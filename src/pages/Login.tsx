@@ -1,6 +1,6 @@
 
 import React, { useState } from 'react';
-import { User } from 'lucide-react';
+import { User, HardHat, Truck, ShieldCheck } from 'lucide-react';
 import { supabase } from '../services/supabase';
 
 interface LoginProps {
