@@ -24,37 +24,54 @@ export function useGoogleDrive() {
     useEffect(() => {
         // Wait for scripts to load
         const checkScripts = setInterval(() => {
-            if (window.gapi) {
+            // Check GAPI
+            if (window.gapi && !isGapiLoaded) {
                 window.gapi.load('client', async () => {
-                    await window.gapi.client.init({
-                        apiKey: API_KEY,
-                        discoveryDocs: [DISCOVERY_DOC],
-                    });
-                    setIsGapiLoaded(true);
+                    try {
+                        await window.gapi.client.init({
+                            apiKey: API_KEY,
+                            discoveryDocs: [DISCOVERY_DOC],
+                        });
+                        setIsGapiLoaded(true);
+                    } catch (e) {
+                        console.error("GAPI Init Error", e);
+                    }
                 });
-                clearInterval(checkScripts);
+            }
+
+            // Check GIS (Google Identity Services)
+            if (window.google && !tokenClient) {
+                try {
+                    const client = window.google.accounts.oauth2.initTokenClient({
+                        client_id: CLIENT_ID,
+                        scope: SCOPES,
+                        callback: (resp: any) => {
+                            if (resp.error) {
+                                throw resp;
+                            }
+                            const token = resp.access_token;
+                            setAccessToken(token);
+                            localStorage.setItem('gdrive_token', token);
+                        },
+                    });
+                    setTokenClient(client);
+                    setIsGisLoaded(true);
+                } catch (e) {
+                    console.error("GIS Init Error", e);
+                }
+            }
+
+            // Stop checking if both are loaded
+            if (window.gapi && window.google && isGapiLoaded && isGisLoaded) {
+                // Keep checking until state updates reflect? 
+                // Actually the state updates will trigger re-renders.
+                // We can clear interval if we want, but checking strictly against state in interval closure is tricky.
+                // Let's just rely on the if checks above (they have !isLoaded guards).
             }
         }, 500);
 
-        if (window.google) {
-            const client = window.google.accounts.oauth2.initTokenClient({
-                client_id: CLIENT_ID,
-                scope: SCOPES,
-                callback: (resp: any) => {
-                    if (resp.error) {
-                        throw resp;
-                    }
-                    const token = resp.access_token;
-                    setAccessToken(token);
-                    localStorage.setItem('gdrive_token', token);
-                },
-            });
-            setTokenClient(client);
-            setIsGisLoaded(true);
-        }
-
         return () => clearInterval(checkScripts);
-    }, []);
+    }, [isGapiLoaded, isGisLoaded, tokenClient]);
 
     // 2. Login Flow
     const login = () => {
