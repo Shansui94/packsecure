@@ -42,7 +42,7 @@ const RecipeManager: React.FC = () => {
         // Fetch Product (Finished Goods) and Raw Materials
         const [fg, raw] = await Promise.all([
             getV2ItemsByType('Product'),
-            getV2ItemsByType('Product'),
+            getV2ItemsByType('Raw'),
         ]);
         setProducts(fg);
         setMaterials(raw);
