@@ -646,39 +646,39 @@ export default function DataManagement() {
                     <button onClick={() => setNotification(null)} className="ml-4 hover:text-white"><X size={14} /></button>
                 </div>
             )}
-        </div>
-            
-            {/* DRIVE PICKER MODAL */ }
-    {
-        showDrivePicker && (
-            <div className="fixed inset-0 bg-black/80 backdrop-blur-sm z-50 flex items-center justify-center p-4">
-                <div className="bg-[#121215] border border-white/10 w-full max-w-md rounded-2xl p-6 shadow-2xl">
-                    <div className="flex justify-between items-center mb-4">
-                        <h3 className="text-xl font-bold text-white flex items-center gap-2"><Cloud size={20} className="text-green-400" /> Select File</h3>
-                        <button onClick={() => setShowDrivePicker(false)}><X size={20} className="text-gray-500 hover:text-white" /></button>
+
+
+            {/* DRIVE PICKER MODAL */}
+            {
+                showDrivePicker && (
+                    <div className="fixed inset-0 bg-black/80 backdrop-blur-sm z-50 flex items-center justify-center p-4">
+                        <div className="bg-[#121215] border border-white/10 w-full max-w-md rounded-2xl p-6 shadow-2xl">
+                            <div className="flex justify-between items-center mb-4">
+                                <h3 className="text-xl font-bold text-white flex items-center gap-2"><Cloud size={20} className="text-green-400" /> Select File</h3>
+                                <button onClick={() => setShowDrivePicker(false)}><X size={20} className="text-gray-500 hover:text-white" /></button>
+                            </div>
+                            <div className="max-h-[300px] overflow-y-auto space-y-2">
+                                {driveLoading ? (
+                                    <div className="text-center py-8 text-gray-500 animate-pulse">Fetching files...</div>
+                                ) : driveFiles.length === 0 ? (
+                                    <div className="text-center py-8 text-gray-500">No CSV files found in Drive.</div>
+                                ) : (
+                                    driveFiles.map(f => (
+                                        <button key={f.id} onClick={() => handleDriveSelect(f.id)} className="w-full p-3 bg-white/5 hover:bg-white/10 border border-white/5 rounded-xl flex items-center gap-3 text-left transition-colors">
+                                            <div className="w-8 h-8 rounded-lg bg-green-500/20 flex items-center justify-center text-green-400"><FileText size={16} /></div>
+                                            <div className="flex-1 truncate">
+                                                <div className="text-sm font-bold text-gray-200 truncate">{f.name}</div>
+                                                <div className="text-xs text-gray-500">ID: {f.id}</div>
+                                            </div>
+                                            <Download size={14} className="text-gray-500" />
+                                        </button>
+                                    ))
+                                )}
+                            </div>
+                        </div>
                     </div>
-                    <div className="max-h-[300px] overflow-y-auto space-y-2">
-                        {driveLoading ? (
-                            <div className="text-center py-8 text-gray-500 animate-pulse">Fetching files...</div>
-                        ) : driveFiles.length === 0 ? (
-                            <div className="text-center py-8 text-gray-500">No CSV files found in Drive.</div>
-                        ) : (
-                            driveFiles.map(f => (
-                                <button key={f.id} onClick={() => handleDriveSelect(f.id)} className="w-full p-3 bg-white/5 hover:bg-white/10 border border-white/5 rounded-xl flex items-center gap-3 text-left transition-colors">
-                                    <div className="w-8 h-8 rounded-lg bg-green-500/20 flex items-center justify-center text-green-400"><FileText size={16} /></div>
-                                    <div className="flex-1 truncate">
-                                        <div className="text-sm font-bold text-gray-200 truncate">{f.name}</div>
-                                        <div className="text-xs text-gray-500">ID: {f.id}</div>
-                                    </div>
-                                    <Download size={14} className="text-gray-500" />
-                                </button>
-                            ))
-                        )}
-                    </div>
-                </div>
-            </div>
-        )
-    }
+                )
+            }
         </div >
     );
 }
