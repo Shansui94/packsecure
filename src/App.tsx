@@ -107,14 +107,15 @@ function App() {
         const role = user.role;
         // Define allowable pages per role
         const allowedPages: Record<string, string[]> = {
-            'Admin': ['*'], // Wildcard
-            'Manager': ['*'],
+            'SuperAdmin': ['*'], // The Only One with Full Access
+            'Admin': ['profile', 'construction'], // Temporarily Restricted
+            'Manager': ['profile', 'construction'], // Temporarily Restricted
             'Driver': ['delivery-driver', 'claims', 'profile'],
-            'Operator': ['scanner', 'profile'], // Strictly Scanner only (+ Profile)
-            'Device': ['scanner'], // Device Mode
-            'HR': ['hr', 'profile', 'claims'], // HR Portal
-            'Sales': ['dashboard', 'jobs', 'products', 'delivery', 'profile'], // Sales Access
-            'Finance': ['claims', 'dashboard', 'executive-reports', 'profile'] // Finance Access
+            'Operator': ['scanner', 'profile'],
+            'Device': ['scanner'],
+            'HR': ['profile', 'construction'], // Temporarily Restricted
+            'Sales': ['profile', 'construction'], // Temporarily Restricted
+            'Finance': ['profile', 'construction'] // Temporarily Restricted
         };
 
         const allowed = allowedPages[role] || [];
@@ -122,11 +123,12 @@ function App() {
 
         if (!isAllowed) {
             console.warn(`Access Denied: ${role} tried to access ${activePage}. Redirecting...`);
-            // Redirect to primary safe page
-            if (role === 'Operator' || role === 'Device') setActivePage('scanner');
+            if (activePage === 'login') return; // Allow login page
+
+            if (allowed.includes('construction')) setActivePage('construction');
+            else if (role === 'Operator' || role === 'Device') setActivePage('scanner');
             else if (role === 'Driver') setActivePage('delivery-driver');
-            else if (role === 'Admin' || role === 'Manager') setActivePage('dashboard');
-            else setActivePage('login'); // Should not happen
+            else setActivePage('login');
         }
     }, [activePage, user]);
 
@@ -156,13 +158,9 @@ function App() {
                 status = profile.status || 'Active';
                 name = profile.name || name;
                 employeeId = profile.employee_id;
-
-                // --- SUPER ADMIN ENFORCEMENT ---
-                if (employeeId === '001' || employeeId === '002') {
-                    role = 'Admin';
-                }
             } else {
                 // Fallback for Demo / Legacy
+                if (currentUser.email?.includes('super')) { role = 'SuperAdmin'; status = 'Active'; }
                 if (currentUser.email?.includes('admin')) { role = 'Admin'; status = 'Active'; }
                 if (currentUser.email?.includes('driver')) { role = 'Driver'; status = 'Active'; }
                 if (currentUser.email?.includes('boss')) { role = 'Manager'; status = 'Active'; }
@@ -171,11 +169,17 @@ function App() {
                 if (currentUser.email?.startsWith('device-')) { role = 'Device' as UserRole; status = 'Active'; }
             }
 
+            // --- SUPER ADMIN ENFORCEMENT ---
+            // If employee ID is 001 or 002, FORCE SuperAdmin role regardless of DB
+            if (employeeId === '001' || employeeId === '002') {
+                role = 'SuperAdmin';
+            }
+
             // 🚨 FIX: Normalize legacy 'User' role to 'Operator'
             if (role === 'User' as any) role = 'Operator';
 
             // 🚨 FORCE ACTIVE FOR DEMO ACCOUNTS (Override DB) 🚨
-            const demoKeywords = ['admin', 'driver', 'boss', 'operator', 'demo', 'test', 'device'];
+            const demoKeywords = ['admin', 'driver', 'boss', 'operator', 'demo', 'test', 'device', 'super'];
             if (demoKeywords.some(k => currentUser.email?.includes(k))) {
                 status = 'Active';
             }
@@ -204,8 +208,10 @@ function App() {
 
             // Initial Routing Logic (Force correct landing page)
             if (!localStorage.getItem('lastActivePage')) {
-                if (role === 'Operator' || role === 'Device') setActivePage('scanner');
+                if (role === 'SuperAdmin') setActivePage('dashboard');
+                else if (role === 'Operator' || role === 'Device') setActivePage('scanner');
                 else if (role === 'Driver') setActivePage('delivery-driver');
+                else if (['Admin', 'Manager', 'HR', 'Sales', 'Finance'].includes(role)) setActivePage('construction');
                 else setActivePage('dashboard');
             }
 
@@ -417,12 +423,20 @@ function App() {
         // Handle Demo Login (Bypassing Supabase Auth)
         if (email?.startsWith('demo.')) {
             console.log("Demo Login Detected:", role);
+            // Assign Special ID for SuperAdmin Demo
+            let empId = 'DEMO-001';
+            let finalRole = role as UserRole;
+
+            if (role === 'SuperAdmin') {
+                empId = '001';
+            }
+
             const demoUser: User = {
                 email: email,
                 name: `${role} Demo`,
-                role: role as UserRole,
+                role: finalRole,
                 uid: 'demo-' + Date.now(),
-                employeeId: 'DEMO-001',
+                employeeId: empId,
                 gps: gps,
                 status: 'Active',
                 loginTime: new Date().toLocaleTimeString()
@@ -430,10 +444,11 @@ function App() {
             setUser(demoUser);
             setIsLoggedIn(true);
 
-            // Route based on role
-            if (role === 'Operator') setActivePage('scanner');
+            // Explicit Routing
+            if (finalRole === 'SuperAdmin') setActivePage('dashboard');
+            else if (role === 'Operator') setActivePage('scanner');
             else if (role === 'Driver') setActivePage('delivery-driver');
-            else if (role === 'HR') setActivePage('hr'); // or dashboard if hr page not ready
+            else if (['Admin', 'Manager', 'HR', 'Sales', 'Finance'].includes(role)) setActivePage('construction');
             else setActivePage('dashboard');
 
             return;
@@ -583,6 +598,8 @@ function App() {
                 return <ClaimsManagement user={user} />;
             case 'update-password':
                 return <UpdatePassword />;
+            case 'construction':
+                return <UnderConstruction title="Access Restricted" />;
             default:
                 return <Dashboard logs={logs} inventory={inventory} jobs={jobs} machines={machines} />;
         }

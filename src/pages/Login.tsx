@@ -307,11 +307,11 @@ const Login: React.FC<LoginProps> = ({ onLogin }) => {
                                 <div className="pt-6 border-t border-white/5">
                                     <label className="block text-[10px] font-bold text-slate-500 uppercase tracking-widest mb-3 text-center">— Quick Demo Access —</label>
                                     <div className="grid grid-cols-4 gap-2">
-                                        {['Admin', 'Manager', 'Operator', 'Driver', 'HR', 'Sales', 'Finance'].map(role => (
+                                        {['SuperAdmin', 'Admin', 'Manager', 'Finance', 'HR', 'Sales', 'Operator', 'Driver'].map(role => (
                                             <button
                                                 key={role}
                                                 onClick={() => handleDemoLogin(role)}
-                                                className="px-2 py-2 rounded-lg bg-slate-800 border border-slate-700 hover:bg-slate-700 hover:border-slate-500 text-[10px] text-slate-300 font-bold uppercase transition-all"
+                                                className={`px-2 py-2 rounded-lg border text-[10px] font-bold uppercase transition-all ${role === 'SuperAdmin' ? 'bg-amber-500/20 border-amber-500/50 text-amber-300 hover:bg-amber-500/30' : 'bg-slate-800 border-slate-700 hover:bg-slate-700 hover:border-slate-500 text-slate-300'}`}
                                             >
                                                 {role}
                                             </button>

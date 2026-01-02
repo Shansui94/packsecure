@@ -1,7 +1,7 @@
 // Core Type Definitions for Factory App
 
 // 1. User Role (Strict Unions)
-export type UserRole = 'Admin' | 'Manager' | 'Operator' | 'Driver' | 'HR' | 'Sales' | 'Finance';
+export type UserRole = 'SuperAdmin' | 'Admin' | 'Manager' | 'Operator' | 'Driver' | 'HR' | 'Sales' | 'Finance';
 
 // 2. User Profile
 export interface User {
