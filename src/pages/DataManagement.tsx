@@ -236,9 +236,10 @@ export default function DataManagement() {
 
                 {/* 2. LIST VIEW */}
                 <div className="w-full md:w-80 lg:w-96 bg-[#0c0c0e] border-r border-white/5 flex flex-col z-10">
-                    <div className="p-4 border-b border-white/5 flex flex-col gap-3 backdrop-blur-md sticky top-0 bg-[#0c0c0e]/95 z-20">
+                    <div className="p-4 border-b border-white/5 flex flex-col gap-3 z-20 bg-[#0c0c0e]">
                         <h2 className="text-xl font-bold text-white tracking-tight flex items-center gap-2">
                             {TABS.find(t => t.id === activeTab)?.label}
+                            <span className="text-xs bg-indigo-500 text-white px-1.5 py-0.5 rounded font-bold">v2.1</span>
                             <span className="text-xs bg-white/10 px-2 py-0.5 rounded-full text-gray-400 font-normal">{data.length}</span>
                         </h2>
                         <div className="relative group">
@@ -263,20 +264,20 @@ export default function DataManagement() {
 
                             <button
                                 onClick={handleCreateNew}
-                                className="flex-1 p-2.5 rounded-xl border border-dashed border-white/10 hover:border-indigo-500/50 hover:bg-indigo-500/5 text-gray-400 hover:text-indigo-400 text-sm font-bold flex items-center justify-center gap-2 transition-all bg-[#0c0c0e]"
+                                className="flex-1 p-2.5 rounded-xl bg-indigo-600 hover:bg-indigo-500 text-white shadow-lg shadow-indigo-900/20 text-sm font-bold flex items-center justify-center gap-2 transition-all"
                             >
                                 <Plus size={16} /> New
                             </button>
                             <button
                                 onClick={handleExport}
-                                className="p-2.5 rounded-xl border border-dashed border-white/10 hover:border-green-500/50 hover:bg-green-500/5 text-gray-400 hover:text-green-400 text-sm font-bold flex items-center justify-center gap-2 transition-all bg-[#0c0c0e]"
+                                className="p-2.5 rounded-xl border border-white/20 bg-white/5 hover:bg-green-500/20 hover:border-green-500/50 text-gray-300 hover:text-green-400 text-sm font-bold flex items-center justify-center gap-2 transition-all"
                                 title="Export CSV"
                             >
                                 <Download size={16} />
                             </button>
                             <button
                                 onClick={handleImportClick}
-                                className="p-2.5 rounded-xl border border-dashed border-white/10 hover:border-orange-500/50 hover:bg-orange-500/5 text-gray-400 hover:text-orange-400 text-sm font-bold flex items-center justify-center gap-2 transition-all bg-[#0c0c0e]"
+                                className="p-2.5 rounded-xl border border-white/20 bg-white/5 hover:bg-orange-500/20 hover:border-orange-500/50 text-gray-300 hover:text-orange-400 text-sm font-bold flex items-center justify-center gap-2 transition-all"
                                 title="Import CSV"
                             >
                                 <Upload size={16} />
