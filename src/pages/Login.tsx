@@ -201,97 +201,116 @@ const Login: React.FC<LoginProps> = ({ onLogin }) => {
                         {/* FORM SWITCHER */}
                         {loginMode === 'device' ? (
                             <form onSubmit={handleDeviceLogin} className="space-y-6">
-                                {/* Machine Select Grid */}
-                                <div className="space-y-3">
-                                    <label className="block text-xs font-bold text-slate-400 uppercase tracking-wider mb-2 ml-1 text-center">
-                                        Select Machine Station
-                                    </label>
-                                    <div className="grid grid-cols-3 gap-3 max-h-[240px] overflow-y-auto pr-1">
-                                        {machines.map(m => (
-                                            <button
-                                                key={m.machine_id}
-                                                type="button"
-                                                onClick={() => setSelectedMachine(m.machine_id)}
-                                                className={`
-                                                    p-3 rounded-xl border flex flex-col items-center justify-center gap-1 transition-all
-                                                    ${selectedMachine === m.machine_id
-                                                        ? 'bg-gradient-to-br from-cyan-600 to-blue-600 border-cyan-400 text-white shadow-lg shadow-cyan-500/20 scale-105 ring-2 ring-cyan-400/50'
-                                                        : 'bg-slate-800/50 border-slate-700/50 text-slate-300 hover:bg-slate-700/50 hover:border-slate-500'}
-                                                `}
-                                            >
-                                                <div className={`w-8 h-8 rounded-full flex items-center justify-center ${selectedMachine === m.machine_id ? 'bg-white/20' : 'bg-slate-700'}`}>
-                                                    <span className="text-xs font-bold">{m.machine_id.replace('M', '')}</span>
+
+                                {/* LOW: 1. Machine Selection View */}
+                                {!selectedMachine ? (
+                                    <div className="space-y-4">
+                                        <label className="block text-xs font-bold text-slate-400 uppercase tracking-wider mb-4 text-center">
+                                            Select Your Station
+                                        </label>
+                                        <div className="grid grid-cols-2 gap-4 max-h-[400px] overflow-y-auto pr-1">
+                                            {machines.map(m => (
+                                                <button
+                                                    key={m.machine_id}
+                                                    type="button"
+                                                    onClick={() => setSelectedMachine(m.machine_id)}
+                                                    className="p-6 rounded-2xl border flex flex-col items-center justify-center gap-2 transition-all bg-slate-800/50 border-slate-700/50 text-slate-300 hover:bg-cyan-900/20 hover:border-cyan-500/50 hover:text-cyan-400 hover:scale-[1.02] active:scale-95 shadow-lg"
+                                                >
+                                                    <div className="w-12 h-12 rounded-full flex items-center justify-center bg-slate-700/50 text-white shadow-inner mb-1">
+                                                        <span className="text-lg font-bold">{m.machine_id.replace('M', '')}</span>
+                                                    </div>
+                                                    <span className="text-sm font-black uppercase tracking-wide truncate w-full text-center">{m.name}</span>
+                                                </button>
+                                            ))}
+                                        </div>
+                                    </div>
+                                ) : (
+                                    /* LOW: 2. Password Entry View */
+                                    <div className="space-y-4 animate-fade-in-up">
+                                        {/* Selected Machine Header */}
+                                        <div className="flex items-center justify-between bg-cyan-900/20 border border-cyan-500/30 rounded-xl p-4 mb-4">
+                                            <div className="flex items-center gap-3">
+                                                <div className="w-10 h-10 rounded-full bg-cyan-600 flex items-center justify-center text-white font-bold text-sm shadow-lg">
+                                                    {selectedMachine.replace('M', '')}
                                                 </div>
-                                                <span className="text-[10px] font-bold uppercase truncate w-full text-center">{m.name}</span>
-                                            </button>
-                                        ))}
-                                    </div>
-                                </div>
-
-                                {/* Numeric Keypad Input */}
-                                <div className="space-y-4 pt-4 border-t border-white/5">
-                                    <div className="relative">
-                                        <input
-                                            type="password"
-                                            readOnly
-                                            value={password}
-                                            className="w-full bg-slate-900/80 border-2 border-slate-700 rounded-2xl py-4 text-center text-3xl font-mono tracking-[0.5em] text-cyan-400 focus:outline-none focus:border-cyan-500 shadow-inner"
-                                            placeholder="••••"
-                                        />
-                                        {password.length > 0 && (
+                                                <div className="text-left">
+                                                    <div className="text-[10px] text-cyan-300 font-bold uppercase tracking-wider">Selected Station</div>
+                                                    <div className="text-white font-bold">{machines.find(m => m.machine_id === selectedMachine)?.name || selectedMachine}</div>
+                                                </div>
+                                            </div>
                                             <button
                                                 type="button"
-                                                onClick={() => setPassword('')}
-                                                className="absolute right-4 top-1/2 -translate-y-1/2 text-slate-500 hover:text-red-400 transition-colors"
+                                                onClick={() => { setSelectedMachine(''); setPassword(''); }}
+                                                className="px-3 py-1 rounded-lg bg-slate-800 hover:bg-slate-700 text-[10px] font-bold text-slate-400 hover:text-white uppercase transition-colors"
                                             >
-                                                CLEAR
+                                                Change
                                             </button>
+                                        </div>
+
+                                        {/* Numeric Keypad Input */}
+                                        <div className="relative">
+                                            <input
+                                                type="password"
+                                                readOnly
+                                                value={password}
+                                                className="w-full bg-slate-900/80 border-2 border-slate-700 rounded-2xl py-4 text-center text-3xl font-mono tracking-[0.5em] text-cyan-400 focus:outline-none focus:border-cyan-500 shadow-inner"
+                                                placeholder="••••"
+                                            />
+                                            {password.length > 0 && (
+                                                <button
+                                                    type="button"
+                                                    onClick={() => setPassword('')}
+                                                    className="absolute right-4 top-1/2 -translate-y-1/2 text-slate-500 hover:text-red-400 transition-colors"
+                                                >
+                                                    CLEAR
+                                                </button>
+                                            )}
+                                        </div>
+
+                                        {/* Keypad */}
+                                        <div className="grid grid-cols-3 gap-3">
+                                            {[1, 2, 3, 4, 5, 6, 7, 8, 9].map(num => (
+                                                <button
+                                                    key={num}
+                                                    type="button"
+                                                    onClick={() => setPassword(prev => (prev.length < 4 ? prev + num : prev))}
+                                                    className="h-16 rounded-xl bg-slate-800 border border-slate-700 text-3xl font-bold text-white hover:bg-slate-700 hover:border-slate-500 active:scale-95 active:bg-cyan-600 transition-all shadow-sm"
+                                                >
+                                                    {num}
+                                                </button>
+                                            ))}
+                                            <button disabled className="opacity-0 cursor-default"></button>
+                                            <button
+                                                type="button"
+                                                onClick={() => setPassword(prev => (prev.length < 4 ? prev + 0 : prev))}
+                                                className="h-16 rounded-xl bg-slate-800 border border-slate-700 text-3xl font-bold text-white hover:bg-slate-700 hover:border-slate-500 active:scale-95 active:bg-cyan-600 transition-all shadow-sm"
+                                            >
+                                                0
+                                            </button>
+                                            <button
+                                                type="button"
+                                                onClick={() => setPassword(prev => prev.slice(0, -1))}
+                                                className="h-16 rounded-xl bg-slate-800/50 border border-slate-700 text-red-400 hover:bg-red-500/20 active:scale-95 transition-all flex items-center justify-center font-bold text-lg"
+                                            >
+                                                DEL
+                                            </button>
+                                        </div>
+
+                                        {error && (
+                                            <div className="text-red-400 text-sm text-center bg-red-500/10 py-3 rounded-xl border border-red-500/20 animate-shake">
+                                                {error}
+                                            </div>
                                         )}
-                                    </div>
 
-                                    {/* Keypad */}
-                                    <div className="grid grid-cols-3 gap-3">
-                                        {[1, 2, 3, 4, 5, 6, 7, 8, 9].map(num => (
-                                            <button
-                                                key={num}
-                                                type="button"
-                                                onClick={() => setPassword(prev => (prev.length < 4 ? prev + num : prev))}
-                                                className="h-14 rounded-xl bg-slate-800 border border-slate-700 text-2xl font-bold text-white hover:bg-slate-700 active:scale-95 transition-all shadow-sm"
-                                            >
-                                                {num}
-                                            </button>
-                                        ))}
-                                        <button disabled className="opacity-0 cursor-default"></button>
                                         <button
-                                            type="button"
-                                            onClick={() => setPassword(prev => (prev.length < 4 ? prev + 0 : prev))}
-                                            className="h-14 rounded-xl bg-slate-800 border border-slate-700 text-2xl font-bold text-white hover:bg-slate-700 active:scale-95 transition-all shadow-sm"
+                                            type="submit"
+                                            disabled={isLoading || password.length !== 4}
+                                            className="w-full bg-gradient-to-r from-cyan-600 to-blue-600 hover:from-cyan-500 hover:to-blue-500 text-white font-bold py-4 rounded-xl shadow-lg shadow-cyan-500/20 transition-all transform hover:-translate-y-0.5 active:scale-95 mt-2 disabled:opacity-50 disabled:cursor-not-allowed"
                                         >
-                                            0
+                                            {isLoading ? 'ACCESSING...' : 'CONFIRM PIN'}
                                         </button>
-                                        <button
-                                            type="button"
-                                            onClick={() => setPassword(prev => prev.slice(0, -1))}
-                                            className="h-14 rounded-xl bg-slate-800/50 border border-slate-700 text-red-400 hover:bg-red-500/20 active:scale-95 transition-all flex items-center justify-center font-bold text-lg"
-                                        >
-                                            DEL
-                                        </button>
-                                    </div>
-                                </div>
-
-                                {error && (
-                                    <div className="text-red-400 text-sm text-center bg-red-500/10 py-3 rounded-xl border border-red-500/20 animate-shake">
-                                        {error}
                                     </div>
                                 )}
-
-                                <button
-                                    type="submit"
-                                    disabled={isLoading || password.length !== 4 || !selectedMachine}
-                                    className="w-full bg-gradient-to-r from-cyan-600 to-blue-600 hover:from-cyan-500 hover:to-blue-500 text-white font-bold py-4 rounded-xl shadow-lg shadow-cyan-500/20 transition-all transform hover:-translate-y-0.5 active:scale-95 mt-4 disabled:opacity-50 disabled:cursor-not-allowed"
-                                >
-                                    {isLoading ? 'ACCESSING...' : 'UNLOCK DEVICE'}
-                                </button>
                             </form>
                         ) : (
                             <div className="space-y-6">
