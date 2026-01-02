@@ -36,7 +36,7 @@ class ErrorBoundary extends Component<Props, State> {
                         <div className="flex items-center gap-4 mb-6">
                             <AlertTriangle className="text-red-500" size={48} />
                             <div>
-                                <h1 className="text-3xl font-bold text-red-500">SYSTEM CRITICAL FAILURE</h1>
+                                <h1 className="text-3xl font-bold text-red-500">SYSTEM CRITICAL FAILURE (v5.2)</h1>
                                 <p className="text-red-300">Application has crashed. Please confirm the error below.</p>
                             </div>
                         </div>
