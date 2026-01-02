@@ -414,6 +414,31 @@ function App() {
             return;
         }
 
+        // Handle Demo Login (Bypassing Supabase Auth)
+        if (email?.startsWith('demo.')) {
+            console.log("Demo Login Detected:", role);
+            const demoUser: User = {
+                email: email,
+                name: `${role} Demo`,
+                role: role as UserRole,
+                uid: 'demo-' + Date.now(),
+                employeeId: 'DEMO-001',
+                gps: gps,
+                status: 'Active',
+                loginTime: new Date().toLocaleTimeString()
+            };
+            setUser(demoUser);
+            setIsLoggedIn(true);
+
+            // Route based on role
+            if (role === 'Operator') setActivePage('scanner');
+            else if (role === 'Driver') setActivePage('delivery-driver');
+            else if (role === 'HR') setActivePage('hr'); // or dashboard if hr page not ready
+            else setActivePage('dashboard');
+
+            return;
+        }
+
         // Check for session to be safe (though Login.tsx usually handles Supabase auth for others)
         // If we get here for non-device, check current session
         supabase.auth.getSession().then(({ data: { session } }) => {
