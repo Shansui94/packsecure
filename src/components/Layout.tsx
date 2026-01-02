@@ -45,7 +45,8 @@ const Layout: React.FC<LayoutProps> = ({ children, activePage, setActivePage, us
     );
 
     const NavItem = ({ id, icon: Icon, label, roles }: { id: string, icon: any, label: string, roles?: string[] }) => {
-        if (roles && userRole && !roles.includes(userRole)) return null;
+        // SuperAdmin implies access to everything, overriding specific role checks
+        if (userRole !== 'SuperAdmin' && roles && userRole && !roles.includes(userRole)) return null;
 
         const isActive = activePage === id;
 
@@ -123,36 +124,36 @@ const Layout: React.FC<LayoutProps> = ({ children, activePage, setActivePage, us
                     {/* Navigation Links */}
                     <nav className="flex-1 overflow-y-auto px-4 custom-scrollbar space-y-2 pb-6">
                         {/* SUPER ADMIN / MANAGER / ADMIN VIEW */}
-                        {(userRole === 'Admin' || userRole === 'Manager' || user?.employeeId === '001') && (
+                        {(userRole === 'SuperAdmin' || userRole === 'Admin' || userRole === 'Manager' || user?.employeeId === '001') && (
                             <>
                                 <NavGroup title="Executive Suite">
-                                    <NavItem id="dashboard" icon={LayoutDashboard} label="Dashboard" roles={['Admin', 'Manager']} />
-                                    <NavItem id="data-v2" icon={Database} label="Data Command" roles={['Admin', 'Manager']} />
+                                    <NavItem id="dashboard" icon={LayoutDashboard} label="Dashboard" roles={['SuperAdmin', 'Admin', 'Manager']} />
+                                    <NavItem id="data-v2" icon={Database} label="Data Command" roles={['SuperAdmin', 'Admin', 'Manager']} />
                                 </NavGroup>
 
                                 <NavGroup title="Operations">
-                                    <NavItem id="scanner" icon={Scan} label="Production Control" roles={['Admin', 'Manager']} />
-                                    <NavItem id="jobs" icon={ClipboardList} label="Job Orders" roles={['Admin', 'Manager']} />
-                                    <NavItem id="livestock" icon={BarChart3} label="Live Stock" roles={['Admin', 'Manager']} />
+                                    <NavItem id="scanner" icon={Scan} label="Production Control" roles={['SuperAdmin', 'Admin', 'Manager']} />
+                                    <NavItem id="jobs" icon={ClipboardList} label="Job Orders" roles={['SuperAdmin', 'Admin', 'Manager']} />
+                                    <NavItem id="livestock" icon={BarChart3} label="Live Stock" roles={['SuperAdmin', 'Admin', 'Manager']} />
                                 </NavGroup>
 
                                 <NavGroup title="Inventory & BOM">
-                                    <NavItem id="inventory" icon={Box} label="Inventory" roles={['Admin', 'Manager']} />
-                                    <NavItem id="recipes" icon={FlaskConical} label="Recipe Manager" roles={['Admin', 'Manager']} />
-                                    <NavItem id="products" icon={Package} label="Product Library" roles={['Admin', 'Manager']} />
+                                    <NavItem id="inventory" icon={Box} label="Inventory" roles={['SuperAdmin', 'Admin', 'Manager']} />
+                                    <NavItem id="recipes" icon={FlaskConical} label="Recipe Manager" roles={['SuperAdmin', 'Admin', 'Manager']} />
+                                    <NavItem id="products" icon={Package} label="Product Library" roles={['SuperAdmin', 'Admin', 'Manager']} />
                                 </NavGroup>
 
                                 <NavGroup title="Logistics">
-                                    <NavItem id="delivery" icon={Truck} label="Delivery Orders" roles={['Admin', 'Manager']} />
-                                    <NavItem id="dispatch" icon={Truck} label="Dispatch" roles={['Admin', 'Manager']} />
-                                    <NavItem id="production" icon={Database} label="Production Logs" roles={['Admin', 'Manager']} />
-                                    <NavItem id="report-history" icon={FileText} label="Reports" roles={['Admin', 'Manager']} />
+                                    <NavItem id="delivery" icon={Truck} label="Delivery Orders" roles={['SuperAdmin', 'Admin', 'Manager']} />
+                                    <NavItem id="dispatch" icon={Truck} label="Dispatch" roles={['SuperAdmin', 'Admin', 'Manager']} />
+                                    <NavItem id="production" icon={Database} label="Production Logs" roles={['SuperAdmin', 'Admin', 'Manager']} />
+                                    <NavItem id="report-history" icon={FileText} label="Reports" roles={['SuperAdmin', 'Admin', 'Manager']} />
                                 </NavGroup>
 
                                 <NavGroup title="Organization">
-                                    <NavItem id="hr" icon={Users} label="HR Portal" roles={['Admin', 'Manager']} />
-                                    <NavItem id="users" icon={Users} label="User Management" roles={['Admin']} />
-                                    <NavItem id="claims" icon={FileCheck} label="Claims" roles={['Admin', 'Manager']} />
+                                    <NavItem id="hr" icon={Users} label="HR Portal" roles={['SuperAdmin', 'Admin', 'Manager']} />
+                                    <NavItem id="users" icon={Users} label="User Management" roles={['SuperAdmin', 'Admin']} />
+                                    <NavItem id="claims" icon={FileCheck} label="Claims" roles={['SuperAdmin', 'Admin', 'Manager']} />
                                 </NavGroup>
                             </>
                         )}
