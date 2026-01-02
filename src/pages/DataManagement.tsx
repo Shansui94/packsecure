@@ -401,27 +401,30 @@ export default function DataManagement() {
                             />
                         </div>
                         {/* DRIVE CONNECT */}
-                        {isReady && (
-                            <div className="flex gap-2">
-                                {!isAuthenticated ? (
-                                    <button onClick={login} className="flex-1 py-2 px-3 bg-white/5 hover:bg-white/10 border border-white/10 rounded-lg flex items-center justify-center gap-2 text-xs font-bold text-gray-400 hover:text-white transition-all">
-                                        <Cloud size={14} /> Connect Google Drive
+                        <div className="flex gap-2 items-center">
+                            {!isReady ? (
+                                <div className="text-xs text-gray-500 bg-white/5 px-2 py-1 rounded flex gap-2 items-center min-w-[120px]">
+                                    <span className="animate-spin">⏳</span>
+                                    {driveError ? <span className="text-red-400 font-bold">{driveError}</span> : <span className="text-gray-400">{debugStatus}</span>}
+                                </div>
+                            ) : !isAuthenticated ? (
+                                <button onClick={login} className="flex-1 py-2 px-3 bg-white/5 hover:bg-white/10 border border-white/10 rounded-lg flex items-center justify-center gap-2 text-xs font-bold text-gray-400 hover:text-white transition-all">
+                                    <Cloud size={14} /> Connect Google Drive
+                                </button>
+                            ) : (
+                                <div className="flex-1 flex gap-1">
+                                    <button onClick={handleDriveUpload} disabled={driveLoading} className="flex-1 py-2 bg-blue-500/10 hover:bg-blue-500/20 border border-blue-500/20 rounded-lg flex items-center justify-center gap-2 text-xs font-bold text-blue-400 transition-all" title="Backup to Drive">
+                                        <Upload size={14} /> Backup
                                     </button>
-                                ) : (
-                                    <div className="flex-1 flex gap-1">
-                                        <button onClick={handleDriveUpload} disabled={driveLoading} className="flex-1 py-2 bg-blue-500/10 hover:bg-blue-500/20 border border-blue-500/20 rounded-lg flex items-center justify-center gap-2 text-xs font-bold text-blue-400 transition-all" title="Backup to Drive">
-                                            <Upload size={14} /> Backup
-                                        </button>
-                                        <button onClick={handleDriveList} disabled={driveLoading} className="flex-1 py-2 bg-green-500/10 hover:bg-green-500/20 border border-green-500/20 rounded-lg flex items-center justify-center gap-2 text-xs font-bold text-green-400 transition-all" title="Restore from Drive">
-                                            <Download size={14} /> Restore
-                                        </button>
-                                        <button onClick={logout} className="px-2 bg-red-500/10 hover:bg-red-500/20 border border-red-500/20 rounded-lg text-red-400" title="Disconnect">
-                                            <LogOut size={14} />
-                                        </button>
-                                    </div>
-                                )}
-                            </div>
-                        )}
+                                    <button onClick={handleDriveList} disabled={driveLoading} className="flex-1 py-2 bg-green-500/10 hover:bg-green-500/20 border border-green-500/20 rounded-lg flex items-center justify-center gap-2 text-xs font-bold text-green-400 transition-all" title="Restore from Drive">
+                                        <Download size={14} /> Restore
+                                    </button>
+                                    <button onClick={logout} className="px-2 bg-red-500/10 hover:bg-red-500/20 border border-red-500/20 rounded-lg text-red-400" title="Disconnect">
+                                        <LogOut size={14} />
+                                    </button>
+                                </div>
+                            )}
+                        </div>
                     </div>
 
                     <div className="flex gap-2 pt-1 border-t border-white/5 mt-1">
