@@ -201,39 +201,82 @@ const Login: React.FC<LoginProps> = ({ onLogin }) => {
                         {/* FORM SWITCHER */}
                         {loginMode === 'device' ? (
                             <form onSubmit={handleDeviceLogin} className="space-y-6">
-                                {/* Machine Select */}
-                                <div className="group">
-                                    <label className="block text-xs font-bold text-slate-400 uppercase tracking-wider mb-2 ml-1">Machine Station</label>
-                                    <div className="relative">
-                                        <select
-                                            required
-                                            value={selectedMachine}
-                                            onChange={(e) => setSelectedMachine(e.target.value)}
-                                            className="w-full bg-slate-900/50 border border-slate-700/50 rounded-xl px-4 py-4 text-white appearance-none focus:outline-none focus:border-cyan-500 focus:ring-1 focus:ring-cyan-500 transition-all font-mono"
-                                        >
-                                            <option value="" disabled>-- Select Machine --</option>
-                                            {machines.map(m => (
-                                                <option key={m.machine_id} value={m.machine_id}>
-                                                    {m.name} ({m.machine_id})
-                                                </option>
-                                            ))}
-                                        </select>
-                                        <div className="absolute right-4 top-1/2 transform -translate-y-1/2 pointer-events-none text-slate-500">▼</div>
+                                {/* Machine Select Grid */}
+                                <div className="space-y-3">
+                                    <label className="block text-xs font-bold text-slate-400 uppercase tracking-wider mb-2 ml-1 text-center">
+                                        Select Machine Station
+                                    </label>
+                                    <div className="grid grid-cols-3 gap-3 max-h-[240px] overflow-y-auto pr-1">
+                                        {machines.map(m => (
+                                            <button
+                                                key={m.machine_id}
+                                                type="button"
+                                                onClick={() => setSelectedMachine(m.machine_id)}
+                                                className={`
+                                                    p-3 rounded-xl border flex flex-col items-center justify-center gap-1 transition-all
+                                                    ${selectedMachine === m.machine_id
+                                                        ? 'bg-gradient-to-br from-cyan-600 to-blue-600 border-cyan-400 text-white shadow-lg shadow-cyan-500/20 scale-105 ring-2 ring-cyan-400/50'
+                                                        : 'bg-slate-800/50 border-slate-700/50 text-slate-300 hover:bg-slate-700/50 hover:border-slate-500'}
+                                                `}
+                                            >
+                                                <div className={`w-8 h-8 rounded-full flex items-center justify-center ${selectedMachine === m.machine_id ? 'bg-white/20' : 'bg-slate-700'}`}>
+                                                    <span className="text-xs font-bold">{m.machine_id.replace('M', '')}</span>
+                                                </div>
+                                                <span className="text-[10px] font-bold uppercase truncate w-full text-center">{m.name}</span>
+                                            </button>
+                                        ))}
                                     </div>
                                 </div>
 
-                                {/* Password Input */}
-                                <div className="group">
-                                    <label className="block text-xs font-bold text-slate-400 uppercase tracking-wider mb-2 ml-1">Device Password</label>
-                                    <input
-                                        type="password"
-                                        required
-                                        maxLength={4}
-                                        className="w-full bg-slate-900/50 border border-slate-700/50 rounded-xl px-4 py-4 text-white placeholder-slate-600 focus:outline-none focus:border-cyan-500 focus:ring-1 focus:ring-cyan-500 transition-all text-center tracking-[0.5em] font-mono text-xl"
-                                        value={password}
-                                        onChange={(e) => setPassword(e.target.value)}
-                                        placeholder="••••"
-                                    />
+                                {/* Numeric Keypad Input */}
+                                <div className="space-y-4 pt-4 border-t border-white/5">
+                                    <div className="relative">
+                                        <input
+                                            type="password"
+                                            readOnly
+                                            value={password}
+                                            className="w-full bg-slate-900/80 border-2 border-slate-700 rounded-2xl py-4 text-center text-3xl font-mono tracking-[0.5em] text-cyan-400 focus:outline-none focus:border-cyan-500 shadow-inner"
+                                            placeholder="••••"
+                                        />
+                                        {password.length > 0 && (
+                                            <button
+                                                type="button"
+                                                onClick={() => setPassword('')}
+                                                className="absolute right-4 top-1/2 -translate-y-1/2 text-slate-500 hover:text-red-400 transition-colors"
+                                            >
+                                                CLEAR
+                                            </button>
+                                        )}
+                                    </div>
+
+                                    {/* Keypad */}
+                                    <div className="grid grid-cols-3 gap-3">
+                                        {[1, 2, 3, 4, 5, 6, 7, 8, 9].map(num => (
+                                            <button
+                                                key={num}
+                                                type="button"
+                                                onClick={() => setPassword(prev => (prev.length < 4 ? prev + num : prev))}
+                                                className="h-14 rounded-xl bg-slate-800 border border-slate-700 text-2xl font-bold text-white hover:bg-slate-700 active:scale-95 transition-all shadow-sm"
+                                            >
+                                                {num}
+                                            </button>
+                                        ))}
+                                        <button disabled className="opacity-0 cursor-default"></button>
+                                        <button
+                                            type="button"
+                                            onClick={() => setPassword(prev => (prev.length < 4 ? prev + 0 : prev))}
+                                            className="h-14 rounded-xl bg-slate-800 border border-slate-700 text-2xl font-bold text-white hover:bg-slate-700 active:scale-95 transition-all shadow-sm"
+                                        >
+                                            0
+                                        </button>
+                                        <button
+                                            type="button"
+                                            onClick={() => setPassword(prev => prev.slice(0, -1))}
+                                            className="h-14 rounded-xl bg-slate-800/50 border border-slate-700 text-red-400 hover:bg-red-500/20 active:scale-95 transition-all flex items-center justify-center font-bold text-lg"
+                                        >
+                                            DEL
+                                        </button>
+                                    </div>
                                 </div>
 
                                 {error && (
@@ -244,10 +287,10 @@ const Login: React.FC<LoginProps> = ({ onLogin }) => {
 
                                 <button
                                     type="submit"
-                                    disabled={isLoading}
-                                    className="w-full bg-gradient-to-r from-cyan-600 to-blue-600 hover:from-cyan-500 hover:to-blue-500 text-white font-bold py-4 rounded-xl shadow-lg shadow-cyan-500/20 transition-all transform hover:-translate-y-0.5 active:scale-95 mt-4"
+                                    disabled={isLoading || password.length !== 4 || !selectedMachine}
+                                    className="w-full bg-gradient-to-r from-cyan-600 to-blue-600 hover:from-cyan-500 hover:to-blue-500 text-white font-bold py-4 rounded-xl shadow-lg shadow-cyan-500/20 transition-all transform hover:-translate-y-0.5 active:scale-95 mt-4 disabled:opacity-50 disabled:cursor-not-allowed"
                                 >
-                                    {isLoading ? 'Accessing...' : 'UNLOCK DEVICE'}
+                                    {isLoading ? 'ACCESSING...' : 'UNLOCK DEVICE'}
                                 </button>
                             </form>
                         ) : (
