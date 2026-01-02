@@ -1,31 +1,26 @@
-
-import { GoogleGenerativeAI } from '@google/generative-ai';
-import dotenv from 'dotenv';
-dotenv.config();
-
-const apiKey = process.env.GEMINI_API_KEY || 'AIzaSyAiOdSCfLfMtcCxctVB2wPZwfbUy6ByXfQ';
-const genAI = new GoogleGenerativeAI(apiKey);
-
+// Direct REST test to avoid package issues
 async function run() {
-    console.log("----------------------------------------");
-    console.log("Testing specific model: gemini-2.5-flash");
-    console.log("----------------------------------------");
+    const apiKey = process.env.GEMINI_API_KEY;
+    if (!apiKey) {
+        console.error("❌ Please set GEMINI_API_KEY in .env file first!");
+        return;
+    }
+
+    console.log("Checking available models for key...");
+    const url = `https://generativelanguage.googleapis.com/v1beta/models?key=${apiKey}`;
 
     try {
-        const model = genAI.getGenerativeModel({ model: "gemini-2.5-flash" });
-        console.log("⚠️ Attempting to generate content...");
+        const resp = await fetch(url);
+        const data = await resp.json();
 
-        const result = await model.generateContent("Hello, are you there?");
-        const response = await result.response;
-        console.log("✅ SUCCESS! Model verification passed.");
-        console.log("Response:", response.text());
-    } catch (error: any) {
-        console.error("❌ FAILURE! Could not access model.");
-        console.error("Error Name:", error.name);
-        console.error("Error Message:", error.message);
-        if (error.response) {
-            console.error("API Error Details:", JSON.stringify(error.response, null, 2));
+        if (data.models) {
+            console.log("✅ Models available:");
+            data.models.forEach((m: any) => console.log(` - ${m.name} (${m.supportedGenerationMethods})`));
+        } else {
+            console.error("❌ No models found or error:", data);
         }
+    } catch (e) {
+        console.error("Fetch Error:", e);
     }
 }
 

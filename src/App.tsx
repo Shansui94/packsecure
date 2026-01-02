@@ -110,7 +110,8 @@ function App() {
             'Admin': ['*'], // Wildcard
             'Manager': ['*'],
             'Driver': ['delivery-driver', 'claims', 'profile'],
-            'Operator': ['scanner', 'profile'] // Strictly Scanner only (+ Profile)
+            'Operator': ['scanner', 'profile'], // Strictly Scanner only (+ Profile)
+            'Device': ['scanner'] // Device Mode
         };
 
         const allowed = allowedPages[role] || [];
@@ -119,7 +120,7 @@ function App() {
         if (!isAllowed) {
             console.warn(`Access Denied: ${role} tried to access ${activePage}. Redirecting...`);
             // Redirect to primary safe page
-            if (role === 'Operator') setActivePage('scanner');
+            if (role === 'Operator' || role === 'Device') setActivePage('scanner');
             else if (role === 'Driver') setActivePage('delivery-driver');
             else if (role === 'Admin' || role === 'Manager') setActivePage('dashboard');
             else setActivePage('login'); // Should not happen
@@ -163,13 +164,15 @@ function App() {
                 if (currentUser.email?.includes('driver')) { role = 'Driver'; status = 'Active'; }
                 if (currentUser.email?.includes('boss')) { role = 'Manager'; status = 'Active'; }
                 if (currentUser.email?.includes('operator')) { role = 'Operator'; status = 'Active'; }
+                // Device detection via email pattern if not set in profile
+                if (currentUser.email?.startsWith('device-')) { role = 'Device' as UserRole; status = 'Active'; }
             }
 
             // 🚨 FIX: Normalize legacy 'User' role to 'Operator'
             if (role === 'User' as any) role = 'Operator';
 
             // 🚨 FORCE ACTIVE FOR DEMO ACCOUNTS (Override DB) 🚨
-            const demoKeywords = ['admin', 'driver', 'boss', 'operator', 'demo', 'test'];
+            const demoKeywords = ['admin', 'driver', 'boss', 'operator', 'demo', 'test', 'device'];
             if (demoKeywords.some(k => currentUser.email?.includes(k))) {
                 status = 'Active';
             }
@@ -198,7 +201,7 @@ function App() {
 
             // Initial Routing Logic (Force correct landing page)
             if (!localStorage.getItem('lastActivePage')) {
-                if (role === 'Operator') setActivePage('scanner');
+                if (role === 'Operator' || role === 'Device') setActivePage('scanner');
                 else if (role === 'Driver') setActivePage('delivery-driver');
                 else setActivePage('dashboard');
             }
@@ -389,6 +392,32 @@ function App() {
 
     const handleLogin = (email: string | null, gps: string, role: string) => {
         console.log("Login callback triggered", email, gps, role);
+
+        // Handle Device Login (Bypassing Supabase Auth)
+        if (role === 'Device' && email) {
+            const fakeUser: User = {
+                email: email,
+                name: 'Device Station',
+                role: 'Device' as UserRole,
+                uid: 'device-' + Date.now(),
+                employeeId: undefined,
+                gps: gps,
+                status: 'Active',
+                loginTime: new Date().toLocaleTimeString()
+            };
+            setUser(fakeUser);
+            setIsLoggedIn(true);
+            setActivePage('scanner');
+            return;
+        }
+
+        // Check for session to be safe (though Login.tsx usually handles Supabase auth for others)
+        // If we get here for non-device, check current session
+        supabase.auth.getSession().then(({ data: { session } }) => {
+            if (session?.user) {
+                handleSession(session);
+            }
+        });
     };
 
     // handleProductionSubmit removed (Moved to ProductionControl)

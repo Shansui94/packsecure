@@ -189,6 +189,13 @@ export interface Claim {
     odometerEndImg?: string;
     distance?: number;
 
+    // Finance / Audit Fields (New)
+    company_name?: string;
+    invoice_no?: string;
+    tax_amount?: number;
+    currency?: string;
+    receipt_date?: string;
+
     // Attachments
     receiptUrl: string; // Mandatory receipt image
     itemPhotoUrl?: string; // Optional item photo

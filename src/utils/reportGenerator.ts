@@ -68,9 +68,25 @@ export const generateSessionReport = (
         job: log.Job_ID || '-',
         product: (() => {
             if (!log.Note) return 'Manual Entry';
+            // Handle V2 format: "V2 Production: SKU-NAME | Lane: Left"
+            if (log.Note.includes('V2 Production:')) {
+                const parts = log.Note.split('V2 Production:');
+                if (parts.length > 1) {
+                    // Get part after "V2 Production:"
+                    let skuPart = parts[1].trim();
+                    // If it contains a pipe "|", split and take the first part (the SKU)
+                    if (skuPart.includes('|')) {
+                        skuPart = skuPart.split('|')[0].trim();
+                    }
+                    return skuPart;
+                }
+            }
+            // Fallback for legacy notes
             const separator = ': ';
             const idx = log.Note.lastIndexOf(separator);
-            if (idx !== -1) return log.Note.substring(idx + separator.length);
+            // Only split by separator if it's NOT a V2 log (to avoid accidental partials)
+            // Actually, keep safe fallback but prioritize full note if unsure
+            if (idx !== -1 && !log.Note.includes('|')) return log.Note.substring(idx + separator.length);
             return log.Note;
         })(),
         qty: log.Output_Qty

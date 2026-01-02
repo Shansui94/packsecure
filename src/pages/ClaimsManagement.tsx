@@ -1,4 +1,5 @@
 import React, { useState, useEffect } from 'react';
+import { createPortal } from 'react-dom';
 import { supabase } from '../services/supabase';
 import { Claim } from '../types';
 import { DollarSign, FileText, Plus, X, Upload, CheckCircle, Clock, AlertTriangle } from 'lucide-react';
@@ -23,6 +24,13 @@ const ClaimsManagement: React.FC<ClaimsManagementProps> = ({ user }) => {
     const [receiptFile, setReceiptFile] = useState<File | null>(null);
     const [startFile, setStartFile] = useState<File | null>(null);
     const [endFile, setEndFile] = useState<File | null>(null);
+
+    // New Finance Fields (State)
+    const [companyName, setCompanyName] = useState('');
+    const [invoiceNo, setInvoiceNo] = useState('');
+    const [taxAmount, setTaxAmount] = useState('');
+    const [receiptDate, setReceiptDate] = useState('');
+    const [currency, setCurrency] = useState('MYR');
 
     const [scanning, setScanning] = useState(false);
     const [submitting, setSubmitting] = useState(false);
@@ -132,23 +140,76 @@ const ClaimsManagement: React.FC<ClaimsManagementProps> = ({ user }) => {
             const base64Data = base64Full.split(',')[1];
             const mimeType = file.type || 'image/jpeg';
 
-            // Google Gemini API Request
-            const response = await fetch(`https://generativelanguage.googleapis.com/v1beta/models/gemini-1.5-flash:generateContent?key=${apiKey}`, {
-                method: 'POST',
-                headers: {
-                    'Content-Type': 'application/json'
-                },
-                body: JSON.stringify({
-                    contents: [{
-                        parts: [
-                            { text: "Analyze this receipt/image. Return purely a JSON object (no markdown) with keys: 'amount' (number, digits only), 'merchant' (string, name of shop), 'category' (string, best guess: Meal, Transport, Medical, Other, Otba), 'date' (string, YYYY-MM-DD)." },
-                            { inline_data: { mime_type: mimeType, data: base64Data } }
-                        ]
-                    }]
-                })
-            });
+            // Retry Logic with multiple models
+            const models = [
+                'gemini-2.5-flash',
+                'gemini-2.0-flash',
+                'gemini-flash-latest'
+            ];
 
-            const data = await response.json();
+            let data;
+            let usedModel;
+
+            for (const model of models) {
+                try {
+                    console.log(`Attempting AI scan with model: ${model}...`);
+                    const response = await fetch(`https://generativelanguage.googleapis.com/v1beta/models/${model}:generateContent?key=${apiKey}`, {
+                        method: 'POST',
+                        headers: { 'Content-Type': 'application/json' },
+                        body: JSON.stringify({
+                            contents: [{
+                                parts: [
+                                    {
+                                        text: `我想做一个专业的财务审计与 OCR 数据提取专家。你的任务是从用户上传的报销单据（收据、发票）或车辆仪表盘（里程表）照片中精准提取结构化信息。
+
+# Output Format 请只返回一个纯 JSON 对象，不要包含任何 Markdown 格式（如 \`\`\`json）、不要有开场白、不要有任何解释说明。
+
+# Task Logic 请根据图片内容，自动判断是属于 receipt（财务收据）还是 odometer（里程表），并按照以下结构输出：
+
+1. 如果是财务收据 (Receipt Mode): 提取以下字段：
+
+merchant: 商家/供应商名称（例如：Shell, McDonald's, Hardware Store）。
+amount: 支付总额，必须是数字（例如：125.50）。
+date: 收据上的日期，格式统一为 YYYY-MM-DD。
+tax_amount: SST 或其他税额（数字，若未写则为 0）。
+invoice_no: 收据编号或发票号码（用于查重）。
+currency: 币种（例如：MYR）。
+category: 根据内容分类，必须限定在：Meal, Transport, Medical, Other 之一。
+
+2. 如果是里程表 (Odometer Mode): 提取以下字段：
+
+mileage: 仪表盘上显示的当前总行驶里程数，必须是纯数字（例如：45210）。
+
+# Constraints
+
+如果某个字段无法辨认，请设为 null。
+确保日期格式严格按照 YYYY-MM-DD。
+金额和里程必须是数字类型，不要带有单位。` },
+                                    { inline_data: { mime_type: mimeType, data: base64Data } }
+                                ]
+                            }]
+                        })
+                    });
+
+                    if (!response.ok) {
+                        const errText = await response.text();
+                        console.warn(`Model ${model} failed:`, errText);
+                        continue; // Try next model
+                    }
+
+                    data = await response.json();
+                    if (data.candidates && data.candidates.length > 0) {
+                        usedModel = model;
+                        break; // Success!
+                    }
+                } catch (e) {
+                    console.error(`Error with ${model}:`, e);
+                }
+            }
+
+            if (!data) {
+                throw new Error("All AI models failed. Please check your API Key or try again later.");
+            }
 
             if (data.error) {
                 throw new Error(data.error.message);
@@ -158,15 +219,38 @@ const ClaimsManagement: React.FC<ClaimsManagementProps> = ({ user }) => {
             const content = data.candidates?.[0]?.content?.parts?.[0]?.text;
             if (!content) throw new Error("No analysis returned.");
 
-            // cleanup potential markdown code blocks
-            const jsonStr = content.replace(/```json/g, '').replace(/```/g, '').trim();
-            const result = JSON.parse(jsonStr);
+            console.log("Raw AI Content:", content);
 
-            console.log("Gemini Result:", result);
+            // Robust JSON extraction: Find first '{' and last '}'
+            const start = content.indexOf('{');
+            const end = content.lastIndexOf('}');
+
+            let jsonStr = content;
+            if (start !== -1 && end !== -1) {
+                jsonStr = content.substring(start, end + 1);
+            }
+
+            let result;
+            try {
+                result = JSON.parse(jsonStr);
+            } catch (e) {
+                console.error("JSON Parse Error:", e);
+                alert("AI Error: Could not parse response. Raw: " + content.substring(0, 100));
+                return;
+            }
+
+            console.log("Parsed AI Result:", result);
 
             if (type === 'receipt') {
                 if (result.amount) setAmount(result.amount.toString());
-                if (result.merchant) setDescription(result.merchant);
+                if (result.merchant) setCompanyName(result.merchant); // Map merchant to company_name
+                if (result.invoice_no) setInvoiceNo(result.invoice_no);
+                if (result.tax_amount) setTaxAmount(result.tax_amount.toString());
+                if (result.date) setReceiptDate(result.date);
+
+                // Description fallback if empty
+                if (!description && result.merchant) setDescription(`${result.merchant} - ${result.category || 'Expense'}`);
+
                 if (result.category) {
                     // Map inferred category to exact state values
                     const allowedTypes = ['Meal', 'Transport', 'Medical', 'Otba', 'Other'];
@@ -179,6 +263,12 @@ const ClaimsManagement: React.FC<ClaimsManagementProps> = ({ user }) => {
                         else setClaimType('Other');
                     }
                 }
+            }
+
+            // Handle Odometer Mode logic from prompt
+            if (result.mileage) {
+                if (field === 'start') setOdometerStart(result.mileage.toString());
+                if (field === 'end') setOdometerEnd(result.mileage.toString());
             }
             // Odometer could be handled similarly if needed, but receipt is priority
 
@@ -250,7 +340,14 @@ const ClaimsManagement: React.FC<ClaimsManagementProps> = ({ user }) => {
 
             const { error: dbError } = await supabase
                 .from('claims')
-                .insert(newClaim);
+                .insert({
+                    ...newClaim,
+                    company_name: companyName,
+                    invoice_no: invoiceNo,
+                    tax_amount: Number(taxAmount) || 0,
+                    currency: currency,
+                    receipt_date: receiptDate || null
+                });
 
             if (dbError) throw dbError;
 
@@ -258,6 +355,12 @@ const ClaimsManagement: React.FC<ClaimsManagementProps> = ({ user }) => {
             setAmount('');
             setDescription('');
             setReceiptFile(null);
+            // Clear new fields
+            setCompanyName('');
+            setInvoiceNo('');
+            setTaxAmount('');
+            setReceiptDate('');
+
             alert("Claim Submitted Successfully!");
             fetchClaims(); // Refresh list immediately
 
@@ -269,8 +372,217 @@ const ClaimsManagement: React.FC<ClaimsManagementProps> = ({ user }) => {
         }
     };
 
+    // Modal Portal Definition
+    const modal = isModalOpen && createPortal(
+        <div className="fixed inset-0 z-[9999] overflow-y-auto">
+            {/* Backdrop */}
+            <div className="fixed inset-0 bg-black/80 backdrop-blur-sm" onClick={() => setIsModalOpen(false)}></div>
+
+            {/* Scrollable Container Wrapper */}
+            <div className="flex min-h-full items-center justify-center p-4 py-8 pointer-events-none">
+
+                {/* The Card */}
+                <div className="relative w-full max-w-2xl bg-gray-900 rounded-2xl border border-gray-700 shadow-2xl overflow-hidden pointer-events-auto animate-fade-in-up">
+
+                    {/* Header */}
+                    <div className="px-6 py-4 border-b border-gray-700 flex justify-between items-center bg-gray-800">
+                        <h2 className="text-xl font-bold text-white">New Claim</h2>
+                        <button onClick={() => setIsModalOpen(false)} className="text-gray-400 hover:text-white transition-colors">
+                            <X size={24} />
+                        </button>
+                    </div>
+
+                    {/* Content */}
+                    <div className="p-6">
+                        <form onSubmit={handleSubmit} className="space-y-5">
+                            <div className="space-y-4">
+                                {/* Row 1: Type & Date */}
+                                <div className="grid grid-cols-2 gap-4">
+                                    <div>
+                                        <label className="block text-xs font-bold text-gray-400 uppercase mb-1">Type</label>
+                                        <select
+                                            value={claimType}
+                                            onChange={e => setClaimType(e.target.value as any)}
+                                            className="w-full bg-gray-900/50 border border-gray-600 rounded-lg px-3 py-2 text-white text-sm outline-none focus:border-green-500 transition-all appearance-none"
+                                        >
+                                            <option value="Meal">Meal Allowance</option>
+                                            <option value="Transport">Transport / Petrol</option>
+                                            <option value="Medical">Medical</option>
+                                            <option value="Otba">Overtime (Backup)</option>
+                                            <option value="Other">Other</option>
+                                        </select>
+                                    </div>
+                                    <div>
+                                        <label className="block text-xs font-bold text-gray-400 uppercase mb-1">Receipt Date</label>
+                                        <input
+                                            type="date"
+                                            value={receiptDate}
+                                            onChange={(e) => setReceiptDate(e.target.value)}
+                                            className="w-full bg-gray-900/50 border border-gray-600 rounded-lg px-3 py-2 text-white text-sm outline-none focus:border-green-500 transition-all"
+                                        />
+                                    </div>
+                                </div>
+
+                                {/* Row 2: Finance Details */}
+                                <div className="p-3 bg-gray-900/40 rounded-xl border border-gray-700/50 space-y-3">
+                                    <div className="grid grid-cols-2 gap-3">
+                                        <div>
+                                            <label className="block text-[10px] font-bold text-gray-500 uppercase mb-1">Merchant</label>
+                                            <input
+                                                type="text"
+                                                value={companyName}
+                                                onChange={(e) => setCompanyName(e.target.value)}
+                                                placeholder="e.g. Shell"
+                                                className="w-full bg-transparent border-b border-gray-600 px-2 py-1 text-white text-sm focus:border-blue-400 outline-none transition-colors placeholder-gray-600"
+                                            />
+                                        </div>
+                                        <div>
+                                            <label className="block text-[10px] font-bold text-gray-500 uppercase mb-1">Invoice No.</label>
+                                            <input
+                                                type="text"
+                                                value={invoiceNo}
+                                                onChange={(e) => setInvoiceNo(e.target.value)}
+                                                placeholder="e.g. INV-123"
+                                                className="w-full bg-transparent border-b border-gray-600 px-2 py-1 text-white text-sm focus:border-blue-400 outline-none transition-colors placeholder-gray-600"
+                                            />
+                                        </div>
+                                    </div>
+
+                                    <div className="grid grid-cols-3 gap-3 pt-1">
+                                        <div>
+                                            <label className="block text-[10px] font-bold text-gray-500 uppercase mb-1">Currency</label>
+                                            <select
+                                                value={currency}
+                                                onChange={(e) => setCurrency(e.target.value)}
+                                                className="w-full bg-transparent border-b border-gray-600 px-2 py-1 text-white text-sm focus:border-blue-500 outline-none appearance-none"
+                                            >
+                                                <option value="MYR">MYR</option>
+                                                <option value="USD">USD</option>
+                                                <option value="SGD">SGD</option>
+                                                <option value="CNY">CNY</option>
+                                            </select>
+                                        </div>
+                                        <div>
+                                            <label className="block text-[10px] font-bold text-gray-500 uppercase mb-1">Tax</label>
+                                            <input
+                                                type="number"
+                                                value={taxAmount}
+                                                onChange={(e) => setTaxAmount(e.target.value)}
+                                                placeholder="0.00"
+                                                className="w-full bg-transparent border-b border-gray-600 px-2 py-1 text-white text-sm focus:border-blue-500 outline-none placeholder-gray-600"
+                                            />
+                                        </div>
+                                        <div>
+                                            <label className="block text-[10px] font-bold text-gray-500 uppercase mb-1">Total</label>
+                                            <input
+                                                type="number"
+                                                value={amount}
+                                                onChange={(e) => setAmount(e.target.value)}
+                                                placeholder="0.00"
+                                                className="w-full bg-transparent border-b border-green-500/50 px-2 py-1 text-green-400 font-bold text-sm focus:border-green-400 outline-none placeholder-gray-700"
+                                            />
+                                        </div>
+                                    </div>
+                                </div>
+                            </div>
+
+
+                            <div>
+                                <label className="block text-xs font-bold text-gray-500 uppercase mb-1">Description</label>
+                                <textarea
+                                    value={description}
+                                    onChange={e => setDescription(e.target.value)}
+                                    className="w-full bg-gray-900 border border-gray-700 rounded-lg px-3 py-2 text-white outline-none focus:border-green-500 h-20 resize-none text-sm"
+                                    placeholder="e.g. Detailed breakdown of expenses..."
+                                />
+                            </div>
+                            <div>
+                                <label className="block text-xs font-bold text-gray-500 uppercase mb-1">Receipt Photo {scanning && <span className="text-green-500 animate-pulse">(Analyzing...)</span>}</label>
+                                <div className="border-2 border-dashed border-gray-700 rounded-xl p-4 text-center hover:border-green-500 transition-colors cursor-pointer relative bg-gray-900/50">
+                                    <input
+                                        type="file"
+                                        accept="image/*"
+                                        onChange={(e) => handleFileChange(e, 'receipt')}
+                                        className="absolute inset-0 opacity-0 cursor-pointer"
+                                    />
+                                    <Upload className="mx-auto text-gray-500 mb-2" />
+                                    <p className="text-xs text-gray-400">{receiptFile ? 'Photo/Upload Selected' : 'Take Photo / Upload'}</p>
+                                </div>
+                            </div>
+
+                            {/* DRIVER SPECIFIC FIELDS */}
+                            {claimType === 'Transport' && (
+                                <div className="space-y-4 bg-gray-700/30 p-4 rounded-xl border border-gray-600">
+                                    <h4 className="text-sm font-bold text-blue-400 flex items-center gap-2">
+                                        <div className="w-2 h-2 rounded-full bg-blue-500"></div> Driver Trip Log
+                                    </h4>
+
+                                    <div className="grid grid-cols-2 gap-4">
+                                        {/* Start ODO */}
+                                        <div>
+                                            <label className="block text-[10px] uppercase text-gray-500 mb-1">Start ODO (Photo)</label>
+                                            <div className="relative border border-gray-600 rounded-lg p-2 text-center bg-gray-800">
+                                                <input type="file" accept="image/*" onChange={(e) => handleFileChange(e, 'start')} className="absolute inset-0 opacity-0 z-10" />
+                                                <span className="text-xs text-blue-300">{startFile ? 'Captured' : '+ Photo'}</span>
+                                            </div>
+                                            <input
+                                                type="number"
+                                                value={odometerStart}
+                                                onChange={e => setOdometerStart(e.target.value)}
+                                                className="w-full bg-transparent border-b border-gray-600 text-white text-sm mt-2 focus:border-blue-500 outline-none"
+                                                placeholder="00000"
+                                            />
+                                        </div>
+
+                                        {/* End ODO */}
+                                        <div>
+                                            <label className="block text-[10px] uppercase text-gray-500 mb-1">End ODO (Photo)</label>
+                                            <div className="relative border border-gray-600 rounded-lg p-2 text-center bg-gray-800">
+                                                <input type="file" accept="image/*" onChange={(e) => handleFileChange(e, 'end')} className="absolute inset-0 opacity-0 z-10" />
+                                                <span className="text-xs text-blue-300">{endFile ? 'Captured' : '+ Photo'}</span>
+                                            </div>
+                                            <input
+                                                type="number"
+                                                value={odometerEnd}
+                                                onChange={e => setOdometerEnd(e.target.value)}
+                                                className="w-full bg-transparent border-b border-gray-600 text-white text-sm mt-2 focus:border-blue-500 outline-none"
+                                                placeholder="00000"
+                                            />
+                                        </div>
+                                    </div>
+
+                                    <div className="text-right">
+                                        <p className="text-xs text-gray-400">Total Distance: <span className="text-white font-bold text-lg">{distance} km</span></p>
+                                    </div>
+                                </div>
+                            )}
+
+                            <div className="flex gap-3 mt-6">
+                                <button
+                                    type="button"
+                                    onClick={() => setIsModalOpen(false)}
+                                    className="flex-1 bg-gray-700 hover:bg-gray-600 text-white py-3 rounded-xl font-bold transition-colors"
+                                >
+                                    Cancel
+                                </button>
+                                <button
+                                    type="submit"
+                                    disabled={submitting}
+                                    className={`flex-1 bg-green-600 hover:bg-green-500 text-white py-3 rounded-xl font-bold shadow-lg transition-all ${submitting ? 'opacity-50 cursor-not-allowed' : ''}`}
+                                >
+                                    {submitting ? 'Submitting...' : 'Submit Claim'}
+                                </button>
+                            </div>
+                        </form>
+                    </div>
+                </div>
+            </div>
+        </div>,
+        document.body
+    );
+
     return (
-        <div className="max-w-4xl mx-auto p-6 animate-fade-in">
+        <div className="p-6 max-w-7xl mx-auto space-y-6 pb-24">
             <div className="flex justify-between items-center mb-8">
                 <div>
                     <h1 className="text-3xl font-bold text-white flex items-center gap-3">
@@ -278,7 +590,7 @@ const ClaimsManagement: React.FC<ClaimsManagementProps> = ({ user }) => {
                         {isAdmin ? 'Claims Management' : 'My Claims'}
                     </h1>
                     <p className="text-gray-400 mt-1">Submit and track expense reimbursements.</p>
-                </div>
+                </div >
                 <div className="flex gap-3">
                     {/* API Key Toggle - More Visible */}
                     <button
@@ -313,27 +625,29 @@ const ClaimsManagement: React.FC<ClaimsManagementProps> = ({ user }) => {
                         <Plus size={20} /> New Claim
                     </button>
                 </div>
-            </div>
+            </div >
 
             {/* API Key Modal/Input (Conditional) */}
-            {showKeyInput && (
-                <div className="bg-gray-800 p-4 rounded-xl border border-blue-500/30 mb-6 flex items-center gap-4 animate-fade-in">
-                    <span className="text-sm font-bold text-blue-400 whitespace-nowrap">Google API Key:</span>
-                    <input
-                        type="password"
-                        value={apiKey}
-                        onChange={(e) => setApiKey(e.target.value)}
-                        placeholder="AIza..."
-                        className="flex-1 bg-gray-900 border border-gray-700 rounded px-3 py-1.5 text-white text-sm outline-none focus:border-blue-500"
-                    />
-                    <button
-                        onClick={handleSaveKey}
-                        className="bg-blue-600 hover:bg-blue-500 text-white px-4 py-1.5 rounded-lg text-sm font-bold"
-                    >
-                        Save
-                    </button>
-                </div>
-            )}
+            {
+                showKeyInput && (
+                    <div className="bg-gray-800 p-4 rounded-xl border border-blue-500/30 mb-6 flex items-center gap-4 animate-fade-in">
+                        <span className="text-sm font-bold text-blue-400 whitespace-nowrap">Google API Key:</span>
+                        <input
+                            type="password"
+                            value={apiKey}
+                            onChange={(e) => setApiKey(e.target.value)}
+                            placeholder="AIza..."
+                            className="flex-1 bg-gray-900 border border-gray-700 rounded px-3 py-1.5 text-white text-sm outline-none focus:border-blue-500"
+                        />
+                        <button
+                            onClick={handleSaveKey}
+                            className="bg-blue-600 hover:bg-blue-500 text-white px-4 py-1.5 rounded-lg text-sm font-bold"
+                        >
+                            Save
+                        </button>
+                    </div>
+                )
+            }
 
             {/* Claims Stats */}
             <div className="grid grid-cols-3 gap-4 mb-8">
@@ -422,125 +736,9 @@ const ClaimsManagement: React.FC<ClaimsManagementProps> = ({ user }) => {
                 )}
             </div>
 
-            {/* Modal */}
-            {isModalOpen && (
-                <div className="fixed inset-0 bg-black/80 backdrop-blur-sm z-50 flex items-center justify-center p-4">
-                    <div className="bg-gray-800 rounded-2xl border border-gray-700 w-full max-w-md shadow-2xl">
-                        <div className="p-6 border-b border-gray-700 flex justify-between items-center">
-                            <h2 className="text-xl font-bold text-white">New Claim</h2>
-                            <button onClick={() => setIsModalOpen(false)} className="text-gray-400 hover:text-white"><X /></button>
-                        </div>
-                        <form onSubmit={handleSubmit} className="p-6 space-y-4">
-                            <div>
-                                <label className="block text-xs font-bold text-gray-500 uppercase mb-1">Type</label>
-                                <select
-                                    value={claimType}
-                                    onChange={e => setClaimType(e.target.value as any)}
-                                    className="w-full bg-gray-900 border border-gray-700 rounded px-3 py-2 text-white outline-none focus:border-green-500"
-                                >
-                                    <option value="Meal">Meal Allowance</option>
-                                    <option value="Transport">Transport / Petrol</option>
-                                    <option value="Medical">Medical</option>
-                                    <option value="Otba">Overtime (Backup)</option>
-                                    <option value="Other">Other</option>
-                                </select>
-                            </div>
-                            <div>
-                                <label className="block text-xs font-bold text-gray-500 uppercase mb-1">Amount (RM)</label>
-                                <input
-                                    type="number"
-                                    step="0.01"
-                                    required
-                                    value={amount}
-                                    onChange={e => setAmount(e.target.value)}
-                                    className="w-full bg-gray-900 border border-gray-700 rounded px-3 py-2 text-white outline-none focus:border-green-500"
-                                    placeholder="0.00"
-                                />
-                            </div>
-                            <div>
-                                <label className="block text-xs font-bold text-gray-500 uppercase mb-1">Description</label>
-                                <input
-                                    type="text"
-                                    required
-                                    value={description}
-                                    onChange={e => setDescription(e.target.value)}
-                                    className="w-full bg-gray-900 border border-gray-700 rounded px-3 py-2 text-white outline-none focus:border-green-500"
-                                    placeholder="Dinner with client..."
-                                />
-                            </div>
-                            <div>
-                                <label className="block text-xs font-bold text-gray-500 uppercase mb-1">Receipt Photo {scanning && <span className="text-green-500 animate-pulse">(Analyzing...)</span>}</label>
-                                <div className="border-2 border-dashed border-gray-700 rounded-xl p-4 text-center hover:border-green-500 transition-colors cursor-pointer relative bg-gray-900/50">
-                                    <input
-                                        type="file"
-                                        accept="image/*"
-                                        onChange={(e) => handleFileChange(e, 'receipt')}
-                                        className="absolute inset-0 opacity-0 cursor-pointer"
-                                    />
-                                    <Upload className="mx-auto text-gray-500 mb-2" />
-                                    <p className="text-xs text-gray-400">{receiptFile ? 'Photo/Upload Selected' : 'Take Photo / Upload'}</p>
-                                </div>
-                            </div>
-
-                            {/* DRIVER SPECIFIC FIELDS */}
-                            {claimType === 'Transport' && (
-                                <div className="space-y-4 bg-gray-700/30 p-4 rounded-xl border border-gray-600">
-                                    <h4 className="text-sm font-bold text-blue-400 flex items-center gap-2">
-                                        <div className="w-2 h-2 rounded-full bg-blue-500"></div> Driver Trip Log
-                                    </h4>
-
-                                    <div className="grid grid-cols-2 gap-4">
-                                        {/* Start ODO */}
-                                        <div>
-                                            <label className="block text-[10px] uppercase text-gray-500 mb-1">Start ODO (Photo)</label>
-                                            <div className="relative border border-gray-600 rounded-lg p-2 text-center bg-gray-800">
-                                                <input type="file" accept="image/*" onChange={(e) => handleFileChange(e, 'start')} className="absolute inset-0 opacity-0 z-10" />
-                                                <span className="text-xs text-blue-300">{startFile ? 'Captured' : '+ Photo'}</span>
-                                            </div>
-                                            <input
-                                                type="number"
-                                                value={odometerStart}
-                                                onChange={e => setOdometerStart(e.target.value)}
-                                                className="w-full bg-transparent border-b border-gray-600 text-white text-sm mt-2 focus:border-blue-500 outline-none"
-                                                placeholder="00000"
-                                            />
-                                        </div>
-
-                                        {/* End ODO */}
-                                        <div>
-                                            <label className="block text-[10px] uppercase text-gray-500 mb-1">End ODO (Photo)</label>
-                                            <div className="relative border border-gray-600 rounded-lg p-2 text-center bg-gray-800">
-                                                <input type="file" accept="image/*" onChange={(e) => handleFileChange(e, 'end')} className="absolute inset-0 opacity-0 z-10" />
-                                                <span className="text-xs text-blue-300">{endFile ? 'Captured' : '+ Photo'}</span>
-                                            </div>
-                                            <input
-                                                type="number"
-                                                value={odometerEnd}
-                                                onChange={e => setOdometerEnd(e.target.value)}
-                                                className="w-full bg-transparent border-b border-gray-600 text-white text-sm mt-2 focus:border-blue-500 outline-none"
-                                                placeholder="00000"
-                                            />
-                                        </div>
-                                    </div>
-
-                                    <div className="text-right">
-                                        <p className="text-xs text-gray-400">Total Distance: <span className="text-white font-bold text-lg">{distance} km</span></p>
-                                    </div>
-                                </div>
-                            )}
-
-                            <button
-                                type="submit"
-                                disabled={submitting}
-                                className={`w-full bg-green-600 hover:bg-green-500 text-white py-3 rounded-xl font-bold mt-4 shadow-lg ${submitting ? 'opacity-50 cursor-not-allowed' : ''}`}
-                            >
-                                {submitting ? 'Submitting...' : 'Submit Claim'}
-                            </button>
-                        </form>
-                    </div>
-                </div>
-            )}
-        </div>
+            {/* Modal Portal rendered here */}
+            {modal}
+        </div >
     );
 };
 

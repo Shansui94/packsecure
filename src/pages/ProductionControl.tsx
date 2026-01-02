@@ -26,10 +26,11 @@ interface ProductionLaneProps {
     user: User | null;
     activeJob: JobOrder | null;
     onProductionComplete: () => void;
+    onBeforeProduce?: () => boolean; // New Prop
     className?: string;
 }
 
-const ProductionLane: React.FC<ProductionLaneProps> = ({ laneId, machineMetadata, user, activeJob, onProductionComplete, className }) => {
+const ProductionLane: React.FC<ProductionLaneProps> = ({ laneId, machineMetadata, user, activeJob, onProductionComplete, onBeforeProduce, className }) => {
     // Local State for this Lane
     const [step, setStep] = useState<1 | 2 | 3>(1);
     const [selectedLayer, setSelectedLayer] = useState<ProductLayer>('Single');
@@ -60,6 +61,11 @@ const ProductionLane: React.FC<ProductionLaneProps> = ({ laneId, machineMetadata
 
     // STEP 3 HANDLER (PRODUCTION ENTRY)
     const completeProduction = async (qty: number) => {
+        // PRE-CHECK: Operator Login
+        if (onBeforeProduce && !onBeforeProduce()) {
+            return; // Blocked
+        }
+
         // Cooldown Check (2 Seconds)
         const now = Date.now();
         if (now - lastProducedTime < 2000) {
@@ -346,8 +352,10 @@ interface ProductionControlProps {
 }
 
 const ProductionControl: React.FC<ProductionControlProps> = ({ user, jobs = [] }) => {
-    // Machine Selection State (Persisted in Session)
-    const [selectedMachine, setSelectedMachine] = useState<string | null>(sessionStorage.getItem('selectedMachine'));
+    // Machine Selection State (Persisted in Session & Local)
+    const [selectedMachine, setSelectedMachine] = useState<string | null>(
+        sessionStorage.getItem('selectedMachine') || localStorage.getItem('device_machine_id')
+    );
     const [machineMetadata, setMachineMetadata] = useState<Machine | null>(null);
     const currentMachineName = machineMetadata?.name || selectedMachine || 'Unknown Machine';
 
@@ -358,16 +366,89 @@ const ProductionControl: React.FC<ProductionControlProps> = ({ user, jobs = [] }
     // Operator ID State
     const [operatorId, setOperatorId] = useState<string | null>(null);
     const [operatorName, setOperatorName] = useState<string | null>(null);
-    const [loginTime] = useState(new Date());
-    const [debugStatus, setDebugStatus] = useState<string>("Initializing...");
+    // PIN Login State
+    const [isLoginModalOpen, setIsLoginModalOpen] = useState(false);
+    const [isLogoutMode, setIsLogoutMode] = useState(false); // New: Track if PIN is for logout
+    const [pinCode, setPinCode] = useState("");
+    const [loginError, setLoginError] = useState("");
+
+    // PIN Handlers
+    const handlePinPress = (num: number) => {
+        if (pinCode.length < 4) {
+            const newPin = pinCode + num;
+            setPinCode(newPin);
+            if (newPin.length === 4) {
+                verifyPin(newPin);
+            }
+        }
+    };
+
+    const handleClearPin = () => {
+        setPinCode("");
+        setLoginError("");
+    };
+
+    const verifyPin = async (code: string) => {
+        setLoginError("");
+        try {
+            // Check sys_users_v2 for this PIN
+            const { data, error } = await supabase
+                .from('sys_users_v2')
+                .select('id, name')
+                .eq('pin_code', code)
+                .eq('status', 'Active') // Ensure active
+                .single();
+
+            if (data) {
+                if (isLogoutMode) {
+                    // VERIFY LOGOUT
+                    if (data.id === operatorId) {
+                        setOperatorId(null);
+                        setOperatorName(null);
+                        setIsLoginModalOpen(false);
+                        setIsLogoutMode(false);
+                        setPinCode("");
+                    } else {
+                        setLoginError("Wrong PIN for current user");
+                        setTimeout(() => setPinCode(""), 500);
+                    }
+                } else {
+                    // LOGIN
+                    setOperatorId(data.id);
+                    setOperatorName(data.name);
+                    setIsLoginModalOpen(false);
+                    setPinCode("");
+                }
+            } else {
+                setLoginError("Invalid PIN");
+                setTimeout(() => setPinCode(""), 500); // Auto clear after visual feedback
+            }
+        } catch (err) {
+            setLoginError("System Error");
+            console.error(err);
+        }
+    };
+
+    const initiateClockOut = () => {
+        setIsLogoutMode(true);
+        setIsLoginModalOpen(true);
+    };
+
+    const handleDeviceLogout = async () => {
+        if (window.confirm("Disconnect Device from this Machine?")) {
+            sessionStorage.removeItem('selectedMachine');
+            localStorage.removeItem('device_machine_id');
+            // Force reload to trigger App-level logout or re-login flow
+            window.location.reload();
+        }
+    };
 
     // Effect: Resolve Machine Metadata
     useEffect(() => {
         if (!selectedMachine) return;
         const resolveMachine = async () => {
-            // Try by ID first (T1.2-M01), then by Code
             let machine = await getMachineByCode(selectedMachine);
-            if (!machine && selectedMachine.length > 5) { // Arbitrary length check
+            if (!machine && selectedMachine.length > 5) {
                 machine = await getMachineById(selectedMachine);
             }
             if (machine) setMachineMetadata(machine);
@@ -375,25 +456,6 @@ const ProductionControl: React.FC<ProductionControlProps> = ({ user, jobs = [] }
         resolveMachine();
     }, [selectedMachine]);
 
-    // Handle Check-In
-    const handleMachineCheckIn = async (machineId: string) => {
-        await new Promise(resolve => setTimeout(resolve, 800));
-        setSelectedMachine(machineId);
-        sessionStorage.setItem('selectedMachine', machineId);
-    };
-
-    // Handle Check-Out
-    const handleChangeMachine = async () => {
-        if (selectedMachine && user?.email) {
-            const confirmed = window.confirm("Checking out will download your daily report. Continue?");
-            if (!confirmed) return;
-            // Report generation logic omitted for brevity (preserved if needed, but simplifying for now)
-            // Re-adding essential report logic if needed or just cleared out
-        }
-        setSelectedMachine(null);
-        setMachineMetadata(null);
-        sessionStorage.removeItem('selectedMachine');
-    };
 
     // Find Active Job
     useEffect(() => {
@@ -404,33 +466,6 @@ const ProductionControl: React.FC<ProductionControlProps> = ({ user, jobs = [] }
         );
         setActiveJob(job || null);
     }, [jobs, selectedMachine]);
-
-    // Resolve User Logic (Simplified restoration from previous)
-    useEffect(() => {
-        const authId = user?.uid || user?.id;
-        if (!authId) return;
-
-        const resolveUser = async () => {
-            const { data } = await supabase.from('sys_users_v2').select('id, name').eq('auth_user_id', authId).single();
-            if (data) {
-                setOperatorId(data.id);
-                setOperatorName(data.name);
-            } else {
-                // Auto-create logic (Condensed)
-                const { data: newProfile } = await supabase.from('sys_users_v2').insert({
-                    auth_user_id: authId,
-                    name: user?.email?.split('@')[0] || 'Operator',
-                    role: 'Operator',
-                    status: 'Active'
-                }).select().single();
-                if (newProfile) {
-                    setOperatorId(newProfile.id);
-                    setOperatorName(newProfile.name);
-                }
-            }
-        };
-        resolveUser();
-    }, [user]);
 
     // Fetch Logs
     const fetchUserLogs = async () => {
@@ -462,12 +497,29 @@ const ProductionControl: React.FC<ProductionControlProps> = ({ user, jobs = [] }
                     (payload) => { if (payload.new.operator_id === operatorId) fetchUserLogs(); })
                 .subscribe();
             return () => { supabase.removeChannel(sub); };
+        } else {
+            setRecentLogs([]);
         }
     }, [operatorId]);
 
 
     // --- DUAL LANE CHECK ---
     const isDualLane = selectedMachine === 'T1.2-M01' || machineMetadata?.id === 'T1.2-M01' || machineMetadata?.machine_id === 'T1.2-M01';
+
+    // TRIGGER FOR PRODUCTION (Pass to Lanes)
+    // We need to intercept the lane's attempt to produce and check Operator ID
+    const handleProductionAttempt = () => {
+        if (!operatorId) {
+            setIsLogoutMode(false);
+            setIsLoginModalOpen(true);
+            return false; // Block production
+        }
+        return true; // Allow production
+    };
+
+    // We need to pass this check down to ProductionLane? 
+    // Or ProductionLane calls a callback?
+    // Let's modify ProductionLane to accept an `onBeforeProduce` prop.
 
     return (
         <div className="min-h-screen bg-slate-900 text-white font-sans selection:bg-cyan-500/30 overflow-x-hidden relative">
@@ -494,25 +546,72 @@ const ProductionControl: React.FC<ProductionControlProps> = ({ user, jobs = [] }
                             </div>
                         )}
                     </div>
-                    {selectedMachine && (
-                        <button onClick={handleChangeMachine} className="px-3 py-1.5 rounded-lg bg-red-500/10 text-red-400 text-xs font-bold border border-red-500/20 hover:bg-red-500/20 flex items-center gap-1">
-                            <LogOut size={12} /> EXIT
+
+                    <div className="flex items-center gap-2">
+                        {/* CLOCK IN / OUT BUTTONS - HEADER PLACEMENT */}
+                        {!operatorId ? (
+                            <button
+                                onClick={() => setIsLoginModalOpen(true)}
+                                className="bg-green-600 hover:bg-green-500 text-white font-bold py-2 px-4 rounded-lg shadow-lg border border-green-400/50 flex items-center gap-2 animate-pulse"
+                            >
+                                <Clock size={16} /> CLOCK IN
+                            </button>
+                        ) : (
+                            <button
+                                onClick={initiateClockOut}
+                                className="bg-red-600 hover:bg-red-500 text-white font-bold py-2 px-4 rounded-lg shadow-lg border border-red-400/50 flex items-center gap-2"
+                            >
+                                <LogOut size={16} /> CLOCK OUT
+                            </button>
+                        )}
+
+                        {/* DEVICE LOGOUT */}
+                        <button onClick={handleDeviceLogout} className="px-3 py-1.5 rounded-lg bg-gray-800 text-red-400 text-xs font-bold border border-red-500/20 hover:bg-red-900/40 flex items-center gap-1 ml-4">
+                            EXIT DEVICE
                         </button>
-                    )}
+                    </div>
                 </header>
 
                 {!selectedMachine ? (
-                    <div className="flex-1 flex flex-col items-center justify-center animate-fade-in-up">
-                        <div className="bg-black/60 backdrop-blur-2xl border border-white/10 rounded-3xl p-8 max-w-md w-full text-center">
-                            <h1 className="text-3xl font-black text-white mb-2">STATION ACCESS</h1>
-                            <p className="text-gray-400 text-sm mb-6">Scan specific machine ID to begin.</p>
-                            <div className="h-[300px] w-full rounded-2xl overflow-hidden border border-white/10 relative">
-                                <MachineCheckIn onCheckIn={handleMachineCheckIn} />
-                            </div>
+                    <div className="flex-1 flex flex-col items-center justify-center">
+                        <div className="text-center p-10 bg-black/40 rounded-3xl border border-white/10">
+                            <div className="text-red-400 text-6xl mb-4">⚠️</div>
+                            <h2 className="text-2xl font-bold text-white mb-2">Device Not Configured</h2>
+                            <p className="text-gray-400 mb-6">No machine selected. Please login as a device.</p>
+                            <button onClick={handleDeviceLogout} className="bg-red-600 px-6 py-2 rounded-xl font-bold">Return to Login</button>
                         </div>
                     </div>
                 ) : (
                     <main className="flex-1 flex flex-col gap-4">
+
+                        {/* OPERATOR STATUS BANNER */}
+                        {operatorId ? (
+                            <div className="bg-green-500/10 border border-green-500/20 p-4 rounded-xl flex items-center justify-between">
+                                <div className="flex items-center gap-3">
+                                    <div className="w-10 h-10 rounded-full bg-green-500/20 flex items-center justify-center text-green-400">
+                                        <Clock size={20} />
+                                    </div>
+                                    <div>
+                                        <p className="text-green-400 text-xs font-bold uppercase tracking-wider">Operator On Duty</p>
+                                        <p className="text-white font-bold text-lg leading-none">{operatorName}</p>
+                                    </div>
+                                </div>
+                                {/* Clock Out button moved to header */}
+                            </div>
+                        ) : (
+                            <div className="bg-yellow-500/10 border border-yellow-500/20 p-4 rounded-xl flex items-center justify-between animate-pulse">
+                                <div className="flex items-center gap-3">
+                                    <div className="w-10 h-10 rounded-full bg-yellow-500/20 flex items-center justify-center text-yellow-400">
+                                        <LogOut size={20} />
+                                    </div>
+                                    <div>
+                                        <p className="text-yellow-400 text-xs font-bold uppercase tracking-wider">Device Locked</p>
+                                        <p className="text-white font-bold text-sm leading-none">Clock In Required to Produce</p>
+                                    </div>
+                                </div>
+                                {/* Clock In button moved to header */}
+                            </div>
+                        )}
 
                         {/* DUAL LANE LAYOUT */}
                         {isDualLane ? (
@@ -523,6 +622,7 @@ const ProductionControl: React.FC<ProductionControlProps> = ({ user, jobs = [] }
                                     user={user}
                                     activeJob={activeJob}
                                     onProductionComplete={fetchUserLogs}
+                                    onBeforeProduce={handleProductionAttempt}
                                 />
                                 <ProductionLane
                                     laneId="Right"
@@ -530,6 +630,7 @@ const ProductionControl: React.FC<ProductionControlProps> = ({ user, jobs = [] }
                                     user={user}
                                     activeJob={activeJob}
                                     onProductionComplete={fetchUserLogs}
+                                    onBeforeProduce={handleProductionAttempt}
                                 />
                             </div>
                         ) : (
@@ -540,6 +641,7 @@ const ProductionControl: React.FC<ProductionControlProps> = ({ user, jobs = [] }
                                 user={user}
                                 activeJob={activeJob}
                                 onProductionComplete={fetchUserLogs}
+                                onBeforeProduce={handleProductionAttempt}
                             />
                         )}
 
@@ -564,6 +666,68 @@ const ProductionControl: React.FC<ProductionControlProps> = ({ user, jobs = [] }
                             </div>
                         </div>
                     </main>
+                )}
+
+                {/* PIN MODAL */}
+                {isLoginModalOpen && (
+                    <div className="fixed inset-0 z-[200] bg-black/90 backdrop-blur-xl flex items-center justify-center p-4">
+                        <div className="bg-gray-900 border border-white/10 rounded-3xl p-8 w-full max-w-sm shadow-2xl relative">
+                            <button
+                                onClick={() => setIsLoginModalOpen(false)}
+                                className="absolute top-4 right-4 text-gray-500 hover:text-white"
+                            >
+                                <div className="bg-white/10 p-2 rounded-full"><span className="text-xl">✕</span></div>
+                            </button>
+
+                            <div className="text-center mb-8">
+                                <h2 className="text-2xl font-black text-white mb-2">{isLogoutMode ? 'CLOCK OUT' : 'OPERATOR LOGIN'}</h2>
+                                <p className="text-gray-400 text-sm">Enter your 4-digit PIN code</p>
+                            </div>
+
+                            {/* PIN DOTS */}
+                            <div className="flex justify-center gap-4 mb-8">
+                                {[0, 1, 2, 3].map(i => (
+                                    <div
+                                        key={i}
+                                        className={`w-4 h-4 rounded-full transition-all duration-200 ${
+                                            // Show filled valid dots
+                                            i < pinCode.length
+                                                ? (loginError ? 'bg-red-500' : 'bg-green-400')
+                                                : 'bg-gray-700'
+                                            }`}
+                                    ></div>
+                                ))}
+                            </div>
+
+                            {loginError && <div className="text-red-400 text-center font-bold mb-4 animate-shake">{loginError}</div>}
+
+                            {/* KEYPAD */}
+                            <div className="grid grid-cols-3 gap-4">
+                                {[1, 2, 3, 4, 5, 6, 7, 8, 9].map(num => (
+                                    <button
+                                        key={num}
+                                        onClick={() => handlePinPress(num)}
+                                        className="h-16 rounded-2xl bg-gray-800 text-2xl font-bold text-white hover:bg-gray-700 active:bg-gray-600 transition-colors border border-white/5"
+                                    >
+                                        {num}
+                                    </button>
+                                ))}
+                                <div className="col-span-1"></div>
+                                <button
+                                    onClick={() => handlePinPress(0)}
+                                    className="h-16 rounded-2xl bg-gray-800 text-2xl font-bold text-white hover:bg-gray-700 active:bg-gray-600 transition-colors border border-white/5"
+                                >
+                                    0
+                                </button>
+                                <button
+                                    onClick={handleClearPin}
+                                    className="h-16 rounded-2xl bg-red-900/40 text-red-400 font-bold hover:bg-red-900/60 active:bg-red-900 transition-colors border border-red-500/20 flex items-center justify-center"
+                                >
+                                    CLR
+                                </button>
+                            </div>
+                        </div>
+                    </div>
                 )}
             </div>
             <style>{`
