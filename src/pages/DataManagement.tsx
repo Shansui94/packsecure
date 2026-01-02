@@ -236,7 +236,7 @@ export default function DataManagement() {
 
                 {/* 2. LIST VIEW */}
                 <div className="w-full md:w-80 lg:w-96 bg-[#0c0c0e] border-r border-white/5 flex flex-col z-10">
-                    <div className="p-4 border-b border-white/5 flex flex-col gap-3 backdrop-blur-md sticky top-0">
+                    <div className="p-4 border-b border-white/5 flex flex-col gap-3 backdrop-blur-md sticky top-0 bg-[#0c0c0e]/95 z-20">
                         <h2 className="text-xl font-bold text-white tracking-tight flex items-center gap-2">
                             {TABS.find(t => t.id === activeTab)?.label}
                             <span className="text-xs bg-white/10 px-2 py-0.5 rounded-full text-gray-400 font-normal">{data.length}</span>
@@ -250,11 +250,8 @@ export default function DataManagement() {
                                 placeholder="Search records..."
                             />
                         </div>
-                    </div>
 
-                    <div className="flex-1 overflow-y-auto p-2 scrollbar-thin scrollbar-thumb-gray-800">
-
-                        <div className="flex gap-2 mb-2 px-1">
+                        <div className="flex gap-2 pt-1 border-t border-white/5 mt-1">
                             {/* Hidden File Input */}
                             <input
                                 type="file"
@@ -266,25 +263,29 @@ export default function DataManagement() {
 
                             <button
                                 onClick={handleCreateNew}
-                                className="flex-1 p-3 rounded-xl border border-dashed border-white/10 hover:border-indigo-500/50 hover:bg-indigo-500/5 text-gray-400 hover:text-indigo-400 text-sm font-bold flex items-center justify-center gap-2 transition-all"
+                                className="flex-1 p-2.5 rounded-xl border border-dashed border-white/10 hover:border-indigo-500/50 hover:bg-indigo-500/5 text-gray-400 hover:text-indigo-400 text-sm font-bold flex items-center justify-center gap-2 transition-all bg-[#0c0c0e]"
                             >
                                 <Plus size={16} /> New
                             </button>
                             <button
                                 onClick={handleExport}
-                                className="p-3 rounded-xl border border-dashed border-white/10 hover:border-green-500/50 hover:bg-green-500/5 text-gray-400 hover:text-green-400 text-sm font-bold flex items-center justify-center gap-2 transition-all"
+                                className="p-2.5 rounded-xl border border-dashed border-white/10 hover:border-green-500/50 hover:bg-green-500/5 text-gray-400 hover:text-green-400 text-sm font-bold flex items-center justify-center gap-2 transition-all bg-[#0c0c0e]"
                                 title="Export CSV"
                             >
                                 <Download size={16} />
                             </button>
                             <button
                                 onClick={handleImportClick}
-                                className="p-3 rounded-xl border border-dashed border-white/10 hover:border-orange-500/50 hover:bg-orange-500/5 text-gray-400 hover:text-orange-400 text-sm font-bold flex items-center justify-center gap-2 transition-all"
+                                className="p-2.5 rounded-xl border border-dashed border-white/10 hover:border-orange-500/50 hover:bg-orange-500/5 text-gray-400 hover:text-orange-400 text-sm font-bold flex items-center justify-center gap-2 transition-all bg-[#0c0c0e]"
                                 title="Import CSV"
                             >
                                 <Upload size={16} />
                             </button>
                         </div>
+                    </div>
+
+                    <div className="flex-1 overflow-y-auto p-2 scrollbar-thin scrollbar-thumb-gray-800">
+
 
                         {loading ? (
                             <div className="text-center py-10 text-gray-600 text-sm animate-pulse">Loading Data...</div>
