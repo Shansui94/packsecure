@@ -306,8 +306,8 @@ const Login: React.FC<LoginProps> = ({ onLogin }) => {
                                 {/* DEMO ACCOUNTS */}
                                 <div className="pt-6 border-t border-white/5">
                                     <label className="block text-[10px] font-bold text-slate-500 uppercase tracking-widest mb-3 text-center">— Quick Demo Access —</label>
-                                    <div className="grid grid-cols-3 gap-2">
-                                        {['Admin', 'Manager', 'Operator', 'Driver', 'HR', 'Sales'].map(role => (
+                                    <div className="grid grid-cols-4 gap-2">
+                                        {['Admin', 'Manager', 'Operator', 'Driver', 'HR', 'Sales', 'Finance'].map(role => (
                                             <button
                                                 key={role}
                                                 onClick={() => handleDemoLogin(role)}

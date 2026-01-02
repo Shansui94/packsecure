@@ -111,7 +111,10 @@ function App() {
             'Manager': ['*'],
             'Driver': ['delivery-driver', 'claims', 'profile'],
             'Operator': ['scanner', 'profile'], // Strictly Scanner only (+ Profile)
-            'Device': ['scanner'] // Device Mode
+            'Device': ['scanner'], // Device Mode
+            'HR': ['hr', 'profile', 'claims'], // HR Portal
+            'Sales': ['dashboard', 'jobs', 'products', 'delivery', 'profile'], // Sales Access
+            'Finance': ['claims', 'dashboard', 'executive-reports', 'profile'] // Finance Access
         };
 
         const allowed = allowedPages[role] || [];
