@@ -3,9 +3,9 @@ import { supabase } from '../services/supabase';
 import Papa from 'papaparse';
 import {
     Search, Plus, Save, Trash2, Database, Truck, Users,
-    Package, Settings, Box, ChevronRight, LayoutGrid, FlaskConical,
-    AlertCircle, CheckCircle, X, Download, Upload
+    AlertCircle, CheckCircle, X, Download, Upload, Cloud, LogOut, FileText
 } from 'lucide-react';
+import { useGoogleDrive } from '../hooks/useGoogleDrive';
 
 // --- TYPES ---
 type TabType = 'items' | 'machines' | 'vehicles' | 'customers' | 'partners' | 'recipes' | 'factories';
@@ -39,6 +39,12 @@ export default function DataManagement() {
     // NOTIFICATION
     const [notification, setNotification] = useState<{ msg: string, type: 'success' | 'error' } | null>(null);
     const fileInputRef = useRef<HTMLInputElement>(null);
+
+    // GOOGLE DRIVE HOOK
+    const { login, logout, isAuthenticated, isReady, uploadFile, listFiles, downloadFile } = useGoogleDrive();
+    const [driveFiles, setDriveFiles] = useState<any[]>([]);
+    const [showDrivePicker, setShowDrivePicker] = useState(false);
+    const [driveLoading, setDriveLoading] = useState(false);
 
     // 1. FETCH DATA
     const fetchData = async () => {
@@ -220,13 +226,18 @@ export default function DataManagement() {
         const file = e.target.files?.[0];
         if (!file) return;
 
-        Papa.parse(file, {
+        parseAndImport(file);
+    };
+
+    // --- SHARED PARSER ---
+    const parseAndImport = (file: File | string) => {
+        Papa.parse(file as any, {
             header: true,
             skipEmptyLines: true,
             complete: async (results) => {
                 const rows = results.data;
                 if (!rows || rows.length === 0) {
-                    showToast('CSV is empty or invalid', 'error');
+                    showToast('Data is empty or invalid', 'error');
                     return;
                 }
 
@@ -245,12 +256,12 @@ export default function DataManagement() {
                         case 'factories': table = 'sys_factories_v2'; break;
                     }
 
-                    // Batch insert/upsert
                     const { error } = await supabase.from(table).upsert(rows);
                     if (error) throw error;
 
                     showToast(`Successfully imported ${rows.length} records`, 'success');
                     fetchData();
+                    setShowDrivePicker(false); // Close picker if open
                 } catch (err: any) {
                     showToast('Import Failed: ' + err.message, 'error');
                 } finally {
@@ -258,9 +269,50 @@ export default function DataManagement() {
                 }
             },
             error: (err) => {
-                showToast('CSV Parse Error: ' + err.message, 'error');
+                showToast('Parse Error: ' + err.message, 'error');
             }
         });
+    }
+
+    // --- DRIVE ACTIONS ---
+    const handleDriveUpload = async () => {
+        if (!filteredData || filteredData.length === 0) return showToast('No data to backup', 'error');
+        setDriveLoading(true);
+        try {
+            const csv = Papa.unparse(filteredData.map(({ id, title, subtitle, ...rest }) => ({ id, ...rest })));
+            const fileName = `${activeTab}_backup_${new Date().toISOString().slice(0, 10)}.csv`;
+            await uploadFile(csv, fileName);
+            showToast('Backup uploaded to Google Drive!', 'success');
+        } catch (err: any) {
+            showToast('Upload Failed: ' + err.message, 'error');
+        } finally {
+            setDriveLoading(false);
+        }
+    };
+
+    const handleDriveList = async () => {
+        setDriveLoading(true);
+        try {
+            const files = await listFiles();
+            setDriveFiles(files || []);
+            setShowDrivePicker(true);
+        } catch (err: any) {
+            showToast('Failed to list files: ' + err.message, 'error');
+        } finally {
+            setDriveLoading(false);
+        }
+    };
+
+    const handleDriveSelect = async (fileId: string) => {
+        setDriveLoading(true);
+        try {
+            const content = await downloadFile(fileId);
+            parseAndImport(content);
+        } catch (err: any) {
+            showToast('Download Failed: ' + err.message, 'error');
+        } finally {
+            setDriveLoading(false);
+        }
     };
 
 
@@ -312,14 +364,38 @@ export default function DataManagement() {
                         <span className="text-xs bg-indigo-500 text-white px-1.5 py-0.5 rounded font-bold">v2.3</span>
                         <span className="text-xs bg-white/10 px-2 py-0.5 rounded-full text-gray-400 font-normal">{data.length}</span>
                     </h2>
-                    <div className="relative group">
-                        <Search className="absolute left-3 top-2.5 text-gray-500 group-focus-within:text-indigo-400 transition-colors" size={16} />
-                        <input
-                            value={search}
-                            onChange={e => setSearch(e.target.value)}
-                            className="w-full bg-[#18181b] border-white/5 border rounded-xl py-2 pl-9 text-sm text-gray-200 placeholder-gray-600 focus:outline-none focus:border-indigo-500/50 focus:bg-[#1e1e24] transition-all"
-                            placeholder="Search records..."
-                        />
+                    <div className="flex flex-col gap-2">
+                        <div className="relative group">
+                            <Search className="absolute left-3 top-2.5 text-gray-500 group-focus-within:text-indigo-400 transition-colors" size={16} />
+                            <input
+                                value={search}
+                                onChange={e => setSearch(e.target.value)}
+                                className="w-full bg-[#18181b] border-white/5 border rounded-xl py-2 pl-9 text-sm text-gray-200 placeholder-gray-600 focus:outline-none focus:border-indigo-500/50 focus:bg-[#1e1e24] transition-all"
+                                placeholder="Search records..."
+                            />
+                        </div>
+                        {/* DRIVE CONNECT */}
+                        {isReady && (
+                            <div className="flex gap-2">
+                                {!isAuthenticated ? (
+                                    <button onClick={login} className="flex-1 py-2 px-3 bg-white/5 hover:bg-white/10 border border-white/10 rounded-lg flex items-center justify-center gap-2 text-xs font-bold text-gray-400 hover:text-white transition-all">
+                                        <Cloud size={14} /> Connect Google Drive
+                                    </button>
+                                ) : (
+                                    <div className="flex-1 flex gap-1">
+                                        <button onClick={handleDriveUpload} disabled={driveLoading} className="flex-1 py-2 bg-blue-500/10 hover:bg-blue-500/20 border border-blue-500/20 rounded-lg flex items-center justify-center gap-2 text-xs font-bold text-blue-400 transition-all" title="Backup to Drive">
+                                            <Upload size={14} /> Backup
+                                        </button>
+                                        <button onClick={handleDriveList} disabled={driveLoading} className="flex-1 py-2 bg-green-500/10 hover:bg-green-500/20 border border-green-500/20 rounded-lg flex items-center justify-center gap-2 text-xs font-bold text-green-400 transition-all" title="Restore from Drive">
+                                            <Download size={14} /> Restore
+                                        </button>
+                                        <button onClick={logout} className="px-2 bg-red-500/10 hover:bg-red-500/20 border border-red-500/20 rounded-lg text-red-400" title="Disconnect">
+                                            <LogOut size={14} />
+                                        </button>
+                                    </div>
+                                )}
+                            </div>
+                        )}
                     </div>
 
                     <div className="flex gap-2 pt-1 border-t border-white/5 mt-1">
@@ -542,6 +618,39 @@ export default function DataManagement() {
                 </div>
             )}
         </div>
+            
+            {/* DRIVE PICKER MODAL */ }
+    {
+        showDrivePicker && (
+            <div className="fixed inset-0 bg-black/80 backdrop-blur-sm z-50 flex items-center justify-center p-4">
+                <div className="bg-[#121215] border border-white/10 w-full max-w-md rounded-2xl p-6 shadow-2xl">
+                    <div className="flex justify-between items-center mb-4">
+                        <h3 className="text-xl font-bold text-white flex items-center gap-2"><Cloud size={20} className="text-green-400" /> Select File</h3>
+                        <button onClick={() => setShowDrivePicker(false)}><X size={20} className="text-gray-500 hover:text-white" /></button>
+                    </div>
+                    <div className="max-h-[300px] overflow-y-auto space-y-2">
+                        {driveLoading ? (
+                            <div className="text-center py-8 text-gray-500 animate-pulse">Fetching files...</div>
+                        ) : driveFiles.length === 0 ? (
+                            <div className="text-center py-8 text-gray-500">No CSV files found in Drive.</div>
+                        ) : (
+                            driveFiles.map(f => (
+                                <button key={f.id} onClick={() => handleDriveSelect(f.id)} className="w-full p-3 bg-white/5 hover:bg-white/10 border border-white/5 rounded-xl flex items-center gap-3 text-left transition-colors">
+                                    <div className="w-8 h-8 rounded-lg bg-green-500/20 flex items-center justify-center text-green-400"><FileText size={16} /></div>
+                                    <div className="flex-1 truncate">
+                                        <div className="text-sm font-bold text-gray-200 truncate">{f.name}</div>
+                                        <div className="text-xs text-gray-500">ID: {f.id}</div>
+                                    </div>
+                                    <Download size={14} className="text-gray-500" />
+                                </button>
+                            ))
+                        )}
+                    </div>
+                </div>
+            </div>
+        )
+    }
+        </div >
     );
 }
 
