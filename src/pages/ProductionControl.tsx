@@ -397,12 +397,14 @@ const ProductionControl: React.FC<ProductionControlProps> = ({ user, jobs = [] }
                 .select('id, name')
                 .eq('pin_code', code)
                 .eq('status', 'Active') // Ensure active
-                .single();
+                .eq('status', 'Active') // Ensure active
+                .limit(1);
 
-            if (data) {
+            if (data && data.length > 0) {
+                const user = data[0];
                 if (isLogoutMode) {
                     // VERIFY LOGOUT
-                    if (data.id === operatorId) {
+                    if (user.id === operatorId) {
                         setOperatorId(null);
                         setOperatorName(null);
                         setIsLoginModalOpen(false);
@@ -414,8 +416,8 @@ const ProductionControl: React.FC<ProductionControlProps> = ({ user, jobs = [] }
                     }
                 } else {
                     // LOGIN
-                    setOperatorId(data.id);
-                    setOperatorName(data.name);
+                    setOperatorId(user.id);
+                    setOperatorName(user.name);
                     setIsLoginModalOpen(false);
                     setPinCode("");
                 }
