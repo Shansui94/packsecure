@@ -627,7 +627,7 @@ function App() {
                 {renderContent()}
                 <VoiceCommand />
                 <div className="fixed bottom-0 left-0 bg-red-600 text-white font-mono text-[10px] px-2 py-0.5 z-[9999] pointer-events-none">
-                    DEPLOY CHECK: {new Date().toLocaleTimeString()}
+                    DEPLOY CHECK: v5.1 {new Date().toLocaleTimeString()}
                 </div>
             </Layout >
         </ErrorBoundary>
