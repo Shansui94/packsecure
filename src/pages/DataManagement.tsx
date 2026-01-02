@@ -387,7 +387,7 @@ export default function DataManagement() {
                 <div className="p-4 border-b border-white/5 flex flex-col gap-3 z-20 bg-[#0c0c0e]">
                     <h2 className="text-xl font-bold text-white tracking-tight flex items-center gap-2">
                         {TABS.find(t => t.id === activeTab)?.label}
-                        <span className="text-xs bg-indigo-500 text-white px-1.5 py-0.5 rounded font-bold">v2.3</span>
+                        <span className="text-xs bg-indigo-500 text-white px-1.5 py-0.5 rounded font-bold">v2.4 (Debug)</span>
                         <span className="text-xs bg-white/10 px-2 py-0.5 rounded-full text-gray-400 font-normal">{data.length}</span>
                     </h2>
                     <div className="flex flex-col gap-2">
