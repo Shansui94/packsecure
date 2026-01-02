@@ -70,8 +70,28 @@ const Login: React.FC<LoginProps> = ({ onLogin }) => {
         setIsLoading(true);
 
         try {
+            let loginEmail = email.trim();
+
+            // 1. Resolve Employee ID to Email logic
+            // If input does NOT contain '@', assume it is an Employee ID
+            if (!loginEmail.includes('@')) {
+                const { data, error: fetchError } = await supabase
+                    .from('users_public')
+                    .select('email')
+                    .eq('employee_id', loginEmail)
+                    .single();
+
+                if (fetchError || !data || !data.email) {
+                    throw new Error("Invalid Employee ID or User not found.");
+                }
+
+                console.log(`Resolved ID ${loginEmail} to ${data.email}`);
+                loginEmail = data.email;
+            }
+
+            // 2. Perform Standard Auth
             const { data, error } = await supabase.auth.signInWithPassword({
-                email: email,
+                email: loginEmail,
                 password: staffPassword,
             });
 
@@ -315,18 +335,18 @@ const Login: React.FC<LoginProps> = ({ onLogin }) => {
                         ) : (
                             <div className="space-y-6">
                                 <form onSubmit={handleStaffLogin} className="space-y-6">
-                                    {/* Email Input */}
+                                    {/* Email / ID Input */}
                                     <div className="group">
-                                        <label className="block text-xs font-bold text-slate-400 uppercase tracking-wider mb-2 ml-1">Email Address</label>
+                                        <label className="block text-xs font-bold text-slate-400 uppercase tracking-wider mb-2 ml-1">Email or Employee ID</label>
                                         <div className="relative">
                                             <Mail size={16} className="absolute left-4 top-1/2 transform -translate-y-1/2 text-slate-500" />
                                             <input
-                                                type="email"
+                                                type="text"
                                                 required
-                                                className="w-full bg-slate-900/50 border border-slate-700/50 rounded-xl pl-12 pr-4 py-4 text-white placeholder-slate-600 focus:outline-none focus:border-purple-500 focus:ring-1 focus:ring-purple-500 transition-all"
+                                                className="w-full bg-slate-900/50 border border-slate-700/50 rounded-xl pl-12 pr-4 py-4 text-white placeholder-slate-600 focus:outline-none focus:border-purple-500 focus:ring-1 focus:ring-purple-500 transition-all font-mono"
                                                 value={email}
                                                 onChange={(e) => setEmail(e.target.value)}
-                                                placeholder="name@packsecure.com"
+                                                placeholder="Email or ID (e.g. 001)"
                                             />
                                         </div>
                                     </div>
