@@ -486,6 +486,13 @@ export default function DataManagement() {
                     >
                         <Upload size={16} />
                     </button>
+                    <button
+                        onClick={() => setShowKeyInput(!showKeyInput)}
+                        className="p-2.5 rounded-xl border border-white/20 bg-white/5 hover:bg-indigo-500/20 hover:border-indigo-500/50 text-gray-300 hover:text-indigo-400 text-sm font-bold flex items-center justify-center gap-2 transition-all"
+                        title="Configure AI Key"
+                    >
+                        <Settings size={16} />
+                    </button>
                 </div>
             </div>
 
