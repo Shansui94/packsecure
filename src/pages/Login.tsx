@@ -428,7 +428,7 @@ const Login: React.FC<LoginProps> = ({ onLogin }) => {
             </div>
 
             <div className="absolute bottom-6 text-center w-full z-10 text-slate-700 text-[10px] tracking-widest uppercase">
-                System v6.0 • Data Center Active
+                System v6.1 • Data Center Active
             </div>
         </div>
     );

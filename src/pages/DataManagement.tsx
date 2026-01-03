@@ -52,12 +52,6 @@ export default function DataManagement() {
         setTimeout(() => setNotification(null), 3000);
     };
 
-    // ... (fetchData) ...
-
-    // ... (rendering) ...
-
-
-
     // 1. FETCH DATA
     const fetchData = async () => {
         setLoading(true);
@@ -327,9 +321,6 @@ export default function DataManagement() {
         }
     };
 
-
-
-
     // FILTER
     const filteredData = useMemo(() => {
         if (!search) return data;
@@ -341,7 +332,7 @@ export default function DataManagement() {
         );
     }, [data, search]);
 
-    // --- AI HANDLER ---
+    // --- AI HANDLER (Updated) ---
     const handleAIAction = (action: any) => {
         if (action.type === 'FILTER') {
             setSearch(action.payload.keyword);
@@ -362,7 +353,7 @@ export default function DataManagement() {
     };
 
     return (
-        <div className="h-full bg-[#09090b] flex flex-col md:flex-row text-slate-300 font-sans overflow-hidden">
+        <div className="h-full bg-[#09090b] flex flex-col md:flex-row text-slate-300 font-sans overflow-hidden relative">
 
             {/* 1. SIDEBAR TABS */}
             <div className="w-full md:w-20 bg-[#121215] border-r border-white/5 flex md:flex-col items-center py-4 gap-4 overflow-x-auto md:overflow-visible shrink-0 z-20 shadow-xl">
@@ -393,7 +384,7 @@ export default function DataManagement() {
                 <div className="p-4 border-b border-white/5 flex flex-col gap-3 z-20 bg-[#0c0c0e]">
                     <h2 className="text-xl font-bold text-white tracking-tight flex items-center gap-2">
                         {TABS.find(t => t.id === activeTab)?.label}
-                        <span className="text-xs bg-indigo-500 text-white px-1.5 py-0.5 rounded font-bold">v2.4 (Debug)</span>
+                        <span className="text-xs bg-indigo-500 text-white px-1.5 py-0.5 rounded font-bold">v6.1</span>
                         <span className="text-xs bg-white/10 px-2 py-0.5 rounded-full text-gray-400 font-normal">{data.length}</span>
                     </h2>
                     <div className="flex flex-col gap-2">
@@ -498,240 +489,231 @@ export default function DataManagement() {
                 </div>
             </div>
 
-            <div className="h-full bg-[#09090b] flex flex-col md:flex-row text-slate-300 font-sans overflow-hidden relative">
+            {/* 3. DETAIL VIEW / COMMAND DECK */}
+            <div className="flex-1 bg-[#09090b] flex flex-col h-full overflow-hidden relative">
+                {/* Background Glow */}
+                <div className="absolute top-[-20%] right-[-10%] w-[500px] h-[500px] bg-indigo-600/5 rounded-full blur-3xl pointer-events-none" />
 
-                {/* ... Sidebar and List View (Unchanged) ... */}
-
-                {/* 3. DETAIL VIEW / COMMAND DECK */}
-                <div className="flex-1 bg-[#09090b] flex flex-col h-full overflow-hidden relative">
-                    {/* Background Glow */}
-                    <div className="absolute top-[-20%] right-[-10%] w-[500px] h-[500px] bg-indigo-600/5 rounded-full blur-3xl pointer-events-none" />
-
-                    {selectedItem ? (
-                        // ... Existing Detail View Logic ...
-                        <div className="flex flex-col h-full animate-in slide-in-from-right-4 duration-300">
-                            {/* Detail Header */}
-                            <div className="p-6 border-b border-white/5 flex justify-between items-center bg-[#0c0c0e]/50 backdrop-blur-sm z-10">
-                                <div>
-                                    <h3 className="text-2xl font-black text-white tracking-tight flex items-center gap-3">
-                                        {selectedItem.id === 'NEW' ? 'Create New Record' : (form.title || selectedItem.title)}
-                                        {selectedItem.id === 'NEW' && <span className="text-xs bg-indigo-500 text-white px-2 py-0.5 rounded uppercase tracking-wider">New</span>}
-                                    </h3>
-                                    <p className="text-gray-500 text-sm font-mono mt-1">ID: {form.id || selectedItem.id}</p>
-                                </div>
-                                <div className="flex gap-3">
-                                    {selectedItem.id !== 'NEW' && (
-                                        <button
-                                            onClick={handleDelete}
-                                            className="p-2 text-red-400 hover:text-white hover:bg-red-500/20 rounded-lg transition-colors"
-                                            title="Delete"
-                                        >
-                                            <Trash2 size={20} />
-                                        </button>
-                                    )}
+                {selectedItem ? (
+                    <div className="flex flex-col h-full animate-in slide-in-from-right-4 duration-300">
+                        {/* Detail Header */}
+                        <div className="p-6 border-b border-white/5 flex justify-between items-center bg-[#0c0c0e]/50 backdrop-blur-sm z-10">
+                            <div>
+                                <h3 className="text-2xl font-black text-white tracking-tight flex items-center gap-3">
+                                    {selectedItem.id === 'NEW' ? 'Create New Record' : (form.title || selectedItem.title)}
+                                    {selectedItem.id === 'NEW' && <span className="text-xs bg-indigo-500 text-white px-2 py-0.5 rounded uppercase tracking-wider">New</span>}
+                                </h3>
+                                <p className="text-gray-500 text-sm font-mono mt-1">ID: {form.id || selectedItem.id}</p>
+                            </div>
+                            <div className="flex gap-3">
+                                {selectedItem.id !== 'NEW' && (
                                     <button
-                                        onClick={handleSave}
-                                        className="flex items-center gap-2 bg-indigo-600 hover:bg-indigo-500 text-white px-6 py-2.5 rounded-xl font-bold shadow-lg shadow-indigo-600/20 active:scale-95 transition-all"
+                                        onClick={handleDelete}
+                                        className="p-2 text-red-400 hover:text-white hover:bg-red-500/20 rounded-lg transition-colors"
+                                        title="Delete"
                                     >
-                                        <Save size={18} />
-                                        Save Record
+                                        <Trash2 size={20} />
                                     </button>
-                                </div>
-                            </div>
-
-                            {/* Detail Form Content */}
-                            <div className="flex-1 overflow-y-auto p-8 custom-scrollbar">
-                                <div className="max-w-3xl space-y-8">
-                                    {/* DYNAMIC FORM GEN */}
-                                    {activeTab === 'vehicles' && (
-                                        <div className="grid grid-cols-2 gap-6">
-                                            <InputGroup label="Vehicle ID" name="id" value={form.id} onChange={(v: any) => setForm({ ...form, id: v })} disabled={selectedItem.id !== 'NEW'} required />
-                                            <InputGroup label="Plate Number" name="plate_number" value={form.plate_number} onChange={(v: any) => setForm({ ...form, plate_number: v })} required />
-
-                                            <SelectGroup label="Status" value={form.status} onChange={(v: any) => setForm({ ...form, status: v })}>
-                                                <option value="Available">Available</option>
-                                                <option value="On-Route">On-Route</option>
-                                                <option value="Maintenance">Maintenance</option>
-                                            </SelectGroup>
-
-                                            <div className="col-span-2 grid grid-cols-2 gap-6 p-4 bg-white/5 rounded-xl border border-white/5">
-                                                <h4 className="col-span-2 text-xs font-bold text-gray-500 uppercase tracking-wider mb-2">Capacity Config</h4>
-                                                <InputGroup label="Max Volume (m³)" type="number" value={form.max_volume_m3} onChange={(v: any) => setForm({ ...form, max_volume_m3: v })} />
-                                                <InputGroup label="Max Weight (kg)" type="number" value={form.max_weight_kg} onChange={(v: any) => setForm({ ...form, max_weight_kg: v })} />
-                                                <InputGroup label="Internal Dimensions" value={form.internal_dims} onChange={(v: any) => setForm({ ...form, internal_dims: v })} placeholder="LxWxH" />
-                                            </div>
-                                        </div>
-                                    )}
-
-                                    {activeTab === 'customers' && (
-                                        <div className="grid grid-cols-2 gap-6">
-                                            <InputGroup label="Customer Name" value={form.name} onChange={(v: any) => setForm({ ...form, name: v })} required colSpan={2} />
-
-                                            <SelectGroup label="Delivery Zone" value={form.zone} onChange={(v: any) => setForm({ ...form, zone: v })}>
-                                                <option value="">Select Zone...</option>
-                                                <option value="North">North (Penang/Perak)</option>
-                                                <option value="Central_Left">Central Left (Klang/Shah Alam)</option>
-                                                <option value="Central_Right">Central Right (KL/Rawang)</option>
-                                                <option value="South">South (Johor/Melaka)</option>
-                                                <option value="East">East Coast</option>
-                                            </SelectGroup>
-
-                                            <InputGroup label="Contact Person" value={form.contact_person} onChange={(v: any) => setForm({ ...form, contact_person: v })} />
-
-                                            <InputGroup label="Phone Number" value={form.phone} onChange={(v: any) => setForm({ ...form, phone: v })} />
-                                            <InputGroup label="Full Address" value={form.address} onChange={(v: any) => setForm({ ...form, address: v })} colSpan={2} />
-
-                                            <div className="col-span-2 grid grid-cols-2 gap-6 p-4 bg-white/5 rounded-xl border border-white/5">
-                                                <h4 className="col-span-2 text-xs font-bold text-gray-500 uppercase tracking-wider mb-2 flex items-center gap-2"><Truck size={12} /> GPS Coordination</h4>
-                                                <InputGroup label="Latitude" type="number" value={form.lat} onChange={(v: any) => setForm({ ...form, lat: v })} />
-                                                <InputGroup label="Longitude" type="number" value={form.lng} onChange={(v: any) => setForm({ ...form, lng: v })} />
-                                            </div>
-                                        </div>
-                                    )}
-
-                                    {activeTab === 'items' && (
-                                        <div className="grid grid-cols-2 gap-6">
-                                            <InputGroup label="SKU Code" value={form.sku} onChange={(v: any) => setForm({ ...form, sku: v })} disabled={selectedItem.id !== 'NEW'} required />
-                                            <InputGroup label="Product Name" value={form.name} onChange={(v: any) => setForm({ ...form, name: v })} required />
-
-                                            <div className="col-span-2 p-4 bg-white/5 rounded-xl border border-white/5 grid grid-cols-3 gap-4">
-                                                <InputGroup label="Weight (kg/unit)" type="number" value={form.weight_kg} onChange={(v: any) => setForm({ ...form, weight_kg: v })} />
-                                                <InputGroup label="Volume (m³/unit)" type="number" value={form.volume_m3} onChange={(v: any) => setForm({ ...form, volume_m3: v })} />
-                                                <InputGroup label="Pack Dims" value={form.pack_dims} onChange={(v: any) => setForm({ ...form, pack_dims: v })} placeholder="LxWxH" />
-                                            </div>
-                                            <InputGroup label="Description" value={form.description} onChange={(v: any) => setForm({ ...form, description: v })} colSpan={2} />
-                                        </div>
-                                    )}
-
-                                    {activeTab === 'machines' && (
-                                        <div className="space-y-4">
-                                            <InputGroup label="Machine ID" value={form.machine_id} onChange={(v: any) => setForm({ ...form, machine_id: v })} disabled={selectedItem.id !== 'NEW'} />
-                                            <InputGroup label="Machine Name" value={form.name} onChange={(v: any) => setForm({ ...form, name: v })} />
-                                            <InputGroup label="Type / Model" value={form.type} onChange={(v: any) => setForm({ ...form, type: v })} />
-                                            <InputGroup label="Factory ID" value={form.factory_id} onChange={(v: any) => setForm({ ...form, factory_id: v })} />
-                                        </div>
-                                    )}
-
-                                    {activeTab === 'factories' && (
-                                        <div className="grid grid-cols-2 gap-6">
-                                            <InputGroup label="Factory ID" value={form.factory_id} onChange={(v: any) => setForm({ ...form, factory_id: v })} disabled={selectedItem.id !== 'NEW'} required />
-                                            <InputGroup label="Factory Name" value={form.name} onChange={(v: any) => setForm({ ...form, name: v })} required />
-                                            <InputGroup label="Location Name" value={form.location_name} onChange={(v: any) => setForm({ ...form, location_name: v })} colSpan={2} />
-
-                                            <div className="col-span-2 grid grid-cols-2 gap-6 p-4 bg-white/5 rounded-xl border border-white/5">
-                                                <h4 className="col-span-2 text-xs font-bold text-gray-500 uppercase tracking-wider mb-2 flex items-center gap-2"><Truck size={12} /> GPS Coordination</h4>
-                                                <InputGroup label="Latitude" type="number" value={form.lat} onChange={(v: any) => setForm({ ...form, lat: v })} />
-                                                <InputGroup label="Longitude" type="number" value={form.lng} onChange={(v: any) => setForm({ ...form, lng: v })} />
-                                            </div>
-                                        </div>
-                                    )}
-
-                                    {/* GENERIC FALLBACK FOR OTHERS */}
-                                    {['partners', 'recipes'].includes(activeTab) && (
-                                        <div className="text-gray-500 italic p-4 border border-dashed border-white/10 rounded-xl">
-                                            Generic editor for {activeTab} coming soon.
-                                            <pre className="text-xs mt-2 text-gray-600 overflow-auto">{JSON.stringify(form, null, 2)}</pre>
-                                        </div>
-                                    )}
-                                </div>
+                                )}
+                                <button
+                                    onClick={handleSave}
+                                    className="flex items-center gap-2 bg-indigo-600 hover:bg-indigo-500 text-white px-6 py-2.5 rounded-xl font-bold shadow-lg shadow-indigo-600/20 active:scale-95 transition-all"
+                                >
+                                    <Save size={18} />
+                                    Save Record
+                                </button>
                             </div>
                         </div>
-                    ) : (
-                        // --- COMMAND DECK (Overview) ---
-                        <CommandDeck totalItems={data.length} activeTab={activeTab} data={data} />
-                    )}
-                </div>
 
-                {/* AIChatWidget Overlay */}
-                <AIChatWidget
-                    contextData={{ activeTab, data }}
-                    onAction={handleAIAction}
-                />
+                        {/* Detail Form Content */}
+                        <div className="flex-1 overflow-y-auto p-8 custom-scrollbar">
+                            <div className="max-w-3xl space-y-8">
+                                {/* DYNAMIC FORM GEN */}
+                                {activeTab === 'vehicles' && (
+                                    <div className="grid grid-cols-2 gap-6">
+                                        <InputGroup label="Vehicle ID" name="id" value={form.id} onChange={(v: any) => setForm({ ...form, id: v })} disabled={selectedItem.id !== 'NEW'} required />
+                                        <InputGroup label="Plate Number" name="plate_number" value={form.plate_number} onChange={(v: any) => setForm({ ...form, plate_number: v })} required />
 
-                {/* ... Toast and Modals ... */}
+                                        <SelectGroup label="Status" value={form.status} onChange={(v: any) => setForm({ ...form, status: v })}>
+                                            <option value="Available">Available</option>
+                                            <option value="On-Route">On-Route</option>
+                                            <option value="Maintenance">Maintenance</option>
+                                        </SelectGroup>
 
-                {/* TOAST */}
-                {notification && (
-                    <div className={`fixed bottom-6 right-6 px-6 py-4 rounded-xl shadow-2xl border flex items-center gap-3 animate-in slide-in-from-bottom-10 z-50 ${notification.type === 'success' ? 'bg-[#18181b] border-green-500/30 text-green-400' : 'bg-[#18181b] border-red-500/30 text-red-400'
-                        }`}>
-                        {notification.type === 'success' ? <CheckCircle size={20} /> : <AlertCircle size={20} />}
-                        <span className="font-bold text-sm">{notification.msg}</span>
-                        <button onClick={() => setNotification(null)} className="ml-4 hover:text-white"><X size={14} /></button>
+                                        <div className="col-span-2 grid grid-cols-2 gap-6 p-4 bg-white/5 rounded-xl border border-white/5">
+                                            <h4 className="col-span-2 text-xs font-bold text-gray-500 uppercase tracking-wider mb-2">Capacity Config</h4>
+                                            <InputGroup label="Max Volume (m³)" type="number" value={form.max_volume_m3} onChange={(v: any) => setForm({ ...form, max_volume_m3: v })} />
+                                            <InputGroup label="Max Weight (kg)" type="number" value={form.max_weight_kg} onChange={(v: any) => setForm({ ...form, max_weight_kg: v })} />
+                                            <InputGroup label="Internal Dimensions" value={form.internal_dims} onChange={(v: any) => setForm({ ...form, internal_dims: v })} placeholder="LxWxH" />
+                                        </div>
+                                    </div>
+                                )}
+
+                                {activeTab === 'customers' && (
+                                    <div className="grid grid-cols-2 gap-6">
+                                        <InputGroup label="Customer Name" value={form.name} onChange={(v: any) => setForm({ ...form, name: v })} required colSpan={2} />
+
+                                        <SelectGroup label="Delivery Zone" value={form.zone} onChange={(v: any) => setForm({ ...form, zone: v })}>
+                                            <option value="">Select Zone...</option>
+                                            <option value="North">North (Penang/Perak)</option>
+                                            <option value="Central_Left">Central Left (Klang/Shah Alam)</option>
+                                            <option value="Central_Right">Central Right (KL/Rawang)</option>
+                                            <option value="South">South (Johor/Melaka)</option>
+                                            <option value="East">East Coast</option>
+                                        </SelectGroup>
+
+                                        <InputGroup label="Contact Person" value={form.contact_person} onChange={(v: any) => setForm({ ...form, contact_person: v })} />
+
+                                        <InputGroup label="Phone Number" value={form.phone} onChange={(v: any) => setForm({ ...form, phone: v })} />
+                                        <InputGroup label="Full Address" value={form.address} onChange={(v: any) => setForm({ ...form, address: v })} colSpan={2} />
+
+                                        <div className="col-span-2 grid grid-cols-2 gap-6 p-4 bg-white/5 rounded-xl border border-white/5">
+                                            <h4 className="col-span-2 text-xs font-bold text-gray-500 uppercase tracking-wider mb-2 flex items-center gap-2"><Truck size={12} /> GPS Coordination</h4>
+                                            <InputGroup label="Latitude" type="number" value={form.lat} onChange={(v: any) => setForm({ ...form, lat: v })} />
+                                            <InputGroup label="Longitude" type="number" value={form.lng} onChange={(v: any) => setForm({ ...form, lng: v })} />
+                                        </div>
+                                    </div>
+                                )}
+
+                                {activeTab === 'items' && (
+                                    <div className="grid grid-cols-2 gap-6">
+                                        <InputGroup label="SKU Code" value={form.sku} onChange={(v: any) => setForm({ ...form, sku: v })} disabled={selectedItem.id !== 'NEW'} required />
+                                        <InputGroup label="Product Name" value={form.name} onChange={(v: any) => setForm({ ...form, name: v })} required />
+
+                                        <div className="col-span-2 p-4 bg-white/5 rounded-xl border border-white/5 grid grid-cols-3 gap-4">
+                                            <InputGroup label="Weight (kg/unit)" type="number" value={form.weight_kg} onChange={(v: any) => setForm({ ...form, weight_kg: v })} />
+                                            <InputGroup label="Volume (m³/unit)" type="number" value={form.volume_m3} onChange={(v: any) => setForm({ ...form, volume_m3: v })} />
+                                            <InputGroup label="Pack Dims" value={form.pack_dims} onChange={(v: any) => setForm({ ...form, pack_dims: v })} placeholder="LxWxH" />
+                                        </div>
+                                        <InputGroup label="Description" value={form.description} onChange={(v: any) => setForm({ ...form, description: v })} colSpan={2} />
+                                    </div>
+                                )}
+
+                                {activeTab === 'machines' && (
+                                    <div className="space-y-4">
+                                        <InputGroup label="Machine ID" value={form.machine_id} onChange={(v: any) => setForm({ ...form, machine_id: v })} disabled={selectedItem.id !== 'NEW'} />
+                                        <InputGroup label="Machine Name" value={form.name} onChange={(v: any) => setForm({ ...form, name: v })} />
+                                        <InputGroup label="Type / Model" value={form.type} onChange={(v: any) => setForm({ ...form, type: v })} />
+                                        <InputGroup label="Factory ID" value={form.factory_id} onChange={(v: any) => setForm({ ...form, factory_id: v })} />
+                                    </div>
+                                )}
+
+                                {activeTab === 'factories' && (
+                                    <div className="grid grid-cols-2 gap-6">
+                                        <InputGroup label="Factory ID" value={form.factory_id} onChange={(v: any) => setForm({ ...form, factory_id: v })} disabled={selectedItem.id !== 'NEW'} required />
+                                        <InputGroup label="Factory Name" value={form.name} onChange={(v: any) => setForm({ ...form, name: v })} required />
+                                        <InputGroup label="Location Name" value={form.location_name} onChange={(v: any) => setForm({ ...form, location_name: v })} colSpan={2} />
+
+                                        <div className="col-span-2 grid grid-cols-2 gap-6 p-4 bg-white/5 rounded-xl border border-white/5">
+                                            <h4 className="col-span-2 text-xs font-bold text-gray-500 uppercase tracking-wider mb-2 flex items-center gap-2"><Truck size={12} /> GPS Coordination</h4>
+                                            <InputGroup label="Latitude" type="number" value={form.lat} onChange={(v: any) => setForm({ ...form, lat: v })} />
+                                            <InputGroup label="Longitude" type="number" value={form.lng} onChange={(v: any) => setForm({ ...form, lng: v })} />
+                                        </div>
+                                    </div>
+                                )}
+
+                                {/* GENERIC FALLBACK FOR OTHERS */}
+                                {['partners', 'recipes'].includes(activeTab) && (
+                                    <div className="text-gray-500 italic p-4 border border-dashed border-white/10 rounded-xl">
+                                        Generic editor for {activeTab} coming soon.
+                                        <pre className="text-xs mt-2 text-gray-600 overflow-auto">{JSON.stringify(form, null, 2)}</pre>
+                                    </div>
+                                )}
+                            </div>
+                        </div>
                     </div>
+                ) : (
+                    // --- COMMAND DECK (Overview) ---
+                    <CommandDeck totalItems={data.length} activeTab={activeTab} data={data} />
                 )}
+            </div>
+
+            {/* AIChatWidget Overlay */}
+            <AIChatWidget
+                contextData={{ activeTab, data }}
+                onAction={handleAIAction}
+            />
+
+            {/* TOAST */}
+            {notification && (
+                <div className={`fixed bottom-6 right-6 px-6 py-4 rounded-xl shadow-2xl border flex items-center gap-3 animate-in slide-in-from-bottom-10 z-50 ${notification.type === 'success' ? 'bg-[#18181b] border-green-500/30 text-green-400' : 'bg-[#18181b] border-red-500/30 text-red-400'
+                    }`}>
+                    {notification.type === 'success' ? <CheckCircle size={20} /> : <AlertCircle size={20} />}
+                    <span className="font-bold text-sm">{notification.msg}</span>
+                    <button onClick={() => setNotification(null)} className="ml-4 hover:text-white"><X size={14} /></button>
+                </div>
+            )}
 
 
-                {/* DRIVE PICKER MODAL */}
-                {
-                    showDrivePicker && (
-                        <div className="fixed inset-0 bg-black/80 backdrop-blur-sm z-50 flex items-center justify-center p-4">
-                            <div className="bg-[#121215] border border-white/10 w-full max-w-md rounded-2xl p-6 shadow-2xl">
-                                <div className="flex justify-between items-center mb-4">
-                                    <h3 className="text-xl font-bold text-white flex items-center gap-2"><Cloud size={20} className="text-green-400" /> Select File</h3>
-                                    <button onClick={() => setShowDrivePicker(false)}><X size={20} className="text-gray-500 hover:text-white" /></button>
-                                </div>
-                                <div className="max-h-[300px] overflow-y-auto space-y-2">
-                                    {driveLoading ? (
-                                        <div className="text-center py-8 text-gray-500 animate-pulse">Fetching files...</div>
-                                    ) : driveFiles.length === 0 ? (
-                                        <div className="text-center py-8 text-gray-500">No CSV files found in Drive.</div>
-                                    ) : (
-                                        driveFiles.map(f => (
-                                            <button key={f.id} onClick={() => handleDriveSelect(f.id)} className="w-full p-3 bg-white/5 hover:bg-white/10 border border-white/5 rounded-xl flex items-center gap-3 text-left transition-colors">
-                                                <div className="w-8 h-8 rounded-lg bg-green-500/20 flex items-center justify-center text-green-400"><FileText size={16} /></div>
-                                                <div className="flex-1 truncate">
-                                                    <div className="text-sm font-bold text-gray-200 truncate">{f.name}</div>
-                                                    <div className="text-xs text-gray-500">ID: {f.id}</div>
-                                                </div>
-                                                <Download size={14} className="text-gray-500" />
-                                            </button>
-                                        ))
-                                    )}
-                                </div>
+            {/* DRIVE PICKER MODAL */}
+            {
+                showDrivePicker && (
+                    <div className="fixed inset-0 bg-black/80 backdrop-blur-sm z-50 flex items-center justify-center p-4">
+                        <div className="bg-[#121215] border border-white/10 w-full max-w-md rounded-2xl p-6 shadow-2xl">
+                            <div className="flex justify-between items-center mb-4">
+                                <h3 className="text-xl font-bold text-white flex items-center gap-2"><Cloud size={20} className="text-green-400" /> Select File</h3>
+                                <button onClick={() => setShowDrivePicker(false)}><X size={20} className="text-gray-500 hover:text-white" /></button>
+                            </div>
+                            <div className="max-h-[300px] overflow-y-auto space-y-2">
+                                {driveLoading ? (
+                                    <div className="text-center py-8 text-gray-500 animate-pulse">Fetching files...</div>
+                                ) : driveFiles.length === 0 ? (
+                                    <div className="text-center py-8 text-gray-500">No CSV files found in Drive.</div>
+                                ) : (
+                                    driveFiles.map(f => (
+                                        <button key={f.id} onClick={() => handleDriveSelect(f.id)} className="w-full p-3 bg-white/5 hover:bg-white/10 border border-white/5 rounded-xl flex items-center gap-3 text-left transition-colors">
+                                            <div className="w-8 h-8 rounded-lg bg-green-500/20 flex items-center justify-center text-green-400"><FileText size={16} /></div>
+                                            <div className="flex-1 truncate">
+                                                <div className="text-sm font-bold text-gray-200 truncate">{f.name}</div>
+                                                <div className="text-xs text-gray-500">ID: {f.id}</div>
+                                            </div>
+                                            <Download size={14} className="text-gray-500" />
+                                        </button>
+                                    ))
+                                )}
                             </div>
                         </div>
-                    )
-                }
-            </div >
-            );
+                    </div>
+                )
+            }
+        </div>
+    );
 }
 
-            // --- UI COMPONENTS ---
-            const InputGroup = ({label, value, onChange, type = 'text', required = false, disabled = false, placeholder = '', colSpan = 1, name = ''}: any) => (
-            <div className={`col-span-${colSpan} group`}>
-                <label className="block text-xs font-bold text-gray-500 uppercase tracking-wider mb-2 group-focus-within:text-indigo-400 transition-colors">
-                    {label} {required && <span className="text-red-500">*</span>}
-                </label>
-                <input
-                    type={type}
-                    value={value || ''}
-                    onChange={e => onChange(e.target.value)}
-                    disabled={disabled}
-                    placeholder={placeholder}
-                    name={name}
-                    className={`w-full bg-[#18181b] border ${disabled ? 'border-transparent text-gray-600 cursor-not-allowed' : 'border-white/10 group-focus-within:border-indigo-500/50'} rounded-xl py-3 px-4 text-sm text-gray-200 focus:outline-none focus:bg-[#1e1e24] transition-all`}
-                />
+// --- UI COMPONENTS ---
+const InputGroup = ({ label, value, onChange, type = 'text', required = false, disabled = false, placeholder = '', colSpan = 1, name = '' }: any) => (
+    <div className={`col-span-${colSpan} group`}>
+        <label className="block text-xs font-bold text-gray-500 uppercase tracking-wider mb-2 group-focus-within:text-indigo-400 transition-colors">
+            {label} {required && <span className="text-red-500">*</span>}
+        </label>
+        <input
+            type={type}
+            value={value || ''}
+            onChange={e => onChange(e.target.value)}
+            disabled={disabled}
+            placeholder={placeholder}
+            name={name}
+            className={`w-full bg-[#18181b] border ${disabled ? 'border-transparent text-gray-600 cursor-not-allowed' : 'border-white/10 group-focus-within:border-indigo-500/50'} rounded-xl py-3 px-4 text-sm text-gray-200 focus:outline-none focus:bg-[#1e1e24] transition-all`}
+        />
+    </div>
+);
+
+const SelectGroup = ({ label, value, onChange, children, required = false }: any) => (
+    <div>
+        <label className="block text-xs font-bold text-gray-500 uppercase tracking-wider mb-2">
+            {label} {required && <span className="text-red-500">*</span>}
+        </label>
+        <div className="relative">
+            <select
+                value={value || ''}
+                onChange={e => onChange(e.target.value)}
+                className="w-full bg-[#18181b] border border-white/10 rounded-xl py-3 px-4 text-sm text-gray-200 focus:outline-none focus:border-indigo-500/50 appearance-none"
+            >
+                {children}
+            </select>
+            <div className="absolute right-4 top-1/2 -translate-y-1/2 pointer-events-none text-gray-500">
+                <ChevronRight size={14} className="rotate-90" />
             </div>
-            );
-
-            const SelectGroup = ({label, value, onChange, children, required = false}: any) => (
-            <div>
-                <label className="block text-xs font-bold text-gray-500 uppercase tracking-wider mb-2">
-                    {label} {required && <span className="text-red-500">*</span>}
-                </label>
-                <div className="relative">
-                    <select
-                        value={value || ''}
-                        onChange={e => onChange(e.target.value)}
-                        className="w-full bg-[#18181b] border border-white/10 rounded-xl py-3 px-4 text-sm text-gray-200 focus:outline-none focus:border-indigo-500/50 appearance-none"
-                    >
-                        {children}
-                    </select>
-                    <div className="absolute right-4 top-1/2 -translate-y-1/2 pointer-events-none text-gray-500">
-                        <ChevronRight size={14} className="rotate-90" />
-                    </div>
-                </div>
-            </div>
-            );
-
-
+        </div>
+    </div>
+);
