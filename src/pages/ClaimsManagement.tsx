@@ -140,11 +140,12 @@ const ClaimsManagement: React.FC<ClaimsManagementProps> = ({ user }) => {
             const base64Data = base64Full.split(',')[1];
             const mimeType = file.type || 'image/jpeg';
 
-            // Retry Logic with multiple models
+            // Retry Logic with multiple models (Updated based on user feedback)
             const models = [
-                'gemini-2.5-flash',
-                'gemini-2.0-flash',
-                'gemini-flash-latest'
+                'gemini-2.0-flash-exp', // Latest experimental
+                'gemini-1.5-pro',       // Standard Pro
+                'gemini-1.5-flash',     // Keep as fallback just in case
+                'gemini-pro'            // Legacy 1.0
             ];
 
             let data;
