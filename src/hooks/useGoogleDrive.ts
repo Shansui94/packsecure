@@ -95,6 +95,48 @@ export function useGoogleDrive() {
         setAccessToken(null);
     };
 
+    // 3. Drive Operations
+    const uploadFile = async (content: string, filename: string) => {
+        if (!window.gapi?.client?.drive) throw new Error("Drive API not loaded");
+
+        const file = new Blob([content], { type: 'text/csv' });
+        const metadata = {
+            name: filename,
+            mimeType: 'text/csv',
+        };
+
+        const form = new FormData();
+        form.append('metadata', new Blob([JSON.stringify(metadata)], { type: 'application/json' }));
+        form.append('file', file);
+
+        return fetch('https://www.googleapis.com/upload/drive/v3/files?uploadType=multipart', {
+            method: 'POST',
+            headers: {
+                Authorization: `Bearer ${accessToken}`,
+            },
+            body: form,
+        }).then(res => res.json());
+    };
+
+    const listFiles = async () => {
+        if (!window.gapi?.client?.drive) throw new Error("Drive API not loaded");
+        const res = await window.gapi.client.drive.files.list({
+            pageSize: 10,
+            fields: 'files(id, name)',
+            q: "mimeType = 'text/csv' and trashed = false",
+        });
+        return res.result.files;
+    };
+
+    const downloadFile = async (fileId: string): Promise<string> => {
+        if (!window.gapi?.client?.drive) throw new Error("Drive API not loaded");
+        const res = await window.gapi.client.drive.files.get({
+            fileId: fileId,
+            alt: 'media',
+        });
+        return res.body;
+    };
+
     return {
         isReady: isGapiLoaded && isGisLoaded,
         isAuthenticated: !!accessToken,
