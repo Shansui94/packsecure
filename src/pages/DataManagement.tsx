@@ -7,6 +7,8 @@ import {
     Package, Settings, LayoutGrid, FlaskConical, ChevronRight
 } from 'lucide-react';
 import { useGoogleDrive } from '../hooks/useGoogleDrive';
+import { CommandDeck } from '../components/CommandDeck';
+import { AIChatWidget } from '../components/AIChatWidget';
 
 // --- TYPES ---
 type TabType = 'items' | 'machines' | 'vehicles' | 'customers' | 'partners' | 'recipes' | 'factories';
@@ -339,6 +341,26 @@ export default function DataManagement() {
         );
     }, [data, search]);
 
+    // --- AI HANDLER ---
+    const handleAIAction = (action: any) => {
+        if (action.type === 'FILTER') {
+            setSearch(action.payload.keyword);
+            showToast(`AI: Filtering for "${action.payload.keyword}"`, 'success');
+        }
+        if (action.type === 'NAVIGATE') {
+            setActiveTab(action.payload.tabId);
+            showToast(`AI: Switched to ${action.payload.tabId}`, 'success');
+        }
+        if (action.type === 'CREATE_DRAFT') {
+            handleCreateNew();
+            // Merge AI guess with defaults
+            setTimeout(() => {
+                setForm((prev: any) => ({ ...prev, ...action.payload }));
+            }, 100);
+            showToast('AI: Draft created with suggested data', 'success');
+        }
+    };
+
     return (
         <div className="h-full bg-[#09090b] flex flex-col md:flex-row text-slate-300 font-sans overflow-hidden">
 
@@ -476,33 +498,6 @@ export default function DataManagement() {
                 </div>
             </div>
 
-// ... imports
-            import {CommandDeck} from '../components/CommandDeck';
-            import {AIChatWidget} from '../components/AIChatWidget';
-
-// ... inside component ...
-
-    // --- AI HANDLER ---
-    const handleAIAction = (action: any) => {
-        if (action.type === 'FILTER') {
-                setSearch(action.payload.keyword);
-            showToast(`AI: Filtering for "${action.payload.keyword}"`, 'success');
-        }
-            if (action.type === 'NAVIGATE') {
-                setActiveTab(action.payload.tabId);
-            showToast(`AI: Switched to ${action.payload.tabId}`, 'success');
-        }
-            if (action.type === 'CREATE_DRAFT') {
-                handleCreateNew();
-            // Merge AI guess with defaults
-            setTimeout(() => {
-                setForm(prev => ({ ...prev, ...action.payload }));
-            }, 100);
-            showToast('AI: Draft created with suggested data', 'success');
-        }
-    };
-
-            return (
             <div className="h-full bg-[#09090b] flex flex-col md:flex-row text-slate-300 font-sans overflow-hidden relative">
 
                 {/* ... Sidebar and List View (Unchanged) ... */}
