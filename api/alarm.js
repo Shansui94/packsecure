@@ -1,6 +1,4 @@
 
-import { createClient } from '@supabase/supabase-js';
-
 export default async function handler(req, res) {
     // Enable CORS
     res.setHeader('Access-Control-Allow-Credentials', 'true');
@@ -25,40 +23,81 @@ export default async function handler(req, res) {
             throw new Error('Missing Supabase Env Vars');
         }
 
-        const supabase = createClient(supabaseUrl, supabaseKey);
-
         const { machine_id, alarm_count } = req.body;
-
         if (!machine_id) {
             return res.status(400).json({ error: 'machine_id is required' });
         }
 
-        console.log(`[Cloud JS] Received from ${machine_id}`);
+        console.log(`[Cloud Native] Alarm from ${machine_id}`);
 
-        // Resolve Active Product
+        // 1. Get Active Product (Raw REST Call)
+        // GET /rest/v1/machine_active_products?machine_id=eq.machine_id&select=product_sku
         let productSku = 'UNKNOWN';
-        const { data: activeProduct } = await supabase
-            .from('machine_active_products')
-            .select('product_sku')
-            .eq('machine_id', machine_id)
-            .single();
 
-        if (activeProduct) {
-            productSku = activeProduct.product_sku;
+        try {
+            const queryUrl = `${supabaseUrl}/rest/v1/machine_active_products?machine_id=eq.${machine_id}&select=product_sku`;
+            const getResp = await fetch(queryUrl, {
+                method: 'GET',
+                headers: {
+                    'apikey': supabaseKey,
+                    'Authorization': `Bearer ${supabaseKey}`,
+                    'Content-Type': 'application/json',
+                    // Accept header ensures we get JSON, but 'single' isn't a direct header in REST. 
+                    // We get an array back unless we use Accept: application/vnd.pgrst.object+json
+                    'Accept': 'application/vnd.pgrst.object+json'
+                }
+            });
+
+            if (getResp.ok) {
+                const data = await getResp.json();
+                if (data && data.product_sku) {
+                    productSku = data.product_sku;
+                }
+            } else {
+                console.warn("Product fetch failed status:", getResp.status);
+                // Don't fail the whole request, just log UNKNOWN
+            }
+        } catch (err) {
+            console.error("Fetch Product Error:", err);
         }
 
-        const { error } = await supabase.from('production_logs').insert({
-            machine_id,
-            alarm_count: 2,
-            product_sku: productSku
+        // 2. Insert Log (Raw REST Call)
+        // POST /rest/v1/production_logs
+        const postUrl = `${supabaseUrl}/rest/v1/production_logs`;
+        const postResp = await fetch(postUrl, {
+            method: 'POST',
+            headers: {
+                'apikey': supabaseKey,
+                'Authorization': `Bearer ${supabaseKey}`,
+                'Content-Type': 'application/json',
+                'Prefer': 'return=representation'
+            },
+            body: JSON.stringify({
+                machine_id: machine_id,
+                alarm_count: 2,
+                product_sku: productSku
+            })
         });
 
-        if (error) throw error;
+        if (!postResp.ok) {
+            const errorText = await postResp.text();
+            throw new Error(`Supabase Insert Failed: ${postResp.status} - ${errorText}`);
+        }
 
-        res.status(200).json({ status: 'ok', product: productSku });
+        // Success
+        const responseData = await postResp.json();
+        res.status(200).json({
+            status: 'ok',
+            message: 'Logged via Native Fetch',
+            product: productSku,
+            data: responseData
+        });
 
     } catch (e) {
-        console.error("Error:", e);
-        res.status(500).json({ error: e.message });
+        console.error("Handler Error:", e);
+        res.status(500).json({
+            error: e.message,
+            stack: e.stack
+        });
     }
 }
