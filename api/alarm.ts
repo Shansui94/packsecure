@@ -1,5 +1,5 @@
 import type { VercelRequest, VercelResponse } from '@vercel/node';
-import { supabase } from './_supabase';
+import { createClient } from '@supabase/supabase-js';
 
 export default async function handler(req: VercelRequest, res: VercelResponse) {
     // Enable CORS
@@ -18,6 +18,16 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
     }
 
     try {
+        // Initialize Supabase INSIDE handler to catch errors
+        const supabaseUrl = process.env.VITE_SUPABASE_URL;
+        const supabaseKey = process.env.SUPABASE_SERVICE_ROLE_KEY || process.env.VITE_SUPABASE_ANON_KEY;
+
+        if (!supabaseUrl || !supabaseKey) {
+            throw new Error(`Missing Supabase Env Vars: URL=${!!supabaseUrl}, KEY=${!!supabaseKey}`);
+        }
+
+        const supabase = createClient(supabaseUrl, supabaseKey);
+
         const { machine_id, alarm_count } = req.body;
 
         if (!machine_id) {
@@ -28,11 +38,15 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
 
         // Resolve Active Product
         let productSku = 'UNKNOWN'; // Default
-        const { data: activeProduct } = await supabase
+        const { data: activeProduct, error: fetchError } = await supabase
             .from('machine_active_products')
             .select('product_sku')
             .eq('machine_id', machine_id)
             .single();
+
+        if (fetchError && fetchError.code !== 'PGRST116') { // Ignore "Row not found"
+            console.error("Fetch Product Error:", fetchError);
+        }
 
         if (activeProduct) {
             productSku = activeProduct.product_sku;
@@ -41,18 +55,26 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
         console.log(`[Cloud ALARM] Machine: ${machine_id}, ActiveSKU: ${productSku}, Count: 2`);
 
         // Always use 2 for Dual Lane logic
-        const { error } = await supabase.from('production_logs').insert({
+        const { error: insertError } = await supabase.from('production_logs').insert({
             machine_id,
             alarm_count: 2, // Hardcoded per user request
             product_sku: productSku
         });
 
-        if (error) throw error;
+        if (insertError) throw insertError;
 
         res.status(200).json({ status: 'ok', message: 'Logged successfully (Cloud)', product: productSku });
 
     } catch (e: any) {
         console.error("Cloud Alarm Log Error:", e);
-        res.status(500).json({ error: e.message || "Failed to log alarm" });
+        // RETURN ERROR IN JSON so we see it
+        res.status(500).json({
+            error: e.message || "Failed to log alarm",
+            stack: e.stack,
+            env_check: {
+                has_url: !!process.env.VITE_SUPABASE_URL,
+                has_key: !!(process.env.SUPABASE_SERVICE_ROLE_KEY || process.env.VITE_SUPABASE_ANON_KEY)
+            }
+        });
     }
 }
