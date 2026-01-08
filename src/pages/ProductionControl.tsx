@@ -12,7 +12,7 @@ import {
 import { getRecommendedPackaging } from '../utils/packagingRules';
 import { getBubbleWrapSku } from '../utils/skuMapper';
 import { RotateCcw, Box, Settings, Clock, Layers, LogOut, Columns } from 'lucide-react';
-import MachineCheckIn from './MachineCheckIn';
+
 
 import { JobOrder, ProductionLog, User } from '../types';
 import { supabase } from '../services/supabase';
@@ -44,7 +44,12 @@ const ProductionLane: React.FC<ProductionLaneProps> = ({ laneId, machineMetadata
 
     // Cooldown State
     const [lastProducedTime, setLastProducedTime] = useState<number>(0);
+
     const [cooldownActive, setCooldownActive] = useState<boolean>(false);
+
+    // Live Run State
+    const [isLiveRun, setIsLiveRun] = useState(false);
+    const [liveCount, setLiveCount] = useState(0);
 
     // STEP 1 HANDLER
     const handleTypeSelect = (layer: ProductLayer, material: ProductMaterial) => {
@@ -59,82 +64,96 @@ const ProductionLane: React.FC<ProductionLaneProps> = ({ laneId, machineMetadata
         const pack = getRecommendedPackaging(selectedLayer, selectedMaterial, size);
         setDerivedPackaging(pack);
         setStep(3);
+        // Reset Live State on new selection
+        setIsLiveRun(false);
+        setLiveCount(0);
     };
 
-    // STEP 3 HANDLER (PRODUCTION ENTRY)
-    const completeProduction = async (qty: number) => {
-        // PRE-CHECK: Operator Login
-        if (onBeforeProduce && !onBeforeProduce()) {
-            return; // Blocked
-        }
+    // STEP 3 HANDLER: TOGGLE RUN
+    const toggleProductionRun = async () => {
+        if (isLiveRun) {
+            // STOP
+            setIsLiveRun(false);
+            // Optionally clear active product in DB or keep it?
+            // User likely just wants to stop matching counts to this specific run session locally.
+            // Backend keeps "last set" product until changed.
+        } else {
+            // START
+            // PRE-CHECK: Operator Login
+            if (onBeforeProduce && !onBeforeProduce()) return;
 
-        // Cooldown Check (2 Seconds)
-        const now = Date.now();
-        if (now - lastProducedTime < 2000) {
-            console.warn("Cooldown active. ignored.");
-            return;
-        }
-
-        console.log(`[Lane ${laneId}] Attempting Production V3:`, { derivedPackaging, selectedSize, user: user?.email });
-
-        if (!derivedPackaging || !selectedSize) {
-            alert("Error: Packaging or Size not selected.");
-            return;
-        }
-
-        // Activate Cooldown Visuals
-        setLastProducedTime(now);
-        setCooldownActive(true);
-        setTimeout(() => setCooldownActive(false), 2000);
-
-        const count = qty;
-        const v3Sku = getBubbleWrapSku(selectedLayer, selectedMaterial, selectedSize);
-
-        try {
-            const { executeProductionV3 } = await import('../services/apiV2');
-
-            const jobId = activeJob?.Job_ID;
-            // Append Lane Info to Note
-            const laneInfo = laneId !== 'Single' ? ` | Lane: ${laneId}` : '';
-            const finalNote = (productionNote ? `${productionNote} | ` : '') + `V2 Production: ${v3Sku}${laneInfo}`;
-
-            // Restore machineUuid definition (fixing previous deletion)
-            // Prioritize machine_id (Code) as that's what we likely store in logs
-            const machineUuid = machineMetadata?.id || undefined;
-
-            const result: any = await executeProductionV3(
-                v3Sku,
-                count,
-                machineUuid,
-                jobId,
-                finalNote,
-                operatorId || undefined // Pass the PIN operator ID
-            );
-
-
-            if (result.success) {
-                // Success: Notify parent to refresh logs, but keep user on same screen for rapid entry?
-                // Or reset? Usually rapid entry -> reset to step 3 or stay?
-                // Plan: Reset to Step 1 or 2? Or just clear note?
-                // User UX: Usually wants to produce again. Let's stay on Step 3 for rapid fire?
-                // BUT current logic was "Produce -> Done". Let's reset to Step 1 for start.
-                // Wait, "Double Layer" machine often runs same setting for hours. Staying on Step 3 might be better.
-                // For now, adhere to previous behavior: Reset to Step 3 (keep settings) or clear?
-                // Previous code didn't reset Step, just cleared note.
-                alert(`SUCCESS: Produced ${count} sets of ${v3Sku}.\nInventory updated!`);
-                onProductionComplete();
-                setProductionNote('');
-                // Optional: Reset to Step 1 if they change sizes often?
-                // Let's keep them on Step 3 for convenience, add a "Change Config" button (already there).
-            } else {
-                alert(`Production Failed: ${result.message}`);
+            if (!derivedPackaging || !selectedSize) {
+                alert("Error: Packaging or Size not selected.");
+                return;
             }
 
-        } catch (error: any) {
-            console.error("System Error:", error);
-            alert("Unexpected Error: " + error.message);
+            const v3Sku = getBubbleWrapSku(selectedLayer, selectedMaterial, selectedSize);
+
+            try {
+                // 1. Tell Backend we are now producing this SKU
+                // Send to Backend (Serverless or Local)
+                try {
+                    // Use relative path so it works on Vercel and Local (via Vite Proxy)
+                    await fetch('/api/set-product', {
+                        method: 'POST',
+                        headers: { 'Content-Type': 'application/json' },
+                        body: JSON.stringify({
+                            machine_id: 'T1.2-M01', // Hardcoded for single machine setup
+                            product_sku: v3Sku
+                        })
+                    });
+                    // eslint-disable-next-line @typescript-eslint/no-unused-vars
+                } catch (e) {
+                    console.error("Failed to update active product", e);
+                }
+
+                // 2. Set Local State
+                setIsLiveRun(true);
+                setLiveCount(0); // Reset session count
+
+            } catch (error: any) {
+                console.error("Failed to start run:", error);
+                alert("Failed to start run: " + error.message);
+            }
         }
     };
+
+    // LIVE COUNT SUBSCRIPTION
+    useEffect(() => {
+        const start = Date.now();
+        console.log(`[Lane: ${laneId}] [${start}] Effect Triggered. isLiveRun: ${isLiveRun}`);
+
+        if (!isLiveRun) return;
+
+        // DIAGNOSTIC: Check if we can actually READ the table
+        supabase.from('production_logs').select('id, machine_id').limit(1)
+            .then(({ data, error }) => {
+                console.log(`[Lane: ${laneId}] RLS Check:`, error ? 'FAIL' : 'PASS', error || data);
+            });
+
+        const channelName = `prod-ctrl-${laneId}`; // Simple static name
+        console.log(`[Lane: ${laneId}] Subscribing to: ${channelName}`);
+
+        const channel = supabase.channel(channelName)
+            .on('postgres_changes',
+                { event: 'INSERT', schema: 'public', table: 'production_logs' },
+                (payload) => {
+                    console.log(`[Lane: ${laneId}] [${Date.now()}] ⚡ SIGNAL RECEIVED:`, payload.new);
+                    const newLog = payload.new;
+                    setLiveCount(prev => prev + (newLog.alarm_count || 1));
+                    onProductionComplete();
+                }
+            )
+            .subscribe((status, err) => {
+                console.log(`[Lane: ${laneId}] [${Date.now()}] Subscription Status: ${status}`, err);
+            });
+
+        return () => {
+            const end = Date.now();
+            console.log(`[Lane: ${laneId}] [${end}] Cleaning up channel. Duration: ${(end - start)}ms`);
+            supabase.removeChannel(channel);
+        };
+    }, [isLiveRun]); // Removed machineMetadata dependency
 
     // --- RENDER LANE ---
     return (
@@ -315,31 +334,39 @@ const ProductionLane: React.FC<ProductionLaneProps> = ({ laneId, machineMetadata
                                 className="w-full bg-black/30 text-white text-xs px-3 py-2 rounded-xl border border-white/10 focus:border-cyan-500 focus:outline-none"
                             />
 
-                            {/* Keypad */}
-                            <div className="grid grid-cols-3 gap-2 flex-1">
-                                {[1, 2, 3, 4, 5, 6].map(num => (
-                                    <button
-                                        key={num}
-                                        disabled={cooldownActive}
-                                        onClick={() => completeProduction(num)}
-                                        className={`
-                                            rounded-xl bg-gray-800/40 border-2 border-white/10 text-white
-                                            hover:bg-white/10 active:scale-95 transition-all
-                                            flex flex-col items-center justify-center
-                                            ${cooldownActive ? 'opacity-50 cursor-not-allowed' : ''}
-                                        `}
-                                    >
-                                        <span className="text-2xl font-bold">{num}</span>
-                                        <span className="text-[9px] uppercase opacity-60">Sets</span>
-                                    </button>
-                                ))}
-                            </div>
+                            {/* RUN CONTROLS */}
+                            <div className="flex-1 flex flex-col items-center justify-center gap-4">
+                                {isLiveRun ? (
+                                    <div className="w-full flex flex-col items-center animate-fade-in-up">
+                                        <div className="text-center mb-4">
+                                            <div className="text-green-400 font-bold text-xs uppercase tracking-[0.2em] mb-1 animate-pulse">Live Production Active</div>
+                                            <div className="text-[80px] font-black text-white leading-none tabular-nums drop-shadow-[0_0_30px_rgba(74,222,128,0.5)]">
+                                                {liveCount}
+                                            </div>
+                                            <div className="text-gray-400 text-xs font-mono">Units Produced This Session</div>
+                                        </div>
 
-                            {cooldownActive && (
-                                <div className="text-center text-xs text-red-400 font-bold animate-pulse">
-                                    Wait...
-                                </div>
-                            )}
+                                        <button
+                                            onClick={toggleProductionRun}
+                                            className="w-full py-4 bg-red-600 hover:bg-red-500 rounded-xl font-black text-white shadow-lg border-2 border-red-400/50 active:scale-95 transition-all text-lg flex items-center justify-center gap-2"
+                                        >
+                                            <div className="w-3 h-3 bg-white rounded-sm"></div>
+                                            STOP RUN
+                                        </button>
+                                    </div>
+                                ) : (
+                                    <button
+                                        onClick={toggleProductionRun}
+                                        className="w-full h-32 bg-green-600 hover:bg-green-500 rounded-2xl font-black text-white shadow-[0_0_40px_rgba(22,163,74,0.3)] border-b-8 border-green-800 active:border-b-0 active:translate-y-2 transition-all text-2xl flex flex-col items-center justify-center gap-2 group"
+                                    >
+                                        <div className="w-12 h-12 rounded-full border-4 border-white flex items-center justify-center group-hover:scale-110 transition-transform">
+                                            <div className="w-0 h-0 border-t-[8px] border-t-transparent border-l-[14px] border-l-white border-b-[8px] border-b-transparent ml-1"></div>
+                                        </div>
+                                        START RUN
+                                        <span className="text-xs font-normal opacity-80">Set Machine to This Product</span>
+                                    </button>
+                                )}
+                            </div>
                         </div>
                     );
                 })()}

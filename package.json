@@ -1,7 +1,7 @@
 {
   "name": "packsecure",
   "private": true,
-  "version": "0.0.0",
+  "version": "6.7.0",
   "type": "module",
   "engines": {
     "node": ">=20.0.0"
@@ -11,7 +11,8 @@
     "build": "vite build",
     "lint": "eslint .",
     "preview": "vite preview",
-    "start": "tsx server.ts"
+    "start": "tsx server.ts",
+    "daily-report": "tsx scripts/daily_report_job.ts"
   },
   "dependencies": {
     "@google-cloud/vertexai": "^1.10.0",
@@ -21,15 +22,19 @@
     "@supabase/supabase-js": "^2.87.1",
     "@tailwindcss/postcss": "^4.1.17",
     "@types/jspdf": "^1.3.3",
+    "@types/pg": "^8.16.0",
     "@yudiel/react-qr-scanner": "^2.5.0",
     "cors": "^2.8.5",
     "dotenv": "^17.2.3",
     "express": "^5.2.0",
+    "google-auth-library": "^10.5.0",
+    "googleapis": "^169.0.0",
     "jspdf": "^3.0.4",
     "jspdf-autotable": "^5.0.2",
     "lucide-react": "^0.555.0",
     "multer": "^2.0.2",
     "papaparse": "^5.5.3",
+    "pg": "^8.16.3",
     "react": "^19.2.1",
     "react-dom": "^19.2.1",
     "react-webcam": "^7.2.0",
@@ -47,6 +52,7 @@
     "@types/react": "^19.2.5",
     "@types/react-dom": "^19.2.3",
     "@types/ws": "^8.18.1",
+    "@vercel/node": "^5.5.16",
     "@vitejs/plugin-react": "^5.1.1",
     "autoprefixer": "^10.4.22",
     "eslint": "^9.39.1",
