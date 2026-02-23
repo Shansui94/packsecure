@@ -19,7 +19,8 @@ import {
     FileText,
     Wrench,
     Cpu,
-    FileBarChart
+    FileBarChart,
+    ArrowUpDown
 } from 'lucide-react';
 import { supabase } from '../services/supabase';
 
@@ -214,6 +215,7 @@ const Layout: React.FC<LayoutProps> = ({ children, activePage, setActivePage, us
                                 <NavGroup title="Inventory & BOM">
                                     <NavItem id="inventory" icon={Box} label="Inventory" roles={['SuperAdmin', 'Admin', 'Manager']} />
                                     <NavItem id="products" icon={Package} label="Product Library" roles={['SuperAdmin', 'Admin', 'Manager']} />
+                                    <NavItem id="stock-movement" icon={ArrowUpDown} label="Stock Movement" roles={['SuperAdmin', 'Admin', 'Manager']} />
                                 </NavGroup>
 
                                 <NavGroup title="Logistics">

@@ -38,6 +38,7 @@ import IoTManagement from './pages/IoTManagement';
 import Notes from './pages/Notes';
 import Tasks from './pages/Tasks';
 import FactoryLiveOS from './pages/FactoryLiveOS';
+import StockMovement from './pages/StockMovement';
 
 import { User, UserRole, InventoryItem, ProductionLog as ProductionLogType, JobOrder } from './types';
 import AIAgentWidget from './components/AIAgentWidget';
@@ -546,6 +547,8 @@ function App() {
                 return <Inventory inventory={inventory} />;
             case 'livestock':
                 return <LiveStock />;
+            case 'stock-movement':
+                return <StockMovement />;
             case 'recipes':
                 return null; // <RecipeManager />;
             case 'products':
