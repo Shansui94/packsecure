@@ -5,11 +5,13 @@ import { Search, RefreshCw, Package, Layers, Box } from 'lucide-react';
 
 // Types
 interface StockItem {
-    id?: string; // Optional or removed
+    id?: string;
     sku: string;
     name: string;
+    type?: string;
     current_stock: number;
     reserved_stock?: number;
+    unit?: string;
     layer?: string;
     material?: string;
     size?: string;
@@ -25,24 +27,28 @@ const LiveStock: React.FC = () => {
     const fetchStock = async () => {
         setLoading(true);
         try {
-            console.log("Fetching Live Stock via RPC...");
-            // Use RPC to bypass RLS policies on 'items' table
-            const { data, error } = await supabase.rpc('get_live_stock_viewer');
+            console.log('Fetching Live Stock from items table...');
+            const { data, error } = await supabase
+                .from('items')
+                .select('id, sku, name, type, current_stock, unit')
+                .order('sku', { ascending: true });
 
             if (error) throw error;
 
-            console.log("Stock Items Fetched:", data?.length);
+            console.log('Stock Items Fetched:', data?.length);
 
             const parsedItems: StockItem[] = (data || []).map((item: any) => {
                 // Parse SKU: BW-2L-CLR-50CM
                 const parts = item.sku?.split('-') || [];
                 return {
-                    id: item.sku, // Use SKU as ID
+                    id: item.id,
                     sku: item.sku,
                     name: item.name,
+                    type: item.type,
                     current_stock: Number(item.current_stock) || 0,
-                    reserved_stock: Number(item.reserved_stock) || 0,
-                    // Auto-detect attributes
+                    reserved_stock: 0,
+                    unit: item.unit,
+                    // Auto-detect attributes from SKU
                     layer: parts.length > 1 ? parts[1] : undefined,
                     material: parts.length > 2 ? parts[2] : undefined,
                     size: parts.length > 3 ? parts[3] : undefined,
@@ -52,7 +58,7 @@ const LiveStock: React.FC = () => {
             setItems(parsedItems);
             setLastUpdated(new Date().toLocaleTimeString());
         } catch (err) {
-            console.error("Error loading stock:", err);
+            console.error('Error loading stock:', err);
         } finally {
             setLoading(false);
         }
