@@ -31,16 +31,19 @@ const OrderSummary: React.FC<OrderSummaryProps> = ({ user: _user }) => {
     const fetchData = useCallback(async () => {
         setLoading(true);
         try {
-            const { data: driversData } = await supabase
-                .from('users_public')
-                .select('*')
-                .eq('role', 'Driver');
+            const { data: allUsers } = await supabase.from('users_public').select('*');
 
-            if (driversData) {
-                setDrivers(driversData.map(u => ({
+            if (allUsers) {
+                const filtered = allUsers.filter(u =>
+                    u.role === 'Driver' ||
+                    u.email === 'neosonchun@gmail.com' ||
+                    u.email === 'ericsoobaolin0219@gmail.com' ||
+                    u.name?.toLowerCase().includes('neoson')
+                );
+                setDrivers(filtered.map(u => ({
                     uid: u.id,
                     email: u.email,
-                    name: u.name || u.email?.split('@')[0] || 'Unknown Driver',
+                    name: (u.name && u.name.trim() !== '') ? u.name : (u.email?.split('@')[0] || 'Unknown Driver'),
                     role: 'Driver',
                     factoryId: u.factory_id,
                 } as any)));
@@ -336,8 +339,8 @@ const DriverColumn: React.FC<{
                                     {...provided.dragHandleProps}
                                     style={{ ...provided.draggableProps.style }}
                                     className={`bg-[#18181b] border border-[#27272a] p-4 rounded-xl cursor-grab active:cursor-grabbing transition-all relative group/card ${snapshot.isDragging
-                                            ? 'shadow-2xl border-blue-500 z-50 rotate-1'
-                                            : 'hover:bg-[#27272a] hover:border-blue-500/50'
+                                        ? 'shadow-2xl border-blue-500 z-50 rotate-1'
+                                        : 'hover:bg-[#27272a] hover:border-blue-500/50'
                                         }`}
                                 >
                                     {/* Trip Sequence Badge */}
