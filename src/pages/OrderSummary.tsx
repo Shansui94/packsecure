@@ -1,25 +1,8 @@
 import React, { useState, useEffect, useCallback } from 'react';
+import { DragDropContext, Droppable, Draggable, DropResult } from '@hello-pangea/dnd';
 import { supabase } from '../services/supabase';
 import { SalesOrder, User } from '../types';
-import { Calendar, User as UserIcon, Truck, MapPin, Package, GripVertical } from 'lucide-react';
-import {
-    DndContext,
-    DragOverlay,
-    PointerSensor,
-    useSensor,
-    useSensors,
-    closestCenter,
-    DragStartEvent,
-    DragEndEvent,
-    DragOverEvent,
-} from '@dnd-kit/core';
-import {
-    SortableContext,
-    useSortable,
-    verticalListSortingStrategy,
-    arrayMove,
-} from '@dnd-kit/sortable';
-import { CSS } from '@dnd-kit/utilities';
+import { Calendar, User as UserIcon, Truck, MapPin, Package } from 'lucide-react';
 
 // --- LOCATION CONFIGURATION ---
 const LOCATIONS = ['Taiping', 'Nilai'] as const;
@@ -33,125 +16,16 @@ const LOCATION_COLOR: Record<Location, string> = {
     'Nilai': 'emerald',
 };
 
-const UNASSIGNED_COLUMN = '__unassigned__';
-
 interface OrderSummaryProps {
     user?: any;
 }
 
-// ─── Draggable Order Card ────────────────────────────────────────────────────
-const SortableOrderCard: React.FC<{ order: SalesOrder; isDragging?: boolean }> = ({ order, isDragging }) => {
-    const { attributes, listeners, setNodeRef, transform, transition, over } = useSortable({ id: order.id });
-
-    const style: React.CSSProperties = {
-        transform: CSS.Transform.toString(transform),
-        transition,
-        opacity: isDragging ? 0.3 : 1,
-        cursor: 'grab',
-    };
-
-    return (
-        <div ref={setNodeRef} style={style} {...attributes} className="mb-3">
-            <div className={`bg-[#1a1a1e] border rounded-xl p-4 transition-all ${isDragging ? 'border-blue-500/50' : 'border-white/5 hover:border-white/10'
-                }`}>
-                <div className="flex justify-between items-start mb-2">
-                    <div className="flex items-center gap-2 min-w-0">
-                        {/* Drag handle */}
-                        <div {...listeners} className="cursor-grab touch-none text-slate-600 hover:text-slate-400 shrink-0">
-                            <GripVertical size={14} />
-                        </div>
-                        <div className="min-w-0">
-                            <div className="text-blue-400 font-bold text-sm mb-0.5">{order.orderNumber}</div>
-                            <div className="text-white font-medium truncate">{order.customer}</div>
-                        </div>
-                    </div>
-                    <div className={`shrink-0 px-2 py-1 rounded text-[10px] font-bold uppercase ${order.status === 'Delivered' ? 'bg-green-500/20 text-green-400' : 'bg-yellow-500/20 text-yellow-400'
-                        }`}>
-                        {order.status}
-                    </div>
-                </div>
-
-                <div className="text-xs text-gray-400 mb-3 flex items-start gap-1.5 ml-5">
-                    <MapPin size={12} className="mt-0.5 shrink-0" />
-                    {order.deliveryAddress || 'No Address'}
-                </div>
-
-                <div className="bg-black/40 rounded-lg p-2 space-y-1 ml-5">
-                    {order.items.map((item, idx) => (
-                        <div key={idx} className="flex justify-between text-xs">
-                            <span className="text-gray-300">{item.product}</span>
-                            <span className="font-mono text-gray-400">x{item.quantity}</span>
-                        </div>
-                    ))}
-                </div>
-
-                {order.notes && (
-                    <div className="mt-2 text-[10px] text-yellow-500/80 italic ml-5">
-                        Note: {order.notes}
-                    </div>
-                )}
-            </div>
-        </div>
-    );
-};
-
-// ─── Driver Column (Droppable) ───────────────────────────────────────────────
-const DriverColumn: React.FC<{
-    columnId: string;
-    label: string;
-    orders: SalesOrder[];
-    isUnassigned?: boolean;
-    isOver?: boolean;
-}> = ({ columnId, label, orders, isUnassigned, isOver }) => {
-    return (
-        <div className="space-y-3">
-            <div className={`flex items-center gap-2 font-bold uppercase tracking-wider text-xs px-2 ${isUnassigned ? 'text-red-400' : 'text-gray-400'
-                }`}>
-                {isUnassigned ? <UserIcon size={14} /> : <Truck size={14} />}
-                {label}
-                <span className={`px-1.5 rounded text-[10px] ml-auto ${isUnassigned ? 'bg-red-500/10 text-red-400' : 'bg-white/5'
-                    }`}>{orders.length} DOs</span>
-            </div>
-            <div
-                className={`rounded-xl border p-2 min-h-[100px] transition-all duration-150 ${isOver
-                        ? isUnassigned
-                            ? 'border-red-500/50 bg-red-500/5'
-                            : 'border-blue-500/40 bg-blue-500/5'
-                        : isUnassigned
-                            ? 'border-red-500/10 bg-[#121215]'
-                            : 'border-white/5 bg-[#121215]'
-                    }`}
-            >
-                <SortableContext items={orders.map(o => o.id)} strategy={verticalListSortingStrategy}>
-                    {orders.map(o => (
-                        <SortableOrderCard key={o.id} order={o} />
-                    ))}
-                </SortableContext>
-                {orders.length === 0 && (
-                    <div className="flex items-center justify-center h-16 text-[10px] text-gray-700 uppercase tracking-widest border border-dashed border-white/5 rounded-lg">
-                        Drop here
-                    </div>
-                )}
-            </div>
-        </div>
-    );
-};
-
-// ─── Main Component ──────────────────────────────────────────────────────────
 const OrderSummary: React.FC<OrderSummaryProps> = ({ user: _user }) => {
     const [orders, setOrders] = useState<SalesOrder[]>([]);
     const [drivers, setDrivers] = useState<User[]>([]);
     const [selectedDate, setSelectedDate] = useState<string>(new Date().toISOString().split('T')[0]);
     const [loading, setLoading] = useState(false);
     const [activeTab, setActiveTab] = useState<Location>('Taiping');
-
-    // DnD state
-    const [activeId, setActiveId] = useState<string | null>(null);
-    const [overId, setOverId] = useState<string | null>(null);
-
-    const sensors = useSensors(
-        useSensor(PointerSensor, { activationConstraint: { distance: 5 } })
-    );
 
     // --- FETCH ---
     const fetchData = useCallback(async () => {
@@ -195,11 +69,7 @@ const OrderSummary: React.FC<OrderSummaryProps> = ({ user: _user }) => {
                     tripSequence: o.trip_sequence || 0,
                     factoryId: o.factory_id,
                 }));
-
-                setOrders(mapped.filter(o => {
-                    const d = o.deadline || o.orderDate;
-                    return d === selectedDate;
-                }));
+                setOrders(mapped.filter(o => (o.deadline || o.orderDate) === selectedDate));
             }
         } catch (err) {
             console.error('fetchData error:', err);
@@ -226,122 +96,72 @@ const OrderSummary: React.FC<OrderSummaryProps> = ({ user: _user }) => {
         if (loc) locationOrders[loc].push(o);
     });
 
-    // Active tab orders sorted
     const activeTabOrders = [...(locationOrders[activeTab] || [])].sort(
         (a, b) => (a.tripSequence ?? 99) - (b.tripSequence ?? 99)
     );
 
-    // Group by driver for current tab
-    const buildColumns = (list: SalesOrder[]) => {
-        const byDriver: Record<string, SalesOrder[]> = {};
-        const unassigned: SalesOrder[] = [];
-        list.forEach(o => {
-            if (o.driverId && o.driverId !== 'unassigned') {
-                if (!byDriver[o.driverId]) byDriver[o.driverId] = [];
-                byDriver[o.driverId].push(o);
-            } else {
-                unassigned.push(o);
-            }
-        });
-        return { byDriver, unassigned };
-    };
-
-    const { byDriver, unassigned } = buildColumns(activeTabOrders);
-
-    const getDriverName = (id: string) =>
+    const getDriverName = (id?: string) =>
         drivers.find(d => d.uid === id)?.name || 'Unknown Driver';
 
-    const activeOrder = activeId ? orders.find(o => o.id === activeId) : null;
+    // --- DND HANDLER (mirrors DeliveryOrderManagement logic) ---
+    const onDragEnd = async (result: DropResult) => {
+        const { destination, source, draggableId } = result;
+        if (!destination) return;
+        if (destination.droppableId === source.droppableId && destination.index === source.index) return;
 
-    // Find which column ID an order belongs to
-    const getColumnOfOrder = (orderId: string): string => {
-        const o = orders.find(x => x.id === orderId);
-        if (!o) return UNASSIGNED_COLUMN;
-        if (!o.driverId || o.driverId === 'unassigned') return UNASSIGNED_COLUMN;
-        return o.driverId;
-    };
+        const newDriverId = destination.droppableId === 'unassigned' ? null : destination.droppableId;
+        const oldDriverId = source.droppableId === 'unassigned' ? null : source.droppableId;
+        const orderId = draggableId;
 
-    // The column that is currently being hovered over
-    const getTargetColumn = (overIdRaw: string | null): string | null => {
-        if (!overIdRaw) return null;
-        // overId is either a column header id or an order id
-        if (overIdRaw === UNASSIGNED_COLUMN) return UNASSIGNED_COLUMN;
-        if (drivers.find(d => d.uid === overIdRaw)) return overIdRaw; // it's a driver id
-        // it's an order id — find which column it's in
-        return getColumnOfOrder(overIdRaw);
-    };
+        // Get destination column's current orders
+        const destOrders = activeTabOrders
+            .filter(o => {
+                if (destination.droppableId === 'unassigned') return !o.driverId;
+                return o.driverId === destination.droppableId;
+            })
+            .sort((a, b) => (a.tripSequence || 0) - (b.tripSequence || 0));
 
-    // --- DND HANDLERS ---
-    const handleDragStart = (event: DragStartEvent) => {
-        setActiveId(event.active.id as string);
-    };
+        const movedOrder = orders.find(o => o.id === orderId);
+        if (!movedOrder) return;
 
-    const handleDragOver = (event: DragOverEvent) => {
-        setOverId(event.over?.id as string ?? null);
-    };
-
-    const handleDragEnd = async (event: DragEndEvent) => {
-        const { active, over } = event;
-        setActiveId(null);
-        setOverId(null);
-
-        if (!over || active.id === over.id) return;
-
-        const draggedId = active.id as string;
-        const overId = over.id as string;
-
-        const sourceCol = getColumnOfOrder(draggedId);
-        const targetCol = getTargetColumn(overId) ?? sourceCol;
-
-        if (sourceCol !== targetCol) {
-            // ── Moved to different column: update driver_id ──
-            const newDriverId = targetCol === UNASSIGNED_COLUMN ? null : targetCol;
-
-            // Optimistic update
-            setOrders(prev => prev.map(o =>
-                o.id === draggedId ? { ...o, driverId: newDriverId ?? undefined } : o
-            ));
-
-            // Persist
-            const { error } = await supabase
-                .from('sales_orders')
-                .update({ driver_id: newDriverId })
-                .eq('id', draggedId);
-
-            if (error) {
-                console.error('Failed to update driver:', error);
-                fetchData(); // rollback
-            }
+        // Build new order for destination
+        if (newDriverId === oldDriverId) {
+            // Same column reorder
+            destOrders.splice(source.index, 1);
+            destOrders.splice(destination.index, 0, movedOrder);
         } else {
-            // ── Same column: reorder trip_sequence ──
-            const colOrders = sourceCol === UNASSIGNED_COLUMN
-                ? [...unassigned]
-                : [...(byDriver[sourceCol] || [])];
+            // Cross-column move
+            destOrders.splice(destination.index, 0, { ...movedOrder, driverId: newDriverId || undefined });
+        }
 
-            const oldIdx = colOrders.findIndex(o => o.id === draggedId);
-            const newIdx = colOrders.findIndex(o => o.id === overId);
-            if (oldIdx === -1 || newIdx === -1) return;
+        // Optimistic update
+        const sequenceMap = new Map<string, number>();
+        destOrders.forEach((o, i) => sequenceMap.set(o.id, i + 1));
 
-            const reordered = arrayMove(colOrders, oldIdx, newIdx);
+        setOrders(prev => prev.map(o => {
+            let updated = o;
+            if (o.id === orderId && newDriverId !== oldDriverId) {
+                updated = { ...o, driverId: newDriverId || undefined };
+            }
+            if (sequenceMap.has(o.id)) {
+                updated = { ...updated, tripSequence: sequenceMap.get(o.id) };
+            }
+            return updated;
+        }));
 
-            // Assign new trip_sequence values (1-based)
-            const updates = reordered.map((o, idx) => ({
-                id: o.id,
-                trip_sequence: idx + 1,
-            }));
-
-            // Optimistic update
-            setOrders(prev => prev.map(o => {
-                const u = updates.find(x => x.id === o.id);
-                return u ? { ...o, tripSequence: u.trip_sequence } : o;
-            }));
-
-            // Persist all in parallel
+        // Persist
+        try {
+            if (newDriverId !== oldDriverId) {
+                await supabase.from('sales_orders').update({ driver_id: newDriverId }).eq('id', orderId);
+            }
             await Promise.all(
-                updates.map(u =>
-                    supabase.from('sales_orders').update({ trip_sequence: u.trip_sequence }).eq('id', u.id)
+                destOrders.map((o, i) =>
+                    supabase.from('sales_orders').update({ trip_sequence: i + 1 }).eq('id', o.id)
                 )
             );
+        } catch (err) {
+            console.error('DnD persist error:', err);
+            fetchData();
         }
     };
 
@@ -353,23 +173,19 @@ const OrderSummary: React.FC<OrderSummaryProps> = ({ user: _user }) => {
         return acc;
     }, {} as Record<string, number>);
 
-    // All columns for DnD context (need all order ids + column drop zones)
-    const allItems = activeTabOrders.map(o => o.id);
+    // Build column list: unassigned + all drivers who have orders in this tab
+    const driverIdsInTab = [...new Set(
+        activeTabOrders.filter(o => o.driverId).map(o => o.driverId!)
+    )];
 
     return (
-        <DndContext
-            sensors={sensors}
-            collisionDetection={closestCenter}
-            onDragStart={handleDragStart}
-            onDragOver={handleDragOver}
-            onDragEnd={handleDragEnd}
-        >
+        <DragDropContext onDragEnd={onDragEnd}>
             <div className="p-6 max-w-7xl mx-auto pb-20">
                 {/* Header */}
                 <div className="flex flex-col md:flex-row justify-between items-start md:items-center mb-8 gap-4">
                     <div>
                         <h1 className="text-2xl font-bold text-white mb-1">Daily Prep List</h1>
-                        <p className="text-gray-400 text-sm">Daily Production &amp; Delivery Preparation — drag cards to reassign drivers or reorder</p>
+                        <p className="text-slate-400 text-sm">Drag cards to reassign drivers or reorder trip sequence</p>
                     </div>
                     <div className="flex items-center gap-2 bg-[#1a1a1e] border border-white/10 p-1.5 rounded-xl">
                         <Calendar className="text-gray-500 ml-2" size={18} />
@@ -387,7 +203,7 @@ const OrderSummary: React.FC<OrderSummaryProps> = ({ user: _user }) => {
                     {LOCATIONS.map(loc => {
                         const c = LOCATION_COLOR[loc];
                         const isActive = activeTab === loc;
-                        const borderColor = {
+                        const activeStyle = {
                             blue: 'border-blue-500 text-blue-400 bg-blue-500/10',
                             emerald: 'border-emerald-500 text-emerald-400 bg-emerald-500/10',
                         }[c];
@@ -395,7 +211,7 @@ const OrderSummary: React.FC<OrderSummaryProps> = ({ user: _user }) => {
                             <button
                                 key={loc}
                                 onClick={() => setActiveTab(loc)}
-                                className={`flex-1 py-4 text-center font-bold text-sm uppercase tracking-wider transition-all border-b-2 ${isActive ? borderColor : 'border-transparent text-gray-500 hover:text-gray-300 hover:bg-white/5'
+                                className={`flex-1 py-4 text-center font-bold text-sm uppercase tracking-wider transition-all border-b-2 ${isActive ? activeStyle : 'border-transparent text-gray-500 hover:text-gray-300 hover:bg-white/5'
                                     }`}
                             >
                                 {loc}
@@ -410,8 +226,8 @@ const OrderSummary: React.FC<OrderSummaryProps> = ({ user: _user }) => {
                 {loading ? (
                     <div className="text-center py-20 text-gray-500 animate-pulse">Loading orders...</div>
                 ) : (
-                    <div className="animate-in fade-in duration-300">
-                        {/* PRODUCTION SUMMARY */}
+                    <div>
+                        {/* Production Summary */}
                         <div className="mb-8 bg-blue-500/5 border border-blue-500/20 rounded-xl p-4">
                             <h2 className="text-sm font-bold text-blue-400 uppercase tracking-wider mb-3 flex items-center gap-2">
                                 <Package size={16} /> Production Requirements — {activeTab}
@@ -430,54 +246,151 @@ const OrderSummary: React.FC<OrderSummaryProps> = ({ user: _user }) => {
                             )}
                         </div>
 
-                        {/* KANBAN COLUMNS */}
+                        {/* Kanban Columns */}
                         {activeTabOrders.length === 0 ? (
                             <div className="text-center py-20 text-gray-600 italic border border-dashed border-white/5 rounded-xl">
                                 No orders for {activeTab} on this date.
                             </div>
                         ) : (
-                            <SortableContext items={allItems} strategy={verticalListSortingStrategy}>
-                                <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
-                                    {/* Unassigned */}
-                                    {(unassigned.length > 0 || activeId) && (
+                            <div className="grid grid-cols-1 md:grid-cols-2 xl:grid-cols-3 gap-6">
+                                {/* Unassigned Column */}
+                                {(() => {
+                                    const colOrders = activeTabOrders.filter(o => !o.driverId).sort((a, b) => (a.tripSequence || 0) - (b.tripSequence || 0));
+                                    if (colOrders.length === 0 && driverIdsInTab.length > 0) return null;
+                                    return (
                                         <DriverColumn
-                                            columnId={UNASSIGNED_COLUMN}
-                                            label="Unassigned"
-                                            orders={unassigned}
+                                            key="unassigned"
+                                            droppableId="unassigned"
+                                            label="📦 Unassigned"
+                                            orders={colOrders}
                                             isUnassigned
-                                            isOver={getTargetColumn(overId) === UNASSIGNED_COLUMN}
                                         />
-                                    )}
+                                    );
+                                })()}
 
-                                    {/* Per-driver columns */}
-                                    {Object.entries(byDriver).map(([driverId, driverOrders]) => (
+                                {/* Driver Columns */}
+                                {driverIdsInTab.map(driverId => {
+                                    const colOrders = activeTabOrders.filter(o => o.driverId === driverId).sort((a, b) => (a.tripSequence || 0) - (b.tripSequence || 0));
+                                    return (
                                         <DriverColumn
                                             key={driverId}
-                                            columnId={driverId}
+                                            droppableId={driverId}
                                             label={getDriverName(driverId)}
-                                            orders={driverOrders}
-                                            isOver={getTargetColumn(overId) === driverId}
+                                            orders={colOrders}
                                         />
-                                    ))}
-                                </div>
-                            </SortableContext>
+                                    );
+                                })}
+                            </div>
                         )}
                     </div>
                 )}
             </div>
-
-            {/* Drag Overlay — ghost card while dragging */}
-            <DragOverlay>
-                {activeOrder ? (
-                    <div className="bg-[#1a1a1e] border border-blue-500/60 rounded-xl p-4 shadow-2xl shadow-blue-500/20 opacity-95 rotate-1">
-                        <div className="text-blue-400 font-bold text-sm">{activeOrder.orderNumber}</div>
-                        <div className="text-white font-medium">{activeOrder.customer}</div>
-                        <div className="text-xs text-gray-500 mt-1">{activeOrder.deliveryAddress}</div>
-                    </div>
-                ) : null}
-            </DragOverlay>
-        </DndContext>
+        </DragDropContext>
     );
 };
+
+// ─── Driver Column Component ─────────────────────────────────────────────────
+const DriverColumn: React.FC<{
+    droppableId: string;
+    label: string;
+    orders: SalesOrder[];
+    isUnassigned?: boolean;
+}> = ({ droppableId, label, orders, isUnassigned }) => (
+    <div className={`flex flex-col gap-4 rounded-2xl p-4 border transition-all ${isUnassigned ? 'bg-slate-900/50 border-dashed border-slate-700' : 'bg-slate-900/50 border-slate-800'
+        }`}>
+        {/* Column Header */}
+        <div className="flex items-center justify-between pb-2 border-b border-white/5">
+            <div className="flex items-center gap-3">
+                <div className={`w-10 h-10 rounded-full flex items-center justify-center text-lg font-bold shadow-lg ${isUnassigned ? 'bg-slate-700 text-slate-400' : 'bg-gradient-to-br from-blue-600 to-cyan-600 text-white'
+                    }`}>
+                    {isUnassigned ? '?' : label.charAt(0).toUpperCase()}
+                </div>
+                <div>
+                    <div className={`font-bold text-sm ${isUnassigned ? 'text-slate-400' : 'text-white'}`}>{label}</div>
+                    <div className="text-[10px] text-slate-500 font-mono flex items-center gap-1">
+                        {isUnassigned ? <><UserIcon size={10} /> Pending Assign</> : <><Truck size={10} /> {orders.length} Orders</>}
+                    </div>
+                </div>
+            </div>
+            <div className="flex flex-col items-end">
+                <div className="text-2xl font-black text-white">{orders.length}</div>
+                <div className="text-[9px] font-bold text-zinc-600 uppercase tracking-widest">Orders</div>
+            </div>
+        </div>
+
+        {/* Droppable Area */}
+        <Droppable droppableId={droppableId}>
+            {(provided, snapshot) => (
+                <div
+                    ref={provided.innerRef}
+                    {...provided.droppableProps}
+                    className={`flex-1 p-1 space-y-3 min-h-[80px] transition-colors rounded-xl ${snapshot.isDraggingOver ? 'bg-blue-500/5 border border-blue-500/20' : ''
+                        }`}
+                >
+                    {orders.map((order, index) => (
+                        <Draggable key={order.id} draggableId={order.id} index={index}>
+                            {(provided, snapshot) => (
+                                <div
+                                    ref={provided.innerRef}
+                                    {...provided.draggableProps}
+                                    {...provided.dragHandleProps}
+                                    style={{ ...provided.draggableProps.style }}
+                                    className={`bg-[#18181b] border border-[#27272a] p-4 rounded-xl cursor-grab active:cursor-grabbing transition-all relative group/card ${snapshot.isDragging
+                                            ? 'shadow-2xl border-blue-500 z-50 rotate-1'
+                                            : 'hover:bg-[#27272a] hover:border-blue-500/50'
+                                        }`}
+                                >
+                                    {/* Trip Sequence Badge */}
+                                    <div className="absolute -top-2 -right-2 bg-slate-950 border border-slate-700 text-slate-400 text-[9px] font-bold uppercase py-0.5 px-2 rounded-full shadow-lg z-10">
+                                        {index + 1}{index === 0 ? 'st' : index === 1 ? 'nd' : index === 2 ? 'rd' : 'th'} Trip
+                                    </div>
+
+                                    {/* Order Header */}
+                                    <div className="flex justify-between items-start mb-2">
+                                        <div className="font-mono text-sm font-black text-blue-400 bg-blue-500/10 px-2 py-1 rounded border border-blue-500/20 tracking-wide">
+                                            {order.orderNumber}
+                                        </div>
+                                        <div className={`px-2 py-1 rounded text-[10px] font-bold uppercase ${order.status === 'Delivered' ? 'bg-green-500/20 text-green-400' : 'bg-yellow-500/20 text-yellow-400'
+                                            }`}>
+                                            {order.status}
+                                        </div>
+                                    </div>
+
+                                    <div className="text-white font-medium text-sm mb-2">{order.customer}</div>
+
+                                    <div className="text-xs text-gray-400 mb-3 flex items-start gap-1.5">
+                                        <MapPin size={12} className="mt-0.5 shrink-0" />
+                                        {order.deliveryAddress || 'No Address'}
+                                    </div>
+
+                                    <div className="bg-black/30 rounded-lg p-2 space-y-1">
+                                        {order.items.map((item, idx) => (
+                                            <div key={idx} className="flex justify-between text-xs">
+                                                <span className="text-gray-300">{item.product}</span>
+                                                <span className="font-mono text-gray-400">x{item.quantity}</span>
+                                            </div>
+                                        ))}
+                                    </div>
+
+                                    {order.notes && (
+                                        <div className="mt-2 text-[10px] text-yellow-500/80 italic">
+                                            Note: {order.notes}
+                                        </div>
+                                    )}
+                                </div>
+                            )}
+                        </Draggable>
+                    ))}
+                    {provided.placeholder}
+                    {orders.length === 0 && !snapshot.isDraggingOver && (
+                        <div className="flex items-center justify-center h-16 text-[10px] text-gray-700 uppercase tracking-widest border border-dashed border-white/5 rounded-lg">
+                            Drop here
+                        </div>
+                    )}
+                </div>
+            )}
+        </Droppable>
+    </div>
+);
 
 export default OrderSummary;
