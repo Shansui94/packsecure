@@ -184,6 +184,7 @@ const Layout: React.FC<LayoutProps> = ({ children, activePage, setActivePage, us
                             <NavGroup title="Neoson Workspace">
                                 <NavItem id="order-summary" icon={FileBarChart} label="Daily Prep" />
                                 <NavItem id="maintenance" icon={Wrench} label="Maintenance Control" />
+                                <NavItem id="driver-leave" icon={Calendar} label="Apply Leave" />
                             </NavGroup>
                         )}
 
@@ -258,6 +259,21 @@ const Layout: React.FC<LayoutProps> = ({ children, activePage, setActivePage, us
                                 <NavGroup title="Productivity">
                                     <NavItem id="notes" icon={FileText} label="Notes" roles={['Driver']} />
                                     <NavItem id="tasks" icon={ClipboardList} label="Tasks" roles={['Driver']} badge={taskCount} />
+                                </NavGroup>
+                            </>
+                        )}
+
+                        {/* HR VIEW */}
+                        {userRole === 'HR' && (
+                            <>
+                                <NavGroup title="HR Workspace">
+                                    <NavItem id="hr" icon={Users} label="HR Portal" roles={['HR']} />
+                                    <NavItem id="driver-leave" icon={Calendar} label="Apply Leave" roles={['HR']} />
+                                </NavGroup>
+
+                                <NavGroup title="Productivity">
+                                    <NavItem id="notes" icon={FileText} label="Notes" roles={['HR']} />
+                                    <NavItem id="tasks" icon={ClipboardList} label="Tasks" roles={['HR']} badge={taskCount} />
                                 </NavGroup>
                             </>
                         )}

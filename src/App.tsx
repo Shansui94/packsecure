@@ -149,7 +149,7 @@ function App() {
             'Driver': ['delivery-driver', 'delivery-history', 'driver-leave', 'lorry-service', 'claims', 'profile'],
             'Operator': ['scanner', 'profile'],
             'Device': ['scanner'],
-            'HR': ['profile', 'construction'],
+            'HR': ['profile', 'hr', 'driver-leave', 'notes', 'tasks'],
             'Sales': ['profile', 'construction'],
             'Finance': ['profile', 'construction']
         };
@@ -259,7 +259,8 @@ function App() {
                 else if (role === 'SuperAdmin') setActivePage('dashboard');
                 else if (role === 'Operator' || role === 'Device') setActivePage('scanner');
                 else if (role === 'Driver') setActivePage('delivery-driver');
-                else if (['Admin', 'Manager', 'HR', 'Sales', 'Finance'].includes(role)) setActivePage('construction');
+                else if (['Admin', 'Manager', 'Sales', 'Finance'].includes(role)) setActivePage('construction');
+                else if (role === 'HR') setActivePage('hr');
                 else setActivePage('dashboard');
             }
 
@@ -589,7 +590,7 @@ function App() {
             case 'driver-management':
                 return <DriverManagement currentUser={user} />;
             case 'hr':
-                return <HRPortal />;
+                return <HRPortal user={user} />;
             case 'claims':
                 return <ClaimsManagement user={user} />;
             case 'update-password':

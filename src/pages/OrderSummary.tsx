@@ -3,54 +3,29 @@ import { supabase } from '../services/supabase';
 import { SalesOrder, User } from '../types';
 import { Calendar, User as UserIcon, Truck, MapPin, Package } from 'lucide-react';
 
-// --- WAREHOUSE CONFIGURATION ---
-const WAREHOUSES = ['SPD', 'OPM LAMA', 'OPM CORNER', 'NILAI'] as const;
-type Warehouse = typeof WAREHOUSES[number];
+// --- LOCATION CONFIGURATION ---
+const LOCATIONS = ['Taiping', 'Nilai'] as const;
+type Location = typeof LOCATIONS[number];
 
-const WAREHOUSE_KEYWORDS: Record<Warehouse, string[]> = {
-    'SPD': ['SPD'],
-    'OPM LAMA': ['OPM Lama', 'OPM LAMA', 'OPM_LAMA', 'OPMLAMA'],
-    'OPM CORNER': ['OPM Corner', 'OPM CORNER', 'OPM_CORNER', 'OPMCORNER'],
-    'NILAI': ['NILAI', 'Nilai'],
+const TAIPING_KEYWORDS = ['SPD', 'OPM Lama', 'OPM LAMA', 'OPM_LAMA', 'OPMLAMA', 'OPM Corner', 'OPM CORNER', 'OPM_CORNER', 'OPMCORNER'];
+const NILAI_KEYWORDS = ['NILAI', 'Nilai'];
+
+const LOCATION_COLOR: Record<Location, string> = {
+    'Taiping': 'blue',
+    'Nilai': 'emerald',
 };
-
-const WAREHOUSE_COLOR: Record<Warehouse, string> = {
-    'SPD': 'blue',
-    'OPM LAMA': 'violet',
-    'OPM CORNER': 'amber',
-    'NILAI': 'emerald',
-};
-
-const TAIPING_WAREHOUSES: Warehouse[] = ['SPD', 'OPM LAMA', 'OPM CORNER'];
 
 interface OrderSummaryProps {
     user?: any;
 }
 
-const OrderSummary: React.FC<OrderSummaryProps> = ({ user }) => {
+const OrderSummary: React.FC<OrderSummaryProps> = ({ user: _user }) => {
     const [orders, setOrders] = useState<SalesOrder[]>([]);
     const [drivers, setDrivers] = useState<User[]>([]);
     const [selectedDate, setSelectedDate] = useState<string>(new Date().toISOString().split('T')[0]);
     const [loading, setLoading] = useState(false);
 
-    // Determine allowed tabs per user
-    const isNeoson = user?.employeeId === '009';
-    const isEric = user?.email === 'ericsoobaolin0219@gmail.com';
-
-    const allowedTabs: Warehouse[] = isNeoson
-        ? TAIPING_WAREHOUSES
-        : isEric
-            ? ['NILAI']
-            : [...WAREHOUSES];
-
-    const [activeTab, setActiveTab] = useState<Warehouse>(allowedTabs[0]);
-
-    // Keep active tab valid if user context changes
-    useEffect(() => {
-        if (!allowedTabs.includes(activeTab)) {
-            setActiveTab(allowedTabs[0]);
-        }
-    }, [isNeoson, isEric]);
+    const [activeTab, setActiveTab] = useState<Location>('Taiping');
 
     // --- FETCH ---
     const fetchData = async () => {
@@ -112,35 +87,27 @@ const OrderSummary: React.FC<OrderSummaryProps> = ({ user }) => {
 
     useEffect(() => { fetchData(); }, [selectedDate]);
 
-    // --- WAREHOUSE CLASSIFICATION ---
-    const getOrderWarehouse = (o: SalesOrder): Warehouse | null => {
-        // 1. Check item remarks for warehouse keywords
-        for (const wh of WAREHOUSES) {
-            const keywords = WAREHOUSE_KEYWORDS[wh];
-            const matched = o.items.some(item =>
-                item.remark && keywords.some(k =>
-                    item.remark!.toLowerCase().includes(k.toLowerCase())
-                )
-            );
-            if (matched) return wh;
-        }
-        // 2. Fallback: factory_id
-        if (o.factoryId === 'N1' || o.factoryId === 'N2') return 'NILAI';
-        if (o.factoryId === 'T1') return 'SPD'; // Default Taiping → SPD
+    // --- LOCATION CLASSIFICATION ---
+    const getOrderLocation = (o: SalesOrder): Location | null => {
+        // Check item remarks
+        const remarkText = o.items.map(i => i.remark || '').join(' ');
+        if (NILAI_KEYWORDS.some(k => remarkText.toLowerCase().includes(k.toLowerCase()))) return 'Nilai';
+        if (TAIPING_KEYWORDS.some(k => remarkText.toLowerCase().includes(k.toLowerCase()))) return 'Taiping';
+        // Fallback: factory_id
+        if (o.factoryId === 'N1' || o.factoryId === 'N2') return 'Nilai';
+        if (o.factoryId === 'T1') return 'Taiping';
         return null;
     };
 
-    // Build per-warehouse order lists
-    const warehouseOrders: Record<Warehouse, SalesOrder[]> = {
-        'SPD': [], 'OPM LAMA': [], 'OPM CORNER': [], 'NILAI': [],
-    };
+    // Build per-location order lists
+    const locationOrders: Record<Location, SalesOrder[]> = { 'Taiping': [], 'Nilai': [] };
     orders.forEach(o => {
-        const wh = getOrderWarehouse(o);
-        if (wh) warehouseOrders[wh].push(o);
+        const loc = getOrderLocation(o);
+        if (loc) locationOrders[loc].push(o);
     });
 
     // Active tab's orders, sorted by trip sequence
-    const activeOrders = [...(warehouseOrders[activeTab] || [])].sort(
+    const activeOrders = [...(locationOrders[activeTab] || [])].sort(
         (a, b) => (a.tripSequence || 99) - (b.tripSequence || 99)
     );
 
@@ -162,15 +129,8 @@ const OrderSummary: React.FC<OrderSummaryProps> = ({ user }) => {
     const getDriverName = (id: string) =>
         drivers.find(d => d.uid === id)?.name || 'Unknown Driver';
 
-    // --- COMPONENTS ---
-    const color = WAREHOUSE_COLOR[activeTab];
 
-    const colorClass = {
-        blue: { tab: 'border-blue-500 text-blue-400 bg-blue-500/10', badge: 'bg-blue-500/20 text-blue-300', unassigned: 'border-red-500/10', header: 'text-blue-400' },
-        violet: { tab: 'border-violet-500 text-violet-400 bg-violet-500/10', badge: 'bg-violet-500/20 text-violet-300', unassigned: 'border-red-500/10', header: 'text-violet-400' },
-        amber: { tab: 'border-amber-500 text-amber-400 bg-amber-500/10', badge: 'bg-amber-500/20 text-amber-300', unassigned: 'border-red-500/10', header: 'text-amber-400' },
-        emerald: { tab: 'border-emerald-500 text-emerald-400 bg-emerald-500/10', badge: 'bg-emerald-500/20 text-emerald-300', unassigned: 'border-red-500/10', header: 'text-emerald-400' },
-    }[color];
+
 
     const OrderCard = ({ order }: { order: SalesOrder }) => (
         <div className="bg-[#1a1a1e] border border-white/5 rounded-xl p-4 mb-3 hover:border-white/10 transition-colors">
@@ -236,29 +196,27 @@ const OrderSummary: React.FC<OrderSummaryProps> = ({ user }) => {
                 </div>
             </div>
 
-            {/* Warehouse Tabs */}
+            {/* Location Tabs */}
             <div className="flex mb-6 bg-[#0a0a0c] rounded-xl overflow-hidden border border-white/5">
-                {allowedTabs.map(wh => {
-                    const c = WAREHOUSE_COLOR[wh];
-                    const isActive = activeTab === wh;
+                {LOCATIONS.map(loc => {
+                    const c = LOCATION_COLOR[loc];
+                    const isActive = activeTab === loc;
                     const borderColor = {
                         blue: 'border-blue-500 text-blue-400 bg-blue-500/10',
-                        violet: 'border-violet-500 text-violet-400 bg-violet-500/10',
-                        amber: 'border-amber-500 text-amber-400 bg-amber-500/10',
                         emerald: 'border-emerald-500 text-emerald-400 bg-emerald-500/10',
                     }[c];
                     return (
                         <button
-                            key={wh}
-                            onClick={() => setActiveTab(wh)}
+                            key={loc}
+                            onClick={() => setActiveTab(loc)}
                             className={`flex-1 py-4 text-center font-bold text-sm uppercase tracking-wider transition-all border-b-2 ${isActive
-                                    ? borderColor
-                                    : 'border-transparent text-gray-500 hover:text-gray-300 hover:bg-white/5'
+                                ? borderColor
+                                : 'border-transparent text-gray-500 hover:text-gray-300 hover:bg-white/5'
                                 }`}
                         >
-                            {wh}
+                            {loc}
                             <span className="ml-2 px-2 py-0.5 rounded-full bg-white/10 text-xs">
-                                {warehouseOrders[wh].length}
+                                {locationOrders[loc].length}
                             </span>
                         </button>
                     );
