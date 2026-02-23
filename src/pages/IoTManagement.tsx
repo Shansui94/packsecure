@@ -10,7 +10,7 @@ import {
 interface IoTConfig {
     mac_address: string;
     machine_id: string;
-    lane_id: string;
+    lane_id: string;  // kept in DB but managed by ProductionControl
     active_product_sku: string;
     count_per_signal: number;
     debounce_ms: number;
@@ -28,23 +28,25 @@ interface Machine {
 const IoTManagement: React.FC = () => {
     const [configs, setConfigs] = useState<IoTConfig[]>([]);
     const [machines, setMachines] = useState<Machine[]>([]);
-    const [products, setProducts] = useState<any[]>([]);
+
     const [loading, setLoading] = useState(true);
     const [saving, setSaving] = useState<string | null>(null);
+    const [editingMacs, setEditingMacs] = useState<Set<string>>(new Set());
+
+    const toggleEdit = (mac: string) =>
+        setEditingMacs(prev => { const s = new Set(prev); s.has(mac) ? s.delete(mac) : s.add(mac); return s; });
 
     // Fetch all data
     const fetchData = async () => {
         setLoading(true);
         try {
-            const [configRes, machineRes, productRes] = await Promise.all([
+            const [configRes, machineRes] = await Promise.all([
                 supabase.from('iot_device_configs').select('*').order('updated_at', { ascending: false }),
                 supabase.from('sys_machines_v2').select('machine_id, name'),
-                supabase.from('products_v2').select('sku, name')
             ]);
 
             if (configRes.data) setConfigs(configRes.data);
             if (machineRes.data) setMachines(machineRes.data);
-            if (productRes.data) setProducts(productRes.data);
         } catch (err) {
             console.error("Error fetching IoT data:", err);
         } finally {
@@ -74,6 +76,7 @@ const IoTManagement: React.FC = () => {
                 .eq('mac_address', mac);
 
             if (error) throw error;
+
 
             // Local state update
             setConfigs(prev => prev.map(c => c.mac_address === mac ? { ...c, ...updates } : c));
@@ -118,127 +121,142 @@ const IoTManagement: React.FC = () => {
                     </div>
                 )}
 
-                {configs.map(config => (
-                    <div key={config.mac_address} className="bg-black/40 backdrop-blur-md border border-white/10 rounded-3xl overflow-hidden group hover:border-blue-500/30 transition-all duration-500">
-                        {/* Header / MAC Row */}
-                        <div className="px-6 py-4 bg-white/5 border-b border-white/5 flex flex-wrap justify-between items-center gap-4">
-                            <div className="flex items-center gap-3">
-                                <div className={`w-3 h-3 rounded-full ${getStatus(config.last_heartbeat) === 'Online' ? 'bg-green-500 animate-pulse' : 'bg-gray-600'}`} />
-                                <span className="font-mono text-sm tracking-widest text-blue-400">{config.mac_address}</span>
-                                <span className="text-[10px] bg-white/10 px-2 py-0.5 rounded text-gray-400">Ver: {config.firmware_version}</span>
-                            </div>
-                            <div className="flex items-center gap-4 text-xs text-gray-500">
-                                <span>Last Seen: {config.last_heartbeat ? new Date(config.last_heartbeat).toLocaleString() : 'Never'}</span>
-                            </div>
-                        </div>
+                {configs.map(config => {
+                    const status = getStatus(config.last_heartbeat);
+                    const isOnline = status === 'Online';
+                    const debouncePresets = [
+                        { label: '1 min', ms: 60000 },
+                        { label: '2 min', ms: 120000 },
+                        { label: '4.5 min', ms: 270000 },
+                        { label: '6 min', ms: 360000 },
+                    ];
 
-                        {/* Grid Settings */}
-                        <div className="p-6 grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-6">
-
-                            {/* Machine & Lane */}
-                            <div className="space-y-4">
-                                <div>
-                                    <label className="text-xs font-bold text-gray-500 uppercase tracking-widest mb-1.5 block">Binding Machine</label>
-                                    <select
-                                        value={config.machine_id || ''}
-                                        onChange={(e) => handleUpdate(config.mac_address, { machine_id: e.target.value })}
-                                        className="w-full bg-slate-800/50 border border-white/10 rounded-xl px-4 py-2 text-sm focus:border-blue-500 focus:outline-none appearance-none"
-                                    >
-                                        <option value="">Unassigned</option>
-                                        {machines.map(m => <option key={m.machine_id} value={m.machine_id}>{m.name}</option>)}
-                                    </select>
+                    return (
+                        <div key={config.mac_address}
+                            className="bg-black/40 backdrop-blur-md border border-white/10 rounded-2xl overflow-hidden hover:border-blue-500/30 transition-all duration-300"
+                        >
+                            {/* ── Header ── */}
+                            <div className="px-5 py-3 bg-white/5 border-b border-white/5 flex flex-wrap justify-between items-center gap-3">
+                                <div className="flex items-center gap-3">
+                                    <div className={`w-2.5 h-2.5 rounded-full flex-shrink-0 ${isOnline ? 'bg-green-500 animate-pulse' : 'bg-gray-600'}`} />
+                                    <span className="font-mono text-sm tracking-widest text-blue-400">{config.mac_address}</span>
+                                    <span className="text-[10px] bg-white/10 px-2 py-0.5 rounded text-gray-400">v{config.firmware_version || '—'}</span>
+                                    <span className={`text-[10px] px-2 py-0.5 rounded font-bold ${isOnline ? 'bg-green-500/20 text-green-400' : 'bg-gray-700 text-gray-500'}`}>
+                                        {status.toUpperCase()}
+                                    </span>
                                 </div>
-                                <div>
-                                    <label className="text-xs font-bold text-gray-500 uppercase tracking-widest mb-1.5 block">Assigned Lane</label>
-                                    <div className="flex gap-2">
-                                        {['Left', 'Right', 'Single'].map(l => (
+                                <span className="text-xs text-gray-500">
+                                    {config.last_heartbeat ? new Date(config.last_heartbeat).toLocaleString() : 'Never'}
+                                </span>
+                            </div>
+
+                            {/* ── Body: 2-column grid ── */}
+                            <div className="p-5 grid grid-cols-1 md:grid-cols-2 gap-5">
+
+                                {/* LEFT: Device Binding */}
+                                <div className="space-y-4">
+                                    <div className="flex items-center justify-between">
+                                        <p className="text-[10px] font-bold text-gray-500 uppercase tracking-widest">Device Binding</p>
+                                        {config.machine_id && (
                                             <button
-                                                key={l}
-                                                onClick={() => handleUpdate(config.mac_address, { lane_id: l })}
-                                                className={`flex-1 py-1.5 rounded-lg text-xs font-bold transition-all ${config.lane_id === l ? 'bg-blue-600 text-white' : 'bg-white/5 text-gray-400 hover:bg-white/10'
-                                                    }`}
+                                                onClick={() => toggleEdit(config.mac_address)}
+                                                className="text-[10px] text-gray-500 hover:text-white px-2 py-0.5 rounded hover:bg-white/10 transition-all"
                                             >
-                                                {l}
+                                                {editingMacs.has(config.mac_address) ? 'Cancel' : 'Change'}
                                             </button>
-                                        ))}
+                                        )}
+                                    </div>
+
+                                    {/* CONFIRMED STATE */}
+                                    {config.machine_id && !editingMacs.has(config.mac_address) ? (
+                                        <div className="space-y-2">
+                                            <div className="bg-green-500/10 border border-green-500/20 rounded-xl p-4 flex items-center justify-between">
+                                                <div>
+                                                    <div className="text-[10px] text-green-400 font-bold uppercase tracking-widest mb-1">Bound Machine</div>
+                                                    <div className="text-white font-bold text-sm">{config.machine_id}</div>
+                                                </div>
+                                                <div className="w-8 h-8 rounded-full bg-green-500/20 flex items-center justify-center text-green-400 text-lg">✓</div>
+                                            </div>
+                                            {/* Terminal URL — for bookmark / home-screen shortcut */}
+                                            <div className="bg-black/30 border border-white/5 rounded-lg px-3 py-2 flex items-center gap-2">
+                                                <span className="text-[10px] text-gray-500 flex-shrink-0">Terminal URL</span>
+                                                <span className="text-[10px] font-mono text-blue-400 truncate flex-1">
+                                                    {window.location.origin}/#/production/{config.machine_id}
+                                                </span>
+                                                <button
+                                                    onClick={() => navigator.clipboard.writeText(`${window.location.origin}/#/production/${config.machine_id}`)}
+                                                    className="text-[10px] text-gray-500 hover:text-white px-1.5 py-0.5 rounded hover:bg-white/10 transition-all flex-shrink-0"
+                                                    title="Copy URL"
+                                                >
+                                                    Copy
+                                                </button>
+                                            </div>
+                                        </div>
+                                    ) : (
+                                        /* EDIT STATE */
+                                        <>
+                                            <div>
+                                                <label className="text-xs text-gray-400 mb-1.5 block">Binding Machine</label>
+                                                <select
+                                                    value={config.machine_id || ''}
+                                                    onChange={e => {
+                                                        handleUpdate(config.mac_address, { machine_id: e.target.value });
+                                                        if (e.target.value) toggleEdit(config.mac_address);
+                                                    }}
+                                                    className="w-full bg-slate-800/60 border border-white/10 rounded-lg px-3 py-2.5 text-sm text-white focus:border-blue-500 focus:outline-none"
+                                                >
+                                                    <option value="">— Unassigned —</option>
+                                                    {machines.map(m => <option key={m.machine_id} value={m.machine_id}>{m.machine_id} – {m.name}</option>)}
+                                                </select>
+                                            </div>
+                                        </>
+                                    )}
+                                </div>
+
+                                {/* RIGHT: Signal Config */}
+                                <div className="space-y-4">
+                                    <p className="text-[10px] font-bold text-gray-500 uppercase tracking-widest">Signal Config</p>
+
+                                    {/* Debounce Presets */}
+                                    <div>
+                                        <label className="text-xs text-gray-400 mb-1.5 block">
+                                            Cycle Cooldown &nbsp;
+                                            <span className="text-blue-400 font-semibold">
+                                                {(config.debounce_ms / 60000).toFixed(1)} min
+                                            </span>
+                                        </label>
+                                        <div className="flex gap-2">
+                                            {debouncePresets.map(({ label, ms }) => (
+                                                <button key={ms}
+                                                    onClick={() => handleUpdate(config.mac_address, { debounce_ms: ms })}
+                                                    className={`flex-1 py-2 rounded-lg text-xs font-semibold transition-all ${config.debounce_ms === ms
+                                                        ? 'bg-cyan-600 text-white'
+                                                        : 'bg-white/5 text-gray-400 hover:bg-white/10 hover:text-white'}`}
+                                                >
+                                                    {label}
+                                                </button>
+                                            ))}
+                                        </div>
                                     </div>
                                 </div>
                             </div>
 
-                            {/* Product SKU */}
-                            <div>
-                                <label className="text-xs font-bold text-gray-500 uppercase tracking-widest mb-1.5 block">Active Product SKU</label>
-                                <select
-                                    value={config.active_product_sku || ''}
-                                    onChange={(e) => handleUpdate(config.mac_address, { active_product_sku: e.target.value })}
-                                    className="w-full bg-slate-800/50 border border-white/10 rounded-xl px-4 py-2 text-sm focus:border-blue-500 focus:outline-none"
-                                >
-                                    <option value="">Select SKU...</option>
-                                    {products.map(p => <option key={p.sku} value={p.sku}>{p.sku} - {p.name}</option>)}
-                                </select>
-                                <p className="mt-2 text-[10px] text-gray-600 italic">This controls which item inventory is deducted from.</p>
+                            {/* ── Footer: Notes ── */}
+                            <div className="px-5 py-2.5 bg-black/20 border-t border-white/5 flex items-center gap-2">
+                                <Settings size={11} className="text-gray-600 flex-shrink-0" />
+                                <input
+                                    type="text"
+                                    placeholder="Device notes..."
+                                    value={config.notes || ''}
+                                    onBlur={e => handleUpdate(config.mac_address, { notes: e.target.value })}
+                                    className="bg-transparent border-none text-[11px] text-gray-500 w-full focus:outline-none italic"
+                                />
+                                {saving === config.mac_address && <RefreshCw size={12} className="animate-spin text-blue-500 flex-shrink-0" />}
                             </div>
-
-                            {/* Cutting & Yield */}
-                            <div className="space-y-4">
-                                <div>
-                                    <label className="text-xs font-bold text-gray-500 uppercase tracking-widest mb-1.5 block">Cutting Size (cm)</label>
-                                    <div className="grid grid-cols-3 gap-2">
-                                        {[100, 50, 33, 25, 20].map(s => (
-                                            <button
-                                                key={s}
-                                                onClick={() => handleUpdate(config.mac_address, { cutting_size: s })}
-                                                className={`py-1.5 rounded-lg text-xs font-bold transition-all ${config.cutting_size === s ? 'bg-cyan-600 text-white shadow-lg shadow-cyan-500/20' : 'bg-white/5 text-gray-400 hover:bg-white/10'
-                                                    }`}
-                                            >
-                                                {s}cm
-                                            </button>
-                                        ))}
-                                    </div>
-                                </div>
-                                <div className="bg-blue-500/5 border border-blue-500/20 rounded-xl p-3 flex justify-between items-center">
-                                    <div className="text-[10px] text-blue-400 font-bold uppercase tracking-wider">Auto Yield</div>
-                                    <div className="text-xl font-black text-blue-400">
-                                        {config.machine_id === 'T1.1-M03' ? '2' : Math.floor(100 / (config.cutting_size || 100)) || 1}
-                                    </div>
-                                </div>
-                            </div>
-
-                            {/* Hardware Pulse */}
-                            <div className="space-y-4">
-                                <div>
-                                    <label className="text-xs font-bold text-gray-500 uppercase tracking-widest mb-1.5 block">Debounce (ms)</label>
-                                    <input
-                                        type="number"
-                                        value={config.debounce_ms}
-                                        onChange={(e) => handleUpdate(config.mac_address, { debounce_ms: parseInt(e.target.value) })}
-                                        className="w-full bg-slate-800/50 border border-white/10 rounded-xl px-4 py-2 text-sm focus:border-blue-500 focus:outline-none"
-                                        step={1000}
-                                    />
-                                </div>
-                                <div className="flex gap-2 pt-2">
-                                    <div className="flex-1 text-[10px] text-gray-600 leading-tight">
-                                        Current cooling period: <span className="text-gray-400">{(config.debounce_ms / 60000).toFixed(1)} mins</span>
-                                    </div>
-                                    {saving === config.mac_address && <RefreshCw size={14} className="animate-spin text-blue-500" />}
-                                </div>
-                            </div>
-
                         </div>
+                    );
+                })}
 
-                        {/* Notes Section Footer */}
-                        <div className="px-6 py-3 bg-black/20 border-t border-white/5 flex items-center gap-2">
-                            <Settings size={12} className="text-gray-600" />
-                            <input
-                                type="text"
-                                placeholder="Device notes (e.g. Near window M01)..."
-                                value={config.notes || ''}
-                                onBlur={(e) => handleUpdate(config.mac_address, { notes: e.target.value })}
-                                className="bg-transparent border-none text-[11px] text-gray-500 w-full focus:outline-none italic"
-                            />
-                        </div>
-                    </div>
-                ))}
             </div>
         </div>
     );

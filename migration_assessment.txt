@@ -1,0 +1,9 @@
+--- Start Assessment ---
+Vehicles: Legacy(lorries)=11 -> V2(sys_vehicles)=11
+Items: Legacy(inventory)=null -> V2(master_items_v2)=505
+Customers: Legacy(customers)=null -> V2(sys_customers)=352
+Clients: Legacy(sys_clients)=null -> V2(sys_customers)=352
+Suppliers: Legacy(suppliers)=null -> V2(crm_partners_v2)=10
+Machines: Legacy(machines)=0 -> V2(sys_machines_v2)=5
+Recipes: Legacy(recipes)=0 -> V2(bom_headers_v2)=0
+BOM Recipes: Legacy(bom_recipes)=null -> V2(bom_headers_v2)=0

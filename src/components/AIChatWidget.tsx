@@ -1,5 +1,6 @@
-import React, { useState, useRef, useEffect } from 'react';
-import { MessageSquare, Send, Sparkles, X, Loader } from 'lucide-react';
+import * as React from 'react';
+import { useState, useRef, useEffect } from 'react';
+import { Send, Sparkles, X, Loader } from 'lucide-react';
 import { useAICommand } from '../hooks/useAICommand';
 
 interface AIChatWidgetProps {
@@ -7,14 +8,14 @@ interface AIChatWidgetProps {
     onAction: (action: any) => void;
 }
 
-export const AIChatWidget: React.FC<AIChatWidgetProps> = ({ contextData, onAction }) => {
+export const AIChatWidget: React.FC<AIChatWidgetProps> = ({ contextData, onAction }: AIChatWidgetProps) => {
     const [isOpen, setIsOpen] = useState(false);
     const [query, setQuery] = useState('');
     const [messages, setMessages] = useState<{ role: 'user' | 'ai', text: string }[]>([]);
     const bottomRef = useRef<HTMLDivElement>(null);
 
     // Initialize Hook
-    const { executeCommand, loading, error } = useAICommand();
+    const { executeCommand, loading } = useAICommand();
 
     // Scroll to bottom
     useEffect(() => {
@@ -92,8 +93,8 @@ export const AIChatWidget: React.FC<AIChatWidgetProps> = ({ contextData, onActio
                         {messages.map((m, idx) => (
                             <div key={idx} className={`flex ${m.role === 'user' ? 'justify-end' : 'justify-start'}`}>
                                 <div className={`max-w-[80%] p-3 rounded-2xl text-sm ${m.role === 'user'
-                                        ? 'bg-indigo-600 text-white rounded-br-none'
-                                        : 'bg-white/10 text-gray-200 rounded-bl-none'
+                                    ? 'bg-indigo-600 text-white rounded-br-none'
+                                    : 'bg-white/10 text-gray-200 rounded-bl-none'
                                     }`}>
                                     {m.text}
                                 </div>

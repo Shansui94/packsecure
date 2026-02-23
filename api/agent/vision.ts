@@ -1,6 +1,6 @@
 import { VercelRequest, VercelResponse } from '@vercel/node';
 import { GoogleGenerativeAI } from '@google/generative-ai';
-import multer from 'multer';
+// import multer from 'multer';
 
 // Configure Multer for Vercel (memory storage)
 // Vercel functions have size limits, but for reasonable images it should work.

@@ -1,7 +1,7 @@
 
 import React, { useState, useEffect } from 'react';
 import { supabase } from '../services/supabase';
-import { Truck, Wrench, Send, History, CheckCircle, Clock, AlertCircle } from 'lucide-react';
+import { Truck, Wrench, History, Clock, AlertCircle } from 'lucide-react';
 
 interface LorryServiceProps {
     user: any;
@@ -184,7 +184,7 @@ const LorryService: React.FC<LorryServiceProps> = ({ user }) => {
                         <div key={idx} className="bg-slate-900/80 border border-slate-800 p-5 rounded-3xl flex justify-between items-center transition-all hover:border-slate-700">
                             <div className="flex items-center gap-4">
                                 <div className={`p-2 rounded-xl ${req.status === 'Scheduled' ? 'bg-blue-500/10 text-blue-500' :
-                                        'bg-amber-500/10 text-amber-500'
+                                    'bg-amber-500/10 text-amber-500'
                                     }`}>
                                     {req.status === 'Scheduled' ? <Clock size={20} /> : <AlertCircle size={20} />}
                                 </div>
@@ -196,7 +196,7 @@ const LorryService: React.FC<LorryServiceProps> = ({ user }) => {
                                 </div>
                             </div>
                             <div className={`px-3 py-1 rounded-lg text-[10px] font-black uppercase ${req.status === 'Scheduled' ? 'bg-blue-500/20 text-blue-400' :
-                                    'bg-amber-500/20 text-amber-400'
+                                'bg-amber-500/20 text-amber-400'
                                 }`}>
                                 {req.status}
                             </div>

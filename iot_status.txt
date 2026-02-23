@@ -1,0 +1,28 @@
+ONLINE | machine:T1.2-M01 | lane:-
+  MAC: F4:2D:C9:70:EA:E4
+  debounce: 240000ms | cut: 100cm | SKU: NONE
+  firmware: 1.0.0
+  last_heartbeat: 2026-02-21T06:02:56.53+00:00 (1 mins ago)
+  notes: Auto-registered - Pending Assignment
+
+ONLINE | machine:T1.3-M02 | lane:-
+  MAC: F4:2D:C9:87:E1:74
+  debounce: 240000ms | cut: 100cm | SKU: NONE
+  firmware: 1.0.0
+  last_heartbeat: 2026-02-21T06:02:57.847+00:00 (1 mins ago)
+  notes: Auto-registered - Pending Assignment
+
+ONLINE | machine:N2-M02 | lane:-
+  MAC: D4:E9:F4:60:13:60
+  debounce: 240000ms | cut: 100cm | SKU: NONE
+  firmware: 1.0.0
+  last_heartbeat: 2026-02-21T06:02:59.264+00:00 (1 mins ago)
+  notes: Auto-registered - Pending Assignment
+
+ONLINE | machine:N1-M01 | lane:-
+  MAC: 70:4B:CA:25:8F:B8
+  debounce: 240000ms | cut: 100cm | SKU: NONE
+  firmware: 1.0.0
+  last_heartbeat: 2026-02-21T06:03:18.618+00:00 (1 mins ago)
+  notes: Auto-registered - Pending Assignment
+

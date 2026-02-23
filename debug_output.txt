@@ -1,21 +1,4 @@
---- Debugging User Login (8335 / maxtan) ---
-
---- Searching for name "Max" ---
-Found 1 users with name "Max":
-{
-  "id": "38f575dd-8339-470a-b1cf-1b9796606886",
-  "auth_user_id": "45673d8c-787e-4c6e-9743-4b2b95f1cf51",
-  "employee_id": "EMP-45673d",
-  "name": "maxtan",
-  "role": "Driver",
-  "department": null,
-  "status": "Active",
-  "photo_url": null,
-  "created_at": "2026-02-07T23:35:26.530814+00:00",
-  "pin_code": null,
-  "email": "8335@packsecure.com",
-  "phone": null
-}
-
---- Searching for PIN "8335" ---
-Found 0 users with PIN "8335":
+--- DEBUG V2 ---
+Inventory Error: Could not find the table 'public.inventory' in the schema cache
+Factories Error: column sys_factories_v2.id does not exist
+FactoryInv Sample: []

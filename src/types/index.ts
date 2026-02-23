@@ -79,20 +79,22 @@ export interface JobOrder {
 }
 
 // 13. Sales Order (NEW)
+export interface SalesOrderItem {
+    product: string; // e.g. "BW-S50-CLR-ORG"
+    sku?: string; // New: Explicit SKU
+    layer?: ProductLayer;
+    material?: ProductMaterial;
+    packaging?: PackagingColor;
+    size?: ProductSize;
+    quantity: number; // Rolls
+    remark?: string; // NEW: Remark field
+}
+
 export interface SalesOrder {
     id: string;
     orderNumber: string; // User friendly ID e.g., SO-2025-001
     customer: string;
-    items: {
-        product: string; // e.g. "BW-S50-CLR-ORG"
-        sku?: string; // New: Explicit SKU
-        layer?: ProductLayer;
-        material?: ProductMaterial;
-        packaging?: PackagingColor;
-        size?: ProductSize;
-        quantity: number; // Rolls
-        remark?: string; // NEW: Remark field
-    }[];
+    items: SalesOrderItem[];
     status: 'New' | 'Planned' | 'In-Production' | 'Ready-to-Ship' | 'Shipped' | 'Delivered' | 'Cancelled' | 'Pending Approval';
     orderDate: string;
     deadline: string;
@@ -136,6 +138,21 @@ export interface LogisticsTrip {
 // ... existing InventoryItem ...
 
 // 10. Logistics Structures (NEW)
+// 10. Logistics Structures (NEW)
+export interface Driver extends Omit<User, 'status'> {
+    status: 'Available' | 'On-Route' | 'Offline';
+    activeOrders?: number;
+}
+
+export interface Vehicle {
+    id: string;
+    plate_number: string;
+    max_volume_m3: number;
+    max_weight_kg: number;
+    driver_id?: string;
+    status: string;
+}
+
 export interface Lorry {
     id: string;
     plateNumber: string;

@@ -1,15 +1,13 @@
 import React, { useState, useEffect } from 'react';
 import { supabase } from '../services/supabase';
-import { Truck, Package, CheckCircle, ClipboardList, ChevronRight, Box } from 'lucide-react';
+import { Truck, CheckCircle, ClipboardList, Box } from 'lucide-react';
 import { LogisticsTrip, SalesOrder } from '../types';
 
 const LoadingDock: React.FC = () => {
     const [trips, setTrips] = useState<LogisticsTrip[]>([]);
-    const [loading, setLoading] = useState(true);
     const [selectedTrip, setSelectedTrip] = useState<LogisticsTrip | null>(null);
 
     const fetchData = async () => {
-        setLoading(true);
         try {
             // Fetch Trips (Status: Planning, Loading)
             const { data: tripData, error } = await supabase
@@ -53,8 +51,6 @@ const LoadingDock: React.FC = () => {
             setTrips(mappedTrips);
         } catch (error) {
             console.error("Loading Dock Error:", error);
-        } finally {
-            setLoading(false);
         }
     };
 
@@ -112,8 +108,8 @@ const LoadingDock: React.FC = () => {
                                 key={trip.trip_id}
                                 onClick={() => setSelectedTrip(trip)}
                                 className={`p-4 rounded-xl border cursor-pointer transition-all ${selectedTrip?.trip_id === trip.trip_id
-                                        ? 'bg-orange-500/10 border-orange-500 text-white'
-                                        : 'bg-[#1e1e24] border-white/5 hover:border-white/20 text-gray-300'
+                                    ? 'bg-orange-500/10 border-orange-500 text-white'
+                                    : 'bg-[#1e1e24] border-white/5 hover:border-white/20 text-gray-300'
                                     }`}
                             >
                                 <div className="flex justify-between items-start mb-2">

@@ -1,7 +1,7 @@
 
 import React, { useState, useEffect } from 'react';
 import { Search, Package, Layers, Info, Box, Activity, Component, Share2, Printer, Edit3, Hexagon, Download } from 'lucide-react';
-import { getV2Items, getProducibleRecipes, getRecipeDetails, getInventoryStatus } from '../services/apiV2';
+import { getV2Items, getProducibleRecipes, getRecipeDetails, getInventoryStatus, createItemV2, updateItemV2 } from '../services/apiV2';
 import { V2Item, V2RecipeHeader, V2RecipeItem } from '../types/v2';
 
 // --- COMPONENTS ---
@@ -48,16 +48,204 @@ const HoloCard = ({ item, stock, onClick }: { item: V2Item, stock?: number, onCl
                 <p className="text-sm text-gray-400 line-clamp-1 mb-4 h-5">{item.name}</p>
 
                 <div className="flex items-center justify-between pt-4 border-t border-gray-800">
-                    <div className="flex flex-col">
-                        <span className="text-[10px] text-gray-500 uppercase">Category</span>
-                        <span className="text-xs text-gray-300">{item.category}</span>
-                    </div>
-                    <div className="text-right">
+                    <div className="text-right w-full">
                         <span className={`text-xs font-mono font-bold ${isLowStock ? 'text-red-400 animate-pulse' : 'text-green-400'}`}>
                             {currentStock} {item.uom}
                         </span>
                     </div>
                 </div>
+            </div>
+        </div>
+    );
+};
+
+// --- ITEM FORM MODAL ---
+const ItemFormModal = ({
+    isOpen,
+    onClose,
+    initialData,
+    onSave
+}: {
+    isOpen: boolean;
+    onClose: () => void;
+    initialData: V2Item | null;
+    onSave: (data: V2Item) => Promise<void>;
+}) => {
+    const [formData, setFormData] = useState<Partial<V2Item>>({});
+    const [loading, setLoading] = useState(false);
+    const isEdit = !!initialData;
+
+    useEffect(() => {
+        if (isOpen) {
+            setFormData(initialData || {
+                sku: '',
+                name: '',
+                type: 'Raw',
+                supply_type: 'Purchased',
+                status: 'Active',
+                uom: 'kg',
+                min_stock_level: 1000
+            });
+        }
+    }, [isOpen, initialData]);
+
+    if (!isOpen) return null;
+
+    const handleSubmit = async (e: React.FormEvent) => {
+        e.preventDefault();
+        setLoading(true);
+        try {
+            await onSave(formData as V2Item);
+            onClose();
+        } catch (err: any) {
+            alert("Error saving: " + err.message);
+        } finally {
+            setLoading(false);
+        }
+    };
+
+    const handleChange = (field: keyof V2Item, value: any) => {
+        setFormData(prev => ({ ...prev, [field]: value }));
+    };
+
+    return (
+        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/80 backdrop-blur-sm p-4">
+            <div className="bg-gray-900 border border-gray-800 rounded-xl w-full max-w-2xl max-h-[90vh] overflow-y-auto shadow-2xl">
+                <form onSubmit={handleSubmit} className="flex flex-col h-full">
+                    <div className="p-6 border-b border-gray-800 flex justify-between items-center bg-gray-950/50">
+                        <h2 className="text-xl font-bold text-white flex items-center gap-2">
+                            {isEdit ? <Edit3 size={20} className="text-cyan-400" /> : <Package size={20} className="text-green-400" />}
+                            {isEdit ? 'Edit Blueprint' : 'New Blueprint'}
+                        </h2>
+                        <button type="button" onClick={onClose} className="text-gray-500 hover:text-white"><Hexagon size={20} className="rotate-45" /></button>
+                    </div>
+
+                    <div className="p-6 space-y-6">
+                        {/* Identity Section */}
+                        <div className="grid grid-cols-2 gap-4">
+                            <div>
+                                <label className="text-xs uppercase font-bold text-gray-500 mb-1 block">SKU Identity</label>
+                                <input
+                                    required
+                                    disabled={isEdit}
+                                    value={formData.sku || ''}
+                                    onChange={e => handleChange('sku', e.target.value.toUpperCase())}
+                                    className={`w-full bg-gray-950 border border-gray-800 rounded-lg p-2.5 text-white font-mono focus:border-cyan-500 outline-none ${isEdit ? 'opacity-50 cursor-not-allowed' : ''}`}
+                                    placeholder="e.g. R-ABS-001"
+                                />
+                            </div>
+                            <div>
+                                <label className="text-xs uppercase font-bold text-gray-500 mb-1 block">Item Name</label>
+                                <input
+                                    required
+                                    value={formData.name || ''}
+                                    onChange={e => handleChange('name', e.target.value)}
+                                    className="w-full bg-gray-950 border border-gray-800 rounded-lg p-2.5 text-white focus:border-cyan-500 outline-none"
+                                    placeholder="Descriptive Name"
+                                />
+                            </div>
+                        </div>
+
+                        <div className="grid grid-cols-4 gap-4">
+                            <div>
+                                <label className="text-xs uppercase font-bold text-gray-500 mb-1 block">Type</label>
+                                <select
+                                    value={formData.type || 'Raw'}
+                                    onChange={e => {
+                                        const newType = e.target.value as any;
+                                        setFormData(prev => ({
+                                            ...prev,
+                                            type: newType,
+                                            supply_type: newType === 'Raw' ? 'Purchased' : 'Manufactured'
+                                        }));
+                                    }}
+                                    className="w-full bg-gray-950 border border-gray-800 rounded-lg p-2.5 text-white outline-none focus:border-cyan-500"
+                                >
+                                    <option value="Raw">Raw Material</option>
+                                    <option value="FG">Finished Good</option>
+                                    <option value="WiP">Work in Progress</option>
+                                </select>
+                            </div>
+                            <div>
+                                <label className="text-xs uppercase font-bold text-gray-500 mb-1 block">Source</label>
+                                <select
+                                    value={formData.supply_type || 'Manufactured'}
+                                    onChange={e => handleChange('supply_type', e.target.value)}
+                                    className="w-full bg-gray-950 border border-gray-800 rounded-lg p-2.5 text-white outline-none focus:border-cyan-500"
+                                >
+                                    <option value="Manufactured">Manufactured (自产)</option>
+                                    <option value="Purchased">Purchased (外购)</option>
+                                </select>
+                            </div>
+                            <div>
+                                <label className="text-xs uppercase font-bold text-gray-500 mb-1 block">Status</label>
+                                <select
+                                    value={formData.status || 'Active'}
+                                    onChange={e => handleChange('status', e.target.value)}
+                                    className="w-full bg-gray-950 border border-gray-800 rounded-lg p-2.5 text-white outline-none focus:border-cyan-500"
+                                >
+                                    <option value="Active">Active</option>
+                                    <option value="Obsolete">Obsolete</option>
+                                </select>
+                            </div>
+                        </div>
+
+                        {/* Specs Section */}
+                        <div className="p-4 bg-gray-950/50 rounded-xl border border-gray-800">
+                            <h3 className="text-xs font-bold text-cyan-400 uppercase mb-4 flex items-center gap-2"><Activity size={14} /> Technical Specs</h3>
+                            <div className="grid grid-cols-3 gap-4">
+                                <div>
+                                    <label className="text-xs text-gray-500 mb-1 block">Width (mm)</label>
+                                    <input type="number" step="any" value={formData.width_mm || ''} onChange={e => handleChange('width_mm', parseFloat(e.target.value))} className="w-full bg-gray-900 border border-gray-800 rounded p-2 text-white text-sm" />
+                                </div>
+                                <div>
+                                    <label className="text-xs text-gray-500 mb-1 block">Length (m)</label>
+                                    <input type="number" step="any" value={formData.length_m || ''} onChange={e => handleChange('length_m', parseFloat(e.target.value))} className="w-full bg-gray-900 border border-gray-800 rounded p-2 text-white text-sm" />
+                                </div>
+                                <div>
+                                    <label className="text-xs text-gray-500 mb-1 block">Thickness (mic)</label>
+                                    <input type="number" step="any" value={formData.thickness_mic || ''} onChange={e => handleChange('thickness_mic', parseFloat(e.target.value))} className="w-full bg-gray-900 border border-gray-800 rounded p-2 text-white text-sm" />
+                                </div>
+                                <div>
+                                    <label className="text-xs text-gray-500 mb-1 block">Net Weight (kg)</label>
+                                    <input type="number" step="any" value={formData.net_weight_kg || ''} onChange={e => handleChange('net_weight_kg', parseFloat(e.target.value))} className="w-full bg-gray-900 border border-gray-800 rounded p-2 text-white text-sm" />
+                                </div>
+                                <div>
+                                    <label className="text-xs text-gray-500 mb-1 block">Gross Weight (kg)</label>
+                                    <input type="number" step="any" value={formData.gross_weight_kg || ''} onChange={e => handleChange('gross_weight_kg', parseFloat(e.target.value))} className="w-full bg-gray-900 border border-gray-800 rounded p-2 text-white text-sm" />
+                                </div>
+                                <div>
+                                    <label className="text-xs text-gray-500 mb-1 block">Unit (UOM)</label>
+                                    <input type="text" value={formData.uom || 'kg'} onChange={e => handleChange('uom', e.target.value)} className="w-full bg-gray-900 border border-gray-800 rounded p-2 text-white text-sm" />
+                                </div>
+                            </div>
+                        </div>
+
+                        {/* Commercial Section */}
+                        <div className="grid grid-cols-2 gap-4">
+                            <div>
+                                <label className="text-xs uppercase font-bold text-gray-500 mb-1 block">Supplier / Brand</label>
+                                <input value={formData.supplier || ''} onChange={e => handleChange('supplier', e.target.value)} className="w-full bg-gray-950 border border-gray-800 rounded-lg p-2 text-sm text-white" placeholder="Supplier Name" />
+                            </div>
+                            <div>
+                                <label className="text-xs uppercase font-bold text-gray-500 mb-1 block">Min Stock (Alert Level)</label>
+                                <input type="number" value={formData.min_stock_level || ''} onChange={e => handleChange('min_stock_level', parseFloat(e.target.value))} className="w-full bg-gray-950 border border-gray-800 rounded-lg p-2 text-sm text-white" />
+                            </div>
+                        </div>
+                    </div>
+
+                    <div className="p-4 border-t border-gray-800 bg-gray-950/50 flex justify-end gap-3 mt-auto">
+                        <button type="button" onClick={onClose} className="px-4 py-2 text-gray-400 hover:text-white font-medium">Cancel</button>
+                        <button
+                            type="submit"
+                            disabled={loading}
+                            className="px-6 py-2 bg-cyan-600 hover:bg-cyan-500 text-white font-bold rounded-lg shadow-lg shadow-cyan-900/20 disabled:opacity-50 flex items-center gap-2"
+                        >
+                            {loading ? <Activity className="animate-spin" size={16} /> : <Share2 size={16} />}
+                            {isEdit ? 'Save Changes' : 'Create Blueprint'}
+                        </button>
+                    </div>
+                </form>
             </div>
         </div>
     );
@@ -77,6 +265,10 @@ const ProductLibrary: React.FC = () => {
     const [recipes, setRecipes] = useState<V2RecipeHeader[]>([]);
     const [selectedRecipe, setSelectedRecipe] = useState<V2RecipeHeader | null>(null);
     const [recipeDetails, setRecipeDetails] = useState<V2RecipeItem[]>([]);
+
+    // Edit Modal State
+    const [isEditModalOpen, setIsEditModalOpen] = useState(false);
+    const [editingItem, setEditingItem] = useState<V2Item | null>(null);
 
     useEffect(() => {
         loadItems();
@@ -106,8 +298,7 @@ const ProductLibrary: React.FC = () => {
     const filteredItems = items.filter(item => {
         const matchesSearch =
             item.name.toLowerCase().includes(searchTerm.toLowerCase()) ||
-            item.sku.toLowerCase().includes(searchTerm.toLowerCase()) ||
-            item.category.toLowerCase().includes(searchTerm.toLowerCase());
+            item.sku.toLowerCase().includes(searchTerm.toLowerCase());
         const matchesType = filterType === 'All' || item.type === filterType;
         return matchesSearch && matchesType;
     });
@@ -146,13 +337,45 @@ const ProductLibrary: React.FC = () => {
         setRecipeDetails(details);
     };
 
+    // ITEM CRUD HANDLERS
+    const handleCreateNew = () => {
+        setEditingItem(null); // Empty for new
+        setIsEditModalOpen(true);
+    };
+
+    const handleEditItem = (item?: V2Item) => {
+        const target = item || selectedItem;
+        if (!target) return;
+        setEditingItem(target);
+        setIsEditModalOpen(true);
+    };
+
+    const handleSaveItem = async (data: V2Item) => {
+        if (editingItem) {
+            // Update
+            await updateItemV2(data.sku, data);
+
+            // Update local state
+            setItems(prev => prev.map(i => i.sku === data.sku ? { ...i, ...data } : i));
+            if (selectedItem?.sku === data.sku) setSelectedItem({ ...selectedItem, ...data });
+        } else {
+            // Create
+            if (items.some(i => i.sku === data.sku)) {
+                throw new Error("SKU already exists!");
+            }
+            await createItemV2(data);
+            setItems(prev => [...prev, data]);
+        }
+        loadItems(); // Refresh full data to be safe
+    };
+
     const handleExport = () => {
         if (!items.length) {
             alert('No items to export.');
             return;
         }
 
-        const headers = ['SKU', 'Name', 'Type', 'Category', 'Unit', 'Net Weight (kg)', 'Gross Weight (kg)', 'Status'];
+        const headers = ['SKU', 'Name', 'Type', 'Unit', 'Net Weight (kg)', 'Gross Weight (kg)', 'Status'];
 
         const rows = items.map(item => {
             const safeName = item.name.includes(',') ? `"${item.name}"` : item.name;
@@ -160,7 +383,6 @@ const ProductLibrary: React.FC = () => {
                 item.sku,
                 safeName,
                 item.type,
-                item.category,
                 item.uom,
                 item.net_weight_kg || 0,
                 item.gross_weight_kg || 0,
@@ -208,7 +430,10 @@ const ProductLibrary: React.FC = () => {
                                     <Download size={16} />
                                     Export CSV
                                 </button>
-                                <button className="px-4 py-2 bg-blue-600 hover:bg-blue-500 text-sm font-medium rounded-lg text-white shadow-[0_0_15px_rgba(37,99,235,0.3)] transition-all">
+                                <button
+                                    onClick={handleCreateNew}
+                                    className="px-4 py-2 bg-blue-600 hover:bg-blue-500 text-sm font-medium rounded-lg text-white shadow-[0_0_15px_rgba(37,99,235,0.3)] transition-all"
+                                >
                                     + New Item
                                 </button>
                             </div>
@@ -290,7 +515,10 @@ const ProductLibrary: React.FC = () => {
 
                                 {/* Quick Actions */}
                                 <div className="flex gap-2">
-                                    <button className="flex-1 bg-cyan-500/10 hover:bg-cyan-500/20 text-cyan-400 border border-cyan-500/30 py-2 rounded-lg text-sm font-medium flex justify-center items-center gap-2">
+                                    <button
+                                        onClick={() => handleEditItem()}
+                                        className="flex-1 bg-cyan-500/10 hover:bg-cyan-500/20 text-cyan-400 border border-cyan-500/30 py-2 rounded-lg text-sm font-medium flex justify-center items-center gap-2"
+                                    >
                                         <Edit3 size={14} /> Edit
                                     </button>
                                     <button className="flex-1 bg-gray-800 hover:bg-gray-700 text-gray-300 border border-gray-700 py-2 rounded-lg text-sm font-medium flex justify-center items-center gap-2">
@@ -404,6 +632,13 @@ const ProductLibrary: React.FC = () => {
                     )}
                 </div>
             </div>
+            {/* MODAL */}
+            <ItemFormModal
+                isOpen={isEditModalOpen}
+                onClose={() => setIsEditModalOpen(false)}
+                initialData={editingItem}
+                onSave={handleSaveItem}
+            />
         </div>
     );
 };

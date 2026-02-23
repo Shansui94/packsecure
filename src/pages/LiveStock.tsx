@@ -1,7 +1,7 @@
 
 import React, { useState, useEffect } from 'react';
 import { supabase } from '../services/supabase';
-import { Search, RefreshCw, Package, Layers, Box, AlertTriangle } from 'lucide-react';
+import { Search, RefreshCw, Package, Layers, Box } from 'lucide-react';
 
 // Types
 interface StockItem {

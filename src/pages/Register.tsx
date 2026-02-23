@@ -2,11 +2,7 @@ import React, { useState } from 'react';
 import { UserPlus, Mail, Lock, User, Briefcase, ArrowLeft } from 'lucide-react';
 import { supabase } from '../services/supabase';
 
-interface RegisterProps {
-    onNavigate: (page: string) => void;
-}
-
-const Register: React.FC<RegisterProps> = ({ onNavigate }) => {
+const Register: React.FC<{ onNavigate: (page: string) => void }> = ({ onNavigate }) => {
     const [name, setName] = useState('');
     const [email, setEmail] = useState('');
     const [password, setPassword] = useState('');
@@ -23,7 +19,7 @@ const Register: React.FC<RegisterProps> = ({ onNavigate }) => {
 
         try {
             // 1. Sign Up with Supabase Auth
-            const { data: authData, error: authError } = await supabase.auth.signUp({
+            const { error: authError } = await supabase.auth.signUp({
                 email,
                 password,
                 options: {

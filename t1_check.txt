@@ -1,0 +1,27 @@
+=== machine_active_products for T1 ===
+[
+  {
+    "machine_id": "T1.2-M01",
+    "lane_id": "Left",
+    "product_sku": "BW-CLEAR-50CM-2",
+    "updated_at": "2026-02-21T05:10:43.694+00:00",
+    "cutting_size": 100,
+    "yield": 1
+  },
+  {
+    "machine_id": "T1.2-M01",
+    "lane_id": "Right",
+    "product_sku": "BW-CLEAR-50CM-2",
+    "updated_at": "2026-02-21T05:10:47.127+00:00",
+    "cutting_size": 100,
+    "yield": 1
+  }
+]
+
+=== Last T1.2-M01 logs ===
+{"id":"ab94f071-d8b9-4137-83d5-b9def226bee1","machine_id":"T1.2-M01","alarm_count":1,"created_at":"2026-02-16T13:36:47+00:00","product_sku":"BW-CLEAR-50CM-2","lane_id":"Right"}
+{"id":"6826675d-7683-4016-9e11-7c9c98612627","machine_id":"T1.2-M01","alarm_count":1,"created_at":"2026-02-16T13:36:47+00:00","product_sku":"BW-CLEAR-50CM-2","lane_id":"Left"}
+{"id":"0c6c3d6b-6a0c-492f-903e-fc3d80687f74","machine_id":"T1.2-M01","alarm_count":1,"created_at":"2026-02-16T13:31:48+00:00","product_sku":"BW-CLEAR-50CM-2","lane_id":"Left"}
+
+=== Manual insert test (alarm_count=0 = test) ===
+INSERT ERROR: insert or update on table "stock_ledger_v2" violates foreign key constraint "stock_ledger_v2_sku_fkey"

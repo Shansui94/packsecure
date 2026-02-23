@@ -1,5 +1,5 @@
 
-import React, { useState } from 'react';
+import React, { useState, useEffect } from 'react';
 import {
     LayoutDashboard,
     ClipboardList,
@@ -17,12 +17,11 @@ import {
     FileCheck,
     Database,
     FileText,
-    FlaskConical,
-    Sparkles,
     Wrench,
     Cpu,
     FileBarChart
 } from 'lucide-react';
+import { supabase } from '../services/supabase';
 
 interface LayoutProps {
     children: React.ReactNode;
@@ -35,11 +34,42 @@ interface LayoutProps {
 
 const Layout: React.FC<LayoutProps> = ({ children, activePage, setActivePage, userRole, user, onLogout }) => {
     const [isMobileMenuOpen, setIsMobileMenuOpen] = useState(false);
+    const [taskCount, setTaskCount] = useState(0);
 
     const toggleMobileMenu = () => setIsMobileMenuOpen(!isMobileMenuOpen);
 
     // Special User Check
     const isVivian = user?.email === 'diyadmin1111@gmail.com';
+    const isNeoson = user?.employeeId === '009' || user?.email === 'ericsoobaolin0219@gmail.com';
+
+    useEffect(() => {
+        if (user) {
+            fetchTaskCount();
+            // Subscribe to task changes
+            const channel = supabase.channel('layout-task-count')
+                .on('postgres_changes', { event: '*', schema: 'public', table: 'tasks' }, () => {
+                    fetchTaskCount();
+                })
+                .subscribe();
+
+            return () => {
+                supabase.removeChannel(channel);
+            };
+        }
+    }, [user]);
+
+    const fetchTaskCount = async () => {
+        if (!user) return;
+        const { count, error } = await supabase
+            .from('tasks')
+            .select('*', { count: 'exact', head: true })
+            .eq('assigned_to', user.uid)
+            .neq('status', 'Done');
+
+        if (!error && count !== null) {
+            setTaskCount(count);
+        }
+    };
 
     const NavGroup = ({ title, children }: { title: string, children: React.ReactNode }) => (
         <div className="mb-6">
@@ -50,7 +80,7 @@ const Layout: React.FC<LayoutProps> = ({ children, activePage, setActivePage, us
         </div>
     );
 
-    const NavItem = ({ id, icon: Icon, label, roles }: { id: string, icon: any, label: string, roles?: string[] }) => {
+    const NavItem = ({ id, icon: Icon, label, roles, badge }: { id: string, icon: any, label: string, roles?: string[], badge?: number }) => {
         // SuperAdmin implies access to everything, overriding specific role checks
         const isSuperAdmin = userRole === 'SuperAdmin' || user?.employeeId === '001';
         if (!isSuperAdmin && roles && userRole && !roles.includes(userRole)) return null;
@@ -79,9 +109,16 @@ const Layout: React.FC<LayoutProps> = ({ children, activePage, setActivePage, us
                 </div>
 
                 {/* Label */}
-                <span className={`relative z-10 font-bold tracking-wide text-[15px] ${isActive ? 'text-white' : ''}`}>
+                <span className={`relative z-10 font-bold tracking-wide text-[15px] flex-1 text-left ${isActive ? 'text-white' : ''}`}>
                     {label}
                 </span>
+
+                {/* Badge */}
+                {badge && badge > 0 && (
+                    <span className="relative z-10 bg-red-500 text-white text-[10px] font-bold px-2 py-0.5 rounded-full shadow-lg shadow-red-500/30">
+                        {badge > 99 ? '99+' : badge}
+                    </span>
+                )}
 
                 {/* Active Indicator Dot */}
                 {isActive && (
@@ -142,7 +179,7 @@ const Layout: React.FC<LayoutProps> = ({ children, activePage, setActivePage, us
                     {/* Navigation Links */}
                     <nav className="flex-1 overflow-y-auto px-4 custom-scrollbar space-y-2 pb-6">
                         {/* SPECIAL VIEW FOR NEOSON (User 009) */}
-                        {user?.employeeId === '009' && (
+                        {isNeoson && (
                             <NavGroup title="Neoson Workspace">
                                 <NavItem id="order-summary" icon={FileBarChart} label="Daily Prep" />
                                 <NavItem id="maintenance" icon={Wrench} label="Maintenance Control" />
@@ -157,6 +194,7 @@ const Layout: React.FC<LayoutProps> = ({ children, activePage, setActivePage, us
                                 <NavItem id="delivery" icon={Truck} label="Delivery Orders" roles={['SuperAdmin', 'Admin', 'Manager']} />
                                 <NavItem id="order-summary" icon={FileBarChart} label="Daily Prep" roles={['SuperAdmin', 'Admin', 'Manager']} />
                                 <NavItem id="maintenance" icon={Wrench} label="Maintenance Control" roles={['SuperAdmin', 'Admin', 'Manager']} />
+                                <NavItem id="driver-management" icon={Users} label="Driver Management" roles={['SuperAdmin', 'Admin', 'Manager']} />
                             </NavGroup>
                         )}
 
@@ -164,30 +202,23 @@ const Layout: React.FC<LayoutProps> = ({ children, activePage, setActivePage, us
                         {!isVivian && user?.employeeId !== '009' && (userRole === 'SuperAdmin' || userRole === 'Admin' || userRole === 'Manager' || user?.employeeId === '001') && (
                             <>
                                 <NavGroup title="Executive Suite">
-                                    <NavItem id="dashboard" icon={LayoutDashboard} label="Dashboard" roles={['SuperAdmin', 'Admin', 'Manager']} />
+                                    <NavItem id="factory-live-os" icon={LayoutDashboard} label="Factory Live OS" roles={['SuperAdmin', 'Admin', 'Manager']} />
                                     <NavItem id="data-v2" icon={Database} label="Data Command" roles={['SuperAdmin', 'Admin', 'Manager']} />
-                                    <NavItem id="customer-import" icon={Users} label="Import Customers" roles={['SuperAdmin', 'Admin', 'Manager']} />
-                                    <NavItem id="universal-intake" icon={Sparkles} label="AI Data Hub" roles={['SuperAdmin', 'Admin', 'Manager']} />
-                                    <NavItem id="factory-dashboard" icon={LayoutDashboard} label="Factory OS (Live)" roles={['SuperAdmin', 'Admin', 'Manager']} />
                                 </NavGroup>
 
                                 <NavGroup title="Operations">
                                     <NavItem id="scanner" icon={Scan} label="Production Control" roles={['SuperAdmin', 'Admin', 'Manager']} />
-                                    <NavItem id="jobs" icon={ClipboardList} label="Job Orders" roles={['SuperAdmin', 'Admin', 'Manager']} />
-                                    <NavItem id="simple-stock" icon={Truck} label="Quick Stock Out" roles={['SuperAdmin', 'Admin', 'Manager']} />
                                     <NavItem id="livestock" icon={BarChart3} label="Live Stock" roles={['SuperAdmin', 'Admin', 'Manager']} />
                                 </NavGroup>
 
                                 <NavGroup title="Inventory & BOM">
                                     <NavItem id="inventory" icon={Box} label="Inventory" roles={['SuperAdmin', 'Admin', 'Manager']} />
-                                    <NavItem id="recipes" icon={FlaskConical} label="Recipe Manager" roles={['SuperAdmin', 'Admin', 'Manager']} />
                                     <NavItem id="products" icon={Package} label="Product Library" roles={['SuperAdmin', 'Admin', 'Manager']} />
                                 </NavGroup>
 
                                 <NavGroup title="Logistics">
                                     <NavItem id="delivery" icon={Truck} label="Delivery Orders" roles={['SuperAdmin', 'Admin', 'Manager']} />
                                     <NavItem id="order-summary" icon={FileBarChart} label="Daily Prep" roles={['SuperAdmin', 'Admin', 'Manager']} />
-                                    <NavItem id="dispatch" icon={Truck} label="Dispatch" roles={['SuperAdmin', 'Admin', 'Manager']} />
                                     <NavItem id="maintenance" icon={Wrench} label="Maintenance Control" roles={['SuperAdmin', 'Admin', 'Manager']} />
                                     <NavItem id="lorry-management" icon={Truck} label="Lorry Fleet" roles={['SuperAdmin', 'Admin', 'Manager']} />
                                     <NavItem id="loading-dock" icon={ClipboardList} label="Loading Dock" roles={['SuperAdmin', 'Admin', 'Manager']} />
@@ -197,6 +228,7 @@ const Layout: React.FC<LayoutProps> = ({ children, activePage, setActivePage, us
 
                                 <NavGroup title="Organization">
                                     <NavItem id="hr" icon={Users} label="HR Portal" roles={['SuperAdmin', 'Admin', 'Manager']} />
+                                    <NavItem id="driver-management" icon={Users} label="Driver Management" roles={['SuperAdmin', 'Admin', 'Manager']} />
                                     <NavItem id="reports" icon={FileBarChart} label="EXECUTIVE REPORTS" roles={['SuperAdmin', 'Manager']} />
                                     <NavItem id="iot" icon={Cpu} label="IOT SETTINGS" roles={['SuperAdmin', 'Admin', 'Manager']} />
                                     <div className="h-4" />
@@ -205,27 +237,41 @@ const Layout: React.FC<LayoutProps> = ({ children, activePage, setActivePage, us
 
                                 <NavGroup title="Productivity">
                                     <NavItem id="notes" icon={FileText} label="Notes" roles={['SuperAdmin', 'Admin', 'Manager']} />
-                                    <NavItem id="tasks" icon={ClipboardList} label="Tasks" roles={['SuperAdmin', 'Admin', 'Manager']} />
+                                    <NavItem id="tasks" icon={ClipboardList} label="Tasks" roles={['SuperAdmin', 'Admin', 'Manager']} badge={taskCount} />
                                 </NavGroup>
                             </>
                         )}
 
                         {/* DRIVER VIEW */}
                         {userRole === 'Driver' && user?.employeeId !== '009' && (
-                            <NavGroup title="Driver Workspace">
-                                <NavItem id="delivery-driver" icon={Package} label="My Delivery" roles={['Driver']} />
-                                <NavItem id="delivery-history" icon={ClipboardList} label="My History" roles={['Driver']} />
-                                <NavItem id="driver-leave" icon={Calendar} label="Apply Cuti" roles={['Driver']} />
-                                <NavItem id="lorry-service" icon={Truck} label="Lorry Service" roles={['Driver']} />
-                                {/* <NavItem id="claims" icon={FileCheck} label="My Claims" roles={['Driver']} /> */}
-                            </NavGroup>
+                            <>
+                                <NavGroup title="Driver Workspace">
+                                    <NavItem id="delivery-driver" icon={Package} label="My Delivery" roles={['Driver']} />
+                                    <NavItem id="delivery-history" icon={ClipboardList} label="My History" roles={['Driver']} />
+                                    <NavItem id="driver-leave" icon={Calendar} label="Apply Cuti" roles={['Driver']} />
+                                    <NavItem id="lorry-service" icon={Truck} label="Lorry Service" roles={['Driver']} />
+                                    {/* <NavItem id="claims" icon={FileCheck} label="My Claims" roles={['Driver']} /> */}
+                                </NavGroup>
+
+                                <NavGroup title="Productivity">
+                                    <NavItem id="notes" icon={FileText} label="Notes" roles={['Driver']} />
+                                    <NavItem id="tasks" icon={ClipboardList} label="Tasks" roles={['Driver']} badge={taskCount} />
+                                </NavGroup>
+                            </>
                         )}
 
                         {/* OPERATOR VIEW */}
                         {userRole === 'Operator' && user?.employeeId !== '009' && (
-                            <NavGroup title="Production Floor">
-                                <NavItem id="scanner" icon={Scan} label="Production Control" roles={['Operator']} />
-                            </NavGroup>
+                            <>
+                                <NavGroup title="Production Floor">
+                                    <NavItem id="scanner" icon={Scan} label="Production Control" roles={['Operator']} />
+                                </NavGroup>
+
+                                <NavGroup title="Productivity">
+                                    <NavItem id="notes" icon={FileText} label="Notes" roles={['Operator']} />
+                                    <NavItem id="tasks" icon={ClipboardList} label="Tasks" roles={['Operator']} badge={taskCount} />
+                                </NavGroup>
+                            </>
                         )}
                     </nav>
 
@@ -233,7 +279,7 @@ const Layout: React.FC<LayoutProps> = ({ children, activePage, setActivePage, us
                     <div className="p-4 border-t border-white/5 bg-[#0a0a0c]">
                         <button
                             onClick={() => setActivePage('profile')}
-                            className={`w - full flex items - center gap - 3 p - 3 rounded - xl transition - all duration - 300 group ${activePage === 'profile' ? 'bg-white/5 border border-white/5' : 'hover:bg-white/5 border border-transparent'
+                            className={`w-full flex items-center gap-3 p-3 rounded-xl transition-all duration-300 group ${activePage === 'profile' ? 'bg-white/5 border border-white/5' : 'hover:bg-white/5 border border-transparent'
                                 } `}
                         >
                             <div className="relative">

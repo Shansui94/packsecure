@@ -35,6 +35,7 @@ const LorryManagement: React.FC = () => {
             const filteredDrivers = driversRes.data.filter((u: any) =>
                 u.role === 'Driver' ||
                 u.email === 'neosonchun@gmail.com' ||
+                u.email === 'ericsoobaolin0219@gmail.com' ||
                 u.name?.toLowerCase().includes('neoson')
             );
             setDrivers(filteredDrivers);

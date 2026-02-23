@@ -1,13 +1,7 @@
 import React, { useMemo } from 'react';
-import { Package, Truck, Activity, AlertTriangle, Radio, Database } from 'lucide-react';
+import { Activity, AlertTriangle, Radio, Database } from 'lucide-react';
 
-interface CommandDeckProps {
-    totalItems: number;
-    activeTab: string;
-    data: any[];
-}
-
-export const CommandDeck: React.FC<CommandDeckProps> = ({ totalItems, activeTab, data }) => {
+export const CommandDeck: React.FC<{ totalItems: number; activeTab: string; data: any[] }> = ({ totalItems, activeTab, data }) => {
 
     // Calculate live stats
     const stats = useMemo(() => {

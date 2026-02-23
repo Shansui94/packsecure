@@ -22,7 +22,7 @@ import { Machine } from '../types';
 // --- PRODUCTION LANE COMPONENT ---
 // --- PRODUCTION LANE COMPONENT ---
 interface ProductionLaneProps {
-    laneId: 'Left' | 'Right' | 'Single';
+    laneId: 'Left' | 'Right' | 'Single' | 'Lane1' | 'Lane2';
     machineMetadata: Machine | null;
     user: User | null;
     operatorId: string | null;
@@ -95,11 +95,10 @@ const ProductionLane: React.FC<ProductionLaneProps> = ({ laneId, machineMetadata
         if (isLiveRun) {
             try {
                 const machineId = machineMetadata?.id || 'T1.2-M01';
-                const dbLaneId = laneId;
                 await supabase.from('machine_active_products')
                     .delete()
                     .eq('machine_id', machineId)
-                    .eq('lane_id', dbLaneId);
+                    .eq('lane_id', laneId);
             } catch (err) {
                 console.error("Failed to clear active product:", err);
             }
@@ -122,10 +121,9 @@ const ProductionLane: React.FC<ProductionLaneProps> = ({ laneId, machineMetadata
 
             try {
                 const machineId = machineMetadata?.id || 'T1.2-M01';
-                const dbLaneId = laneId;
                 const { error } = await supabase.from('machine_active_products').upsert({
                     machine_id: machineId,
-                    lane_id: dbLaneId,
+                    lane_id: laneId,
                     product_sku: v3Sku,
                     cutting_size: numericSize,
                     yield: calculatedYield,
@@ -154,40 +152,33 @@ const ProductionLane: React.FC<ProductionLaneProps> = ({ laneId, machineMetadata
                 { event: 'INSERT', schema: 'public', table: 'production_logs' },
                 async (payload) => { // Async handler
                     const newLog = payload.new;
-                    if (newLog.machine_id === machineId && newLog.product_sku === activeSku) {
-                        if (newLog.lane_id && newLog.lane_id !== laneId) return;
+                    if (newLog.machine_id !== machineId || newLog.product_sku !== activeSku) return;
+                    // Filter to only count logs from this lane
+                    if (newLog.lane_id && newLog.lane_id !== laneId) return;
 
-                        console.log(`[Lane: ${laneId}] ⚡ MATCHED SIGNAL:`, newLog);
-                        const qty = newLog.alarm_count || 1;
-                        setLiveCount(prev => prev + qty);
+                    console.log(`[Lane: ${laneId}] ⚡ MATCHED SIGNAL:`, newLog);
+                    const qty = newLog.alarm_count || 1;
+                    setLiveCount(prev => prev + qty);
 
-                        // --- AUTO-UPDATE MATCHING JOB ---
-                        // Construct current product name to match Job
-                        const currentProduct = `${selectedLayer} ${selectedMaterial} ${selectedSize}`; // e.g., "Single Clear 50cm"
+                    // --- AUTO-UPDATE MATCHING JOB ---
+                    const currentProduct = `${selectedLayer} ${selectedMaterial} ${selectedSize}`;
+                    const matchingJob = jobs.find(j =>
+                        (j.machine === machineId || j.Machine_ID === machineId) &&
+                        j.status !== 'Completed' &&
+                        j.product === currentProduct
+                    );
 
-                        // Find a pending job for this machine + product
-                        // STRICT MATCH ONLY: Prevents cross-deduction (e.g. producing Blue won't deduct Orange)
-                        const matchingJob = jobs.find(j =>
-                            (j.machine === machineId || j.Machine_ID === machineId) &&
-                            j.status !== 'Completed' &&
-                            j.product === currentProduct // EXACT MATCH
-                        );
-
-                        if (matchingJob) {
-                            const newProduced = (matchingJob.produced || 0) + qty;
-                            const isComplete = newProduced >= matchingJob.target;
-
-                            // Optimistic / Fire & Forget Update
-                            await supabase.from('job_orders').update({
-                                produced: newProduced,
-                                status: isComplete ? 'Completed' : matchingJob.status
-                            }).eq('job_id', matchingJob.Job_ID || matchingJob.id); // Try both ID fields
-
-                            console.log(`Auto-updated Job ${matchingJob.Job_ID}: +${qty} (${newProduced}/${matchingJob.target})`);
-                        }
-
-                        onProductionComplete();
+                    if (matchingJob) {
+                        const newProduced = (matchingJob.produced || 0) + qty;
+                        const isComplete = newProduced >= matchingJob.target;
+                        await supabase.from('job_orders').update({
+                            produced: newProduced,
+                            status: isComplete ? 'Completed' : matchingJob.status
+                        }).eq('job_id', matchingJob.Job_ID || matchingJob.id);
+                        console.log(`Auto-updated Job ${matchingJob.Job_ID}: +${qty} (${newProduced}/${matchingJob.target})`);
                     }
+
+                    onProductionComplete();
                 }
             )
             .subscribe();
@@ -198,6 +189,10 @@ const ProductionLane: React.FC<ProductionLaneProps> = ({ laneId, machineMetadata
     }, [isLiveRun, activeSku, machineMetadata, laneId, jobs, selectedLayer, selectedMaterial, selectedSize]);
 
     // --- RENDER LANE ---
+    // DL machines (name contains 'Double Layer') can produce both SL and DL.
+    // SL machines can only produce Single Layer.
+    const canProduceDL = !machineMetadata || machineMetadata.name?.includes('Double Layer');
+
     return (
         <div className={`flex-1 bg-black/20 backdrop-blur-md border border-white/5 rounded-3xl p-1 relative overflow-hidden flex flex-col min-h-[500px] ${className}`}>
             {/* Lane Badge */}
@@ -242,31 +237,40 @@ const ProductionLane: React.FC<ProductionLaneProps> = ({ laneId, machineMetadata
 
                 {/* STEP 1 */}
                 {step === 1 && (
-                    <div className="grid grid-cols-2 gap-3 h-full animate-slide-up">
-                        {[
-                            { layer: 'Single', mat: 'Clear', label: '1L Clear', img: '/assets/product-types/single-clear.png', border: 'border-cyan-500/30' },
-                            { layer: 'Single', mat: 'Black', label: '1L Black', img: '/assets/product-types/double-black.png', border: 'border-gray-600' },
-                            { layer: 'Double', mat: 'Clear', label: '2L Clear', img: '/assets/product-types/double-clear.png', border: 'border-blue-400', glow: true },
-                            { layer: 'Double', mat: 'Black', label: '2L Black', img: '/assets/product-types/single-black.png', border: 'border-slate-500' },
-                        ].map((item, idx) => (
-                            <button
-                                key={idx}
-                                onClick={() => handleTypeSelect(item.layer as any, item.mat as any)}
-                                className={`
+                    <div className="flex flex-col gap-3 h-full animate-slide-up">
+                        {/* DL capability hint */}
+                        {!canProduceDL && (
+                            <div className="text-[10px] text-amber-400/70 bg-amber-500/10 border border-amber-500/20 rounded-lg px-3 py-1.5 font-mono">
+                                This machine produces Single Layer only
+                            </div>
+                        )}
+                        <div className={`grid gap-3 h-full ${canProduceDL ? 'grid-cols-2' : 'grid-cols-2'}`}>
+                            {[
+                                { layer: 'Single', mat: 'Clear', label: '1L Clear', img: '/assets/product-types/single-clear.png', border: 'border-cyan-500/30' },
+                                { layer: 'Single', mat: 'Black', label: '1L Black', img: '/assets/product-types/double-black.png', border: 'border-gray-600' },
+                                { layer: 'Double', mat: 'Clear', label: '2L Clear', img: '/assets/product-types/double-clear.png', border: 'border-blue-400', glow: true },
+                                { layer: 'Double', mat: 'Black', label: '2L Black', img: '/assets/product-types/single-black.png', border: 'border-slate-500' },
+                            ].filter(item => canProduceDL || item.layer === 'Single')
+                                .map((item, idx) => (
+                                    <button
+                                        key={idx}
+                                        onClick={() => handleTypeSelect(item.layer as any, item.mat as any)}
+                                        className={`
                                     relative group rounded-3xl border-2 ${item.border} bg-gray-900/50 overflow-hidden
                                     hover:scale-[1.02] active:scale-95 transition-all duration-300 flex flex-col justify-between
                                     hover:shadow-xl hover:border-white/80 min-h-[140px]
                                     ${item.glow ? 'shadow-[0_0_20px_rgba(59,130,246,0.2)]' : ''}
                                 `}
-                            >
-                                <div className="h-2/3 w-full relative bg-black/20 p-2">
-                                    <img src={item.img} alt={item.label} className="w-full h-full object-contain drop-shadow-xl" />
-                                </div>
-                                <div className="h-1/3 w-full flex items-center justify-center bg-white/5 border-t border-white/5">
-                                    <span className="text-xs md:text-sm font-black text-white uppercase">{item.label}</span>
-                                </div>
-                            </button>
-                        ))}
+                                    >
+                                        <div className="h-2/3 w-full relative bg-black/20 p-2">
+                                            <img src={item.img} alt={item.label} className="w-full h-full object-contain drop-shadow-xl" />
+                                        </div>
+                                        <div className="h-1/3 w-full flex items-center justify-center bg-white/5 border-t border-white/5">
+                                            <span className="text-xs md:text-sm font-black text-white uppercase">{item.label}</span>
+                                        </div>
+                                    </button>
+                                ))}
+                        </div>
                     </div>
                 )}
 
@@ -455,9 +459,12 @@ interface ProductionControlProps {
 
 const ProductionControl: React.FC<ProductionControlProps> = ({ user, jobs = [] }) => {
     // Machine Selection State (Persisted in Session & Local)
-    const [selectedMachine] = useState<string | null>(
+    const [selectedMachine, setSelectedMachine] = useState<string | null>(
         sessionStorage.getItem('selectedMachine') || localStorage.getItem('device_machine_id')
     );
+    // Local type for machine picker (matches sys_machines_v2 columns)
+    type SysMachine = { machine_id: string; name: string; type: string; factory_id: string; base_width: number };
+    const [machines, setMachines] = useState<SysMachine[]>([]);
     const [machineMetadata, setMachineMetadata] = useState<Machine | null>(null);
     const currentMachineName = machineMetadata?.name || selectedMachine || 'Unknown Machine';
 
@@ -546,6 +553,16 @@ const ProductionControl: React.FC<ProductionControlProps> = ({ user, jobs = [] }
         }
     };
 
+    // Fetch machines list when no machine bound yet
+    useEffect(() => {
+        if (!selectedMachine) {
+            supabase.from('sys_machines_v2')
+                .select('machine_id, name, type, factory_id, base_width')
+                .order('factory_id')
+                .then(({ data }) => { if (data) setMachines(data as any); });
+        }
+    }, [selectedMachine]);
+
     // Effect: Resolve Machine Metadata
     useEffect(() => {
         if (!selectedMachine) return;
@@ -616,8 +633,7 @@ const ProductionControl: React.FC<ProductionControlProps> = ({ user, jobs = [] }
     }, [selectedMachine, machineMetadata]);
 
 
-    // --- DUAL LANE CHECK ---
-    const isDualLane = selectedMachine === 'T1.2-M01' || machineMetadata?.id === 'T1.2-M01';
+    // --- SINGLE LANE ONLY ---
 
     // TRIGGER FOR PRODUCTION (Pass to Lanes)
     // We need to intercept the lane's attempt to produce and check Operator ID
@@ -652,7 +668,7 @@ const ProductionControl: React.FC<ProductionControlProps> = ({ user, jobs = [] }
                             <div className="flex items-center gap-2 mt-1">
                                 <span className="text-green-400 font-mono text-xs uppercase tracking-widest flex items-center gap-1">
                                     <div className="h-2 w-2 rounded-full bg-green-500 animate-pulse"></div>
-                                    {isDualLane ? 'Dual Lane Mode' : 'Standard Mode'}
+                                    Standard Mode
                                 </span>
                                 <span className="text-gray-500 text-xs">| {currentMachineName}</span>
                             </div>
@@ -717,12 +733,30 @@ const ProductionControl: React.FC<ProductionControlProps> = ({ user, jobs = [] }
                 </header>
 
                 {!selectedMachine ? (
-                    <div className="flex-1 flex flex-col items-center justify-center">
-                        <div className="text-center p-10 bg-black/40 rounded-3xl border border-white/10">
-                            <div className="text-red-400 text-6xl mb-4">⚠️</div>
-                            <h2 className="text-2xl font-bold text-white mb-2">Device Not Configured</h2>
-                            <p className="text-gray-400 mb-6">No machine selected. Please login as a device.</p>
-                            <button onClick={handleDeviceLogout} className="bg-red-600 px-6 py-2 rounded-xl font-bold">Return to Login</button>
+                    <div className="flex-1 flex flex-col items-center justify-center p-6">
+                        <div className="w-full max-w-2xl">
+                            <div className="text-center mb-8">
+                                <div className="text-5xl mb-3">🏭</div>
+                                <h2 className="text-2xl font-black text-white mb-1">Select Machine</h2>
+                                <p className="text-gray-400 text-sm">Choose the machine for this production session</p>
+                            </div>
+                            <div className="grid grid-cols-2 md:grid-cols-3 gap-3">
+                                {machines.filter(m => m.type !== 'Extruder' || m.base_width !== 50).map(m => (
+                                    <button
+                                        key={m.machine_id}
+                                        onClick={() => {
+                                            sessionStorage.setItem('selectedMachine', m.machine_id);
+                                            localStorage.setItem('device_machine_id', m.machine_id);
+                                            setSelectedMachine(m.machine_id);
+                                        }}
+                                        className="bg-black/40 border-2 border-white/10 hover:border-cyan-500/60 hover:bg-cyan-500/5 rounded-2xl p-5 text-left transition-all group"
+                                    >
+                                        <div className="text-[10px] text-gray-500 font-mono uppercase tracking-widest mb-1">{m.factory_id}</div>
+                                        <div className="text-white font-black text-sm leading-tight mb-2">{m.name}</div>
+                                        <div className="text-cyan-400 font-mono text-xs bg-cyan-500/10 px-2 py-0.5 rounded-full inline-block">{m.machine_id}</div>
+                                    </button>
+                                ))}
+                            </div>
                         </div>
                     </div>
                 ) : (
@@ -757,42 +791,50 @@ const ProductionControl: React.FC<ProductionControlProps> = ({ user, jobs = [] }
                             </div>
                         )}
 
-                        {/* DUAL LANE LAYOUT */}
-                        {isDualLane ? (
-                            <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-                                <ProductionLane
-                                    laneId="Left"
-                                    machineMetadata={machineMetadata}
-                                    user={user}
-                                    operatorId={operatorId} // Pass ID
-                                    activeJob={activeJob}
-                                    jobs={jobs}
-                                    onProductionComplete={fetchUserLogs}
-                                    onBeforeProduce={handleProductionAttempt}
-                                />
-                                <ProductionLane
-                                    laneId="Right"
-                                    machineMetadata={machineMetadata}
-                                    user={user}
-                                    operatorId={operatorId} // Pass ID
-                                    activeJob={activeJob}
-                                    jobs={jobs}
-                                    onProductionComplete={fetchUserLogs}
-                                    onBeforeProduce={handleProductionAttempt}
-                                />
-
+                        {/* LANE LAYOUT — dual for T1.2-M01, single for all others */}
+                        {selectedMachine === 'T1.2-M01' ? (
+                            <div className="flex gap-4">
+                                <div className="flex-1 min-w-0">
+                                    <div className="text-center mb-2">
+                                        <span className="text-xs font-bold text-cyan-400 uppercase tracking-widest bg-cyan-500/10 px-3 py-1 rounded-full">Lane 1</span>
+                                    </div>
+                                    <ProductionLane
+                                        laneId="Lane1"
+                                        machineMetadata={machineMetadata}
+                                        user={user}
+                                        operatorId={operatorId}
+                                        activeJob={activeJob}
+                                        jobs={jobs}
+                                        onProductionComplete={fetchUserLogs}
+                                        onBeforeProduce={handleProductionAttempt}
+                                    />
+                                </div>
+                                <div className="w-px bg-white/5 self-stretch" />
+                                <div className="flex-1 min-w-0">
+                                    <div className="text-center mb-2">
+                                        <span className="text-xs font-bold text-purple-400 uppercase tracking-widest bg-purple-500/10 px-3 py-1 rounded-full">Lane 2</span>
+                                    </div>
+                                    <ProductionLane
+                                        laneId="Lane2"
+                                        machineMetadata={machineMetadata}
+                                        user={user}
+                                        operatorId={operatorId}
+                                        activeJob={activeJob}
+                                        jobs={jobs}
+                                        onProductionComplete={fetchUserLogs}
+                                        onBeforeProduce={handleProductionAttempt}
+                                    />
+                                </div>
                             </div>
                         ) : (
-                            // STANDARD LAYOUT
                             <ProductionLane
                                 laneId="Single"
                                 machineMetadata={machineMetadata}
                                 user={user}
-                                operatorId={operatorId} // Pass ID
+                                operatorId={operatorId}
                                 activeJob={activeJob}
                                 jobs={jobs}
                                 onProductionComplete={fetchUserLogs}
-
                                 onBeforeProduce={handleProductionAttempt}
                             />
                         )}

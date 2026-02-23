@@ -1,0 +1,5 @@
+﻿src/pages/DeliveryOrderManagement.tsx(956,36): error TS2304: Cannot find name 'setIsStockOutOpen'.
+src/pages/LoadingDock.tsx(3,17): error TS6133: 'Scale' is declared but its value is never read.
+src/pages/LoadingDock.tsx(3,24): error TS6133: 'Scan' is declared but its value is never read.
+src/pages/LoadingDock.tsx(3,43): error TS6133: 'Clock' is declared but its value is never read.
+src/pages/Notes.tsx(8,11): error TS6196: 'NotesProps' is declared but never used.

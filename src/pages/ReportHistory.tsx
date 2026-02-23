@@ -1,8 +1,9 @@
-import React, { useState, useEffect } from 'react';
+import * as React from 'react';
+import { useState, useEffect } from 'react';
 import { supabase } from '../services/supabase';
 import { User, ProductionLog } from '../types';
 import { generateSessionReport } from '../utils/reportGenerator';
-import { FileText, Download, Calendar, Loader, ChevronLeft, ChevronRight, Activity, PowerOff } from 'lucide-react';
+import { Download, Loader, ChevronLeft, ChevronRight, Activity, PowerOff } from 'lucide-react';
 import { FACTORIES, MACHINES } from '../data/factoryData';
 
 interface ReportHistoryProps {
@@ -19,7 +20,7 @@ interface MachineDailySummary {
     operatorName: string; // Main operator or 'Multiple'
 }
 
-const ReportHistory: React.FC<ReportHistoryProps> = ({ user }) => {
+const ReportHistory: React.FC<ReportHistoryProps> = ({ user }: ReportHistoryProps) => {
     const [loading, setLoading] = useState(true);
     const [selectedDate, setSelectedDate] = useState<string>(new Date().toISOString().split('T')[0]);
     const [dailyData, setDailyData] = useState<Record<string, MachineDailySummary>>({}); // Map<MachineID, Summary>
@@ -37,7 +38,7 @@ const ReportHistory: React.FC<ReportHistoryProps> = ({ user }) => {
             // Get User Map for Operator display
             let userMap: Record<string, any> = {};
             const { data: allUsers } = await supabase.from('sys_users_v2').select('id, name, email');
-            if (allUsers) allUsers.forEach(u => { userMap[u.id] = u; });
+            if (allUsers) allUsers.forEach((u: any) => { userMap[u.id] = u; });
 
             // Fetch Logs for selected Date
             const startOfDay = new Date(selectedDate);
@@ -94,7 +95,7 @@ const ReportHistory: React.FC<ReportHistoryProps> = ({ user }) => {
             Object.values(summaryMap).forEach(s => {
                 // Operator: Take the most frequent or first
                 if (s.logs.length > 0) {
-                    s.operatorName = s.logs[0].Operator_Email; // Simple first logic
+                    s.operatorName = s.logs[0].Operator_Email || 'Unknown'; // Simple first logic
                 }
 
                 // Speed
@@ -281,7 +282,7 @@ const ReportHistory: React.FC<ReportHistoryProps> = ({ user }) => {
                                     {selectedSummary.logs.map((log) => (
                                         <tr key={log.Log_ID} className="hover:bg-blue-50/50 transition-colors">
                                             <td className="px-6 py-3 font-mono text-gray-600 whitespace-nowrap">
-                                                {log.formattedDate}
+                                                {(log as any).formattedDate}
                                             </td>
                                             <td className="px-6 py-3 font-bold text-gray-700">
                                                 {log.Operator_Email}

@@ -238,3 +238,42 @@ export const getV2Factories = async (): Promise<V2Factory[]> => {
     if (error) return [];
     return data || [];
 };
+
+// --- Items Management (Create/Update) ---
+
+// Create new Item
+export const createItemV2 = async (item: Partial<V2Item>): Promise<V2Item | null> => {
+    // 1. Validate mandatory fields
+    if (!item.sku || !item.name || !item.type) {
+        throw new Error("Missing mandatory fields: SKU, Name, Type");
+    }
+
+    // 2. Insert
+    const { data, error } = await supabase
+        .from('master_items_v2')
+        .insert(item)
+        .select()
+        .single();
+
+    if (error) {
+        console.error("Error creating item:", error);
+        throw error; // Rethrow to let UI handle alerts
+    }
+    return data;
+};
+
+// Update existing Item
+export const updateItemV2 = async (sku: string, updates: Partial<V2Item>): Promise<V2Item | null> => {
+    const { data, error } = await supabase
+        .from('master_items_v2')
+        .update(updates)
+        .eq('sku', sku)
+        .select()
+        .single();
+
+    if (error) {
+        console.error("Error updating item:", error);
+        throw error;
+    }
+    return data;
+};

@@ -1,7 +1,7 @@
 
 import React, { useState, useEffect } from 'react';
 import { supabase } from '../services/supabase';
-import { Calendar, ChevronLeft, Send, History, AlertCircle } from 'lucide-react';
+import { Calendar, Send, History } from 'lucide-react';
 
 interface DriverLeaveProps {
     user: any;
@@ -119,7 +119,7 @@ const DriverLeave: React.FC<DriverLeaveProps> = ({ user }) => {
 
                 {leaveHistory.length === 0 ? (
                     <div className="text-center py-12 bg-slate-900/50 rounded-3xl border border-slate-800 border-dashed">
-                        <AlertCircle size={32} className="mx-auto mb-2 text-slate-700" />
+                        <History size={32} className="mx-auto mb-2 text-slate-700" />
                         <p className="text-slate-500 text-sm font-bold">No records found</p>
                     </div>
                 ) : (

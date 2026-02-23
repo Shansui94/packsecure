@@ -1,15 +1,12 @@
 
 import React, { useState, useEffect } from 'react';
 import { supabase } from '../services/supabase';
-import { Note, User as UserType } from '../types';
-import { Plus, Tag, Search, Trash2, Edit2, Share2, Lock, Unlock, FileText, User } from 'lucide-react';
+import { Note } from '../types';
+import { Plus, Tag, Search, Trash2, Edit2, Lock, Unlock, FileText, User } from 'lucide-react';
 import ReactMarkdown from 'react-markdown';
 
-interface NotesProps {
-    user: UserType | null;
-}
 
-const Notes: React.FC<NotesProps> = ({ user }) => {
+const Notes: React.FC<{ user: any }> = ({ user }) => {
     const [notes, setNotes] = useState<Note[]>([]);
     const [selectedNote, setSelectedNote] = useState<Note | null>(null);
     const [isEditing, setIsEditing] = useState(false);
@@ -26,7 +23,7 @@ const Notes: React.FC<NotesProps> = ({ user }) => {
         fetchNotes();
         // Realtime subscription
         const channel = supabase.channel('notes-changes')
-            .on('postgres_changes', { event: '*', schema: 'public', table: 'notes' }, (payload) => {
+            .on('postgres_changes', { event: '*', schema: 'public', table: 'notes' }, (_payload) => {
                 fetchNotes();
             })
             .subscribe();

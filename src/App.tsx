@@ -1,8 +1,7 @@
 import { useState, useEffect } from 'react';
 import Layout from './components/Layout';
 import ErrorBoundary from './components/ErrorBoundary';
-import Dashboard from './pages/Dashboard';
-import JobOrders from './pages/JobOrders';
+// import Dashboard from './pages/Dashboard';
 import ProductionLog from './pages/ProductionLog';
 import Inventory from './pages/Inventory';
 import Login from './pages/Login';
@@ -11,7 +10,6 @@ import Register from './pages/Register';
 import ProductionControl from './pages/ProductionControl';
 // import ProductionPlanning from './pages/ProductionPlanning';
 import LiveStock from './pages/LiveStock';
-import RecipeManager from './pages/RecipeManager';
 import ProductLibrary from './pages/ProductLibrary';
 import DeliveryOrderManagement from './pages/DeliveryOrderManagement';
 import DriverDelivery from './pages/DriverDelivery';
@@ -20,7 +18,7 @@ import DriverLeave from './pages/DriverLeave';
 import LorryService from './pages/LorryService';
 import MaintenanceManagement from './pages/MaintenanceManagement';
 import LorryManagement from './pages/LorryManagement';
-import Dispatch from './pages/Dispatch';
+// import Dispatch from './pages/Dispatch';
 import LoadingDock from './pages/LoadingDock';
 import MachineLabels from './pages/MachineLabels';
 import ExecutiveReports from './pages/ExecutiveReports';
@@ -30,19 +28,20 @@ import UnderConstruction from './pages/UnderConstruction';
 import ClaimsManagement from './pages/ClaimsManagement';
 import UpdatePassword from './pages/UpdatePassword';
 import OrderSummary from './pages/OrderSummary'; // New Page
-import CustomerImport from './pages/CustomerImport'; // Added Import Page
-import UniversalIntake from './pages/UniversalIntake';
-import FactoryDashboard from './pages/FactoryDashboard';
-import SimpleStock from './pages/SimpleStock';
+// import CustomerImport from './pages/CustomerImport'; // Added Import Page
+// import UniversalIntake from './pages/UniversalIntake';
+// import SimpleStock from './pages/SimpleStock';
 import UserManagement from './pages/UserManagement';
+import DriverManagement from './pages/DriverManagement';
 import HRPortal from './pages/HRPortal';
 import IoTManagement from './pages/IoTManagement';
 import Notes from './pages/Notes';
 import Tasks from './pages/Tasks';
+import FactoryLiveOS from './pages/FactoryLiveOS';
 
 import { User, UserRole, InventoryItem, ProductionLog as ProductionLogType, JobOrder } from './types';
 import AIAgentWidget from './components/AIAgentWidget';
-import { determineZone } from './utils/logistics';
+
 import { supabase } from './services/supabase';
 import { Session } from '@supabase/supabase-js';
 
@@ -54,7 +53,11 @@ import { Session } from '@supabase/supabase-js';
 function App() {
     const [isLoggedIn, setIsLoggedIn] = useState<boolean>(false);
     const [user, setUser] = useState<User | null>(null);
-    const [activePage, setActivePage] = useState<string>(() => localStorage.getItem('lastActivePage') || 'dashboard');
+    const [activePage, setActivePage] = useState<string>(() => {
+        // Kiosk mode: if this device is bound to a machine, always start on production screen
+        if (localStorage.getItem('device_machine_id')) return 'scanner';
+        return localStorage.getItem('lastActivePage') || 'factory-live-os';
+    });
 
     // Persist activePage
     useEffect(() => {
@@ -65,7 +68,7 @@ function App() {
     const [inventory, setInventory] = useState<InventoryItem[]>([]);
     const [logs, setLogs] = useState<ProductionLogType[]>([]);
     const [jobs, setJobs] = useState<JobOrder[]>([]);
-    const [machines, setMachines] = useState<any[]>([]);
+
 
     // 0. Auth & Router State
     useEffect(() => {
@@ -99,12 +102,14 @@ function App() {
                 return;
             }
 
-            // 2. Machine Deep Link
+            // 2. Machine Deep Link  e.g. #/production/N1-M01
             if (hash.startsWith('#/production/')) {
                 const machineId = hash.replace('#/production/', '');
                 if (machineId) {
                     console.log("Deep Link Detected for Machine:", machineId);
                     sessionStorage.setItem('selectedMachine', machineId);
+                    // Persist permanently so bookmark / home-screen shortcut auto-binds on every visit
+                    localStorage.setItem('device_machine_id', machineId);
                     setActivePage('scanner');
                 }
             }
@@ -115,9 +120,6 @@ function App() {
             }
             if (hash === '#/input' || hash === '#/universal-intake') {
                 setActivePage('universal-intake');
-            }
-            if (hash === '#/factory-dashboard') {
-                setActivePage('factory-dashboard');
             }
             if (hash === '#/simple-stock') {
                 setActivePage('simple-stock');
@@ -141,8 +143,8 @@ function App() {
         // Define allowable pages per role
         const allowedPages: Record<string, string[]> = {
             'SuperAdmin': ['*'], // The Only One with Full Access
-            'Admin': ['profile', 'construction', 'factory-dashboard', 'dashboard', 'data-v2', 'customer-import', 'universal-intake', 'scanner', 'jobs', 'livestock', 'inventory', 'recipes', 'products', 'delivery', 'order-summary', 'dispatch', 'loading-dock', 'production', 'report-history', 'users', 'hr', 'claims', 'simple-stock', 'maintenance', 'lorry-management', 'iot'],
-            'Manager': ['profile', 'construction', 'factory-dashboard', 'dashboard', 'data-v2', 'customer-import', 'universal-intake', 'scanner', 'jobs', 'livestock', 'inventory', 'recipes', 'products', 'delivery', 'order-summary', 'dispatch', 'loading-dock', 'production', 'report-history', 'hr', 'claims', 'simple-stock', 'maintenance', 'lorry-management', 'iot'],
+            'Admin': ['profile', 'construction', 'factory-live-os', 'dashboard', 'data-v2', 'customer-import', 'universal-intake', 'scanner', 'jobs', 'livestock', 'inventory', 'recipes', 'products', 'delivery', 'order-summary', 'dispatch', 'loading-dock', 'production', 'report-history', 'users', 'hr', 'claims', 'simple-stock', 'maintenance', 'lorry-management', 'iot', 'driver-management'],
+            'Manager': ['profile', 'construction', 'factory-live-os', 'dashboard', 'data-v2', 'customer-import', 'universal-intake', 'scanner', 'jobs', 'livestock', 'inventory', 'recipes', 'products', 'delivery', 'order-summary', 'dispatch', 'loading-dock', 'production', 'report-history', 'hr', 'claims', 'simple-stock', 'maintenance', 'lorry-management', 'iot', 'driver-management'],
             'Driver': ['delivery-driver', 'delivery-history', 'driver-leave', 'lorry-service', 'claims', 'profile'],
             'Operator': ['scanner', 'profile'],
             'Device': ['scanner'],
@@ -159,7 +161,7 @@ function App() {
 
         // --- SPECIAL USER OVERRIDE (Vivian) ---
         if (user.email === 'diyadmin1111@gmail.com') {
-            allowed = [...allowed, 'order-summary'];
+            allowed = [...allowed, 'order-summary', 'driver-management'];
         }
 
         const isAllowed = allowed.includes('*') || allowed.includes(activePage);
@@ -412,34 +414,13 @@ function App() {
             .on('postgres_changes', { event: '*', schema: 'public', table: 'job_orders' }, fetchJobs)
             .subscribe();
 
-        // 4. Machines Sync (Real-time)
-        const fetchMachines = async () => {
-            const { data } = await supabase.from('sys_machines_v2').select('*').order('machine_id');
-            if (data) {
-                // Map to Machine type if necessary, or ensure strict typing
-                // sys_machines_v2 has: machine_id, name, type, status, factory_id...
-                // Machine type has: id, name, type, status, factory_id
-                const mapped: any[] = data.map(m => ({
-                    id: m.machine_id,
-                    name: m.name,
-                    type: m.type,
-                    status: m.status,
-                    factory_id: m.factory_id
-                }));
-                setMachines(mapped);
-            }
-        };
-        fetchMachines();
 
-        const machinesChannel = supabase.channel('machines-changes')
-            .on('postgres_changes', { event: '*', schema: 'public', table: 'sys_machines_v2' }, fetchMachines)
-            .subscribe();
 
         return () => {
             supabase.removeChannel(invChannel);
             supabase.removeChannel(logsChannel);
             supabase.removeChannel(jobsChannel);
-            supabase.removeChannel(machinesChannel);
+
         };
     }, [user]);
 
@@ -515,60 +496,7 @@ function App() {
 
     // ... (existing imports)
 
-    const handleCreateJob = async (newJobData: Partial<JobOrder>) => {
-        // DB expects UUID for job_id
-        const uuid = self.crypto.randomUUID();
 
-        // Determine Zone automatically if location/address is provided
-        const address = newJobData.deliveryAddress || (newJobData as any).location || '';
-        const autoZone = determineZone(address);
-
-        const newJob = {
-            job_id: uuid, // Fixed: Must be UUID
-            customer: newJobData.customer || 'Unknown',
-            product: newJobData.product || 'Unknown',
-            target_qty: Number(newJobData.target) || 0,
-            produced_qty: 0,
-            status: 'Pending',
-            machine: newJobData.machine || 'M01',
-            priority: newJobData.Priority || 'Normal',
-            delivery_zone: autoZone,
-            delivery_status: 'Pending',
-            order_index: 9999,
-            created_at: new Date().toISOString(),
-            // New Fields for Feed
-            type: newJobData.type || 'Production',
-            notes: newJobData.notes || '',
-            original_text: newJobData.originalText || ''
-        };
-
-        try {
-            const { error } = await supabase.from('job_orders').insert(newJob);
-            if (error) throw error;
-        } catch (error: any) {
-            console.error("Error creating job:", error);
-            alert("Failed to create job: " + (error.message || JSON.stringify(error)));
-        }
-    };
-
-    const handleReorderJobs = async (newJobOrder: JobOrder[]) => {
-        // Optimistic Update
-        setJobs(newJobOrder);
-
-        // Persist to Supabase
-        // Upsert approach: Update order_index for each modified job
-        // Batching is harder in Supabase client directly without RPC, but we can parallelize or straightforward loop
-        // For 50 items, 50 requests is okay.
-        try {
-            const updates = newJobOrder.map((job, index) =>
-                supabase.from('job_orders').update({ order_index: index }).eq('job_id', job.Job_ID)
-            );
-            await Promise.all(updates);
-            console.log("Job order updated in Supabase");
-        } catch (error) {
-            console.error("Error updating job order:", error);
-        }
-    };
 
     // Check for printable mode (via URL ?mode=labels)
     const isLabelMode = window.location.search.includes('mode=labels');
@@ -603,11 +531,11 @@ function App() {
     const renderContent = () => {
         switch (activePage) {
             case 'dashboard':
-                return <Dashboard logs={logs} inventory={inventory} jobs={jobs} machines={machines} />;
+                return null; // <Dashboard logs={logs} inventory={inventory} jobs={jobs} machines={machines} />;
             case 'login': // Explicit case
                 return null;
             case 'jobs':
-                return <JobOrders jobs={jobs} onCreateJob={handleCreateJob} onReorderJobs={handleReorderJobs} />;
+                return null; // <JobOrders jobs={jobs} onCreateJob={handleCreateJob} onReorderJobs={handleReorderJobs} />;
             case 'planning':
                 return null; // <ProductionPlanning jobs={jobs} onUpdateJob={handleUpdateJob} />;
             case 'production':
@@ -619,7 +547,7 @@ function App() {
             case 'livestock':
                 return <LiveStock />;
             case 'recipes':
-                return <RecipeManager />;
+                return null; // <RecipeManager />;
             case 'products':
                 return <ProductLibrary />;
             case 'delivery':
@@ -635,11 +563,11 @@ function App() {
             case 'lorry-service':
                 return <LorryService user={user} />;
             case 'maintenance':
-                return <MaintenanceManagement />;
+                return <MaintenanceManagement user={user} />;
             case 'lorry-management':
                 return <LorryManagement />;
             case 'dispatch':
-                return <Dispatch />;
+                return null; // <Dispatch />;
             case 'loading-dock':
                 return <LoadingDock />;
             case 'data-v2':
@@ -655,20 +583,16 @@ function App() {
             // Organization
             case 'users':
                 return <UserManagement currentUser={user} />;
+            case 'driver-management':
+                return <DriverManagement currentUser={user} />;
             case 'hr':
                 return <HRPortal />;
-            case 'simple-stock': // Added
-                return <SimpleStock />;
             case 'claims':
                 return <ClaimsManagement user={user} />;
             case 'update-password':
                 return <UpdatePassword />;
-            case 'customer-import':  // Added Import Page Case
-                return <CustomerImport />;
-            case 'universal-intake':
-                return <UniversalIntake />;
-            case 'factory-dashboard':
-                return <FactoryDashboard />;
+            case 'factory-live-os':
+                return <FactoryLiveOS />;
             case 'notes':
                 return <Notes user={user} />;
             case 'tasks':
@@ -677,7 +601,7 @@ function App() {
             case 'construction':
                 return <UnderConstruction title="Access Restricted" />;
             default:
-                return <Dashboard logs={logs} inventory={inventory} jobs={jobs} machines={machines} />;
+                return <ProductionControl user={user as any} jobs={jobs} />;
         }
     };
 

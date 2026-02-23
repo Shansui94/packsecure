@@ -1,7 +1,7 @@
 import { VercelRequest, VercelResponse } from '@vercel/node';
-import { GoogleGenerativeAI } from '@google/generative-ai';
+// import { GoogleGenerativeAI } from '@google/generative-ai';
 
-export default async function handler(req: VercelRequest, res: VercelResponse) {
+export default async function handler(_req: VercelRequest, res: VercelResponse) {
     const apiKey = process.env.GOOGLE_API_KEY || process.env.GEMINI_API_KEY;
 
     if (!apiKey) {
@@ -9,7 +9,7 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
     }
 
     try {
-        const genAI = new GoogleGenerativeAI(apiKey);
+        // const genAI = new GoogleGenerativeAI(apiKey);
         // Access the model capabilities directly if possible or infer from error
         // The SDK doesn't have a direct 'listModels' on the main class in older versions, 
         // but let's try to just return a simple health check or attempt a list via REST if SDK fails.

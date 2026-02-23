@@ -9,7 +9,7 @@
 #include <WebServer.h>
 #include <WiFi.h>
 
-const String CURRENT_VERSION = "3.0.0"; // ★ 当前本地固件版本
+const String CURRENT_VERSION = "3.1.0"; // ★ 硬件中断信号检测版本
 #include <WiFiClientSecure.h>
 #include <esp_task_wdt.h> // Watchdog Timer
 #include <time.h>         // Include standard time library
@@ -46,6 +46,20 @@ int currentYield =
 unsigned long debounceDelay =
     240000;                    // 冷却时间。启动后会自动从云端拉取 (如 240000ms)
 String currentSku = "UNKNOWN"; // 正在生产的 SKU
+
+// --- 硬件中断信号捕捉 (ISR-safe, volatile) ---
+// 用中断代替轮询，确保 HTTP/WiFi 阻塞期间也不会漏信号
+volatile bool signalDetected = false;      // ISR 设置，main loop 清除
+volatile unsigned long isrTriggerTime = 0; // 信号触发时间 (ms)
+
+void IRAM_ATTR BUZZER_ISR() {
+  // FALLING edge ISR: 只记录时间,让 main loop 做验证
+  // 不改 signalDetected 如果已经有待处理信号 (防止 ISR 内竞争)
+  if (!signalDetected) {
+    isrTriggerTime = millis();
+    signalDetected = true;
+  }
+}
 
 int lastState = HIGH;
 unsigned long lastDebounceTime = 0;
@@ -87,6 +101,12 @@ void setup() {
 
   pinMode(relayPin, INPUT_PULLUP);
   pinMode(ledPin, OUTPUT);
+
+  // ★ 硬件中断: FALLING edge (继电器闭合 = 警报器响)
+  // 优先级高于 loop(), HTTP/WiFi 阻塞也不会漏掉信号
+  attachInterrupt(digitalPinToInterrupt(relayPin), BUZZER_ISR, FALLING);
+  Serial.println("GPIO 中断已绑定到 pin " + String(relayPin) +
+                 " (FALLING edge)");
 
   connectWiFi();
   if (WiFi.status() == WL_CONNECTED) {
@@ -134,33 +154,67 @@ void loop() {
     lastConfigSync = millis();
   }
 
-  // 1. 信号检测
-  int reading = digitalRead(relayPin);
-  if (reading == LOW && lastState == HIGH) {
-    if ((millis() - lastDebounceTime) > debounceDelay) {
-      int validCount = 0;
-      for (int i = 0; i < 5; i++) {
-        delay(20);
-        esp_task_wdt_reset();
-        if (digitalRead(relayPin) == LOW)
-          validCount++;
-      }
-      if (validCount >= 3) {
-        Serial.printf("触发! Yield: %d, SKU: %s\n", currentYield,
-                      currentSku.c_str());
-        digitalWrite(ledPin, LOW);
-        delay(100);
-        digitalWrite(ledPin, HIGH);
-        lastDebounceTime = millis();
-        time_t now;
-        time(&now);
-        QueueItem item = {currentYield, now};
+  // ══════════════════════════════════════════════════
+  // 1. 信号验证 (中断触发后在 main loop 里验证)
+  // ══════════════════════════════════════════════════
+  if (signalDetected) {
+    signalDetected = false; // 立刻清除标志，防止重复处理
+
+    // 等待 300ms 再验证: 真正的 3 秒警报在 300ms 后 pin 仍为 LOW
+    // 噪声脉冲 (<100ms) 此时已恢复 HIGH，直接被过滤
+    delay(300);
+    esp_task_wdt_reset();
+
+    if (digitalRead(relayPin) == LOW) {
+      // ✅ 确认是真实信号 (警报还在响)
+      unsigned long now = millis();
+
+      if ((now - lastDebounceTime) > debounceDelay) {
+        // ✅ 冷却时间已过 (最短 4 分钟间隔)
+        float elapsed = (float)(now - lastDebounceTime) / 1000.0;
+        lastDebounceTime = now;
+
+        Serial.printf("[OK] 有效触发! Yield=%d, SKU=%s, 距上次=%.1fs\n",
+                      currentYield, currentSku.c_str(), elapsed);
+
+        // LED 闪烁确认
+        for (int i = 0; i < 3; i++) {
+          digitalWrite(ledPin, LOW);
+          delay(80);
+          digitalWrite(ledPin, HIGH);
+          delay(80);
+          esp_task_wdt_reset();
+        }
+
+        time_t t;
+        time(&t);
+        QueueItem item = {currentYield, t};
         alarmQueue.push_back(item);
         saveQueue();
+
+      } else {
+        float cooldownLeft =
+            (float)(debounceDelay - (now - lastDebounceTime)) / 1000.0;
+        Serial.printf("[SKIP] 冷却中，还需 %.1f 秒\n", cooldownLeft);
       }
+
+      // ★ 等待警报器结束 (pin 恢复 HIGH) 再继续
+      // 防止 3 秒内产生多次 ISR 重复触发
+      Serial.println("等待警报器结束...");
+      unsigned long waitStart = millis();
+      while (digitalRead(relayPin) == LOW && (millis() - waitStart) < 8000) {
+        esp_task_wdt_reset();
+        delay(50);
+      }
+      Serial.println("警报器已结束，恢复监听");
+
+      // 清除 ISR 期间可能积累的多余标志
+      signalDetected = false;
+
+    } else {
+      Serial.println("[NOISE] 300ms 后 pin 恢复 HIGH，判断为噪声，忽略");
     }
   }
-  lastState = reading;
 
   handleNetworkQueue();
 

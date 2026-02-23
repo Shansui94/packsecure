@@ -70,7 +70,7 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
             'N1-M01': 100,
             'N2-M02': 100,
             'T1.3-M02': 100,
-            'T1.2-M01': 100,
+            'T1.2-M01': 200,   // 2M double-layer machine → always yields 2x per signal
             'T1.1-M03': 0
         };
 
@@ -100,7 +100,7 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
             version: device.firmware_version,
             cutting_size: cuttingSize,
             // 远程升级配置
-            latest_version: "3.0.0",
+            latest_version: "3.1.0",
             download_url: "https://raw.githubusercontent.com/Shansui94/packsecure/main/firmware/factory_monitor/firmware.bin"
         });
 

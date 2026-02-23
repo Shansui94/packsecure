@@ -1,7 +1,6 @@
 import React, { useState, useEffect } from 'react';
 import { supabase } from '../services/supabase';
-import { FileText, Plus, Calendar, AlertCircle, CheckCircle, TrendingUp, User } from 'lucide-react';
-import { UserRole } from '../types';
+import { FileText, TrendingUp, User, AlertCircle, CheckCircle, Plus } from 'lucide-react';
 
 interface Report {
     id: string;
@@ -21,7 +20,6 @@ interface ExecutiveReportsProps {
 const ExecutiveReports: React.FC<ExecutiveReportsProps> = ({ user }) => {
     const [reports, setReports] = useState<Report[]>([]);
     const [isCreateOpen, setIsCreateOpen] = useState(false);
-    const [loading, setLoading] = useState(true);
 
     // Form State
     const [formData, setFormData] = useState({
@@ -39,14 +37,12 @@ const ExecutiveReports: React.FC<ExecutiveReportsProps> = ({ user }) => {
     }, []);
 
     const fetchReports = async () => {
-        setLoading(true);
         const { data } = await supabase
             .from('management_reports')
             .select('*')
             .order('created_at', { ascending: false });
 
         if (data) setReports(data);
-        setLoading(false);
     };
 
     const fetchQuickStats = async () => {
@@ -55,7 +51,7 @@ const ExecutiveReports: React.FC<ExecutiveReportsProps> = ({ user }) => {
         const { data } = await supabase
             .from('production_logs_v2')
             .select('quantity_produced')
-            .gte('created_at', `${today}T00:00:00`);
+            .gte('created_at', `${today} T00:00:00`);
 
         const total = data?.reduce((sum, item) => sum + (item.quantity_produced || 0), 0) || 0;
         setStats(prev => ({ ...prev, totalProduced: total }));

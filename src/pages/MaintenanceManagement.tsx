@@ -3,10 +3,19 @@ import React, { useState, useEffect } from 'react';
 import { supabase } from '../services/supabase';
 import { Wrench, Calendar, Truck, User } from 'lucide-react';
 
-const MaintenanceManagement: React.FC = () => {
+const NILAI_DRIVERS = ['SAM', 'Mahadi', 'Ayam', 'Tahir'];
+
+const isNilaiDriver = (name?: string) =>
+    name ? NILAI_DRIVERS.some(n => name.toUpperCase().includes(n.toUpperCase())) : false;
+
+const MaintenanceManagement: React.FC<{ user?: any }> = ({ user }) => {
     const [requests, setRequests] = useState<any[]>([]);
     const [loading, setLoading] = useState(true);
     const [activeTab, setActiveTab] = useState<'pending' | 'history'>('pending');
+
+    // Factory filter: Neoson → Taiping (non-Nilai), Eric → Nilai
+    const isNeoson = user?.employeeId === '009';
+    const isEric = user?.email === 'ericsoobaolin0219@gmail.com';
 
     useEffect(() => {
         fetchRequests();
@@ -157,8 +166,16 @@ const MaintenanceManagement: React.FC = () => {
 
 
 
-    const pendingList = requests.filter(r => r.status !== 'Completed');
-    const historyList = requests.filter(r => r.status === 'Completed');
+    // Apply factory filter for Neoson / Eric
+    const factoryFiltered = requests.filter(r => {
+        const driverName = r.users_public?.name || '';
+        if (isNeoson) return !isNilaiDriver(driverName); // Taiping only
+        if (isEric) return isNilaiDriver(driverName);  // Nilai only
+        return true; // Admins see all
+    });
+
+    const pendingList = factoryFiltered.filter(r => r.status !== 'Completed');
+    const historyList = factoryFiltered.filter(r => r.status === 'Completed');
     const displayList = activeTab === 'pending' ? pendingList : historyList;
 
     return (

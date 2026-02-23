@@ -15,7 +15,6 @@ import {
 import { V2Item } from '../types/v2';
 
 
-import SimpleStock from './SimpleStock';
 
 // Reusable Searchable Select Component (Ported from SimpleStock for consistency)
 interface SearchableSelectProps {
@@ -144,7 +143,6 @@ const DeliveryOrderManagement: React.FC = () => {
     const [lorryServices, setLorryServices] = useState<any[]>([]); // State for Service Reminders
 
     const [isCreateModalOpen, setIsCreateModalOpen] = useState(false);
-    const [isStockOutOpen, setIsStockOutOpen] = useState(false);
     const [searchTerm, setSearchTerm] = useState('');
     const [statusFilter, setStatusFilter] = useState<string>('All');
 
@@ -252,6 +250,7 @@ const DeliveryOrderManagement: React.FC = () => {
                 const filteredUsers = usersRes.data.filter(u =>
                     u.role === 'Driver' ||
                     u.email === 'neosonchun@gmail.com' ||
+                    u.email === 'ericsoobaolin0219@gmail.com' ||
                     u.name?.toLowerCase().includes('neoson')
                 );
 
@@ -955,7 +954,7 @@ const DeliveryOrderManagement: React.FC = () => {
                     <p className="text-slate-400 mt-1 font-medium">Assign orders, track shipments, and manage fleet.</p>
                 </div>
                 <button
-                    onClick={() => setIsStockOutOpen(true)}
+                    onClick={() => setIsCreateModalOpen(true)}
                     className="group relative bg-gradient-to-r from-blue-600 to-blue-500 hover:from-blue-500 hover:to-blue-400 text-white px-6 py-3 rounded-xl flex items-center gap-3 font-bold shadow-xl shadow-blue-900/20 transition-all active:scale-95"
                 >
                     <Plus size={20} />
@@ -1716,28 +1715,6 @@ const DeliveryOrderManagement: React.FC = () => {
                 </div>
             )}
 
-            {/* --- QUICK STOCK OUT MODAL --- */}
-            {
-                isStockOutOpen && (
-                    <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/80 backdrop-blur-sm animate-in fade-in duration-200 p-4">
-                        <div className="w-full max-w-2xl max-h-[90vh] overflow-y-auto custom-scrollbar bg-slate-950 rounded-2xl border border-slate-800 shadow-2xl relative">
-                            {/* Pass onClose to SimpleStock so it can render a back button or we handle it here. 
-                             Actually SimpleStock logic I added handles the button rendering if onClose is present.
-                         */}
-                            <div className="p-4">
-                                <SimpleStock
-                                    onClose={() => setIsStockOutOpen(false)}
-                                    isModal={true}
-                                    onSuccess={() => {
-                                        setIsStockOutOpen(false);
-                                        fetchData(); // Soft Refresh
-                                    }}
-                                />
-                            </div>
-                        </div>
-                    </div>
-                )
-            }
 
         </div >
     );

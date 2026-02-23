@@ -1,6 +1,5 @@
 export type UserRole = 'Admin' | 'Manager' | 'Operator' | 'Driver' | 'Sales';
 export type ItemType = 'Raw' | 'WiP' | 'FG';
-export type ItemCategory = 'Resin' | 'Additive' | 'Packaging' | 'Bag' | 'StretchFilm' | 'Trading';
 export type SupplyType = 'Manufactured' | 'Purchased';
 export type MachineStatus = 'Running' | 'Idle' | 'Maintenance' | 'Off';
 export type DeliveryStatus = 'Pending' | 'Loading' | 'In_Transit' | 'Delivered' | 'Cancelled';
@@ -20,7 +19,6 @@ export interface V2Item {
     sku: string; // PK
     name: string;
     type: ItemType;
-    category: ItemCategory;
     supply_type: SupplyType;
     uom: string;
 

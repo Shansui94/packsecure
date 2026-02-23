@@ -1,11 +1,12 @@
-import React, { useEffect, useState } from 'react';
+// import * as React from 'react';
+import { useState } from 'react';
 import { useGoogleDrive } from '../hooks/useGoogleDrive';
-import { reportService, DailyReport } from '../services/reportService';
-import { FileText, CheckCircle, RefreshCw, AlertTriangle } from 'lucide-react';
+import { reportService } from '../services/reportService';
+import { FileText, CheckCircle, RefreshCw } from 'lucide-react';
 
 const SPREADSHEET_ID = '1mUBb5RYFq-G2a8bYKnYTop1A-4KSIoawSXH6J3TBITQ'; // From User Link
-const SHEET_NAME = 'MAX TAN';
-const RANGE_NAME = "'MAX TAN'!A:F";
+// const SHEET_NAME = 'MAX TAN';
+// const RANGE_NAME = "'MAX TAN'!A:F";
 
 export const AutoDailyReport = ({ isAuthenticated }: { isAuthenticated: boolean }) => {
     const { appendToSheet, readSheetValues, updateSheetValues } = useGoogleDrive();
@@ -23,8 +24,8 @@ export const AutoDailyReport = ({ isAuthenticated }: { isAuthenticated: boolean 
 
             const rowData = [
                 stats.date,
-                stats.startTime || '-',
-                stats.endTime || '-',
+                stats.startTime ?? '-',
+                stats.endTime ?? '-',
                 stats.duration,
                 stats.totalQuantity,
                 stats.productBreakdown

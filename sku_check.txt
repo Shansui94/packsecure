@@ -1,0 +1,4 @@
+products_v2 BW-CLEAR-50CM-2: null err:Could not find the table 'public.products_v2' in the schema cache
+items BW-CLEAR-50CM-2: null err:invalid input syntax for type uuid: "BW-CLEAR-50CM-2"
+stock_ledger_v2 BW-CLEAR-50CM-2: null err:none
+Insert T1.2 (no sku): FAIL-insert or update on table "stock_ledger_v2" violates foreign key constraint "stock_ledger_v2_sku_fkey"

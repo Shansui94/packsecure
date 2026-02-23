@@ -1,0 +1,26 @@
+[
+  {
+    "mac_address": "70:4B:CA:25:8F:B8",
+    "machine_id": "N1-M01",
+    "last_heartbeat": "2026-02-23T04:00:58.399+00:00",
+    "firmware_version": "1.0.0"
+  },
+  {
+    "mac_address": "D4:E9:F4:60:13:60",
+    "machine_id": "N2-M02",
+    "last_heartbeat": "2026-02-23T04:01:25.181+00:00",
+    "firmware_version": "1.0.0"
+  },
+  {
+    "mac_address": "F4:2D:C9:70:EA:E4",
+    "machine_id": "T1.2-M01",
+    "last_heartbeat": "2026-02-23T04:01:45.015+00:00",
+    "firmware_version": "1.0.0"
+  },
+  {
+    "mac_address": "F4:2D:C9:87:E1:74",
+    "machine_id": "T1.3-M02",
+    "last_heartbeat": "2026-02-23T04:01:45.326+00:00",
+    "firmware_version": "1.0.0"
+  }
+]

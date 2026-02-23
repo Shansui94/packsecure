@@ -135,6 +135,7 @@ export function useGoogleDrive() {
             fileId: fileId,
             alt: 'media',
         });
+        return res.body;
     };
 
     // 4. Sheets Operations

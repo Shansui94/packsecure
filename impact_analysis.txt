@@ -1,0 +1,19 @@
+--- Deletion Impact Analysis ---
+Total Inactive SKUs with History: 14
+
+SKU | Production Logs | Stock Ledger
+--- | --- | ---
+BW-CLEAR | 704 | 543
+BW-CLEAR-50CM-2 | 296 | 273
+BW20CM-5 | 0 | 100
+BW33CM-3 | 0 | 70
+AWB-2000-BOX | 0 | 3
+AWB-350-BOX | 0 | 2
+AWB-500-BOX | 0 | 2
+AIRTUBE-25CM-300METER-7136 | 0 | 1
+AIRTUBE-25CM-50METER | 0 | 1
+AIRTUBE-30CM-50METER | 0 | 1
+SF-22KG-BLACK | 0 | 1
+AIRTUBE-40CM-300METER-7139 | 0 | 1
+AIRTUBE-30CM-300METER-7137 | 0 | 1
+AIRTUBE-60CM-50METER | 0 | 1
