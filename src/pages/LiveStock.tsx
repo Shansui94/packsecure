@@ -38,7 +38,7 @@ const LiveStock: React.FC = () => {
             const { data, error } = await supabase
                 .from('v2_inventory_view')
                 .select('sku, name, type, uom, current_stock, last_updated')
-                .order('type', { ascending: true })
+                .ilike('sku', 'BW-%')
                 .order('sku', { ascending: true });
 
             if (error) throw error;
@@ -153,8 +153,8 @@ const LiveStock: React.FC = () => {
                                 key={t}
                                 onClick={() => setTypeFilter(t)}
                                 className={`px-3 py-2 rounded-lg text-xs font-bold uppercase transition-all ${typeFilter === t
-                                        ? 'bg-cyan-500/20 text-cyan-400 border border-cyan-500/30'
-                                        : 'bg-white/5 text-gray-500 border border-white/5 hover:text-white'
+                                    ? 'bg-cyan-500/20 text-cyan-400 border border-cyan-500/30'
+                                    : 'bg-white/5 text-gray-500 border border-white/5 hover:text-white'
                                     }`}
                             >
                                 {t === 'All' ? 'All Types' : (TYPE_LABEL[t] || t)}
