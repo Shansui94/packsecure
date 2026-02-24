@@ -481,7 +481,6 @@ const ProductionControl: React.FC<ProductionControlProps> = ({ user, jobs = [] }
     const [pinCode, setPinCode] = useState("");
     const [loginError, setLoginError] = useState("");
 
-    // PIN Handlers
     const handlePinPress = (num: number) => {
         if (pinCode.length < 4) {
             const newPin = pinCode + num;
@@ -500,12 +499,12 @@ const ProductionControl: React.FC<ProductionControlProps> = ({ user, jobs = [] }
     const verifyPin = async (code: string) => {
         setLoginError("");
         try {
-            // Check sys_users_v2 for this PIN
+            // 用 employee_id（4位工号）查询操作员
             const { data } = await supabase
                 .from('sys_users_v2')
-                .select('id, name')
-                .eq('pin_code', code)
-                .eq('status', 'Active') // Ensure active
+                .select('id, name, employee_id')
+                .eq('employee_id', code)
+                .eq('status', 'Active')
                 .limit(1);
 
             if (data && data.length > 0) {
@@ -519,7 +518,7 @@ const ProductionControl: React.FC<ProductionControlProps> = ({ user, jobs = [] }
                         setIsLogoutMode(false);
                         setPinCode("");
                     } else {
-                        setLoginError("Wrong PIN for current user");
+                        setLoginError("Wrong ID for current operator");
                         setTimeout(() => setPinCode(""), 500);
                     }
                 } else {
@@ -530,8 +529,8 @@ const ProductionControl: React.FC<ProductionControlProps> = ({ user, jobs = [] }
                     setPinCode("");
                 }
             } else {
-                setLoginError("Invalid PIN");
-                setTimeout(() => setPinCode(""), 500); // Auto clear after visual feedback
+                setLoginError("ID not found / not active");
+                setTimeout(() => setPinCode(""), 500);
             }
         } catch (err) {
             setLoginError("System Error");
@@ -878,7 +877,7 @@ const ProductionControl: React.FC<ProductionControlProps> = ({ user, jobs = [] }
 
                             <div className="text-center mb-8">
                                 <h2 className="text-2xl font-black text-white mb-2">{isLogoutMode ? 'CLOCK OUT' : 'OPERATOR LOGIN'}</h2>
-                                <p className="text-gray-400 text-sm">Enter your 4-digit PIN code</p>
+                                <p className="text-gray-400 text-sm">输入 4 位工号 (Enter 4-digit Operator ID)</p>
                             </div>
 
                             {/* PIN DOTS */}
