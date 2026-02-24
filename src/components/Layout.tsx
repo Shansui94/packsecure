@@ -41,7 +41,7 @@ const Layout: React.FC<LayoutProps> = ({ children, activePage, setActivePage, us
 
     // Special User Check
     const isVivian = user?.email === 'diyadmin1111@gmail.com';
-    const isNeoson = user?.employeeId === '009' || user?.email === 'ericsoobaolin0219@gmail.com';
+    const isNeoson = user?.employeeId === '009' || user?.email === 'ericsoobaolin0219@gmail.com' || user?.email === 'neosonchun@gmail.com';
 
     useEffect(() => {
         if (user) {
@@ -182,6 +182,7 @@ const Layout: React.FC<LayoutProps> = ({ children, activePage, setActivePage, us
                         {/* SPECIAL VIEW FOR NEOSON (User 009) */}
                         {isNeoson && (
                             <NavGroup title="Neoson Workspace">
+                                <NavItem id="delivery-driver" icon={Package} label="My Delivery (货物)" />
                                 <NavItem id="order-summary" icon={FileBarChart} label="Daily Prep" />
                                 <NavItem id="maintenance" icon={Wrench} label="Maintenance Control" />
                                 <NavItem id="driver-leave" icon={Calendar} label="Apply Leave" />

@@ -156,13 +156,14 @@ function App() {
 
         let allowed = allowedPages[role] || [];
 
-        if (user.employeeId === '009') {
-            allowed = ['order-summary', 'maintenance', 'profile'];
-        }
-
         // --- SPECIAL USER OVERRIDE (Vivian) ---
         if (user.email === 'diyadmin1111@gmail.com') {
             allowed = [...allowed, 'order-summary', 'driver-management'];
+        }
+
+        // --- SPECIAL USER OVERRIDE (Neoson - Manager + Driver) ---
+        if (user.email === 'neosonchun@gmail.com') {
+            allowed = [...allowed, 'delivery-driver', 'delivery-history', 'driver-leave'];
         }
 
         const isAllowed = allowed.includes('*') || allowed.includes(activePage);
@@ -171,7 +172,6 @@ function App() {
             console.warn(`Access Denied: ${role} tried to access ${activePage}. Redirecting...`);
             if (activePage === 'login') return; // Allow login page
 
-            if (user.employeeId === '009') setActivePage('order-summary'); // Special redirect
             else if (allowed.includes('construction')) setActivePage('construction');
             else if (role === 'Operator' || role === 'Device') setActivePage('scanner');
             else if (role === 'Driver') setActivePage('delivery-driver');
