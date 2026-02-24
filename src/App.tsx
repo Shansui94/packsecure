@@ -54,6 +54,10 @@ import { Session } from '@supabase/supabase-js';
 function App() {
     const [isLoggedIn, setIsLoggedIn] = useState<boolean>(false);
     const [user, setUser] = useState<User | null>(null);
+    // IoT 模式：访问 #/production/... 或设备已绑定机器时，绕过 Supabase 登录
+    const [isIoTMode, setIsIoTMode] = useState<boolean>(() => {
+        return !!localStorage.getItem('device_machine_id') || window.location.hash.startsWith('#/production/');
+    });
     const [activePage, setActivePage] = useState<string>(() => {
         // Kiosk mode: if this device is bound to a machine, always start on production screen
         if (localStorage.getItem('device_machine_id')) return 'scanner';
@@ -111,6 +115,7 @@ function App() {
                     sessionStorage.setItem('selectedMachine', machineId);
                     // Persist permanently so bookmark / home-screen shortcut auto-binds on every visit
                     localStorage.setItem('device_machine_id', machineId);
+                    setIsIoTMode(true); // 标记为 IoT 模式，绕过登录
                     setActivePage('scanner');
                 }
             }
@@ -508,6 +513,14 @@ function App() {
     }
 
     if (!isLoggedIn) {
+        // IoT 模式：设备通过 #/production/... 访问，直接显示生产控制页（含 PIN 验证）
+        if (isIoTMode) {
+            return (
+                <ErrorBoundary>
+                    <ProductionControl user={null} jobs={[]} />
+                </ErrorBoundary>
+            );
+        }
         if (activePage === 'register') {
             return (
                 <ErrorBoundary>
@@ -614,10 +627,12 @@ function App() {
             await supabase.auth.signOut();
             setUser(null);
             setIsLoggedIn(false);
+            setIsIoTMode(false);
             setActivePage('dashboard');
             // Clear machine session & persistence
             sessionStorage.removeItem('selectedMachine');
             localStorage.removeItem('selectedMachine');
+            localStorage.removeItem('device_machine_id'); // 清除 IoT 绑定
             localStorage.removeItem('lastActivePage'); // Force clean state on next login
         } catch (error) {
             console.error("Error logging out:", error);

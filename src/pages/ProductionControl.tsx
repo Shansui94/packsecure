@@ -246,10 +246,10 @@ const ProductionLane: React.FC<ProductionLaneProps> = ({ laneId, machineMetadata
                         )}
                         <div className={`grid gap-3 h-full ${canProduceDL ? 'grid-cols-2' : 'grid-cols-2'}`}>
                             {[
-                                { layer: 'Single', mat: 'Clear', label: '1L Clear', img: '/assets/product-types/single-clear.png', border: 'border-cyan-500/30' },
-                                { layer: 'Single', mat: 'Black', label: '1L Black', img: '/assets/product-types/double-black.png', border: 'border-gray-600' },
-                                { layer: 'Double', mat: 'Clear', label: '2L Clear', img: '/assets/product-types/double-clear.png', border: 'border-blue-400', glow: true },
-                                { layer: 'Double', mat: 'Black', label: '2L Black', img: '/assets/product-types/single-black.png', border: 'border-slate-500' },
+                                { layer: 'Single', mat: 'Clear', label: 'SL Clear', img: '/assets/product-types/single-clear.png', border: 'border-cyan-500/30' },
+                                { layer: 'Single', mat: 'Black', label: 'SL Black', img: '/assets/product-types/double-black.png', border: 'border-gray-600' },
+                                { layer: 'Double', mat: 'Clear', label: 'DL Clear', img: '/assets/product-types/double-clear.png', border: 'border-blue-400', glow: true },
+                                { layer: 'Double', mat: 'Black', label: 'DL Black', img: '/assets/product-types/single-black.png', border: 'border-slate-500' },
                             ].filter(item => canProduceDL || item.layer === 'Single')
                                 .map((item, idx) => (
                                     <button

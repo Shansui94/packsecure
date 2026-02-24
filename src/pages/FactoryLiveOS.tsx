@@ -15,7 +15,7 @@ interface MachineCard {
     iot_mac: string | null;
     // Live
     status: 'Online' | 'Offline';
-    isProducing: boolean;        // has production log < 6 min ago
+    isProducing: boolean;        // has an active SKU loaded in machine_active_products
     today_count: number;
     current_sku: string | null;
     // Health
@@ -50,11 +50,11 @@ const timeSince = (iso: string | null): string => {
     return `${Math.floor(hrs / 24)}d ago`;
 };
 
-const resolveStatus = (heartbeatIso: string | null, lastProdIso: string | null): { status: MachineCard['status']; isProducing: boolean } => {
+const resolveStatus = (heartbeatIso: string | null, hasActiveSku: boolean): { status: MachineCard['status']; isProducing: boolean } => {
     const now = Date.now();
     const hbDiff = heartbeatIso ? now - new Date(heartbeatIso).getTime() : Infinity;
-    const prodDiff = lastProdIso ? now - new Date(lastProdIso).getTime() : Infinity;
-    const isProducing = prodDiff < 360000;                          // production < 6 min ago
+    // A machine is considered producing if it has an active SKU loaded
+    const isProducing = hasActiveSku;
     const status: MachineCard['status'] = hbDiff < 180000 ? 'Online' : 'Offline'; // heartbeat < 3 min = Online
     return { status, isProducing };
 };
@@ -194,7 +194,7 @@ const MachineCardView = ({ machine, onClick }: { machine: MachineCard; onClick: 
         >
             {/* Background glow */}
             <div className={`absolute top-0 right-0 w-32 h-32 rounded-full blur-3xl opacity-10 ${machine.isProducing ? 'bg-emerald-500' :
-                    machine.status === 'Online' ? 'bg-cyan-500' : 'bg-transparent'
+                machine.status === 'Online' ? 'bg-cyan-500' : 'bg-transparent'
                 }`} />
 
             {/* Top Row */}
@@ -326,7 +326,7 @@ const FactoryLiveOS = () => {
                 type: m.type,
                 last_heartbeat: iotMap[m.machine_id]?.last_heartbeat || null,
                 iot_mac: iotMap[m.machine_id]?.mac || null,
-                ...(() => { const r = resolveStatus(iotMap[m.machine_id]?.last_heartbeat || null, lastProdMap[m.machine_id] || null); return { status: r.status, isProducing: r.isProducing }; })(),
+                ...(() => { const r = resolveStatus(iotMap[m.machine_id]?.last_heartbeat || null, !!activeMap[m.machine_id]); return { status: r.status, isProducing: r.isProducing }; })(),
                 today_count: countMap[m.machine_id] || 0,
                 current_sku: activeMap[m.machine_id] || null,
                 reboot_count: rebootMap[m.machine_id] || 0,
