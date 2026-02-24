@@ -156,8 +156,10 @@ const DeliveryOrderManagement: React.FC = () => {
 
     // New Order Form State
     const [selectedDriverId, setSelectedDriverId] = useState('');
-    const [newOrderDate, setNewOrderDate] = useState(''); // Order Date State
-    const [newOrderDeliveryDate, setNewOrderDeliveryDate] = useState('');
+    const getTodayStr = () => new Date().toLocaleDateString('en-CA'); // YYYY-MM-DD 本地时间
+    const getTomorrowStr = () => { const d = new Date(); d.setDate(d.getDate() + 1); return d.toLocaleDateString('en-CA'); };
+    const [newOrderDate, setNewOrderDate] = useState(getTodayStr); // 默认今天
+    const [newOrderDeliveryDate, setNewOrderDeliveryDate] = useState(getTomorrowStr); // 默认明天
     const [newOrderItems, setNewOrderItems] = useState<SalesOrder['items']>([]);
     const [orderCustomer, setOrderCustomer] = useState('');
     const [newOrderAddress, setNewOrderAddress] = useState('');
@@ -840,11 +842,11 @@ const DeliveryOrderManagement: React.FC = () => {
 
     const handleCloseModal = () => {
         setIsCreateModalOpen(false);
-        setEditingOrderId(null); setNewOrderDate('');
+        setEditingOrderId(null); setNewOrderDate(getTodayStr());
         setSelectedDriverId('');
         setOrderCustomer('');
         setNewOrderAddress('');
-        setNewOrderDeliveryDate('');
+        setNewOrderDeliveryDate(getTomorrowStr());
         setNewOrderItems([]);
         setNewOrderNotes(''); // Reset Notes
     };
