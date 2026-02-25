@@ -951,16 +951,16 @@ const DeliveryOrderManagement: React.FC = () => {
                 <div>
                     <h1 className="text-3xl font-black text-white italic flex items-center gap-2">
                         <div className="bg-gradient-to-r from-blue-600 to-cyan-500 w-3 h-10 rounded-full"></div>
-                        Delivery Order Management
+                        Trip Management
                     </h1>
-                    <p className="text-slate-400 mt-1 font-medium">Assign orders, track shipments, and manage fleet.</p>
+                    <p className="text-slate-400 mt-1 font-medium">Assign trips, track deliveries, and manage fleet.</p>
                 </div>
                 <button
                     onClick={() => setIsCreateModalOpen(true)}
                     className="group relative bg-gradient-to-r from-blue-600 to-blue-500 hover:from-blue-500 hover:to-blue-400 text-white px-6 py-3 rounded-xl flex items-center gap-3 font-bold shadow-xl shadow-blue-900/20 transition-all active:scale-95"
                 >
                     <Plus size={20} />
-                    New Order
+                    New Trip
                 </button>
             </div>
 
@@ -1312,7 +1312,7 @@ const DeliveryOrderManagement: React.FC = () => {
                                 {driverOrders.length === 0 && (
                                     <div className="h-40 flex flex-col items-center justify-center text-slate-700 opacity-50">
                                         <Truck size={40} className="mb-3" />
-                                        <span className="text-xs font-bold uppercase tracking-wider">No Active Orders</span>
+                                        <span className="text-xs font-bold uppercase tracking-wider">No Trips</span>
                                     </div>
                                 )}
                             </div>
@@ -1331,9 +1331,9 @@ const DeliveryOrderManagement: React.FC = () => {
                                 <div>
                                     <h2 className="text-xl font-bold text-slate-100 flex items-center gap-2">
                                         {editingOrderId ? <FileText className="text-blue-400" /> : <Plus className="text-blue-400" />}
-                                        {editingOrderId ? 'Edit Order' : 'Create New Order'}
+                                        {editingOrderId ? 'Edit Trip' : 'Create New Trip'}
                                     </h2>
-                                    <p className="text-xs text-slate-500 mt-1">Manage order details and items.</p>
+                                    <p className="text-xs text-slate-500 mt-1">Manage trip details and items.</p>
                                 </div>
                                 <div className="flex items-center gap-2">
                                     <button onClick={handleCloseModal} className="p-2 hover:bg-slate-800 rounded-lg text-slate-500 hover:text-white transition-all">
@@ -1366,7 +1366,7 @@ const DeliveryOrderManagement: React.FC = () => {
                                         <div className="grid grid-cols-2 gap-4">
                                             <div>
                                                 <label className="block text-[10px] font-black text-slate-600 uppercase mb-2 tracking-widest flex items-center gap-2">
-                                                    <Calendar size={12} /> Order Date
+                                                    <Calendar size={12} /> Trip Date
                                                 </label>
                                                 <div className="relative group">
                                                     <input
@@ -1404,12 +1404,12 @@ const DeliveryOrderManagement: React.FC = () => {
                                     </div>
                                 </div>
 
-                                {/* BATCH ORDER NOTE */}
+                                {/* TRIP NOTE */}
                                 <div>
-                                    <label className="block text-xs font-bold text-slate-500 uppercase mb-2">Order Notes (Batch Remark)</label>
+                                    <label className="block text-xs font-bold text-slate-500 uppercase mb-2">Trip Notes</label>
                                     <textarea
                                         rows={2}
-                                        placeholder="Enter general notes for this order..."
+                                        placeholder="Enter notes for this trip..."
                                         className="w-full bg-slate-900 border border-slate-800 rounded-xl px-4 py-3 text-sm text-slate-300 focus:border-blue-500/50 outline-none placeholder:text-slate-600 resize-none"
                                         value={newOrderNotes}
                                         onChange={e => setNewOrderNotes(e.target.value)}
@@ -1421,7 +1421,7 @@ const DeliveryOrderManagement: React.FC = () => {
                                 {/* Section 2: Items */}
                                 <div>
                                     <h3 className="text-sm font-bold text-slate-400 uppercase tracking-wider mb-4 flex items-center gap-2">
-                                        <Box size={16} /> Order Items
+                                        <Box size={16} /> Trip Items
                                     </h3>
 
                                     {/* Item List Layout */}

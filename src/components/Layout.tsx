@@ -194,7 +194,7 @@ const Layout: React.FC<LayoutProps> = ({ children, activePage, setActivePage, us
                         {isVivian && (
                             <NavGroup title="Vivian Workspace">
                                 <NavItem id="livestock" icon={BarChart3} label="Live Stock" roles={['SuperAdmin', 'Admin', 'Manager']} />
-                                <NavItem id="delivery" icon={Truck} label="Delivery Orders" roles={['SuperAdmin', 'Admin', 'Manager']} />
+                                <NavItem id="delivery" icon={Truck} label="Trip Management" roles={['SuperAdmin', 'Admin', 'Manager']} />
                                 <NavItem id="order-summary" icon={FileBarChart} label="Daily Prep" roles={['SuperAdmin', 'Admin', 'Manager']} />
                                 <NavItem id="products" icon={Package} label="Product Library" roles={['SuperAdmin', 'Admin', 'Manager']} />
                                 <NavItem id="maintenance" icon={Wrench} label="Maintenance Control" roles={['SuperAdmin', 'Admin', 'Manager']} />
@@ -222,7 +222,7 @@ const Layout: React.FC<LayoutProps> = ({ children, activePage, setActivePage, us
                                 </NavGroup>
 
                                 <NavGroup title="Logistics">
-                                    <NavItem id="delivery" icon={Truck} label="Delivery Orders" roles={['SuperAdmin', 'Admin', 'Manager']} />
+                                    <NavItem id="delivery" icon={Truck} label="Trip Management" roles={['SuperAdmin', 'Admin', 'Manager']} />
                                     <NavItem id="order-summary" icon={FileBarChart} label="Daily Prep" roles={['SuperAdmin', 'Admin', 'Manager']} />
                                     <NavItem id="maintenance" icon={Wrench} label="Maintenance Control" roles={['SuperAdmin', 'Admin', 'Manager']} />
                                     <NavItem id="lorry-management" icon={Truck} label="Lorry Fleet" roles={['SuperAdmin', 'Admin', 'Manager']} />

@@ -188,7 +188,7 @@ const OrderSummary: React.FC<OrderSummaryProps> = ({ user: _user }) => {
                 <div className="flex flex-col md:flex-row justify-between items-start md:items-center mb-8 gap-4">
                     <div>
                         <h1 className="text-2xl font-bold text-white mb-1">Daily Prep List</h1>
-                        <p className="text-slate-400 text-sm">Drag cards to reassign drivers or reorder trip sequence</p>
+                        <p className="text-slate-400 text-sm">Drag trips to reassign drivers or reorder sequence</p>
                     </div>
                     <div className="flex items-center gap-2 bg-[#1a1a1e] border border-white/10 p-1.5 rounded-xl">
                         <Calendar className="text-gray-500 ml-2" size={18} />
