@@ -169,9 +169,11 @@ const DeliveryOrderManagement: React.FC = () => {
     const [selectedV2Item, setSelectedV2Item] = useState<V2Item | null>(null);
     const [currentItemLoc, setCurrentItemLoc] = useState('SPD'); // New Location state
 
-    // Reassign Driver State
     const [isReassignModalOpen, setIsReassignModalOpen] = useState(false);
     const [reassignOrder, setReassignOrder] = useState<SalesOrder | null>(null);
+
+    // Submission guard — prevents double-click duplicate trips
+    const [isSubmitting, setIsSubmitting] = useState(false);
 
     // Split Order State
     const [isSplitModalOpen, setIsSplitModalOpen] = useState(false);
@@ -732,10 +734,10 @@ const DeliveryOrderManagement: React.FC = () => {
     */
 
     const handleSubmitOrder = async () => {
-
-        // if (!orderCustomer.trim()) return alert("Enter Customer Name");  <-- Removed validation
+        if (isSubmitting) return; // 🛡️ Prevent double submission
         if (newOrderItems.length === 0) return alert("Add at least one item");
 
+        setIsSubmitting(true);
         try {
             // Assign default customer if empty (since input is hidden)
             const finalCustomer = orderCustomer.trim() || "General Customer";
@@ -837,6 +839,8 @@ const DeliveryOrderManagement: React.FC = () => {
 
         } catch (err: any) {
             alert("Error: " + err.message);
+        } finally {
+            setIsSubmitting(false);
         }
     };
 
@@ -1560,9 +1564,14 @@ const DeliveryOrderManagement: React.FC = () => {
                                 <button onClick={handleCloseModal} className="px-6 py-2 rounded-xl text-slate-400 hover:text-white font-bold transition-colors">Cancel</button>
                                 <button
                                     onClick={handleSubmitOrder}
-                                    className="px-8 py-2 bg-gradient-to-r from-blue-600 to-blue-500 hover:from-blue-500 hover:to-blue-400 text-white rounded-xl font-bold shadow-lg shadow-blue-900/30 transition-all active:scale-95"
+                                    disabled={isSubmitting}
+                                    className="px-8 py-2 bg-gradient-to-r from-blue-600 to-blue-500 hover:from-blue-500 hover:to-blue-400 disabled:opacity-60 disabled:cursor-not-allowed text-white rounded-xl font-bold shadow-lg shadow-blue-900/30 transition-all active:scale-95 flex items-center gap-2"
                                 >
-                                    {editingOrderId ? 'Save Changes' : 'Confirm Order'}
+                                    {isSubmitting ? (
+                                        <><span className="w-4 h-4 border-2 border-white/30 border-t-white rounded-full animate-spin" />Saving...</>
+                                    ) : (
+                                        editingOrderId ? 'Save Changes' : 'Confirm Trip'
+                                    )}
                                 </button>
                             </div>
                         </div>
