@@ -148,37 +148,35 @@ ${diffStat}
 
 只回复 JSON，不要 markdown 代码块，不要额外文字。
 `;
-
-    const resp = await fetch(
-        `https://generativelanguage.googleapis.com/v1beta/models/gemini-pro:generateContent?key=${GEMINI_API_KEY}`,
-        {
-            method: 'POST',
-            headers: { 'Content-Type': 'application/json' },
-            body: JSON.stringify({
-                contents: [{ parts: [{ text: prompt }] }],
-                generationConfig: { temperature: 0.4, maxOutputTokens: 1500 }
-            })
-        }
-    );
-
-    if (!resp.ok) {
-        const err = await resp.text();
-        throw new Error(`Gemini API error ${resp.status}: ${err}`);
-    }
-
-    const data = await resp.json();
-    const text = data.candidates?.[0]?.content?.parts?.[0]?.text || '{}';
+    // Replace raw fetch with @google/genai SDK
+    const { GoogleGenAI } = await import('@google/genai');
+    const ai = new GoogleGenAI({ apiKey: GEMINI_API_KEY });
 
     try {
-        // Strip any accidental markdown fences
-        const clean = text.replace(/```json\n?/g, '').replace(/```\n?/g, '').trim();
-        return { parsed: JSON.parse(clean), raw: text };
-    } catch {
-        console.warn('⚠️ Could not parse Gemini JSON, using raw text');
-        return {
-            parsed: { summary: text.substring(0, 500), changes: [], risks: [], recommendations: [], mood: 'quiet' },
-            raw: text
-        };
+        const response = await ai.models.generateContent({
+            model: 'gemini-2.5-flash',
+            contents: prompt,
+            config: {
+                temperature: 0.4,
+                maxOutputTokens: 1500,
+            }
+        });
+
+        const text = response.text || "{}";
+
+        try {
+            // Strip any accidental markdown fences
+            const clean = text.replace(/```json\n?/g, '').replace(/```\n?/g, '').trim();
+            return { parsed: JSON.parse(clean), raw: text };
+        } catch {
+            console.warn('⚠️ Could not parse Gemini JSON, using raw text');
+            return {
+                parsed: { summary: text.substring(0, 500), changes: [], risks: [], recommendations: [], mood: 'quiet' },
+                raw: text
+            };
+        }
+    } catch (apiErr) {
+        throw new Error(`Gemini API error: ${apiErr.message}`);
     }
 }
 
