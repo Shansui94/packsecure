@@ -18,9 +18,9 @@ interface MachineCard {
     isProducing: boolean;        // has an active SKU loaded in machine_active_products
     today_count: number;
     current_sku: string | null;
-    // Health
+    total_count: number;
     reboot_count: number;
-    gap_count: number;
+    gaps: { start: string, end: string, duration_min: number }[];
 }
 
 interface ProductionLogRow {
@@ -113,7 +113,7 @@ const DetailPanel = ({ machine, onClose }: { machine: MachineCard; onClose: () =
                     {[
                         { label: 'Today', value: machine.today_count.toLocaleString(), unit: 'rolls' },
                         { label: 'Reboots', value: machine.reboot_count, unit: 'times' },
-                        { label: 'Gaps', value: machine.gap_count, unit: 'detected' },
+                        { label: 'Uptime', value: machine.gaps.length === 0 ? '100%' : `${machine.gaps.length} gaps`, unit: 'today' },
                     ].map(s => (
                         <div key={s.label} className="bg-[#0a0a0f] px-4 py-3">
                             <div className="text-[10px] text-gray-500 uppercase tracking-widest">{s.label}</div>
@@ -144,6 +144,28 @@ const DetailPanel = ({ machine, onClose }: { machine: MachineCard; onClose: () =
                         </div>
                     )}
                 </div>
+
+                {/* Downtime Analysis timeline */}
+                {machine.gaps && machine.gaps.length > 0 && (
+                    <div className="px-6 py-4 bg-orange-500/5 border-b border-orange-500/10">
+                        <div className="flex items-center gap-2 mb-3">
+                            <AlertTriangle size={14} className="text-orange-500" />
+                            <span className="text-[10px] text-orange-500 uppercase tracking-widest font-bold">Downtime Analysis</span>
+                        </div>
+                        <div className="space-y-2">
+                            {machine.gaps.map((g, i) => (
+                                <div key={i} className="flex items-center justify-between bg-black/40 rounded-lg px-3 py-2 border border-white/5">
+                                    <div className="text-xs font-mono text-gray-400">
+                                        {g.start} <span className="text-gray-600">→</span> {g.end}
+                                    </div>
+                                    <div className="text-xs font-bold text-orange-400">
+                                        {g.duration_min} min
+                                    </div>
+                                </div>
+                            ))}
+                        </div>
+                    </div>
+                )}
 
                 {/* Logs */}
                 <div className="flex-1 overflow-y-auto custom-scrollbar">
@@ -255,12 +277,9 @@ const MachineCardView = ({ machine, onClick }: { machine: MachineCard; onClick: 
                     <span className="text-[10px] text-gray-500">{timeSince(machine.last_heartbeat)}</span>
                 </div>
                 <div className="flex items-center gap-2">
-                    {(machine.reboot_count > 0 || machine.gap_count > 0) && (
-                        <span className="flex items-center gap-1 text-[10px] text-amber-400">
-                            <AlertTriangle size={10} />
-                            {machine.reboot_count + machine.gap_count}
-                        </span>
-                    )}
+                    <span className={`text-[10px] font-bold ${machine.reboot_count > 0 ? 'text-orange-400' : 'text-gray-600'}`}>
+                        {machine.reboot_count === 0 ? 'No alerts' : `${machine.reboot_count} alerts`}
+                    </span>
                     <ChevronRight size={14} className="text-gray-600 group-hover:text-white group-hover:translate-x-0.5 transition-all" />
                 </div>
             </div>
@@ -306,7 +325,7 @@ const FactoryLiveOS = () => {
         const countMap: Record<string, number> = {};
         const lastProdMap: Record<string, string> = {};
         const rebootMap: Record<string, number> = {};
-        const gapMap: Record<string, number> = {};
+        const gapMap: Record<string, { start: string, end: string, duration_min: number }[]> = {};
         const lastTimeMap: Record<string, number> = {};
 
         (logsRes.data || []).sort((a: any, b: any) => new Date(a.created_at).getTime() - new Date(b.created_at).getTime())
@@ -323,7 +342,18 @@ const FactoryLiveOS = () => {
 
                 if (count > 0) countMap[id] = (countMap[id] || 0) + count;
                 else rebootMap[id] = (rebootMap[id] || 0) + 1;
-                if (lastTimeMap[id] && (t - lastTimeMap[id]) > 600000) gapMap[id] = (gapMap[id] || 0) + 1;
+
+                if (lastTimeMap[id]) {
+                    const diffMin = Math.round((t - lastTimeMap[id]) / 60000);
+                    if (diffMin > 10) {
+                        if (!gapMap[id]) gapMap[id] = [];
+                        gapMap[id].unshift({
+                            start: new Date(lastTimeMap[id]).toLocaleTimeString('en-MY', { hour: '2-digit', minute: '2-digit' }),
+                            end: new Date(t).toLocaleTimeString('en-MY', { hour: '2-digit', minute: '2-digit' }),
+                            duration_min: diffMin
+                        });
+                    }
+                }
                 lastTimeMap[id] = t;
                 if (!lastProdMap[id] || t > new Date(lastProdMap[id]).getTime()) lastProdMap[id] = log.created_at;
             });
@@ -342,7 +372,8 @@ const FactoryLiveOS = () => {
                 today_count: countMap[m.machine_id] || 0,
                 current_sku: activeMap[m.machine_id] || null,
                 reboot_count: rebootMap[m.machine_id] || 0,
-                gap_count: gapMap[m.machine_id] || 0,
+                gaps: gapMap[m.machine_id] || [],
+                total_count: 0,
             }));
 
         setMachines(cards);
@@ -369,7 +400,7 @@ const FactoryLiveOS = () => {
     const onlineCount = machines.filter(m => m.status === 'Online').length;
     const producingCount = machines.filter(m => m.isProducing).length;
     const totalRolls = machines.reduce((s, m) => s + m.today_count, 0);
-    const alertCount = machines.reduce((s, m) => s + m.reboot_count + m.gap_count, 0);
+    const alertCount = machines.reduce((s, m) => s + m.reboot_count, 0);
 
     return (
         <div className="min-h-screen bg-[#070710] text-white flex flex-col">
