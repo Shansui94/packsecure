@@ -45,7 +45,9 @@ jobs:
           SUPABASE_URL: ${{ secrets.SUPABASE_URL }}
           SUPABASE_SERVICE_KEY: ${{ secrets.SUPABASE_SERVICE_KEY }}
           REPORT_DATE: ${{ env.REPORT_DATE }}
-        run: node scripts/generate-dev-log.mjs
+        run: |
+          npm ci
+          node scripts/generate-dev-log.mjs
 
       - name: Log success
         run: echo "✅ Dev log generated for ${{ env.REPORT_DATE }}"
