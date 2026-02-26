@@ -20,7 +20,8 @@ import {
     Wrench,
     Cpu,
     FileBarChart,
-    ArrowUpDown
+    ArrowUpDown,
+    Activity
 } from 'lucide-react';
 import { supabase } from '../services/supabase';
 
@@ -237,6 +238,7 @@ const Layout: React.FC<LayoutProps> = ({ children, activePage, setActivePage, us
                                     <NavItem id="operators" icon={Users} label="操作员管理" roles={['SuperAdmin', 'Admin', 'Manager']} />
                                     <NavItem id="reports" icon={FileBarChart} label="EXECUTIVE REPORTS" roles={['SuperAdmin', 'Manager']} />
                                     <NavItem id="iot" icon={Cpu} label="IOT SETTINGS" roles={['SuperAdmin', 'Admin', 'Manager']} />
+                                    <NavItem id="dev-log" icon={Activity} label="Dev Log" roles={['SuperAdmin', 'Admin']} />
                                     <div className="h-4" />
                                     <NavItem id="claims" icon={FileCheck} label="Claims" roles={['SuperAdmin', 'Admin', 'Manager']} />
                                 </NavGroup>

@@ -1,0 +1,51 @@
+name: 📋 Daily Dev Log
+
+on:
+  schedule:
+    # 11:00 PM MYT = 15:00 UTC
+    - cron: '0 15 * * *'
+  workflow_dispatch:   # Allow manual trigger for testing
+    inputs:
+      date:
+        description: 'Report date (YYYY-MM-DD, leave empty for today)'
+        required: false
+        default: ''
+
+jobs:
+  generate-dev-log:
+    name: Generate AI Dev Log
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: Checkout repository (full history)
+        uses: actions/checkout@v4
+        with:
+          fetch-depth: 0  # Need full history for git log
+          token: ${{ secrets.GH_TOKEN }}
+
+      - name: Setup Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: '20'
+
+      - name: Set report date
+        id: date
+        run: |
+          if [ -n "${{ github.event.inputs.date }}" ]; then
+            echo "REPORT_DATE=${{ github.event.inputs.date }}" >> $GITHUB_ENV
+          else
+            # Use MYT (UTC+8)
+            echo "REPORT_DATE=$(TZ=Asia/Kuala_Lumpur date +%Y-%m-%d)" >> $GITHUB_ENV
+          fi
+          echo "Report date: $REPORT_DATE"
+
+      - name: Run Dev Log Generator
+        env:
+          GEMINI_API_KEY: ${{ secrets.GEMINI_API_KEY }}
+          SUPABASE_URL: ${{ secrets.SUPABASE_URL }}
+          SUPABASE_SERVICE_KEY: ${{ secrets.SUPABASE_SERVICE_KEY }}
+          REPORT_DATE: ${{ env.REPORT_DATE }}
+        run: node scripts/generate-dev-log.mjs
+
+      - name: Log success
+        run: echo "✅ Dev log generated for ${{ env.REPORT_DATE }}"

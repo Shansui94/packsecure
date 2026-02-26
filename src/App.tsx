@@ -40,6 +40,7 @@ import Tasks from './pages/Tasks';
 import FactoryLiveOS from './pages/FactoryLiveOS';
 import StockMovement from './pages/StockMovement';
 import OperatorManagement from './pages/OperatorManagement';
+import DevLog from './pages/DevLog';
 
 import { User, UserRole, InventoryItem, ProductionLog as ProductionLogType, JobOrder } from './types';
 import AIAgentWidget from './components/AIAgentWidget';
@@ -150,7 +151,7 @@ function App() {
         // Define allowable pages per role
         const allowedPages: Record<string, string[]> = {
             'SuperAdmin': ['*'], // The Only One with Full Access
-            'Admin': ['profile', 'construction', 'factory-live-os', 'dashboard', 'data-v2', 'customer-import', 'universal-intake', 'scanner', 'jobs', 'livestock', 'inventory', 'recipes', 'products', 'delivery', 'order-summary', 'dispatch', 'loading-dock', 'production', 'report-history', 'users', 'hr', 'claims', 'simple-stock', 'maintenance', 'lorry-management', 'iot', 'driver-management', 'operators'],
+            'Admin': ['profile', 'construction', 'factory-live-os', 'dashboard', 'data-v2', 'customer-import', 'universal-intake', 'scanner', 'jobs', 'livestock', 'inventory', 'recipes', 'products', 'delivery', 'order-summary', 'dispatch', 'loading-dock', 'production', 'report-history', 'users', 'hr', 'claims', 'simple-stock', 'maintenance', 'lorry-management', 'iot', 'driver-management', 'operators', 'dev-log'],
             'Manager': ['profile', 'construction', 'factory-live-os', 'dashboard', 'data-v2', 'customer-import', 'universal-intake', 'scanner', 'jobs', 'livestock', 'inventory', 'recipes', 'products', 'delivery', 'order-summary', 'dispatch', 'loading-dock', 'production', 'report-history', 'hr', 'claims', 'simple-stock', 'maintenance', 'lorry-management', 'iot', 'driver-management', 'operators'],
             'Driver': ['delivery-driver', 'delivery-history', 'driver-leave', 'lorry-service', 'claims', 'profile'],
             'Operator': ['scanner', 'profile'],
@@ -613,6 +614,8 @@ function App() {
                 return <FactoryLiveOS />;
             case 'operators':
                 return <OperatorManagement />;
+            case 'dev-log':
+                return <DevLog />;
             case 'notes':
                 return <Notes user={user} />;
             case 'tasks':
