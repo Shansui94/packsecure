@@ -1,0 +1,43 @@
+name: Build ESP32 Firmware
+
+on:
+  push:
+    paths:
+      - 'firmware/factory_monitor/**'
+  workflow_dispatch:
+
+jobs:
+  build:
+    runs-on: ubuntu-latest
+
+    steps:
+    - name: Checkout code
+      uses: actions/checkout@v3
+
+    - name: Install Arduino CLI
+      uses: arduino/setup-arduino-cli@v1.1.2
+
+    - name: Configure Arduino CLI
+      run: |
+        arduino-cli config init
+        arduino-cli core update-index
+        # Add ESP32 core
+        arduino-cli config add board_manager.additional_urls https://raw.githubusercontent.com/espressif/arduino-esp32/gh-pages/package_esp32_dev_index.json
+        arduino-cli core update-index
+        arduino-cli core install esp32:esp32
+        # Install required libraries
+        arduino-cli lib install ArduinoJson
+        # Note: WiFi, WebServer, Update, HTTPClient, ESPmDNS are built-in for ESP32
+
+    - name: Compile Sketch
+      run: |
+        arduino-cli compile --fqbn esp32:esp32:esp32doit-devkit-v1 firmware/factory_monitor/factory_monitor.ino --output-dir build
+
+    - name: Commit and Push binary
+      run: |
+        git config --global user.name 'github-actions[bot]'
+        git config --global user.email 'github-actions[bot]@users.noreply.github.com'
+        cp build/factory_monitor.ino.bin firmware/factory_monitor/firmware.bin
+        git add firmware/factory_monitor/firmware.bin
+        # Only commit if there are changes
+        git diff --quiet && git diff --staged --quiet || (git commit -m "chore(firmware): auto-build ESP32 OTA v3.2.0 binary [skip ci]" && git push)
