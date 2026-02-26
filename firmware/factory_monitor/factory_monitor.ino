@@ -335,13 +335,31 @@ void handleNetworkQueue() {
   if (alarmQueue.empty() || WiFi.status() != WL_CONNECTED)
     return;
   static unsigned long lastUp = 0;
-  if (millis() - lastUp < 2000)
+  if (millis() - lastUp <
+      3000) // Increase interval to 3s to avoid Vercel rate limits
     return;
+
   lastUp = millis();
-  QueueItem item = alarmQueue.front();
-  if (sendToSupabase(item.count, item.timestamp)) {
-    alarmQueue.erase(alarmQueue.begin());
+
+  // Aggregate all pending cuts into a single payload if there's a backlog
+  int totalCount = 0;
+  for (const auto &item : alarmQueue) {
+    totalCount += item.count;
+  }
+
+  // We use the timestamp of the first item
+  time_t timestamp = alarmQueue.front().timestamp;
+
+  Serial.printf("Attempting to send batch of %d counts to Supabase...\n",
+                totalCount);
+
+  if (sendToSupabase(totalCount, timestamp)) {
+    // Only if SUCCESSFUL (HTTP 200), we clear the entire queue
+    alarmQueue.clear();
     saveQueue();
+    Serial.println("Batch send SUCCESS! Queue cleared.");
+  } else {
+    Serial.println("Batch send FAILED. Keeping data in flash cache.");
   }
 }
 
@@ -349,15 +367,30 @@ bool sendToSupabase(int count, time_t timestamp) {
   HTTPClient http;
   WiFiClientSecure client;
   client.setInsecure();
-  if (!http.begin(client, alarmApiUrl))
+
+  if (!http.begin(client, alarmApiUrl)) {
+    Serial.println("HTTP Begin failed.");
     return false;
-  http.setTimeout(3000);
+  }
+
+  http.setTimeout(10000); // 10s timeout to survive Vercel Cold Starts
   http.addHeader("Content-Type", "application/json");
+
   String json = "{\"machine_id\": \"" + String(machineId) +
                 "\", \"alarm_count\": " + String(count) + "}";
+
   int res = http.POST(json);
   http.end();
-  return (res >= 200 && res < 300) || (res >= 400 && res < 500);
+
+  Serial.printf("API Response Code: %d\n", res);
+
+  // STRICT CHECK: Only consider it delivered if Vercel says 200 OK.
+  // Previously, 4xx errors were considered "delivered" and deleted, causing
+  // data loss!
+  if (res == 200) {
+    return true;
+  }
+  return false;
 }
 
 // --- OTA 逻辑实现 ---
