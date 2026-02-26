@@ -29,6 +29,7 @@ interface ProductionLogRow {
     machine_id: string;
     product_sku: string | null;
     alarm_count: number;
+    lane_id?: string;
 }
 
 // ─── Helpers ──────────────────────────────────────────────────────────────────
@@ -70,7 +71,7 @@ const DetailPanel = ({ machine, onClose }: { machine: MachineCard; onClose: () =
         setLoading(true);
         const today = new Date(); today.setHours(0, 0, 0, 0);
         supabase.from('production_logs')
-            .select('id, created_at, machine_id, product_sku, alarm_count')
+            .select('id, created_at, machine_id, product_sku, alarm_count, lane_id')
             .eq('machine_id', machine.machine_id)
             .gte('created_at', today.toISOString())
             .order('created_at', { ascending: false })
@@ -168,7 +169,7 @@ const DetailPanel = ({ machine, onClose }: { machine: MachineCard; onClose: () =
                                         )}
                                     </div>
                                     <div className={`text-sm font-black ${log.alarm_count === 0 ? 'text-orange-400' : 'text-white'}`}>
-                                        {log.alarm_count === 0 ? '⚡ REBOOT' : `+${log.alarm_count}`}
+                                        {log.alarm_count === 0 ? '⚡ REBOOT' : `+${(log.lane_id === 'Unknown' && (log.machine_id.startsWith('N1') || log.machine_id.startsWith('N2'))) ? 1 : log.alarm_count}`}
                                     </div>
                                 </div>
                             ))}
@@ -286,7 +287,7 @@ const FactoryLiveOS = () => {
         const [machinesRes, iotRes, logsRes, activeRes] = await Promise.all([
             supabase.from('sys_machines_v2').select('machine_id, name, factory_id, base_width, type').order('factory_id'),
             supabase.from('iot_device_configs').select('mac_address, machine_id, last_heartbeat'),
-            supabase.from('production_logs').select('machine_id, alarm_count, created_at, product_sku').gte('created_at', todayISO),
+            supabase.from('production_logs').select('machine_id, alarm_count, created_at, product_sku, lane_id').gte('created_at', todayISO),
             supabase.from('machine_active_products').select('machine_id, product_sku'),
         ]);
 
@@ -309,7 +310,14 @@ const FactoryLiveOS = () => {
             .forEach((log: any) => {
                 const id = log.machine_id;
                 const t = new Date(log.created_at).getTime();
-                if (log.alarm_count > 0) countMap[id] = (countMap[id] || 0) + log.alarm_count;
+
+                // Patch for N1/N2 old firmware inserting +2
+                let count = log.alarm_count;
+                if (count === 2 && log.lane_id === 'Unknown' && (id.startsWith('N1') || id.startsWith('N2'))) {
+                    count = 1;
+                }
+
+                if (count > 0) countMap[id] = (countMap[id] || 0) + count;
                 else rebootMap[id] = (rebootMap[id] || 0) + 1;
                 if (lastTimeMap[id] && (t - lastTimeMap[id]) > 600000) gapMap[id] = (gapMap[id] || 0) + 1;
                 lastTimeMap[id] = t;
