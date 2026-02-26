@@ -9,7 +9,8 @@
 #include <WebServer.h>
 #include <WiFi.h>
 
-const String CURRENT_VERSION = "3.1.0"; // ★ 硬件中断信号检测版本
+const String CURRENT_VERSION =
+    "3.2.0"; // ★ 全面非阻塞状态机 & 切换至 Vercel API
 #include <WiFiClientSecure.h>
 #include <esp_task_wdt.h> // Watchdog Timer
 #include <time.h>         // Include standard time library
@@ -25,14 +26,7 @@ const char *password = "88888888";
 const String configApiUrl = "https://packsecure.vercel.app/api/iot-config?mac=";
 
 // --- SERVER CONFIGURATION ---
-const char *supabaseUrl =
-    "https://kdahubyhwndgyloaljak.supabase.co/rest/v1/production_logs";
-const char *apiKey =
-    "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9."
-    "eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6ImtkYWh1Ynlod25kZ3lsb2FsamFrIiwicm9sZSI6Im"
-    "Fub24iLCJpYXQiOjE3NjUzODY4ODksImV4cCI6MjA4MDk2Mjg4OX0."
-    "mzTtQ6zpfvRY07372UH_"
-    "M4dvKPzHBDkiydwosUYPs-8";
+const String alarmApiUrl = "https://packsecure.vercel.app/api/alarm";
 
 // --- MACHINE CONFIGURATION ---
 String machineId =
@@ -52,10 +46,15 @@ String currentSku = "UNKNOWN"; // 正在生产的 SKU
 volatile bool signalDetected = false;      // ISR 设置，main loop 清除
 volatile unsigned long isrTriggerTime = 0; // 信号触发时间 (ms)
 
+// --- 非阻塞状态机参数 ---
+enum SignalState { STATE_IDLE, STATE_WAIT_CONFIRM, STATE_WAIT_END };
+SignalState currentState = STATE_IDLE;
+unsigned long stateTimer = 0;
+
 void IRAM_ATTR BUZZER_ISR() {
   // FALLING edge ISR: 只记录时间,让 main loop 做验证
   // 不改 signalDetected 如果已经有待处理信号 (防止 ISR 内竞争)
-  if (!signalDetected) {
+  if (!signalDetected && currentState == STATE_IDLE) {
     isrTriggerTime = millis();
     signalDetected = true;
   }
@@ -155,65 +154,68 @@ void loop() {
   }
 
   // ══════════════════════════════════════════════════
-  // 1. 信号验证 (中断触发后在 main loop 里验证)
+  // 1. 信号验证 (采用非阻塞状态机)
   // ══════════════════════════════════════════════════
-  if (signalDetected) {
-    signalDetected = false; // 立刻清除标志，防止重复处理
+  switch (currentState) {
+  case STATE_IDLE:
+    if (signalDetected) {
+      signalDetected = false;
+      currentState = STATE_WAIT_CONFIRM;
+      stateTimer = millis();
+    }
+    break;
 
+  case STATE_WAIT_CONFIRM:
     // 等待 300ms 再验证: 真正的 3 秒警报在 300ms 后 pin 仍为 LOW
-    // 噪声脉冲 (<100ms) 此时已恢复 HIGH，直接被过滤
-    delay(300);
-    esp_task_wdt_reset();
+    if (millis() - stateTimer >= 300) {
+      if (digitalRead(relayPin) == LOW) {
+        // ✅ 确认是真实信号 (警报还在响)
+        unsigned long now = millis();
 
-    if (digitalRead(relayPin) == LOW) {
-      // ✅ 确认是真实信号 (警报还在响)
-      unsigned long now = millis();
+        if ((now - lastDebounceTime) > debounceDelay) {
+          // ✅ 冷却时间已过
+          float elapsed = (float)(now - lastDebounceTime) / 1000.0;
+          lastDebounceTime = now;
 
-      if ((now - lastDebounceTime) > debounceDelay) {
-        // ✅ 冷却时间已过 (最短 4 分钟间隔)
-        float elapsed = (float)(now - lastDebounceTime) / 1000.0;
-        lastDebounceTime = now;
+          Serial.printf("[OK] 有效触发! Yield=%d, SKU=%s, 距上次=%.1fs\n",
+                        currentYield, currentSku.c_str(), elapsed);
 
-        Serial.printf("[OK] 有效触发! Yield=%d, SKU=%s, 距上次=%.1fs\n",
-                      currentYield, currentSku.c_str(), elapsed);
-
-        // LED 闪烁确认
-        for (int i = 0; i < 3; i++) {
+          // 快速非阻塞的 LED 反馈
+          // (主循环的后面心跳会覆盖，此处直接亮起一次代表记录成功)
           digitalWrite(ledPin, LOW);
-          delay(80);
-          digitalWrite(ledPin, HIGH);
-          delay(80);
-          esp_task_wdt_reset();
+
+          time_t t;
+          time(&t);
+          QueueItem item = {currentYield, t};
+          alarmQueue.push_back(item);
+          saveQueue();
+
+        } else {
+          float cooldownLeft =
+              (float)(debounceDelay - (now - lastDebounceTime)) / 1000.0;
+          Serial.printf("[SKIP] 冷却中，还需 %.1f 秒\n", cooldownLeft);
         }
 
-        time_t t;
-        time(&t);
-        QueueItem item = {currentYield, t};
-        alarmQueue.push_back(item);
-        saveQueue();
-
+        // 进入等待结束状态，防止重复 ISR
+        currentState = STATE_WAIT_END;
+        stateTimer = millis();
+        Serial.println("等待警报器结束...");
       } else {
-        float cooldownLeft =
-            (float)(debounceDelay - (now - lastDebounceTime)) / 1000.0;
-        Serial.printf("[SKIP] 冷却中，还需 %.1f 秒\n", cooldownLeft);
+        // 噪声脉冲，直接忽略恢复空闲
+        Serial.println("[NOISE] 300ms 后 pin 恢复 HIGH，判断为噪声，忽略");
+        currentState = STATE_IDLE;
       }
-
-      // ★ 等待警报器结束 (pin 恢复 HIGH) 再继续
-      // 防止 3 秒内产生多次 ISR 重复触发
-      Serial.println("等待警报器结束...");
-      unsigned long waitStart = millis();
-      while (digitalRead(relayPin) == LOW && (millis() - waitStart) < 8000) {
-        esp_task_wdt_reset();
-        delay(50);
-      }
-      Serial.println("警报器已结束，恢复监听");
-
-      // 清除 ISR 期间可能积累的多余标志
-      signalDetected = false;
-
-    } else {
-      Serial.println("[NOISE] 300ms 后 pin 恢复 HIGH，判断为噪声，忽略");
     }
+    break;
+
+  case STATE_WAIT_END:
+    // ★ 等待警报器结束 (pin 恢复 HIGH) 或者超时 (8000ms)
+    if (digitalRead(relayPin) == HIGH || (millis() - stateTimer) >= 8000) {
+      Serial.println("警报器已结束，恢复监听");
+      signalDetected = false; // 清理这期间发生的误触
+      currentState = STATE_IDLE;
+    }
+    break;
   }
 
   handleNetworkQueue();
@@ -329,25 +331,6 @@ void connectWiFi() {
   Serial.println();
 }
 
-bool isTimeSet() {
-  struct tm ti;
-  if (!getLocalTime(&ti))
-    return false;
-  return (ti.tm_year + 1900 > 2020);
-}
-
-String getISOTime(time_t rawtime) {
-  if (rawtime <= 0 && isTimeSet())
-    time(&rawtime);
-  else if (rawtime <= 0)
-    return "";
-  struct tm *ti = gmtime(&rawtime);
-  char buf[30];
-  sprintf(buf, "%04d-%02d-%02dT%02d:%02d:%02dZ", ti->tm_year + 1900,
-          ti->tm_mon + 1, ti->tm_mday, ti->tm_hour, ti->tm_min, ti->tm_sec);
-  return String(buf);
-}
-
 void handleNetworkQueue() {
   if (alarmQueue.empty() || WiFi.status() != WL_CONNECTED)
     return;
@@ -366,19 +349,12 @@ bool sendToSupabase(int count, time_t timestamp) {
   HTTPClient http;
   WiFiClientSecure client;
   client.setInsecure();
-  if (!http.begin(client, supabaseUrl))
+  if (!http.begin(client, alarmApiUrl))
     return false;
-  http.setTimeout(5000);
+  http.setTimeout(3000);
   http.addHeader("Content-Type", "application/json");
-  http.addHeader("apikey", apiKey);
-  http.addHeader("Authorization", String("Bearer ") + apiKey);
-  String timeStr = getISOTime(timestamp);
-  String json = (timeStr != "")
-                    ? "{\"machine_id\": \"" + String(machineId) +
-                          "\", \"alarm_count\": " + String(count) +
-                          ", \"created_at\": \"" + timeStr + "\"}"
-                    : "{\"machine_id\": \"" + String(machineId) +
-                          "\", \"alarm_count\": " + String(count) + "}";
+  String json = "{\"machine_id\": \"" + String(machineId) +
+                "\", \"alarm_count\": " + String(count) + "}";
   int res = http.POST(json);
   http.end();
   return (res >= 200 && res < 300) || (res >= 400 && res < 500);
