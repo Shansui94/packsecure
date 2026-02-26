@@ -27,24 +27,28 @@ function getGitCommits() {
         since.setHours(since.getHours() - 24);
         const sinceISO = since.toISOString();
 
-        const raw = execSync(
-            `git log --since="${sinceISO}" --pretty=format:"%H|%an|%s" --name-stat`,
+        // Step 1: get commit lines
+        const commitLines = execSync(
+            `git log --since="${sinceISO}" --format="%H|%an|%s"`,
             { encoding: 'utf8', cwd: process.cwd() }
-        );
+        ).trim().split('\n').filter(Boolean);
 
-        const commits = [];
-        let current = null;
+        const commits = commitLines.map(line => {
+            const [hash, author, ...msgParts] = line.split('|');
+            return { hash: (hash || '').substring(0, 7), author: author || '', message: msgParts.join('|'), files: [] };
+        });
 
-        for (const line of raw.split('\n')) {
-            if (line.match(/^[a-f0-9]{40}\|/)) {
-                if (current) commits.push(current);
-                const [hash, author, ...msgParts] = line.split('|');
-                current = { hash: hash.substring(0, 7), author, message: msgParts.join('|'), files: [] };
-            } else if (current && line.match(/^[AMD]\s+/)) {
-                current.files.push(line.trim());
-            }
+        // Step 2: get changed files for each commit
+        for (const commit of commits) {
+            try {
+                const files = execSync(
+                    `git diff-tree --no-commit-id -r --name-only ${commit.hash}`,
+                    { encoding: 'utf8' }
+                ).trim().split('\n').filter(Boolean);
+                commit.files = files.slice(0, 10); // cap at 10 files
+            } catch { /* ignore per-commit errors */ }
         }
-        if (current) commits.push(current);
+
         return commits;
     } catch (e) {
         console.warn('⚠️ Git log failed:', e.message);
@@ -146,7 +150,7 @@ ${diffStat}
 `;
 
     const resp = await fetch(
-        `https://generativelanguage.googleapis.com/v1beta/models/gemini-1.5-flash:generateContent?key=${GEMINI_API_KEY}`,
+        `https://generativelanguage.googleapis.com/v1beta/models/gemini-2.0-flash:generateContent?key=${GEMINI_API_KEY}`,
         {
             method: 'POST',
             headers: { 'Content-Type': 'application/json' },
