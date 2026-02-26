@@ -169,7 +169,10 @@ const DetailPanel = ({ machine, onClose }: { machine: MachineCard; onClose: () =
                                         )}
                                     </div>
                                     <div className={`text-sm font-black ${log.alarm_count === 0 ? 'text-orange-400' : 'text-white'}`}>
-                                        {log.alarm_count === 0 ? '⚡ REBOOT' : `+${(log.lane_id === 'Unknown' && (log.machine_id.startsWith('N1') || log.machine_id.startsWith('N2'))) ? 1 : log.alarm_count}`}
+                                        {log.alarm_count === 0 ? '⚡ REBOOT' : `+${(
+                                            (log.lane_id === 'Unknown' && (log.machine_id.startsWith('N1') || log.machine_id.startsWith('N2'))) ||
+                                            (log.machine_id === 'T1.3-M02' && log.alarm_count === 2 && (!log.product_sku || log.product_sku === 'UNKNOWN'))
+                                        ) ? 1 : log.alarm_count}`}
                                     </div>
                                 </div>
                             ))}
@@ -313,8 +316,9 @@ const FactoryLiveOS = () => {
 
                 // Patch for N1/N2 old firmware inserting +2
                 let count = log.alarm_count;
-                if (count === 2 && log.lane_id === 'Unknown' && (id.startsWith('N1') || id.startsWith('N2'))) {
-                    count = 1;
+                if (count === 2) {
+                    if (log.lane_id === 'Unknown' && (id.startsWith('N1') || id.startsWith('N2'))) count = 1;
+                    if (id === 'T1.3-M02' && (!log.product_sku || log.product_sku === 'UNKNOWN')) count = 1;
                 }
 
                 if (count > 0) countMap[id] = (countMap[id] || 0) + count;
