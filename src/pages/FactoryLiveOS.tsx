@@ -345,7 +345,7 @@ const FactoryLiveOS = () => {
 
                 if (lastTimeMap[id]) {
                     const diffMin = Math.round((t - lastTimeMap[id]) / 60000);
-                    if (diffMin > 10) {
+                    if (diffMin > 30) {
                         if (!gapMap[id]) gapMap[id] = [];
                         gapMap[id].unshift({
                             start: new Date(lastTimeMap[id]).toLocaleTimeString('en-MY', { hour: '2-digit', minute: '2-digit' }),
