@@ -162,7 +162,7 @@ const ItemFormModal = ({
                                     className="w-full bg-gray-950 border border-gray-800 rounded-lg p-2.5 text-white outline-none focus:border-cyan-500"
                                 >
                                     <option value="Raw">Raw Material</option>
-                                    <option value="FG">Finished Good</option>
+                                    <option value="FG">FG</option>
                                     <option value="WiP">Work in Progress</option>
                                 </select>
                             </div>
@@ -443,7 +443,7 @@ const ProductLibrary: React.FC = () => {
                         <div className="grid grid-cols-4 gap-4 mb-6">
                             <StatCard label="Total Items" value={stats.total} icon={Box} color="cyan" />
                             <StatCard label="Raw Materials" value={stats.raw} icon={Hexagon} color="blue" />
-                            <StatCard label="Finished Goods" value={stats.fg} icon={Package} color="green" />
+                            <StatCard label="FG" value={stats.fg} icon={Package} color="green" />
                             <StatCard label="Low Stock Alerts" value={lowStockCount} icon={Activity} color="red" />
                         </div>
 

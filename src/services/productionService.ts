@@ -18,7 +18,7 @@ export const getItems = async () => {
         id: d.sku, // Use SKU as ID
         sku: d.sku,
         name: d.name,
-        type: d.type === 'Raw' ? 'raw' : 'product', // Map Enum back to string
+        type: d.type === 'Raw' ? 'raw' : 'FG', // Map Enum back to string
         current_stock: 0, // Stock logic is separate in V2 (ledger), placeholder for now
         unit: d.uom
     })) as Item[];

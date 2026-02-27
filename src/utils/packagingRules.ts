@@ -18,6 +18,9 @@ export const getRecommendedPackaging = (
             // 单层黑 100cm -> Green, 50cm -> Pink, 其他 -> Green
             if (size === '100cm') return 'Green';
             return size === '50cm' ? 'Pink' : 'Green';
+        } else if (material === 'Silver') {
+            // 单层银 默认使用 Pink (红色包装)
+            return 'Pink';
         } else {
             // 单层透明 100cm -> Pink, 50cm -> Orange, 其他 -> Green
             if (size === '100cm') return 'Pink';
@@ -28,6 +31,9 @@ export const getRecommendedPackaging = (
             // 双层黑 100cm -> Pink, 50cm -> Green, 其他 -> Pink
             if (size === '100cm') return 'Pink';
             return size === '50cm' ? 'Green' : 'Pink';
+        } else if (material === 'Silver') {
+            // 双层银 默认使用 Pink (红色包装)
+            return 'Pink';
         } else {
             // 双层透明 100cm -> Yellow, 其他 -> Blue
             if (size === '100cm') return 'Yellow';

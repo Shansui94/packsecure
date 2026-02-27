@@ -11,7 +11,7 @@ export const PRODUCT_LAYERS = [
 export const PRODUCT_MATERIALS = [
     { label: 'Clear (透明)', value: 'Clear', code: 'CLR' },
     { label: 'Black (Hitam)', value: 'Black', code: 'BLK' },
-    { label: 'Silver (Grey)', value: 'Silver', code: 'SLV' },
+    { label: 'Silver (Grey)', value: 'Silver', code: 'SLR' },
 ];
 
 export const PACKAGING_COLORS = [

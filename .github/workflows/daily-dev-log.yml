@@ -50,4 +50,6 @@ jobs:
           node scripts/generate-dev-log.mjs
 
       - name: Log success
-        run: echo "✅ Dev log generated for ${{ env.REPORT_DATE }}"
+        run: echo "✅ Dev log generated for $REPORT_DATE"
+        env:
+          REPORT_DATE: ${{ env.REPORT_DATE }}

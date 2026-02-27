@@ -33,7 +33,7 @@ interface ProductionLaneProps {
     className?: string;
 }
 
-const ProductionLane: React.FC<ProductionLaneProps> = ({ laneId, machineMetadata, jobs, onProductionComplete, onBeforeProduce, className }) => {
+const ProductionLane: React.FC<ProductionLaneProps> = ({ laneId, machineMetadata, operatorId, jobs, onProductionComplete, onBeforeProduce, className }) => {
 
     // ... (Keep existing state)
     const [step, setStep] = useState<1 | 2 | 3>(1);
@@ -244,29 +244,32 @@ const ProductionLane: React.FC<ProductionLaneProps> = ({ laneId, machineMetadata
                                 This machine produces Single Layer only
                             </div>
                         )}
-                        <div className={`grid gap-3 h-full ${canProduceDL ? 'grid-cols-2' : 'grid-cols-2'}`}>
+                        <div className={`grid gap-3 h-full ${canProduceDL ? 'grid-cols-2 md:grid-cols-3' : 'grid-cols-2'}`}>
                             {[
-                                { layer: 'Single', mat: 'Clear', label: 'SL Clear', img: '/assets/product-types/single-clear.png', border: 'border-cyan-500/30' },
-                                { layer: 'Single', mat: 'Black', label: 'SL Black', img: '/assets/product-types/double-black.png', border: 'border-gray-600' },
-                                { layer: 'Double', mat: 'Clear', label: 'DL Clear', img: '/assets/product-types/double-clear.png', border: 'border-blue-400', glow: true },
-                                { layer: 'Double', mat: 'Black', label: 'DL Black', img: '/assets/product-types/single-black.png', border: 'border-slate-500' },
+                                { layer: 'Single', mat: 'Clear', label: 'SL Clear', img: '/assets/product-types/single-clear.png', border: 'border-cyan-500/30', bg: 'bg-white/10' },
+                                { layer: 'Single', mat: 'Black', label: 'SL Black', img: '/assets/product-types/double-black.png', border: 'border-gray-600', bg: 'bg-black/60' },
+                                { layer: 'Single', mat: 'Silver', label: 'SL Silver', img: '/assets/product-types/double-black.png', border: 'border-slate-400', bg: 'bg-slate-400/20', isSmall: true },
+                                { layer: 'Double', mat: 'Clear', label: 'DL Clear', img: '/assets/product-types/double-clear.png', border: 'border-blue-400', glow: true, bg: 'bg-white/10' },
+                                { layer: 'Double', mat: 'Black', label: 'DL Black', img: '/assets/product-types/single-black.png', border: 'border-slate-500', bg: 'bg-black/80' },
+                                { layer: 'Double', mat: 'Silver', label: 'DL Silver', img: '/assets/product-types/single-black.png', border: 'border-gray-400', bg: 'bg-slate-500/30', isSmall: true },
                             ].filter(item => canProduceDL || item.layer === 'Single')
                                 .map((item, idx) => (
                                     <button
                                         key={idx}
                                         onClick={() => handleTypeSelect(item.layer as any, item.mat as any)}
                                         className={`
-                                    relative group rounded-3xl border-2 ${item.border} bg-gray-900/50 overflow-hidden
-                                    hover:scale-[1.02] active:scale-95 transition-all duration-300 flex flex-col justify-between
-                                    hover:shadow-xl hover:border-white/80 min-h-[140px]
-                                    ${item.glow ? 'shadow-[0_0_20px_rgba(59,130,246,0.2)]' : ''}
-                                `}
+                                            relative group rounded-3xl border-2 ${item.border} ${item.bg} overflow-hidden
+                                            hover:scale-[1.02] active:scale-95 transition-all duration-300 flex flex-col justify-between
+                                            hover:shadow-xl hover:border-white/80
+                                            ${item.isSmall ? 'min-h-[80px] p-2' : 'min-h-[140px] p-0'}
+                                            ${item.glow ? 'shadow-[0_0_20px_rgba(59,130,246,0.2)]' : ''}
+                                        `}
                                     >
-                                        <div className="h-2/3 w-full relative bg-black/20 p-2">
+                                        <div className={`${item.isSmall ? 'h-1/2' : 'h-2/3'} w-full relative bg-black/20 ${item.isSmall ? 'p-1' : 'p-2'}`}>
                                             <img src={item.img} alt={item.label} className="w-full h-full object-contain drop-shadow-xl" />
                                         </div>
-                                        <div className="h-1/3 w-full flex items-center justify-center bg-white/5 border-t border-white/5">
-                                            <span className="text-xs md:text-sm font-black text-white uppercase">{item.label}</span>
+                                        <div className={`${item.isSmall ? 'h-1/2' : 'h-1/3'} w-full flex items-center justify-center bg-white/5 border-t border-white/5`}>
+                                            <span className={`${item.isSmall ? 'text-[10px]' : 'text-xs md:text-sm'} font-black text-white uppercase`}>{item.label}</span>
                                         </div>
                                     </button>
                                 ))}
@@ -282,16 +285,29 @@ const ProductionLane: React.FC<ProductionLaneProps> = ({ laneId, machineMetadata
                             <button onClick={() => setStep(1)} className="text-xs font-bold text-gray-500 hover:text-white px-2 py-1 rounded hover:bg-white/10">BACK</button>
                         </div>
                         <div className="grid grid-cols-2 gap-3">
-                            {PRODUCT_SIZES.map(size => (
-                                <button
-                                    key={size.value}
-                                    onClick={() => handleSizeSelect(size.value as ProductSize)}
-                                    className="relative group bg-gray-800/60 hover:bg-cyan-900/40 border-2 border-white/10 hover:border-cyan-400 rounded-2xl py-6 flex flex-col items-center gap-1 active:scale-95 transition-all"
-                                >
-                                    <span className="text-3xl font-black text-white">{size.label.replace(/[^0-9]/g, '')}</span>
-                                    <span className="text-xs text-gray-400">{size.rolls} Rolls</span>
-                                </button>
-                            ))}
+                            {PRODUCT_SIZES.map(size => {
+                                const isDisabled = selectedMaterial === 'Silver' && size.value !== '100cm';
+                                return (
+                                    <button
+                                        key={size.value}
+                                        onClick={() => !isDisabled && handleSizeSelect(size.value as ProductSize)}
+                                        disabled={isDisabled}
+                                        className={`relative group rounded-2xl py-6 flex flex-col items-center gap-1 transition-all
+                                            ${isDisabled
+                                                ? 'bg-gray-900/40 border-2 border-red-500/10 opacity-40 cursor-not-allowed'
+                                                : 'bg-gray-800/60 hover:bg-cyan-900/40 border-2 border-white/10 hover:border-cyan-400 active:scale-95'}
+                                        `}
+                                    >
+                                        <span className="text-3xl font-black text-white">{size.label.replace(/[^0-9]/g, '')}</span>
+                                        <span className="text-xs text-gray-400">{size.rolls} Rolls</span>
+                                        {isDisabled && (
+                                            <div className="absolute top-2 right-2 flex items-center gap-1 bg-red-500/10 text-red-500 text-[9px] px-1.5 py-0.5 rounded font-bold uppercase">
+                                                <span>✕ N/A</span>
+                                            </div>
+                                        )}
+                                    </button>
+                                );
+                            })}
                         </div>
                     </div>
                 )}
@@ -418,6 +434,27 @@ const ProductionLane: React.FC<ProductionLaneProps> = ({ laneId, machineMetadata
                                             </div>
                                             <div className="text-gray-400 text-xs font-mono">Units Produced This Session</div>
                                         </div>
+
+                                        <button
+                                            onClick={async () => {
+                                                try {
+                                                    const machineId = machineMetadata?.id || 'T1.2-M01';
+                                                    await supabase.from('production_logs').insert({
+                                                        machine_id: machineId,
+                                                        lane_id: laneId === 'Single' ? null : laneId,
+                                                        product_sku: activeSku,
+                                                        operator_id: operatorId, // Pass the currently logged-in operator
+                                                        alarm_count: selectedRolls
+                                                    });
+                                                } catch (e) {
+                                                    console.error("Pulse Simulation Error", e);
+                                                }
+                                            }}
+                                            className="w-full py-3 mb-2 bg-cyan-600 hover:bg-cyan-500 rounded-xl font-black text-white shadow-lg border-2 border-cyan-400/50 active:scale-95 transition-all flex justify-center items-center gap-2 text-sm"
+                                        >
+                                            <div className="w-2 h-2 rounded-full bg-white animate-pulse"></div>
+                                            SIMULATE HARDWARE PULSE
+                                        </button>
 
                                         <button
                                             onClick={toggleProductionRun}
@@ -588,28 +625,36 @@ const ProductionControl: React.FC<ProductionControlProps> = ({ user, jobs = [] }
 
     // Fetch Logs
     const fetchUserLogs = async () => {
-        // CHANGED: Fetch by Machine ID, not Operator ID, because Firmware/Trigger logs have no Operator ID.
-        // We want to see all production for this machine.
         const targetMachine = machineMetadata?.id || selectedMachine;
         if (!targetMachine) return;
 
+        // Fetch User Map to display actual Operator names instead of Unknown
+        let userMap: Record<string, string> = {};
+        const { data: users } = await supabase.from('sys_users_v2').select('id, name');
+        if (users) {
+            users.forEach((u: any) => userMap[u.id] = u.name);
+        }
+
         console.log("Fetching logs for machine:", targetMachine);
 
-        const { data } = await supabase.from('production_logs') // Use V1 table (where trigger writes) or V2? Trigger writes to V1 'production_logs'
+        const { data } = await supabase.from('production_logs')
             .select('*')
             .eq('machine_id', targetMachine)
             .order('created_at', { ascending: false })
             .limit(20);
 
         if (data) {
-            const mapped: ProductionLog[] = data.map((log: any) => ({
-                Log_ID: log.id, // V1 uses 'id'
-                Timestamp: log.created_at,
-                Job_ID: 'N/A',
-                Operator_Email: 'Machine Auto',
-                Output_Qty: log.alarm_count || 1,
-                Note: log.product_sku || 'Production Log',
-            }));
+            const mapped: ProductionLog[] = data.map((log: any) => {
+                const operatorName = log.operator_id ? (userMap[log.operator_id] || 'Unknown User') : 'Machine Auto';
+                return {
+                    Log_ID: log.id,
+                    Timestamp: log.created_at,
+                    Job_ID: 'N/A',
+                    Operator_Email: operatorName,
+                    Output_Qty: log.alarm_count || 1,
+                    Note: log.product_sku || 'Production Log',
+                };
+            });
             setRecentLogs(mapped);
         }
     };

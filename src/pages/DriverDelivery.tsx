@@ -121,12 +121,14 @@ const DriverDelivery: React.FC<DriverDeliveryProps> = ({ user }) => {
                 // 2. NO AMENDMENTS - Proceed to Deduct & Deliver
                 for (const item of loadItems) {
                     const qtyToDeduct = item.confirmedQty || item.quantity;
+                    const loc = item.sourceLocation || 'Unassigned'; // NEW: Multi-location Source
                     if (qtyToDeduct > 0) {
                         // Direct Insert to bypass RPC "change_type" phantom error
                         const { error } = await supabase.from('stock_ledger_v2').insert({
                             sku: item.sku,
                             change_qty: -qtyToDeduct, // Negative for OUT
                             event_type: 'Transfer Out',
+                            loc_id: loc,              // Explicit Warehouse Deduct
                             ref_doc: selectedOrder.orderNumber,
                             notes: `Loaded by Driver: ${user?.name || 'Unknown'} `
                         });
@@ -279,13 +281,15 @@ const DriverDelivery: React.FC<DriverDeliveryProps> = ({ user }) => {
                             <div className="space-y-3 mb-6">
                                 {(() => {
                                     const grouped = (order.items || []).reduce((acc: any, item: any) => {
-                                        let loc = 'Other Items';
-                                        if (item.remark && item.remark.includes('Loc:')) {
+                                        let loc = item.sourceLocation || 'Other Items';
+
+                                        // Fallback legacy support if an old order STILL has Loc: hardcoded in its remark
+                                        if (loc === 'Other Items' && item.remark && item.remark.includes('Loc:')) {
                                             const match = item.remark.match(/Loc:\s*([^)\n\r,]+)/);
                                             if (match) loc = match[1].trim();
-                                            // Handle legacy "General" tag
-                                            if (loc.toLowerCase() === 'general') loc = 'Other Items';
                                         }
+
+                                        if (loc.toLowerCase() === 'general') loc = 'Other Items';
                                         if (!acc[loc]) acc[loc] = [];
                                         acc[loc].push(item);
                                         return acc;
@@ -300,11 +304,11 @@ const DriverDelivery: React.FC<DriverDeliveryProps> = ({ user }) => {
                                                 {items.map((item: any, idx: number) => (
                                                     <div key={idx} className="flex justify-between items-center text-sm border-b border-slate-800/50 last:border-0 pb-1 last:pb-0">
                                                         <div>
-                                                            <span className="font-bold text-white">{item.quantity} x {item.sku}</span>
-                                                            {/* Strip Loc from remark for cleaner display */}
-                                                            {item.remark && !item.remark.includes('Loc:') && (
+                                                            <span className="font-bold text-white">{item.quantity} x {item.product || item.sku}</span>
+                                                            {/* Display Remark (Legacy strip Loc: just in case) */}
+                                                            {item.remark && (
                                                                 <div className="text-[11px] text-amber-500 font-mono mt-0.5">
-                                                                    {item.remark}
+                                                                    {item.remark.replace(/Loc:\s*[^)\n\r,]+/, '').trim() || item.remark}
                                                                 </div>
                                                             )}
                                                         </div>
@@ -370,14 +374,15 @@ const DriverDelivery: React.FC<DriverDeliveryProps> = ({ user }) => {
                                 const grouped: Record<string, any[]> = {};
                                 try {
                                     (loadItems || []).forEach(item => {
-                                        let loc = 'Other Items';
-                                        // Safe access to remark
-                                        if (item && typeof item.remark === 'string') {
+                                        let loc = item.sourceLocation || 'Other Items';
+
+                                        // Fallback legacy support
+                                        if (loc === 'Other Items' && item && typeof item.remark === 'string') {
                                             const match = item.remark.match(/Loc:\s*([^)\n\r,]+)/);
                                             if (match) loc = match[1].trim();
-                                            // Handle legacy "General" tag
-                                            if (loc.toLowerCase() === 'general') loc = 'Other Items';
                                         }
+
+                                        if (loc.toLowerCase() === 'general') loc = 'Other Items';
 
                                         if (!grouped[loc]) grouped[loc] = [];
                                         grouped[loc].push(item);

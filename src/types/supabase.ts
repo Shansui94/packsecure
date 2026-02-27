@@ -14,7 +14,7 @@ export interface Database {
                     id: string
                     sku: string
                     name: string
-                    type: 'raw' | 'product'
+                    type: 'raw' | 'FG'
                     current_stock: number
                     unit: string
                     created_at?: string
@@ -24,7 +24,7 @@ export interface Database {
                     id?: string
                     sku: string
                     name: string
-                    type?: 'raw' | 'product'
+                    type?: 'raw' | 'FG'
                     current_stock?: number
                     unit?: string
                     created_at?: string
@@ -34,7 +34,7 @@ export interface Database {
                     id?: string
                     sku?: string
                     name?: string
-                    type?: 'raw' | 'product'
+                    type?: 'raw' | 'FG'
                     current_stock?: number
                     unit?: string
                     created_at?: string

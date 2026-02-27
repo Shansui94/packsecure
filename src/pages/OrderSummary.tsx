@@ -1,20 +1,20 @@
 import React, { useState, useEffect, useCallback } from 'react';
 import { DragDropContext, Droppable, Draggable, DropResult } from '@hello-pangea/dnd';
 import { supabase } from '../services/supabase';
+import { WAREHOUSES } from '../data/factoryData';
 import { SalesOrder, User } from '../types';
 import { Calendar, User as UserIcon, Truck, MapPin, Package } from 'lucide-react';
+const LOCATIONS = WAREHOUSES;
+type Location = string;
 
-// --- LOCATION CONFIGURATION ---
-const LOCATIONS = ['Taiping', 'Nilai'] as const;
-type Location = typeof LOCATIONS[number];
-
-const TAIPING_KEYWORDS = ['SPD', 'OPM Lama', 'OPM LAMA', 'OPM_LAMA', 'OPMLAMA', 'OPM Corner', 'OPM CORNER', 'OPM_CORNER', 'OPMCORNER'];
+const TAIPING_KEYWORDS = ['SPD', 'OPM Lama', 'OPM Corner'];
 const NILAI_KEYWORDS = ['NILAI', 'Nilai'];
 
-const LOCATION_COLOR: Record<Location, string> = {
-    'Taiping': 'blue',
-    'Nilai': 'emerald',
-};
+const LOCATION_COLOR_PALETTES = ['blue', 'emerald', 'purple', 'orange', 'rose'];
+const LOCATION_COLOR: Record<string, string> = {};
+LOCATIONS.forEach((loc, i) => {
+    LOCATION_COLOR[loc] = LOCATION_COLOR_PALETTES[i % LOCATION_COLOR_PALETTES.length];
+});
 
 interface OrderSummaryProps {
     user?: any;
@@ -25,7 +25,7 @@ const OrderSummary: React.FC<OrderSummaryProps> = ({ user: _user }) => {
     const [drivers, setDrivers] = useState<User[]>([]);
     const [selectedDate, setSelectedDate] = useState<string>(new Date().toISOString().split('T')[0]);
     const [loading, setLoading] = useState(false);
-    const [activeTab, setActiveTab] = useState<Location>('Taiping');
+    const [activeTab, setActiveTab] = useState<Location>(LOCATIONS[0] || 'Unknown');
 
     // --- FETCH ---
     const fetchData = useCallback(async () => {
@@ -85,18 +85,30 @@ const OrderSummary: React.FC<OrderSummaryProps> = ({ user: _user }) => {
 
     // --- LOCATION CLASSIFICATION ---
     const getOrderLocation = (o: SalesOrder): Location | null => {
-        const text = o.items.map(i => i.remark || '').join(' ');
-        if (NILAI_KEYWORDS.some(k => text.toLowerCase().includes(k.toLowerCase()))) return 'Nilai';
-        if (TAIPING_KEYWORDS.some(k => text.toLowerCase().includes(k.toLowerCase()))) return 'Taiping';
-        if (o.factoryId === 'N1' || o.factoryId === 'N2') return 'Nilai';
-        if (o.factoryId === 'T1') return 'Taiping';
-        return null;
+        // 1. Direct location assigned in trip sequence or order metadata
+        const text = o.items.map(i => i.remark || '').join(' ').toLowerCase();
+
+        // Return exact matches from WAREHOUSES
+        for (const w of WAREHOUSES) {
+            if (text.includes(w.toLowerCase())) return w;
+        }
+
+        // Broad fallback checking
+        if (TAIPING_KEYWORDS.some(k => text.includes(k.toLowerCase()))) return 'Taiping';
+        if (NILAI_KEYWORDS.some(k => text.includes(k.toLowerCase()))) return 'Nilai';
+
+        return LOCATIONS[0] || 'Unknown';
     };
 
-    const locationOrders: Record<Location, SalesOrder[]> = { Taiping: [], Nilai: [] };
+    const locationOrders: Record<Location, SalesOrder[]> = {};
+    LOCATIONS.forEach(loc => locationOrders[loc] = []);
+
     orders.forEach(o => {
         const loc = getOrderLocation(o);
-        if (loc) locationOrders[loc].push(o);
+        if (loc) {
+            if (!locationOrders[loc]) locationOrders[loc] = [];
+            locationOrders[loc].push(o);
+        }
     });
 
     const activeTabOrders = [...(locationOrders[activeTab] || [])].sort(

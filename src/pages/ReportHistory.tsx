@@ -4,7 +4,7 @@ import { supabase } from '../services/supabase';
 import { User, ProductionLog } from '../types';
 import { generateSessionReport } from '../utils/reportGenerator';
 import { Download, Loader, ChevronLeft, ChevronRight, Activity, PowerOff } from 'lucide-react';
-import { FACTORIES, MACHINES } from '../data/factoryData';
+import { WAREHOUSES, MACHINES } from '../data/factoryData';
 
 interface ReportHistoryProps {
     user: User | null;
@@ -172,24 +172,24 @@ const ReportHistory: React.FC<ReportHistoryProps> = ({ user }: ReportHistoryProp
                             <Loader className="animate-spin" /> Loading data...
                         </div>
                     ) : (
-                        FACTORIES.map(factory => {
-                            // Filter machines for this factory
-                            const factoryMachines = MACHINES.filter(m => m.factory_id === factory.id);
-                            if (factoryMachines.length === 0) return null; // Skip empty factories if any
+                        WAREHOUSES.map(warehouse => {
+                            // Filter machines for this warehouse
+                            const warehouseMachines = MACHINES.filter(m => m.factory_id === warehouse);
+                            if (warehouseMachines.length === 0) return null; // Skip empty warehouses if any
 
                             return (
-                                <div key={factory.id} className="w-[320px] flex flex-col h-full bg-gray-100/50 rounded-2xl border border-gray-200/60 shadow-sm hover:shadow-md transition-shadow">
+                                <div key={warehouse} className="w-[320px] flex flex-col h-full bg-gray-100/50 rounded-2xl border border-gray-200/60 shadow-sm hover:shadow-md transition-shadow">
                                     {/* Column Header */}
                                     <div className="p-4 border-b border-gray-200 bg-white rounded-t-2xl flex justify-between items-center">
-                                        <h3 className="font-bold text-gray-800">{factory.name}</h3>
+                                        <h3 className="font-bold text-gray-800">{warehouse}</h3>
                                         <span className="text-[10px] font-bold bg-gray-100 text-gray-500 px-2 py-1 rounded-full border border-gray-200">
-                                            {factory.id}
+                                            Zone
                                         </span>
                                     </div>
 
                                     {/* Column Body */}
                                     <div className="p-3 space-y-3 overflow-y-auto flex-1 custom-scrollbar">
-                                        {factoryMachines.map(machine => {
+                                        {warehouseMachines.map(machine => {
                                             const summary = dailyData[machine.id];
                                             const hasData = summary && summary.logCount > 0;
 
@@ -242,7 +242,7 @@ const ReportHistory: React.FC<ReportHistoryProps> = ({ user }: ReportHistoryProp
                                         })}
                                     </div>
                                     <div className="p-3 border-t border-gray-200 bg-gray-50 rounded-b-2xl text-center text-[10px] uppercase font-bold text-gray-400">
-                                        {factory.type} Unit
+                                        Manufacturing Unit
                                     </div>
                                 </div>
                             );

@@ -2,7 +2,8 @@ import React, { useState, useEffect, useRef } from 'react';
 import { supabase } from '../services/supabase';
 import { getV2Items } from '../services/apiV2';
 import { V2Item } from '../types/v2';
-import { ArrowDownCircle, ArrowUpCircle, ClipboardList, Search, Check, AlertCircle } from 'lucide-react';
+import { WAREHOUSES } from '../data/factoryData';
+import { ArrowDownCircle, ArrowUpCircle, ClipboardList, Search, Check, AlertCircle, Plus, Minus, X, ShoppingCart } from 'lucide-react';
 
 type Mode = 'in' | 'out';
 
@@ -10,10 +11,14 @@ interface LedgerRow {
     txn_id: string;
     sku: string;
     timestamp: string;
-    txn_type: string;
+    event_type: string;
     change_qty: number;
     ref_doc?: string;
     notes?: string;
+}
+
+interface CartItem extends V2Item {
+    qty: number;
 }
 
 const StockMovement: React.FC = () => {
@@ -25,24 +30,33 @@ const StockMovement: React.FC = () => {
 
     // Form state
     const [skuSearch, setSkuSearch] = useState('');
-    const [selectedSku, setSelectedSku] = useState<V2Item | null>(null);
-    const [qty, setQty] = useState('');
+    const [cart, setCart] = useState<CartItem[]>([]);
     const [refDoc, setRefDoc] = useState('');
     const [notes, setNotes] = useState('');
+    const [selectedLocation, setSelectedLocation] = useState<string>('');
     const [showDropdown, setShowDropdown] = useState(false);
     const dropdownRef = useRef<HTMLDivElement>(null);
+    const searchInputRef = useRef<HTMLInputElement>(null);
 
     // Load items + ledger
     useEffect(() => {
         getV2Items().then(setItems);
         fetchLedger();
+
+        const handleClickOutside = (event: MouseEvent) => {
+            if (dropdownRef.current && !dropdownRef.current.contains(event.target as Node)) {
+                setShowDropdown(false);
+            }
+        };
+        document.addEventListener('mousedown', handleClickOutside);
+        return () => document.removeEventListener('mousedown', handleClickOutside);
     }, []);
 
     const fetchLedger = async () => {
         const { data } = await supabase
             .from('stock_ledger_v2')
-            .select('txn_id, sku, timestamp, txn_type, change_qty, ref_doc, notes')
-            .in('txn_type', ['Stock In', 'Stock Out'])
+            .select('txn_id, sku, timestamp, event_type, change_qty, ref_doc, notes')
+            .in('event_type', ['Stock In', 'Stock Out'])
             .order('timestamp', { ascending: false })
             .limit(50);
         setLedger(data || []);
@@ -55,10 +69,37 @@ const StockMovement: React.FC = () => {
         i.name.toLowerCase().includes(skuSearch.toLowerCase())
     ).slice(0, 10);
 
-    const selectSku = (item: V2Item) => {
-        setSelectedSku(item);
-        setSkuSearch(item.sku);
+    const addToCart = (item: V2Item) => {
+        const existing = cart.find(c => c.sku === item.sku);
+        if (existing) {
+            setCart(cart.map(c => c.sku === item.sku ? { ...c, qty: c.qty + 1 } : c));
+        } else {
+            setCart([{ ...item, qty: 1 }, ...cart]);
+        }
+        setSkuSearch('');
         setShowDropdown(false);
+        searchInputRef.current?.focus();
+    };
+
+    const updateCartQty = (sku: string, delta: number) => {
+        setCart(cart.map(c => {
+            if (c.sku === sku) {
+                const newQty = Math.max(1, c.qty + delta);
+                return { ...c, qty: newQty };
+            }
+            return c;
+        }));
+    };
+
+    const setManualQty = (sku: string, value: string) => {
+        const num = parseInt(value);
+        if (!isNaN(num) && num >= 1) {
+            setCart(cart.map(c => c.sku === sku ? { ...c, qty: num } : c));
+        }
+    };
+
+    const removeFromCart = (sku: string) => {
+        setCart(cart.filter(c => c.sku !== sku));
     };
 
     const showToast = (msg: string, type: 'ok' | 'err') => {
@@ -68,32 +109,34 @@ const StockMovement: React.FC = () => {
 
     const handleSubmit = async (e: React.FormEvent) => {
         e.preventDefault();
-        if (!selectedSku) return showToast('Please select a SKU', 'err');
-        const numQty = parseInt(qty);
-        if (!numQty || numQty <= 0) return showToast('Enter a valid quantity', 'err');
+        if (cart.length === 0) return showToast('Cart is empty. Please add items.', 'err');
+        if (!selectedLocation) return showToast('Please select a warehouse location.', 'err');
 
         setLoading(true);
         try {
-            const change = mode === 'in' ? numQty : -numQty;
             const txnType = mode === 'in' ? 'Stock In' : 'Stock Out';
+            const multiplier = mode === 'in' ? 1 : -1;
 
-            const { error } = await supabase.from('stock_ledger_v2').insert({
-                sku: selectedSku.sku,
-                change_qty: change,
-                txn_type: txnType,
+            const inserts = cart.map(item => ({
+                sku: item.sku,
+                change_qty: item.qty * multiplier,
+                event_type: txnType,
+                loc_id: selectedLocation,
                 ref_doc: refDoc || null,
                 notes: notes || null,
-            });
+            }));
+
+            const { error } = await supabase.from('stock_ledger_v2').insert(inserts);
 
             if (error) throw error;
 
-            showToast(`${txnType} recorded: ${selectedSku.sku} × ${numQty}`, 'ok');
-            // Reset form
-            setSelectedSku(null);
+            showToast(`${txnType} recorded for ${cart.length} items!`, 'ok');
+
+            setCart([]);
             setSkuSearch('');
-            setQty('');
             setRefDoc('');
             setNotes('');
+            // We intentionally do NOT reset selectedLocation for user convenience
             fetchLedger();
         } catch (err: any) {
             showToast('Error: ' + err.message, 'err');
@@ -103,16 +146,19 @@ const StockMovement: React.FC = () => {
     };
 
     const isIn = mode === 'in';
+    const borderClass = isIn ? 'border-green-500/30' : 'border-orange-500/30';
+    const textClass = isIn ? 'text-green-400' : 'text-orange-400';
+    const bgClass = isIn ? 'bg-green-500/10' : 'bg-orange-500/10';
 
     return (
-        <div className="min-h-screen bg-[#0a0a0e] text-white p-4 md:p-8 pb-24">
-            <div className="max-w-5xl mx-auto">
+        <div className="min-h-screen bg-[#07070a] text-white p-4 md:p-8 pb-24 font-sans">
+            <div className="max-w-7xl mx-auto">
 
                 {/* Toast */}
                 {toast && (
                     <div className={`fixed top-6 right-6 z-50 flex items-center gap-3 px-5 py-3 rounded-xl shadow-2xl text-sm font-bold border transition-all ${toast.type === 'ok'
-                            ? 'bg-green-950 border-green-500/40 text-green-300'
-                            : 'bg-red-950 border-red-500/40 text-red-300'
+                        ? 'bg-green-950/90 border-green-500/50 text-green-300 backdrop-blur-md'
+                        : 'bg-red-950/90 border-red-500/50 text-red-300 backdrop-blur-md'
                         }`}>
                         {toast.type === 'ok' ? <Check size={16} /> : <AlertCircle size={16} />}
                         {toast.msg}
@@ -120,172 +166,274 @@ const StockMovement: React.FC = () => {
                 )}
 
                 {/* Header */}
-                <div className="mb-8">
-                    <h1 className="text-3xl font-black tracking-tighter text-white mb-1">Stock Movement</h1>
-                    <p className="text-gray-500 text-sm">Manually record stock in and stock out transactions</p>
+                <div className="mb-8 flex items-end justify-between">
+                    <div>
+                        <h1 className="text-3xl font-black tracking-tighter text-white mb-2 flex items-center gap-3">
+                            <ShoppingCart className={textClass} size={28} />
+                            Stock Movement
+                        </h1>
+                        <p className="text-gray-500 text-sm">Batch process multi-SKU inward and outward movements.</p>
+                    </div>
+                    {/* Mode Toggle */}
+                    <div className="flex bg-black/40 rounded-xl p-1 border border-white/5 shadow-xl">
+                        <button
+                            onClick={() => setMode('in')}
+                            className={`flex items-center gap-2 px-6 py-2.5 rounded-lg font-bold text-sm uppercase tracking-wider transition-all ${isIn
+                                ? 'bg-green-600/20 text-green-400 border border-green-500/30 shadow-lg shadow-green-900/20'
+                                : 'text-gray-500 hover:text-gray-300 border border-transparent'
+                                }`}
+                        >
+                            <ArrowDownCircle size={16} /> INWARD
+                        </button>
+                        <button
+                            onClick={() => setMode('out')}
+                            className={`flex items-center gap-2 px-6 py-2.5 rounded-lg font-bold text-sm uppercase tracking-wider transition-all ${!isIn
+                                ? 'bg-orange-600/20 text-orange-400 border border-orange-500/30 shadow-lg shadow-orange-900/20'
+                                : 'text-gray-500 hover:text-gray-300 border border-transparent'
+                                }`}
+                        >
+                            <ArrowUpCircle size={16} /> OUTWARD
+                        </button>
+                    </div>
                 </div>
 
-                <div className="grid grid-cols-1 lg:grid-cols-5 gap-8">
-                    {/* ── LEFT: Form ── */}
-                    <div className="lg:col-span-2">
-                        {/* Mode Toggle */}
-                        <div className="flex rounded-2xl overflow-hidden border border-white/10 mb-6">
-                            <button
-                                onClick={() => setMode('in')}
-                                className={`flex-1 flex items-center justify-center gap-2 py-4 font-bold text-sm uppercase tracking-wider transition-all ${isIn
-                                        ? 'bg-green-600/20 text-green-400 border-r border-green-500/20'
-                                        : 'bg-transparent text-gray-500 hover:text-gray-300 border-r border-white/5'
-                                    }`}
-                            >
-                                <ArrowDownCircle size={18} /> Stock In
-                            </button>
-                            <button
-                                onClick={() => setMode('out')}
-                                className={`flex-1 flex items-center justify-center gap-2 py-4 font-bold text-sm uppercase tracking-wider transition-all ${!isIn
-                                        ? 'bg-red-600/20 text-red-400'
-                                        : 'bg-transparent text-gray-500 hover:text-gray-300'
-                                    }`}
-                            >
-                                <ArrowUpCircle size={18} /> Stock Out
-                            </button>
+                <div className="grid grid-cols-1 lg:grid-cols-12 gap-8">
+                    {/* ── LEFT: Staging Cart (8 cols) ── */}
+                    <div className="lg:col-span-8 flex flex-col gap-6">
+
+                        {/* Search Bar */}
+                        <div className="relative" ref={dropdownRef}>
+                            <div className={`relative flex items-center bg-[#0d0d12] border ${cart.length === 0 ? borderClass : 'border-white/10'} rounded-2xl overflow-hidden shadow-2xl transition-all duration-500 focus-within:border-white/30 focus-within:shadow-white/5`}>
+                                <div className={`pl-5 ${textClass}`}>
+                                    <Search size={20} />
+                                </div>
+                                <input
+                                    ref={searchInputRef}
+                                    type="text"
+                                    value={skuSearch}
+                                    onChange={e => { setSkuSearch(e.target.value); setShowDropdown(true); }}
+                                    onFocus={() => setShowDropdown(true)}
+                                    placeholder="Scan barcode or type SKU / Item Name to add to list..."
+                                    className="w-full bg-transparent border-none py-5 pl-4 pr-6 text-base font-medium focus:outline-none text-white placeholder-gray-600"
+                                />
+                                <div className="pr-5 flex items-center">
+                                    <div className="text-[10px] uppercase tracking-widest text-gray-600 border border-gray-700/50 rounded px-2 py-1 bg-white/5">Auto-focus</div>
+                                </div>
+                            </div>
+
+                            {/* Dropdown */}
+                            {showDropdown && skuSearch && filteredItems.length > 0 && (
+                                <div className="absolute z-30 top-full mt-2 left-0 right-0 bg-[#16161e] border border-white/10 rounded-xl overflow-hidden shadow-2xl max-h-80 overflow-y-auto">
+                                    {filteredItems.map(item => (
+                                        <button
+                                            key={item.sku}
+                                            type="button"
+                                            onClick={() => addToCart(item)}
+                                            className="w-full text-left px-5 py-4 hover:bg-white/5 flex justify-between items-center gap-4 border-b border-white/5 last:border-0 transition-colors group"
+                                        >
+                                            <div>
+                                                <div className="font-bold text-white text-base group-hover:text-cyan-400 transition-colors">{item.sku}</div>
+                                                <div className="text-sm text-gray-500 mt-0.5">{item.name}</div>
+                                            </div>
+                                            <div className="flex items-center gap-3">
+                                                <span className="text-[10px] px-2.5 py-1 rounded-full bg-white/5 text-gray-400 shrink-0 font-medium tracking-widest uppercase">{item.type}</span>
+                                                <div className="w-8 h-8 rounded-full bg-white/5 flex items-center justify-center group-hover:bg-cyan-500/20 group-hover:text-cyan-400 transition-colors">
+                                                    <Plus size={16} />
+                                                </div>
+                                            </div>
+                                        </button>
+                                    ))}
+                                </div>
+                            )}
                         </div>
 
-                        <form onSubmit={handleSubmit} className="bg-white/3 border border-white/8 rounded-2xl p-6 space-y-4">
+                        {/* Cart List */}
+                        <div className={`flex-1 bg-[#0d0d12] border border-white/5 rounded-2xl flex flex-col overflow-hidden shadow-xl ${cart.length > 0 ? `ring-1 ring-inset ${isIn ? 'ring-green-500/10' : 'ring-orange-500/10'}` : ''}`}>
+                            <div className={`px-6 py-4 border-b border-white/5 flex justify-between items-center bg-black/20`}>
+                                <h2 className="text-xs font-bold text-gray-400 uppercase tracking-widest flex items-center gap-2">
+                                    <ClipboardList size={14} /> Staging List
+                                </h2>
+                                <span className={`text-[10px] font-bold px-2.5 py-1 rounded-full ${bgClass} ${textClass}`}>
+                                    {cart.length} ITEMS
+                                </span>
+                            </div>
 
-                            {/* SKU Search */}
-                            <div className="relative" ref={dropdownRef}>
-                                <label className="block text-xs font-bold text-gray-400 uppercase tracking-wider mb-1.5">SKU / Item</label>
-                                <div className="relative">
-                                    <Search className="absolute left-3 top-1/2 -translate-y-1/2 text-gray-500" size={15} />
-                                    <input
-                                        type="text"
-                                        value={skuSearch}
-                                        onChange={e => { setSkuSearch(e.target.value); setSelectedSku(null); setShowDropdown(true); }}
-                                        onFocus={() => setShowDropdown(true)}
-                                        placeholder="Search SKU or name..."
-                                        className="w-full bg-white/5 border border-white/10 rounded-xl pl-9 pr-4 py-3 text-sm focus:outline-none focus:border-cyan-500/50 text-white placeholder-gray-600"
-                                    />
-                                </div>
-                                {showDropdown && skuSearch && filteredItems.length > 0 && (
-                                    <div className="absolute z-20 top-full mt-1 left-0 right-0 bg-[#141418] border border-white/10 rounded-xl overflow-hidden shadow-2xl max-h-52 overflow-y-auto">
-                                        {filteredItems.map(item => (
-                                            <button
-                                                key={item.sku}
-                                                type="button"
-                                                onClick={() => selectSku(item)}
-                                                className="w-full text-left px-4 py-3 text-sm hover:bg-white/5 flex justify-between items-center gap-2 border-b border-white/5 last:border-0"
-                                            >
-                                                <div>
-                                                    <div className="font-bold text-white">{item.sku}</div>
-                                                    <div className="text-xs text-gray-500">{item.name}</div>
+                            <div className="flex-1 p-2">
+                                {cart.length === 0 ? (
+                                    <div className="h-64 flex flex-col items-center justify-center text-gray-600 gap-4">
+                                        <div className="w-16 h-16 rounded-full bg-white/5 flex items-center justify-center">
+                                            <ShoppingCart size={24} className="opacity-50" />
+                                        </div>
+                                        <div className="text-sm font-medium">List is empty. Scan an item above.</div>
+                                    </div>
+                                ) : (
+                                    <div className="space-y-2">
+                                        {cart.map((item, index) => (
+                                            <div key={`${item.sku}-${index}`} className="group flex items-center bg-white/5 hover:bg-white-[0.07] border border-transparent hover:border-white/10 rounded-xl p-3 pr-4 transition-all duration-200">
+
+                                                {/* Number */}
+                                                <div className="w-8 text-center text-[10px] font-mono text-gray-600 font-bold">
+                                                    {(index + 1).toString().padStart(2, '0')}
                                                 </div>
-                                                <span className="text-[10px] px-2 py-0.5 rounded-full bg-white/10 text-gray-400 shrink-0">{item.type}</span>
-                                            </button>
+
+                                                {/* Info */}
+                                                <div className="flex-1 min-w-0 pl-2 pr-6">
+                                                    <div className="font-bold text-white text-base truncate">{item.sku}</div>
+                                                    <div className="text-xs text-gray-500 truncate mt-0.5">{item.name}</div>
+                                                </div>
+
+                                                {/* Qty Controls */}
+                                                <div className="flex items-center bg-black/40 rounded-lg p-1 border border-white/5 mr-4 ring-1 ring-inset ring-transparent focus-within:ring-white/20 transition-all">
+                                                    <button type="button" onClick={() => updateCartQty(item.sku, -1)} className="w-9 h-9 flex items-center justify-center rounded-md hover:bg-white/10 text-gray-400 hover:text-white transition-colors">
+                                                        <Minus size={16} />
+                                                    </button>
+                                                    <input
+                                                        type="text"
+                                                        value={item.qty}
+                                                        onChange={(e) => setManualQty(item.sku, e.target.value)}
+                                                        className="w-14 text-center bg-transparent border-none text-lg font-black font-mono focus:outline-none text-white"
+                                                    />
+                                                    <button type="button" onClick={() => updateCartQty(item.sku, 1)} className="w-9 h-9 flex items-center justify-center rounded-md hover:bg-white/10 text-gray-400 hover:text-white transition-colors">
+                                                        <Plus size={16} />
+                                                    </button>
+                                                </div>
+
+                                                {/* Total Change visual */}
+                                                <div className={`w-20 text-right font-black font-mono text-lg ${textClass} mr-6`}>
+                                                    {isIn ? '+' : '-'}{item.qty}
+                                                </div>
+
+                                                {/* Remove */}
+                                                <button type="button" onClick={() => removeFromCart(item.sku)} className="w-8 h-8 flex items-center justify-center rounded-full hover:bg-red-500/20 text-gray-600 hover:text-red-400 transition-colors opacity-50 group-hover:opacity-100">
+                                                    <X size={16} />
+                                                </button>
+                                            </div>
                                         ))}
                                     </div>
                                 )}
                             </div>
+                        </div>
 
-                            {/* Selected SKU badge */}
-                            {selectedSku && (
-                                <div className="flex items-center gap-2 bg-cyan-500/10 border border-cyan-500/20 rounded-xl px-4 py-2.5">
-                                    <Check size={14} className="text-cyan-400" />
-                                    <span className="text-sm text-cyan-300 font-bold">{selectedSku.sku}</span>
-                                    <span className="text-xs text-gray-500">— {selectedSku.name}</span>
-                                </div>
-                            )}
+                    </div>
 
-                            {/* Quantity */}
+                    {/* ── RIGHT: Meta & History (4 cols) ── */}
+                    <div className="lg:col-span-4 flex flex-col gap-6">
+
+                        {/* Transaction Meta Card */}
+                        <form onSubmit={handleSubmit} className={`bg-[#0d0d12] border ${cart.length > 0 ? borderClass : 'border-white/5'} rounded-2xl p-6 flex flex-col gap-5 shadow-2xl relative overflow-hidden transition-all duration-500`}>
+
+                            {/* Ambient Glow */}
+                            <div className={`absolute -top-24 -right-24 w-48 h-48 ${bgClass} blur-3xl rounded-full opacity-50 pointer-events-none transition-all duration-500`} />
+
+                            <h2 className="text-xs font-bold text-gray-400 uppercase tracking-widest border-b border-white/5 pb-3">Transaction Details</h2>
+
+                            {/* Location (Required) */}
                             <div>
-                                <label className="block text-xs font-bold text-gray-400 uppercase tracking-wider mb-1.5">Quantity</label>
-                                <input
-                                    type="number"
-                                    min="1"
-                                    value={qty}
-                                    onChange={e => setQty(e.target.value)}
-                                    placeholder="0"
-                                    className="w-full bg-white/5 border border-white/10 rounded-xl px-4 py-3 text-lg font-mono font-bold focus:outline-none focus:border-cyan-500/50 text-white placeholder-gray-600"
-                                />
+                                <label className="block text-[10px] font-bold text-gray-500 uppercase tracking-widest mb-2">Location <span className="text-red-500">*</span></label>
+                                <select
+                                    value={selectedLocation}
+                                    onChange={(e) => setSelectedLocation(e.target.value)}
+                                    className="w-full bg-black/40 border border-white/10 rounded-xl px-4 py-3 text-sm focus:outline-none focus:border-white/30 text-white transition-colors cursor-pointer appearance-none"
+                                    required
+                                >
+                                    <option value="" disabled>Select Warehouse...</option>
+                                    {WAREHOUSES.map(w => (
+                                        <option key={w} value={w}>{w}</option>
+                                    ))}
+                                </select>
                             </div>
 
                             {/* Ref Doc */}
                             <div>
-                                <label className="block text-xs font-bold text-gray-400 uppercase tracking-wider mb-1.5">Reference Doc <span className="font-normal text-gray-600">(optional)</span></label>
+                                <label className="block text-[10px] font-bold text-gray-500 uppercase tracking-widest mb-2">Reference Document (Optional)</label>
                                 <input
                                     type="text"
                                     value={refDoc}
                                     onChange={e => setRefDoc(e.target.value)}
-                                    placeholder="e.g. PO-2026-001 or DO-001"
-                                    className="w-full bg-white/5 border border-white/10 rounded-xl px-4 py-3 text-sm focus:outline-none focus:border-cyan-500/50 text-white placeholder-gray-600"
+                                    placeholder="e.g. PO-8890, DO-123"
+                                    className="w-full bg-black/40 border border-white/10 rounded-xl px-4 py-3 text-sm focus:outline-none focus:border-white/30 text-white placeholder-gray-700 transition-colors"
                                 />
                             </div>
 
                             {/* Notes */}
                             <div>
-                                <label className="block text-xs font-bold text-gray-400 uppercase tracking-wider mb-1.5">Notes <span className="font-normal text-gray-600">(optional)</span></label>
+                                <label className="block text-[10px] font-bold text-gray-500 uppercase tracking-widest mb-2">Internal Notes (Optional)</label>
                                 <textarea
                                     value={notes}
                                     onChange={e => setNotes(e.target.value)}
-                                    rows={2}
-                                    placeholder="Reason, supplier, batch no..."
-                                    className="w-full bg-white/5 border border-white/10 rounded-xl px-4 py-3 text-sm focus:outline-none focus:border-cyan-500/50 text-white placeholder-gray-600 resize-none"
+                                    rows={3}
+                                    placeholder="Remarks, supplier info, reason for adjustment..."
+                                    className="w-full bg-black/40 border border-white/10 rounded-xl px-4 py-3 text-sm focus:outline-none focus:border-white/30 text-white placeholder-gray-700 resize-none transition-colors"
                                 />
                             </div>
 
+                            {/* Submit Button */}
                             <button
                                 type="submit"
-                                disabled={loading}
-                                className={`w-full py-4 rounded-xl font-black uppercase tracking-widest text-sm transition-all ${isIn
-                                        ? 'bg-green-600 hover:bg-green-500 text-white shadow-lg shadow-green-900/30'
-                                        : 'bg-red-600 hover:bg-red-500 text-white shadow-lg shadow-red-900/30'
-                                    } disabled:opacity-50`}
+                                disabled={loading || cart.length === 0}
+                                className={`mt-2 w-full py-4 rounded-xl font-black uppercase tracking-widest text-sm flex items-center justify-center gap-3 transition-all duration-300 ${cart.length === 0
+                                    ? 'bg-white/5 text-gray-500 cursor-not-allowed'
+                                    : isIn
+                                        ? 'bg-green-600 hover:bg-green-500 text-white shadow-xl shadow-green-900/30 hover:shadow-green-900/50 hover:-translate-y-0.5'
+                                        : 'bg-orange-600 hover:bg-orange-500 text-white shadow-xl shadow-orange-900/30 hover:shadow-orange-900/50 hover:-translate-y-0.5'
+                                    }`}
                             >
-                                {loading ? 'Recording...' : isIn ? '▼ Record Stock In' : '▲ Record Stock Out'}
+                                {loading ? (
+                                    <>
+                                        <div className="w-4 h-4 border-2 border-white/30 border-t-white rounded-full animate-spin" />
+                                        PROCESSING...
+                                    </>
+                                ) : (
+                                    <>
+                                        <Check size={18} />
+                                        SUBMIT {cart.length} ITEMS
+                                    </>
+                                )}
                             </button>
                         </form>
-                    </div>
 
-                    {/* ── RIGHT: History ── */}
-                    <div className="lg:col-span-3">
-                        <div className="flex items-center gap-2 mb-4">
-                            <ClipboardList size={16} className="text-gray-500" />
-                            <h2 className="text-sm font-bold text-gray-400 uppercase tracking-wider">Recent Transactions</h2>
-                        </div>
+                        {/* Recent History */}
+                        <div className="flex-1 bg-[#0d0d12] border border-white/5 rounded-2xl flex flex-col overflow-hidden">
+                            <div className="px-6 py-4 border-b border-white/5 bg-black/20">
+                                <h2 className="text-xs font-bold text-gray-400 uppercase tracking-widest">Recent Activity</h2>
+                            </div>
 
-                        <div className="space-y-2">
-                            {ledger.length === 0 ? (
-                                <div className="text-center py-16 text-gray-600 border border-dashed border-white/5 rounded-2xl">
-                                    No manual stock movements yet.
-                                </div>
-                            ) : ledger.map(row => {
-                                const isPositive = row.change_qty > 0;
-                                return (
-                                    <div key={row.txn_id} className="bg-white/3 border border-white/8 rounded-xl px-4 py-3 flex items-center gap-4">
-                                        <div className={`w-8 h-8 rounded-full flex items-center justify-center shrink-0 ${isPositive ? 'bg-green-500/15 text-green-400' : 'bg-red-500/15 text-red-400'
-                                            }`}>
-                                            {isPositive ? <ArrowDownCircle size={16} /> : <ArrowUpCircle size={16} />}
-                                        </div>
-                                        <div className="flex-1 min-w-0">
-                                            <div className="flex items-center gap-2">
-                                                <span className="font-bold text-sm text-white truncate">{row.sku}</span>
-                                                {row.ref_doc && (
-                                                    <span className="text-[10px] px-2 py-0.5 rounded bg-white/5 text-gray-500 font-mono shrink-0">{row.ref_doc}</span>
-                                                )}
-                                            </div>
-                                            {row.notes && <p className="text-xs text-gray-500 truncate mt-0.5">{row.notes}</p>}
-                                        </div>
-                                        <div className="text-right shrink-0">
-                                            <div className={`text-lg font-black ${isPositive ? 'text-green-400' : 'text-red-400'}`}>
-                                                {isPositive ? '+' : ''}{row.change_qty.toLocaleString()}
-                                            </div>
-                                            <div className="text-[10px] text-gray-600 font-mono">
-                                                {new Date(row.timestamp).toLocaleDateString('en-GB', { day: '2-digit', month: 'short', hour: '2-digit', minute: '2-digit' })}
-                                            </div>
-                                        </div>
+                            <div className="flex-1 overflow-y-auto max-h-[400px] p-2 custom-scrollbar">
+                                {ledger.length === 0 ? (
+                                    <div className="text-center py-12 text-gray-600 text-sm">No recent transactions</div>
+                                ) : (
+                                    <div className="space-y-1">
+                                        {ledger.map(row => {
+                                            const isPositive = row.change_qty > 0;
+                                            return (
+                                                <div key={row.txn_id} className="px-4 py-3 rounded-xl hover:bg-white/5 transition-colors group flex items-start gap-3">
+                                                    {/* Color Bar / Dot */}
+                                                    <div className={`mt-1.5 w-2 h-2 rounded-full shrink-0 ${isPositive ? 'bg-green-500' : 'bg-orange-500'}`} />
+
+                                                    <div className="flex-1 min-w-0">
+                                                        <div className="flex justify-between items-start mb-0.5">
+                                                            <span className="font-bold text-white text-sm truncate pr-2" title={row.sku}>{row.sku}</span>
+                                                            <span className={`font-black font-mono text-sm shrink-0 ${isPositive ? 'text-green-400' : 'text-orange-400'}`}>
+                                                                {isPositive ? '+' : ''}{row.change_qty.toLocaleString()}
+                                                            </span>
+                                                        </div>
+                                                        <div className="flex items-center justify-between mt-1 gap-2">
+                                                            <span className="text-[10px] text-gray-500 font-mono tracking-wider">
+                                                                {new Date(row.timestamp).toLocaleTimeString('en-GB', { hour: '2-digit', minute: '2-digit' })} • {new Date(row.timestamp).toLocaleDateString('en-GB', { day: '2-digit', month: 'short' })}
+                                                            </span>
+                                                            {row.ref_doc && (
+                                                                <span className="text-[9px] px-1.5 py-0.5 rounded bg-white/5 text-gray-400 font-mono truncate max-w-[100px]">{row.ref_doc}</span>
+                                                            )}
+                                                        </div>
+                                                    </div>
+                                                </div>
+                                            );
+                                        })}
                                     </div>
-                                );
-                            })}
+                                )}
+                            </div>
                         </div>
+
                     </div>
                 </div>
             </div>

@@ -21,7 +21,8 @@ import {
     Cpu,
     FileBarChart,
     ArrowUpDown,
-    Activity
+    Activity,
+    ClipboardCheck
 } from 'lucide-react';
 import { supabase } from '../services/supabase';
 
@@ -220,6 +221,7 @@ const Layout: React.FC<LayoutProps> = ({ children, activePage, setActivePage, us
                                     <NavItem id="inventory" icon={Box} label="Inventory" roles={['SuperAdmin', 'Admin', 'Manager']} />
                                     <NavItem id="products" icon={Package} label="Product Library" roles={['SuperAdmin', 'Admin', 'Manager']} />
                                     <NavItem id="stock-movement" icon={ArrowUpDown} label="Stock Movement" roles={['SuperAdmin', 'Admin', 'Manager']} />
+                                    <NavItem id="stock-audit" icon={ClipboardCheck} label="Stock Audit" roles={['SuperAdmin', 'Admin', 'Manager']} />
                                 </NavGroup>
 
                                 <NavGroup title="Logistics">

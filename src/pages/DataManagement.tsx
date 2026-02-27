@@ -357,7 +357,7 @@ export default function DataManagement() {
                     mapFn = (i) => ({ ...i, id: i.recipe_id, title: i.product_sku, subtitle: `${i.bom_items_v2?.length || 0} Ingredients` });
                     break;
                 case 'factories':
-                    query = supabase.from('sys_factories_v2').select('*').order('factory_id');
+                    query = supabase.from('sys_locations_v2').select('*').order('loc_id');
                     mapFn = (i) => ({ ...i, id: i.factory_id, title: i.name, subtitle: i.location_name });
                     break;
             }
@@ -410,7 +410,7 @@ export default function DataManagement() {
                 case 'machines': table = 'sys_machines_v2'; pk = 'machine_id'; break;
                 case 'partners': table = 'crm_partners_v2'; pk = 'partner_id'; break;
                 case 'recipes': table = 'bom_headers_v2'; pk = 'recipe_id'; break;
-                case 'factories': table = 'sys_factories_v2'; pk = 'factory_id'; break;
+                case 'factories': table = 'sys_locations_v2'; pk = 'loc_id'; break;
             }
 
             const payload = { ...form };
@@ -457,7 +457,7 @@ export default function DataManagement() {
                 case 'machines': table = 'sys_machines_v2'; pkField = 'machine_id'; break;
                 case 'partners': table = 'crm_partners_v2'; pkField = 'partner_id'; break;
                 case 'recipes': table = 'bom_headers_v2'; pkField = 'recipe_id'; break;
-                case 'factories': table = 'sys_factories_v2'; pkField = 'factory_id'; break;
+                case 'factories': table = 'sys_locations_v2'; pkField = 'loc_id'; break;
             }
 
             const id = form[pkField] || selectedItem.id;
@@ -490,7 +490,7 @@ export default function DataManagement() {
                 case 'machines': table = 'sys_machines_v2'; break;
                 case 'partners': table = 'crm_partners_v2'; break;
                 case 'recipes': table = 'bom_headers_v2'; break;
-                case 'factories': table = 'sys_factories_v2'; break;
+                case 'factories': table = 'sys_locations_v2'; break;
             }
 
             // AI ENRICHMENT: Auto-Fill Zone for Customers if missing

@@ -7,6 +7,7 @@ import {
     Plus, Search, Calendar, FileText, X, Truck,
     User as UserIcon, Box, Zap, Trash2, Scissors, AlertTriangle, MapPin, Wrench
 } from 'lucide-react';
+import { WAREHOUSES } from '../data/factoryData';
 import {
     SalesOrder,
     User,
@@ -583,13 +584,12 @@ const DeliveryOrderManagement: React.FC = () => {
         if (currentItemQty <= 0) return alert("Please enter a valid quantity.");
         if (!selectedV2Item) return alert("Please select a product.");
 
-        const combinedRemark = currentItemLoc ? `${currentItemRemark} (Loc: ${currentItemLoc})`.trim() : currentItemRemark;
-
         const newItem = {
             product: selectedV2Item.name,
             sku: selectedV2Item.sku,
             quantity: currentItemQty,
-            remark: combinedRemark.startsWith(' (Loc:') ? combinedRemark.replace(' (Loc:', 'Loc:').replace(')', '') : combinedRemark,
+            remark: currentItemRemark,
+            sourceLocation: currentItemLoc || undefined,
             packaging: (selectedV2Item.uom || 'Unit') as any
         };
 
@@ -1477,21 +1477,39 @@ const DeliveryOrderManagement: React.FC = () => {
                                                             </div>
                                                         </div>
 
-                                                        {/* INLINE REMARK EDIT */}
-                                                        <div className="flex items-center gap-2 mt-1">
-                                                            <div className="text-[10px] font-bold text-slate-600 uppercase">Remark:</div>
-                                                            <input
-                                                                type="text"
-                                                                placeholder="Add remark..."
-                                                                className="flex-1 bg-transparent border-b border-slate-800 text-xs text-slate-400 focus:border-blue-500 outline-none py-0.5 placeholder:text-slate-700"
-                                                                value={item.remark || ''}
-                                                                onChange={(e) => {
-                                                                    const val = e.target.value;
-                                                                    const updated = [...newOrderItems];
-                                                                    updated[idx].remark = val;
-                                                                    setNewOrderItems(updated);
-                                                                }}
-                                                            />
+                                                        {/* INLINE LOCATION & REMARK EDIT */}
+                                                        <div className="flex flex-col gap-2 mt-1">
+                                                            <div className="flex items-center gap-2">
+                                                                <div className="text-[10px] font-bold text-slate-600 uppercase w-16">Pickup:</div>
+                                                                <select
+                                                                    className="flex-1 bg-slate-900 border border-slate-800 rounded px-2 py-1 text-xs text-blue-400 font-bold focus:border-blue-500 outline-none"
+                                                                    value={item.sourceLocation || ''}
+                                                                    onChange={(e) => {
+                                                                        const val = e.target.value;
+                                                                        const updated = [...newOrderItems];
+                                                                        updated[idx].sourceLocation = val;
+                                                                        setNewOrderItems(updated);
+                                                                    }}
+                                                                >
+                                                                    <option value="">-- No Location --</option>
+                                                                    {WAREHOUSES.map(loc => <option key={loc} value={loc}>{loc}</option>)}
+                                                                </select>
+                                                            </div>
+                                                            <div className="flex items-center gap-2">
+                                                                <div className="text-[10px] font-bold text-slate-600 uppercase w-16">Remark:</div>
+                                                                <input
+                                                                    type="text"
+                                                                    placeholder="Add remark..."
+                                                                    className="flex-1 bg-transparent border-b border-slate-800 text-xs text-slate-400 focus:border-blue-500 outline-none py-0.5 placeholder:text-slate-700"
+                                                                    value={item.remark || ''}
+                                                                    onChange={(e) => {
+                                                                        const val = e.target.value;
+                                                                        const updated = [...newOrderItems];
+                                                                        updated[idx].remark = val;
+                                                                        setNewOrderItems(updated);
+                                                                    }}
+                                                                />
+                                                            </div>
                                                         </div>
                                                     </div>
                                                 ))
@@ -1525,10 +1543,9 @@ const DeliveryOrderManagement: React.FC = () => {
                                                         value={currentItemLoc}
                                                         onChange={e => setCurrentItemLoc(e.target.value)}
                                                     >
-                                                        <option value="SPD">SPD</option>
-                                                        <option value="OPM Lama">OPM Lama</option>
-                                                        <option value="OPM Corner">OPM Corner</option>
-                                                        <option value="Nilai">Nilai</option>
+                                                        {WAREHOUSES.map(loc => (
+                                                            <option key={loc} value={loc}>{loc}</option>
+                                                        ))}
                                                         <option value="">No Loc</option>
                                                     </select>
                                                     <input

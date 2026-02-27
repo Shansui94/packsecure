@@ -69,7 +69,7 @@ export const getV2ItemBySku = async (sku: string): Promise<V2Item | null> => {
     return data;
 };
 
-export const getV2ItemsByType = async (type: 'Product' | 'Raw' | 'Packaging'): Promise<V2Item[]> => {
+export const getV2ItemsByType = async (type: 'FG' | 'Raw' | 'Packaging'): Promise<V2Item[]> => {
     // Note: V2 types might differ (e.g., 'FG' vs 'Product'). Let's match typical usage.
     // Assuming DB content matches types/v2.ts: 'Raw', 'WiP', 'FG'
     // Map UI "Product" to "FG"? Or usage? 
@@ -205,6 +205,7 @@ export const getStockBalance = async (sku: string, locId?: string): Promise<numb
 
 export interface V2InventorySnapshot {
     sku: string;
+    loc_id?: string;
     current_stock: number;
     last_updated: string;
 }
@@ -212,7 +213,7 @@ export interface V2InventorySnapshot {
 export const getInventoryStatus = async (): Promise<V2InventorySnapshot[]> => {
     const { data, error } = await supabase
         .from('v2_inventory_view')
-        .select('sku, current_stock, last_updated');
+        .select('sku, loc_id, current_stock, last_updated');
 
     if (error) {
         console.error('Error fetching inventory snapshot:', error);
@@ -234,7 +235,7 @@ export const getLedgerHistory = async (sku: string): Promise<V2StockLedgerEntry[
 
 // --- Factories ---
 export const getV2Factories = async (): Promise<V2Factory[]> => {
-    const { data, error } = await supabase.from('sys_factories_v2').select('*');
+    const { data, error } = await supabase.from('sys_locations_v2').select('*');
     if (error) return [];
     return data || [];
 };

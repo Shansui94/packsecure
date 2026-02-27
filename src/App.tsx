@@ -10,6 +10,8 @@ import Register from './pages/Register';
 import ProductionControl from './pages/ProductionControl';
 // import ProductionPlanning from './pages/ProductionPlanning';
 import LiveStock from './pages/LiveStock';
+import StockMovement from './pages/StockMovement';
+import StockAudit from './pages/StockAudit';
 import ProductLibrary from './pages/ProductLibrary';
 import DeliveryOrderManagement from './pages/DeliveryOrderManagement';
 import DriverDelivery from './pages/DriverDelivery';
@@ -38,7 +40,6 @@ import IoTManagement from './pages/IoTManagement';
 import Notes from './pages/Notes';
 import Tasks from './pages/Tasks';
 import FactoryLiveOS from './pages/FactoryLiveOS';
-import StockMovement from './pages/StockMovement';
 import OperatorManagement from './pages/OperatorManagement';
 import DevLog from './pages/DevLog';
 
@@ -340,6 +341,7 @@ function App() {
                         id: item.sku, // Use SKU as ID
                         qty: item.current_stock,
                         name: item.name,
+                        loc_id: item.loc_id,
                         // Export Fields
                         category: item.category,
                         status: item.status,
@@ -565,10 +567,12 @@ function App() {
                 return <LiveStock />;
             case 'stock-movement':
                 return <StockMovement />;
+            case 'stock-audit':
+                return <StockAudit />;
+            case 'product-library':
+                return <ProductLibrary />;
             case 'recipes':
                 return null; // <RecipeManager />;
-            case 'products':
-                return <ProductLibrary />;
             case 'delivery':
                 return <DeliveryOrderManagement />;
             case 'order-summary':

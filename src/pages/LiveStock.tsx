@@ -1,6 +1,7 @@
 import React, { useState, useEffect, useMemo } from 'react';
 import { supabase } from '../services/supabase';
-import { Search, RefreshCw, Package, TrendingDown, Box, Layers, Filter } from 'lucide-react';
+import { Search, RefreshCw, Box, Filter } from 'lucide-react';
+import { WAREHOUSES } from '../data/factoryData';
 
 // --- TYPES ---
 interface StockRow {
@@ -8,6 +9,7 @@ interface StockRow {
     name: string;
     type: string;
     uom: string;
+    loc_id?: string;
     current_stock: number;
     last_updated: string;
 }
@@ -20,7 +22,7 @@ const TYPE_COLOR: Record<string, string> = {
 };
 
 const TYPE_LABEL: Record<string, string> = {
-    FG: 'Finished Good', Raw: 'Raw Material', WiP: 'Work in Progress', Packaging: 'Packaging',
+    FG: 'FG', Raw: 'Raw Material', WiP: 'Work in Progress', Packaging: 'Packaging',
 };
 
 const LOW_STOCK_THRESHOLD = 50;
@@ -31,13 +33,14 @@ const LiveStock: React.FC = () => {
     const [lastUpdated, setLastUpdated] = useState('');
     const [search, setSearch] = useState('');
     const [typeFilter, setTypeFilter] = useState<string>('All');
+    const [locationFilter, setLocationFilter] = useState<string>('All');
 
     const fetchStock = async () => {
         setLoading(true);
         try {
             const { data, error } = await supabase
                 .from('v2_inventory_view')
-                .select('sku, name, type, uom, current_stock, last_updated')
+                .select('sku, name, type, uom, loc_id, current_stock, last_updated')
                 .ilike('sku', 'BW-%')
                 .order('sku', { ascending: true });
 
@@ -64,14 +67,30 @@ const LiveStock: React.FC = () => {
     }, [rows]);
 
     const filtered = useMemo(() => {
-        return rows.filter(r => {
+        const preFiltered = rows.filter(r => {
             const matchType = typeFilter === 'All' || r.type === typeFilter;
             const matchSearch = !search ||
                 r.sku.toLowerCase().includes(search.toLowerCase()) ||
                 r.name.toLowerCase().includes(search.toLowerCase());
             return matchType && matchSearch;
         });
-    }, [rows, typeFilter, search]);
+
+        if (locationFilter === 'All') {
+            const map = new Map<string, StockRow>();
+            preFiltered.forEach(r => {
+                if (map.has(r.sku)) {
+                    const existing = map.get(r.sku)!;
+                    existing.current_stock += (r.current_stock || 0);
+                    if (new Date(r.last_updated) > new Date(existing.last_updated)) existing.last_updated = r.last_updated;
+                } else {
+                    map.set(r.sku, { ...r });
+                }
+            });
+            return Array.from(map.values()).sort((a, b) => a.sku.localeCompare(b.sku));
+        } else {
+            return preFiltered.filter(r => r.loc_id === locationFilter).sort((a, b) => a.sku.localeCompare(b.sku));
+        }
+    }, [rows, typeFilter, search, locationFilter]);
 
     const totalItems = filtered.length;
     const totalQty = filtered.reduce((sum, r) => sum + (r.current_stock || 0), 0);
@@ -158,6 +177,23 @@ const LiveStock: React.FC = () => {
                                     }`}
                             >
                                 {t === 'All' ? 'All Types' : (TYPE_LABEL[t] || t)}
+                            </button>
+                        ))}
+                    </div>
+
+                    {/* Location Filter */}
+                    <div className="flex items-center gap-2 flex-wrap">
+                        <span className="text-gray-500 font-bold uppercase text-[10px]">Location:</span>
+                        {['All', ...WAREHOUSES].map(w => (
+                            <button
+                                key={w}
+                                onClick={() => setLocationFilter(w)}
+                                className={`px-3 py-2 rounded-lg text-xs font-bold uppercase transition-all ${locationFilter === w
+                                    ? 'bg-violet-500/20 text-violet-400 border border-violet-500/30'
+                                    : 'bg-white/5 text-gray-500 border border-white/5 hover:text-white'
+                                    }`}
+                            >
+                                {w}
                             </button>
                         ))}
                     </div>

@@ -18,17 +18,21 @@ const deg2rad = (deg: number) => {
     return deg * (Math.PI / 180);
 };
 
-// Factory Coordinates
-const FACTORIES = [
-    { id: 'N1', name: 'Nilai (Main)', lat: 2.8167, lng: 101.7958 },
-    { id: 'T1', name: 'Taiping', lat: 4.8500, lng: 100.7333 }
+// Removed unused WAREHOUSES import
+
+// Factory Coordinates mapping for WAREHOUSES
+const WAREHOUSE_COORDS = [
+    { id: 'Nilai', name: 'Nilai', lat: 2.8167, lng: 101.7958 },
+    { id: 'OPM Lama', name: 'OPM Lama', lat: 4.8500, lng: 100.7333 },
+    { id: 'OPM Corner', name: 'OPM Corner', lat: 4.8505, lng: 100.7340 },
+    { id: 'SPD', name: 'SPD', lat: 4.8510, lng: 100.7350 }
 ];
 
 export const findNearestFactory = (targetLat: number, targetLng: number) => {
     let nearest = null;
     let minDist = Infinity;
 
-    FACTORIES.forEach(f => {
+    WAREHOUSE_COORDS.forEach(f => {
         const d = calculateDistance(targetLat, targetLng, f.lat, f.lng);
         if (d < minDist) {
             minDist = d;
@@ -137,12 +141,12 @@ export const determineState = (address: string): string => {
 // Approximation of "score" based on Zone (0-100)
 // Higher is shorter distance / better
 const getZoneDistanceScore = (zone: DeliveryZone, factoryId: string): number => {
-    if (factoryId === 'T1') { // Taiping (North)
+    if (factoryId.includes('OPM') || factoryId === 'SPD') { // North
         if (zone === 'North') return 100;
         if (zone === 'Central_Left' || zone === 'Central_Right') return 40;
         return 10; // South/East is very far
     }
-    if (factoryId === 'N1') { // Nilai (Central/South)
+    if (factoryId === 'Nilai') { // Nilai (Central/South)
         if (zone === 'Central_Left' || zone === 'Central_Right') return 100;
         if (zone === 'South') return 90;
         if (zone === 'East') return 80;
@@ -156,31 +160,20 @@ const getZoneDistanceScore = (zone: DeliveryZone, factoryId: string): number => 
 
 
 export const findBestFactory = (zone: DeliveryZone, items: any[], stockMap: Record<string, any>) => {
-    const scored = FACTORIES.map(f => {
+    const scored = WAREHOUSE_COORDS.map(f => {
         // 1. Distance Score (40%)
         const distScore = getZoneDistanceScore(zone, f.id);
 
-        // 2. Stock Score (60%)
-        // Hack: Since RPC only returns TOTAL stock, let's Simulate breakdown
-        // N1 gets 70%, T1 gets 30% of total for simulation, UNLESS raw data differs.
-
-        // Mock Factory Stock Distribution for Phase 2 Demo
-        // In real prod, 'stockMap' should be { sku: { N1: 100, T1: 50 } }
-        // Here we map global int to object on fly if needed?
-        // Let's assume stockMap is currently Record<string, number>.
-        // We will mock: N1 has the Main Inventory.
-
-        // Re-calc stock score per item using this logic
         let stockScore = 0;
         items.forEach(i => {
             const global = stockMap[i.sku];
             let local = 0;
             if (typeof global === 'number') {
-                local = (f.id === 'N1') ? global : 0;
+                local = (f.id === 'Nilai') ? global : 0;
             } else {
                 local = global?.[f.id] || 0;
             }
-            stockScore += (Math.min(local, i.quantity) / i.quantity);
+            stockScore += (Math.min(local, i.quantity) / (i.quantity || 1));
         });
         stockScore = (items.length > 0) ? (stockScore / items.length) * 100 : 100;
 

@@ -79,16 +79,20 @@ const Inventory: React.FC<InventoryProps> = ({ inventory, onUpdateStock }) => {
                 </button>
             </div>
             <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
-                {items.map(item => {
+                {items.map((item, index) => {
                     const displayName = item.Material_Name || item.Product_Name || item.name;
                     const displayId = item.Raw_Material_ID || item.id || item.SKU_ID;
                     const displayStock = item.Stock_Kg || item.qty;
+                    const displayLoc = item.loc_id || 'All Locations';
 
                     return (
-                        <div key={displayId} className="bg-gray-800 p-5 rounded-xl border border-gray-700 flex justify-between items-center group hover:border-blue-500/50 transition-all">
+                        <div key={`${displayId}-${index}`} className="bg-gray-800 p-5 rounded-xl border border-gray-700 flex justify-between items-center group hover:border-blue-500/50 transition-all">
                             <div>
                                 <h4 className="font-bold text-white">{displayName}</h4>
-                                <p className="text-xs text-gray-500">ID: {displayId}</p>
+                                <div className="flex gap-2 items-center mt-1">
+                                    <p className="text-xs text-gray-500">ID: {displayId}</p>
+                                    <span className="text-[10px] px-2 py-0.5 rounded-full border border-gray-600/50 bg-gray-700/50 text-gray-400 font-bold uppercase">{displayLoc}</span>
+                                </div>
                             </div>
                             <div className="text-right">
                                 <p className="text-2xl font-mono font-bold text-blue-400">{displayStock} <span className="text-xs text-gray-500">kg</span></p>

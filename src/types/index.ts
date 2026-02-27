@@ -88,6 +88,7 @@ export interface SalesOrderItem {
     size?: ProductSize;
     quantity: number; // Rolls
     remark?: string; // NEW: Remark field
+    sourceLocation?: string; // NEW: Optional Multi-Location Pickup
 }
 
 export interface SalesOrder {
@@ -183,6 +184,7 @@ export interface InventoryItem {
     category?: string;
     status?: string;
     unit?: string;
+    loc_id?: string;
 }
 
 // 5. Production Log (Audit Trail)
@@ -276,7 +278,7 @@ export interface ProductVariant {
 
 // 14. Factory Types (Supabase)
 // --- Factory & Machine Types (Inlined) ---
-export type ItemType = 'raw' | 'product';
+export type ItemType = 'raw' | 'FG';
 export type RecipeStatus = 'active' | 'draft' | 'archived';
 export type TransactionType = 'production_in' | 'production_out' | 'adjustment' | 'purchase';
 
