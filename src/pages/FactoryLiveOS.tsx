@@ -186,9 +186,14 @@ const DetailPanel = ({ machine, onClose }: { machine: MachineCard; onClose: () =
                                         <div className="text-xs text-gray-400 font-mono">
                                             {new Date(log.created_at).toLocaleTimeString('en-MY', { hour: '2-digit', minute: '2-digit', second: '2-digit' })}
                                         </div>
-                                        {log.product_sku && log.product_sku.trim().toUpperCase() !== 'UNKNOWN' && (
-                                            <div className="text-[10px] text-gray-600 font-mono mt-0.5">{log.product_sku}</div>
-                                        )}
+                                        {(() => {
+                                            const displaySku = log.product_sku && log.product_sku.trim().toUpperCase() !== 'UNKNOWN'
+                                                ? log.product_sku
+                                                : machine.current_sku;
+                                            return displaySku ? (
+                                                <div className="text-[10px] text-gray-600 font-mono mt-0.5">{displaySku}</div>
+                                            ) : null;
+                                        })()}
                                         {/* Show Lane unless it's Unknown */}
                                         {log.lane_id && log.lane_id.trim().toUpperCase() !== 'UNKNOWN' && (
                                             <div className="text-[9px] text-gray-700 font-mono mt-0.5 uppercase">LANE: {log.lane_id}</div>

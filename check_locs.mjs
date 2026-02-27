@@ -7,16 +7,8 @@ const supabaseAdmin = createClient(
     process.env.SUPABASE_SERVICE_ROLE_KEY || process.env.VITE_SUPABASE_ANON_KEY
 );
 
-async function checkLocations() {
-    const { data, error } = await supabaseAdmin
-        .from('sys_locations_v2')
-        .select('*');
-
-    if (error) {
-        console.error("Error:", error);
-    } else {
-        console.log("Found locations:", data);
-    }
+async function check() {
+    const { data, error } = await supabaseAdmin.from('sys_locations_v2').select('loc_id');
+    console.log(data || error);
 }
-
-checkLocations();
+check();
