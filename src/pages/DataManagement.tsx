@@ -419,6 +419,12 @@ export default function DataManagement() {
             delete payload.subtitle;
             delete payload.bom_items_v2; // Don't save nested relations directly here for now
 
+            // DYNAMIC PK HANDLING: if the table's DB Primary Key is NOT 'id', we must strip the 'id' field
+            // that was injected by the frontend mapFn for UI mapping purposes.
+            if (pk !== 'id') {
+                delete payload.id;
+            }
+
             // Handle ID assignment for NEW items
             if (activeTab === 'customers' && selectedItem?.id === 'NEW' && !payload.id) {
                 // Auto-gen UUID for customers
