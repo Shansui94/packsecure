@@ -267,7 +267,8 @@ function App() {
                 else if (role === 'SuperAdmin') setActivePage('dashboard');
                 else if (role === 'Operator' || role === 'Device') setActivePage('scanner');
                 else if (role === 'Driver') setActivePage('delivery-driver');
-                else if (['Admin', 'Manager', 'Sales', 'Finance'].includes(role)) setActivePage('construction');
+                else if (role === 'Manager') setActivePage('order-summary');
+                else if (['Admin', 'Sales', 'Finance'].includes(role)) setActivePage('construction');
                 else if (role === 'HR') setActivePage('hr');
                 else setActivePage('dashboard');
             }
@@ -486,7 +487,8 @@ function App() {
             if (finalRole === 'SuperAdmin') setActivePage('dashboard');
             else if (role === 'Operator') setActivePage('scanner');
             else if (role === 'Driver') setActivePage('delivery-driver');
-            else if (['Admin', 'Manager', 'HR', 'Sales', 'Finance'].includes(role)) setActivePage('construction');
+            else if (role === 'Manager') setActivePage('order-summary');
+            else if (['Admin', 'HR', 'Sales', 'Finance'].includes(role)) setActivePage('construction');
             else setActivePage('dashboard');
 
             return;
