@@ -197,9 +197,9 @@ const ProductionLane: React.FC<ProductionLaneProps> = ({ laneId, machineMetadata
         <div className={`flex-1 bg-black/20 backdrop-blur-md border border-white/5 rounded-3xl p-1 relative overflow-hidden flex flex-col min-h-[500px] ${className}`}>
             {/* Lane Badge */}
             {laneId !== 'Single' && (
-                <div className={`absolute top-0 right-0 px-3 py-1 text-xs font-bold uppercase rounded-bl-xl border-l border-b border-white/10 z-20 ${laneId === 'Left' ? 'bg-cyan-500/20 text-cyan-400' : 'bg-purple-500/20 text-purple-400'
+                <div className={`absolute top-0 right-0 px-3 py-1 text-xs font-bold uppercase rounded-bl-xl border-l border-b border-white/10 z-20 ${laneId === 'Left' || laneId === 'Lane 1' ? 'bg-cyan-500/20 text-cyan-400' : 'bg-purple-500/20 text-purple-400'
                     }`}>
-                    {laneId === 'Left' ? 'Left Lane' : 'Right Lane'}
+                    {laneId === 'Left' || laneId === 'Right' ? `${laneId} Lane` : laneId}
                 </div>
             )}
 
