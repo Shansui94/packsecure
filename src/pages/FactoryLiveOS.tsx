@@ -186,17 +186,17 @@ const DetailPanel = ({ machine, onClose }: { machine: MachineCard; onClose: () =
                                         <div className="text-xs text-gray-400 font-mono">
                                             {new Date(log.created_at).toLocaleTimeString('en-MY', { hour: '2-digit', minute: '2-digit', second: '2-digit' })}
                                         </div>
-                                        {log.product_sku && log.product_sku !== 'UNKNOWN' && (
+                                        {log.product_sku && log.product_sku.trim().toUpperCase() !== 'UNKNOWN' && (
                                             <div className="text-[10px] text-gray-600 font-mono mt-0.5">{log.product_sku}</div>
                                         )}
                                         {/* Show Lane unless it's Unknown */}
-                                        {log.lane_id && log.lane_id !== 'Unknown' && (
+                                        {log.lane_id && log.lane_id.trim().toUpperCase() !== 'UNKNOWN' && (
                                             <div className="text-[9px] text-gray-700 font-mono mt-0.5 uppercase">LANE: {log.lane_id}</div>
                                         )}
                                     </div>
                                     <div className={`text-sm font-black ${log.alarm_count === 0 ? 'text-orange-400' : 'text-white'}`}>
                                         {log.alarm_count === 0 ? '⚡ REBOOT' : `+${(
-                                            (log.lane_id === 'Unknown' && (log.machine_id.startsWith('N1') || log.machine_id.startsWith('N2') || log.machine_id === 'T1.2-M01')) ||
+                                            (log.lane_id && log.lane_id.trim().toUpperCase() === 'UNKNOWN' && (log.machine_id.startsWith('N1') || log.machine_id.startsWith('N2') || log.machine_id === 'T1.2-M01')) ||
                                             (log.machine_id === 'T1.3-M02' && log.alarm_count === 2)
                                         ) ? 1 : log.alarm_count}`}
                                     </div>
@@ -340,7 +340,7 @@ const FactoryLiveOS = () => {
                 // Patch for old firmware inserting +2
                 let count = log.alarm_count;
                 if (count === 2) {
-                    if (log.lane_id === 'Unknown' && (id.startsWith('N1') || id.startsWith('N2') || id === 'T1.2-M01')) count = 1;
+                    if (log.lane_id && log.lane_id.trim().toUpperCase() === 'UNKNOWN' && (id.startsWith('N1') || id.startsWith('N2') || id === 'T1.2-M01')) count = 1;
                     if (id === 'T1.3-M02') count = 1;
                 }
 
