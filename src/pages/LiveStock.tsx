@@ -238,8 +238,8 @@ const LiveStock: React.FC = () => {
 
                                     {/* SKU + Name */}
                                     <div className="mb-5">
-                                        <div className="font-black text-white text-sm tracking-tight leading-tight mb-0.5">{item.sku}</div>
-                                        <div className="text-[11px] text-gray-500 truncate" title={item.name}>{item.name}</div>
+                                        <div className="font-black text-white text-base tracking-tight leading-tight mb-0.5 truncate" title={item.name}>{item.name}</div>
+                                        <div className="text-[11px] text-gray-400 truncate font-mono" title={item.sku}>{item.sku}</div>
                                     </div>
 
                                     {/* Stock Number */}

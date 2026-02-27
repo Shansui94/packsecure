@@ -7,13 +7,21 @@ const supabaseKey = envFile.match(/VITE_SUPABASE_ANON_KEY=(.*)/)[1];
 const supabase = createClient(supabaseUrl, supabaseKey);
 
 async function run() {
-    const { data: records, error } = await supabase
-        .from('stock_ledger_v2')
+    const { data, error } = await supabase
+        .from('v2_inventory_view')
         .select('*')
-        .order('created_at', { ascending: false })
-        .limit(10);
+        .limit(1);
 
-    console.log("Recent stock_ledger_v2 entries:", records);
+    if (error) {
+        console.log("Error querying view:", error);
+        return;
+    }
+
+    if (data && data.length > 0) {
+        console.log("Columns:", Object.keys(data[0]));
+    } else {
+        console.log("No data returned, cannot infer columns.");
+    }
 }
 
 run();

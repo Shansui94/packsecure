@@ -7,13 +7,16 @@ const supabaseKey = envFile.match(/VITE_SUPABASE_ANON_KEY=(.*)/)[1];
 const supabase = createClient(supabaseUrl, supabaseKey);
 
 async function run() {
-    const { data: records, error } = await supabase
+    const { data, error } = await supabase
         .from('stock_ledger_v2')
-        .select('*')
-        .order('created_at', { ascending: false })
-        .limit(10);
+        .select('txn_id, sku, change_qty, loc_id, timestamp')
+        .eq('event_type', 'Audit Adjustment')
+        .eq('loc_id', 'SPD')
+        .order('timestamp', { ascending: false })
+        .limit(20);
 
-    console.log("Recent stock_ledger_v2 entries:", records);
+    console.log("Error:", error);
+    console.log("Recent SPD Audits:", data);
 }
 
 run();

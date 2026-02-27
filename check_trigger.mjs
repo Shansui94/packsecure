@@ -7,13 +7,9 @@ const supabaseKey = envFile.match(/VITE_SUPABASE_ANON_KEY=(.*)/)[1];
 const supabase = createClient(supabaseUrl, supabaseKey);
 
 async function run() {
-    const { data: records, error } = await supabase
-        .from('stock_ledger_v2')
-        .select('*')
-        .order('created_at', { ascending: false })
-        .limit(10);
-
-    console.log("Recent stock_ledger_v2 entries:", records);
+    const { data, error } = await supabase.rpc('query_pg_triggers', { table_name: 'stock_ledger_v2' });
+    console.log("Error:", error);
+    console.log("Triggers:", data);
 }
 
 run();

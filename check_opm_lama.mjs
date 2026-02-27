@@ -7,13 +7,9 @@ const supabaseKey = envFile.match(/VITE_SUPABASE_ANON_KEY=(.*)/)[1];
 const supabase = createClient(supabaseUrl, supabaseKey);
 
 async function run() {
-    const { data: records, error } = await supabase
-        .from('stock_ledger_v2')
-        .select('*')
-        .order('created_at', { ascending: false })
-        .limit(10);
-
-    console.log("Recent stock_ledger_v2 entries:", records);
+    const { data, error } = await supabase.from('v2_inventory_view').select('sku, loc_id, current_stock').eq('loc_id', 'OPM Lama').limit(5);
+    console.log('Error:', error);
+    console.log('OPM Lama items:', data);
 }
 
 run();
