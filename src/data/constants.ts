@@ -15,7 +15,7 @@ export const PRODUCT_MATERIALS = [
 ];
 
 export const PACKAGING_COLORS = [
-    { label: 'Orange (Oren)', value: 'Orange', code: 'ORG', hex: '#FF3D00', class: 'bg-orange-600' }, // Deep Orange A400
+    { label: 'Orange (Oren)', value: 'Orange', code: 'ORN', hex: '#FF3D00', class: 'bg-orange-600' }, // Deep Orange A400
     { label: 'Red (Merah)', value: 'Pink', code: 'PNK', hex: '#F50057', class: 'bg-pink-600' }, // Pink A400
     { label: 'Blue (Biru)', value: 'Blue', code: 'BLU', hex: '#2979FF', class: 'bg-blue-600' }, // Blue A400
     { label: 'Yellow (Kuning)', value: 'Yellow', code: 'YEL', hex: '#FFD600', class: 'bg-yellow-400 text-black' }, // Yellow A700
