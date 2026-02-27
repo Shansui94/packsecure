@@ -85,18 +85,21 @@ const OrderSummary: React.FC<OrderSummaryProps> = ({ user: _user }) => {
 
     // --- LOCATION CLASSIFICATION ---
     const getOrderLocation = (o: SalesOrder): Location | null => {
-        // 1. Direct location assigned in trip sequence or order metadata
+        // 1. Check direct location assigned via remark
         const text = o.items.map(i => i.remark || '').join(' ').toLowerCase();
 
-        // Return exact matches from WAREHOUSES
-        for (const w of WAREHOUSES) {
-            if (text.includes(w.toLowerCase())) return w;
-        }
-
-        // Broad fallback checking
-        if (TAIPING_KEYWORDS.some(k => text.includes(k.toLowerCase()))) return 'Taiping';
+        // Exact tab matches
+        if (text.includes('opm lama')) return 'OPM Lama';
+        if (text.includes('opm corner')) return 'OPM Corner';
         if (NILAI_KEYWORDS.some(k => text.includes(k.toLowerCase()))) return 'Nilai';
+        if (TAIPING_KEYWORDS.some(k => text.includes(k.toLowerCase()))) return 'SPD';
+        if (text.includes('spd')) return 'SPD';
 
+        // 2. Based on zone or customer text
+        const orderText = (o.zone + ' ' + o.deliveryAddress).toLowerCase();
+        if (orderText.includes('nilai') || orderText.includes('seremban')) return 'Nilai';
+
+        // Default to SPD
         return LOCATIONS[0] || 'Unknown';
     };
 
