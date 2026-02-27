@@ -181,9 +181,15 @@ const Layout: React.FC<LayoutProps> = ({ children, activePage, setActivePage, us
 
                     {/* Navigation Links */}
                     <nav className="flex-1 overflow-y-auto px-4 custom-scrollbar space-y-2 pb-6">
-                        {/* SPECIAL VIEW FOR NEOSON (User 009) */}
+                        {/* SPECIAL VIEW FOR NEOSON (User 009) & ERIC */}
                         {isNeoson && (
-                            <NavGroup title="Neoson Workspace">
+                            <NavGroup title="Manager Workspace">
+                                <NavItem id="factory-live-os" icon={LayoutDashboard} label="Factory Live OS" />
+                                <NavItem id="products" icon={Package} label="Product Library" />
+                                <NavItem id="stock-movement" icon={ArrowUpDown} label="Stock Movement" />
+                                <NavItem id="stock-audit" icon={ClipboardCheck} label="Stock Audit" />
+                                <NavItem id="operators" icon={Users} label="操作员管理" />
+
                                 <NavItem id="delivery-driver" icon={Package} label="My Delivery (货物)" />
                                 <NavItem id="order-summary" icon={FileBarChart} label="Daily Prep" />
                                 <NavItem id="maintenance" icon={Wrench} label="Maintenance Control" />
