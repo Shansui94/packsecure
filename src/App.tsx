@@ -153,7 +153,7 @@ function App() {
         const allowedPages: Record<string, string[]> = {
             'SuperAdmin': ['*'], // The Only One with Full Access
             'Admin': ['profile', 'construction', 'factory-live-os', 'dashboard', 'data-v2', 'customer-import', 'universal-intake', 'scanner', 'jobs', 'livestock', 'inventory', 'recipes', 'products', 'delivery', 'order-summary', 'dispatch', 'loading-dock', 'production', 'report-history', 'users', 'hr', 'claims', 'simple-stock', 'maintenance', 'lorry-management', 'iot', 'driver-management', 'operators', 'dev-log'],
-            'Manager': ['profile', 'construction', 'factory-live-os', 'dashboard', 'data-v2', 'customer-import', 'universal-intake', 'scanner', 'jobs', 'livestock', 'inventory', 'recipes', 'products', 'delivery', 'order-summary', 'dispatch', 'loading-dock', 'production', 'report-history', 'hr', 'claims', 'simple-stock', 'maintenance', 'lorry-management', 'iot', 'driver-management', 'operators'],
+            'Manager': ['profile', 'construction', 'factory-live-os', 'dashboard', 'data-v2', 'customer-import', 'universal-intake', 'jobs', 'livestock', 'inventory', 'recipes', 'products', 'delivery', 'order-summary', 'dispatch', 'loading-dock', 'production', 'report-history', 'hr', 'claims', 'simple-stock', 'maintenance', 'lorry-management', 'iot', 'driver-management', 'operators'],
             'Driver': ['delivery-driver', 'delivery-history', 'driver-leave', 'lorry-service', 'claims', 'profile'],
             'Operator': ['scanner', 'profile'],
             'Device': ['scanner'],
