@@ -85,8 +85,9 @@ const OrderSummary: React.FC<OrderSummaryProps> = ({ user: _user }) => {
 
     // --- LOCATION CLASSIFICATION ---
     const getOrderLocation = (o: SalesOrder): Location | null => {
-        // 1. Check direct location assigned via remark
-        const text = o.items.map(i => i.remark || '').join(' ').toLowerCase();
+        // 1. Check direct location assigned via remark, sourceLocation or global notes
+        const itemTexts = o.items.map(i => `${i.remark || ''} ${i.sourceLocation || ''}`).join(' ').toLowerCase();
+        const text = `${itemTexts} ${o.notes || ''}`.toLowerCase();
 
         // Exact tab matches
         if (text.includes('opm lama')) return 'OPM Lama';
