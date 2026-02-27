@@ -419,6 +419,11 @@ export default function DataManagement() {
             delete payload.subtitle;
             delete payload.bom_items_v2; // Don't save nested relations directly here for now
 
+            // Remove Generated/Computed Columns
+            if (activeTab === 'items') {
+                delete payload.volume_m3;
+            }
+
             // DYNAMIC PK HANDLING: if the table's DB Primary Key is NOT 'id', we must strip the 'id' field
             // that was injected by the frontend mapFn for UI mapping purposes.
             if (pk !== 'id') {
@@ -518,6 +523,12 @@ export default function DataManagement() {
                         id: undefined
                     };
                 }).filter((r: any) => r.name);
+            } else if (activeTab === 'items') {
+                finalRows = rows.map((r: any) => {
+                    const newR = { ...r };
+                    delete newR.volume_m3; // Strip generated column
+                    return newR;
+                });
             }
 
             const { error } = await supabase.from(table).upsert(finalRows);
