@@ -1184,7 +1184,19 @@ const DeliveryOrderManagement: React.FC = () => {
                                                                 setNewOrderAddress(order.deliveryAddress || '');
                                                                 setNewOrderDeliveryDate(order.deadline || '');
                                                                 setNewOrderNotes(order.notes || '');
-                                                                setNewOrderItems(order.items || []);
+
+                                                                // Extract legacy location from remark if sourceLocation is missing
+                                                                const itemsWithExtractedLoc = (order.items || []).map(item => {
+                                                                    if (!item.sourceLocation && item.remark && item.remark.includes('(Loc:')) {
+                                                                        const locMatch = item.remark.match(/\(Loc:\s*(.*?)\)/);
+                                                                        if (locMatch && locMatch[1]) {
+                                                                            return { ...item, sourceLocation: locMatch[1] };
+                                                                        }
+                                                                    }
+                                                                    return item;
+                                                                });
+                                                                setNewOrderItems(itemsWithExtractedLoc);
+
                                                                 setIsCreateModalOpen(true);
                                                             }}
                                                             style={{ ...provided.draggableProps.style }}
