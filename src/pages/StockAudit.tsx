@@ -310,10 +310,10 @@ const StockAudit: React.FC = () => {
                                                     {/* Product Info */}
                                                     <div className="col-span-1 md:col-span-5 flex flex-col min-w-0">
                                                         <div className="flex items-center gap-2 mb-1">
-                                                            <span className="font-bold text-white text-base truncate pr-2">{item.sku}</span>
+                                                            <span className="font-black text-cyan-50 text-lg truncate pr-2">{item.sku}</span>
                                                             {item.physicalQty !== '' && <CheckCircle2 size={14} className="text-green-500 shrink-0" />}
                                                         </div>
-                                                        <span className="text-xs text-gray-500 truncate">{item.name}</span>
+                                                        <span className="text-sm text-cyan-200/80 font-bold truncate">{item.name}</span>
                                                     </div>
 
                                                     {/* System Qty (Mobile vs Desktop) */}
@@ -329,11 +329,10 @@ const StockAudit: React.FC = () => {
                                                             placeholder="—"
                                                             value={item.physicalQty}
                                                             onChange={(e) => handlePhysicalQtyChange(item.sku, e.target.value)}
-                                                            className={`w-full md:w-3/4 max-w-[200px] text-center bg-black/40 border-2 rounded-xl py-3 md:py-2 text-lg font-black font-mono focus:outline-none transition-all placeholder-gray-700
-                                                                ${item.physicalQty === '' ? 'border-white/10 text-gray-300' :
-                                                                    variance === 0 ? 'border-green-500/40 text-green-300' : 'border-orange-500/40 text-orange-300 shadow-[0_0_15px_rgba(249,115,22,0.15)]'
-                                                                }
-                                                                focus:border-cyan-400/60 focus:bg-white/5`}
+                                                            className={`w-full md:w-3/4 max-w-[200px] text-center bg-white border-2 rounded-xl py-3 md:py-2 text-xl font-black font-mono focus:outline-none transition-all placeholder-gray-400 text-black shadow-inner focus:border-cyan-500 focus:ring-4 focus:ring-cyan-500/30
+                                                                ${item.physicalQty === '' ? 'border-gray-300' :
+                                                                    variance === 0 ? 'border-green-500 shadow-[0_0_15px_rgba(34,197,94,0.3)]' : 'border-orange-500 shadow-[0_0_15px_rgba(249,115,22,0.3)]'
+                                                                }`}
                                                         />
                                                     </div>
 

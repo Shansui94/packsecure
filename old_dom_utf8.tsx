@@ -1,4 +1,4 @@
-import React, { useState, useEffect } from 'react';
+﻿import React, { useState, useEffect } from 'react';
 import { DragDropContext, Droppable, Draggable, DropResult } from '@hello-pangea/dnd';
 import { supabase } from '../services/supabase';
 import { getV2Items } from '../services/apiV2';
@@ -157,10 +157,10 @@ const DeliveryOrderManagement: React.FC = () => {
 
     // New Order Form State
     const [selectedDriverId, setSelectedDriverId] = useState('');
-    const getTodayStr = () => new Date().toLocaleDateString('en-CA'); // YYYY-MM-DD 本地时间
+    const getTodayStr = () => new Date().toLocaleDateString('en-CA'); // YYYY-MM-DD µ£¼σ£░µù╢Θù┤
     const getTomorrowStr = () => { const d = new Date(); d.setDate(d.getDate() + 1); return d.toLocaleDateString('en-CA'); };
-    const [newOrderDate, setNewOrderDate] = useState(getTodayStr); // 默认今天
-    const [newOrderDeliveryDate, setNewOrderDeliveryDate] = useState(getTomorrowStr); // 默认明天
+    const [newOrderDate, setNewOrderDate] = useState(getTodayStr); // Θ╗ÿΦ«ñΣ╗èσñ⌐
+    const [newOrderDeliveryDate, setNewOrderDeliveryDate] = useState(getTomorrowStr); // Θ╗ÿΦ«ñµÿÄσñ⌐
     const [newOrderItems, setNewOrderItems] = useState<SalesOrder['items']>([]);
     const [orderCustomer, setOrderCustomer] = useState('');
     const [newOrderAddress, setNewOrderAddress] = useState('');
@@ -173,7 +173,7 @@ const DeliveryOrderManagement: React.FC = () => {
     const [isReassignModalOpen, setIsReassignModalOpen] = useState(false);
     const [reassignOrder, setReassignOrder] = useState<SalesOrder | null>(null);
 
-    // Submission guard — prevents double-click duplicate trips
+    // Submission guard ΓÇö prevents double-click duplicate trips
     const [isSubmitting, setIsSubmitting] = useState(false);
 
     // Split Order State
@@ -332,7 +332,7 @@ const DeliveryOrderManagement: React.FC = () => {
         });
 
         if (strictConflict) {
-            alert(`⛔ BLOCKED: ${driverName} is on leave from ${formatDateDMY(strictConflict.start_date)} to ${formatDateDMY(strictConflict.end_date)}.\n\nCannot assign orders on ${formatDateDMY(targetDateStr)}.`);
+            alert(`Γ¢ö BLOCKED: ${driverName} is on leave from ${formatDateDMY(strictConflict.start_date)} to ${formatDateDMY(strictConflict.end_date)}.\n\nCannot assign orders on ${formatDateDMY(targetDateStr)}.`);
             return false;
         }
 
@@ -352,7 +352,7 @@ const DeliveryOrderManagement: React.FC = () => {
         });
 
         if (nearConflict) {
-            const confirmLeaveWithUser = window.confirm(`💡 LEAVE REMINDER: ${driverName} will be on leave starting ${formatDateDMY(nearConflict.start_date)} (in 3 days or less).\n\nAre you sure you want to assign this trip?`);
+            const confirmLeaveWithUser = window.confirm(`≡ƒÆí LEAVE REMINDER: ${driverName} will be on leave starting ${formatDateDMY(nearConflict.start_date)} (in 3 days or less).\n\nAre you sure you want to assign this trip?`);
             if (!confirmLeaveWithUser) return false;
         }
 
@@ -364,7 +364,7 @@ const DeliveryOrderManagement: React.FC = () => {
         });
 
         if (serviceConflict) {
-            const confirmService = window.confirm(`🔧 SERVICE WARNING: The lorry for ${driverName} is scheduled for maintenance on ${formatDateDMY(targetDateStr)}.\n\nProceed with assignment?`);
+            const confirmService = window.confirm(`≡ƒöº SERVICE WARNING: The lorry for ${driverName} is scheduled for maintenance on ${formatDateDMY(targetDateStr)}.\n\nProceed with assignment?`);
             if (!confirmService) return false;
         }
 
@@ -563,7 +563,7 @@ const DeliveryOrderManagement: React.FC = () => {
 
             if (error) throw error;
 
-            alert("✅ Approved & Stock Deducted!");
+            alert("Γ£à Approved & Stock Deducted!");
 
             // Optimistic Update
             setOrders(prev => prev.map(o => {
@@ -734,7 +734,7 @@ const DeliveryOrderManagement: React.FC = () => {
     */
 
     const handleSubmitOrder = async () => {
-        if (isSubmitting) return; // 🛡️ Prevent double submission
+        if (isSubmitting) return; // ≡ƒ¢í∩╕Å Prevent double submission
         if (newOrderItems.length === 0) return alert("Add at least one item");
 
         setIsSubmitting(true);
@@ -910,7 +910,7 @@ const DeliveryOrderManagement: React.FC = () => {
                     if (first.name) setOrderCustomer(first.name);
                     if (first.address) setNewOrderAddress(first.address);
                     // You could also extract items if the prompt was updated, but for now just Contact Info
-                    alert(`✨ AI Extracted:\nName: ${first.name}\nAddress: ${first.address}`);
+                    alert(`Γ£¿ AI Extracted:\nName: ${first.name}\nAddress: ${first.address}`);
                 } else {
                     alert("AI couldn't find contact info in this image.");
                 }
@@ -997,7 +997,7 @@ const DeliveryOrderManagement: React.FC = () => {
                                 <div>
                                     <div className="text-sm font-black text-amber-400 uppercase tracking-widest leading-none mb-1">Upcoming Holidays (Next 2 Weeks)</div>
                                     <div className="text-xs font-bold text-amber-500/80">
-                                        {upcomingLeaves.map(l => `${l.driverName} (${l.start_date}${l.start_date !== l.end_date ? ' ➔ ' + l.end_date : ''})`).join(', ')}
+                                        {upcomingLeaves.map(l => `${l.driverName} (${l.start_date}${l.start_date !== l.end_date ? ' Γ₧ö ' + l.end_date : ''})`).join(', ')}
                                     </div>
                                 </div>
                             </div>
@@ -1110,7 +1110,7 @@ const DeliveryOrderManagement: React.FC = () => {
                 <div className="grid grid-cols-1 md:grid-cols-2 xl:grid-cols-3 gap-6">
                     {/* Add Unassigned Pseudo-Driver if not in list */}
                     {[
-                        { uid: 'unassigned', name: '📦 Unassigned / New', email: '', role: 'Driver' } as User,
+                        { uid: 'unassigned', name: '≡ƒôª Unassigned / New', email: '', role: 'Driver' } as User,
                         ...drivers
                     ].map(driver => {
                         const driverOrders = filteredOrders
@@ -1259,11 +1259,11 @@ const DeliveryOrderManagement: React.FC = () => {
                                                                 <Calendar size={14} className="text-slate-600 shrink-0" />
                                                                 <div className="flex flex-col gap-0.5 leading-tight">
                                                                     <div className="flex items-center gap-1">
-                                                                        <span className="text-[9px] font-black text-slate-600 uppercase tracking-tighter">📦 Ord:</span>
+                                                                        <span className="text-[9px] font-black text-slate-600 uppercase tracking-tighter">≡ƒôª Ord:</span>
                                                                         <span className="text-[10px] text-slate-500 font-bold">{formatDateDMY(order.orderDate)}</span>
                                                                     </div>
                                                                     <div className="flex items-center gap-1">
-                                                                        <span className="text-[9px] font-black text-blue-500/50 uppercase tracking-tighter">🚚 Del:</span>
+                                                                        <span className="text-[9px] font-black text-blue-500/50 uppercase tracking-tighter">≡ƒÜÜ Del:</span>
                                                                         <span className="text-[10px] text-blue-400 font-black">{formatDateDMY(order.deadline) || "No Date"}</span>
                                                                     </div>
                                                                 </div>
@@ -1276,18 +1276,11 @@ const DeliveryOrderManagement: React.FC = () => {
                                                                 ) : (
                                                                     order.items?.slice(0, 3).map((item, i) => (
                                                                         <div key={i} className="text-[11px] flex justify-between items-center gap-2">
-                                                                            <div className="flex items-center gap-2 overflow-hidden flex-1">
+                                                                            <div className="flex items-center gap-2 overflow-hidden">
                                                                                 <div className="w-1 h-1 rounded-full bg-slate-600 shrink-0"></div>
                                                                                 <span className="text-slate-400 truncate">{item.product}</span>
                                                                             </div>
-                                                                            <div className="flex items-center gap-2 shrink-0">
-                                                                                {item.sourceLocation && (
-                                                                                    <span className="text-[9px] px-1.5 py-0.5 rounded bg-blue-500/10 text-blue-400 border border-blue-500/20 uppercase tracking-widest font-black">
-                                                                                        {item.sourceLocation}
-                                                                                    </span>
-                                                                                )}
-                                                                                <span className="text-slate-200 font-bold font-mono whitespace-nowrap">x{item.quantity}</span>
-                                                                            </div>
+                                                                            <span className="text-slate-200 font-bold font-mono whitespace-nowrap">x{item.quantity}</span>
                                                                         </div>
                                                                     ))
                                                                 )}
@@ -1370,7 +1363,7 @@ const DeliveryOrderManagement: React.FC = () => {
                                                 <option value="">-- Unassigned --</option>
                                                 {drivers.map(d => <option key={d.uid} value={d.uid}>{d.name || d.email}</option>)}
                                             </select>
-                                            <div className="absolute right-4 top-4 pointer-events-none text-slate-600">▼</div>
+                                            <div className="absolute right-4 top-4 pointer-events-none text-slate-600">Γû╝</div>
                                         </div>
                                     </div>
                                     <div>
@@ -1533,7 +1526,7 @@ const DeliveryOrderManagement: React.FC = () => {
                                                     options={v2Items.map(item => ({
                                                         value: item.sku,
                                                         label: item.name,
-                                                        subLabel: `${item.sku} • Stock: ${stockMap[item.sku] || 0}`,
+                                                        subLabel: `${item.sku} ΓÇó Stock: ${stockMap[item.sku] || 0}`,
                                                         statusColor: (stockMap[item.sku] || 0) < 100 ? 'text-red-400' : 'text-green-400',
                                                         statusLabel: (stockMap[item.sku] || 0) < 100 ? 'LOW' : 'OK'
                                                     }))}
@@ -1759,7 +1752,7 @@ const DeliveryOrderManagement: React.FC = () => {
 
 /*
 function CheckCircle({size, className}: {size ?: number, className ?: string}) {
-    return <div className={`rounded-full border flex items-center justify-center ${className}`} style={{ width: size, height: size }}>✓</div>;
+    return <div className={`rounded-full border flex items-center justify-center ${className}`} style={{ width: size, height: size }}>Γ£ô</div>;
             */
 
 
