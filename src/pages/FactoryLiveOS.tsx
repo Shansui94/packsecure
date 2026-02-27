@@ -186,7 +186,7 @@ const DetailPanel = ({ machine, onClose }: { machine: MachineCard; onClose: () =
                                         <div className="text-xs text-gray-400 font-mono">
                                             {new Date(log.created_at).toLocaleTimeString('en-MY', { hour: '2-digit', minute: '2-digit', second: '2-digit' })}
                                         </div>
-                                        {log.product_sku && (
+                                        {log.product_sku && log.product_sku !== 'UNKNOWN' && (
                                             <div className="text-[10px] text-gray-600 font-mono mt-0.5">{log.product_sku}</div>
                                         )}
                                         {/* Show Lane unless it's Unknown */}
