@@ -12,6 +12,7 @@ import ProductionControl from './pages/ProductionControl';
 import LiveStock from './pages/LiveStock';
 import StockMovement from './pages/StockMovement';
 import StockAudit from './pages/StockAudit';
+import AuditReport from './pages/AuditReport';
 import ProductLibrary from './pages/ProductLibrary';
 import DeliveryOrderManagement from './pages/DeliveryOrderManagement';
 import DriverDelivery from './pages/DriverDelivery';
@@ -571,6 +572,8 @@ function App() {
                 return <StockMovement />;
             case 'stock-audit':
                 return <StockAudit />;
+            case 'audit-report':
+                return <AuditReport />;
             case 'product-library':
                 return <ProductLibrary />;
             case 'recipes':

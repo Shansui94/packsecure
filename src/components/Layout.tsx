@@ -188,6 +188,7 @@ const Layout: React.FC<LayoutProps> = ({ children, activePage, setActivePage, us
                                 <NavItem id="products" icon={Package} label="Product Library" />
                                 <NavItem id="stock-movement" icon={ArrowUpDown} label="Stock Movement" />
                                 <NavItem id="stock-audit" icon={ClipboardCheck} label="Stock Audit" />
+                                <NavItem id="audit-report" icon={FileBarChart} label="Audit Report" />
                                 <NavItem id="operators" icon={Users} label="操作员管理" />
 
                                 <NavItem id="delivery-driver" icon={Package} label="My Delivery (货物)" />
@@ -228,6 +229,7 @@ const Layout: React.FC<LayoutProps> = ({ children, activePage, setActivePage, us
                                     <NavItem id="products" icon={Package} label="Product Library" roles={['SuperAdmin', 'Admin', 'Manager']} />
                                     <NavItem id="stock-movement" icon={ArrowUpDown} label="Stock Movement" roles={['SuperAdmin', 'Admin', 'Manager']} />
                                     <NavItem id="stock-audit" icon={ClipboardCheck} label="Stock Audit" roles={['SuperAdmin', 'Admin', 'Manager']} />
+                                    <NavItem id="audit-report" icon={FileBarChart} label="Audit Report" roles={['SuperAdmin', 'Admin', 'Manager']} />
                                 </NavGroup>
 
                                 <NavGroup title="Logistics">
