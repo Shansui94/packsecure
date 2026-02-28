@@ -3,8 +3,8 @@ import { supabase } from '../services/supabase';
 import {
     Users, CheckCircle, XCircle, Calendar, Clock, User as UserIcon,
     DollarSign, ChevronLeft, ChevronRight, Loader, Download, AlertCircle,
-    TrendingDown, Wallet, Plus, Edit2, Save, X, Shield, ToggleLeft,
-    ToggleRight, Truck, Star, Award
+    Wallet, Plus, Edit2, Save, X, ToggleLeft,
+    ToggleRight, Star, Award
 } from 'lucide-react';
 
 // ── TYPES ────────────────────────────────────────────────────
@@ -370,9 +370,6 @@ const HRPortal: React.FC<{ user?: any }> = ({ user }) => {
         (existing || []).forEach((r: any) => { existingMap[r.employee_id] = r; });
 
         // Calculate payroll per employee
-        // Working days this month (Mon-Sat, rough estimate)
-        const workingDays = Math.round((new Date(payYear, payMonth, 0).getDate() * 6) / 7);
-
         const rows = (emps || []).map((emp: any) => {
             let gross = 0;
             let details = '';

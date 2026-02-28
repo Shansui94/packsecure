@@ -549,6 +549,24 @@ const ProductionControl: React.FC<ProductionControlProps> = ({ user, jobs = [] }
                 if (isLogoutMode) {
                     // VERIFY LOGOUT
                     if (user.id === operatorId) {
+                        // Record clock-out in operator_attendance
+                        const today = new Date().toISOString().split('T')[0];
+                        const clockOutTime = new Date().toISOString();
+                        // Find today's row and update it
+                        const { data: existingRow } = await supabase
+                            .from('operator_attendance')
+                            .select('id, clock_in')
+                            .eq('operator_id', user.employee_id)
+                            .eq('date', today)
+                            .limit(1);
+                        if (existingRow && existingRow.length > 0) {
+                            const clockIn = new Date(existingRow[0].clock_in);
+                            const clockOut = new Date(clockOutTime);
+                            const hoursWorked = (clockOut.getTime() - clockIn.getTime()) / 3600000;
+                            await supabase.from('operator_attendance')
+                                .update({ clock_out: clockOutTime, hours_worked: Math.round(hoursWorked * 100) / 100 })
+                                .eq('id', existingRow[0].id);
+                        }
                         setOperatorId(null);
                         setOperatorName(null);
                         setIsLoginModalOpen(false);
@@ -559,7 +577,12 @@ const ProductionControl: React.FC<ProductionControlProps> = ({ user, jobs = [] }
                         setTimeout(() => setPinCode(""), 500);
                     }
                 } else {
-                    // LOGIN
+                    // LOGIN — record clock-in in operator_attendance
+                    const today = new Date().toISOString().split('T')[0];
+                    const clockInTime = new Date().toISOString();
+                    await supabase.from('operator_attendance')
+                        .upsert({ operator_id: user.employee_id, date: today, clock_in: clockInTime },
+                            { onConflict: 'operator_id,date', ignoreDuplicates: true });
                     setOperatorId(user.id);
                     setOperatorName(user.name);
                     setIsLoginModalOpen(false);
