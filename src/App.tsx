@@ -569,7 +569,7 @@ function App() {
             case 'livestock':
                 return <LiveStock />;
             case 'stock-movement':
-                return <StockMovement />;
+                return <StockMovement user={user} />;
             case 'stock-audit':
                 return <StockAudit />;
             case 'audit-report':

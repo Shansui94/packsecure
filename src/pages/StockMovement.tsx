@@ -15,16 +15,19 @@ interface LedgerRow {
     change_qty: number;
     ref_doc?: string;
     notes?: string;
+    created_by_name?: string;
 }
 
 interface CartItem extends V2Item {
     qty: number;
 }
 
-const StockMovement: React.FC = () => {
+const StockMovement: React.FC<{ user?: any }> = ({ user }) => {
     const [mode, setMode] = useState<Mode>('in');
+    const [activeTab, setActiveTab] = useState<'all' | 'mine'>('all');
     const [items, setItems] = useState<V2Item[]>([]);
     const [ledger, setLedger] = useState<LedgerRow[]>([]);
+    const [myHistory, setMyHistory] = useState<LedgerRow[]>([]);
     const [loading, setLoading] = useState(false);
     const [toast, setToast] = useState<{ msg: string; type: 'ok' | 'err' } | null>(null);
 
@@ -55,11 +58,22 @@ const StockMovement: React.FC = () => {
     const fetchLedger = async () => {
         const { data } = await supabase
             .from('stock_ledger_v2')
-            .select('txn_id, sku, timestamp, event_type, change_qty, ref_doc, notes')
+            .select('txn_id, sku, timestamp, event_type, change_qty, ref_doc, notes, created_by_name')
             .in('event_type', ['Stock In', 'Stock Out'])
             .order('timestamp', { ascending: false })
-            .limit(50);
+            .limit(80);
         setLedger(data || []);
+
+        // My history: only current user's stock outs
+        if (user?.uid) {
+            const { data: mine } = await supabase
+                .from('stock_ledger_v2')
+                .select('txn_id, sku, timestamp, event_type, change_qty, ref_doc, notes, created_by_name')
+                .eq('created_by', user.uid)
+                .order('timestamp', { ascending: false })
+                .limit(100);
+            setMyHistory(mine || []);
+        }
     };
 
     // SKU autocomplete filter
@@ -124,6 +138,8 @@ const StockMovement: React.FC = () => {
                 loc_id: selectedLocation,
                 ref_doc: refDoc || null,
                 notes: notes || null,
+                created_by: user?.uid || null,
+                created_by_name: user?.name || null,
             }));
 
             const { error } = await supabase.from('stock_ledger_v2').insert(inserts);
@@ -394,43 +410,55 @@ const StockMovement: React.FC = () => {
 
                         {/* Recent History */}
                         <div className="flex-1 bg-[#0d0d12] border border-white/5 rounded-2xl flex flex-col overflow-hidden">
-                            <div className="px-6 py-4 border-b border-white/5 bg-black/20">
-                                <h2 className="text-xs font-bold text-gray-400 uppercase tracking-widest">Recent Activity</h2>
+                            <div className="px-4 py-3 border-b border-white/5 bg-black/20 flex items-center gap-2">
+                                {(['all', 'mine'] as const).map(t => (
+                                    <button key={t} onClick={() => setActiveTab(t)}
+                                        className={`px-3 py-1.5 rounded-lg text-[10px] font-bold uppercase tracking-widest transition-all ${activeTab === t
+                                            ? 'bg-white/10 text-white'
+                                            : 'text-gray-600 hover:text-gray-400'}`}>
+                                        {t === 'all' ? `All (${ledger.length})` : `My History (${myHistory.length})`}
+                                    </button>
+                                ))}
                             </div>
 
-                            <div className="flex-1 overflow-y-auto max-h-[400px] p-2 custom-scrollbar">
-                                {ledger.length === 0 ? (
-                                    <div className="text-center py-12 text-gray-600 text-sm">No recent transactions</div>
-                                ) : (
-                                    <div className="space-y-1">
-                                        {ledger.map(row => {
-                                            const isPositive = row.change_qty > 0;
-                                            return (
-                                                <div key={row.txn_id} className="px-4 py-3 rounded-xl hover:bg-white/5 transition-colors group flex items-start gap-3">
-                                                    {/* Color Bar / Dot */}
-                                                    <div className={`mt-1.5 w-2 h-2 rounded-full shrink-0 ${isPositive ? 'bg-green-500' : 'bg-orange-500'}`} />
-
-                                                    <div className="flex-1 min-w-0">
-                                                        <div className="flex justify-between items-start mb-0.5">
-                                                            <span className="font-bold text-white text-sm truncate pr-2" title={row.sku}>{row.sku}</span>
-                                                            <span className={`font-black font-mono text-sm shrink-0 ${isPositive ? 'text-green-400' : 'text-orange-400'}`}>
-                                                                {isPositive ? '+' : ''}{row.change_qty.toLocaleString()}
-                                                            </span>
-                                                        </div>
-                                                        <div className="flex items-center justify-between mt-1 gap-2">
-                                                            <span className="text-[10px] text-gray-500 font-mono tracking-wider">
-                                                                {new Date(row.timestamp).toLocaleTimeString('en-GB', { hour: '2-digit', minute: '2-digit' })} • {new Date(row.timestamp).toLocaleDateString('en-GB', { day: '2-digit', month: 'short' })}
-                                                            </span>
-                                                            {row.ref_doc && (
-                                                                <span className="text-[9px] px-1.5 py-0.5 rounded bg-white/5 text-gray-400 font-mono truncate max-w-[100px]">{row.ref_doc}</span>
-                                                            )}
+                            <div className="flex-1 overflow-y-auto max-h-[500px] p-2 custom-scrollbar">
+                                {(() => {
+                                    const rows = activeTab === 'mine' ? myHistory : ledger;
+                                    if (rows.length === 0) return (
+                                        <div className="text-center py-12 text-gray-600 text-sm">
+                                            {activeTab === 'mine' ? 'No personal transactions yet' : 'No recent transactions'}
+                                        </div>
+                                    );
+                                    return (
+                                        <div className="space-y-1">
+                                            {rows.map(row => {
+                                                const isPositive = row.change_qty > 0;
+                                                return (
+                                                    <div key={row.txn_id} className="px-4 py-3 rounded-xl hover:bg-white/5 transition-colors flex items-start gap-3">
+                                                        <div className={`mt-1.5 w-2 h-2 rounded-full shrink-0 ${isPositive ? 'bg-green-500' : 'bg-orange-500'}`} />
+                                                        <div className="flex-1 min-w-0">
+                                                            <div className="flex justify-between items-start mb-0.5">
+                                                                <span className="font-bold text-white text-sm truncate pr-2" title={row.sku}>{row.sku}</span>
+                                                                <span className={`font-black font-mono text-sm shrink-0 ${isPositive ? 'text-green-400' : 'text-orange-400'}`}>
+                                                                    {isPositive ? '+' : ''}{row.change_qty.toLocaleString()}
+                                                                </span>
+                                                            </div>
+                                                            <div className="flex items-center justify-between mt-1 gap-2 flex-wrap">
+                                                                <span className="text-[10px] text-gray-500 font-mono">
+                                                                    {new Date(row.timestamp).toLocaleDateString('en-GB', { day: '2-digit', month: 'short' })} {new Date(row.timestamp).toLocaleTimeString('en-GB', { hour: '2-digit', minute: '2-digit' })}
+                                                                    {row.created_by_name && <span className="text-blue-400/70"> · {row.created_by_name}</span>}
+                                                                </span>
+                                                                {row.ref_doc && (
+                                                                    <span className="text-[9px] px-1.5 py-0.5 rounded bg-white/5 text-gray-400 font-mono truncate max-w-[100px]">{row.ref_doc}</span>
+                                                                )}
+                                                            </div>
                                                         </div>
                                                     </div>
-                                                </div>
-                                            );
-                                        })}
-                                    </div>
-                                )}
+                                                );
+                                            })}
+                                        </div>
+                                    );
+                                })()}
                             </div>
                         </div>
 
