@@ -357,6 +357,11 @@ const Layout: React.FC<LayoutProps> = ({ children, activePage, setActivePage, us
                                 <p className="text-[10px] text-blue-400 font-bold uppercase tracking-wider">
                                     {userRole || 'Guest'}
                                 </p>
+                                {user?.employeeId && (
+                                    <p className="text-[10px] text-gray-600 font-mono tracking-widest mt-0.5">
+                                        PIN: {user.employeeId}
+                                    </p>
+                                )}
                             </div>
                         </button>
 
