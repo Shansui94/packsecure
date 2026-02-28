@@ -8,20 +8,15 @@ const supabase = createClient(supabaseUrl, supabaseKey);
 
 async function run() {
     const { data, error } = await supabase
-        .from('v2_inventory_view')
-        .select('*')
+        .from('production_logs_v2')
+        .select('sku, output_qty, created_at, machine_id')
+        .eq('machine_id', 'T1.2-M01')
+        .not('sku', 'is', null)
+        .order('created_at', { ascending: false })
         .limit(1);
 
-    if (error) {
-        console.log("Error querying view:", error);
-        return;
-    }
-
-    if (data && data.length > 0) {
-        console.log("Columns:", Object.keys(data[0]));
-    } else {
-        console.log("No data returned, cannot infer columns.");
-    }
+    console.log("Error:", error);
+    console.log("Last production:", data);
 }
 
 run();

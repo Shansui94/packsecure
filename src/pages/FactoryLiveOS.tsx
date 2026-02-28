@@ -24,12 +24,11 @@ interface MachineCard {
 }
 
 interface ProductionLogRow {
-    id: string;
+    log_id: string;
     created_at: string;
     machine_id: string;
-    product_sku: string | null;
-    alarm_count: number;
-    lane_id?: string;
+    sku: string | null;
+    output_qty: number;
 }
 
 // ─── Helpers ──────────────────────────────────────────────────────────────────
@@ -70,8 +69,8 @@ const DetailPanel = ({ machine, onClose }: { machine: MachineCard; onClose: () =
     useEffect(() => {
         setLoading(true);
         const today = new Date(); today.setHours(0, 0, 0, 0);
-        supabase.from('production_logs')
-            .select('id, created_at, machine_id, product_sku, alarm_count, lane_id')
+        supabase.from('production_logs_v2')
+            .select('log_id, created_at, machine_id, sku, output_qty')
             .eq('machine_id', machine.machine_id)
             .gte('created_at', today.toISOString())
             .order('created_at', { ascending: false })
@@ -181,29 +180,19 @@ const DetailPanel = ({ machine, onClose }: { machine: MachineCard; onClose: () =
                     ) : (
                         <div className="divide-y divide-white/5">
                             {logs.map(log => (
-                                <div key={log.id} className="px-6 py-3 flex items-center justify-between hover:bg-white/2">
+                                <div key={log.log_id} className="px-6 py-3 flex items-center justify-between hover:bg-white/2">
                                     <div>
                                         <div className="text-xs text-gray-400 font-mono">
                                             {new Date(log.created_at).toLocaleTimeString('en-MY', { hour: '2-digit', minute: '2-digit', second: '2-digit' })}
                                         </div>
-                                        {(() => {
-                                            const displaySku = log.product_sku && log.product_sku.trim().toUpperCase() !== 'UNKNOWN'
-                                                ? log.product_sku
-                                                : machine.current_sku;
-                                            return displaySku ? (
-                                                <div className="text-[10px] text-gray-600 font-mono mt-0.5">{displaySku}</div>
-                                            ) : null;
-                                        })()}
-                                        {/* Show Lane unless it's Unknown */}
-                                        {log.lane_id && log.lane_id.trim().toUpperCase() !== 'UNKNOWN' && (
-                                            <div className="text-[9px] text-gray-700 font-mono mt-0.5 uppercase">LANE: {log.lane_id}</div>
-                                        )}
+                                        {log.sku && log.sku.trim().toUpperCase() !== 'UNKNOWN' ? (
+                                            <div className="text-[10px] text-gray-600 font-mono mt-0.5">{log.sku}</div>
+                                        ) : machine.current_sku ? (
+                                            <div className="text-[10px] text-gray-600 font-mono mt-0.5">{machine.current_sku}</div>
+                                        ) : null}
                                     </div>
-                                    <div className={`text-sm font-black ${log.alarm_count === 0 ? 'text-orange-400' : 'text-white'}`}>
-                                        {log.alarm_count === 0 ? '⚡ REBOOT' : `+${(
-                                            (log.lane_id && log.lane_id.trim().toUpperCase() === 'UNKNOWN' && (log.machine_id.startsWith('N1') || log.machine_id.startsWith('N2') || log.machine_id === 'T1.2-M01')) ||
-                                            (log.machine_id === 'T1.3-M02' && log.alarm_count === 2)
-                                        ) ? 1 : log.alarm_count}`}
+                                    <div className="text-sm font-black text-white">
+                                        +{log.output_qty || 0}
                                     </div>
                                 </div>
                             ))}
@@ -318,7 +307,7 @@ const FactoryLiveOS = () => {
         const [machinesRes, iotRes, logsRes, activeRes] = await Promise.all([
             supabase.from('sys_machines_v2').select('machine_id, name, factory_id, base_width, type').order('factory_id'),
             supabase.from('iot_device_configs').select('mac_address, machine_id, last_heartbeat'),
-            supabase.from('production_logs').select('machine_id, alarm_count, created_at, product_sku, lane_id').gte('created_at', todayISO),
+            supabase.from('production_logs_v2').select('machine_id, output_qty, created_at, sku, log_id').gte('created_at', todayISO),
             supabase.from('machine_active_products').select('machine_id, product_sku'),
         ]);
 
@@ -342,15 +331,10 @@ const FactoryLiveOS = () => {
                 const id = log.machine_id;
                 const t = new Date(log.created_at).getTime();
 
-                // Patch for old firmware inserting +2
-                let count = log.alarm_count;
-                if (count === 2) {
-                    if (log.lane_id && log.lane_id.trim().toUpperCase() === 'UNKNOWN' && (id.startsWith('N1') || id.startsWith('N2') || id === 'T1.2-M01')) count = 1;
-                    if (id === 'T1.3-M02') count = 1;
-                }
+                // Use output_qty from production_logs_v2 — already correct for all machines
+                const count = Number(log.output_qty) || 0;
 
                 if (count > 0) countMap[id] = (countMap[id] || 0) + count;
-                else rebootMap[id] = (rebootMap[id] || 0) + 1;
 
                 if (lastTimeMap[id]) {
                     const diffMin = Math.round((t - lastTimeMap[id]) / 60000);
