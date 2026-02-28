@@ -192,9 +192,7 @@ const DetailPanel = ({ machine, onClose }: { machine: MachineCard; onClose: () =
                                         ) : null}
                                     </div>
                                     <div className="text-sm font-black text-white">
-                                        +{['T1.3-M02'].includes(log.machine_id)
-                                            ? Math.round((log.output_qty || 0) / 2)
-                                            : (log.output_qty || 0)}
+                                        +{log.output_qty || 0}
                                     </div>
                                 </div>
                             ))}
@@ -333,11 +331,8 @@ const FactoryLiveOS = () => {
                 const id = log.machine_id;
                 const t = new Date(log.created_at).getTime();
 
-                // Machines with known firmware over-reporting (sends alarm_count=2 but produces 1 roll)
-                const HALF_COUNT_MACHINES = ['T1.3-M02'];
-                const count = HALF_COUNT_MACHINES.includes(id)
-                    ? Math.round(Number(log.output_qty) / 2) || 0
-                    : Number(log.output_qty) || 0;
+                // output_qty from production_logs_v2 is now computed correctly by the DB trigger
+                const count = Number(log.output_qty) || 0;
 
                 if (count > 0) countMap[id] = (countMap[id] || 0) + count;
 
