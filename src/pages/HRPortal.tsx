@@ -111,6 +111,19 @@ const EmployeeModal: React.FC<{
 
     const set = (k: keyof Employee, v: any) => setForm(f => ({ ...f, [k]: v }));
 
+    // Auto-generate next PIN for new employees
+    useEffect(() => {
+        if (!isNew) return;
+        supabase.from('sys_users_v2').select('employee_id').then(({ data }) => {
+            const maxPin = (data || [])
+                .map(r => parseInt(r.employee_id || '0', 10))
+                .filter(n => !isNaN(n) && n > 0)
+                .reduce((m, n) => Math.max(m, n), 0);
+            const nextPin = String(maxPin + 1).padStart(4, '0');
+            setForm(f => ({ ...f, pin_input: nextPin } as any));
+        });
+    }, [isNew]);
+
     const handleSave = async () => {
         const pin = (form as any).pin_input || '';
         if (isNew && pin.length !== 4) return setError('PIN must be exactly 4 digits.');
