@@ -73,3 +73,51 @@ $$ LANGUAGE plpgsql SECURITY DEFINER;
 
 -- Verify
 SELECT machine_id, name, base_width, rolls_per_alarm FROM public.sys_machines_v2 ORDER BY machine_id;
+
+-- ============================================================
+-- Step 4: Fix HISTORICAL over-counted production records
+-- These machines sent alarm_count=2 but only produced 1 roll.
+-- All their past Production entries in stock_ledger_v2 are 2x too high.
+-- ============================================================
+
+-- PREVIEW FIRST — check how many rows will be corrected and the total impact
+SELECT
+    SUBSTRING(notes, 10, 8) AS machine,
+    COUNT(*) AS rows_affected,
+    SUM(change_qty) AS current_total_qty,
+    SUM(change_qty / 2) AS corrected_total_qty,
+    SUM(change_qty) - SUM(change_qty / 2) AS qty_to_remove
+FROM public.stock_ledger_v2
+WHERE event_type = 'Production'
+  AND (
+    notes LIKE 'Auto-Log: T1.3-M02%'
+    OR notes LIKE 'Auto-Log: N1-M01%'
+    OR notes LIKE 'Auto-Log: N2-M02%'
+  )
+GROUP BY SUBSTRING(notes, 10, 8)
+ORDER BY machine;
+
+-- APPLY CORRECTION — halve all historical production quantities for 100cm machines
+UPDATE public.stock_ledger_v2
+SET change_qty = change_qty / 2
+WHERE event_type = 'Production'
+  AND (
+    notes LIKE 'Auto-Log: T1.3-M02%'
+    OR notes LIKE 'Auto-Log: N1-M01%'
+    OR notes LIKE 'Auto-Log: N2-M02%'
+  );
+
+-- CONFIRM — how many rows were updated
+SELECT
+    SUBSTRING(notes, 10, 8) AS machine,
+    COUNT(*) AS rows_updated,
+    SUM(change_qty) AS corrected_total_qty
+FROM public.stock_ledger_v2
+WHERE event_type = 'Production'
+  AND (
+    notes LIKE 'Auto-Log: T1.3-M02%'
+    OR notes LIKE 'Auto-Log: N1-M01%'
+    OR notes LIKE 'Auto-Log: N2-M02%'
+  )
+GROUP BY SUBSTRING(notes, 10, 8)
+ORDER BY machine;

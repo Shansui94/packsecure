@@ -1,6 +1,6 @@
 import React, { useState, useEffect, useMemo } from 'react';
 import { supabase } from '../services/supabase';
-import { Search, RefreshCw, Box, Filter } from 'lucide-react';
+import { Search, RefreshCw, Box, Filter, X, TrendingUp, TrendingDown, Package, Clipboard, ArrowUpDown } from 'lucide-react';
 import { WAREHOUSES } from '../data/factoryData';
 
 // --- TYPES ---
@@ -14,6 +14,17 @@ interface StockRow {
     last_updated: string;
 }
 
+interface LedgerRow {
+    txn_id: string;
+    sku: string;
+    change_qty: number;
+    event_type: string;
+    loc_id: string;
+    ref_doc: string;
+    notes: string;
+    timestamp: string;
+}
+
 const TYPE_COLOR: Record<string, string> = {
     FG: 'from-cyan-500/10 to-cyan-500/0 border-cyan-500/20 text-cyan-400',
     Raw: 'from-amber-500/10 to-amber-500/0 border-amber-500/20 text-amber-400',
@@ -25,8 +36,142 @@ const TYPE_LABEL: Record<string, string> = {
     FG: 'FG', Raw: 'Raw Material', WiP: 'Work in Progress', Packaging: 'Packaging',
 };
 
+const EVENT_STYLE: Record<string, { icon: React.FC<any>; color: string; bg: string }> = {
+    'Production': { icon: TrendingUp, color: 'text-green-400', bg: 'bg-green-500/10' },
+    'Stock In': { icon: TrendingUp, color: 'text-cyan-400', bg: 'bg-cyan-500/10' },
+    'Stock Out': { icon: TrendingDown, color: 'text-red-400', bg: 'bg-red-500/10' },
+    'Audit Adjustment': { icon: Clipboard, color: 'text-purple-400', bg: 'bg-purple-500/10' },
+    'Transfer': { icon: ArrowUpDown, color: 'text-amber-400', bg: 'bg-amber-500/10' },
+};
+
+const getEventStyle = (type: string, qty: number) => {
+    if (EVENT_STYLE[type]) return EVENT_STYLE[type];
+    return qty >= 0
+        ? { icon: TrendingUp, color: 'text-green-400', bg: 'bg-green-500/10' }
+        : { icon: TrendingDown, color: 'text-red-400', bg: 'bg-red-500/10' };
+};
+
 const LOW_STOCK_THRESHOLD = 50;
 
+// --- DETAIL PANEL ---
+const DetailPanel: React.FC<{ item: StockRow; locFilter: string; onClose: () => void }> = ({ item, locFilter, onClose }) => {
+    const [ledger, setLedger] = useState<LedgerRow[]>([]);
+    const [loading, setLoading] = useState(true);
+
+    useEffect(() => {
+        setLoading(true);
+        let q = supabase
+            .from('stock_ledger_v2')
+            .select('txn_id, sku, change_qty, event_type, loc_id, ref_doc, notes, timestamp')
+            .eq('sku', item.sku)
+            .order('timestamp', { ascending: false })
+            .limit(50);
+
+        if (locFilter !== 'All') q = q.eq('loc_id', locFilter);
+
+        q.then(({ data }) => {
+            setLedger(data || []);
+            setLoading(false);
+        });
+    }, [item.sku, locFilter]);
+
+    const totalIn = ledger.filter(r => r.change_qty > 0).reduce((s, r) => s + r.change_qty, 0);
+    const totalOut = ledger.filter(r => r.change_qty < 0).reduce((s, r) => s + r.change_qty, 0);
+
+    return (
+        <div className="fixed inset-0 z-50 flex items-stretch justify-end">
+            <div className="absolute inset-0 bg-black/60 backdrop-blur-sm" onClick={onClose} />
+            <div className="relative w-full max-w-md bg-[#0a0a0f] border-l border-white/10 flex flex-col overflow-hidden shadow-2xl">
+
+                {/* Header */}
+                <div className="p-5 border-b border-white/5 flex items-start justify-between shrink-0">
+                    <div className="flex-1 min-w-0 pr-3">
+                        <div className="text-white font-black text-base leading-tight truncate" title={item.name}>{item.name}</div>
+                        <div className="text-[11px] text-gray-500 font-mono mt-0.5 truncate">{item.sku}</div>
+                        {locFilter !== 'All' && (
+                            <div className="text-[10px] text-violet-400 font-mono mt-1 uppercase tracking-widest">📍 {locFilter}</div>
+                        )}
+                    </div>
+                    <button onClick={onClose} className="p-2 rounded-xl bg-white/5 hover:bg-white/10 text-gray-400 hover:text-white transition-all shrink-0">
+                        <X size={16} />
+                    </button>
+                </div>
+
+                {/* Summary Strip */}
+                <div className="grid grid-cols-3 border-b border-white/5 shrink-0">
+                    <div className="px-4 py-3 border-r border-white/5 text-center">
+                        <div className="text-[10px] text-gray-500 uppercase tracking-widest mb-0.5">Stock</div>
+                        <div className={`text-xl font-black ${item.current_stock < 0 ? 'text-red-400' : item.current_stock < LOW_STOCK_THRESHOLD ? 'text-amber-400' : 'text-white'}`}>
+                            {Number(item.current_stock).toLocaleString()}
+                        </div>
+                    </div>
+                    <div className="px-4 py-3 border-r border-white/5 text-center">
+                        <div className="text-[10px] text-gray-500 uppercase tracking-widest mb-0.5">In</div>
+                        <div className="text-xl font-black text-green-400">+{totalIn.toLocaleString()}</div>
+                    </div>
+                    <div className="px-4 py-3 text-center">
+                        <div className="text-[10px] text-gray-500 uppercase tracking-widest mb-0.5">Out</div>
+                        <div className="text-xl font-black text-red-400">{totalOut.toLocaleString()}</div>
+                    </div>
+                </div>
+
+                {/* Ledger */}
+                <div className="px-5 py-3 border-b border-white/5 shrink-0">
+                    <span className="text-[10px] text-gray-500 uppercase tracking-widest">Recent Movements (last 50)</span>
+                </div>
+                <div className="flex-1 overflow-y-auto">
+                    {loading ? (
+                        <div className="flex items-center justify-center py-16">
+                            <div className="w-6 h-6 border-2 border-cyan-500/30 border-t-cyan-500 rounded-full animate-spin" />
+                        </div>
+                    ) : ledger.length === 0 ? (
+                        <div className="text-center py-16 text-gray-600">
+                            <Package size={32} className="mx-auto mb-2 opacity-30" />
+                            <div className="text-sm">No movements found</div>
+                        </div>
+                    ) : (
+                        <div className="divide-y divide-white/5">
+                            {ledger.map(row => {
+                                const style = getEventStyle(row.event_type, row.change_qty);
+                                const Icon = style.icon;
+                                const isPos = row.change_qty > 0;
+                                return (
+                                    <div key={row.txn_id} className="px-5 py-3 flex items-start gap-3 hover:bg-white/[0.02]">
+                                        <div className={`mt-0.5 w-7 h-7 rounded-lg ${style.bg} flex items-center justify-center shrink-0`}>
+                                            <Icon size={13} className={style.color} />
+                                        </div>
+                                        <div className="flex-1 min-w-0">
+                                            <div className="flex items-baseline justify-between gap-2">
+                                                <span className={`text-xs font-bold ${style.color}`}>{row.event_type}</span>
+                                                <span className={`text-sm font-black tabular-nums shrink-0 ${isPos ? 'text-green-400' : 'text-red-400'}`}>
+                                                    {isPos ? '+' : ''}{row.change_qty}
+                                                </span>
+                                            </div>
+                                            {row.loc_id && locFilter === 'All' && (
+                                                <div className="text-[10px] text-gray-500 mt-0.5">📍 {row.loc_id}</div>
+                                            )}
+                                            {row.ref_doc && (
+                                                <div className="text-[10px] text-gray-600 font-mono mt-0.5 truncate">{row.ref_doc}</div>
+                                            )}
+                                            {row.notes && (
+                                                <div className="text-[10px] text-gray-700 mt-0.5 truncate" title={row.notes}>{row.notes}</div>
+                                            )}
+                                            <div className="text-[10px] text-gray-600 mt-0.5 font-mono">
+                                                {new Date(row.timestamp).toLocaleString('en-MY', { day: '2-digit', month: 'short', hour: '2-digit', minute: '2-digit' })}
+                                            </div>
+                                        </div>
+                                    </div>
+                                );
+                            })}
+                        </div>
+                    )}
+                </div>
+            </div>
+        </div>
+    );
+};
+
+// --- MAIN ---
 const LiveStock: React.FC = () => {
     const [rows, setRows] = useState<StockRow[]>([]);
     const [loading, setLoading] = useState(true);
@@ -34,6 +179,7 @@ const LiveStock: React.FC = () => {
     const [search, setSearch] = useState('');
     const [typeFilter, setTypeFilter] = useState<string>('All');
     const [locationFilter, setLocationFilter] = useState<string>('All');
+    const [selectedItem, setSelectedItem] = useState<StockRow | null>(null);
 
     const fetchStock = async () => {
         setLoading(true);
@@ -60,7 +206,6 @@ const LiveStock: React.FC = () => {
         return () => clearInterval(interval);
     }, []);
 
-    // Derived
     const allTypes = useMemo(() => {
         const t = [...new Set(rows.map(r => r.type).filter(Boolean))];
         return t.sort();
@@ -125,7 +270,6 @@ const LiveStock: React.FC = () => {
                         </p>
                     </div>
 
-                    {/* Stat Pills */}
                     <div className="flex gap-3 flex-wrap">
                         <div className="bg-white/5 border border-white/10 rounded-xl px-4 py-3 min-w-[100px]">
                             <div className="text-[10px] text-gray-500 font-bold uppercase mb-0.5">SKUs</div>
@@ -152,7 +296,6 @@ const LiveStock: React.FC = () => {
 
                 {/* ── Controls ── */}
                 <div className="flex flex-col sm:flex-row gap-3 mb-6">
-                    {/* Search */}
                     <div className="relative flex-1 max-w-sm">
                         <Search className="absolute left-3 top-1/2 -translate-y-1/2 text-gray-500" size={16} />
                         <input
@@ -164,7 +307,6 @@ const LiveStock: React.FC = () => {
                         />
                     </div>
 
-                    {/* Type Filter */}
                     <div className="flex items-center gap-2 flex-wrap">
                         <Filter size={14} className="text-gray-500" />
                         {['All', ...allTypes].map(t => (
@@ -181,7 +323,6 @@ const LiveStock: React.FC = () => {
                         ))}
                     </div>
 
-                    {/* Location Filter */}
                     <div className="flex items-center gap-2 flex-wrap">
                         <span className="text-gray-500 font-bold uppercase text-[10px]">Location:</span>
                         {['All', ...WAREHOUSES].map(w => (
@@ -222,9 +363,10 @@ const LiveStock: React.FC = () => {
                             const badge = getStockBadge(item.current_stock);
                             const typeStyle = TYPE_COLOR[item.type] || 'from-white/5 to-white/0 border-white/10 text-gray-400';
                             return (
-                                <div
+                                <button
                                     key={item.sku}
-                                    className={`relative bg-gradient-to-br ${typeStyle} border rounded-2xl p-5 hover:scale-[1.01] transition-transform`}
+                                    onClick={() => setSelectedItem(item)}
+                                    className={`relative bg-gradient-to-br ${typeStyle} border rounded-2xl p-5 hover:scale-[1.02] hover:brightness-110 active:scale-[0.99] transition-all text-left cursor-pointer w-full`}
                                 >
                                     {/* Type tag */}
                                     <div className="flex justify-between items-start mb-4">
@@ -251,12 +393,21 @@ const LiveStock: React.FC = () => {
                                             {Number(item.current_stock).toLocaleString()}
                                         </div>
                                     </div>
-                                </div>
+                                </button>
                             );
                         })}
                     </div>
                 )}
             </div>
+
+            {/* Detail Panel */}
+            {selectedItem && (
+                <DetailPanel
+                    item={selectedItem}
+                    locFilter={locationFilter}
+                    onClose={() => setSelectedItem(null)}
+                />
+            )}
         </div>
     );
 };
