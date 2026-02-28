@@ -38,6 +38,8 @@ interface LayoutProps {
 const Layout: React.FC<LayoutProps> = ({ children, activePage, setActivePage, userRole, user, onLogout }) => {
     const [isMobileMenuOpen, setIsMobileMenuOpen] = useState(false);
     const [taskCount, setTaskCount] = useState(0);
+    // DB-driven page permissions: Set<page_id> of allowed pages for this role
+    const [dbAllowedPages, setDbAllowedPages] = useState<Set<string> | null>(null);
 
     const toggleMobileMenu = () => setIsMobileMenuOpen(!isMobileMenuOpen);
 
@@ -60,6 +62,24 @@ const Layout: React.FC<LayoutProps> = ({ children, activePage, setActivePage, us
             };
         }
     }, [user]);
+
+    // Fetch DB-driven page permissions for this role
+    useEffect(() => {
+        if (!userRole || userRole === 'SuperAdmin') return;
+        supabase
+            .from('role_permissions')
+            .select('page_id, allowed')
+            .eq('role_name', userRole)
+            .then(({ data }) => {
+                if (data && data.length > 0) {
+                    const allowed = new Set<string>(
+                        data.filter(r => r.allowed).map(r => r.page_id)
+                    );
+                    setDbAllowedPages(allowed);
+                }
+                // If no DB records for this role, keep null → fall back to hardcoded
+            });
+    }, [userRole]);
 
     const fetchTaskCount = async () => {
         if (!user) return;
@@ -84,9 +104,15 @@ const Layout: React.FC<LayoutProps> = ({ children, activePage, setActivePage, us
     );
 
     const NavItem = ({ id, icon: Icon, label, roles, badge }: { id: string, icon: any, label: string, roles?: string[], badge?: number }) => {
-        // SuperAdmin implies access to everything, overriding specific role checks
         const isSuperAdmin = userRole === 'SuperAdmin' || user?.employeeId === '001';
-        if (!isSuperAdmin && roles && userRole && !roles.includes(userRole)) return null;
+        if (isSuperAdmin) { /* SuperAdmin sees everything */ }
+        else if (dbAllowedPages !== null) {
+            // DB permissions exist for this role → use them exclusively
+            if (!dbAllowedPages.has(id)) return null;
+        } else if (roles && userRole && !roles.includes(userRole)) {
+            // Fallback to hardcoded roles array
+            return null;
+        }
 
         const isActive = activePage === id;
 

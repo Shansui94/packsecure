@@ -112,10 +112,11 @@ const EmployeeModal: React.FC<{
     const set = (k: keyof Employee, v: any) => setForm(f => ({ ...f, [k]: v }));
 
     const handleSave = async () => {
-        if (!form.name?.trim()) return setError('Name is required.');
+        const pin = (form as any).pin_input || '';
+        if (isNew && pin.length !== 4) return setError('PIN must be exactly 4 digits.');
         setSaving(true);
         setError('');
-        const payload = {
+        const payload: any = {
             name: form.name, email: form.email || null, phone: form.phone || null,
             role: form.role, status: form.status || 'active',
             pay_type: form.pay_type, hourly_rate: Number(form.hourly_rate) || 0,
@@ -124,8 +125,10 @@ const EmployeeModal: React.FC<{
             attendance_bonus: Number(form.attendance_bonus) || 0,
             attendance_bonus_threshold: Number(form.attendance_bonus_threshold) || 0,
         };
+        // Only set pin_code / employee_id when provided
+        if (pin) { payload.pin_code = pin; payload.employee_id = pin; }
         const { error: err } = isNew
-            ? await supabase.from('sys_users_v2').insert({ ...payload, employee_id: `EMP-${Date.now()}` })
+            ? await supabase.from('sys_users_v2').insert({ ...payload, employee_id: pin })
             : await supabase.from('sys_users_v2').update(payload).eq('id', form.id);
         if (err) setError(err.message);
         else { onSave(); onClose(); }
@@ -154,6 +157,18 @@ const EmployeeModal: React.FC<{
                         {f('Full Name', 'name', 'text', 'Ahmad bin Ali')}
                         {f('Email', 'email', 'email', 'ahmad@company.com')}
                         {f('Phone', 'phone', 'text', '012-XXXXXXX')}
+                        <div>
+                            <label className="block text-[10px] text-gray-500 uppercase tracking-widest mb-1.5">
+                                PIN / Employee ID {isNew && <span className="text-red-400">*</span>}
+                            </label>
+                            <input
+                                type="text" maxLength={4}
+                                value={(form as any).pin_input ?? ''}
+                                onChange={e => setForm(f => ({ ...f, pin_input: e.target.value.replace(/\D/g, '').slice(0, 4) }))}
+                                placeholder={isNew ? '4-digit PIN' : 'Blank = keep existing'}
+                                className="w-full bg-black/40 border border-white/10 rounded-xl px-3 py-2.5 text-sm text-white placeholder-gray-700 focus:outline-none focus:border-white/30 tracking-[0.3em] font-mono" />
+                            <div className="text-[9px] text-gray-600 mt-1">Used to clock in at Production Control</div>
+                        </div>
                         <div>
                             <label className="block text-[10px] text-gray-500 uppercase tracking-widest mb-1.5">Role</label>
                             <select value={form.role || 'Operator'} onChange={e => set('role', e.target.value)}
