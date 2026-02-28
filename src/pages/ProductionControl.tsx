@@ -628,33 +628,22 @@ const ProductionControl: React.FC<ProductionControlProps> = ({ user, jobs = [] }
         const targetMachine = machineMetadata?.id || selectedMachine;
         if (!targetMachine) return;
 
-        // Fetch User Map to display actual Operator names instead of Unknown
-        let userMap: Record<string, string> = {};
-        const { data: users } = await supabase.from('sys_users_v2').select('id, name');
-        if (users) {
-            users.forEach((u: any) => userMap[u.id] = u.name);
-        }
-
-        console.log("Fetching logs for machine:", targetMachine);
-
-        const { data } = await supabase.from('production_logs')
-            .select('*')
+        const { data } = await supabase.from('production_logs_v2')
+            .select('log_id, sku, output_qty, operator_id, created_at')
             .eq('machine_id', targetMachine)
+            .not('sku', 'is', null)
             .order('created_at', { ascending: false })
             .limit(20);
 
         if (data) {
-            const mapped: ProductionLog[] = data.map((log: any) => {
-                const operatorName = log.operator_id ? (userMap[log.operator_id] || 'Unknown User') : 'Machine Auto';
-                return {
-                    Log_ID: log.id,
-                    Timestamp: log.created_at,
-                    Job_ID: 'N/A',
-                    Operator_Email: operatorName,
-                    Output_Qty: log.alarm_count || 1,
-                    Note: log.product_sku || 'Production Log',
-                };
-            });
+            const mapped: ProductionLog[] = data.map((log: any) => ({
+                Log_ID: log.log_id,
+                Timestamp: log.created_at,
+                Job_ID: 'N/A',
+                Operator_Email: '',
+                Output_Qty: log.output_qty || 1,
+                Note: log.sku || 'Production Log',
+            }));
             setRecentLogs(mapped);
         }
     };
