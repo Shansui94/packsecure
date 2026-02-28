@@ -628,6 +628,11 @@ const ProductionControl: React.FC<ProductionControlProps> = ({ user, jobs = [] }
         const targetMachine = machineMetadata?.id || selectedMachine;
         if (!targetMachine) return;
 
+        // Machines where firmware sends alarm_count=2 but actually produces 1 roll
+        // Remove this list once the DB trigger SQL migration (rolls_per_alarm) has been applied
+        const HALF_COUNT_MACHINES = ['T1.3-M02', 'N1-M01', 'N2-M02'];
+        const isHalfCount = HALF_COUNT_MACHINES.includes(targetMachine);
+
         const { data } = await supabase.from('production_logs_v2')
             .select('log_id, sku, output_qty, operator_id, created_at')
             .eq('machine_id', targetMachine)
@@ -641,7 +646,7 @@ const ProductionControl: React.FC<ProductionControlProps> = ({ user, jobs = [] }
                 Timestamp: log.created_at,
                 Job_ID: 'N/A',
                 Operator_Email: '',
-                Output_Qty: log.output_qty || 1,
+                Output_Qty: isHalfCount ? Math.round((log.output_qty || 1) / 2) : (log.output_qty || 1),
                 Note: log.sku || 'Production Log',
             }));
             setRecentLogs(mapped);
