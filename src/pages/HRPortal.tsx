@@ -3,8 +3,8 @@ import { supabase } from '../services/supabase';
 import {
     Users, CheckCircle, XCircle, Calendar, Clock, User as UserIcon,
     DollarSign, ChevronLeft, ChevronRight, Loader, Download, AlertCircle,
-    Wallet, Plus, Edit2, Save, X, ToggleLeft,
-    ToggleRight, Star, Award
+    Wallet, Plus, Edit2, Save, X, ToggleLeft, Trash2,
+    ToggleRight, Star, Award, MapPin
 } from 'lucide-react';
 
 // ── TYPES ────────────────────────────────────────────────────
@@ -253,6 +253,14 @@ const HRPortal: React.FC<{ user?: any }> = ({ user }) => {
     const [loadingPayroll, setLoadingPayroll] = useState(false);
     const [generatingPayroll, setGeneratingPayroll] = useState(false);
 
+    // Zone rates
+    const [zoneRates, setZoneRates] = useState<{ id: string; zone_name: string; rate: number; notes: string }[]>([]);
+    const [showZoneEditor, setShowZoneEditor] = useState(false);
+    const [newZoneName, setNewZoneName] = useState('');
+    const [newZoneRate, setNewZoneRate] = useState('');
+    const [newZoneNotes, setNewZoneNotes] = useState('');
+    const [savingZone, setSavingZone] = useState(false);
+
     // ── Personnel ────────────────────────────────────────────
     const fetchEmployees = useCallback(async () => {
         setLoadingEmp(true);
@@ -319,6 +327,31 @@ const HRPortal: React.FC<{ user?: any }> = ({ user }) => {
         fetchLeave();
     };
 
+
+    // ── Zone Rates ───────────────────────────────────────────
+    const fetchZoneRates = useCallback(async () => {
+        const { data } = await supabase.from('zone_trip_rates').select('*').order('zone_name');
+        setZoneRates(data || []);
+    }, []);
+
+    const handleAddZone = async () => {
+        if (!newZoneName.trim() || !newZoneRate) return;
+        setSavingZone(true);
+        await supabase.from('zone_trip_rates').upsert(
+            { zone_name: newZoneName.trim(), rate: Number(newZoneRate), notes: newZoneNotes },
+            { onConflict: 'zone_name' }
+        );
+        setNewZoneName(''); setNewZoneRate(''); setNewZoneNotes('');
+        await fetchZoneRates();
+        setSavingZone(false);
+    };
+
+    const handleDeleteZone = async (id: string) => {
+        if (!window.confirm('Delete this zone rate?')) return;
+        await supabase.from('zone_trip_rates').delete().eq('id', id);
+        fetchZoneRates();
+    };
+
     // ── Payroll ──────────────────────────────────────────────
     const fetchPayroll = useCallback(async () => {
         setLoadingPayroll(true);
@@ -328,20 +361,24 @@ const HRPortal: React.FC<{ user?: any }> = ({ user }) => {
         // Employees
         const { data: emps } = await supabase.from('sys_users_v2')
             .select('id, auth_user_id, employee_id, name, role, pay_type, hourly_rate, base_salary, trip_allowance, attendance_bonus, attendance_bonus_threshold')
-            .eq('status', 'active')
-            .order('name');
+            .eq('status', 'active').order('name');
 
         // Attendance hours for operators
         const { data: attendance } = await supabase.from('operator_attendance')
             .select('operator_id, hours_worked, date')
             .gte('date', firstDay).lte('date', lastDay);
 
-        // Driver trips
+        // Driver trips with zone info for zone-based allowance
         const { data: trips } = await supabase.from('sales_orders')
-            .select('driver_id')
+            .select('driver_id, zone, delivery_zone')
             .eq('status', 'Delivered')
             .gte('pod_timestamp', new Date(payYear, payMonth - 1, 1).toISOString())
             .lte('pod_timestamp', new Date(payYear, payMonth, 0, 23, 59, 59).toISOString());
+
+        // Zone rates lookup
+        const { data: zr } = await supabase.from('zone_trip_rates').select('zone_name, rate');
+        const zoneRateMap: Record<string, number> = {};
+        (zr || []).forEach((z: any) => { zoneRateMap[z.zone_name?.toLowerCase()] = Number(z.rate); });
 
         // Approved leave (for attendance bonus check)
         const { data: leaves } = await supabase.from('employee_leave')
@@ -352,16 +389,27 @@ const HRPortal: React.FC<{ user?: any }> = ({ user }) => {
         const { data: existing } = await supabase.from('payroll_records')
             .select('*').eq('month', payMonth).eq('year', payYear);
 
-        // Build maps
-        const hoursMap: Record<string, number> = {};
-        const daysWorkedMap: Record<string, number> = {};
-        (attendance || []).forEach((a: any) => {
-            hoursMap[a.operator_id] = (hoursMap[a.operator_id] || 0) + (Number(a.hours_worked) || 0);
-            daysWorkedMap[a.operator_id] = (daysWorkedMap[a.operator_id] || 0) + 1;
+        // Build driver trip earnings map using zone rates
+        // tripEarningsMap[auth_user_id] = { totalEarnings, tripCount, tripDetails }
+        const tripEarningsMap: Record<string, { total: number; count: number; breakdown: string[] }> = {};
+        (trips || []).forEach((t: any) => {
+            if (!t.driver_id) return;
+            const zone = (t.zone || t.delivery_zone || '').toLowerCase();
+            const rate = zoneRateMap[zone] ?? null;
+            if (!tripEarningsMap[t.driver_id]) tripEarningsMap[t.driver_id] = { total: 0, count: 0, breakdown: [] };
+            tripEarningsMap[t.driver_id].count += 1;
+            if (rate !== null) {
+                tripEarningsMap[t.driver_id].total += rate;
+                tripEarningsMap[t.driver_id].breakdown.push(`${t.zone || t.delivery_zone}: RM${rate}`);
+            } else {
+                // No zone rate — flag it
+                tripEarningsMap[t.driver_id].breakdown.push(`${t.zone || t.delivery_zone || 'Unknown'}: ⚠️ no rate`);
+            }
         });
 
-        const tripMap: Record<string, number> = {};
-        (trips || []).forEach((t: any) => { if (t.driver_id) tripMap[t.driver_id] = (tripMap[t.driver_id] || 0) + 1; });
+        // Build maps
+        const hoursMap: Record<string, number> = {};
+        (attendance || []).forEach((a: any) => { hoursMap[a.operator_id] = (hoursMap[a.operator_id] || 0) + (Number(a.hours_worked) || 0); });
 
         const leaveMap: Record<string, number> = {};
         (leaves || []).forEach((l: any) => { leaveMap[l.employee_id] = (leaveMap[l.employee_id] || 0) + l.count_days; });
@@ -374,15 +422,16 @@ const HRPortal: React.FC<{ user?: any }> = ({ user }) => {
             let gross = 0;
             let details = '';
             const hoursWorked = hoursMap[emp.employee_id] || 0;
-            const tripCount = tripMap[emp.auth_user_id] || 0;
+            const tripData = tripEarningsMap[emp.auth_user_id] || { total: 0, count: 0, breakdown: [] };
             const absentDays = leaveMap[emp.employee_id] || 0;
 
             if (emp.pay_type === 'hourly') {
                 gross = hoursWorked * (Number(emp.hourly_rate) || 0);
                 details = `${hoursWorked.toFixed(1)}h × RM${emp.hourly_rate}`;
             } else if (emp.pay_type === 'driver') {
-                gross = Number(emp.base_salary) + tripCount * Number(emp.trip_allowance);
-                details = `Base RM${emp.base_salary} + ${tripCount} trips × RM${emp.trip_allowance}`;
+                gross = Number(emp.base_salary) + tripData.total;
+                const basePart = emp.base_salary > 0 ? `Base RM${emp.base_salary} + ` : '';
+                details = `${basePart}${tripData.count} trips = RM${tripData.total.toFixed(2)}`;
             } else {
                 gross = Number(emp.base_salary);
                 details = `Fixed RM${emp.base_salary}`;
@@ -395,7 +444,8 @@ const HRPortal: React.FC<{ user?: any }> = ({ user }) => {
             const net = gross + bonusAmt;
 
             return {
-                emp, gross, details, hoursWorked, tripCount, absentDays,
+                emp, gross, details, hoursWorked,
+                tripCount: tripData.count, tripBreakdown: tripData.breakdown, absentDays,
                 bonusAmt, earnedBonus, net,
                 existing: existingMap[emp.employee_id] || null,
             };
@@ -405,7 +455,7 @@ const HRPortal: React.FC<{ user?: any }> = ({ user }) => {
         setLoadingPayroll(false);
     }, [payMonth, payYear]);
 
-    useEffect(() => { if (activeTab === 'payroll') fetchPayroll(); }, [activeTab, fetchPayroll]);
+    useEffect(() => { if (activeTab === 'payroll') { fetchPayroll(); fetchZoneRates(); } }, [activeTab, fetchPayroll, fetchZoneRates]);
 
     const handleGeneratePayroll = async () => {
         if (!window.confirm(`Generate payroll for ${MONTH_NAMES[payMonth - 1]} ${payYear}?`)) return;
@@ -697,6 +747,57 @@ const HRPortal: React.FC<{ user?: any }> = ({ user }) => {
                         </div>
                     </div>
 
+
+                    {/* Zone Rates Manager */}
+                    <div className="mb-5 bg-[#0d0d12] border border-amber-500/20 rounded-2xl overflow-hidden">
+                        <button
+                            onClick={() => setShowZoneEditor(v => !v)}
+                            className="w-full px-4 py-3 flex items-center justify-between hover:bg-white/[0.02] transition-colors">
+                            <div className="flex items-center gap-2 text-amber-400 font-bold text-xs uppercase tracking-widest">
+                                <MapPin size={13} /> Zone Trip Rates
+                            </div>
+                            <span className="text-[10px] text-gray-500">{zoneRates.length} zones configured · click to {showZoneEditor ? 'collapse' : 'expand'}</span>
+                        </button>
+                        {showZoneEditor && (
+                            <div className="border-t border-white/5 p-4 space-y-3">
+                                {/* Existing zones */}
+                                {zoneRates.length > 0 && (
+                                    <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-2 mb-3">
+                                        {zoneRates.map(z => (
+                                            <div key={z.id} className="flex items-center justify-between bg-black/30 border border-white/5 rounded-xl px-3 py-2">
+                                                <div>
+                                                    <div className="text-sm font-bold text-white">{z.zone_name}</div>
+                                                    <div className="text-[10px] text-amber-400 font-mono">RM {Number(z.rate).toFixed(2)}</div>
+                                                    {z.notes && <div className="text-[10px] text-gray-600">{z.notes}</div>}
+                                                </div>
+                                                <button onClick={() => handleDeleteZone(z.id)} className="p-1.5 rounded-lg text-gray-600 hover:text-red-400 hover:bg-red-500/10 transition-colors">
+                                                    <Trash2 size={12} />
+                                                </button>
+                                            </div>
+                                        ))}
+                                    </div>
+                                )}
+                                {/* Add new zone */}
+                                <div className="flex gap-2 flex-wrap">
+                                    <input type="text" value={newZoneName} onChange={e => setNewZoneName(e.target.value)}
+                                        placeholder="Zone name (e.g. KL, Seremban)"
+                                        className="flex-1 min-w-[140px] bg-black/40 border border-white/10 rounded-xl px-3 py-2 text-sm text-white placeholder-gray-700 focus:outline-none focus:border-amber-500/50" />
+                                    <input type="number" value={newZoneRate} onChange={e => setNewZoneRate(e.target.value)}
+                                        placeholder="Rate (RM)"
+                                        className="w-28 bg-black/40 border border-white/10 rounded-xl px-3 py-2 text-sm text-white placeholder-gray-700 focus:outline-none focus:border-amber-500/50" />
+                                    <input type="text" value={newZoneNotes} onChange={e => setNewZoneNotes(e.target.value)}
+                                        placeholder="Notes (optional)"
+                                        className="flex-1 min-w-[120px] bg-black/40 border border-white/10 rounded-xl px-3 py-2 text-sm text-white placeholder-gray-700 focus:outline-none focus:border-amber-500/50" />
+                                    <button onClick={handleAddZone} disabled={savingZone || !newZoneName || !newZoneRate}
+                                        className="px-4 py-2 bg-amber-600 hover:bg-amber-500 disabled:opacity-50 rounded-xl text-xs font-bold text-white flex items-center gap-1.5 transition-colors">
+                                        {savingZone ? <Loader size={12} className="animate-spin" /> : <Plus size={12} />}
+                                        Add Zone
+                                    </button>
+                                </div>
+                            </div>
+                        )}
+                    </div>
+
                     {loadingPayroll ? (
                         <div className="flex justify-center py-20"><Loader className="animate-spin text-green-500" size={28} /></div>
                     ) : payrollData.length === 0 ? (
@@ -727,7 +828,14 @@ const HRPortal: React.FC<{ user?: any }> = ({ user }) => {
                                             <td className="px-4 py-4 text-xs text-gray-400">
                                                 <div>{row.details}</div>
                                                 {row.emp.pay_type === 'hourly' && <div className="text-[10px] text-gray-600">{row.hoursWorked.toFixed(1)} hours logged</div>}
-                                                {row.emp.pay_type === 'driver' && <div className="text-[10px] text-amber-400">{row.tripCount} trips completed</div>}
+                                                {row.emp.pay_type === 'driver' && (
+                                                    <div className="space-y-0.5 mt-0.5">
+                                                        {row.tripBreakdown?.slice(0, 5).map((b: string, i: number) => (
+                                                            <div key={i} className={`text-[10px] font-mono ${b.includes('⚠️') ? 'text-red-400' : 'text-amber-400/70'}`}>{b}</div>
+                                                        ))}
+                                                        {row.tripBreakdown?.length > 5 && <div className="text-[9px] text-gray-600">+{row.tripBreakdown.length - 5} more</div>}
+                                                    </div>
+                                                )}
                                             </td>
                                             <td className="px-4 py-4 font-mono font-bold text-white">
                                                 RM {row.gross.toLocaleString('en-MY', { minimumFractionDigits: 2 })}
