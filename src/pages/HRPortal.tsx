@@ -116,8 +116,9 @@ const EmployeeModal: React.FC<{
         if (!isNew) return;
         supabase.from('sys_users_v2').select('employee_id').then(({ data }) => {
             const maxPin = (data || [])
-                .map(r => parseInt(r.employee_id || '0', 10))
-                .filter(n => !isNaN(n) && n > 0)
+                .map(r => r.employee_id || '')
+                .filter(s => /^\d{4}$/.test(s))   // only exact 4-digit PINs
+                .map(s => parseInt(s, 10))
                 .reduce((m, n) => Math.max(m, n), 0);
             const nextPin = String(maxPin + 1).padStart(4, '0');
             setForm(f => ({ ...f, pin_input: nextPin } as any));
