@@ -1,13 +1,28 @@
 import React, { useState, useEffect, useCallback } from 'react';
 import { supabase } from '../services/supabase';
 import {
-    Users, CheckCircle, XCircle, Calendar, Clock,
-    User as UserIcon, DollarSign, ChevronLeft, ChevronRight,
-    Loader, Download, AlertCircle, TrendingDown, Wallet
+    Users, CheckCircle, XCircle, Calendar, Clock, User as UserIcon,
+    DollarSign, ChevronLeft, ChevronRight, Loader, Download, AlertCircle,
+    TrendingDown, Wallet, Plus, Edit2, Save, X, Shield, ToggleLeft,
+    ToggleRight, Truck, Star, Award
 } from 'lucide-react';
 
-interface HRPortalProps {
-    user?: any;
+// ── TYPES ────────────────────────────────────────────────────
+interface Employee {
+    id: string;
+    auth_user_id: string;
+    employee_id: string;
+    name: string;
+    email: string;
+    phone: string;
+    role: string;
+    status: string;
+    pay_type: string;
+    hourly_rate: number;
+    base_salary: number;
+    trip_allowance: number;
+    attendance_bonus: number;
+    attendance_bonus_threshold: number;
 }
 
 interface LeaveRequest {
@@ -23,436 +38,724 @@ interface LeaveRequest {
     users_public?: { name: string; email: string; role: string; };
 }
 
-interface Employee {
-    id: string;
-    name: string;
-    email: string;
-    role: string;
-    salary: number;
-}
+// All pages in the system
+const ALL_PAGES = [
+    { id: 'factory-live-os', label: 'Factory Live OS', group: 'Factory' },
+    { id: 'scanner', label: 'Production Control', group: 'Factory' },
+    { id: 'livestock', label: 'Live Stock', group: 'Factory' },
+    { id: 'production', label: 'Production Logs', group: 'Factory' },
+    { id: 'inventory', label: 'Inventory', group: 'Inventory' },
+    { id: 'products', label: 'Product Library', group: 'Inventory' },
+    { id: 'stock-movement', label: 'Stock Movement', group: 'Inventory' },
+    { id: 'stock-audit', label: 'Stock Audit', group: 'Inventory' },
+    { id: 'audit-report', label: 'Audit Report', group: 'Inventory' },
+    { id: 'delivery', label: 'Trip Management', group: 'Logistics' },
+    { id: 'order-summary', label: 'Daily Prep', group: 'Logistics' },
+    { id: 'lorry-management', label: 'Lorry Fleet', group: 'Logistics' },
+    { id: 'loading-dock', label: 'Loading Dock', group: 'Logistics' },
+    { id: 'delivery-driver', label: 'My Delivery', group: 'Driver' },
+    { id: 'delivery-history', label: 'My History', group: 'Driver' },
+    { id: 'lorry-service', label: 'Lorry Service', group: 'Driver' },
+    { id: 'hr', label: 'HR Portal', group: 'Admin' },
+    { id: 'operators', label: '操作员管理', group: 'Admin' },
+    { id: 'driver-management', label: 'Driver Management', group: 'Admin' },
+    { id: 'data-v2', label: 'Data Command', group: 'Admin' },
+    { id: 'iot', label: 'IoT Settings', group: 'Admin' },
+    { id: 'reports', label: 'Executive Reports', group: 'Admin' },
+    { id: 'maintenance', label: 'Maintenance Control', group: 'Other' },
+    { id: 'claims', label: 'Claims', group: 'Other' },
+    { id: 'notes', label: 'Notes', group: 'Other' },
+    { id: 'tasks', label: 'Tasks', group: 'Other' },
+    { id: 'driver-leave', label: 'Apply Leave', group: 'Other' },
+    { id: 'report-history', label: 'Reports', group: 'Other' },
+];
 
-interface PayrollRow {
-    employee: Employee;
-    baseSalary: number;
-    approvedLeaveDays: number;
-    deduction: number;
-    netSalary: number;
-    existing?: any;
-}
+const ALL_ROLES = ['SuperAdmin', 'Admin', 'Manager', 'HR', 'Operator', 'Driver'];
 
 const MONTH_NAMES = ['January', 'February', 'March', 'April', 'May', 'June',
     'July', 'August', 'September', 'October', 'November', 'December'];
 
-const WORKING_DAYS_PER_MONTH = 26;
+const PAY_TYPE_LABELS: Record<string, string> = {
+    hourly: '🕐 Hourly (Operator)',
+    monthly: '📅 Monthly Fixed',
+    driver: '🚛 Driver (Base + Trip)',
+};
 
 const StatusBadge = ({ status }: { status: string }) => {
-    const styles = {
+    const styles: Record<string, string> = {
         Approved: 'bg-green-500/10 text-green-400 border-green-500/20',
         Rejected: 'bg-red-500/10 text-red-400 border-red-500/20',
         Pending: 'bg-amber-500/10 text-amber-400 border-amber-500/20',
-    }[status] || 'bg-slate-500/10 text-slate-400 border-slate-500/20';
+    };
     return (
-        <span className={`text-[10px] font-black uppercase px-3 py-1.5 rounded-full border ${styles}`}>
+        <span className={`text-[10px] font-black uppercase px-3 py-1.5 rounded-full border ${styles[status] || 'bg-slate-500/10 text-slate-400 border-slate-500/20'}`}>
             {status}
         </span>
     );
 };
 
-const HRPortal: React.FC<HRPortalProps> = ({ user }) => {
-    const [activeTab, setActiveTab] = useState<'pending' | 'history' | 'payroll'>('pending');
+// ── EMPLOYEE EDIT MODAL ──────────────────────────────────────
+const EmployeeModal: React.FC<{
+    emp: Partial<Employee> | null;
+    onClose: () => void;
+    onSave: () => void;
+}> = ({ emp, onClose, onSave }) => {
+    const isNew = !emp?.id;
+    const [form, setForm] = useState<Partial<Employee>>(emp || {
+        role: 'Operator', pay_type: 'hourly', status: 'active',
+        hourly_rate: 0, base_salary: 0, trip_allowance: 0,
+        attendance_bonus: 0, attendance_bonus_threshold: 0,
+    });
+    const [saving, setSaving] = useState(false);
+    const [error, setError] = useState('');
+
+    const set = (k: keyof Employee, v: any) => setForm(f => ({ ...f, [k]: v }));
+
+    const handleSave = async () => {
+        if (!form.name?.trim()) return setError('Name is required.');
+        setSaving(true);
+        setError('');
+        const payload = {
+            name: form.name, email: form.email || null, phone: form.phone || null,
+            role: form.role, status: form.status || 'active',
+            pay_type: form.pay_type, hourly_rate: Number(form.hourly_rate) || 0,
+            base_salary: Number(form.base_salary) || 0,
+            trip_allowance: Number(form.trip_allowance) || 0,
+            attendance_bonus: Number(form.attendance_bonus) || 0,
+            attendance_bonus_threshold: Number(form.attendance_bonus_threshold) || 0,
+        };
+        const { error: err } = isNew
+            ? await supabase.from('sys_users_v2').insert({ ...payload, employee_id: `EMP-${Date.now()}` })
+            : await supabase.from('sys_users_v2').update(payload).eq('id', form.id);
+        if (err) setError(err.message);
+        else { onSave(); onClose(); }
+        setSaving(false);
+    };
+
+    const f = (label: string, key: keyof Employee, type = 'text', placeholder = '') => (
+        <div>
+            <label className="block text-[10px] text-gray-500 uppercase tracking-widest mb-1.5">{label}</label>
+            <input type={type} value={(form[key] as any) ?? ''} onChange={e => set(key, type === 'number' ? e.target.value : e.target.value)}
+                placeholder={placeholder}
+                className="w-full bg-black/40 border border-white/10 rounded-xl px-3 py-2.5 text-sm text-white placeholder-gray-700 focus:outline-none focus:border-white/30" />
+        </div>
+    );
+
+    return (
+        <div className="fixed inset-0 z-50 bg-black/80 backdrop-blur-md flex items-center justify-center p-4">
+            <div className="bg-[#0d0d12] border border-white/10 rounded-3xl w-full max-w-lg overflow-hidden shadow-2xl">
+                <div className="p-6 border-b border-white/5 flex justify-between items-center">
+                    <h2 className="text-lg font-black text-white">{isNew ? '+ New Employee' : `Edit: ${emp?.name}`}</h2>
+                    <button onClick={onClose} className="p-2 rounded-xl bg-white/5 hover:bg-white/10 text-gray-400"><X size={16} /></button>
+                </div>
+                <div className="p-6 space-y-4 overflow-y-auto max-h-[70vh]">
+                    {/* Basic Info */}
+                    <div className="grid grid-cols-2 gap-3">
+                        {f('Full Name', 'name', 'text', 'Ahmad bin Ali')}
+                        {f('Email', 'email', 'email', 'ahmad@company.com')}
+                        {f('Phone', 'phone', 'text', '012-XXXXXXX')}
+                        <div>
+                            <label className="block text-[10px] text-gray-500 uppercase tracking-widest mb-1.5">Role</label>
+                            <select value={form.role || 'Operator'} onChange={e => set('role', e.target.value)}
+                                className="w-full bg-black/40 border border-white/10 rounded-xl px-3 py-2.5 text-sm text-white focus:outline-none focus:border-white/30">
+                                {ALL_ROLES.map(r => <option key={r} value={r}>{r}</option>)}
+                            </select>
+                        </div>
+                        <div>
+                            <label className="block text-[10px] text-gray-500 uppercase tracking-widest mb-1.5">Status</label>
+                            <select value={form.status || 'active'} onChange={e => set('status', e.target.value)}
+                                className="w-full bg-black/40 border border-white/10 rounded-xl px-3 py-2.5 text-sm text-white focus:outline-none focus:border-white/30">
+                                <option value="active">Active</option>
+                                <option value="inactive">Inactive</option>
+                                <option value="resigned">Resigned</option>
+                            </select>
+                        </div>
+                    </div>
+
+                    {/* Pay Type */}
+                    <div>
+                        <label className="block text-[10px] text-gray-500 uppercase tracking-widest mb-1.5">Pay Type</label>
+                        <div className="grid grid-cols-3 gap-2">
+                            {Object.entries(PAY_TYPE_LABELS).map(([k, v]) => (
+                                <button key={k} onClick={() => set('pay_type', k)}
+                                    className={`py-2 px-3 rounded-xl text-xs font-bold border transition-all ${form.pay_type === k ? 'bg-blue-500/20 text-blue-400 border-blue-500/30' : 'bg-white/5 text-gray-500 border-white/5 hover:text-white'}`}>
+                                    {v}
+                                </button>
+                            ))}
+                        </div>
+                    </div>
+
+                    {/* Pay Fields based on type */}
+                    <div className="bg-black/30 rounded-2xl p-4 space-y-3 border border-white/5">
+                        {form.pay_type === 'hourly' && (
+                            f('Hourly Rate (RM)', 'hourly_rate', 'number', '6.50')
+                        )}
+                        {form.pay_type === 'monthly' && (
+                            f('Monthly Salary (RM)', 'base_salary', 'number', '2000')
+                        )}
+                        {form.pay_type === 'driver' && (<>
+                            {f('Base Salary (RM, 0 = no base)', 'base_salary', 'number', '0')}
+                            {f('Trip Allowance (RM/trip)', 'trip_allowance', 'number', '30')}
+                        </>)}
+                        {/* Attendance Bonus for all */}
+                        <div className="grid grid-cols-2 gap-3 pt-2 border-t border-white/5">
+                            {f('全勤奖 Attendance Bonus (RM)', 'attendance_bonus', 'number', '200')}
+                            <div>
+                                <label className="block text-[10px] text-gray-500 uppercase tracking-widest mb-1.5">Max Absent Days Still Eligible</label>
+                                <input type="number" value={form.attendance_bonus_threshold ?? 0} onChange={e => set('attendance_bonus_threshold', e.target.value)}
+                                    placeholder="0 = perfect attendance"
+                                    className="w-full bg-black/40 border border-white/10 rounded-xl px-3 py-2.5 text-sm text-white placeholder-gray-700 focus:outline-none focus:border-white/30" />
+                                <div className="text-[9px] text-gray-600 mt-1">0 = zero absences required</div>
+                            </div>
+                        </div>
+                    </div>
+
+                    {error && <div className="text-red-400 text-xs bg-red-500/10 border border-red-500/20 rounded-xl px-3 py-2">{error}</div>}
+                </div>
+                <div className="p-6 border-t border-white/5 flex gap-3">
+                    <button onClick={onClose} className="flex-1 py-3 bg-white/5 hover:bg-white/10 rounded-xl text-sm text-gray-400 transition-colors">Cancel</button>
+                    <button onClick={handleSave} disabled={saving}
+                        className="flex-1 py-3 bg-blue-600 hover:bg-blue-500 disabled:opacity-50 rounded-xl text-sm text-white font-bold flex items-center justify-center gap-2 transition-colors">
+                        {saving ? <Loader size={14} className="animate-spin" /> : <Save size={14} />}
+                        {isNew ? 'Create Employee' : 'Save Changes'}
+                    </button>
+                </div>
+            </div>
+        </div>
+    );
+};
+
+// ── MAIN COMPONENT ────────────────────────────────────────────
+const HRPortal: React.FC<{ user?: any }> = ({ user }) => {
+    const [activeTab, setActiveTab] = useState<'personnel' | 'permissions' | 'leave' | 'payroll'>('personnel');
+
+    // Personnel
+    const [employees, setEmployees] = useState<Employee[]>([]);
+    const [loadingEmp, setLoadingEmp] = useState(true);
+    const [editingEmp, setEditingEmp] = useState<Partial<Employee> | null | 'new'>(null);
+    const [empSearch, setEmpSearch] = useState('');
+
+    // Permissions
+    const [permissions, setPermissions] = useState<Record<string, Record<string, boolean>>>({});
+    const [loadingPerms, setLoadingPerms] = useState(true);
+    const [savingPerms, setSavingPerms] = useState(false);
+    const [selectedPermRole, setSelectedPermRole] = useState('Driver');
+
+    // Leave
     const [requests, setRequests] = useState<LeaveRequest[]>([]);
     const [loadingLeave, setLoadingLeave] = useState(true);
 
-    // Payroll state
+    // Payroll
     const today = new Date();
-    const [payMonth, setPayMonth] = useState(today.getMonth() + 1); // 1-12
+    const [payMonth, setPayMonth] = useState(today.getMonth() + 1);
     const [payYear, setPayYear] = useState(today.getFullYear());
-    const [payrollRows, setPayrollRows] = useState<PayrollRow[]>([]);
+    const [payrollData, setPayrollData] = useState<any[]>([]);
     const [loadingPayroll, setLoadingPayroll] = useState(false);
     const [generatingPayroll, setGeneratingPayroll] = useState(false);
 
-    // ── Leave Data ──────────────────────────────────────────
+    // ── Personnel ────────────────────────────────────────────
+    const fetchEmployees = useCallback(async () => {
+        setLoadingEmp(true);
+        const { data } = await supabase.from('sys_users_v2')
+            .select('id, auth_user_id, employee_id, name, email, phone, role, status, pay_type, hourly_rate, base_salary, trip_allowance, attendance_bonus, attendance_bonus_threshold')
+            .order('name');
+        setEmployees(data || []);
+        setLoadingEmp(false);
+    }, []);
+
+    useEffect(() => { fetchEmployees(); }, [fetchEmployees]);
+
+    // ── Permissions ──────────────────────────────────────────
+    const fetchPermissions = useCallback(async () => {
+        setLoadingPerms(true);
+        const { data } = await supabase.from('role_permissions').select('*');
+        const map: Record<string, Record<string, boolean>> = {};
+        (data || []).forEach((r: any) => {
+            if (!map[r.role_name]) map[r.role_name] = {};
+            map[r.role_name][r.page_id] = r.allowed;
+        });
+        setPermissions(map);
+        setLoadingPerms(false);
+    }, []);
+
+    useEffect(() => { if (activeTab === 'permissions') fetchPermissions(); }, [activeTab, fetchPermissions]);
+
+    const togglePerm = (role: string, pageId: string) => {
+        setPermissions(prev => ({
+            ...prev,
+            [role]: { ...(prev[role] || {}), [pageId]: !(prev[role]?.[pageId] ?? false) }
+        }));
+    };
+
+    const savePermissions = async () => {
+        setSavingPerms(true);
+        const rows: any[] = [];
+        Object.entries(permissions).forEach(([role, pages]) => {
+            Object.entries(pages).forEach(([pageId, allowed]) => {
+                rows.push({ role_name: role, page_id: pageId, allowed });
+            });
+        });
+        await supabase.from('role_permissions').delete().in('role_name', ALL_ROLES);
+        if (rows.length > 0) await supabase.from('role_permissions').insert(rows);
+        setSavingPerms(false);
+        alert('✅ Permissions saved! Changes take effect on next login.');
+    };
+
+    // ── Leave ────────────────────────────────────────────────
     const fetchLeave = useCallback(async () => {
         setLoadingLeave(true);
-        const { data, error } = await supabase
-            .from('employee_leave')
-            .select(`*, users_public:employee_id (name, email, role)`)
+        const { data } = await supabase.from('employee_leave')
+            .select('*, users_public:employee_id (name, email, role)')
             .order('created_at', { ascending: false });
-
-        if (!error) setRequests(data || []);
+        setRequests(data || []);
         setLoadingLeave(false);
     }, []);
 
-    useEffect(() => { fetchLeave(); }, [fetchLeave]);
+    useEffect(() => { if (activeTab === 'leave') fetchLeave(); }, [activeTab, fetchLeave]);
 
-    const handleAction = async (id: string, newStatus: 'Approved' | 'Rejected') => {
-        const confirmMsg = newStatus === 'Approved' ? 'Approve this leave request?' : 'Reject this leave request?';
-        if (!window.confirm(confirmMsg)) return;
-
-        const { error } = await supabase
-            .from('employee_leave')
-            .update({
-                status: newStatus,
-                reviewed_by: user?.uid || null,
-                reviewed_at: new Date().toISOString(),
-            })
-            .eq('id', id);
-
-        if (error) alert(error.message);
-        else fetchLeave();
+    const handleLeaveAction = async (id: string, status: 'Approved' | 'Rejected') => {
+        if (!window.confirm(`${status} this leave request?`)) return;
+        await supabase.from('employee_leave').update({ status, reviewed_by: user?.uid, reviewed_at: new Date().toISOString() }).eq('id', id);
+        fetchLeave();
     };
 
-    // ── Payroll Calculator ──────────────────────────────────
+    // ── Payroll ──────────────────────────────────────────────
     const fetchPayroll = useCallback(async () => {
         setLoadingPayroll(true);
+        const firstDay = `${payYear}-${String(payMonth).padStart(2, '0')}-01`;
+        const lastDay = new Date(payYear, payMonth, 0).toISOString().split('T')[0];
 
-        // 1. Fetch all active employees with salary
-        const { data: employees, error: empErr } = await supabase
-            .from('users_public')
-            .select('id, name, email, role, salary')
-            .not('salary', 'is', null)
-            .gt('salary', 0)
+        // Employees
+        const { data: emps } = await supabase.from('sys_users_v2')
+            .select('id, auth_user_id, employee_id, name, role, pay_type, hourly_rate, base_salary, trip_allowance, attendance_bonus, attendance_bonus_threshold')
+            .eq('status', 'active')
             .order('name');
 
-        if (empErr || !employees) { setLoadingPayroll(false); return; }
+        // Attendance hours for operators
+        const { data: attendance } = await supabase.from('operator_attendance')
+            .select('operator_id, hours_worked, date')
+            .gte('date', firstDay).lte('date', lastDay);
 
-        // 2. Compute date range for chosen month
-        const firstDay = `${payYear}-${String(payMonth).padStart(2, '0')}-01`;
-        const lastDayDate = new Date(payYear, payMonth, 0);
-        const lastDay = `${payYear}-${String(payMonth).padStart(2, '0')}-${String(lastDayDate.getDate()).padStart(2, '0')}`;
+        // Driver trips
+        const { data: trips } = await supabase.from('sales_orders')
+            .select('driver_id')
+            .eq('status', 'Delivered')
+            .gte('pod_timestamp', new Date(payYear, payMonth - 1, 1).toISOString())
+            .lte('pod_timestamp', new Date(payYear, payMonth, 0, 23, 59, 59).toISOString());
 
-        // 3. Fetch approved leave for those employees this month
-        const { data: leaveData } = await supabase
-            .from('employee_leave')
-            .select('employee_id, count_days')
-            .eq('status', 'Approved')
-            .gte('start_date', firstDay)
-            .lte('end_date', lastDay);
+        // Approved leave (for attendance bonus check)
+        const { data: leaves } = await supabase.from('employee_leave')
+            .select('employee_id, count_days').eq('status', 'Approved')
+            .gte('start_date', firstDay).lte('end_date', lastDay);
 
-        // 4. Fetch existing payroll records for this month/year
-        const { data: existingPayroll } = await supabase
-            .from('payroll_records')
-            .select('*')
-            .eq('month', payMonth)
-            .eq('year', payYear);
+        // Existing payroll records
+        const { data: existing } = await supabase.from('payroll_records')
+            .select('*').eq('month', payMonth).eq('year', payYear);
 
-        // 5. Build payroll rows
-        const leaveMap: Record<string, number> = {};
-        (leaveData || []).forEach(l => {
-            leaveMap[l.employee_id] = (leaveMap[l.employee_id] || 0) + l.count_days;
+        // Build maps
+        const hoursMap: Record<string, number> = {};
+        const daysWorkedMap: Record<string, number> = {};
+        (attendance || []).forEach((a: any) => {
+            hoursMap[a.operator_id] = (hoursMap[a.operator_id] || 0) + (Number(a.hours_worked) || 0);
+            daysWorkedMap[a.operator_id] = (daysWorkedMap[a.operator_id] || 0) + 1;
         });
 
-        const existingMap: Record<string, any> = {};
-        (existingPayroll || []).forEach(r => { existingMap[r.employee_id] = r; });
+        const tripMap: Record<string, number> = {};
+        (trips || []).forEach((t: any) => { if (t.driver_id) tripMap[t.driver_id] = (tripMap[t.driver_id] || 0) + 1; });
 
-        const rows: PayrollRow[] = employees.map(emp => {
-            const baseSalary = Number(emp.salary) || 0;
-            const approvedLeaveDays = leaveMap[emp.id] || 0;
-            // All approved leave is paid leave — deduction is 0 by default.
-            // To add unpaid leave logic: deduction = (dailyRate * unpaidDays)
-            const deduction = 0;
-            const netSalary = baseSalary - deduction;
+        const leaveMap: Record<string, number> = {};
+        (leaves || []).forEach((l: any) => { leaveMap[l.employee_id] = (leaveMap[l.employee_id] || 0) + l.count_days; });
+
+        const existingMap: Record<string, any> = {};
+        (existing || []).forEach((r: any) => { existingMap[r.employee_id] = r; });
+
+        // Calculate payroll per employee
+        // Working days this month (Mon-Sat, rough estimate)
+        const workingDays = Math.round((new Date(payYear, payMonth, 0).getDate() * 6) / 7);
+
+        const rows = (emps || []).map((emp: any) => {
+            let gross = 0;
+            let details = '';
+            const hoursWorked = hoursMap[emp.employee_id] || 0;
+            const tripCount = tripMap[emp.auth_user_id] || 0;
+            const absentDays = leaveMap[emp.employee_id] || 0;
+
+            if (emp.pay_type === 'hourly') {
+                gross = hoursWorked * (Number(emp.hourly_rate) || 0);
+                details = `${hoursWorked.toFixed(1)}h × RM${emp.hourly_rate}`;
+            } else if (emp.pay_type === 'driver') {
+                gross = Number(emp.base_salary) + tripCount * Number(emp.trip_allowance);
+                details = `Base RM${emp.base_salary} + ${tripCount} trips × RM${emp.trip_allowance}`;
+            } else {
+                gross = Number(emp.base_salary);
+                details = `Fixed RM${emp.base_salary}`;
+            }
+
+            // Full attendance bonus
+            const threshold = Number(emp.attendance_bonus_threshold) || 0;
+            const earnedBonus = (Number(emp.attendance_bonus) > 0 && absentDays <= threshold);
+            const bonusAmt = earnedBonus ? Number(emp.attendance_bonus) : 0;
+            const net = gross + bonusAmt;
 
             return {
-                employee: emp as Employee,
-                baseSalary,
-                approvedLeaveDays,
-                deduction,
-                netSalary,
-                existing: existingMap[emp.id] || null,
+                emp, gross, details, hoursWorked, tripCount, absentDays,
+                bonusAmt, earnedBonus, net,
+                existing: existingMap[emp.employee_id] || null,
             };
         });
 
-        setPayrollRows(rows);
+        setPayrollData(rows);
         setLoadingPayroll(false);
     }, [payMonth, payYear]);
 
-    useEffect(() => {
-        if (activeTab === 'payroll') fetchPayroll();
-    }, [activeTab, fetchPayroll]);
+    useEffect(() => { if (activeTab === 'payroll') fetchPayroll(); }, [activeTab, fetchPayroll]);
 
     const handleGeneratePayroll = async () => {
-        if (!window.confirm(`Generate payroll for ${MONTH_NAMES[payMonth - 1]} ${payYear}?\n\nThis will save records for all ${payrollRows.length} employees.`)) return;
+        if (!window.confirm(`Generate payroll for ${MONTH_NAMES[payMonth - 1]} ${payYear}?`)) return;
         setGeneratingPayroll(true);
-
-        const records = payrollRows.map(row => ({
-            employee_id: row.employee.id,
-            month: payMonth,
-            year: payYear,
-            base_salary: row.baseSalary,
-            leave_days_unpaid: 0,
-            deduction: row.deduction,
-            net_salary: row.netSalary,
+        const records = payrollData.map(r => ({
+            employee_id: r.emp.employee_id,
+            month: payMonth, year: payYear,
+            base_salary: r.gross,
+            attendance_bonus: r.bonusAmt,
+            net_salary: r.net,
+            leave_days_unpaid: 0, deduction: 0,
             generated_by: user?.uid || null,
         }));
-
-        const { error } = await supabase
-            .from('payroll_records')
+        const { error } = await supabase.from('payroll_records')
             .upsert(records, { onConflict: 'employee_id,month,year' });
-
         if (error) alert('Error: ' + error.message);
-        else {
-            alert(`✅ Payroll generated for ${MONTH_NAMES[payMonth - 1]} ${payYear}!`);
-            fetchPayroll();
-        }
+        else { alert(`✅ Payroll saved for ${MONTH_NAMES[payMonth - 1]} ${payYear}`); fetchPayroll(); }
         setGeneratingPayroll(false);
     };
 
-    const changeMonth = (delta: number) => {
-        let m = payMonth + delta;
-        let y = payYear;
-        if (m > 12) { m = 1; y++; }
-        if (m < 1) { m = 12; y--; }
-        setPayMonth(m);
-        setPayYear(y);
+    const changeMonth = (d: number) => {
+        let m = payMonth + d, y = payYear;
+        if (m > 12) { m = 1; y++; } if (m < 1) { m = 12; y--; }
+        setPayMonth(m); setPayYear(y);
     };
 
-    const pendingList = requests.filter(r => r.status === 'Pending');
-    const historyList = requests.filter(r => r.status !== 'Pending');
-    const displayList = activeTab === 'pending' ? pendingList : historyList;
+    const pendingLeave = requests.filter(r => r.status === 'Pending');
+    const historyLeave = requests.filter(r => r.status !== 'Pending');
+    const [leaveSubTab, setLeaveSubTab] = useState<'pending' | 'history'>('pending');
+    const displayLeave = leaveSubTab === 'pending' ? pendingLeave : historyLeave;
 
-    const totalNetPayroll = payrollRows.reduce((s, r) => s + r.netSalary, 0);
+    const filteredEmps = employees.filter(e =>
+        !empSearch || e.name?.toLowerCase().includes(empSearch.toLowerCase()) ||
+        e.role?.toLowerCase().includes(empSearch.toLowerCase()) ||
+        e.employee_id?.toLowerCase().includes(empSearch.toLowerCase()));
 
-    const tabs = [
-        { id: 'pending', label: `Pending (${pendingList.length})` },
-        { id: 'history', label: `Leave History (${historyList.length})` },
-        { id: 'payroll', label: '💰 Payroll Calculator' },
+    const totalPayroll = payrollData.reduce((s, r) => s + r.net, 0);
+
+    const pageGroups = ALL_PAGES.reduce((acc, p) => {
+        if (!acc[p.group]) acc[p.group] = [];
+        acc[p.group].push(p);
+        return acc;
+    }, {} as Record<string, typeof ALL_PAGES>);
+
+    // ── TABS ──────────────────────────────────────────────────
+    const TABS = [
+        { id: 'personnel', label: `👥 Personnel (${employees.length})` },
+        { id: 'permissions', label: '🔐 Page Permissions' },
+        { id: 'leave', label: `🏖️ Leave (${pendingLeave.length} pending)` },
+        { id: 'payroll', label: '💰 Payroll' },
     ] as const;
 
     return (
-        <div className="p-6 bg-[#121215] min-h-screen text-slate-100">
+        <div className="p-4 md:p-6 bg-[#07070a] min-h-screen text-white font-sans">
             {/* Header */}
-            <header className="mb-8">
-                <h1 className="text-3xl font-black text-white italic flex items-center gap-3">
-                    <Users className="text-blue-500" />
-                    HR Control Center
+            <div className="mb-6">
+                <h1 className="text-3xl font-black text-white flex items-center gap-3 mb-1">
+                    <Users className="text-blue-500" size={28} /> HR Control Center
                 </h1>
-                <p className="text-slate-400 mt-1 text-sm">
-                    Manage all employee leave applications and payroll.
-                </p>
-            </header>
+                <p className="text-gray-500 text-sm">Manage employees, permissions, leave and payroll.</p>
+            </div>
 
             {/* Tabs */}
-            <div className="flex gap-3 mb-8 flex-wrap">
-                {tabs.map(tab => (
-                    <button
-                        key={tab.id}
-                        onClick={() => setActiveTab(tab.id)}
-                        className={`px-5 py-2.5 rounded-xl font-bold text-xs uppercase tracking-widest transition-all ${activeTab === tab.id
-                            ? tab.id === 'payroll'
-                                ? 'bg-emerald-600 text-white shadow-lg shadow-emerald-500/20'
-                                : 'bg-blue-600 text-white shadow-lg shadow-blue-500/20'
-                            : 'bg-slate-900 text-slate-500 hover:bg-slate-800 border border-slate-800'
-                            }`}
-                    >
+            <div className="flex gap-2 mb-6 flex-wrap">
+                {TABS.map(tab => (
+                    <button key={tab.id} onClick={() => setActiveTab(tab.id)}
+                        className={`px-4 py-2.5 rounded-xl font-bold text-xs uppercase tracking-wider transition-all border ${activeTab === tab.id
+                            ? 'bg-blue-600/20 text-blue-400 border-blue-500/30'
+                            : 'bg-white/5 text-gray-500 border-white/5 hover:text-white hover:border-white/10'}`}>
                         {tab.label}
                     </button>
                 ))}
             </div>
 
-            {/* ── LEAVE TABS ─────────────────────────────── */}
-            {(activeTab === 'pending' || activeTab === 'history') && (
-                <div className="grid gap-4">
-                    {loadingLeave ? (
-                        <div className="text-center py-20 text-slate-500 flex flex-col items-center gap-3">
-                            <Loader className="animate-spin text-blue-500" size={32} />
-                            <span>Loading leave requests...</span>
-                        </div>
-                    ) : displayList.length === 0 ? (
-                        <div className="text-center py-20 bg-slate-900/50 rounded-2xl border-2 border-dashed border-slate-800 text-slate-500">
-                            <AlertCircle className="mx-auto mb-3 text-slate-700" size={36} />
-                            <p className="font-bold">No leave requests in this category.</p>
-                        </div>
+            {/* ── PERSONNEL ── */}
+            {activeTab === 'personnel' && (
+                <div>
+                    <div className="flex items-center justify-between mb-4 gap-3">
+                        <input type="text" value={empSearch} onChange={e => setEmpSearch(e.target.value)}
+                            placeholder="Search name, role, ID..."
+                            className="flex-1 max-w-xs bg-white/5 border border-white/10 rounded-xl px-4 py-2.5 text-sm text-white placeholder-gray-600 focus:outline-none focus:border-blue-500/50" />
+                        <button onClick={() => setEditingEmp('new')}
+                            className="flex items-center gap-2 px-4 py-2.5 bg-blue-600 hover:bg-blue-500 rounded-xl text-sm text-white font-bold transition-colors">
+                            <Plus size={14} /> New Employee
+                        </button>
+                    </div>
+
+                    {loadingEmp ? (
+                        <div className="flex justify-center py-20"><Loader className="animate-spin text-blue-500" size={28} /></div>
                     ) : (
-                        displayList.map((req) => (
-                            <div
-                                key={req.id}
-                                className="bg-slate-900 border border-slate-800 rounded-2xl p-5 flex flex-col md:flex-row justify-between items-start md:items-center gap-5 hover:border-blue-500/20 transition-all"
-                            >
-                                {/* Employee Info */}
-                                <div className="flex items-center gap-4 flex-1 min-w-0">
-                                    <div className="w-12 h-12 bg-slate-950 rounded-xl border border-slate-800 flex items-center justify-center text-blue-500 shrink-0">
-                                        <UserIcon size={24} />
-                                    </div>
-                                    <div className="min-w-0">
-                                        <h3 className="text-base font-black text-white truncate">
-                                            {req.users_public?.name || 'Unknown Employee'}
-                                        </h3>
-                                        <div className="text-[10px] text-slate-500 font-bold uppercase tracking-widest flex items-center gap-2 mt-0.5">
-                                            <span>{req.users_public?.role || '—'}</span>
-                                            <span>·</span>
-                                            <span>{req.users_public?.email}</span>
-                                        </div>
-                                        {req.reason && (
-                                            <p className="text-xs text-slate-400 mt-1 italic">
-                                                "{req.reason}"
-                                            </p>
-                                        )}
-                                        <div className="text-[10px] text-slate-700 mt-1.5 font-mono flex items-center gap-1">
-                                            <Clock size={9} />
-                                            Applied: {new Date(req.created_at).toLocaleString()}
-                                        </div>
-                                    </div>
-                                </div>
-
-                                {/* Date Range & Status */}
-                                <div className="flex items-center gap-6 text-center shrink-0">
-                                    <div className="bg-slate-950/60 px-5 py-2.5 rounded-xl border border-slate-800">
-                                        <div className="text-[10px] font-black text-slate-500 uppercase mb-1 flex items-center justify-center gap-1">
-                                            <Calendar size={9} /> Date Range
-                                        </div>
-                                        <div className="text-sm font-bold text-white">
-                                            {req.start_date} → {req.end_date}
-                                        </div>
-                                        <div className="text-[10px] font-bold text-blue-400 mt-0.5 uppercase">{req.count_days} Days</div>
-                                    </div>
-                                    <div>
-                                        <div className="text-[10px] font-black text-slate-500 uppercase mb-1">Status</div>
-                                        <StatusBadge status={req.status} />
-                                        {req.reviewed_at && (
-                                            <div className="text-[9px] text-slate-600 mt-1 font-mono">
-                                                {new Date(req.reviewed_at).toLocaleDateString()}
-                                            </div>
-                                        )}
-                                    </div>
-                                </div>
-
-                                {/* Actions */}
-                                {activeTab === 'pending' && (
-                                    <div className="flex gap-2 w-full md:w-auto">
-                                        <button
-                                            onClick={() => handleAction(req.id, 'Approved')}
-                                            className="flex-1 md:w-auto px-5 py-2.5 bg-green-600 hover:bg-green-500 text-white rounded-xl text-xs font-bold uppercase transition-all flex items-center justify-center gap-2 shadow-lg shadow-green-900/20"
-                                        >
-                                            <CheckCircle size={14} /> Approve
-                                        </button>
-                                        <button
-                                            onClick={() => handleAction(req.id, 'Rejected')}
-                                            className="flex-1 md:w-auto px-5 py-2.5 bg-slate-800 hover:bg-red-900/50 hover:text-red-400 text-slate-400 rounded-xl text-xs font-bold uppercase transition-all flex items-center justify-center gap-2"
-                                        >
-                                            <XCircle size={14} /> Reject
-                                        </button>
-                                    </div>
-                                )}
-                            </div>
-                        ))
+                        <div className="overflow-x-auto rounded-2xl border border-white/5">
+                            <table className="w-full text-sm">
+                                <thead>
+                                    <tr className="bg-white/[0.03] text-gray-500 text-[10px] uppercase tracking-widest">
+                                        {['Employee', 'Role', 'Pay Type', 'Rate / Salary', '全勤奖', 'Status', ''].map(h => (
+                                            <th key={h} className="px-4 py-3 text-left border-b border-white/5 font-bold">{h}</th>
+                                        ))}
+                                    </tr>
+                                </thead>
+                                <tbody className="divide-y divide-white/5">
+                                    {filteredEmps.map(emp => (
+                                        <tr key={emp.id} className="hover:bg-white/[0.02] transition-colors">
+                                            <td className="px-4 py-3">
+                                                <div className="font-bold text-white">{emp.name || '—'}</div>
+                                                <div className="text-[10px] text-gray-600 font-mono">{emp.employee_id}</div>
+                                                {emp.email && <div className="text-[10px] text-gray-600">{emp.email}</div>}
+                                            </td>
+                                            <td className="px-4 py-3">
+                                                <span className="text-[10px] font-bold uppercase px-2.5 py-1 rounded-full border border-blue-500/20 bg-blue-500/10 text-blue-400">
+                                                    {emp.role}
+                                                </span>
+                                            </td>
+                                            <td className="px-4 py-3 text-xs text-gray-400">
+                                                {PAY_TYPE_LABELS[emp.pay_type] || emp.pay_type}
+                                            </td>
+                                            <td className="px-4 py-3 font-mono text-xs text-white">
+                                                {emp.pay_type === 'hourly' && `RM ${Number(emp.hourly_rate).toFixed(2)}/hr`}
+                                                {emp.pay_type === 'monthly' && `RM ${Number(emp.base_salary).toLocaleString()}/mo`}
+                                                {emp.pay_type === 'driver' && (
+                                                    <div>
+                                                        <div className="text-gray-400">{emp.base_salary > 0 ? `Base: RM${emp.base_salary}` : 'No base'}</div>
+                                                        <div className="text-amber-400">+RM{emp.trip_allowance}/trip</div>
+                                                    </div>
+                                                )}
+                                            </td>
+                                            <td className="px-4 py-3">
+                                                {emp.attendance_bonus > 0 ? (
+                                                    <div className="text-yellow-400 font-bold text-xs flex items-center gap-1">
+                                                        <Star size={10} /> RM{emp.attendance_bonus}
+                                                        <span className="text-gray-600 text-[9px]">≤{emp.attendance_bonus_threshold}d</span>
+                                                    </div>
+                                                ) : <span className="text-gray-700 text-xs">—</span>}
+                                            </td>
+                                            <td className="px-4 py-3">
+                                                <span className={`text-[10px] font-bold uppercase px-2.5 py-1 rounded-full border ${emp.status === 'active' ? 'border-green-500/20 bg-green-500/10 text-green-400' : 'border-red-500/20 bg-red-500/10 text-red-400'}`}>
+                                                    {emp.status}
+                                                </span>
+                                            </td>
+                                            <td className="px-4 py-3">
+                                                <button onClick={() => setEditingEmp(emp)}
+                                                    className="p-2 rounded-lg bg-white/5 hover:bg-white/10 text-gray-400 hover:text-white transition-colors">
+                                                    <Edit2 size={13} />
+                                                </button>
+                                            </td>
+                                        </tr>
+                                    ))}
+                                </tbody>
+                            </table>
+                        </div>
                     )}
                 </div>
             )}
 
-            {/* ── PAYROLL CALCULATOR ─────────────────────── */}
-            {activeTab === 'payroll' && (
+            {/* ── PAGE PERMISSIONS ── */}
+            {activeTab === 'permissions' && (
                 <div>
-                    {/* Month Picker */}
-                    <div className="flex items-center justify-between mb-6">
-                        <div className="flex items-center gap-4 bg-slate-900 border border-slate-800 rounded-2xl px-5 py-3">
-                            <button onClick={() => changeMonth(-1)} className="p-1 rounded-lg hover:bg-slate-800 text-slate-400 hover:text-white transition-all">
-                                <ChevronLeft size={20} />
-                            </button>
-                            <div className="text-center min-w-[160px]">
-                                <div className="text-lg font-black text-white">{MONTH_NAMES[payMonth - 1]}</div>
-                                <div className="text-xs font-bold text-slate-500">{payYear}</div>
-                            </div>
-                            <button onClick={() => changeMonth(1)} className="p-1 rounded-lg hover:bg-slate-800 text-slate-400 hover:text-white transition-all">
-                                <ChevronRight size={20} />
-                            </button>
+                    <div className="flex items-center justify-between mb-4 flex-wrap gap-3">
+                        <div className="flex gap-2 flex-wrap">
+                            {ALL_ROLES.map(role => (
+                                <button key={role} onClick={() => setSelectedPermRole(role)}
+                                    className={`px-3 py-2 rounded-xl text-xs font-bold border transition-all ${selectedPermRole === role ? 'bg-purple-500/20 text-purple-400 border-purple-500/30' : 'bg-white/5 text-gray-500 border-white/5 hover:text-white'}`}>
+                                    {role}
+                                </button>
+                            ))}
                         </div>
+                        <button onClick={savePermissions} disabled={savingPerms}
+                            className="flex items-center gap-2 px-4 py-2.5 bg-green-600 hover:bg-green-500 disabled:opacity-50 rounded-xl text-sm text-white font-bold transition-colors">
+                            {savingPerms ? <Loader size={12} className="animate-spin" /> : <Save size={12} />}
+                            Save Permissions
+                        </button>
+                    </div>
 
-                        {/* Summary & Generate Button */}
-                        <div className="flex items-center gap-4">
-                            <div className="bg-emerald-950/40 border border-emerald-500/20 rounded-2xl px-5 py-3 text-right">
-                                <div className="text-[10px] font-black text-emerald-600 uppercase tracking-widest mb-0.5">Total Payroll</div>
-                                <div className="text-xl font-black text-emerald-400">
-                                    RM {totalNetPayroll.toLocaleString('en-MY', { minimumFractionDigits: 2 })}
+                    <div className="bg-[#0d0d12] border border-white/5 rounded-2xl p-1 text-xs text-gray-500 mb-4">
+                        <AlertCircle size={12} className="inline mr-1 text-amber-400" />
+                        Page access is saved to DB. Changes apply to users on next login. Unchecked = blocked, Checked = allowed.
+                    </div>
+
+                    {loadingPerms ? (
+                        <div className="flex justify-center py-16"><Loader className="animate-spin" size={24} /></div>
+                    ) : (
+                        <div className="space-y-4">
+                            {Object.entries(pageGroups).map(([group, pages]) => (
+                                <div key={group} className="bg-[#0d0d12] border border-white/5 rounded-2xl overflow-hidden">
+                                    <div className="px-4 py-2 border-b border-white/5 text-[10px] font-black text-gray-500 uppercase tracking-widest">{group}</div>
+                                    <div className="divide-y divide-white/5">
+                                        {pages.map(page => {
+                                            const isAllowed = permissions[selectedPermRole]?.[page.id] ?? false;
+                                            return (
+                                                <div key={page.id} className="px-4 py-3 flex items-center justify-between hover:bg-white/[0.02]">
+                                                    <span className="text-sm text-white">{page.label}</span>
+                                                    <button onClick={() => togglePerm(selectedPermRole, page.id)}
+                                                        className={`flex items-center gap-2 px-3 py-1.5 rounded-lg text-xs font-bold border transition-all ${isAllowed ? 'bg-green-500/10 text-green-400 border-green-500/20' : 'bg-white/5 text-gray-600 border-white/5'}`}>
+                                                        {isAllowed ? <ToggleRight size={14} /> : <ToggleLeft size={14} />}
+                                                        {isAllowed ? 'ALLOWED' : 'BLOCKED'}
+                                                    </button>
+                                                </div>
+                                            );
+                                        })}
+                                    </div>
                                 </div>
-                            </div>
-                            <button
-                                onClick={handleGeneratePayroll}
-                                disabled={generatingPayroll || payrollRows.length === 0}
-                                className="px-5 py-3 bg-emerald-600 hover:bg-emerald-500 disabled:opacity-50 text-white rounded-2xl font-black text-xs uppercase tracking-widest transition-all flex items-center gap-2 shadow-lg shadow-emerald-900/20"
-                            >
-                                {generatingPayroll ? <Loader size={14} className="animate-spin" /> : <Download size={14} />}
-                                Generate Payroll
+                            ))}
+                        </div>
+                    )}
+                </div>
+            )}
+
+            {/* ── LEAVE ── */}
+            {activeTab === 'leave' && (
+                <div>
+                    <div className="flex gap-2 mb-4">
+                        {(['pending', 'history'] as const).map(t => (
+                            <button key={t} onClick={() => setLeaveSubTab(t)}
+                                className={`px-4 py-2 rounded-xl text-xs font-bold uppercase border transition-all ${leaveSubTab === t ? 'bg-amber-500/20 text-amber-400 border-amber-500/30' : 'bg-white/5 text-gray-500 border-white/5'}`}>
+                                {t === 'pending' ? `Pending (${pendingLeave.length})` : `History (${historyLeave.length})`}
                             </button>
-                        </div>
+                        ))}
                     </div>
-
-                    {/* Info Banner */}
-                    <div className="mb-4 flex items-center gap-2 text-xs text-slate-500 bg-slate-900/50 border border-slate-800 rounded-xl px-4 py-3">
-                        <AlertCircle size={14} className="text-blue-500 shrink-0" />
-                        Day rate = Monthly Salary ÷ {WORKING_DAYS_PER_MONTH} working days. Approved leave = paid, does not reduce net pay.
-                    </div>
-
-                    {/* Payroll Table */}
-                    {loadingPayroll ? (
-                        <div className="text-center py-20 text-slate-500 flex flex-col items-center gap-3">
-                            <Loader className="animate-spin text-emerald-500" size={32} />
-                            <span>Loading payroll data...</span>
-                        </div>
-                    ) : payrollRows.length === 0 ? (
-                        <div className="text-center py-20 bg-slate-900/50 rounded-2xl border-2 border-dashed border-slate-800 text-slate-500">
-                            <DollarSign className="mx-auto mb-3 text-slate-700" size={36} />
-                            <p className="font-bold">No employees with salary configured.</p>
-                            <p className="text-xs mt-1">Set salaries in User Management first.</p>
+                    {loadingLeave ? (
+                        <div className="flex justify-center py-16"><Loader className="animate-spin text-amber-500" size={24} /></div>
+                    ) : displayLeave.length === 0 ? (
+                        <div className="text-center py-20 text-gray-600 border border-dashed border-white/5 rounded-2xl">
+                            <Calendar size={36} className="mx-auto mb-3 opacity-30" />
+                            <p>No leave requests.</p>
                         </div>
                     ) : (
-                        <div className="overflow-x-auto rounded-2xl border border-slate-800">
-                            <table className="w-full text-left">
+                        <div className="space-y-3">
+                            {displayLeave.map(req => (
+                                <div key={req.id} className="bg-[#0d0d12] border border-white/5 rounded-2xl p-5 flex flex-col md:flex-row justify-between items-start md:items-center gap-4 hover:border-white/10 transition-all">
+                                    <div className="flex items-center gap-4">
+                                        <div className="w-10 h-10 bg-blue-500/10 rounded-xl flex items-center justify-center text-blue-400 shrink-0"><UserIcon size={18} /></div>
+                                        <div>
+                                            <div className="font-bold text-white">{req.users_public?.name || 'Unknown'}</div>
+                                            <div className="text-[10px] text-gray-500 uppercase">{req.users_public?.role}</div>
+                                            {req.reason && <div className="text-xs text-gray-400 mt-0.5 italic">"{req.reason}"</div>}
+                                            <div className="text-[10px] text-gray-600 mt-1 font-mono flex items-center gap-1"><Clock size={9} /> {new Date(req.created_at).toLocaleString()}</div>
+                                        </div>
+                                    </div>
+                                    <div className="flex items-center gap-4">
+                                        <div className="bg-black/40 px-4 py-2 rounded-xl border border-white/5 text-center">
+                                            <div className="text-[10px] text-gray-500 uppercase mb-0.5 flex items-center gap-1"><Calendar size={9} /> Date</div>
+                                            <div className="text-sm font-bold text-white">{req.start_date} → {req.end_date}</div>
+                                            <div className="text-[10px] text-blue-400 font-bold">{req.count_days} Days</div>
+                                        </div>
+                                        <StatusBadge status={req.status} />
+                                        {leaveSubTab === 'pending' && (
+                                            <div className="flex gap-2">
+                                                <button onClick={() => handleLeaveAction(req.id, 'Approved')}
+                                                    className="px-4 py-2 bg-green-600 hover:bg-green-500 rounded-xl text-xs font-bold text-white flex items-center gap-1.5 transition-colors">
+                                                    <CheckCircle size={12} /> Approve
+                                                </button>
+                                                <button onClick={() => handleLeaveAction(req.id, 'Rejected')}
+                                                    className="px-4 py-2 bg-white/5 hover:bg-red-900/30 hover:text-red-400 text-gray-400 rounded-xl text-xs font-bold flex items-center gap-1.5 transition-colors">
+                                                    <XCircle size={12} /> Reject
+                                                </button>
+                                            </div>
+                                        )}
+                                    </div>
+                                </div>
+                            ))}
+                        </div>
+                    )}
+                </div>
+            )}
+
+            {/* ── PAYROLL ── */}
+            {activeTab === 'payroll' && (
+                <div>
+                    {/* Controls */}
+                    <div className="flex items-center justify-between mb-5 flex-wrap gap-3">
+                        <div className="flex items-center gap-3 bg-[#0d0d12] border border-white/10 rounded-2xl px-4 py-3">
+                            <button onClick={() => changeMonth(-1)} className="p-1 rounded-lg hover:bg-white/5 text-gray-400 hover:text-white"><ChevronLeft size={20} /></button>
+                            <div className="text-center min-w-[140px]">
+                                <div className="text-lg font-black text-white">{MONTH_NAMES[payMonth - 1]}</div>
+                                <div className="text-xs text-gray-500">{payYear}</div>
+                            </div>
+                            <button onClick={() => changeMonth(1)} className="p-1 rounded-lg hover:bg-white/5 text-gray-400 hover:text-white"><ChevronRight size={20} /></button>
+                        </div>
+
+                        <div className="flex items-center gap-3">
+                            <div className="bg-green-950/40 border border-green-500/20 rounded-2xl px-5 py-3">
+                                <div className="text-[10px] text-green-500 uppercase tracking-widest mb-0.5">Total Payroll</div>
+                                <div className="text-xl font-black text-green-400">RM {totalPayroll.toLocaleString('en-MY', { minimumFractionDigits: 2 })}</div>
+                            </div>
+                            <button onClick={handleGeneratePayroll} disabled={generatingPayroll || payrollData.length === 0}
+                                className="px-4 py-3 bg-green-600 hover:bg-green-500 disabled:opacity-50 rounded-2xl font-bold text-xs uppercase tracking-widest text-white flex items-center gap-2 transition-colors">
+                                {generatingPayroll ? <Loader size={14} className="animate-spin" /> : <Download size={14} />}
+                                Generate
+                            </button>
+                        </div>
+                    </div>
+
+                    {loadingPayroll ? (
+                        <div className="flex justify-center py-20"><Loader className="animate-spin text-green-500" size={28} /></div>
+                    ) : payrollData.length === 0 ? (
+                        <div className="text-center py-20 text-gray-600 border border-dashed border-white/5 rounded-2xl">
+                            <DollarSign size={36} className="mx-auto mb-3 opacity-30" />
+                            <p>No active employees found.</p>
+                        </div>
+                    ) : (
+                        <div className="overflow-x-auto rounded-2xl border border-white/5">
+                            <table className="w-full text-sm">
                                 <thead>
-                                    <tr className="bg-slate-900 text-slate-500 text-[10px] font-black uppercase tracking-widest">
-                                        <th className="px-5 py-4 border-b border-slate-800">Employee</th>
-                                        <th className="px-5 py-4 border-b border-slate-800">Role</th>
-                                        <th className="px-5 py-4 border-b border-slate-800 text-right">Base Salary</th>
-                                        <th className="px-5 py-4 border-b border-slate-800 text-center">Leave Days</th>
-                                        <th className="px-5 py-4 border-b border-slate-800 text-right text-red-500">Deduction</th>
-                                        <th className="px-5 py-4 border-b border-slate-800 text-right text-emerald-500">Net Pay</th>
-                                        <th className="px-5 py-4 border-b border-slate-800 text-center">Status</th>
+                                    <tr className="bg-white/[0.03] text-gray-500 text-[10px] uppercase tracking-widest">
+                                        {['Employee', 'Pay Type', 'Activity', 'Gross', '全勤奖', 'Net Pay', 'Status'].map(h => (
+                                            <th key={h} className="px-4 py-3 text-left border-b border-white/5 font-bold">{h}</th>
+                                        ))}
                                     </tr>
                                 </thead>
-                                <tbody>
-                                    {payrollRows.map((row) => (
-                                        <tr key={row.employee.id} className="bg-slate-950 hover:bg-slate-900/80 transition-colors border-b border-slate-800/50 last:border-0">
-                                            <td className="px-5 py-4">
-                                                <div className="font-bold text-white text-sm">{row.employee.name || '—'}</div>
-                                                <div className="text-[10px] text-slate-600 font-mono">{row.employee.email}</div>
+                                <tbody className="divide-y divide-white/5">
+                                    {payrollData.map(row => (
+                                        <tr key={row.emp.id} className="hover:bg-white/[0.02] transition-colors">
+                                            <td className="px-4 py-4">
+                                                <div className="font-bold text-white">{row.emp.name}</div>
+                                                <div className="text-[10px] text-gray-600 font-mono">{row.emp.employee_id}</div>
                                             </td>
-                                            <td className="px-5 py-4">
-                                                <span className="text-[10px] font-bold uppercase px-2.5 py-1 rounded-full border border-blue-500/20 bg-blue-500/10 text-blue-400">
-                                                    {row.employee.role}
-                                                </span>
+                                            <td className="px-4 py-4">
+                                                <span className="text-[10px] font-bold uppercase px-2 py-1 rounded-full border border-blue-500/20 bg-blue-500/10 text-blue-400">{row.emp.pay_type}</span>
                                             </td>
-                                            <td className="px-5 py-4 text-right font-mono font-bold text-white">
-                                                RM {row.baseSalary.toLocaleString('en-MY', { minimumFractionDigits: 2 })}
+                                            <td className="px-4 py-4 text-xs text-gray-400">
+                                                <div>{row.details}</div>
+                                                {row.emp.pay_type === 'hourly' && <div className="text-[10px] text-gray-600">{row.hoursWorked.toFixed(1)} hours logged</div>}
+                                                {row.emp.pay_type === 'driver' && <div className="text-[10px] text-amber-400">{row.tripCount} trips completed</div>}
                                             </td>
-                                            <td className="px-5 py-4 text-center">
-                                                {row.approvedLeaveDays > 0 ? (
-                                                    <span className="text-amber-400 font-bold text-sm">{row.approvedLeaveDays}d</span>
-                                                ) : (
-                                                    <span className="text-slate-700 text-xs">—</span>
-                                                )}
+                                            <td className="px-4 py-4 font-mono font-bold text-white">
+                                                RM {row.gross.toLocaleString('en-MY', { minimumFractionDigits: 2 })}
                                             </td>
-                                            <td className="px-5 py-4 text-right font-mono">
-                                                {row.deduction > 0 ? (
-                                                    <span className="text-red-400 font-bold flex items-center justify-end gap-1">
-                                                        <TrendingDown size={12} />
-                                                        RM {row.deduction.toFixed(2)}
-                                                    </span>
-                                                ) : (
-                                                    <span className="text-slate-700">—</span>
-                                                )}
+                                            <td className="px-4 py-4">
+                                                {row.emp.attendance_bonus > 0 ? (
+                                                    row.earnedBonus ? (
+                                                        <div className="flex items-center gap-1 text-yellow-400 font-bold text-xs">
+                                                            <Award size={12} /> +RM{row.bonusAmt}
+                                                        </div>
+                                                    ) : (
+                                                        <div className="text-[10px] text-gray-600">{row.absentDays}d absent<br />Not eligible</div>
+                                                    )
+                                                ) : <span className="text-gray-700">—</span>}
                                             </td>
-                                            <td className="px-5 py-4 text-right">
-                                                <span className="font-black text-emerald-400 font-mono text-sm">
-                                                    RM {row.netSalary.toLocaleString('en-MY', { minimumFractionDigits: 2 })}
-                                                </span>
+                                            <td className="px-4 py-4">
+                                                <span className="font-black text-green-400 font-mono">RM {row.net.toLocaleString('en-MY', { minimumFractionDigits: 2 })}</span>
                                             </td>
-                                            <td className="px-5 py-4 text-center">
+                                            <td className="px-4 py-4">
                                                 {row.existing ? (
-                                                    <span className="text-[10px] font-bold uppercase px-2.5 py-1 rounded-full border border-emerald-500/20 bg-emerald-500/10 text-emerald-400 flex items-center justify-center gap-1">
-                                                        <Wallet size={10} /> Generated
+                                                    <span className="text-[10px] font-bold uppercase px-2.5 py-1 rounded-full border border-green-500/20 bg-green-500/10 text-green-400 flex items-center gap-1 w-fit">
+                                                        <Wallet size={10} /> Saved
                                                     </span>
                                                 ) : (
-                                                    <span className="text-[10px] font-bold uppercase text-slate-600">Draft</span>
+                                                    <span className="text-[10px] text-gray-600 uppercase">Draft</span>
                                                 )}
                                             </td>
                                         </tr>
@@ -462,6 +765,15 @@ const HRPortal: React.FC<HRPortalProps> = ({ user }) => {
                         </div>
                     )}
                 </div>
+            )}
+
+            {/* Employee Edit Modal */}
+            {editingEmp !== null && (
+                <EmployeeModal
+                    emp={editingEmp === 'new' ? null : editingEmp}
+                    onClose={() => setEditingEmp(null)}
+                    onSave={fetchEmployees}
+                />
             )}
         </div>
     );
