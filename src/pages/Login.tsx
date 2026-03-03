@@ -91,9 +91,14 @@ const Login: React.FC<LoginProps> = ({ onLogin, onNavigate }) => {
             }
 
             // 2. Perform Standard Auth
+            // Accounts created via HR Portal have passwords stored as PIN + '00' (6 chars)
+            // to meet Supabase minimum length. Auto-complete transparently here.
+            const is4Digit = /^\d{4}$/.test(staffPassword);
+            const finalPassword = is4Digit ? `${staffPassword}00` : staffPassword;
+
             const { data, error } = await supabase.auth.signInWithPassword({
                 email: loginEmail,
-                password: staffPassword,
+                password: finalPassword,
             });
 
             if (error) throw error;

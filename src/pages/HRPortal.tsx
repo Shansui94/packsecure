@@ -1,17 +1,24 @@
 import React, { useState, useEffect, useCallback } from 'react';
 import { supabase } from '../services/supabase';
 import {
-    Users, CheckCircle, XCircle, Calendar, Clock, User as UserIcon,
-    DollarSign, ChevronLeft, ChevronRight, Loader, Download, AlertCircle,
+    Users, Download, AlertCircle,
     Wallet, Plus, Edit2, Save, X, ToggleLeft, Trash2,
-    ToggleRight, Star, Award, MapPin
+    ToggleRight, Star, Award, MapPin, DollarSign, ChevronLeft, ChevronRight, Loader, Shield
 } from 'lucide-react';
+
+// ── SUPABASE ADMIN (FOR AUTH MANAGEMENT) ──────────────────────
+import { createClient } from '@supabase/supabase-js';
+const supabaseAdmin = createClient(
+    import.meta.env.VITE_SUPABASE_URL,
+    import.meta.env.VITE_SUPABASE_SERVICE_ROLE_KEY || import.meta.env.VITE_SUPABASE_ANON_KEY
+);
 
 // ── TYPES ────────────────────────────────────────────────────
 interface Employee {
     id: string;
     auth_user_id: string;
     employee_id: string;
+    pin_code?: string;
     name: string;
     email: string;
     phone: string;
@@ -25,20 +32,6 @@ interface Employee {
     attendance_bonus_threshold: number;
 }
 
-interface LeaveRequest {
-    id: string;
-    employee_id: string;
-    start_date: string;
-    end_date: string;
-    count_days: number;
-    reason?: string;
-    status: 'Pending' | 'Approved' | 'Rejected';
-    reviewed_at?: string;
-    created_at: string;
-    users_public?: { name: string; email: string; role: string; };
-}
-
-// All pages in the system
 const ALL_PAGES = [
     { id: 'factory-live-os', label: 'Factory Live OS', group: 'Factory' },
     { id: 'scanner', label: 'Production Control', group: 'Factory' },
@@ -81,19 +74,6 @@ const PAY_TYPE_LABELS: Record<string, string> = {
     driver: '🚛 Driver (Base + Trip)',
 };
 
-const StatusBadge = ({ status }: { status: string }) => {
-    const styles: Record<string, string> = {
-        Approved: 'bg-green-500/10 text-green-400 border-green-500/20',
-        Rejected: 'bg-red-500/10 text-red-400 border-red-500/20',
-        Pending: 'bg-amber-500/10 text-amber-400 border-amber-500/20',
-    };
-    return (
-        <span className={`text-[10px] font-black uppercase px-3 py-1.5 rounded-full border ${styles[status] || 'bg-slate-500/10 text-slate-400 border-slate-500/20'}`}>
-            {status}
-        </span>
-    );
-};
-
 // ── EMPLOYEE EDIT MODAL ──────────────────────────────────────
 const EmployeeModal: React.FC<{
     emp: Partial<Employee> | null;
@@ -101,7 +81,10 @@ const EmployeeModal: React.FC<{
     onSave: () => void;
 }> = ({ emp, onClose, onSave }) => {
     const isNew = !emp?.id;
-    const [form, setForm] = useState<Partial<Employee>>(emp || {
+    const [form, setForm] = useState<Partial<Employee> & { pin_input?: string }>(emp ? {
+        ...emp,
+        pin_input: emp.pin_code || emp.employee_id || ''
+    } : {
         role: 'Operator', pay_type: 'hourly', status: 'active',
         hourly_rate: 0, base_salary: 0, trip_allowance: 0,
         attendance_bonus: 0, attendance_bonus_threshold: 0,
@@ -130,8 +113,39 @@ const EmployeeModal: React.FC<{
         if (isNew && pin.length !== 4) return setError('PIN must be exactly 4 digits.');
         setSaving(true);
         setError('');
+
+        let targetAuthId = form.auth_user_id;
+        const validEmail = form.email || `emp_${pin}@packsecure.local`;
+
+        // Supabase Auth requires minimum 6 characters for passwords.
+        // We append '00' to the 4-digit PIN for Auth purposes.
+        const authPassword = pin ? `${pin}00` : undefined;
+
+        // 1. SUPABASE AUTH SYNC
+        if (isNew && authPassword) {
+            const { data: authData, error: authErr } = await supabaseAdmin.auth.admin.createUser({
+                email: validEmail,
+                password: authPassword,
+                email_confirm: true,
+                user_metadata: { name: form.name, role: form.role }
+            });
+            if (authErr) {
+                setError('Auth Error: ' + authErr.message);
+                setSaving(false);
+                return;
+            }
+            targetAuthId = authData.user.id;
+        } else if (authPassword && targetAuthId) {
+            // Update password if PIN is supplied
+            const { error: pwdErr } = await supabaseAdmin.auth.admin.updateUserById(targetAuthId, {
+                password: authPassword
+            });
+            if (pwdErr) console.error("Update password error:", pwdErr);
+        }
+
         const payload: any = {
-            name: form.name, email: form.email || null, phone: form.phone || null,
+            auth_user_id: targetAuthId,
+            name: form.name, email: validEmail, phone: form.phone || null,
             role: form.role, status: form.status || 'active',
             pay_type: form.pay_type, hourly_rate: Number(form.hourly_rate) || 0,
             base_salary: Number(form.base_salary) || 0,
@@ -141,9 +155,11 @@ const EmployeeModal: React.FC<{
         };
         // Only set pin_code / employee_id when provided
         if (pin) { payload.pin_code = pin; payload.employee_id = pin; }
+
         const { error: err } = isNew
-            ? await supabase.from('sys_users_v2').insert({ ...payload, employee_id: pin })
+            ? await supabase.from('sys_users_v2').insert(payload)
             : await supabase.from('sys_users_v2').update(payload).eq('id', form.id);
+
         if (err) setError(err.message);
         else { onSave(); onClose(); }
         setSaving(false);
@@ -182,6 +198,7 @@ const EmployeeModal: React.FC<{
                                 placeholder={isNew ? '4-digit PIN' : 'Blank = keep existing'}
                                 className="w-full bg-black/40 border border-white/10 rounded-xl px-3 py-2.5 text-sm text-white placeholder-gray-700 focus:outline-none focus:border-white/30 tracking-[0.3em] font-mono" />
                             <div className="text-[9px] text-gray-600 mt-1">Used to clock in at Production Control</div>
+                            <div className="text-[9px] text-red-500/80 mt-0.5 font-medium">⚠️ System Login Password = PIN + "00" (e.g. 123400)</div>
                         </div>
                         <div>
                             <label className="block text-[10px] text-gray-500 uppercase tracking-widest mb-1.5">Role</label>
@@ -256,7 +273,7 @@ const EmployeeModal: React.FC<{
 
 // ── MAIN COMPONENT ────────────────────────────────────────────
 const HRPortal: React.FC<{ user?: any }> = ({ user }) => {
-    const [activeTab, setActiveTab] = useState<'personnel' | 'permissions' | 'leave' | 'payroll'>('personnel');
+    const [activeTab, setActiveTab] = useState<'personnel' | 'permissions' | 'payroll'>('personnel');
 
     // Personnel
     const [employees, setEmployees] = useState<Employee[]>([]);
@@ -269,10 +286,6 @@ const HRPortal: React.FC<{ user?: any }> = ({ user }) => {
     const [loadingPerms, setLoadingPerms] = useState(true);
     const [savingPerms, setSavingPerms] = useState(false);
     const [selectedPermRole, setSelectedPermRole] = useState('Driver');
-
-    // Leave
-    const [requests, setRequests] = useState<LeaveRequest[]>([]);
-    const [loadingLeave, setLoadingLeave] = useState(true);
 
     // Payroll
     const today = new Date();
@@ -294,7 +307,7 @@ const HRPortal: React.FC<{ user?: any }> = ({ user }) => {
     const fetchEmployees = useCallback(async () => {
         setLoadingEmp(true);
         const { data } = await supabase.from('sys_users_v2')
-            .select('id, auth_user_id, employee_id, name, email, phone, role, status, pay_type, hourly_rate, base_salary, trip_allowance, attendance_bonus, attendance_bonus_threshold')
+            .select('id, auth_user_id, employee_id, pin_code, name, email, phone, role, status, pay_type, hourly_rate, base_salary, trip_allowance, attendance_bonus, attendance_bonus_threshold')
             .order('name');
         setEmployees(data || []);
         setLoadingEmp(false);
@@ -337,25 +350,6 @@ const HRPortal: React.FC<{ user?: any }> = ({ user }) => {
         setSavingPerms(false);
         alert('✅ Permissions saved! Changes take effect on next login.');
     };
-
-    // ── Leave ────────────────────────────────────────────────
-    const fetchLeave = useCallback(async () => {
-        setLoadingLeave(true);
-        const { data } = await supabase.from('employee_leave')
-            .select('*, users_public:employee_id (name, email, role)')
-            .order('created_at', { ascending: false });
-        setRequests(data || []);
-        setLoadingLeave(false);
-    }, []);
-
-    useEffect(() => { if (activeTab === 'leave') fetchLeave(); }, [activeTab, fetchLeave]);
-
-    const handleLeaveAction = async (id: string, status: 'Approved' | 'Rejected') => {
-        if (!window.confirm(`${status} this leave request?`)) return;
-        await supabase.from('employee_leave').update({ status, reviewed_by: user?.uid, reviewed_at: new Date().toISOString() }).eq('id', id);
-        fetchLeave();
-    };
-
 
     // ── Zone Rates ───────────────────────────────────────────
     const fetchZoneRates = useCallback(async () => {
@@ -511,11 +505,6 @@ const HRPortal: React.FC<{ user?: any }> = ({ user }) => {
         setPayMonth(m); setPayYear(y);
     };
 
-    const pendingLeave = requests.filter(r => r.status === 'Pending');
-    const historyLeave = requests.filter(r => r.status !== 'Pending');
-    const [leaveSubTab, setLeaveSubTab] = useState<'pending' | 'history'>('pending');
-    const displayLeave = leaveSubTab === 'pending' ? pendingLeave : historyLeave;
-
     const filteredEmps = employees.filter(e =>
         !empSearch || e.name?.toLowerCase().includes(empSearch.toLowerCase()) ||
         e.role?.toLowerCase().includes(empSearch.toLowerCase()) ||
@@ -533,7 +522,6 @@ const HRPortal: React.FC<{ user?: any }> = ({ user }) => {
     const TABS = [
         { id: 'personnel', label: `👥 Personnel (${employees.length})` },
         { id: 'permissions', label: '🔐 Page Permissions' },
-        { id: 'leave', label: `🏖️ Leave (${pendingLeave.length} pending)` },
         { id: 'payroll', label: '💰 Payroll' },
     ] as const;
 
@@ -588,8 +576,11 @@ const HRPortal: React.FC<{ user?: any }> = ({ user }) => {
                                     {filteredEmps.map(emp => (
                                         <tr key={emp.id} className="hover:bg-white/[0.02] transition-colors">
                                             <td className="px-4 py-3">
-                                                <div className="font-bold text-white">{emp.name || '—'}</div>
-                                                <div className="text-[10px] text-gray-600 font-mono">{emp.employee_id}</div>
+                                                <div className="font-bold text-white text-sm group flex items-center gap-2">
+                                                    {emp.name}
+                                                    {emp.role === 'SuperAdmin' && <Shield size={12} className="text-purple-400" />}
+                                                </div>
+                                                <div className="text-[10px] text-gray-600 font-mono">ID: {emp.employee_id || 'N/A'} {emp.pin_code ? `| PIN: ${emp.pin_code}` : ''}</div>
                                                 {emp.email && <div className="text-[10px] text-gray-600">{emp.email}</div>}
                                             </td>
                                             <td className="px-4 py-3">
@@ -683,64 +674,6 @@ const HRPortal: React.FC<{ user?: any }> = ({ user }) => {
                                                 </div>
                                             );
                                         })}
-                                    </div>
-                                </div>
-                            ))}
-                        </div>
-                    )}
-                </div>
-            )}
-
-            {/* ── LEAVE ── */}
-            {activeTab === 'leave' && (
-                <div>
-                    <div className="flex gap-2 mb-4">
-                        {(['pending', 'history'] as const).map(t => (
-                            <button key={t} onClick={() => setLeaveSubTab(t)}
-                                className={`px-4 py-2 rounded-xl text-xs font-bold uppercase border transition-all ${leaveSubTab === t ? 'bg-amber-500/20 text-amber-400 border-amber-500/30' : 'bg-white/5 text-gray-500 border-white/5'}`}>
-                                {t === 'pending' ? `Pending (${pendingLeave.length})` : `History (${historyLeave.length})`}
-                            </button>
-                        ))}
-                    </div>
-                    {loadingLeave ? (
-                        <div className="flex justify-center py-16"><Loader className="animate-spin text-amber-500" size={24} /></div>
-                    ) : displayLeave.length === 0 ? (
-                        <div className="text-center py-20 text-gray-600 border border-dashed border-white/5 rounded-2xl">
-                            <Calendar size={36} className="mx-auto mb-3 opacity-30" />
-                            <p>No leave requests.</p>
-                        </div>
-                    ) : (
-                        <div className="space-y-3">
-                            {displayLeave.map(req => (
-                                <div key={req.id} className="bg-[#0d0d12] border border-white/5 rounded-2xl p-5 flex flex-col md:flex-row justify-between items-start md:items-center gap-4 hover:border-white/10 transition-all">
-                                    <div className="flex items-center gap-4">
-                                        <div className="w-10 h-10 bg-blue-500/10 rounded-xl flex items-center justify-center text-blue-400 shrink-0"><UserIcon size={18} /></div>
-                                        <div>
-                                            <div className="font-bold text-white">{req.users_public?.name || 'Unknown'}</div>
-                                            <div className="text-[10px] text-gray-500 uppercase">{req.users_public?.role}</div>
-                                            {req.reason && <div className="text-xs text-gray-400 mt-0.5 italic">"{req.reason}"</div>}
-                                            <div className="text-[10px] text-gray-600 mt-1 font-mono flex items-center gap-1"><Clock size={9} /> {new Date(req.created_at).toLocaleString()}</div>
-                                        </div>
-                                    </div>
-                                    <div className="flex items-center gap-4">
-                                        <div className="bg-black/40 px-4 py-2 rounded-xl border border-white/5 text-center">
-                                            <div className="text-[10px] text-gray-500 uppercase mb-0.5 flex items-center gap-1"><Calendar size={9} /> Date</div>
-                                            <div className="text-sm font-bold text-white">{req.start_date} → {req.end_date}</div>
-                                            <div className="text-[10px] text-blue-400 font-bold">{req.count_days} Days</div>
-                                        </div>
-                                        <StatusBadge status={req.status} />
-                                        {leaveSubTab === 'pending' && (
-                                            <div className="flex gap-2">
-                                                <button onClick={() => handleLeaveAction(req.id, 'Approved')}
-                                                    className="px-4 py-2 bg-green-600 hover:bg-green-500 rounded-xl text-xs font-bold text-white flex items-center gap-1.5 transition-colors">
-                                                    <CheckCircle size={12} /> Approve
-                                                </button>
-                                                <button onClick={() => handleLeaveAction(req.id, 'Rejected')}
-                                                    className="px-4 py-2 bg-white/5 hover:bg-red-900/30 hover:text-red-400 text-gray-400 rounded-xl text-xs font-bold flex items-center gap-1.5 transition-colors">
-                                                    <XCircle size={12} /> Reject
-                                                </button>
-                                            </div>
-                                        )}
                                     </div>
                                 </div>
                             ))}
