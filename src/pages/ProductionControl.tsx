@@ -121,6 +121,35 @@ const ProductionLane: React.FC<ProductionLaneProps> = ({ laneId, machineMetadata
 
             try {
                 const machineId = machineMetadata?.id || 'T1.2-M01';
+
+                // --- AUTO-REGISTRATION OF UNKNOWN SKU ---
+                const { data: existingItem } = await supabase
+                    .from('master_items_v2')
+                    .select('sku')
+                    .eq('sku', v3Sku)
+                    .single();
+
+                if (!existingItem) {
+                    const autoName = `${selectedLayer} ${selectedMaterial} ${selectedSize} ${selectedRolls}Rolls ${derivedPackaging || ''}`.trim();
+                    const { error: insertError } = await supabase
+                        .from('master_items_v2')
+                        .insert({
+                            sku: v3Sku,
+                            name: `[AUTO-REG] ${autoName}`,
+                            type: 'FG',
+                            status: 'Active',
+                            uom: 'Roll',
+                            supply_type: 'Manufactured'
+                        });
+
+                    if (insertError) {
+                        console.warn("Auto-registration of SKU failed:", insertError);
+                    } else {
+                        console.log(`Auto-registered new SKU: ${v3Sku}`);
+                    }
+                }
+                // --- END AUTO-REGISTRATION ---
+
                 const { error } = await supabase.from('machine_active_products').upsert({
                     machine_id: machineId,
                     lane_id: laneId,
@@ -434,27 +463,6 @@ const ProductionLane: React.FC<ProductionLaneProps> = ({ laneId, machineMetadata
                                             </div>
                                             <div className="text-gray-400 text-xs font-mono">Units Produced This Session</div>
                                         </div>
-
-                                        <button
-                                            onClick={async () => {
-                                                try {
-                                                    const machineId = machineMetadata?.id || 'T1.2-M01';
-                                                    await supabase.from('production_logs').insert({
-                                                        machine_id: machineId,
-                                                        lane_id: laneId === 'Single' ? null : laneId,
-                                                        product_sku: activeSku,
-                                                        operator_id: operatorId, // Pass the currently logged-in operator
-                                                        alarm_count: selectedRolls
-                                                    });
-                                                } catch (e) {
-                                                    console.error("Pulse Simulation Error", e);
-                                                }
-                                            }}
-                                            className="w-full py-3 mb-2 bg-cyan-600 hover:bg-cyan-500 rounded-xl font-black text-white shadow-lg border-2 border-cyan-400/50 active:scale-95 transition-all flex justify-center items-center gap-2 text-sm"
-                                        >
-                                            <div className="w-2 h-2 rounded-full bg-white animate-pulse"></div>
-                                            SIMULATE HARDWARE PULSE
-                                        </button>
 
                                         <button
                                             onClick={toggleProductionRun}
