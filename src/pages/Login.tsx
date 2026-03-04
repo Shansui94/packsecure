@@ -73,11 +73,12 @@ const Login: React.FC<LoginProps> = ({ onLogin, onNavigate }) => {
         try {
             let loginEmail = email.trim();
 
-            // 1. Resolve Employee ID to Email logic
+            // 1. Resolve Employee ID to Email
             // If input does NOT contain '@', assume it is an Employee ID
+            // Use sys_users_v2 as the single source of truth
             if (!loginEmail.includes('@')) {
                 const { data, error: fetchError } = await supabase
-                    .from('users_public')
+                    .from('sys_users_v2')
                     .select('email')
                     .eq('employee_id', loginEmail)
                     .single();
