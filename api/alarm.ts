@@ -75,7 +75,10 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
         });
 
         // ── Build one log insert per lane ──
-        // alarm_count=0 means reboot signal → preserve as 0 for all lanes
+        // IMPORTANT: We IGNORE the firmware's alarm_count for quantity calculation.
+        // The firmware batches queued pulses (e.g. 2 pending → sends alarm_count=2),
+        // but we always use the DB yield config as the source of truth for quantity.
+        // alarm_count=0 is a special reboot signal — the only case where we use it.
         const isReboot = (alarm_count === 0);
         const insertRows = lanes.map(laneId => {
             let laneData = activeLaneMap[laneId] || activeLaneMap['Single'];
@@ -86,7 +89,7 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
             const row: any = {
                 machine_id,
                 lane_id: laneId,
-                // Use the yield value from the active product config — user controls this in UI
+                // ALWAYS use DB yield — never firmware alarm_count (could be batched)
                 alarm_count: isReboot ? 0 : (laneData?.yield ?? 1),
             };
             // Do NOT use 'UNKNOWN' literal — violates foreign key on production_logs_v2
