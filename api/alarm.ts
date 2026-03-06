@@ -9,7 +9,7 @@ const supabase = createClient(supabaseUrl, supabaseKey);
 // Define how many fixed lanes each machine has and their IDs.
 // Single-lane machines use ['Single'], dual-lane uses ['Lane1', 'Lane2'], etc.
 const MACHINE_LANES: Record<string, string[]> = {
-    'T1.2-M01': ['Lane1', 'Lane2'],  // 200cm → 2 fixed lanes of 100cm each
+    'T1.2-M01': ['Lane1', 'Lane2'],  // 200cm → 2 fixed lanes
     'N1-M01': ['Single'],
     'N2-M02': ['Single'],
     'T1.3-M02': ['Single'],
@@ -17,7 +17,6 @@ const MACHINE_LANES: Record<string, string[]> = {
 const DEFAULT_LANES = ['Single'];
 
 // Server-side dedup guard: only reject exact network-retry duplicates (10 seconds)
-// Kept short because ESP32 firmware already enforces the 4-minute production cooldown
 const DEDUP_WINDOW_MS = 10 * 1000;
 
 // ─── Handler ──────────────────────────────────────────────────────────────────
@@ -61,49 +60,48 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
 
         // Build a map: lane_id → { product_sku, yield }
         const activeLaneMap: Record<string, { sku: string | null; yield: number }> = {};
+        let firstAvailableSku: string | null = null;
+        let firstAvailableYield = 1;
+
         (activeProducts || []).forEach((p: any) => {
             activeLaneMap[p.lane_id] = {
                 sku: p.product_sku || null,
                 yield: p.yield || 1,
             };
+            if (!firstAvailableSku && p.product_sku) {
+                firstAvailableSku = p.product_sku;
+                firstAvailableYield = p.yield || 1;
+            }
         });
 
         // ── Build one log insert per lane ──
         // alarm_count=0 means reboot signal → preserve as 0 for all lanes
         const isReboot = (alarm_count === 0);
         const insertRows = lanes.map(laneId => {
-            const laneData = activeLaneMap[laneId] || activeLaneMap['Single'] || null;
+            let laneData = activeLaneMap[laneId] || activeLaneMap['Single'];
+            if (!laneData && firstAvailableSku) {
+                laneData = { sku: firstAvailableSku, yield: firstAvailableYield };
+            }
+
             const row: any = {
                 machine_id,
                 lane_id: laneId,
+                // Use the yield value from the active product config — user controls this in UI
                 alarm_count: isReboot ? 0 : (laneData?.yield ?? 1),
             };
-            if (laneData?.sku) row.product_sku = laneData.sku;
+            // Do NOT use 'UNKNOWN' literal — violates foreign key on production_logs_v2
+            if (laneData?.sku && laneData.sku !== 'UNKNOWN') {
+                row.product_sku = laneData.sku;
+            }
             return row;
         });
 
-        console.log(`Inserting ${insertRows.length} log(s) into V1:`, JSON.stringify(insertRows));
+        console.log(`Inserting ${insertRows.length} log(s):`, JSON.stringify(insertRows));
 
         const { error: v1Error } = await supabase.from('production_logs').insert(insertRows);
         if (v1Error) {
             console.error('V1 Insert Error:', v1Error);
             throw v1Error;
-        }
-
-        // --- EXPLICIT V2 INSERT TO BYPASS BROKEN TRIGGERS ---
-        const v2InsertRows = insertRows.map(row => ({
-            machine_id: row.machine_id,
-            sku: row.product_sku || null, // V2 uses "sku" instead of "product_sku"
-            output_qty: row.alarm_count,
-            note: `Auto-logged from Lane: ${row.lane_id}`
-        }));
-
-        console.log(`Inserting ${v2InsertRows.length} log(s) into V2:`, JSON.stringify(v2InsertRows));
-
-        // Let it fail silently if V2 has issues, so we don't break V1 ESP32 logic
-        const { error: v2Error } = await supabase.from('production_logs_v2').insert(v2InsertRows);
-        if (v2Error) {
-            console.error('V2 Insert Error (Non-Fatal):', v2Error);
         }
 
         return res.status(200).json({
