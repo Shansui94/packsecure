@@ -296,9 +296,9 @@ const ProductLibrary: React.FC = () => {
 
     // Data Filtering
     const filteredItems = items.filter(item => {
-        const matchesSearch =
-            item.name.toLowerCase().includes(searchTerm.toLowerCase()) ||
-            item.sku.toLowerCase().includes(searchTerm.toLowerCase());
+        const name = (item.name || '').toLowerCase();
+        const sku = (item.sku || '').toLowerCase();
+        const matchesSearch = name.includes(searchTerm.toLowerCase()) || sku.includes(searchTerm.toLowerCase());
         const matchesType = filterType === 'All' || item.type === filterType;
         return matchesSearch && matchesType;
     });
