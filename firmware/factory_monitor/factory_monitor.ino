@@ -10,7 +10,7 @@
 #include <WiFi.h>
 
 const String CURRENT_VERSION =
-    "3.2.0"; // ★ 全面非阻塞状态机 & 切换至 Vercel API
+    "3.3.0"; // ★ Fix: send 1 pulse per API call (never batch-sum queue)
 #include <WiFiClientSecure.h>
 #include <esp_task_wdt.h> // Watchdog Timer
 #include <time.h>         // Include standard time library
@@ -335,31 +335,29 @@ void handleNetworkQueue() {
   if (alarmQueue.empty() || WiFi.status() != WL_CONNECTED)
     return;
   static unsigned long lastUp = 0;
-  if (millis() - lastUp <
-      3000) // Increase interval to 3s to avoid Vercel rate limits
+  if (millis() - lastUp < 3000) // 3s interval to avoid Vercel rate limits
     return;
 
   lastUp = millis();
 
-  // Aggregate all pending cuts into a single payload if there's a backlog
-  int totalCount = 0;
-  for (const auto &item : alarmQueue) {
-    totalCount += item.count;
-  }
+  // ★ FIX: Send ONE pulse at a time (not the sum of all queued pulses).
+  // Previously this summed the whole queue and sent totalCount (e.g. 2, 3…),
+  // which inflated alarm_count in the API. Now each pulse is always sent as
+  // count=1 — the API/DB determines the actual product yield from config.
+  QueueItem item = alarmQueue.front();
+  time_t timestamp = item.timestamp;
 
-  // We use the timestamp of the first item
-  time_t timestamp = alarmQueue.front().timestamp;
+  Serial.printf("Sending 1 pulse to Supabase (queue size=%d)...\n",
+                (int)alarmQueue.size());
 
-  Serial.printf("Attempting to send batch of %d counts to Supabase...\n",
-                totalCount);
-
-  if (sendToSupabase(totalCount, timestamp)) {
-    // Only if SUCCESSFUL (HTTP 200), we clear the entire queue
-    alarmQueue.clear();
+  if (sendToSupabase(1, timestamp)) {
+    // Only remove the front item if the API call succeeded
+    alarmQueue.erase(alarmQueue.begin());
     saveQueue();
-    Serial.println("Batch send SUCCESS! Queue cleared.");
+    Serial.printf("Send SUCCESS! %d pulse(s) remaining in queue.\n",
+                  (int)alarmQueue.size());
   } else {
-    Serial.println("Batch send FAILED. Keeping data in flash cache.");
+    Serial.println("Send FAILED. Retrying next cycle.");
   }
 }
 
