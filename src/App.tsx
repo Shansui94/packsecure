@@ -60,11 +60,9 @@ function App() {
     const [user, setUser] = useState<User | null>(null);
     // IoT 模式：访问 #/production/... 或设备已绑定机器时，绕过 Supabase 登录
     const [isIoTMode, setIsIoTMode] = useState<boolean>(() => {
-        return !!localStorage.getItem('device_machine_id') || window.location.hash.startsWith('#/production/');
+        return window.location.hash.startsWith('#/production/');
     });
     const [activePage, setActivePage] = useState<string>(() => {
-        // Kiosk mode: if this device is bound to a machine, always start on production screen
-        if (localStorage.getItem('device_machine_id')) return 'scanner';
         return localStorage.getItem('lastActivePage') || 'factory-live-os';
     });
 
@@ -233,14 +231,6 @@ function App() {
 
             // 🚨 FIX: Normalize legacy 'User' role to 'Operator'
             if (role === 'User' as any) role = 'Operator';
-
-            // 🔓 If a real admin/manager/HR account logs in on a kiosk device,
-            //    automatically release the device binding so they can navigate freely.
-            //    Only Operator and Device roles remain locked to the machine.
-            if (!['Operator', 'Device'].includes(role)) {
-                localStorage.removeItem('device_machine_id');
-                setIsIoTMode(false);
-            }
 
 
             // 🚨 FORCE ACTIVE FOR DEMO ACCOUNTS (Override DB) 🚨
