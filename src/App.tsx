@@ -114,11 +114,9 @@ function App() {
                 const machineId = hash.replace('#/production/', '');
                 if (machineId) {
                     console.log("Deep Link Detected for Machine:", machineId);
+                    // Store machine selection for ProductionControl to auto-select, but
+                    // do NOT lock the user into device/kiosk mode via the hash anymore.
                     sessionStorage.setItem('selectedMachine', machineId);
-                    // Persist permanently so bookmark / home-screen shortcut auto-binds on every visit
-                    localStorage.setItem('device_machine_id', machineId);
-                    setIsIoTMode(true); // 标记为 IoT 模式，绕过登录
-                    setActivePage('scanner');
                 }
             }
 
