@@ -211,14 +211,29 @@ function App() {
                 name = profile.name || name;
                 employeeId = profile.employee_id;
             } else {
-                // Fallback for Demo / Legacy
-                if (currentUser.email?.includes('super')) { role = 'SuperAdmin'; status = 'Active'; }
-                if (currentUser.email?.includes('admin')) { role = 'Admin'; status = 'Active'; }
-                if (currentUser.email?.includes('driver')) { role = 'Driver'; status = 'Active'; }
-                if (currentUser.email?.includes('boss')) { role = 'Manager'; status = 'Active'; }
-                if (currentUser.email?.includes('operator')) { role = 'Operator'; status = 'Active'; }
-                // Device detection via email pattern if not set in profile
-                if (currentUser.email?.startsWith('device-')) { role = 'Device' as UserRole; status = 'Active'; }
+                // ⚡ Fallback: try looking up by email in sys_users_v2
+                // (handles cases where auth_user_id is not linked in the DB)
+                const { data: sysUser } = await supabase
+                    .from('sys_users_v2')
+                    .select('role, status, name, employee_id')
+                    .eq('email', currentUser.email)
+                    .maybeSingle();
+
+                if (sysUser) {
+                    console.log('[Auth] Found profile via email fallback for:', currentUser.email);
+                    role = (sysUser.role as UserRole) || 'Operator';
+                    status = sysUser.status || 'Active';
+                    name = sysUser.name || name;
+                    employeeId = sysUser.employee_id;
+                } else {
+                    // Last-resort fallback for Demo / Legacy email patterns
+                    if (currentUser.email?.includes('super')) { role = 'SuperAdmin'; status = 'Active'; }
+                    if (currentUser.email?.includes('admin')) { role = 'Admin'; status = 'Active'; }
+                    if (currentUser.email?.includes('driver')) { role = 'Driver'; status = 'Active'; }
+                    if (currentUser.email?.includes('boss')) { role = 'Manager'; status = 'Active'; }
+                    if (currentUser.email?.includes('operator')) { role = 'Operator'; status = 'Active'; }
+                    if (currentUser.email?.startsWith('device-')) { role = 'Device' as UserRole; status = 'Active'; }
+                }
             }
 
             // --- SUPER ADMIN ENFORCEMENT ---
