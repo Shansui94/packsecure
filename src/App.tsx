@@ -17,7 +17,6 @@ import ProductLibrary from './pages/ProductLibrary';
 import DeliveryOrderManagement from './pages/DeliveryOrderManagement';
 import DriverDelivery from './pages/DriverDelivery';
 import DriverHistory from './pages/DriverHistory';
-import DriverLeave from './pages/DriverLeave';
 import LorryService from './pages/LorryService';
 import MaintenanceManagement from './pages/MaintenanceManagement';
 import LorryManagement from './pages/LorryManagement';
@@ -43,6 +42,7 @@ import Tasks from './pages/Tasks';
 import FactoryLiveOS from './pages/FactoryLiveOS';
 import OperatorManagement from './pages/OperatorManagement';
 import DevLog from './pages/DevLog';
+import LeaveCalendar from './pages/LeaveCalendar';
 
 import { User, UserRole, InventoryItem, ProductionLog as ProductionLogType, JobOrder } from './types';
 import AIAgentWidget from './components/AIAgentWidget';
@@ -153,12 +153,12 @@ function App() {
         // Define allowable pages per role
         const allowedPages: Record<string, string[]> = {
             'SuperAdmin': ['*'], // The Only One with Full Access
-            'Admin': ['profile', 'construction', 'factory-live-os', 'dashboard', 'data-v2', 'customer-import', 'universal-intake', 'scanner', 'jobs', 'livestock', 'inventory', 'recipes', 'products', 'delivery', 'order-summary', 'dispatch', 'loading-dock', 'production', 'report-history', 'users', 'hr', 'claims', 'simple-stock', 'maintenance', 'lorry-management', 'iot', 'driver-management', 'operators', 'dev-log'],
-            'Manager': ['profile', 'construction', 'factory-live-os', 'dashboard', 'data-v2', 'customer-import', 'universal-intake', 'jobs', 'livestock', 'inventory', 'recipes', 'products', 'delivery', 'order-summary', 'dispatch', 'loading-dock', 'production', 'report-history', 'hr', 'claims', 'simple-stock', 'maintenance', 'lorry-management', 'iot', 'driver-management', 'operators'],
-            'Driver': ['delivery-driver', 'delivery-history', 'driver-leave', 'lorry-service', 'claims', 'profile'],
-            'Operator': ['scanner', 'profile'],
+            'Admin': ['profile', 'construction', 'factory-live-os', 'dashboard', 'data-v2', 'customer-import', 'universal-intake', 'scanner', 'jobs', 'livestock', 'inventory', 'recipes', 'products', 'delivery', 'order-summary', 'dispatch', 'loading-dock', 'production', 'report-history', 'users', 'hr', 'claims', 'simple-stock', 'maintenance', 'lorry-management', 'iot', 'driver-management', 'operators', 'dev-log', 'leave-calendar'],
+            'Manager': ['profile', 'construction', 'factory-live-os', 'dashboard', 'data-v2', 'customer-import', 'universal-intake', 'jobs', 'livestock', 'inventory', 'recipes', 'products', 'delivery', 'order-summary', 'dispatch', 'loading-dock', 'production', 'report-history', 'hr', 'claims', 'simple-stock', 'maintenance', 'lorry-management', 'iot', 'driver-management', 'operators', 'leave-calendar'],
+            'Driver': ['delivery-driver', 'delivery-history', 'leave-calendar', 'lorry-service', 'claims', 'profile'],
+            'Operator': ['scanner', 'leave-calendar', 'profile'],
             'Device': ['scanner'],
-            'HR': ['profile', 'hr', 'driver-leave', 'notes', 'tasks'],
+            'HR': ['profile', 'hr', 'leave-calendar', 'notes', 'tasks'],
             'Sales': ['profile', 'construction'],
             'Finance': ['profile', 'construction']
         };
@@ -172,7 +172,7 @@ function App() {
 
         // --- SPECIAL USER OVERRIDE (Neoson - Manager + Driver) ---
         if (user.email === 'neosonchun@gmail.com') {
-            allowed = [...allowed, 'delivery-driver', 'delivery-history', 'driver-leave'];
+            allowed = [...allowed, 'delivery-driver', 'delivery-history', 'leave-calendar'];
         }
 
         const isAllowed = allowed.includes('*') || allowed.includes(activePage);
@@ -233,6 +233,15 @@ function App() {
 
             // 🚨 FIX: Normalize legacy 'User' role to 'Operator'
             if (role === 'User' as any) role = 'Operator';
+
+            // 🔓 If a real admin/manager/HR account logs in on a kiosk device,
+            //    automatically release the device binding so they can navigate freely.
+            //    Only Operator and Device roles remain locked to the machine.
+            if (!['Operator', 'Device'].includes(role)) {
+                localStorage.removeItem('device_machine_id');
+                setIsIoTMode(false);
+            }
+
 
             // 🚨 FORCE ACTIVE FOR DEMO ACCOUNTS (Override DB) 🚨
             const demoKeywords = ['admin', 'driver', 'boss', 'operator', 'demo', 'test', 'device', 'super'];
@@ -574,7 +583,8 @@ function App() {
                 return <StockAudit />;
             case 'audit-report':
                 return <AuditReport />;
-            case 'product-library':
+            case 'products':
+            case 'product-library': // 兼容旧路由键
                 return <ProductLibrary />;
             case 'recipes':
                 return null; // <RecipeManager />;
@@ -586,8 +596,6 @@ function App() {
                 return <DriverDelivery user={user} />;
             case 'delivery-history':
                 return <DriverHistory user={user} />;
-            case 'driver-leave':
-                return <DriverLeave user={user} />;
             case 'lorry-service':
                 return <LorryService user={user} />;
             case 'maintenance':
@@ -629,7 +637,12 @@ function App() {
                 return <Notes user={user} />;
             case 'tasks':
                 return <Tasks user={user} />;
-
+            case 'leave-calendar':
+                return <LeaveCalendar user={user} />;
+            case 'operator-dashboard':
+                return <UnderConstruction title="Coming Soon" />;
+            case 'data':
+                return <UnderConstruction title="Access Restricted" />;
             case 'construction':
                 return <UnderConstruction title="Access Restricted" />;
             default:
