@@ -91,6 +91,7 @@ const EmployeeModal: React.FC<{
     });
     const [saving, setSaving] = useState(false);
     const [error, setError] = useState('');
+    const [newPassword, setNewPassword] = useState(''); // separate from PIN — only for Auth login password
 
     const set = (k: keyof Employee, v: any) => setForm(f => ({ ...f, [k]: v }));
 
@@ -141,6 +142,18 @@ const EmployeeModal: React.FC<{
                 password: authPassword
             });
             if (pwdErr) console.error("Update password error:", pwdErr);
+        }
+
+        // Separately: if admin explicitly typed a new login password, update Auth password directly
+        if (!isNew && newPassword.trim().length >= 6 && targetAuthId) {
+            const { error: pwdErr } = await supabaseAdmin.auth.admin.updateUserById(targetAuthId, {
+                password: newPassword.trim()
+            });
+            if (pwdErr) {
+                setError('Password update failed: ' + pwdErr.message);
+                setSaving(false);
+                return;
+            }
         }
 
         const payload: any = {
@@ -200,6 +213,22 @@ const EmployeeModal: React.FC<{
                             <div className="text-[9px] text-gray-600 mt-1">Used to clock in at Production Control</div>
                             <div className="text-[9px] text-red-500/80 mt-0.5 font-medium">⚠️ System Login Password = PIN + "00" (e.g. 123400)</div>
                         </div>
+
+                        {/* Reset Login Password — existing employees only */}
+                        {!isNew && (
+                            <div>
+                                <label className="block text-[10px] text-orange-400 uppercase tracking-widest mb-1.5 font-bold">
+                                    🔑 Reset Login Password
+                                </label>
+                                <input
+                                    type="password"
+                                    value={newPassword}
+                                    onChange={e => setNewPassword(e.target.value)}
+                                    placeholder="New password (min 6 chars) — blank = no change"
+                                    className="w-full bg-black/40 border border-orange-500/30 rounded-xl px-3 py-2.5 text-sm text-white placeholder-gray-700 focus:outline-none focus:border-orange-400/60" />
+                                <div className="text-[9px] text-gray-600 mt-1">Leave blank to keep current password. This changes the email login password only.</div>
+                            </div>
+                        )}
                         <div>
                             <label className="block text-[10px] text-gray-500 uppercase tracking-widest mb-1.5">Role</label>
                             <select value={form.role || 'Operator'} onChange={e => set('role', e.target.value)}
