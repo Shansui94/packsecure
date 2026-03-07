@@ -157,7 +157,7 @@ const ProductionLane: React.FC<ProductionLaneProps> = ({ laneId, machineMetadata
                     cutting_size: numericSize,
                     yield: calculatedYield,
                     updated_at: new Date()
-                });
+                }, { onConflict: 'machine_id,lane_id' });
                 if (error) throw error;
                 setIsLiveRun(true);
                 setLiveCount(0);
@@ -181,9 +181,12 @@ const ProductionLane: React.FC<ProductionLaneProps> = ({ laneId, machineMetadata
                 { event: 'INSERT', schema: 'public', table: 'production_logs' },
                 async (payload) => { // Async handler
                     const newLog = payload.new;
-                    if (newLog.machine_id !== machineId || newLog.product_sku !== activeSku) return;
-                    // Filter to only count logs from this lane
-                    if (newLog.lane_id && newLog.lane_id !== laneId) return;
+                    // For old T1.2 firmware (v1.0.0) which sends 'UNKNOWN' sku and 'Unknown' lane_id, we still want to count it
+                    const isOldFirmwareSkipped = newLog.product_sku === 'UNKNOWN' && newLog.lane_id === 'Unknown';
+
+                    if (!isOldFirmwareSkipped && (newLog.machine_id !== machineId || newLog.product_sku !== activeSku)) return;
+                    // Filter to only count logs from this lane (ignore if it's the old firmware 'Unknown' lane)
+                    if (!isOldFirmwareSkipped && newLog.lane_id && newLog.lane_id !== laneId) return;
 
                     console.log(`[Lane: ${laneId}] ⚡ MATCHED SIGNAL:`, newLog);
                     const qty = newLog.alarm_count || 1;
@@ -226,7 +229,7 @@ const ProductionLane: React.FC<ProductionLaneProps> = ({ laneId, machineMetadata
         <div className={`flex-1 bg-black/20 backdrop-blur-md border border-white/5 rounded-3xl p-1 relative overflow-hidden flex flex-col min-h-[500px] ${className}`}>
             {/* Lane Badge */}
             {laneId !== 'Single' && (
-                <div className={`absolute top-0 right-0 px-3 py-1 text-xs font-bold uppercase rounded-bl-xl border-l border-b border-white/10 z-20 ${laneId === 'Left' || laneId === 'Lane 1' ? 'bg-cyan-500/20 text-cyan-400' : 'bg-purple-500/20 text-purple-400'
+                <div className={`absolute top-0 right-0 px-3 py-1 text-xs font-bold uppercase rounded-bl-xl border-l border-b border-white/10 z-20 ${laneId === 'Left' || laneId === 'Lane1' ? 'bg-cyan-500/20 text-cyan-400' : 'bg-purple-500/20 text-purple-400'
                     }`}>
                     {laneId === 'Left' || laneId === 'Right' ? `${laneId} Lane` : laneId}
                 </div>

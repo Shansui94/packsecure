@@ -60,18 +60,12 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
 
         // Build a map: lane_id → { product_sku, yield }
         const activeLaneMap: Record<string, { sku: string | null; yield: number }> = {};
-        let firstAvailableSku: string | null = null;
-        let firstAvailableYield = 1;
 
         (activeProducts || []).forEach((p: any) => {
             activeLaneMap[p.lane_id] = {
                 sku: p.product_sku || null,
                 yield: p.yield || 1,
             };
-            if (!firstAvailableSku && p.product_sku) {
-                firstAvailableSku = p.product_sku;
-                firstAvailableYield = p.yield || 1;
-            }
         });
 
         // ── Build one log insert per lane ──
@@ -81,10 +75,9 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
         // alarm_count=0 is a special reboot signal — the only case where we use it.
         const isReboot = (alarm_count === 0);
         const insertRows = lanes.map(laneId => {
-            let laneData = activeLaneMap[laneId] || activeLaneMap['Single'];
-            if (!laneData && firstAvailableSku) {
-                laneData = { sku: firstAvailableSku, yield: firstAvailableYield };
-            }
+            // Look up this specific lane's active product only — no cross-lane fallback.
+            // For single-lane machines that were configured under 'Single', also check that key.
+            const laneData = activeLaneMap[laneId] ?? activeLaneMap['Single'] ?? null;
 
             const row: any = {
                 machine_id,
@@ -92,10 +85,12 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
                 // ALWAYS use DB yield — never firmware alarm_count (could be batched)
                 alarm_count: isReboot ? 0 : (laneData?.yield ?? 1),
             };
-            // Do NOT use 'UNKNOWN' literal — violates foreign key on production_logs_v2
-            if (laneData?.sku && laneData.sku !== 'UNKNOWN') {
-                row.product_sku = laneData.sku;
-            }
+            // Assign SKU: use lane's active product, or fall back to UNKNOWN-BUBBLEWRAP
+            // so that production counts are never silently dropped from the stock ledger.
+            const resolvedSku = (laneData?.sku && laneData.sku !== 'UNKNOWN')
+                ? laneData.sku
+                : 'UNKNOWN-BUBBLEWRAP';
+            row.product_sku = resolvedSku;
             return row;
         });
 
