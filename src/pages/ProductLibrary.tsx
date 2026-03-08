@@ -6,7 +6,7 @@ import { V2Item, V2RecipeHeader, V2RecipeItem } from '../types/v2';
 import { ProductLayer, ProductMaterial, ProductSize, PackagingColor } from '../types';
 import { PRODUCT_LAYERS, PRODUCT_MATERIALS, PACKAGING_COLORS, PRODUCT_SIZES } from '../data/constants';
 import { getBubbleWrapSku } from '../utils/skuMapper';
-import { getRecommendedPackaging, getRollsPerSet } from '../utils/packagingRules';
+import { getRollsPerSet } from '../utils/packagingRules';
 import { supabase } from '../services/supabase';
 
 // --- COMPONENTS ---
@@ -77,22 +77,14 @@ const BubbleWrapGenerator = ({
     const [size, setSize] = useState<ProductSize>('25cm');
     const [rolls, setRolls] = useState<number>(4);
     const [packColor, setPackColor] = useState<PackagingColor>('Green');
-    const [useAutoPackaging, setUseAutoPackaging] = useState(true);
     const [saving, setSaving] = useState(false);
     const [skuExists, setSkuExists] = useState<boolean | null>(null);
 
-    // Auto-calculate rolls and packaging when selections change
+    // Auto-calculate rolls when size changes
     useEffect(() => {
         const defaultRolls = getRollsPerSet(size);
         setRolls(defaultRolls);
     }, [size]);
-
-    useEffect(() => {
-        if (useAutoPackaging) {
-            const recommended = getRecommendedPackaging(layer, material, size, rolls);
-            setPackColor(recommended);
-        }
-    }, [layer, material, size, rolls, useAutoPackaging]);
 
     // Generate SKU in real-time
     const generatedSku = getBubbleWrapSku(layer, material, size, rolls, packColor);
@@ -250,23 +242,14 @@ const BubbleWrapGenerator = ({
 
             {/* Packaging Color */}
             <div>
-                <div className="flex items-center justify-between mb-2">
+                <div className="mb-2">
                     <label className="text-[10px] uppercase font-bold text-gray-500 tracking-wider">Packaging Color 包装色</label>
-                    <button
-                        onClick={() => setUseAutoPackaging(!useAutoPackaging)}
-                        className={`text-[10px] font-bold px-2 py-0.5 rounded-full transition-all ${useAutoPackaging
-                            ? 'bg-cyan-500/20 text-cyan-400 border border-cyan-500/30'
-                            : 'bg-gray-800 text-gray-500 border border-gray-700'
-                            }`}
-                    >
-                        {useAutoPackaging ? '🤖 AUTO' : '✋ MANUAL'}
-                    </button>
                 </div>
                 <div className="flex gap-2">
                     {PACKAGING_COLORS.map(c => (
                         <button
                             key={c.value}
-                            onClick={() => { setUseAutoPackaging(false); setPackColor(c.value as PackagingColor); }}
+                            onClick={() => setPackColor(c.value as PackagingColor)}
                             className={`flex-1 py-3 rounded-lg text-xs font-bold transition-all border relative ${packColor === c.value
                                 ? 'ring-2 ring-white/40 border-white/30 scale-105'
                                 : 'border-gray-800 opacity-60 hover:opacity-100'
