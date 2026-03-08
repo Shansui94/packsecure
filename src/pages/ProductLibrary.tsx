@@ -77,6 +77,7 @@ const BubbleWrapGenerator = ({
     const [size, setSize] = useState<ProductSize>('25cm');
     const [rolls, setRolls] = useState<number>(4);
     const [packColor, setPackColor] = useState<PackagingColor>('Green');
+    const [customName, setCustomName] = useState('');
     const [saving, setSaving] = useState(false);
     const [skuExists, setSkuExists] = useState<boolean | null>(null);
 
@@ -106,7 +107,8 @@ const BubbleWrapGenerator = ({
     const layerLabel = layer === 'Single' ? 'Single Layer' : 'Double Layer';
     const matLabel = PRODUCT_MATERIALS.find(m => m.value === material)?.label.split(' ')[0] || material;
     const packLabel = PACKAGING_COLORS.find(c => c.value === packColor)?.label.split(' ')[0] || packColor;
-    const generatedName = `${layerLabel} ${matLabel} Bubble Wrap 100m×${size.replace('cm', '')}cm ${rolls} Roll${rolls > 1 ? 's' : ''} (${packLabel})`;
+    const autoName = `${layerLabel} ${matLabel} Bubble Wrap 100m×${size.replace('cm', '')}cm ${rolls} Roll${rolls > 1 ? 's' : ''} (${packLabel})`;
+    const finalName = customName || autoName;
 
     const handleSave = async () => {
         if (skuExists) {
@@ -117,7 +119,7 @@ const BubbleWrapGenerator = ({
         try {
             const { error } = await supabase.from('master_items_v2').insert({
                 sku: generatedSku,
-                name: generatedName,
+                name: finalName,
                 type: 'FG',
                 status: 'Active',
                 uom: 'Roll',
@@ -149,13 +151,25 @@ const BubbleWrapGenerator = ({
                 <div className="text-2xl font-mono font-black text-white tracking-tight mb-1">
                     {generatedSku}
                 </div>
-                <div className="text-sm text-gray-400">{generatedName}</div>
+                <div className="text-sm text-gray-400">{finalName}</div>
                 {skuExists === true && (
                     <div className="mt-2 text-xs text-red-400 font-bold animate-pulse">⚠️ SKU already exists — Cannot create duplicate</div>
                 )}
                 {skuExists === false && (
                     <div className="mt-2 text-xs text-green-400 font-bold">✅ New SKU — Ready to create</div>
                 )}
+            </div>
+
+            {/* ITEM NAME */}
+            <div>
+                <label className="text-[10px] uppercase font-bold text-gray-500 tracking-wider mb-2 block">Item Name 产品名称</label>
+                <input
+                    value={customName}
+                    onChange={e => setCustomName(e.target.value)}
+                    placeholder={autoName}
+                    className="w-full bg-gray-950 border border-gray-800 rounded-lg p-2.5 text-white text-sm focus:border-cyan-500 outline-none placeholder:text-gray-600"
+                />
+                <div className="text-[10px] text-gray-600 mt-1">Leave empty to use auto-generated name</div>
             </div>
 
             {/* PARAMETER GRID */}
