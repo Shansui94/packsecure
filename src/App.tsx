@@ -211,16 +211,16 @@ function App() {
                 name = profile.name || name;
                 employeeId = profile.employee_id;
             } else {
-                // ⚡ Fallback: try looking up by email in sys_users_v2
-                // (handles cases where auth_user_id is not linked in the DB)
+                // ⚡ Fallback: try sys_users_v2 directly via auth_user_id
+                // (handles cases where users_public RLS blocks the anon key read)
                 const { data: sysUser } = await supabase
                     .from('sys_users_v2')
                     .select('role, status, name, employee_id')
-                    .eq('email', currentUser.email)
+                    .eq('auth_user_id', currentUser.id)
                     .maybeSingle();
 
                 if (sysUser) {
-                    console.log('[Auth] Found profile via email fallback for:', currentUser.email);
+                    console.log('[Auth] Found profile via sys_users_v2 fallback for:', currentUser.email);
                     role = (sysUser.role as UserRole) || 'Operator';
                     status = sysUser.status || 'Active';
                     name = sysUser.name || name;
