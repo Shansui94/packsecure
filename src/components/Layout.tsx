@@ -46,7 +46,6 @@ const Layout: React.FC<LayoutProps> = ({ children, activePage, setActivePage, us
 
     // Special User Check
     const isVivian = user?.email === 'diyadmin1111@gmail.com';
-    const isNeoson = user?.employeeId === '009' || user?.email === 'ericsoobaolin0219@gmail.com' || user?.email === 'neosonchun@gmail.com';
 
     useEffect(() => {
         if (user) {
