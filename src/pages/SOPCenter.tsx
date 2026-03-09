@@ -42,6 +42,7 @@ const SOPCenter = ({ userRole, user }: { userRole?: string; user?: any }) => {
     // Admin state
     const [isEditing, setIsEditing] = useState(false);
     const [editArticle, setEditArticle] = useState<Partial<SOPArticle> | null>(null);
+    const fileInputRef = useRef<HTMLInputElement>(null);
     const [uploading, setUploading] = useState(false);
 
     const isAdmin = userRole === 'SuperAdmin' || userRole === 'Admin' || user?.employeeId === '001';
@@ -224,186 +225,7 @@ const SOPCenter = ({ userRole, user }: { userRole?: string; user?: any }) => {
         );
     }
 
-    // ─── Edit Modal ───────────────────────────────────────────────────────────
-    const EditModal = () => {
-        const fileInputRef = useRef<HTMLInputElement>(null);
-        if (!isEditing || !editArticle) return null;
-
-        return (
-            <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/60 backdrop-blur-sm p-4">
-                <div className="bg-gray-950 border border-gray-800 rounded-2xl w-full max-w-3xl max-h-[90vh] flex flex-col shadow-2xl">
-                    {/* Modal Header */}
-                    <div className="flex items-center justify-between px-6 py-4 border-b border-gray-800">
-                        <h2 className="text-lg font-black text-white">
-                            {editArticle.id ? '✏️ 编辑 SOP' : '➕ 新建 SOP'}
-                        </h2>
-                        <button onClick={() => { setIsEditing(false); setEditArticle(null); }}
-                            className="p-2 rounded-lg hover:bg-gray-800 text-gray-400 hover:text-white">
-                            <X size={18} />
-                        </button>
-                    </div>
-
-                    {/* Modal Body */}
-                    <div className="flex-1 overflow-y-auto p-6 space-y-5">
-                        {/* Title */}
-                        <div>
-                            <label className="text-[10px] uppercase font-bold text-gray-500 tracking-wider mb-1 block">标题 Title</label>
-                            <input
-                                value={editArticle.title || ''}
-                                onChange={e => setEditArticle(prev => prev ? { ...prev, title: e.target.value } : prev)}
-                                placeholder="如：如何开始生产"
-                                className="w-full bg-gray-900 border border-gray-800 rounded-lg p-3 text-white focus:border-blue-500 outline-none"
-                            />
-                        </div>
-
-                        {/* Description */}
-                        <div>
-                            <label className="text-[10px] uppercase font-bold text-gray-500 tracking-wider mb-1 block">简述 Description</label>
-                            <input
-                                value={editArticle.description || ''}
-                                onChange={e => setEditArticle(prev => prev ? { ...prev, description: e.target.value } : prev)}
-                                placeholder="一句话说明这篇 SOP 的用途"
-                                className="w-full bg-gray-900 border border-gray-800 rounded-lg p-3 text-white focus:border-blue-500 outline-none"
-                            />
-                        </div>
-
-                        {/* Video Upload */}
-                        <div>
-                            <label className="text-[10px] uppercase font-bold text-gray-500 tracking-wider mb-1 block">视频 Video</label>
-                            {editArticle.video_url ? (
-                                <div className="relative rounded-xl overflow-hidden bg-black border border-gray-800">
-                                    <video src={editArticle.video_url} controls className="w-full max-h-48 object-contain" />
-                                    <button
-                                        onClick={() => setEditArticle(prev => prev ? { ...prev, video_url: '' } : prev)}
-                                        className="absolute top-2 right-2 bg-red-500/80 text-white p-1.5 rounded-lg hover:bg-red-500"
-                                    >
-                                        <X size={14} />
-                                    </button>
-                                </div>
-                            ) : (
-                                <button
-                                    onClick={() => fileInputRef.current?.click()}
-                                    disabled={uploading}
-                                    className="w-full py-8 rounded-xl border-2 border-dashed border-gray-700 hover:border-blue-500 text-gray-500 hover:text-blue-400 transition-all flex flex-col items-center gap-2"
-                                >
-                                    {uploading ? (
-                                        <>
-                                            <div className="animate-spin w-6 h-6 border-2 border-blue-500 border-t-transparent rounded-full" />
-                                            <span className="text-sm">上传中...</span>
-                                        </>
-                                    ) : (
-                                        <>
-                                            <Upload size={24} />
-                                            <span className="text-sm font-bold">点击上传视频</span>
-                                            <span className="text-xs text-gray-600">MP4, WebM, MOV · 最大 50MB</span>
-                                        </>
-                                    )}
-                                </button>
-                            )}
-                            <input
-                                ref={fileInputRef}
-                                type="file"
-                                accept="video/*"
-                                className="hidden"
-                                onChange={e => {
-                                    const file = e.target.files?.[0];
-                                    if (file) handleVideoUpload(file);
-                                }}
-                            />
-                        </div>
-
-                        {/* Content */}
-                        <div>
-                            <label className="text-[10px] uppercase font-bold text-gray-500 tracking-wider mb-1 block">正文内容 Content (Markdown)</label>
-                            <textarea
-                                value={editArticle.content || ''}
-                                onChange={e => setEditArticle(prev => prev ? { ...prev, content: e.target.value } : prev)}
-                                placeholder={"# 标题\n\n## 步骤一\n\n- 打开系统\n- 选择机器\n\n## 步骤二\n\n详细文字说明..."}
-                                rows={10}
-                                className="w-full bg-gray-900 border border-gray-800 rounded-lg p-3 text-white font-mono text-sm focus:border-blue-500 outline-none resize-y"
-                            />
-                        </div>
-
-                        {/* Target Roles */}
-                        <div>
-                            <label className="text-[10px] uppercase font-bold text-gray-500 tracking-wider mb-2 block">适用角色 Target Roles</label>
-                            <div className="flex flex-wrap gap-2">
-                                {ALL_ROLES.map(role => {
-                                    const isSelected = editArticle.target_roles?.includes(role);
-                                    return (
-                                        <button
-                                            key={role}
-                                            onClick={() => {
-                                                setEditArticle(prev => {
-                                                    if (!prev) return prev;
-                                                    const roles = prev.target_roles || [];
-                                                    return {
-                                                        ...prev,
-                                                        target_roles: isSelected
-                                                            ? roles.filter(r => r !== role)
-                                                            : [...roles, role]
-                                                    };
-                                                });
-                                            }}
-                                            className={`px-3 py-1.5 rounded-lg text-xs font-bold transition-all border ${isSelected
-                                                ? 'border-white/30 scale-105'
-                                                : 'border-gray-800 opacity-50 hover:opacity-100'
-                                                }`}
-                                            style={{
-                                                backgroundColor: isSelected ? (ROLE_COLORS[role] || '#666') + '22' : 'transparent',
-                                                color: ROLE_COLORS[role] || '#666'
-                                            }}
-                                        >
-                                            {role}
-                                        </button>
-                                    );
-                                })}
-                            </div>
-                            <p className="text-[10px] text-gray-600 mt-1">不选 = 所有角色可见</p>
-                        </div>
-
-                        {/* Page ID + Published */}
-                        <div className="grid grid-cols-2 gap-4">
-                            <div>
-                                <label className="text-[10px] uppercase font-bold text-gray-500 tracking-wider mb-1 block">关联页面 Page ID</label>
-                                <input
-                                    value={editArticle.page_id || ''}
-                                    onChange={e => setEditArticle(prev => prev ? { ...prev, page_id: e.target.value } : prev)}
-                                    placeholder="如 scanner, stock-movement"
-                                    className="w-full bg-gray-900 border border-gray-800 rounded-lg p-3 text-white text-sm focus:border-blue-500 outline-none"
-                                />
-                            </div>
-                            <div>
-                                <label className="text-[10px] uppercase font-bold text-gray-500 tracking-wider mb-1 block">发布状态</label>
-                                <button
-                                    onClick={() => setEditArticle(prev => prev ? { ...prev, is_published: !prev.is_published } : prev)}
-                                    className={`w-full py-3 rounded-lg font-bold text-sm transition-all border ${editArticle.is_published
-                                        ? 'bg-green-500/10 border-green-500/30 text-green-400'
-                                        : 'bg-gray-900 border-gray-800 text-gray-500'
-                                        }`}
-                                >
-                                    {editArticle.is_published ? '✅ 已发布' : '🔒 草稿'}
-                                </button>
-                            </div>
-                        </div>
-                    </div>
-
-                    {/* Modal Footer */}
-                    <div className="flex justify-end gap-3 px-6 py-4 border-t border-gray-800">
-                        <button onClick={() => { setIsEditing(false); setEditArticle(null); }}
-                            className="px-5 py-2.5 rounded-lg bg-gray-800 text-gray-300 hover:bg-gray-700 font-bold text-sm">
-                            取消
-                        </button>
-                        <button onClick={handleSave}
-                            className="px-6 py-2.5 rounded-lg bg-blue-600 hover:bg-blue-500 text-white font-bold text-sm flex items-center gap-2 shadow-lg shadow-blue-500/20">
-                            <Save size={16} />
-                            保存
-                        </button>
-                    </div>
-                </div>
-            </div>
-        );
-    };
+    // ─── Edit Modal (inline to prevent focus loss) ─────────────────────────────
 
     // ─── Main List View ───────────────────────────────────────────────────────
     return (
@@ -548,8 +370,181 @@ const SOPCenter = ({ userRole, user }: { userRole?: string; user?: any }) => {
                 )}
             </div>
 
-            {/* Edit Modal */}
-            <EditModal />
+            {/* Edit Modal — rendered inline to prevent re-mount focus loss */}
+            {isEditing && editArticle && (
+                <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/60 backdrop-blur-sm p-4">
+                    <div className="bg-gray-950 border border-gray-800 rounded-2xl w-full max-w-3xl max-h-[90vh] flex flex-col shadow-2xl">
+                        {/* Modal Header */}
+                        <div className="flex items-center justify-between px-6 py-4 border-b border-gray-800">
+                            <h2 className="text-lg font-black text-white">
+                                {editArticle.id ? '✏️ 编辑 SOP' : '➕ 新建 SOP'}
+                            </h2>
+                            <button onClick={() => { setIsEditing(false); setEditArticle(null); }}
+                                className="p-2 rounded-lg hover:bg-gray-800 text-gray-400 hover:text-white">
+                                <X size={18} />
+                            </button>
+                        </div>
+
+                        {/* Modal Body */}
+                        <div className="flex-1 overflow-y-auto p-6 space-y-5">
+                            {/* Title */}
+                            <div>
+                                <label className="text-[10px] uppercase font-bold text-gray-500 tracking-wider mb-1 block">标题 Title</label>
+                                <input
+                                    value={editArticle.title || ''}
+                                    onChange={e => setEditArticle(prev => prev ? { ...prev, title: e.target.value } : prev)}
+                                    placeholder="如：如何开始生产"
+                                    className="w-full bg-gray-900 border border-gray-800 rounded-lg p-3 text-white focus:border-blue-500 outline-none"
+                                />
+                            </div>
+
+                            {/* Description */}
+                            <div>
+                                <label className="text-[10px] uppercase font-bold text-gray-500 tracking-wider mb-1 block">简述 Description</label>
+                                <input
+                                    value={editArticle.description || ''}
+                                    onChange={e => setEditArticle(prev => prev ? { ...prev, description: e.target.value } : prev)}
+                                    placeholder="一句话说明这篇 SOP 的用途"
+                                    className="w-full bg-gray-900 border border-gray-800 rounded-lg p-3 text-white focus:border-blue-500 outline-none"
+                                />
+                            </div>
+
+                            {/* Video Upload */}
+                            <div>
+                                <label className="text-[10px] uppercase font-bold text-gray-500 tracking-wider mb-1 block">视频 Video</label>
+                                {editArticle.video_url ? (
+                                    <div className="relative rounded-xl overflow-hidden bg-black border border-gray-800">
+                                        <video src={editArticle.video_url} controls className="w-full max-h-48 object-contain" />
+                                        <button
+                                            onClick={() => setEditArticle(prev => prev ? { ...prev, video_url: '' } : prev)}
+                                            className="absolute top-2 right-2 bg-red-500/80 text-white p-1.5 rounded-lg hover:bg-red-500"
+                                        >
+                                            <X size={14} />
+                                        </button>
+                                    </div>
+                                ) : (
+                                    <button
+                                        onClick={() => fileInputRef.current?.click()}
+                                        disabled={uploading}
+                                        className="w-full py-8 rounded-xl border-2 border-dashed border-gray-700 hover:border-blue-500 text-gray-500 hover:text-blue-400 transition-all flex flex-col items-center gap-2"
+                                    >
+                                        {uploading ? (
+                                            <>
+                                                <div className="animate-spin w-6 h-6 border-2 border-blue-500 border-t-transparent rounded-full" />
+                                                <span className="text-sm">上传中...</span>
+                                            </>
+                                        ) : (
+                                            <>
+                                                <Upload size={24} />
+                                                <span className="text-sm font-bold">点击上传视频</span>
+                                                <span className="text-xs text-gray-600">MP4, WebM, MOV · 最大 50MB</span>
+                                            </>
+                                        )}
+                                    </button>
+                                )}
+                                <input
+                                    ref={fileInputRef}
+                                    type="file"
+                                    accept="video/*"
+                                    className="hidden"
+                                    onChange={e => {
+                                        const file = e.target.files?.[0];
+                                        if (file) handleVideoUpload(file);
+                                    }}
+                                />
+                            </div>
+
+                            {/* Content */}
+                            <div>
+                                <label className="text-[10px] uppercase font-bold text-gray-500 tracking-wider mb-1 block">正文内容 Content (Markdown)</label>
+                                <textarea
+                                    value={editArticle.content || ''}
+                                    onChange={e => setEditArticle(prev => prev ? { ...prev, content: e.target.value } : prev)}
+                                    placeholder={"# 标题\n\n## 步骤一\n\n- 打开系统\n- 选择机器\n\n## 步骤二\n\n详细文字说明..."}
+                                    rows={10}
+                                    className="w-full bg-gray-900 border border-gray-800 rounded-lg p-3 text-white font-mono text-sm focus:border-blue-500 outline-none resize-y"
+                                />
+                            </div>
+
+                            {/* Target Roles */}
+                            <div>
+                                <label className="text-[10px] uppercase font-bold text-gray-500 tracking-wider mb-2 block">适用角色 Target Roles</label>
+                                <div className="flex flex-wrap gap-2">
+                                    {ALL_ROLES.map(role => {
+                                        const isSelected = editArticle.target_roles?.includes(role);
+                                        return (
+                                            <button
+                                                key={role}
+                                                onClick={() => {
+                                                    setEditArticle(prev => {
+                                                        if (!prev) return prev;
+                                                        const roles = prev.target_roles || [];
+                                                        return {
+                                                            ...prev,
+                                                            target_roles: isSelected
+                                                                ? roles.filter(r => r !== role)
+                                                                : [...roles, role]
+                                                        };
+                                                    });
+                                                }}
+                                                className={`px-3 py-1.5 rounded-lg text-xs font-bold transition-all border ${isSelected
+                                                    ? 'border-white/30 scale-105'
+                                                    : 'border-gray-800 opacity-50 hover:opacity-100'
+                                                    }`}
+                                                style={{
+                                                    backgroundColor: isSelected ? (ROLE_COLORS[role] || '#666') + '22' : 'transparent',
+                                                    color: ROLE_COLORS[role] || '#666'
+                                                }}
+                                            >
+                                                {role}
+                                            </button>
+                                        );
+                                    })}
+                                </div>
+                                <p className="text-[10px] text-gray-600 mt-1">不选 = 所有角色可见</p>
+                            </div>
+
+                            {/* Page ID + Published */}
+                            <div className="grid grid-cols-2 gap-4">
+                                <div>
+                                    <label className="text-[10px] uppercase font-bold text-gray-500 tracking-wider mb-1 block">关联页面 Page ID</label>
+                                    <input
+                                        value={editArticle.page_id || ''}
+                                        onChange={e => setEditArticle(prev => prev ? { ...prev, page_id: e.target.value } : prev)}
+                                        placeholder="如 scanner, stock-movement"
+                                        className="w-full bg-gray-900 border border-gray-800 rounded-lg p-3 text-white text-sm focus:border-blue-500 outline-none"
+                                    />
+                                </div>
+                                <div>
+                                    <label className="text-[10px] uppercase font-bold text-gray-500 tracking-wider mb-1 block">发布状态</label>
+                                    <button
+                                        onClick={() => setEditArticle(prev => prev ? { ...prev, is_published: !prev.is_published } : prev)}
+                                        className={`w-full py-3 rounded-lg font-bold text-sm transition-all border ${editArticle.is_published
+                                            ? 'bg-green-500/10 border-green-500/30 text-green-400'
+                                            : 'bg-gray-900 border-gray-800 text-gray-500'
+                                            }`}
+                                    >
+                                        {editArticle.is_published ? '✅ 已发布' : '🔒 草稿'}
+                                    </button>
+                                </div>
+                            </div>
+                        </div>
+
+                        {/* Modal Footer */}
+                        <div className="flex justify-end gap-3 px-6 py-4 border-t border-gray-800">
+                            <button onClick={() => { setIsEditing(false); setEditArticle(null); }}
+                                className="px-5 py-2.5 rounded-lg bg-gray-800 text-gray-300 hover:bg-gray-700 font-bold text-sm">
+                                取消
+                            </button>
+                            <button onClick={handleSave}
+                                className="px-6 py-2.5 rounded-lg bg-blue-600 hover:bg-blue-500 text-white font-bold text-sm flex items-center gap-2 shadow-lg shadow-blue-500/20">
+                                <Save size={16} />
+                                保存
+                            </button>
+                        </div>
+                    </div>
+                </div>
+            )}
         </div>
     );
 };
