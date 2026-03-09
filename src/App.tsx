@@ -641,6 +641,7 @@ function App() {
                 return <Notes user={user} />;
             case 'tasks':
                 return <Tasks user={user} />;
+            case 'driver-leave':
             case 'leave-calendar':
                 return <LeaveCalendar user={user} />;
             case 'sop-center':
