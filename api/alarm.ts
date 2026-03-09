@@ -16,8 +16,12 @@ const MACHINE_LANES: Record<string, string[]> = {
 };
 const DEFAULT_LANES = ['Single'];
 
-// Server-side dedup guard: only reject exact network-retry duplicates (10 seconds)
-const DEDUP_WINDOW_MS = 10 * 1000;
+// Server-side dedup REMOVED (2026-03-09):
+// The ESP32 firmware already enforces a 270s debounce at the hardware level,
+// so real duplicate pulses are physically impossible. The old 10s dedup window
+// was ACTIVELY HARMFUL: when WiFi recovered after an outage, the ESP32 would
+// replay its buffered queue at 3s intervals, and the dedup killed all of them
+// except the first — causing permanent data loss during downtime windows.
 
 // ─── Handler ──────────────────────────────────────────────────────────────────
 
@@ -35,22 +39,6 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
 
         const lanes = MACHINE_LANES[machine_id] || DEFAULT_LANES;
         console.log(`Alarm from ${machine_id} | alarm_count=${alarm_count} | lanes=${lanes.join(',')}`);
-
-        // ── Dedup: reject if this machine logged within the last 10 seconds ──
-        const deduCutoff = new Date(Date.now() - DEDUP_WINDOW_MS).toISOString();
-        const { data: recentLog } = await supabase
-            .from('production_logs')
-            .select('created_at')
-            .eq('machine_id', machine_id)
-            .gte('created_at', deduCutoff)
-            .limit(1)
-            .maybeSingle();
-
-        if (recentLog) {
-            const diffSec = Math.round((Date.now() - new Date(recentLog.created_at).getTime()) / 1000);
-            console.log(`Duplicate rejected for ${machine_id} (last log ${diffSec}s ago)`);
-            return res.status(200).json({ status: 'duplicate', message: `Too soon (${diffSec}s ago), ignored` });
-        }
 
         // ── Fetch all active products for this machine (all lanes) ──
         const { data: activeProducts } = await supabase
@@ -74,7 +62,7 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
         // but we always use the DB yield config as the source of truth for quantity.
         // alarm_count=0 is a special reboot signal — the only case where we use it.
         const isReboot = (alarm_count === 0);
-        const insertRows = lanes.map(laneId => {
+        const insertRows = lanes.map((laneId: string) => {
             // Look up this specific lane's active product only — no cross-lane fallback.
             // For single-lane machines that were configured under 'Single', also check that key.
             const laneData = activeLaneMap[laneId] ?? activeLaneMap['Single'] ?? null;
@@ -105,7 +93,7 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
         return res.status(200).json({
             status: 'ok',
             message: `Logged ${insertRows.length} lane(s)`,
-            lanes: insertRows.map(r => ({ lane: r.lane_id, sku: r.product_sku || 'none', count: r.alarm_count })),
+            lanes: insertRows.map((r: any) => ({ lane: r.lane_id, sku: r.product_sku || 'none', count: r.alarm_count })),
         });
 
     } catch (e: any) {
