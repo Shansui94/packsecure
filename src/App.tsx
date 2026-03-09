@@ -43,6 +43,7 @@ import FactoryLiveOS from './pages/FactoryLiveOS';
 import OperatorManagement from './pages/OperatorManagement';
 import DevLog from './pages/DevLog';
 import LeaveCalendar from './pages/LeaveCalendar';
+import SOPCenter from './pages/SOPCenter';
 
 import { User, UserRole, InventoryItem, ProductionLog as ProductionLogType, JobOrder } from './types';
 import AIAgentWidget from './components/AIAgentWidget';
@@ -642,6 +643,8 @@ function App() {
                 return <Tasks user={user} />;
             case 'leave-calendar':
                 return <LeaveCalendar user={user} />;
+            case 'sop-center':
+                return <SOPCenter userRole={user?.role} user={user} />;
             case 'operator-dashboard':
                 return <UnderConstruction title="Coming Soon" />;
             case 'data':

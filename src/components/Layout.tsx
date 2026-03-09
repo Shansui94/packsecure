@@ -22,7 +22,8 @@ import {
     FileBarChart,
     ArrowUpDown,
     Activity,
-    ClipboardCheck
+    ClipboardCheck,
+    BookOpen
 } from 'lucide-react';
 import { supabase } from '../services/supabase';
 
@@ -280,6 +281,7 @@ const Layout: React.FC<LayoutProps> = ({ children, activePage, setActivePage, us
                                 </NavGroup>
 
                                 <NavGroup title="Productivity">
+                                    <NavItem id="sop-center" icon={BookOpen} label="SOP 指南" roles={['SuperAdmin', 'Admin', 'Manager']} />
                                     <NavItem id="notes" icon={FileText} label="Notes" roles={['SuperAdmin', 'Admin', 'Manager']} />
                                     <NavItem id="tasks" icon={ClipboardList} label="Tasks" roles={['SuperAdmin', 'Admin', 'Manager']} badge={taskCount} />
                                 </NavGroup>
@@ -298,6 +300,7 @@ const Layout: React.FC<LayoutProps> = ({ children, activePage, setActivePage, us
                                 </NavGroup>
 
                                 <NavGroup title="Productivity">
+                                    <NavItem id="sop-center" icon={BookOpen} label="SOP 指南" roles={['Driver']} />
                                     <NavItem id="notes" icon={FileText} label="Notes" roles={['Driver']} />
                                     <NavItem id="tasks" icon={ClipboardList} label="Tasks" roles={['Driver']} badge={taskCount} />
                                 </NavGroup>
@@ -313,6 +316,7 @@ const Layout: React.FC<LayoutProps> = ({ children, activePage, setActivePage, us
                                 </NavGroup>
 
                                 <NavGroup title="Productivity">
+                                    <NavItem id="sop-center" icon={BookOpen} label="SOP 指南" roles={['HR']} />
                                     <NavItem id="notes" icon={FileText} label="Notes" roles={['HR']} />
                                     <NavItem id="tasks" icon={ClipboardList} label="Tasks" roles={['HR']} badge={taskCount} />
                                 </NavGroup>
@@ -327,6 +331,7 @@ const Layout: React.FC<LayoutProps> = ({ children, activePage, setActivePage, us
                                 </NavGroup>
 
                                 <NavGroup title="Productivity">
+                                    <NavItem id="sop-center" icon={BookOpen} label="SOP 指南" roles={['Operator']} />
                                     <NavItem id="notes" icon={FileText} label="Notes" roles={['Operator']} />
                                     <NavItem id="tasks" icon={ClipboardList} label="Tasks" roles={['Operator']} badge={taskCount} />
                                 </NavGroup>
