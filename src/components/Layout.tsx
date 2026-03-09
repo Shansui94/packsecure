@@ -220,7 +220,6 @@ const Layout: React.FC<LayoutProps> = ({ children, activePage, setActivePage, us
                                 <NavItem id="delivery-driver" icon={Package} label="My Delivery (货物)" />
                                 <NavItem id="order-summary" icon={FileBarChart} label="Daily Prep" />
                                 <NavItem id="maintenance" icon={Wrench} label="Maintenance Control" />
-                                <NavItem id="driver-leave" icon={Calendar} label="Apply Leave" />
                             </NavGroup>
                         )}
 
@@ -238,7 +237,7 @@ const Layout: React.FC<LayoutProps> = ({ children, activePage, setActivePage, us
                         )}
 
                         {/* EXECUTIVE SUITE (SuperAdmin, Admin, Manager) - HIDDEN FROM VIVIAN */}
-                        {!isVivian && user?.employeeId !== '009' && (userRole === 'SuperAdmin' || userRole === 'Admin' || userRole === 'Manager' || user?.employeeId === '001') && (
+                        {!isVivian && user?.employeeId !== '009' && (userRole === 'SuperAdmin' || userRole === 'Admin' || userRole === 'Manager' || user?.employeeId === '001' || user?.employeeId === '6965') && (
                             <>
                                 <NavGroup title="Executive Suite">
                                     <NavItem id="factory-live-os" icon={LayoutDashboard} label="Factory Live OS" roles={['SuperAdmin', 'Admin', 'Manager']} />
@@ -269,6 +268,7 @@ const Layout: React.FC<LayoutProps> = ({ children, activePage, setActivePage, us
                                 </NavGroup>
 
                                 <NavGroup title="Organization">
+                                    <NavItem id="leave-calendar" icon={Calendar} label="Leave Center" roles={['SuperAdmin', 'Admin', 'Manager', 'HR', 'Driver', 'Operator']} />
                                     <NavItem id="hr" icon={Users} label="HR Portal" roles={['SuperAdmin', 'Admin', 'Manager']} />
                                     <NavItem id="driver-management" icon={Users} label="Driver Management" roles={['SuperAdmin', 'Admin', 'Manager']} />
                                     <NavItem id="operators" icon={Users} label="操作员管理" roles={['SuperAdmin', 'Admin', 'Manager']} />
