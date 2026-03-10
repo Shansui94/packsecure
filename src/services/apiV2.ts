@@ -249,10 +249,16 @@ export const createItemV2 = async (item: Partial<V2Item>): Promise<V2Item | null
         throw new Error("Missing mandatory fields: SKU, Name, Type");
     }
 
-    // 2. Insert
+    // 2. Strip generated/computed columns
+    const safeItem = { ...item };
+    delete (safeItem as any).volume_m3;
+    delete (safeItem as any).created_at;
+    delete (safeItem as any).updated_at;
+
+    // 3. Insert
     const { data, error } = await supabase
         .from('master_items_v2')
-        .insert(item)
+        .insert(safeItem)
         .select()
         .single();
 
@@ -265,9 +271,15 @@ export const createItemV2 = async (item: Partial<V2Item>): Promise<V2Item | null
 
 // Update existing Item
 export const updateItemV2 = async (sku: string, updates: Partial<V2Item>): Promise<V2Item | null> => {
+    // Remove generated or read-only columns before updating
+    const safeUpdates = { ...updates };
+    delete (safeUpdates as any).volume_m3;
+    delete (safeUpdates as any).created_at;
+    delete (safeUpdates as any).updated_at;
+
     const { data, error } = await supabase
         .from('master_items_v2')
-        .update(updates)
+        .update(safeUpdates)
         .eq('sku', sku)
         .select()
         .single();
