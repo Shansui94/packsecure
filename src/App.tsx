@@ -78,6 +78,10 @@ function App() {
     const [logs, setLogs] = useState<ProductionLogType[]>([]);
     const [jobs, setJobs] = useState<JobOrder[]>([]);
 
+    // DB-Driven Page Permissions
+    const [dbAllowedPages, setDbAllowedPages] = useState<Set<string> | null>(null);
+    const [permissionsLoaded, setPermissionsLoaded] = useState<boolean>(false);
+
 
     // 0. Auth & Router State
     useEffect(() => {
@@ -143,9 +147,34 @@ function App() {
         };
     }, []);
 
+    // --- FETCH ROLE PERMISSIONS FROM DB ---
+    useEffect(() => {
+        if (!user || user.role === 'SuperAdmin') {
+            setPermissionsLoaded(true);
+            return;
+        }
+        
+        setPermissionsLoaded(false);
+        supabase
+            .from('role_permissions')
+            .select('page_id, allowed')
+            .eq('role_name', user.role)
+            .then(({ data }) => {
+                if (data && data.length > 0) {
+                    const allowedSet = new Set<string>(
+                        data.filter(r => r.allowed).map(r => r.page_id)
+                    );
+                    setDbAllowedPages(allowedSet);
+                } else {
+                    setDbAllowedPages(null); // Fallback to hardcoded if no config
+                }
+                setPermissionsLoaded(true);
+            });
+    }, [user]);
+
     // --- STRICT ROUTE GUARD ---
     useEffect(() => {
-        if (!user || !user.role) return;
+        if (!user || !user.role || !permissionsLoaded) return;
 
         const role = user.role;
         // Define allowable pages per role
@@ -162,6 +191,13 @@ function App() {
         };
 
         let allowed = allowedPages[role] || [];
+
+        // OVERRIDE WITH DB TARGETED ROLE PERMISSIONS
+        if (dbAllowedPages !== null) {
+            allowed = Array.from(dbAllowedPages);
+            // Ensure essential UI pages are always kept
+            allowed.push('profile', 'login', 'construction', 'dashboard');
+        }
 
         // --- SPECIAL USER OVERRIDE (Vivian) ---
         if (user.email === 'diyadmin1111@gmail.com') {
