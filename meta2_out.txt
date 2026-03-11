@@ -1,0 +1,18 @@
+﻿[dotenv@17.3.1] injecting env (0) from .env.local -- tip: ΓÜÖ∩╕Å  load multiple .env files with { path: ['.env.local', '.env'] }
+[dotenv@17.3.1] injecting env (0) from .env -- tip: ΓÜÖ∩╕Å  load multiple .env files with { path: ['.env.local', '.env'] }
+--- VIEW ---
+Sample data from view: [
+  {
+    sku: 'AIRTUBE-15CM-300M',
+    name: 'AIRTUBE-15CM-300M',
+    type: 'FG',
+    uom: 'Unit',
+    min_stock_level: null,
+    status: 'Active',
+    supply_type: 'Manufactured',
+    loc_id: 'Unassigned',
+    current_stock: 0,
+    last_updated: null
+  }
+]
+--- TRIGGERS on V2 ---

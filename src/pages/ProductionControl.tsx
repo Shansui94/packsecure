@@ -11,7 +11,7 @@ import {
 } from '../data/constants';
 import { getRecommendedPackaging } from '../utils/packagingRules';
 import { getBubbleWrapSku } from '../utils/skuMapper';
-import { Box, Settings, Clock, Layers, LogOut } from 'lucide-react';
+import { Box, Settings, Clock, Layers, LogOut, Calendar, Package } from 'lucide-react';
 
 
 import { JobOrder, ProductionLog, User } from '../types';
@@ -529,6 +529,18 @@ const ProductionControl: React.FC<ProductionControlProps> = ({ user, jobs = [] }
     const [pinCode, setPinCode] = useState("");
     const [loginError, setLoginError] = useState("");
 
+    // Production Schedule State
+    interface ScheduleItem {
+        id: string;
+        machine_id: string;
+        sku: string;
+        target_qty: number;
+        scheduled_time: string | null;
+        notes: string | null;
+        status: string;
+    }
+    const [scheduleTasks, setScheduleTasks] = useState<ScheduleItem[]>([]);
+
     const handlePinPress = (num: number) => {
         if (pinCode.length < 4) {
             const newPin = pinCode + num;
@@ -614,13 +626,13 @@ const ProductionControl: React.FC<ProductionControlProps> = ({ user, jobs = [] }
         setIsLoginModalOpen(true);
     };
 
-    const handleDeviceLogout = async () => {
-        if (window.confirm("Disconnect Device from this Machine?")) {
-            sessionStorage.removeItem('selectedMachine');
-            localStorage.removeItem('device_machine_id');
-            // Force reload to trigger App-level logout or re-login flow
-            window.location.reload();
-        }
+    const handleDeviceLogout = () => {
+        sessionStorage.removeItem('selectedMachine');
+        localStorage.removeItem('device_machine_id');
+        setSelectedMachine(null);
+        setMachineMetadata(null);
+        setOperatorId(null);
+        setOperatorName(null);
     };
 
     // Fetch machines list when no machine bound yet
@@ -632,6 +644,29 @@ const ProductionControl: React.FC<ProductionControlProps> = ({ user, jobs = [] }
                 .then(({ data }) => { if (data) setMachines(data as any); });
         }
     }, [selectedMachine]);
+
+    // Fetch schedule tasks for selected machine
+    useEffect(() => {
+        if (!selectedMachine) { setScheduleTasks([]); return; }
+
+        const machineId = machineMetadata?.id || selectedMachine;
+        const fetchSchedule = async () => {
+            const todayStart = new Date(); todayStart.setHours(0, 0, 0, 0);
+            const { data } = await supabase.from('production_schedule')
+                .select('*')
+                .eq('machine_id', machineId)
+                .gte('created_at', todayStart.toISOString())
+                .in('status', ['Pending', 'In-Progress'])
+                .order('scheduled_time', { ascending: true, nullsFirst: false });
+            if (data) setScheduleTasks(data as ScheduleItem[]);
+        };
+
+        fetchSchedule();
+        const sub = supabase.channel('schedule-' + machineId)
+            .on('postgres_changes', { event: '*', schema: 'public', table: 'production_schedule' }, fetchSchedule)
+            .subscribe();
+        return () => { supabase.removeChannel(sub); };
+    }, [selectedMachine, machineMetadata]);
 
     // Effect: Resolve Machine Metadata
     useEffect(() => {
@@ -861,6 +896,52 @@ const ProductionControl: React.FC<ProductionControlProps> = ({ user, jobs = [] }
                                     </div>
                                 </div>
                                 {/* Clock In button moved to header */}
+                            </div>
+                        )}
+
+                        {/* MANAGER ASSIGNED TASKS BANNER */}
+                        {scheduleTasks.length > 0 && (
+                            <div className="bg-gradient-to-r from-blue-900/30 to-purple-900/20 border border-blue-500/30 rounded-2xl overflow-hidden">
+                                <div className="px-4 py-2.5 border-b border-blue-500/20 flex items-center justify-between bg-blue-500/10">
+                                    <div className="flex items-center gap-2">
+                                        <Calendar size={14} className="text-blue-400" />
+                                        <span className="text-xs font-black text-blue-300 uppercase tracking-widest">Manager Schedule</span>
+                                        <span className="bg-blue-500/30 text-blue-300 text-[10px] font-bold px-2 py-0.5 rounded-full">{scheduleTasks.length} tasks</span>
+                                    </div>
+                                </div>
+                                <div className="divide-y divide-blue-500/10">
+                                    {scheduleTasks.map(task => (
+                                        <div key={task.id} className="px-4 py-3 flex items-center gap-4">
+                                            <div className={`w-8 h-8 rounded-lg flex items-center justify-center ${
+                                                task.status === 'In-Progress' ? 'bg-blue-500/20' : 'bg-yellow-500/20'
+                                            }`}>
+                                                <Package size={16} className={task.status === 'In-Progress' ? 'text-blue-400' : 'text-yellow-400'} />
+                                            </div>
+                                            <div className="flex-1 min-w-0">
+                                                <div className="text-sm font-mono text-cyan-300 truncate">{task.sku}</div>
+                                                {task.notes && <div className="text-[10px] text-gray-500 truncate">{task.notes}</div>}
+                                            </div>
+                                            <div className="text-right">
+                                                <div className="text-xl font-black text-white">{task.target_qty}</div>
+                                                <div className="text-[9px] text-gray-500 uppercase">target</div>
+                                            </div>
+                                            {task.scheduled_time && (
+                                                <div className="text-right w-16">
+                                                    <div className="text-xs font-mono text-blue-400">
+                                                        {new Date(task.scheduled_time).toLocaleTimeString('en-MY', { hour: '2-digit', minute: '2-digit' })}
+                                                    </div>
+                                                </div>
+                                            )}
+                                            <div className={`text-[10px] font-bold px-2 py-0.5 rounded-full ${
+                                                task.status === 'In-Progress'
+                                                    ? 'bg-blue-500/20 text-blue-400'
+                                                    : 'bg-yellow-500/20 text-yellow-400'
+                                            }`}>
+                                                {task.status}
+                                            </div>
+                                        </div>
+                                    ))}
+                                </div>
                             </div>
                         )}
 

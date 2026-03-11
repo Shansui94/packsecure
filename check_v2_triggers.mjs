@@ -9,10 +9,10 @@ const s = createClient(
     { auth: { autoRefreshToken: false, persistSession: false } }
 );
 
-async function checkView() {
-    console.log("Checking v2_inventory_view definition...");
+async function checkTriggersV2() {
+    console.log("Checking triggers on production_logs_v2 in Information Schema...");
     const { data } = await s.rpc('execute_sql', {
-        sql_query: "SELECT pg_get_viewdef('v2_inventory_view', true) AS view_def;"
+        sql_query: "SELECT trigger_name, event_manipulation, event_object_table, action_statement FROM information_schema.triggers WHERE event_object_table = 'production_logs_v2'"
     }).catch(err => {
         return { data: 'RPC failed: ' + err.message };
     });
@@ -20,4 +20,4 @@ async function checkView() {
     console.log(JSON.stringify(data, null, 2));
 }
 
-checkView();
+checkTriggersV2();

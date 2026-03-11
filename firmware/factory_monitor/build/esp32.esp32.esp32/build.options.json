@@ -1,0 +1,9 @@
+{
+  "additionalFiles": "",
+  "compiler.optimization_flags": "-Os",
+  "customBuildProperties": "",
+  "fqbn": "esp32:esp32:esp32:FlashSize=4M,PartitionScheme=min_spiffs",
+  "hardwareFolders": "C:\\Users\\Max Tan\\AppData\\Local\\Arduino15\\packages\\esp32\\hardware\\esp32\\3.3.7,C:\\Users\\Max Tan\\AppData\\Local\\Arduino15\\packages\\esp32\\hardware\\esp32\\3.3.7",
+  "otherLibrariesFolders": "C:\\Users\\Max Tan\\OneDrive\\Documents\\Arduino\\libraries",
+  "sketchLocation": "C:\\Users\\Max Tan\\Downloads\\Packsecure OS\\packsecure\\firmware\\factory_monitor"
+}

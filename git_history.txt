@@ -1,0 +1,1784 @@
+﻿commit e6c5431ff742dec158c48b681a233379802ff447
+Author: Max Tan <khailoon94@gmail.com>
+Date:   Thu Feb 26 22:32:55 2026 +0800
+
+    feat(esp32): add offline signal caching and explicit Vercel success confirmation
+
+diff --git a/firmware/factory_monitor/factory_monitor.ino b/firmware/factory_monitor/factory_monitor.ino
+index d677604..f349ab3 100644
+--- a/firmware/factory_monitor/factory_monitor.ino
++++ b/firmware/factory_monitor/factory_monitor.ino
+@@ -335,13 +335,31 @@ void handleNetworkQueue() {
+   if (alarmQueue.empty() || WiFi.status() != WL_CONNECTED)
+     return;
+   static unsigned long lastUp = 0;
+-  if (millis() - lastUp < 2000)
++  if (millis() - lastUp <
++      3000) // Increase interval to 3s to avoid Vercel rate limits
+     return;
++
+   lastUp = millis();
+-  QueueItem item = alarmQueue.front();
+-  if (sendToSupabase(item.count, item.timestamp)) {
+-    alarmQueue.erase(alarmQueue.begin());
++
++  // Aggregate all pending cuts into a single payload if there's a backlog
++  int totalCount = 0;
++  for (const auto &item : alarmQueue) {
++    totalCount += item.count;
++  }
++
++  // We use the timestamp of the first item
++  time_t timestamp = alarmQueue.front().timestamp;
++
++  Serial.printf("Attempting to send batch of %d counts to Supabase...\n",
++                totalCount);
++
++  if (sendToSupabase(totalCount, timestamp)) {
++    // Only if SUCCESSFUL (HTTP 200), we clear the entire queue
++    alarmQueue.clear();
+     saveQueue();
++    Serial.println("Batch send SUCCESS! Queue cleared.");
++  } else {
++    Serial.println("Batch send FAILED. Keeping data in flash cache.");
+   }
+ }
+ 
+@@ -349,15 +367,30 @@ bool sendToSupabase(int count, time_t timestamp) {
+   HTTPClient http;
+   WiFiClientSecure client;
+   client.setInsecure();
+-  if (!http.begin(client, alarmApiUrl))
++
++  if (!http.begin(client, alarmApiUrl)) {
++    Serial.println("HTTP Begin failed.");
+     return false;
+-  http.setTimeout(3000);
++  }
++
++  http.setTimeout(10000); // 10s timeout to survive Vercel Cold Starts
+   http.addHeader("Content-Type", "application/json");
++
+   String json = "{\"machine_id\": \"" + String(machineId) +
+                 "\", \"alarm_count\": " + String(count) + "}";
++
+   int res = http.POST(json);
+   http.end();
+-  return (res >= 200 && res < 300) || (res >= 400 && res < 500);
++
++  Serial.printf("API Response Code: %d\n", res);
++
++  // STRICT CHECK: Only consider it delivered if Vercel says 200 OK.
++  // Previously, 4xx errors were considered "delivered" and deleted, causing
++  // data loss!
++  if (res == 200) {
++    return true;
++  }
++  return false;
+ }
+ 
+ // --- OTA ΘÇ╗Φ╛æσ«₧τÄ░ ---
+
+commit e5d42ccb634158dd238583918e40b4c34ea6fb00
+Author: Max Tan <khailoon94@gmail.com>
+Date:   Thu Feb 26 14:07:37 2026 +0800
+
+    feat(firmware): rewrite ESP32 monitor to non-blocking state machine v3.2.0
+
+diff --git a/firmware/factory_monitor/factory_monitor.ino b/firmware/factory_monitor/factory_monitor.ino
+index 489598e..d677604 100644
+--- a/firmware/factory_monitor/factory_monitor.ino
++++ b/firmware/factory_monitor/factory_monitor.ino
+@@ -9,7 +9,8 @@
+ #include <WebServer.h>
+ #include <WiFi.h>
+ 
+-const String CURRENT_VERSION = "3.1.0"; // Γÿà τí¼Σ╗╢Σ╕¡µû¡Σ┐íσÅ╖µúÇµ╡ïτëêµ£¼
++const String CURRENT_VERSION =
++    "3.2.0"; // Γÿà σà¿Θ¥óΘ¥₧Θÿ╗σí₧τè╢µÇüµ£║ & σêçµìóΦç│ Vercel API
+ #include <WiFiClientSecure.h>
+ #include <esp_task_wdt.h> // Watchdog Timer
+ #include <time.h>         // Include standard time library
+@@ -25,14 +26,7 @@ const char *password = "88888888";
+ const String configApiUrl = "https://packsecure.vercel.app/api/iot-config?mac=";
+ 
+ // --- SERVER CONFIGURATION ---
+-const char *supabaseUrl =
+-    "https://kdahubyhwndgyloaljak.supabase.co/rest/v1/production_logs";
+-const char *apiKey =
+-    "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9."
+-    "eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6ImtkYWh1Ynlod25kZ3lsb2FsamFrIiwicm9sZSI6Im"
+-    "Fub24iLCJpYXQiOjE3NjUzODY4ODksImV4cCI6MjA4MDk2Mjg4OX0."
+-    "mzTtQ6zpfvRY07372UH_"
+-    "M4dvKPzHBDkiydwosUYPs-8";
++const String alarmApiUrl = "https://packsecure.vercel.app/api/alarm";
+ 
+ // --- MACHINE CONFIGURATION ---
+ String machineId =
+@@ -52,10 +46,15 @@ String currentSku = "UNKNOWN"; // µ¡úσ£¿τöƒΣ║ºτÜä SKU
+ volatile bool signalDetected = false;      // ISR Φ«╛τ╜«∩╝îmain loop µ╕àΘÖñ
+ volatile unsigned long isrTriggerTime = 0; // Σ┐íσÅ╖ΦºªσÅæµù╢Θù┤ (ms)
+ 
++// --- Θ¥₧Θÿ╗σí₧τè╢µÇüµ£║σÅéµò░ ---
++enum SignalState { STATE_IDLE, STATE_WAIT_CONFIRM, STATE_WAIT_END };
++SignalState currentState = STATE_IDLE;
++unsigned long stateTimer = 0;
++
+ void IRAM_ATTR BUZZER_ISR() {
+   // FALLING edge ISR: σÅ¬Φ«░σ╜òµù╢Θù┤,Φ«⌐ main loop σüÜΘ¬îΦ»ü
+   // Σ╕ìµö╣ signalDetected σªéµ₧£σ╖▓τ╗Åµ£ëσ╛àσñäτÉåΣ┐íσÅ╖ (Θÿ▓µ¡ó ISR σåàτ½₧Σ║ë)
+-  if (!signalDetected) {
++  if (!signalDetected && currentState == STATE_IDLE) {
+     isrTriggerTime = millis();
+     signalDetected = true;
+   }
+@@ -155,65 +154,68 @@ void loop() {
+   }
+ 
+   // ΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉ
+-  // 1. Σ┐íσÅ╖Θ¬îΦ»ü (Σ╕¡µû¡ΦºªσÅæσÉÄσ£¿ main loop ΘçîΘ¬îΦ»ü)
++  // 1. Σ┐íσÅ╖Θ¬îΦ»ü (Θççτö¿Θ¥₧Θÿ╗σí₧τè╢µÇüµ£║)
+   // ΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉ
+-  if (signalDetected) {
+-    signalDetected = false; // τ½ïσê╗µ╕àΘÖñµáçσ┐ù∩╝îΘÿ▓µ¡óΘçìσñìσñäτÉå
++  switch (currentState) {
++  case STATE_IDLE:
++    if (signalDetected) {
++      signalDetected = false;
++      currentState = STATE_WAIT_CONFIRM;
++      stateTimer = millis();
++    }
++    break;
+ 
++  case STATE_WAIT_CONFIRM:
+     // τ¡ëσ╛à 300ms σåìΘ¬îΦ»ü: τ£ƒµ¡úτÜä 3 τºÆΦ¡ªµèÑσ£¿ 300ms σÉÄ pin Σ╗ìΣ╕║ LOW
+-    // σÖ¬σú░Φäëσå▓ (<100ms) µ¡ñµù╢σ╖▓µüóσñì HIGH∩╝îτ¢┤µÄÑΦó½Φ┐çµ╗ñ
+-    delay(300);
+-    esp_task_wdt_reset();
+-
+-    if (digitalRead(relayPin) == LOW) {
+-      // Γ£à τí«Φ«ñµÿ»τ£ƒσ«₧Σ┐íσÅ╖ (Φ¡ªµèÑΦ┐ÿσ£¿σôì)
+-      unsigned long now = millis();
++    if (millis() - stateTimer >= 300) {
++      if (digitalRead(relayPin) == LOW) {
++        // Γ£à τí«Φ«ñµÿ»τ£ƒσ«₧Σ┐íσÅ╖ (Φ¡ªµèÑΦ┐ÿσ£¿σôì)
++        unsigned long now = millis();
+ 
+-      if ((now - lastDebounceTime) > debounceDelay) {
+-        // Γ£à σå╖σì┤µù╢Θù┤σ╖▓Φ┐ç (µ£Çτƒ¡ 4 σêåΘÆƒΘù┤ΘÜö)
+-        float elapsed = (float)(now - lastDebounceTime) / 1000.0;
+-        lastDebounceTime = now;
++        if ((now - lastDebounceTime) > debounceDelay) {
++          // Γ£à σå╖σì┤µù╢Θù┤σ╖▓Φ┐ç
++          float elapsed = (float)(now - lastDebounceTime) / 1000.0;
++          lastDebounceTime = now;
+ 
+-        Serial.printf("[OK] µ£ëµòêΦºªσÅæ! Yield=%d, SKU=%s, Φ╖¥Σ╕èµ¼í=%.1fs\n",
+-                      currentYield, currentSku.c_str(), elapsed);
++          Serial.printf("[OK] µ£ëµòêΦºªσÅæ! Yield=%d, SKU=%s, Φ╖¥Σ╕èµ¼í=%.1fs\n",
++                        currentYield, currentSku.c_str(), elapsed);
+ 
+-        // LED Θù¬τâüτí«Φ«ñ
+-        for (int i = 0; i < 3; i++) {
++          // σ┐½ΘÇƒΘ¥₧Θÿ╗σí₧τÜä LED σÅìΘªê
++          // (Σ╕╗σ╛¬τÄ»τÜäσÉÄΘ¥óσ┐âΦ╖│Σ╝ÜΦªåτ¢û∩╝îµ¡ñσñäτ¢┤µÄÑΣ║«Φ╡╖Σ╕Çµ¼íΣ╗úΦí¿Φ«░σ╜òµêÉσèƒ)
+           digitalWrite(ledPin, LOW);
+-          delay(80);
+-          digitalWrite(ledPin, HIGH);
+-          delay(80);
+-          esp_task_wdt_reset();
+-        }
+ 
+-        time_t t;
+-        time(&t);
+-        QueueItem item = {currentYield, t};
+-        alarmQueue.push_back(item);
+-        saveQueue();
++          time_t t;
++          time(&t);
++          QueueItem item = {currentYield, t};
++          alarmQueue.push_back(item);
++          saveQueue();
++
++        } else {
++          float cooldownLeft =
++              (float)(debounceDelay - (now - lastDebounceTime)) / 1000.0;
++          Serial.printf("[SKIP] σå╖σì┤Σ╕¡∩╝îΦ┐ÿΘ£Ç %.1f τºÆ\n", cooldownLeft);
++        }
+ 
++        // Φ┐¢σàÑτ¡ëσ╛àτ╗ôµ¥ƒτè╢µÇü∩╝îΘÿ▓µ¡óΘçìσñì ISR
++        currentState = STATE_WAIT_END;
++        stateTimer = millis();
++        Serial.println("τ¡ëσ╛àΦ¡ªµèÑσÖ¿τ╗ôµ¥ƒ...");
+       } else {
+-        float cooldownLeft =
+-            (float)(debounceDelay - (now - lastDebounceTime)) / 1000.0;
+-        Serial.printf("[SKIP] σå╖σì┤Σ╕¡∩╝îΦ┐ÿΘ£Ç %.1f τºÆ\n", cooldownLeft);
++        // σÖ¬σú░Φäëσå▓∩╝îτ¢┤µÄÑσ┐╜τòÑµüóσñìτ⌐║Θù▓
++        Serial.println("[NOISE] 300ms σÉÄ pin µüóσñì HIGH∩╝îσêñµû¡Σ╕║σÖ¬σú░∩╝îσ┐╜τòÑ");
++        currentState = STATE_IDLE;
+       }
++    }
++    break;
+ 
+-      // Γÿà τ¡ëσ╛àΦ¡ªµèÑσÖ¿τ╗ôµ¥ƒ (pin µüóσñì HIGH) σåìτ╗ºτ╗¡
+-      // Θÿ▓µ¡ó 3 τºÆσåàΣ║ºτöƒσñÜµ¼í ISR ΘçìσñìΦºªσÅæ
+-      Serial.println("τ¡ëσ╛àΦ¡ªµèÑσÖ¿τ╗ôµ¥ƒ...");
+-      unsigned long waitStart = millis();
+-      while (digitalRead(relayPin) == LOW && (millis() - waitStart) < 8000) {
+-        esp_task_wdt_reset();
+-        delay(50);
+-      }
++  case STATE_WAIT_END:
++    // Γÿà τ¡ëσ╛àΦ¡ªµèÑσÖ¿τ╗ôµ¥ƒ (pin µüóσñì HIGH) µêûΦÇàΦ╢àµù╢ (8000ms)
++    if (digitalRead(relayPin) == HIGH || (millis() - stateTimer) >= 8000) {
+       Serial.println("Φ¡ªµèÑσÖ¿σ╖▓τ╗ôµ¥ƒ∩╝îµüóσñìτ¢æσÉ¼");
+-
+-      // µ╕àΘÖñ ISR µ£ƒΘù┤σÅ»Φâ╜τº»τ┤»τÜäσñÜΣ╜Öµáçσ┐ù
+-      signalDetected = false;
+-
+-    } else {
+-      Serial.println("[NOISE] 300ms σÉÄ pin µüóσñì HIGH∩╝îσêñµû¡Σ╕║σÖ¬σú░∩╝îσ┐╜τòÑ");
++      signalDetected = false; // µ╕àτÉåΦ┐Öµ£ƒΘù┤σÅæτöƒτÜäΦ»»Φºª
++      currentState = STATE_IDLE;
+     }
++    break;
+   }
+ 
+   handleNetworkQueue();
+@@ -329,25 +331,6 @@ void connectWiFi() {
+   Serial.println();
+ }
+ 
+-bool isTimeSet() {
+-  struct tm ti;
+-  if (!getLocalTime(&ti))
+-    return false;
+-  return (ti.tm_year + 1900 > 2020);
+-}
+-
+-String getISOTime(time_t rawtime) {
+-  if (rawtime <= 0 && isTimeSet())
+-    time(&rawtime);
+-  else if (rawtime <= 0)
+-    return "";
+-  struct tm *ti = gmtime(&rawtime);
+-  char buf[30];
+-  sprintf(buf, "%04d-%02d-%02dT%02d:%02d:%02dZ", ti->tm_year + 1900,
+-          ti->tm_mon + 1, ti->tm_mday, ti->tm_hour, ti->tm_min, ti->tm_sec);
+-  return String(buf);
+-}
+-
+ void handleNetworkQueue() {
+   if (alarmQueue.empty() || WiFi.status() != WL_CONNECTED)
+     return;
+@@ -366,19 +349,12 @@ bool sendToSupabase(int count, time_t timestamp) {
+   HTTPClient http;
+   WiFiClientSecure client;
+   client.setInsecure();
+-  if (!http.begin(client, supabaseUrl))
++  if (!http.begin(client, alarmApiUrl))
+     return false;
+-  http.setTimeout(5000);
++  http.setTimeout(3000);
+   http.addHeader("Content-Type", "application/json");
+-  http.addHeader("apikey", apiKey);
+-  http.addHeader("Authorization", String("Bearer ") + apiKey);
+-  String timeStr = getISOTime(timestamp);
+-  String json = (timeStr != "")
+-                    ? "{\"machine_id\": \"" + String(machineId) +
+-                          "\", \"alarm_count\": " + String(count) +
+-                          ", \"created_at\": \"" + timeStr + "\"}"
+-                    : "{\"machine_id\": \"" + String(machineId) +
+-                          "\", \"alarm_count\": " + String(count) + "}";
++  String json = "{\"machine_id\": \"" + String(machineId) +
++                "\", \"alarm_count\": " + String(count) + "}";
+   int res = http.POST(json);
+   http.end();
+   return (res >= 200 && res < 300) || (res >= 400 && res < 500);
+
+commit faebbda3e9f9085a7e5ea5c217512f3a18b88911
+Author: Max Tan <khailoon94@gmail.com>
+Date:   Mon Feb 23 14:58:57 2026 +0800
+
+    feat: lane UI for T1.2, Eric/Neoson permissions, 4-warehouse OrderSummary
+
+diff --git a/firmware/factory_monitor/factory_monitor.ino b/firmware/factory_monitor/factory_monitor.ino
+index eee5134..489598e 100644
+--- a/firmware/factory_monitor/factory_monitor.ino
++++ b/firmware/factory_monitor/factory_monitor.ino
+@@ -9,7 +9,7 @@
+ #include <WebServer.h>
+ #include <WiFi.h>
+ 
+-const String CURRENT_VERSION = "3.0.0"; // Γÿà σ╜ôσëìµ£¼σ£░σ¢║Σ╗╢τëêµ£¼
++const String CURRENT_VERSION = "3.1.0"; // Γÿà τí¼Σ╗╢Σ╕¡µû¡Σ┐íσÅ╖µúÇµ╡ïτëêµ£¼
+ #include <WiFiClientSecure.h>
+ #include <esp_task_wdt.h> // Watchdog Timer
+ #include <time.h>         // Include standard time library
+@@ -47,6 +47,20 @@ unsigned long debounceDelay =
+     240000;                    // σå╖σì┤µù╢Θù┤πÇéσÉ»σè¿σÉÄΣ╝ÜΦç¬σè¿Σ╗ÄΣ║æτ½»µïëσÅû (σªé 240000ms)
+ String currentSku = "UNKNOWN"; // µ¡úσ£¿τöƒΣ║ºτÜä SKU
+ 
++// --- τí¼Σ╗╢Σ╕¡µû¡Σ┐íσÅ╖µìòµìë (ISR-safe, volatile) ---
++// τö¿Σ╕¡µû¡Σ╗úµ¢┐Φ╜«Φ»ó∩╝îτí«Σ┐¥ HTTP/WiFi Θÿ╗σí₧µ£ƒΘù┤Σ╣ƒΣ╕ìΣ╝Üµ╝ÅΣ┐íσÅ╖
++volatile bool signalDetected = false;      // ISR Φ«╛τ╜«∩╝îmain loop µ╕àΘÖñ
++volatile unsigned long isrTriggerTime = 0; // Σ┐íσÅ╖ΦºªσÅæµù╢Θù┤ (ms)
++
++void IRAM_ATTR BUZZER_ISR() {
++  // FALLING edge ISR: σÅ¬Φ«░σ╜òµù╢Θù┤,Φ«⌐ main loop σüÜΘ¬îΦ»ü
++  // Σ╕ìµö╣ signalDetected σªéµ₧£σ╖▓τ╗Åµ£ëσ╛àσñäτÉåΣ┐íσÅ╖ (Θÿ▓µ¡ó ISR σåàτ½₧Σ║ë)
++  if (!signalDetected) {
++    isrTriggerTime = millis();
++    signalDetected = true;
++  }
++}
++
+ int lastState = HIGH;
+ unsigned long lastDebounceTime = 0;
+ struct QueueItem {
+@@ -88,6 +102,12 @@ void setup() {
+   pinMode(relayPin, INPUT_PULLUP);
+   pinMode(ledPin, OUTPUT);
+ 
++  // Γÿà τí¼Σ╗╢Σ╕¡µû¡: FALLING edge (τ╗ºτö╡σÖ¿Θù¡σÉê = Φ¡ªµèÑσÖ¿σôì)
++  // Σ╝ÿσàêτ║ºΘ½ÿΣ║Ä loop(), HTTP/WiFi Θÿ╗σí₧Σ╣ƒΣ╕ìΣ╝Üµ╝ÅµÄëΣ┐íσÅ╖
++  attachInterrupt(digitalPinToInterrupt(relayPin), BUZZER_ISR, FALLING);
++  Serial.println("GPIO Σ╕¡µû¡σ╖▓τ╗æσ«Üσê░ pin " + String(relayPin) +
++                 " (FALLING edge)");
++
+   connectWiFi();
+   if (WiFi.status() == WL_CONNECTED) {
+     Serial.println("WiFiσ╖▓Φ┐₧µÄÑ! MAC: " + WiFi.macAddress());
+@@ -134,33 +154,67 @@ void loop() {
+     lastConfigSync = millis();
+   }
+ 
+-  // 1. Σ┐íσÅ╖µúÇµ╡ï
+-  int reading = digitalRead(relayPin);
+-  if (reading == LOW && lastState == HIGH) {
+-    if ((millis() - lastDebounceTime) > debounceDelay) {
+-      int validCount = 0;
+-      for (int i = 0; i < 5; i++) {
+-        delay(20);
+-        esp_task_wdt_reset();
+-        if (digitalRead(relayPin) == LOW)
+-          validCount++;
+-      }
+-      if (validCount >= 3) {
+-        Serial.printf("ΦºªσÅæ! Yield: %d, SKU: %s\n", currentYield,
+-                      currentSku.c_str());
+-        digitalWrite(ledPin, LOW);
+-        delay(100);
+-        digitalWrite(ledPin, HIGH);
+-        lastDebounceTime = millis();
+-        time_t now;
+-        time(&now);
+-        QueueItem item = {currentYield, now};
++  // ΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉ
++  // 1. Σ┐íσÅ╖Θ¬îΦ»ü (Σ╕¡µû¡ΦºªσÅæσÉÄσ£¿ main loop ΘçîΘ¬îΦ»ü)
++  // ΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉ
++  if (signalDetected) {
++    signalDetected = false; // τ½ïσê╗µ╕àΘÖñµáçσ┐ù∩╝îΘÿ▓µ¡óΘçìσñìσñäτÉå
++
++    // τ¡ëσ╛à 300ms σåìΘ¬îΦ»ü: τ£ƒµ¡úτÜä 3 τºÆΦ¡ªµèÑσ£¿ 300ms σÉÄ pin Σ╗ìΣ╕║ LOW
++    // σÖ¬σú░Φäëσå▓ (<100ms) µ¡ñµù╢σ╖▓µüóσñì HIGH∩╝îτ¢┤µÄÑΦó½Φ┐çµ╗ñ
++    delay(300);
++    esp_task_wdt_reset();
++
++    if (digitalRead(relayPin) == LOW) {
++      // Γ£à τí«Φ«ñµÿ»τ£ƒσ«₧Σ┐íσÅ╖ (Φ¡ªµèÑΦ┐ÿσ£¿σôì)
++      unsigned long now = millis();
++
++      if ((now - lastDebounceTime) > debounceDelay) {
++        // Γ£à σå╖σì┤µù╢Θù┤σ╖▓Φ┐ç (µ£Çτƒ¡ 4 σêåΘÆƒΘù┤ΘÜö)
++        float elapsed = (float)(now - lastDebounceTime) / 1000.0;
++        lastDebounceTime = now;
++
++        Serial.printf("[OK] µ£ëµòêΦºªσÅæ! Yield=%d, SKU=%s, Φ╖¥Σ╕èµ¼í=%.1fs\n",
++                      currentYield, currentSku.c_str(), elapsed);
++
++        // LED Θù¬τâüτí«Φ«ñ
++        for (int i = 0; i < 3; i++) {
++          digitalWrite(ledPin, LOW);
++          delay(80);
++          digitalWrite(ledPin, HIGH);
++          delay(80);
++          esp_task_wdt_reset();
++        }
++
++        time_t t;
++        time(&t);
++        QueueItem item = {currentYield, t};
+         alarmQueue.push_back(item);
+         saveQueue();
++
++      } else {
++        float cooldownLeft =
++            (float)(debounceDelay - (now - lastDebounceTime)) / 1000.0;
++        Serial.printf("[SKIP] σå╖σì┤Σ╕¡∩╝îΦ┐ÿΘ£Ç %.1f τºÆ\n", cooldownLeft);
++      }
++
++      // Γÿà τ¡ëσ╛àΦ¡ªµèÑσÖ¿τ╗ôµ¥ƒ (pin µüóσñì HIGH) σåìτ╗ºτ╗¡
++      // Θÿ▓µ¡ó 3 τºÆσåàΣ║ºτöƒσñÜµ¼í ISR ΘçìσñìΦºªσÅæ
++      Serial.println("τ¡ëσ╛àΦ¡ªµèÑσÖ¿τ╗ôµ¥ƒ...");
++      unsigned long waitStart = millis();
++      while (digitalRead(relayPin) == LOW && (millis() - waitStart) < 8000) {
++        esp_task_wdt_reset();
++        delay(50);
+       }
++      Serial.println("Φ¡ªµèÑσÖ¿σ╖▓τ╗ôµ¥ƒ∩╝îµüóσñìτ¢æσÉ¼");
++
++      // µ╕àΘÖñ ISR µ£ƒΘù┤σÅ»Φâ╜τº»τ┤»τÜäσñÜΣ╜Öµáçσ┐ù
++      signalDetected = false;
++
++    } else {
++      Serial.println("[NOISE] 300ms σÉÄ pin µüóσñì HIGH∩╝îσêñµû¡Σ╕║σÖ¬σú░∩╝îσ┐╜τòÑ");
+     }
+   }
+-  lastState = reading;
+ 
+   handleNetworkQueue();
+ 
+
+commit 1016995bcd6ee8c6d7922894c598ad2e73edbbe7
+Author: Max Tan <khailoon94@gmail.com>
+Date:   Sat Feb 7 11:21:53 2026 +0800
+
+    Fix: Add /api/machines to bypass RLS and show offline machines
+
+diff --git a/firmware/factory_monitor/factory_monitor.ino b/firmware/factory_monitor/factory_monitor.ino
+index 3346ff4..eee5134 100644
+--- a/firmware/factory_monitor/factory_monitor.ino
++++ b/firmware/factory_monitor/factory_monitor.ino
+@@ -18,7 +18,7 @@ const String CURRENT_VERSION = "3.0.0"; // Γÿà σ╜ôσëìµ£¼σ£░σ¢║Σ╗╢τëêµ£¼
+ #define WDT_TIMEOUT 30 // Restart if stuck for 30 seconds
+ 
+ // --- WIFI CONFIGURATION ---
+-const char *ssid = "ESBL_2.4GHz";
++const char *ssid = "opm9821_2.4Ghz@MaxisFibre";
+ const char *password = "88888888";
+ 
+ // 2. Vercel API (Dynamic Config)
+
+commit c15575cf16c4ac5fa7c80e8e9acb12d63d5244e4
+Author: Max Tan <khailoon94@gmail.com>
+Date:   Thu Feb 5 22:53:07 2026 +0800
+
+    Implement driver factory categorization, Source Location grouping in Daily Prep, and UI/Type fixes
+
+diff --git a/firmware/factory_monitor/factory_monitor.ino b/firmware/factory_monitor/factory_monitor.ino
+index eca4a9e..3346ff4 100644
+--- a/firmware/factory_monitor/factory_monitor.ino
++++ b/firmware/factory_monitor/factory_monitor.ino
+@@ -1,8 +1,15 @@
+ 
+-#include <ArduinoJson.h> // Γÿà µû░σó₧: Φ»╖σ«ëΦúàµ¡ñσ║ô
++#include <ArduinoJson.h>
++#include <ArduinoOTA.h>
++#include <ESPmDNS.h>
+ #include <HTTPClient.h>
++#include <HTTPUpdate.h>
+ #include <Preferences.h> // Flash Storage
++#include <Update.h>
++#include <WebServer.h>
+ #include <WiFi.h>
++
++const String CURRENT_VERSION = "3.0.0"; // Γÿà σ╜ôσëìµ£¼σ£░σ¢║Σ╗╢τëêµ£¼
+ #include <WiFiClientSecure.h>
+ #include <esp_task_wdt.h> // Watchdog Timer
+ #include <time.h>         // Include standard time library
+@@ -15,8 +22,7 @@ const char *ssid = "ESBL_2.4GHz";
+ const char *password = "88888888";
+ 
+ // 2. Vercel API (Dynamic Config)
+-const String configApiUrl =
+-    "https://packsecure-os.vercel.app/api/iot-config?mac=";
++const String configApiUrl = "https://packsecure.vercel.app/api/iot-config?mac=";
+ 
+ // --- SERVER CONFIGURATION ---
+ const char *supabaseUrl =
+@@ -53,7 +59,15 @@ Preferences preferences;
+ // NTP µ£ìσèíσÖ¿
+ const char *ntpServer = "pool.ntp.org";
+ 
++// --- WEB SERVER & OTA ---
++WebServer server(80);
++const char *otaPath = "/update";
++const char *otaUser = "admin";
++const char *otaPass = "packsecure";
++
+ // σç╜µò░σú░µÿÄ
++void setupOTA();
++void performCloudUpdate(String url);
+ void updateRemoteConfig();
+ void connectWiFi();
+ void handleNetworkQueue();
+@@ -62,11 +76,14 @@ bool isTimeSet();
+ String getISOTime(time_t rawtime);
+ void saveQueue();
+ void loadQueue();
++void handleRoot();
++void handleUpdateResponse();
++void handleUpdateUpload();
+ 
+ void setup() {
+   Serial.begin(115200);
+   delay(1000);
+-  Serial.println("\n\n--- NILAI PRODUCTION FIRMWARE (PRO VERSION v2.0) ---");
++  Serial.println("\n\n--- NILAI PRODUCTION FIRMWARE (OTA READY v3.0) ---");
+ 
+   pinMode(relayPin, INPUT_PULLUP);
+   pinMode(ledPin, OUTPUT);
+@@ -74,6 +91,8 @@ void setup() {
+   connectWiFi();
+   if (WiFi.status() == WL_CONNECTED) {
+     Serial.println("WiFiσ╖▓Φ┐₧µÄÑ! MAC: " + WiFi.macAddress());
++    setupOTA(); // Γÿà σÉ»σè¿ OTA σÆî Web Server
++  } else {
+     Serial.println("WiFiΦ┐₧µÄÑσñ▒Φ┤Ñ∩╝îΦ»╖µúÇµƒÑ SSID/σ»åτáü µêû 2.4G Θóæµ«╡");
+   }
+ 
+@@ -87,18 +106,27 @@ void setup() {
+   Serial.println("STEP 3: σÉîµ¡ÑΣ║æτ½»Θàìτ╜«...");
+   updateRemoteConfig();
+ 
+-  // Watchdog - σ░¥Φ»òΘ¥ÖΘ╗ÿΘçìµû░Θàìτ╜«
++// Watchdog - 30 seconds
++#if ESP_IDF_VERSION_MAJOR >= 5
+   esp_task_wdt_config_t wdt_config = {.timeout_ms = WDT_TIMEOUT * 1000,
+-                                      .idle_core_mask = (1 << 0),
++                                      .idle_core_mask = 0,
+                                       .trigger_panic = true};
+-
+   esp_task_wdt_reconfigure(&wdt_config);
++#else
++  esp_task_wdt_init(WDT_TIMEOUT, true);
++#endif
+   esp_task_wdt_add(NULL);
+ }
+ 
+ void loop() {
+   esp_task_wdt_reset();
+ 
++  // σñäτÉå OTA σÆî Web Φ»╖µ▒é
++  if (WiFi.status() == WL_CONNECTED) {
++    server.handleClient();
++    ArduinoOTA.handle();
++  }
++
+   // µ»Å 60 τºÆΦç¬σè¿σÉîµ¡ÑΣ╕Çµ¼íΣ║ºΘçÅ
+   static unsigned long lastConfigSync = 0;
+   if (millis() - lastConfigSync > 60000) {
+@@ -178,6 +206,16 @@ void updateRemoteConfig() {
+           if (doc.containsKey("machine_id")) {
+             machineId = doc["machine_id"].as<String>();
+           }
++          if (doc.containsKey("latest_version") &&
++              doc.containsKey("download_url")) {
++            String latestVersion = doc["latest_version"].as<String>();
++            String downloadUrl = doc["download_url"].as<String>();
++            if (latestVersion > CURRENT_VERSION) {
++              Serial.println("σÅæτÄ░µû░τëêµ£¼: " + latestVersion +
++                             "∩╝îσçåσñçΦ┐£τ¿ïσìçτ║º...");
++              performCloudUpdate(downloadUrl);
++            }
++          }
+           Serial.printf("Remote Sync Success: SKU=%s, Yield=%d, Machine=%s\n",
+                         currentSku.c_str(), currentYield, machineId.c_str());
+         }
+@@ -291,3 +329,104 @@ bool sendToSupabase(int count, time_t timestamp) {
+   http.end();
+   return (res >= 200 && res < 300) || (res >= 400 && res < 500);
+ }
++
++// --- OTA ΘÇ╗Φ╛æσ«₧τÄ░ ---
++void setupOTA() {
++  String mac = WiFi.macAddress();
++  mac.replace(":", "");
++  String hostName = "nilai-" + mac;
++
++  if (MDNS.begin(hostName.c_str())) {
++    Serial.println("mDNS σôìσ║öσ╖▓σÉ»σè¿: http://" + hostName + ".local");
++  }
++
++  // Web Server Φ╖»τö▒
++  server.on("/", HTTP_GET, handleRoot);
++  server.on(
++      otaPath, HTTP_POST, []() { handleUpdateResponse(); },
++      []() { handleUpdateUpload(); });
++
++  server.begin();
++  Serial.println("Web Server σìçτ║ºσàÑσÅúσ╖▓σÉ»σè¿: http://" +
++                 WiFi.localIP().toString() + otaPath);
++
++  // Arduino IDE OTA
++  ArduinoOTA.setHostname(hostName.c_str());
++  ArduinoOTA.setPassword("packsecure");
++  ArduinoOTA.begin();
++}
++
++void handleRoot() {
++  String html = "<html><head><title>Nilai OTA</title></head><body>";
++  html += "<h1>Nilai Sensor Maintenance</h1>";
++  html += "<p>MAC: " + WiFi.macAddress() + "</p>";
++  html += "<p>Vercel API: <a href='" + configApiUrl + WiFi.macAddress() + "'>" +
++          configApiUrl + "</a></p>";
++  html += "<hr><h3>Firmware Update</h3>";
++  html += "<form method='POST' action='" + String(otaPath) +
++          "' enctype='multipart/form-data'>";
++  html += "<input type='file' name='update'><input type='submit' value='Update "
++          "Now'>";
++  html += "</form></body></html>";
++  server.send(200, "text/html", html);
++}
++
++void handleUpdateResponse() {
++  server.sendHeader("Connection", "close");
++  server.send(200, "text/plain",
++              (Update.hasError()) ? "FAIL" : "OK. REBOOTING...");
++  delay(1000);
++  ESP.restart();
++}
++
++void handleUpdateUpload() {
++  HTTPUpload &upload = server.upload();
++  if (upload.status == UPLOAD_FILE_START) {
++    Serial.printf("Update Start: %s\n", upload.filename.c_str());
++    if (!Update.begin(UPDATE_SIZE_UNKNOWN)) {
++      Update.printError(Serial);
++    }
++  } else if (upload.status == UPLOAD_FILE_WRITE) {
++    if (Update.write(upload.buf, upload.currentSize) != upload.currentSize) {
++      Update.printError(Serial);
++    }
++  } else if (upload.status == UPLOAD_FILE_END) {
++    if (Update.end(true)) {
++      Serial.printf("Update Success: %u bytes\nRebooting...\n",
++                    upload.totalSize);
++    } else {
++      Update.printError(Serial);
++    }
++  }
++}
++
++void performCloudUpdate(String url) {
++  WiFiClientSecure client;
++  client.setInsecure();
++
++  Serial.println("µ¡úσ£¿Σ╗ÄσñûΘâ¿σ£░σ¥ÇΣ╕ïΦ╜╜σ¢║Σ╗╢: " + url);
++
++  // Σ╕┤µù╢σÅûµ╢êσà│µ│¿ WDT∩╝îΘÿ▓µ¡óσìçτ║ºΦ┐çτ¿ïΣ╕¡ΦºªσÅæΘçìσÉ»
++  // Σ╜┐τö¿ NULL µúÇµƒÑτí«Σ┐¥Σ╕ìΣ╝Üσ¢áΣ╕║ΘçìσñìµôìΣ╜£µèÑΘöÖ
++  esp_task_wdt_delete(NULL);
++
++  t_httpUpdate_return ret = httpUpdate.update(client, url);
++
++  // µùáΦ«║σìçτ║ºτ╗ôµ₧£σªéΣ╜ò∩╝îΘçìµû░σèáσ¢₧ WDT
++  esp_task_wdt_add(NULL);
++
++  switch (ret) {
++  case HTTP_UPDATE_FAILED:
++    Serial.printf("HTTP_UPDATE_FAILED Error (%d): %s\n",
++                  httpUpdate.getLastError(),
++                  httpUpdate.getLastErrorString().c_str());
++    break;
++  case HTTP_UPDATE_NO_UPDATES:
++    Serial.println("HTTP_UPDATE_NO_UPDATES");
++    break;
++  case HTTP_UPDATE_OK:
++    Serial.println("HTTP_UPDATE_OK - ΘçìσÉ»Σ╕¡...");
++    ESP.restart();
++    break;
++  }
++}
+
+commit fee5a7e5afeedea154041d4c2f0950bbffd5b7b9
+Author: Max Tan <khailoon94@gmail.com>
+Date:   Wed Feb 4 15:42:47 2026 +0800
+
+    fix(iot): reset environment to clean working state
+
+diff --git a/firmware/factory_monitor/factory_monitor.ino b/firmware/factory_monitor/factory_monitor.ino
+index b176209..eca4a9e 100644
+--- a/firmware/factory_monitor/factory_monitor.ino
++++ b/firmware/factory_monitor/factory_monitor.ino
+@@ -16,7 +16,7 @@ const char *password = "88888888";
+ 
+ // 2. Vercel API (Dynamic Config)
+ const String configApiUrl =
+-    "https://packsecure-os.vercel.app/api/active-products?mac=";
++    "https://packsecure-os.vercel.app/api/iot-config?mac=";
+ 
+ // --- SERVER CONFIGURATION ---
+ const char *supabaseUrl =
+
+commit 080e2c97ad2136a8a8fb14a026ed9f2d78a23fbc
+Author: Max Tan <khailoon94@gmail.com>
+Date:   Wed Feb 4 15:24:56 2026 +0800
+
+    fix(iot): final stable connection fix
+
+diff --git a/firmware/factory_monitor/factory_monitor.ino b/firmware/factory_monitor/factory_monitor.ino
+index 5dc0f1e..b176209 100644
+--- a/firmware/factory_monitor/factory_monitor.ino
++++ b/firmware/factory_monitor/factory_monitor.ino
+@@ -14,16 +14,17 @@
+ const char *ssid = "ESBL_2.4GHz";
+ const char *password = "88888888";
+ 
+-// --- NEW: VERCEL DYNAMIC CONFIG ---
+-const String configApiUrl = "https://packsecure-os.vercel.app/api/iot?mac=";
++// 2. Vercel API (Dynamic Config)
++const String configApiUrl =
++    "https://packsecure-os.vercel.app/api/active-products?mac=";
+ 
+ // --- SERVER CONFIGURATION ---
+ const char *supabaseUrl =
+     "https://kdahubyhwndgyloaljak.supabase.co/rest/v1/production_logs";
+ const char *apiKey =
+     "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9."
+-    "eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6ImtkYWh1Ynlod25kZ3lsb2FsamakIiwicm9sZSI6Im"
+-    "Fub24iLCJpYXQiOjE3NjUzODY4ODksLCJleHAiOjIwODA5NjI4ODl9."
++    "eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6ImtkYWh1Ynlod25kZ3lsb2FsamFrIiwicm9sZSI6Im"
++    "Fub24iLCJpYXQiOjE3NjUzODY4ODksImV4cCI6MjA4MDk2Mjg4OX0."
+     "mzTtQ6zpfvRY07372UH_"
+     "M4dvKPzHBDkiydwosUYPs-8";
+ 
+
+commit 47592dc8985ba9c82124ebadd0b10cd7af62d16d
+Author: Max Tan <khailoon94@gmail.com>
+Date:   Wed Feb 4 15:05:57 2026 +0800
+
+    fix(iot): rename endpoint to iot-data
+
+diff --git a/firmware/factory_monitor/factory_monitor.ino b/firmware/factory_monitor/factory_monitor.ino
+index 0a40e0a..5dc0f1e 100644
+--- a/firmware/factory_monitor/factory_monitor.ino
++++ b/firmware/factory_monitor/factory_monitor.ino
+@@ -14,19 +14,19 @@
+ const char *ssid = "ESBL_2.4GHz";
+ const char *password = "88888888";
+ 
++// --- NEW: VERCEL DYNAMIC CONFIG ---
++const String configApiUrl = "https://packsecure-os.vercel.app/api/iot?mac=";
++
+ // --- SERVER CONFIGURATION ---
+-const char *serverUrl =
++const char *supabaseUrl =
+     "https://kdahubyhwndgyloaljak.supabase.co/rest/v1/production_logs";
+ const char *apiKey =
+     "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9."
+-    "eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6ImtkYWh1Ynlod25kZ3lsb2FsamFrIiwicm9sZSI6Im"
+-    "Fub24iLCJpYXQiOjE3NjUzODY4ODksImV4cCI6MjA4MDk2Mjg4OX0.mzTtQ6zpfvRY07372UH_"
++    "eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6ImtkYWh1Ynlod25kZ3lsb2FsamakIiwicm9sZSI6Im"
++    "Fub24iLCJpYXQiOjE3NjUzODY4ODksLCJleHAiOjIwODA5NjI4ODl9."
++    "mzTtQ6zpfvRY07372UH_"
+     "M4dvKPzHBDkiydwosUYPs-8";
+ 
+-// --- NEW: VERCEL DYNAMIC CONFIG ---
+-const String configApiUrl =
+-    "https://packsecure-os.vercel.app/api/iot-config?mac=";
+-
+ // --- MACHINE CONFIGURATION ---
+ String machineId =
+     "PENDING_ASSIGNMENT"; // σê¥σºïσìáΣ╜ìτ¼ª∩╝îΘÇÜτö╡σÉÄΣ╝ÜΦç¬σè¿µö╣Σ╕║ N1-M01 µêû N2-M02
+@@ -273,7 +273,7 @@ bool sendToSupabase(int count, time_t timestamp) {
+   HTTPClient http;
+   WiFiClientSecure client;
+   client.setInsecure();
+-  if (!http.begin(client, serverUrl))
++  if (!http.begin(client, supabaseUrl))
+     return false;
+   http.setTimeout(5000);
+   http.addHeader("Content-Type", "application/json");
+
+commit 6ad6880e8a4ae68be4ded73f68ab0c29b0e131b9
+Author: Max Tan <khailoon94@gmail.com>
+Date:   Wed Feb 4 13:40:17 2026 +0800
+
+    feat(iot): deploy backend api and firmware updates
+
+diff --git a/firmware/factory_monitor/factory_monitor.ino b/firmware/factory_monitor/factory_monitor.ino
+index 3ee22de..0a40e0a 100644
+--- a/firmware/factory_monitor/factory_monitor.ino
++++ b/firmware/factory_monitor/factory_monitor.ino
+@@ -1,4 +1,5 @@
+ 
++#include <ArduinoJson.h> // Γÿà µû░σó₧: Φ»╖σ«ëΦúàµ¡ñσ║ô
+ #include <HTTPClient.h>
+ #include <Preferences.h> // Flash Storage
+ #include <WiFi.h>
+@@ -9,11 +10,11 @@
+ 
+ #define WDT_TIMEOUT 30 // Restart if stuck for 30 seconds
+ 
+-// --- WIFI CONFIGURATION (Change This) ---
+-const char *ssid = "opm9821_2.4Ghz@MaxisFibre";
++// --- WIFI CONFIGURATION ---
++const char *ssid = "ESBL_2.4GHz";
+ const char *password = "88888888";
+ 
+-// --- SERVER CONFIGURATION (DIRECT SUPABASE) ---
++// --- SERVER CONFIGURATION ---
+ const char *serverUrl =
+     "https://kdahubyhwndgyloaljak.supabase.co/rest/v1/production_logs";
+ const char *apiKey =
+@@ -22,272 +23,249 @@ const char *apiKey =
+     "Fub24iLCJpYXQiOjE3NjUzODY4ODksImV4cCI6MjA4MDk2Mjg4OX0.mzTtQ6zpfvRY07372UH_"
+     "M4dvKPzHBDkiydwosUYPs-8";
+ 
+-// --- MACHINE CONFIGURATION ---
+-const char *machineId = "T1.3-M03"; // Machine ID (Updated for T1.3-M03)
+-const int relayPin = 15;            // GPIO 15 (D15)
+-const int ledPin = 2;               // Built-in LED (GPIO 2)
++// --- NEW: VERCEL DYNAMIC CONFIG ---
++const String configApiUrl =
++    "https://packsecure-os.vercel.app/api/iot-config?mac=";
+ 
+-// --- VARIABLES ---
+-int lastState = HIGH; // Relay is Normally Open (NO)
++// --- MACHINE CONFIGURATION ---
++String machineId =
++    "PENDING_ASSIGNMENT"; // σê¥σºïσìáΣ╜ìτ¼ª∩╝îΘÇÜτö╡σÉÄΣ╝ÜΦç¬σè¿µö╣Σ╕║ N1-M01 µêû N2-M02
++const int relayPin = 15;  // GPIO 15 (D15)
++const int ledPin = 2;
++
++// --- σè¿µÇüσÅÿΘçÅ (Σ╝ÜΣ╗ÄΣ║æτ½»σÉîµ¡Ñ∩╝îΣ╕ìΦªüσ£¿Φ┐ÖΘçîµ¡╗µö╣µò░σ¡ù) ---
++int currentYield =
++    1; // Σ║ºΘçÅτ│╗µò░∩╝êΘ╗ÿΦ«ñ1∩╝ëπÇéσÉ»σè¿σÉÄΣ╝ÜΦç¬σè¿Σ╗ÄΣ║æτ½»µïëσÅû (σªé 33cm x1 Σ╝ÜσÅÿµêÉ 3)
++unsigned long debounceDelay =
++    240000;                    // σå╖σì┤µù╢Θù┤πÇéσÉ»σè¿σÉÄΣ╝ÜΦç¬σè¿Σ╗ÄΣ║æτ½»µïëσÅû (σªé 240000ms)
++String currentSku = "UNKNOWN"; // µ¡úσ£¿τöƒΣ║ºτÜä SKU
++
++int lastState = HIGH;
+ unsigned long lastDebounceTime = 0;
+-// 4 Minutes Cool-down to prevent double-counting
+-unsigned long debounceDelay = 240000; // FINAL PRODUCTION VALUE (4 Mins)
+-
+-// --- OFFLINE BUFFERING & TIME ---
+ struct QueueItem {
+   int count;
+-  time_t timestamp; // Store epoch time when alarm happened
++  time_t timestamp;
+ };
+ std::vector<QueueItem> alarmQueue;
+-
+-// NTP Servers
+-const char *ntpServer = "pool.ntp.org";
+-const long gmtOffset_sec =
+-    0; // UTC (Supabase expects UTC or ISO string with offset)
+-const int daylightOffset_sec = 0;
+-
+-// Persistent Storage
+ Preferences preferences;
+ 
+-void saveQueue() {
+-  preferences.begin("fv_store", false); // Namespace "fv_store", RW mode
+-  int size = alarmQueue.size();
+-  preferences.putInt("size", size);
+-
+-  // Save each item
+-  for (int i = 0; i < size; i++) {
+-    String key = "i" + String(i); // Keys: i0, i1, i2...
+-    preferences.putBytes(key.c_str(), &alarmQueue[i], sizeof(QueueItem));
+-  }
+-
+-  // Clean up if queue shrunk (optional but good practice)
+-  // Actually, 'size' determines how many we read back, so old keys are ignored.
+-
+-  preferences.end();
+-  Serial.println(" [Flash] Queue Saved.");
+-}
+-
+-void loadQueue() {
+-  preferences.begin("fv_store", true); // Read Only
+-  int size = preferences.getInt("size", 0);
+-
+-  if (size > 0) {
+-    Serial.print(" [Flash] Recovering ");
+-    Serial.print(size);
+-    Serial.println(" items...");
++// NTP µ£ìσèíσÖ¿
++const char *ntpServer = "pool.ntp.org";
+ 
+-    alarmQueue.clear();
+-    for (int i = 0; i < size; i++) {
+-      String key = "i" + String(i);
+-      QueueItem item;
+-      size_t len = preferences.getBytes(key.c_str(), &item, sizeof(QueueItem));
+-      if (len == sizeof(QueueItem)) {
+-        alarmQueue.push_back(item);
+-      }
+-    }
+-  }
+-  preferences.end();
+-}
++// σç╜µò░σú░µÿÄ
++void updateRemoteConfig();
++void connectWiFi();
++void handleNetworkQueue();
++bool sendToSupabase(int count, time_t timestamp);
++bool isTimeSet();
++String getISOTime(time_t rawtime);
++void saveQueue();
++void loadQueue();
+ 
+ void setup() {
+   Serial.begin(115200);
++  delay(1000);
++  Serial.println("\n\n--- NILAI PRODUCTION FIRMWARE (PRO VERSION v2.0) ---");
+ 
+-  // Setup Pins
+   pinMode(relayPin, INPUT_PULLUP);
+   pinMode(ledPin, OUTPUT);
+ 
+-  // Connect WiFi & Sync Time
+   connectWiFi();
++  if (WiFi.status() == WL_CONNECTED) {
++    Serial.println("WiFiσ╖▓Φ┐₧µÄÑ! MAC: " + WiFi.macAddress());
++    Serial.println("WiFiΦ┐₧µÄÑσñ▒Φ┤Ñ∩╝îΦ»╖µúÇµƒÑ SSID/σ»åτáü µêû 2.4G Θóæµ«╡");
++  }
+ 
+-  // Init Time
+-  configTime(gmtOffset_sec, daylightOffset_sec, ntpServer);
++  Serial.println("STEP 1: Θàìτ╜«µù╢Θù┤ (NTP)...");
++  configTime(0, 0, ntpServer);
+ 
+-  // Load unsent data from Flash (Crash Recovery)
++  Serial.println("STEP 2: σèáΦ╜╜τª╗τ║┐Θÿƒσêù...");
+   loadQueue();
+ 
+-  // DIAGNOSTIC: Queue a "Boot Signal" (Count 0)
+-  // This helps us see if the device is rebooting frequently.
+-  QueueItem bootItem = {0, 0};
+-  alarmQueue.push_back(bootItem);
+-  saveQueue();
++  // Γÿà σÉ»σè¿µù╢τ½ïσê╗µïëσÅûΣ╕Çµ¼íΣ║æτ½» Yield Φ«╛τ╜«
++  Serial.println("STEP 3: σÉîµ¡ÑΣ║æτ½»Θàìτ╜«...");
++  updateRemoteConfig();
+ 
+-  // Initialize Watchdog Timer (ESP32 Arduino 3.0+ / IDF 5.x compatible)
++  // Watchdog - σ░¥Φ»òΘ¥ÖΘ╗ÿΘçìµû░Θàìτ╜«
+   esp_task_wdt_config_t wdt_config = {.timeout_ms = WDT_TIMEOUT * 1000,
+-                                      .idle_core_mask =
+-                                          (1 << 0), // Monitor Core 0
++                                      .idle_core_mask = (1 << 0),
+                                       .trigger_panic = true};
+ 
+-  // Try to initialize, if already initialized (ESP_ERR_INVALID_STATE),
+-  // reconfigure
+-  if (esp_task_wdt_init(&wdt_config) != ESP_OK) {
+-    esp_task_wdt_reconfigure(&wdt_config);
+-  }
+-
+-  esp_task_wdt_add(NULL); // Add current thread to WDT watch
+-}
+-
+-void connectWiFi() {
+-  if (WiFi.status() == WL_CONNECTED)
+-    return;
+-
+-  WiFi.begin(ssid, password);
+-  Serial.println("Connecting to WiFi...");
+-  int attempts = 0;
+-  while (WiFi.status() != WL_CONNECTED && attempts < 10) {
+-    delay(500);
+-    Serial.print(".");
+-    digitalWrite(ledPin, !digitalRead(ledPin));
+-    attempts++;
+-  }
+-
+-  if (WiFi.status() == WL_CONNECTED) {
+-    digitalWrite(ledPin, HIGH); // LED ON when connected
+-    Serial.println("\nWiFi Connected!");
+-  } else {
+-    Serial.println("\nWiFi Connect Failed (Will retry in loop)");
+-    digitalWrite(ledPin, LOW);
+-  }
+-}
+-
+-// Helper to check if time is synced
+-bool isTimeSet() {
+-  struct tm timeinfo;
+-  if (!getLocalTime(&timeinfo)) {
+-    return false;
+-  }
+-  // Check if year is valid > 2020
+-  if (timeinfo.tm_year + 1900 < 2020)
+-    return false;
+-  return true;
+-}
+-
+-// Format time to ISO 8601 for Supabase: "YYYY-MM-DDTHH:MM:SSZ"
+-String getISOTime(time_t rawtime) {
+-  if (rawtime <= 0 && isTimeSet()) {
+-    time(&rawtime); // Get current time if not provided
+-  } else if (rawtime <= 0) {
+-    return ""; // Time not set
+-  }
+-
+-  struct tm *ti;
+-  ti = gmtime(&rawtime); // Convert to UTC struct
+-
+-  char buffer[30];
+-  // Format: 2026-01-25T15:30:00Z
+-  sprintf(buffer, "%04d-%02d-%02dT%02d:%02d:%02dZ", ti->tm_year + 1900,
+-          ti->tm_mon + 1, ti->tm_mday, ti->tm_hour, ti->tm_min, ti->tm_sec);
+-
+-  return String(buffer);
++  esp_task_wdt_reconfigure(&wdt_config);
++  esp_task_wdt_add(NULL);
+ }
+ 
+ void loop() {
+-  // 0. RESET WATCHDOG (Feed the dog)
+   esp_task_wdt_reset();
+ 
+-  // 1. SIGNAL DETECTION
+-  int reading = digitalRead(relayPin);
++  // µ»Å 60 τºÆΦç¬σè¿σÉîµ¡ÑΣ╕Çµ¼íΣ║ºΘçÅ
++  static unsigned long lastConfigSync = 0;
++  if (millis() - lastConfigSync > 60000) {
++    updateRemoteConfig();
++    lastConfigSync = millis();
++  }
+ 
++  // 1. Σ┐íσÅ╖µúÇµ╡ï
++  int reading = digitalRead(relayPin);
+   if (reading == LOW && lastState == HIGH) {
+     if ((millis() - lastDebounceTime) > debounceDelay) {
+-      Serial.println("Signal Detected! verifying signal stability (1 sec)...");
+-
+-      // OPTIMIZED NOISE FILTER (STABILITY CHECK)
+-      // USER CUSTOM: Check 5 times (100ms). Threshold 60% (3/5).
+       int validCount = 0;
+-      int totalChecks = 5;
+-
+-      for (int i = 0; i < totalChecks; i++) {
++      for (int i = 0; i < 5; i++) {
+         delay(20);
+-        esp_task_wdt_reset();               // Keep dog fed
+-        if (digitalRead(relayPin) == LOW) { // LOW is Active
++        esp_task_wdt_reset();
++        if (digitalRead(relayPin) == LOW)
+           validCount++;
+-        }
+       }
+-
+-      // If 60% or more (>=3) were valid, we accept it.
+-      bool isStable = (validCount >= 3);
+-      Serial.printf("Stability Check: %d/%d valid. Result: %s\n", validCount,
+-                    totalChecks, isStable ? "PASS" : "FAIL");
+-
+-      if (isStable) {
+-        Serial.println("ALARM CONFIRMED! queueing...");
+-
+-        // Blink Confirm
++      if (validCount >= 3) {
++        Serial.printf("ΦºªσÅæ! Yield: %d, SKU: %s\n", currentYield,
++                      currentSku.c_str());
+         digitalWrite(ledPin, LOW);
+         delay(100);
+         digitalWrite(ledPin, HIGH);
+-
+-        // Update Timer
+         lastDebounceTime = millis();
+-
+-        // CAPTURE TIMESTAMP
+         time_t now;
+         time(&now);
+-        // If time is not set (booted without wifi), 'now' will be small.
+-        // We logic: if now < 2020, mark as 0, send logic will use upload time
+-        // if 0. But better is to try to sync.
+-
+-        QueueItem item = {1, now}; // Count=1, Time=Now
++        QueueItem item = {currentYield, now};
+         alarmQueue.push_back(item);
+-
+-        saveQueue(); // <--- SAVE TO FLASH IMMEDIATELY
+-
+-        Serial.print("Queue Size: ");
+-        Serial.println(alarmQueue.size());
+-
+-      } else {
+-        Serial.println("Signal unstable (Noise Spike) - Ignored.");
++        saveQueue();
+       }
+     }
+   }
+   lastState = reading;
+ 
+-  // 2. NETWORK HANDLING
+   handleNetworkQueue();
+ 
+-  // 3. Keep WiFi Alive
++  // WiFi ΘçìΦ┐₧ΘÇ╗Φ╛æ (τ«Çσîû∩╝îΣ║ñτ╗Öµá╕σ┐âΦç¬σè¿σñäτÉåµêûµëïσè¿ connectWiFi)
+   if (WiFi.status() != WL_CONNECTED) {
+-    static unsigned long lastReconnectAttempt = 0;
+-    if (millis() - lastReconnectAttempt > 10000) {
+-      lastReconnectAttempt = millis();
+-      WiFi.reconnect();
++    static unsigned long lastRecon = 0;
++    if (millis() - lastRecon >
++        30000) { // σó₧σèáτ¡ëσ╛àµù╢Θù┤σê░ 30 τºÆ∩╝îΘü┐σàìσ╣▓µë░σåàΘâ¿Φ┐₧µÄÑ
++      lastRecon = millis();
++      Serial.println("WiFiµû¡σ╝Ç∩╝îσ░¥Φ»òµüóσñì...");
++      connectWiFi();
+     }
+   }
+ 
+-  // 4. HEARTBEAT LED (Shows "I am alive" every 5 seconds)
+-  static unsigned long lastHeartbeat = 0;
+-  if (millis() - lastHeartbeat > 5000) {
+-    lastHeartbeat = millis();
+-    // Quick blip
++  // σ┐âΦ╖│ LED
++  static unsigned long lastHeart = 0;
++  if (millis() - lastHeart > 5000) {
++    lastHeart = millis();
+     digitalWrite(ledPin, LOW);
+     delay(50);
+     digitalWrite(ledPin, (WiFi.status() == WL_CONNECTED) ? HIGH : LOW);
+   }
+ }
+ 
+-void handleNetworkQueue() {
+-  if (alarmQueue.empty())
+-    return;
+-
+-  // Reduce Check Frequency to avoid hammering (Non-blocking delay)
+-  static unsigned long lastUploadAttempt = 0;
+-  if (millis() - lastUploadAttempt < 2000)
+-    return; // Wait 2s between tries
+-
++// πÇÉµû░σó₧µá╕σ┐âσç╜µò░πÇæ∩╝ÜµïëσÅûσè¿µÇüΣ║ºΘçÅσÆî SKU
++void updateRemoteConfig() {
+   if (WiFi.status() == WL_CONNECTED) {
+-    lastUploadAttempt = millis(); // Mark attempt
++    HTTPClient http;
++    WiFiClientSecure client;
++    client.setInsecure(); // Φ╖│Φ┐ç SSL Θ¬îΦ»ü∩╝îτí«Σ┐¥Φâ╜Φ┐₧Σ╕è Vercel (HTTPS)
++
++    String fullUrl = configApiUrl + WiFi.macAddress();
++
++    if (http.begin(client, fullUrl)) {
++      int code = http.GET();
++      if (code == 200) {
++        String payload = http.getString();
++        StaticJsonDocument<512> doc;
++        if (!deserializeJson(doc, payload)) {
++          currentYield = doc["yield"] | currentYield;
++          debounceDelay = doc["debounce"] | debounceDelay;
++          currentSku = doc["sku"].as<String>();
++          if (doc.containsKey("machine_id")) {
++            machineId = doc["machine_id"].as<String>();
++          }
++          Serial.printf("Remote Sync Success: SKU=%s, Yield=%d, Machine=%s\n",
++                        currentSku.c_str(), currentYield, machineId.c_str());
++        }
++      } else {
++        Serial.printf("Remote Sync Failed: HTTP Code %d\n", code);
++      }
++      http.end();
++    } else {
++      Serial.println("Remote Sync Failed: µùáµ│òΦ┐₧µÄÑ API σ£░σ¥Ç (HTTPS)");
++    }
++  } else {
++    Serial.println("Remote Sync Skipped: WiFi µ£¬Φ┐₧µÄÑ∩╝îµùáµ│òσÉîµ¡ÑσÅéµò░");
++  }
++}
+ 
+-    QueueItem item = alarmQueue.front();
++void saveQueue() {
++  preferences.begin("fv_store", false);
++  int size = alarmQueue.size();
++  preferences.putInt("size", size);
++  for (int i = 0; i < size; i++) {
++    String key = "i" + String(i);
++    preferences.putBytes(key.c_str(), &alarmQueue[i], sizeof(QueueItem));
++  }
++  preferences.end();
++}
+ 
+-    // Try Sending with Timestamp
+-    if (sendToSupabase(item.count, item.timestamp)) {
+-      alarmQueue.erase(alarmQueue.begin());
+-      saveQueue(); // <--- UPDATE FLASH AFTER SUCCESSFUL SEND
+-      Serial.print("Sent Success! Rem: ");
+-      Serial.println(alarmQueue.size());
++void loadQueue() {
++  preferences.begin("fv_store", true);
++  int size = preferences.getInt("size", 0);
++  if (size > 0) {
++    alarmQueue.clear();
++    for (int i = 0; i < size; i++) {
++      String key = "i" + String(i);
++      QueueItem item;
++      if (preferences.getBytes(key.c_str(), &item, sizeof(QueueItem)) ==
++          sizeof(QueueItem)) {
++        alarmQueue.push_back(item);
++      }
+     }
+-    // If failed, we just exit. The 'lastUploadAttempt' check ensures we wait 2s
+-    // before retrying. NO BLOCKING DELAY HERE.
++  }
++  preferences.end();
++}
++
++void connectWiFi() {
++  if (WiFi.status() == WL_CONNECTED)
++    return;
++  WiFi.disconnect(true);
++  delay(100);
++  Serial.printf("µ¡úσ£¿Φ┐₧µÄÑ WiFi: %s ", ssid);
++  WiFi.begin(ssid, password);
++  int attempts = 0;
++  while (WiFi.status() != WL_CONNECTED && attempts < 30) {
++    delay(500);
++    Serial.print(".");
++    attempts++;
++  }
++  Serial.println();
++}
++
++bool isTimeSet() {
++  struct tm ti;
++  if (!getLocalTime(&ti))
++    return false;
++  return (ti.tm_year + 1900 > 2020);
++}
++
++String getISOTime(time_t rawtime) {
++  if (rawtime <= 0 && isTimeSet())
++    time(&rawtime);
++  else if (rawtime <= 0)
++    return "";
++  struct tm *ti = gmtime(&rawtime);
++  char buf[30];
++  sprintf(buf, "%04d-%02d-%02dT%02d:%02d:%02dZ", ti->tm_year + 1900,
++          ti->tm_mon + 1, ti->tm_mday, ti->tm_hour, ti->tm_min, ti->tm_sec);
++  return String(buf);
++}
++
++void handleNetworkQueue() {
++  if (alarmQueue.empty() || WiFi.status() != WL_CONNECTED)
++    return;
++  static unsigned long lastUp = 0;
++  if (millis() - lastUp < 2000)
++    return;
++  lastUp = millis();
++  QueueItem item = alarmQueue.front();
++  if (sendToSupabase(item.count, item.timestamp)) {
++    alarmQueue.erase(alarmQueue.begin());
++    saveQueue();
+   }
+ }
+ 
+@@ -295,44 +273,20 @@ bool sendToSupabase(int count, time_t timestamp) {
+   HTTPClient http;
+   WiFiClientSecure client;
+   client.setInsecure();
+-
+-  if (!http.begin(client, serverUrl)) {
++  if (!http.begin(client, serverUrl))
+     return false;
+-  }
+-
+-  // TIMEOUT: Prevent HANGING if server is slow
+-  http.setTimeout(5000); // 5 Seconds Max
+-
++  http.setTimeout(5000);
+   http.addHeader("Content-Type", "application/json");
+   http.addHeader("apikey", apiKey);
+   http.addHeader("Authorization", String("Bearer ") + apiKey);
+-  http.addHeader("Prefer", "return=representation");
+-
+   String timeStr = getISOTime(timestamp);
+-  String jsonPayload;
+-
+-  if (timeStr != "") {
+-    // Send WITH specific timestamp
+-    jsonPayload = String("{\"machine_id\": \"") + machineId +
+-                  "\", \"alarm_count\": " + String(count) +
+-                  ", \"created_at\": \"" + timeStr + "\"}";
+-  } else {
+-    // Fallback: No timestamp (Use server time), only happens if NTP never
+-    // synced
+-    jsonPayload = String("{\"machine_id\": \"") + machineId +
+-                  "\", \"alarm_count\": " + String(count) + "}";
+-  }
+-
+-  int httpResponseCode = http.POST(jsonPayload);
+-  bool success = false;
+-
+-  if (httpResponseCode >= 200 && httpResponseCode < 300) {
+-    success = true;
+-  } else {
+-    Serial.print("DB Error: ");
+-    Serial.println(httpResponseCode);
+-  }
+-
++  String json = (timeStr != "")
++                    ? "{\"machine_id\": \"" + String(machineId) +
++                          "\", \"alarm_count\": " + String(count) +
++                          ", \"created_at\": \"" + timeStr + "\"}"
++                    : "{\"machine_id\": \"" + String(machineId) +
++                          "\", \"alarm_count\": " + String(count) + "}";
++  int res = http.POST(json);
+   http.end();
+-  return success;
+-}
+\ No newline at end of file
++  return (res >= 200 && res < 300) || (res >= 400 && res < 500);
++}
+
+commit 124a105de5d9f0214131b960b706b62b83c94b1d
+Author: Max Tan <khailoon94@gmail.com>
+Date:   Wed Jan 28 09:31:52 2026 +0800
+
+    Update Factory Dashboard threshold, Firmware config, and Simple Stock improvements
+
+diff --git a/firmware/factory_monitor/factory_monitor.ino b/firmware/factory_monitor/factory_monitor.ino
+index aa1bb3e..3ee22de 100644
+--- a/firmware/factory_monitor/factory_monitor.ino
++++ b/firmware/factory_monitor/factory_monitor.ino
+@@ -7,7 +7,6 @@
+ #include <time.h>         // Include standard time library
+ #include <vector>
+ 
+-
+ #define WDT_TIMEOUT 30 // Restart if stuck for 30 seconds
+ 
+ // --- WIFI CONFIGURATION (Change This) ---
+@@ -24,7 +23,7 @@ const char *apiKey =
+     "M4dvKPzHBDkiydwosUYPs-8";
+ 
+ // --- MACHINE CONFIGURATION ---
+-const char *machineId = "T1.2-M01"; // Machine ID (Corrected to M01)
++const char *machineId = "T1.3-M03"; // Machine ID (Updated for T1.3-M03)
+ const int relayPin = 15;            // GPIO 15 (D15)
+ const int ledPin = 2;               // Built-in LED (GPIO 2)
+ 
+@@ -51,7 +50,7 @@ const int daylightOffset_sec = 0;
+ Preferences preferences;
+ 
+ void saveQueue() {
+-  preferences.begin("queue", false); // Namespace "queue", RW mode
++  preferences.begin("fv_store", false); // Namespace "fv_store", RW mode
+   int size = alarmQueue.size();
+   preferences.putInt("size", size);
+ 
+@@ -69,7 +68,7 @@ void saveQueue() {
+ }
+ 
+ void loadQueue() {
+-  preferences.begin("queue", true); // Read Only
++  preferences.begin("fv_store", true); // Read Only
+   int size = preferences.getInt("size", 0);
+ 
+   if (size > 0) {
+@@ -106,6 +105,12 @@ void setup() {
+   // Load unsent data from Flash (Crash Recovery)
+   loadQueue();
+ 
++  // DIAGNOSTIC: Queue a "Boot Signal" (Count 0)
++  // This helps us see if the device is rebooting frequently.
++  QueueItem bootItem = {0, 0};
++  alarmQueue.push_back(bootItem);
++  saveQueue();
++
+   // Initialize Watchdog Timer (ESP32 Arduino 3.0+ / IDF 5.x compatible)
+   esp_task_wdt_config_t wdt_config = {.timeout_ms = WDT_TIMEOUT * 1000,
+                                       .idle_core_mask =
+@@ -187,19 +192,23 @@ void loop() {
+       Serial.println("Signal Detected! verifying signal stability (1 sec)...");
+ 
+       // OPTIMIZED NOISE FILTER (STABILITY CHECK)
+-      // REDUCED STRICTNESS: Check 15 times (300ms) instead of 50 times (1s).
+-      // Why? A 1-second perfect signal requirement is too strict for mechanical
+-      // relays. 300ms is still plenty to filter out electrical noise (<50ms).
+-      bool isStable = true;
+-      for (int i = 0; i < 15; i++) {
++      // USER CUSTOM: Check 5 times (100ms). Threshold 60% (3/5).
++      int validCount = 0;
++      int totalChecks = 5;
++
++      for (int i = 0; i < totalChecks; i++) {
+         delay(20);
+-        esp_task_wdt_reset(); // Keep dog fed during delay loop
+-        if (digitalRead(relayPin) == HIGH) {
+-          isStable = false;
+-          break;
++        esp_task_wdt_reset();               // Keep dog fed
++        if (digitalRead(relayPin) == LOW) { // LOW is Active
++          validCount++;
+         }
+       }
+ 
++      // If 60% or more (>=3) were valid, we accept it.
++      bool isStable = (validCount >= 3);
++      Serial.printf("Stability Check: %d/%d valid. Result: %s\n", validCount,
++                    totalChecks, isStable ? "PASS" : "FAIL");
++
+       if (isStable) {
+         Serial.println("ALARM CONFIRMED! queueing...");
+ 
+@@ -218,7 +227,7 @@ void loop() {
+         // We logic: if now < 2020, mark as 0, send logic will use upload time
+         // if 0. But better is to try to sync.
+ 
+-        QueueItem item = {2, now}; // Count=2, Time=Now
++        QueueItem item = {1, now}; // Count=1, Time=Now
+         alarmQueue.push_back(item);
+ 
+         saveQueue(); // <--- SAVE TO FLASH IMMEDIATELY
+@@ -326,4 +335,4 @@ bool sendToSupabase(int count, time_t timestamp) {
+ 
+   http.end();
+   return success;
+-}
++}
+\ No newline at end of file
+
+commit f060b70c7652dfe5e1cb44126b77e539b9e41c59
+Author: Max Tan <khailoon94@gmail.com>
+Date:   Mon Jan 26 09:38:05 2026 +0800
+
+    Refactor firmware structure, optimize debounce, and add production analysis scripts
+
+diff --git a/firmware/factory_monitor/factory_monitor.ino b/firmware/factory_monitor/factory_monitor.ino
+new file mode 100644
+index 0000000..aa1bb3e
+--- /dev/null
++++ b/firmware/factory_monitor/factory_monitor.ino
+@@ -0,0 +1,329 @@
++
++#include <HTTPClient.h>
++#include <Preferences.h> // Flash Storage
++#include <WiFi.h>
++#include <WiFiClientSecure.h>
++#include <esp_task_wdt.h> // Watchdog Timer
++#include <time.h>         // Include standard time library
++#include <vector>
++
++
++#define WDT_TIMEOUT 30 // Restart if stuck for 30 seconds
++
++// --- WIFI CONFIGURATION (Change This) ---
++const char *ssid = "opm9821_2.4Ghz@MaxisFibre";
++const char *password = "88888888";
++
++// --- SERVER CONFIGURATION (DIRECT SUPABASE) ---
++const char *serverUrl =
++    "https://kdahubyhwndgyloaljak.supabase.co/rest/v1/production_logs";
++const char *apiKey =
++    "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9."
++    "eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6ImtkYWh1Ynlod25kZ3lsb2FsamFrIiwicm9sZSI6Im"
++    "Fub24iLCJpYXQiOjE3NjUzODY4ODksImV4cCI6MjA4MDk2Mjg4OX0.mzTtQ6zpfvRY07372UH_"
++    "M4dvKPzHBDkiydwosUYPs-8";
++
++// --- MACHINE CONFIGURATION ---
++const char *machineId = "T1.2-M01"; // Machine ID (Corrected to M01)
++const int relayPin = 15;            // GPIO 15 (D15)
++const int ledPin = 2;               // Built-in LED (GPIO 2)
++
++// --- VARIABLES ---
++int lastState = HIGH; // Relay is Normally Open (NO)
++unsigned long lastDebounceTime = 0;
++// 4 Minutes Cool-down to prevent double-counting
++unsigned long debounceDelay = 240000; // FINAL PRODUCTION VALUE (4 Mins)
++
++// --- OFFLINE BUFFERING & TIME ---
++struct QueueItem {
++  int count;
++  time_t timestamp; // Store epoch time when alarm happened
++};
++std::vector<QueueItem> alarmQueue;
++
++// NTP Servers
++const char *ntpServer = "pool.ntp.org";
++const long gmtOffset_sec =
++    0; // UTC (Supabase expects UTC or ISO string with offset)
++const int daylightOffset_sec = 0;
++
++// Persistent Storage
++Preferences preferences;
++
++void saveQueue() {
++  preferences.begin("queue", false); // Namespace "queue", RW mode
++  int size = alarmQueue.size();
++  preferences.putInt("size", size);
++
++  // Save each item
++  for (int i = 0; i < size; i++) {
++    String key = "i" + String(i); // Keys: i0, i1, i2...
++    preferences.putBytes(key.c_str(), &alarmQueue[i], sizeof(QueueItem));
++  }
++
++  // Clean up if queue shrunk (optional but good practice)
++  // Actually, 'size' determines how many we read back, so old keys are ignored.
++
++  preferences.end();
++  Serial.println(" [Flash] Queue Saved.");
++}
++
++void loadQueue() {
++  preferences.begin("queue", true); // Read Only
++  int size = preferences.getInt("size", 0);
++
++  if (size > 0) {
++    Serial.print(" [Flash] Recovering ");
++    Serial.print(size);
++    Serial.println(" items...");
++
++    alarmQueue.clear();
++    for (int i = 0; i < size; i++) {
++      String key = "i" + String(i);
++      QueueItem item;
++      size_t len = preferences.getBytes(key.c_str(), &item, sizeof(QueueItem));
++      if (len == sizeof(QueueItem)) {
++        alarmQueue.push_back(item);
++      }
++    }
++  }
++  preferences.end();
++}
++
++void setup() {
++  Serial.begin(115200);
++
++  // Setup Pins
++  pinMode(relayPin, INPUT_PULLUP);
++  pinMode(ledPin, OUTPUT);
++
++  // Connect WiFi & Sync Time
++  connectWiFi();
++
++  // Init Time
++  configTime(gmtOffset_sec, daylightOffset_sec, ntpServer);
++
++  // Load unsent data from Flash (Crash Recovery)
++  loadQueue();
++
++  // Initialize Watchdog Timer (ESP32 Arduino 3.0+ / IDF 5.x compatible)
++  esp_task_wdt_config_t wdt_config = {.timeout_ms = WDT_TIMEOUT * 1000,
++                                      .idle_core_mask =
++                                          (1 << 0), // Monitor Core 0
++                                      .trigger_panic = true};
++
++  // Try to initialize, if already initialized (ESP_ERR_INVALID_STATE),
++  // reconfigure
++  if (esp_task_wdt_init(&wdt_config) != ESP_OK) {
++    esp_task_wdt_reconfigure(&wdt_config);
++  }
++
++  esp_task_wdt_add(NULL); // Add current thread to WDT watch
++}
++
++void connectWiFi() {
++  if (WiFi.status() == WL_CONNECTED)
++    return;
++
++  WiFi.begin(ssid, password);
++  Serial.println("Connecting to WiFi...");
++  int attempts = 0;
++  while (WiFi.status() != WL_CONNECTED && attempts < 10) {
++    delay(500);
++    Serial.print(".");
++    digitalWrite(ledPin, !digitalRead(ledPin));
++    attempts++;
++  }
++
++  if (WiFi.status() == WL_CONNECTED) {
++    digitalWrite(ledPin, HIGH); // LED ON when connected
++    Serial.println("\nWiFi Connected!");
++  } else {
++    Serial.println("\nWiFi Connect Failed (Will retry in loop)");
++    digitalWrite(ledPin, LOW);
++  }
++}
++
++// Helper to check if time is synced
++bool isTimeSet() {
++  struct tm timeinfo;
++  if (!getLocalTime(&timeinfo)) {
++    return false;
++  }
++  // Check if year is valid > 2020
++  if (timeinfo.tm_year + 1900 < 2020)
++    return false;
++  return true;
++}
++
++// Format time to ISO 8601 for Supabase: "YYYY-MM-DDTHH:MM:SSZ"
++String getISOTime(time_t rawtime) {
++  if (rawtime <= 0 && isTimeSet()) {
++    time(&rawtime); // Get current time if not provided
++  } else if (rawtime <= 0) {
++    return ""; // Time not set
++  }
++
++  struct tm *ti;
++  ti = gmtime(&rawtime); // Convert to UTC struct
++
++  char buffer[30];
++  // Format: 2026-01-25T15:30:00Z
++  sprintf(buffer, "%04d-%02d-%02dT%02d:%02d:%02dZ", ti->tm_year + 1900,
++          ti->tm_mon + 1, ti->tm_mday, ti->tm_hour, ti->tm_min, ti->tm_sec);
++
++  return String(buffer);
++}
++
++void loop() {
++  // 0. RESET WATCHDOG (Feed the dog)
++  esp_task_wdt_reset();
++
++  // 1. SIGNAL DETECTION
++  int reading = digitalRead(relayPin);
++
++  if (reading == LOW && lastState == HIGH) {
++    if ((millis() - lastDebounceTime) > debounceDelay) {
++      Serial.println("Signal Detected! verifying signal stability (1 sec)...");
++
++      // OPTIMIZED NOISE FILTER (STABILITY CHECK)
++      // REDUCED STRICTNESS: Check 15 times (300ms) instead of 50 times (1s).
++      // Why? A 1-second perfect signal requirement is too strict for mechanical
++      // relays. 300ms is still plenty to filter out electrical noise (<50ms).
++      bool isStable = true;
++      for (int i = 0; i < 15; i++) {
++        delay(20);
++        esp_task_wdt_reset(); // Keep dog fed during delay loop
++        if (digitalRead(relayPin) == HIGH) {
++          isStable = false;
++          break;
++        }
++      }
++
++      if (isStable) {
++        Serial.println("ALARM CONFIRMED! queueing...");
++
++        // Blink Confirm
++        digitalWrite(ledPin, LOW);
++        delay(100);
++        digitalWrite(ledPin, HIGH);
++
++        // Update Timer
++        lastDebounceTime = millis();
++
++        // CAPTURE TIMESTAMP
++        time_t now;
++        time(&now);
++        // If time is not set (booted without wifi), 'now' will be small.
++        // We logic: if now < 2020, mark as 0, send logic will use upload time
++        // if 0. But better is to try to sync.
++
++        QueueItem item = {2, now}; // Count=2, Time=Now
++        alarmQueue.push_back(item);
++
++        saveQueue(); // <--- SAVE TO FLASH IMMEDIATELY
++
++        Serial.print("Queue Size: ");
++        Serial.println(alarmQueue.size());
++
++      } else {
++        Serial.println("Signal unstable (Noise Spike) - Ignored.");
++      }
++    }
++  }
++  lastState = reading;
++
++  // 2. NETWORK HANDLING
++  handleNetworkQueue();
++
++  // 3. Keep WiFi Alive
++  if (WiFi.status() != WL_CONNECTED) {
++    static unsigned long lastReconnectAttempt = 0;
++    if (millis() - lastReconnectAttempt > 10000) {
++      lastReconnectAttempt = millis();
++      WiFi.reconnect();
++    }
++  }
++
++  // 4. HEARTBEAT LED (Shows "I am alive" every 5 seconds)
++  static unsigned long lastHeartbeat = 0;
++  if (millis() - lastHeartbeat > 5000) {
++    lastHeartbeat = millis();
++    // Quick blip
++    digitalWrite(ledPin, LOW);
++    delay(50);
++    digitalWrite(ledPin, (WiFi.status() == WL_CONNECTED) ? HIGH : LOW);
++  }
++}
++
++void handleNetworkQueue() {
++  if (alarmQueue.empty())
++    return;
++
++  // Reduce Check Frequency to avoid hammering (Non-blocking delay)
++  static unsigned long lastUploadAttempt = 0;
++  if (millis() - lastUploadAttempt < 2000)
++    return; // Wait 2s between tries
++
++  if (WiFi.status() == WL_CONNECTED) {
++    lastUploadAttempt = millis(); // Mark attempt
++
++    QueueItem item = alarmQueue.front();
++
++    // Try Sending with Timestamp
++    if (sendToSupabase(item.count, item.timestamp)) {
++      alarmQueue.erase(alarmQueue.begin());
++      saveQueue(); // <--- UPDATE FLASH AFTER SUCCESSFUL SEND
++      Serial.print("Sent Success! Rem: ");
++      Serial.println(alarmQueue.size());
++    }
++    // If failed, we just exit. The 'lastUploadAttempt' check ensures we wait 2s
++    // before retrying. NO BLOCKING DELAY HERE.
++  }
++}
++
++bool sendToSupabase(int count, time_t timestamp) {
++  HTTPClient http;
++  WiFiClientSecure client;
++  client.setInsecure();
++
++  if (!http.begin(client, serverUrl)) {
++    return false;
++  }
++
++  // TIMEOUT: Prevent HANGING if server is slow
++  http.setTimeout(5000); // 5 Seconds Max
++
++  http.addHeader("Content-Type", "application/json");
++  http.addHeader("apikey", apiKey);
++  http.addHeader("Authorization", String("Bearer ") + apiKey);
++  http.addHeader("Prefer", "return=representation");
++
++  String timeStr = getISOTime(timestamp);
++  String jsonPayload;
++
++  if (timeStr != "") {
++    // Send WITH specific timestamp
++    jsonPayload = String("{\"machine_id\": \"") + machineId +
++                  "\", \"alarm_count\": " + String(count) +
++                  ", \"created_at\": \"" + timeStr + "\"}";
++  } else {
++    // Fallback: No timestamp (Use server time), only happens if NTP never
++    // synced
++    jsonPayload = String("{\"machine_id\": \"") + machineId +
++                  "\", \"alarm_count\": " + String(count) + "}";
++  }
++
++  int httpResponseCode = http.POST(jsonPayload);
++  bool success = false;
++
++  if (httpResponseCode >= 200 && httpResponseCode < 300) {
++    success = true;
++  } else {
++    Serial.print("DB Error: ");
++    Serial.println(httpResponseCode);
++  }
++
++  http.end();
++  return success;
++}

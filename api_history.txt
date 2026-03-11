@@ -1,0 +1,445 @@
+﻿commit 3517928214a64fa92764f5c56b6b6379df06815b
+Author: Max Tan <khailoon94@gmail.com>
+Date:   Fri Feb 27 12:36:47 2026 +0800
+
+    feat: unify locations into sys_locations_v2 and fix stock ledger foreign key
+
+diff --git a/api/alarm.ts b/api/alarm.ts
+index 2e5731b..6dca294 100644
+--- a/api/alarm.ts
++++ b/api/alarm.ts
+@@ -82,10 +82,29 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
+             return row;
+         });
+ 
+-        console.log(`Inserting ${insertRows.length} log(s):`, JSON.stringify(insertRows));
++        console.log(`Inserting ${insertRows.length} log(s) into V1:`, JSON.stringify(insertRows));
+ 
+-        const { error } = await supabase.from('production_logs').insert(insertRows);
+-        if (error) throw error;
++        const { error: v1Error } = await supabase.from('production_logs').insert(insertRows);
++        if (v1Error) {
++            console.error('V1 Insert Error:', v1Error);
++            throw v1Error;
++        }
++
++        // --- EXPLICIT V2 INSERT TO BYPASS BROKEN TRIGGERS ---
++        const v2InsertRows = insertRows.map(row => ({
++            machine_id: row.machine_id,
++            sku: row.product_sku || null, // V2 uses "sku" instead of "product_sku"
++            output_qty: row.alarm_count,
++            note: `Auto-logged from Lane: ${row.lane_id}`
++        }));
++
++        console.log(`Inserting ${v2InsertRows.length} log(s) into V2:`, JSON.stringify(v2InsertRows));
++
++        // Let it fail silently if V2 has issues, so we don't break V1 ESP32 logic
++        const { error: v2Error } = await supabase.from('production_logs_v2').insert(v2InsertRows);
++        if (v2Error) {
++            console.error('V2 Insert Error (Non-Fatal):', v2Error);
++        }
+ 
+         return res.status(200).json({
+             status: 'ok',
+
+commit faebbda3e9f9085a7e5ea5c217512f3a18b88911
+Author: Max Tan <khailoon94@gmail.com>
+Date:   Mon Feb 23 14:58:57 2026 +0800
+
+    feat: lane UI for T1.2, Eric/Neoson permissions, 4-warehouse OrderSummary
+
+diff --git a/api/alarm.ts b/api/alarm.ts
+index 3c66e25..2e5731b 100644
+--- a/api/alarm.ts
++++ b/api/alarm.ts
+@@ -5,6 +5,23 @@ const supabaseUrl = process.env.VITE_SUPABASE_URL!;
+ const supabaseKey = (process.env.SUPABASE_SERVICE_ROLE_KEY || process.env.VITE_SUPABASE_ANON_KEY)!;
+ const supabase = createClient(supabaseUrl, supabaseKey);
+ 
++// ΓöÇΓöÇΓöÇ Machine Layout Config ΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇ
++// Define how many fixed lanes each machine has and their IDs.
++// Single-lane machines use ['Single'], dual-lane uses ['Lane1', 'Lane2'], etc.
++const MACHINE_LANES: Record<string, string[]> = {
++    'T1.2-M01': ['Lane1', 'Lane2'],  // 200cm ΓåÆ 2 fixed lanes of 100cm each
++    'N1-M01': ['Single'],
++    'N2-M02': ['Single'],
++    'T1.3-M02': ['Single'],
++};
++const DEFAULT_LANES = ['Single'];
++
++// Server-side dedup guard: only reject exact network-retry duplicates (10 seconds)
++// Kept short because ESP32 firmware already enforces the 4-minute production cooldown
++const DEDUP_WINDOW_MS = 10 * 1000;
++
++// ΓöÇΓöÇΓöÇ Handler ΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇ
++
+ export default async function handler(req: VercelRequest, res: VercelResponse) {
+     if (req.method !== 'POST') {
+         return res.status(405).json({ error: 'Method Not Allowed' });
+@@ -17,33 +34,67 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
+             return res.status(400).json({ error: 'machine_id is required' });
+         }
+ 
+-        console.log(`Received alarm from ${machine_id}, count: ${alarm_count || 1}`);
++        const lanes = MACHINE_LANES[machine_id] || DEFAULT_LANES;
++        console.log(`Alarm from ${machine_id} | alarm_count=${alarm_count} | lanes=${lanes.join(',')}`);
+ 
+-        // Resolve Active Product
+-        let productSku = 'UNKNOWN';
+-        const { data: activeProduct } = await supabase
+-            .from('machine_active_products')
+-            .select('product_sku')
++        // ΓöÇΓöÇ Dedup: reject if this machine logged within the last 10 seconds ΓöÇΓöÇ
++        const deduCutoff = new Date(Date.now() - DEDUP_WINDOW_MS).toISOString();
++        const { data: recentLog } = await supabase
++            .from('production_logs')
++            .select('created_at')
+             .eq('machine_id', machine_id)
+-            .single();
++            .gte('created_at', deduCutoff)
++            .limit(1)
++            .maybeSingle();
+ 
+-        if (activeProduct) {
+-            productSku = activeProduct.product_sku;
++        if (recentLog) {
++            const diffSec = Math.round((Date.now() - new Date(recentLog.created_at).getTime()) / 1000);
++            console.log(`Duplicate rejected for ${machine_id} (last log ${diffSec}s ago)`);
++            return res.status(200).json({ status: 'duplicate', message: `Too soon (${diffSec}s ago), ignored` });
+         }
+ 
+-        // Always use the count sent by the hardware (Dual Lane = 2)
+-        const { error } = await supabase.from('production_logs').insert({
+-            machine_id,
+-            alarm_count: alarm_count || 1,
+-            product_sku: productSku
++        // ΓöÇΓöÇ Fetch all active products for this machine (all lanes) ΓöÇΓöÇ
++        const { data: activeProducts } = await supabase
++            .from('machine_active_products')
++            .select('product_sku, lane_id, yield')
++            .eq('machine_id', machine_id);
++
++        // Build a map: lane_id ΓåÆ { product_sku, yield }
++        const activeLaneMap: Record<string, { sku: string | null; yield: number }> = {};
++        (activeProducts || []).forEach((p: any) => {
++            activeLaneMap[p.lane_id] = {
++                sku: p.product_sku || null,
++                yield: p.yield || 1,
++            };
++        });
++
++        // ΓöÇΓöÇ Build one log insert per lane ΓöÇΓöÇ
++        // alarm_count=0 means reboot signal ΓåÆ preserve as 0 for all lanes
++        const isReboot = (alarm_count === 0);
++        const insertRows = lanes.map(laneId => {
++            const laneData = activeLaneMap[laneId] || activeLaneMap['Single'] || null;
++            const row: any = {
++                machine_id,
++                lane_id: laneId,
++                alarm_count: isReboot ? 0 : (laneData?.yield ?? 1),
++            };
++            if (laneData?.sku) row.product_sku = laneData.sku;
++            return row;
+         });
+ 
++        console.log(`Inserting ${insertRows.length} log(s):`, JSON.stringify(insertRows));
++
++        const { error } = await supabase.from('production_logs').insert(insertRows);
+         if (error) throw error;
+ 
+-        return res.status(200).json({ status: 'ok', message: 'Logged successfully', product: productSku });
++        return res.status(200).json({
++            status: 'ok',
++            message: `Logged ${insertRows.length} lane(s)`,
++            lanes: insertRows.map(r => ({ lane: r.lane_id, sku: r.product_sku || 'none', count: r.alarm_count })),
++        });
+ 
+     } catch (e: any) {
+-        console.error("Alarm Log Error:", e);
+-        return res.status(500).json({ error: e.message || "Failed to log alarm" });
++        console.error('Alarm Log Error:', e);
++        return res.status(500).json({ error: e.message || 'Failed to log alarm' });
+     }
+ }
+
+commit 124a105de5d9f0214131b960b706b62b83c94b1d
+Author: Max Tan <khailoon94@gmail.com>
+Date:   Wed Jan 28 09:31:52 2026 +0800
+
+    Update Factory Dashboard threshold, Firmware config, and Simple Stock improvements
+
+diff --git a/api/alarm.ts b/api/alarm.ts
+new file mode 100644
+index 0000000..3c66e25
+--- /dev/null
++++ b/api/alarm.ts
+@@ -0,0 +1,49 @@
++import { VercelRequest, VercelResponse } from '@vercel/node';
++import { createClient } from '@supabase/supabase-js';
++
++const supabaseUrl = process.env.VITE_SUPABASE_URL!;
++const supabaseKey = (process.env.SUPABASE_SERVICE_ROLE_KEY || process.env.VITE_SUPABASE_ANON_KEY)!;
++const supabase = createClient(supabaseUrl, supabaseKey);
++
++export default async function handler(req: VercelRequest, res: VercelResponse) {
++    if (req.method !== 'POST') {
++        return res.status(405).json({ error: 'Method Not Allowed' });
++    }
++
++    try {
++        const { machine_id, alarm_count } = req.body;
++
++        if (!machine_id) {
++            return res.status(400).json({ error: 'machine_id is required' });
++        }
++
++        console.log(`Received alarm from ${machine_id}, count: ${alarm_count || 1}`);
++
++        // Resolve Active Product
++        let productSku = 'UNKNOWN';
++        const { data: activeProduct } = await supabase
++            .from('machine_active_products')
++            .select('product_sku')
++            .eq('machine_id', machine_id)
++            .single();
++
++        if (activeProduct) {
++            productSku = activeProduct.product_sku;
++        }
++
++        // Always use the count sent by the hardware (Dual Lane = 2)
++        const { error } = await supabase.from('production_logs').insert({
++            machine_id,
++            alarm_count: alarm_count || 1,
++            product_sku: productSku
++        });
++
++        if (error) throw error;
++
++        return res.status(200).json({ status: 'ok', message: 'Logged successfully', product: productSku });
++
++    } catch (e: any) {
++        console.error("Alarm Log Error:", e);
++        return res.status(500).json({ error: e.message || "Failed to log alarm" });
++    }
++}
+
+commit 99a2b55ee9511f4c3a6012669aae7e7bc6d2ad3a
+Author: PackSecure Admin <admin@packsecure.com>
+Date:   Tue Jan 13 11:26:58 2026 +0800
+
+    Backup before switching computers
+
+diff --git a/api/alarm.ts b/api/alarm.ts
+deleted file mode 100644
+index f8c7b26..0000000
+--- a/api/alarm.ts
++++ /dev/null
+@@ -1,97 +0,0 @@
+-
+-export const config = {
+-    runtime: 'edge',
+-};
+-
+-export default async function handler(req) {
+-    // CORS Headers
+-    const headers = {
+-        'Access-Control-Allow-Credentials': 'true',
+-        'Access-Control-Allow-Origin': '*',
+-        'Access-Control-Allow-Methods': 'GET,OPTIONS,PATCH,DELETE,POST,PUT',
+-        'Access-Control-Allow-Headers': 'X-CSRF-Token, X-Requested-With, Accept, Accept-Version, Content-Length, Content-MD5, Content-Type, Date, X-Api-Version',
+-        'Content-Type': 'application/json'
+-    };
+-
+-    if (req.method === 'OPTIONS') {
+-        return new Response(null, { status: 200, headers });
+-    }
+-
+-    if (req.method !== 'POST') {
+-        return new Response(JSON.stringify({ error: 'Method Not Allowed' }), { status: 405, headers });
+-    }
+-
+-    try {
+-        const supabaseUrl = process.env.VITE_SUPABASE_URL;
+-        const supabaseKey = process.env.SUPABASE_SERVICE_ROLE_KEY || process.env.VITE_SUPABASE_ANON_KEY;
+-
+-        if (!supabaseUrl || !supabaseKey) {
+-            throw new Error('Missing Supabase Env Vars');
+-        }
+-
+-        const { machine_id, alarm_count } = await req.json();
+-
+-        if (!machine_id) {
+-            return new Response(JSON.stringify({ error: 'machine_id is required' }), { status: 400, headers });
+-        }
+-
+-        // 1. Get Active Product (Fetch)
+-        let productSku = 'UNKNOWN';
+-        try {
+-            const queryUrl = `${supabaseUrl}/rest/v1/machine_active_products?machine_id=eq.${machine_id}&select=product_sku`;
+-            const getResp = await fetch(queryUrl, {
+-                method: 'GET',
+-                headers: {
+-                    'apikey': supabaseKey,
+-                    'Authorization': `Bearer ${supabaseKey}`,
+-                    'Content-Type': 'application/json',
+-                    'Accept': 'application/vnd.pgrst.object+json' // Expect object, not array
+-                }
+-            });
+-
+-            if (getResp.ok) {
+-                const data = await getResp.json();
+-                if (data && data.product_sku) {
+-                    productSku = data.product_sku;
+-                }
+-            }
+-        } catch (e) {
+-            console.error("Product fetch failed", e);
+-        }
+-
+-        // 2. Insert Log (Fetch)
+-        const postUrl = `${supabaseUrl}/rest/v1/production_logs`;
+-        const postResp = await fetch(postUrl, {
+-            method: 'POST',
+-            headers: {
+-                'apikey': supabaseKey,
+-                'Authorization': `Bearer ${supabaseKey}`,
+-                'Content-Type': 'application/json',
+-                'Prefer': 'return=representation'
+-            },
+-            body: JSON.stringify({
+-                machine_id: machine_id,
+-                alarm_count: 2,
+-                product_sku: productSku
+-            })
+-        });
+-
+-        if (!postResp.ok) {
+-            throw new Error(`DB Insert Failed: ${postResp.status}`);
+-        }
+-
+-        const result = await postResp.json();
+-
+-        return new Response(JSON.stringify({
+-            status: 'ok',
+-            message: 'Logged via Edge Runtime',
+-            product: productSku
+-        }), { status: 200, headers });
+-
+-    } catch (e) {
+-        return new Response(JSON.stringify({
+-            error: e.message,
+-            stack: e.stack
+-        }), { status: 500, headers });
+-    }
+-}
+
+commit 72ed6a2cf1c342ede96304f1027738082edc2c0c
+Author: PackSecure Admin <admin@packsecure.com>
+Date:   Fri Jan 9 07:00:20 2026 +0800
+
+    fix: switch to Edge Runtime to bypass Node environment issues
+
+diff --git a/api/alarm.ts b/api/alarm.ts
+new file mode 100644
+index 0000000..f8c7b26
+--- /dev/null
++++ b/api/alarm.ts
+@@ -0,0 +1,97 @@
++
++export const config = {
++    runtime: 'edge',
++};
++
++export default async function handler(req) {
++    // CORS Headers
++    const headers = {
++        'Access-Control-Allow-Credentials': 'true',
++        'Access-Control-Allow-Origin': '*',
++        'Access-Control-Allow-Methods': 'GET,OPTIONS,PATCH,DELETE,POST,PUT',
++        'Access-Control-Allow-Headers': 'X-CSRF-Token, X-Requested-With, Accept, Accept-Version, Content-Length, Content-MD5, Content-Type, Date, X-Api-Version',
++        'Content-Type': 'application/json'
++    };
++
++    if (req.method === 'OPTIONS') {
++        return new Response(null, { status: 200, headers });
++    }
++
++    if (req.method !== 'POST') {
++        return new Response(JSON.stringify({ error: 'Method Not Allowed' }), { status: 405, headers });
++    }
++
++    try {
++        const supabaseUrl = process.env.VITE_SUPABASE_URL;
++        const supabaseKey = process.env.SUPABASE_SERVICE_ROLE_KEY || process.env.VITE_SUPABASE_ANON_KEY;
++
++        if (!supabaseUrl || !supabaseKey) {
++            throw new Error('Missing Supabase Env Vars');
++        }
++
++        const { machine_id, alarm_count } = await req.json();
++
++        if (!machine_id) {
++            return new Response(JSON.stringify({ error: 'machine_id is required' }), { status: 400, headers });
++        }
++
++        // 1. Get Active Product (Fetch)
++        let productSku = 'UNKNOWN';
++        try {
++            const queryUrl = `${supabaseUrl}/rest/v1/machine_active_products?machine_id=eq.${machine_id}&select=product_sku`;
++            const getResp = await fetch(queryUrl, {
++                method: 'GET',
++                headers: {
++                    'apikey': supabaseKey,
++                    'Authorization': `Bearer ${supabaseKey}`,
++                    'Content-Type': 'application/json',
++                    'Accept': 'application/vnd.pgrst.object+json' // Expect object, not array
++                }
++            });
++
++            if (getResp.ok) {
++                const data = await getResp.json();
++                if (data && data.product_sku) {
++                    productSku = data.product_sku;
++                }
++            }
++        } catch (e) {
++            console.error("Product fetch failed", e);
++        }
++
++        // 2. Insert Log (Fetch)
++        const postUrl = `${supabaseUrl}/rest/v1/production_logs`;
++        const postResp = await fetch(postUrl, {
++            method: 'POST',
++            headers: {
++                'apikey': supabaseKey,
++                'Authorization': `Bearer ${supabaseKey}`,
++                'Content-Type': 'application/json',
++                'Prefer': 'return=representation'
++            },
++            body: JSON.stringify({
++                machine_id: machine_id,
++                alarm_count: 2,
++                product_sku: productSku
++            })
++        });
++
++        if (!postResp.ok) {
++            throw new Error(`DB Insert Failed: ${postResp.status}`);
++        }
++
++        const result = await postResp.json();
++
++        return new Response(JSON.stringify({
++            status: 'ok',
++            message: 'Logged via Edge Runtime',
++            product: productSku
++        }), { status: 200, headers });
++
++    } catch (e) {
++        return new Response(JSON.stringify({
++            error: e.message,
++            stack: e.stack
++        }), { status: 500, headers });
++    }
++}

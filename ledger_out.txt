@@ -1,0 +1,4 @@
+﻿[dotenv@17.3.1] injecting env (0) from .env.local -- tip: ≡ƒ¢í∩╕Å auth for agents: https://vestauth.com
+[dotenv@17.3.1] injecting env (0) from .env -- tip: ΓÜÖ∩╕Å  specify custom .env file path with { path: '/custom/path/.env' }
+Checking if there's any ledger entry for UNKNOWN sku...
+Latest UNKNOWN ledgers: []

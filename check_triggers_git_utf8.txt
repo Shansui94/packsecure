@@ -1,0 +1,204 @@
+﻿commit 4e1a86199257860f35057fdfce9f6dce73254422
+Author: Max Tan <khailoon94@gmail.com>
+Date:   Sat Feb 28 12:53:08 2026 +0800
+
+    fix(production): temp display correction for 100cm machines until DB trigger migration runs
+
+diff --git a/src/pages/ProductionControl.tsx b/src/pages/ProductionControl.tsx
+index 8b9b79c..16083f6 100644
+--- a/src/pages/ProductionControl.tsx
++++ b/src/pages/ProductionControl.tsx
+@@ -628,6 +628,11 @@ const ProductionControl: React.FC<ProductionControlProps> = ({ user, jobs = [] }
+         const targetMachine = machineMetadata?.id || selectedMachine;
+         if (!targetMachine) return;
+ 
++        // Machines where firmware sends alarm_count=2 but actually produces 1 roll
++        // Remove this list once the DB trigger SQL migration (rolls_per_alarm) has been applied
++        const HALF_COUNT_MACHINES = ['T1.3-M02', 'N1-M01', 'N2-M02'];
++        const isHalfCount = HALF_COUNT_MACHINES.includes(targetMachine);
++
+         const { data } = await supabase.from('production_logs_v2')
+             .select('log_id, sku, output_qty, operator_id, created_at')
+             .eq('machine_id', targetMachine)
+@@ -641,7 +646,7 @@ const ProductionControl: React.FC<ProductionControlProps> = ({ user, jobs = [] }
+                 Timestamp: log.created_at,
+                 Job_ID: 'N/A',
+                 Operator_Email: '',
+-                Output_Qty: log.output_qty || 1,
++                Output_Qty: isHalfCount ? Math.round((log.output_qty || 1) / 2) : (log.output_qty || 1),
+                 Note: log.sku || 'Production Log',
+             }));
+             setRecentLogs(mapped);
+commit e6637f4bf5f00865f6be2dae919b5d163595a509
+Author: Max Tan <khailoon94@gmail.com>
+Date:   Sat Feb 28 12:30:15 2026 +0800
+
+    fix(live): remove UI hack, DB trigger now computes output_qty correctly via rolls_per_alarm
+
+diff --git a/check_view.mjs b/check_view.mjs
+index 2ff426b..d94122f 100644
+--- a/check_view.mjs
++++ b/check_view.mjs
+@@ -6,17 +6,26 @@ const supabaseUrl = envFile.match(/VITE_SUPABASE_URL=(.*)/)[1];
+ const supabaseKey = envFile.match(/VITE_SUPABASE_ANON_KEY=(.*)/)[1];
+ const supabase = createClient(supabaseUrl, supabaseKey);
+ 
++// Read and run the SQL file via rpc
++const sql = fs.readFileSync('fix_rolls_per_alarm.sql', 'utf-8');
++
+ async function run() {
+-    const { data, error } = await supabase
+-        .from('production_logs_v2')
+-        .select('sku, output_qty, created_at, machine_id')
+-        .eq('machine_id', 'T1.2-M01')
+-        .not('sku', 'is', null)
+-        .order('created_at', { ascending: false })
+-        .limit(1);
++    // Apply each statement individually
++    const stmts = sql
++        .split(';')
++        .map(s => s.trim())
++        .filter(s => s.length > 0 && !s.startsWith('--'));
+ 
+-    console.log("Error:", error);
+-    console.log("Last production:", data);
++    for (const stmt of stmts) {
++        if (stmt.length < 5) continue;
++        console.log('Running:', stmt.slice(0, 80).replace(/\n/g, ' ') + '...');
++        const { error } = await supabase.rpc('execute_sql', { query: stmt });
++        if (error) {
++            console.error('  ERROR:', error.message);
++        } else {
++            console.log('  OK');
++        }
++    }
+ }
+ 
+ run();
+diff --git a/fix_rolls_per_alarm.sql b/fix_rolls_per_alarm.sql
+new file mode 100644
+index 0000000..0b891aa
+--- /dev/null
++++ b/fix_rolls_per_alarm.sql
+@@ -0,0 +1,75 @@
++-- ============================================================
++-- Fix: Production Output Calculation (rolls_per_alarm)
++-- Fixes firmware over-reporting on 100cm machines (T1.3, N1, N2)
++-- Run this in Supabase SQL Editor
++-- ============================================================
++
++-- Step 1: Add rolls_per_alarm column to sys_machines_v2
++ALTER TABLE public.sys_machines_v2
++ADD COLUMN IF NOT EXISTS rolls_per_alarm INTEGER NOT NULL DEFAULT 1;
++
++-- Step 2: Set correct values per machine
++-- T1.2-M01: 200cm machine, each alarm = 2 rolls
++UPDATE public.sys_machines_v2 SET rolls_per_alarm = 2 WHERE machine_id = 'T1.2-M01';
++
++-- T1.3-M02, N1-M01, N2-M02: 100cm machines, each alarm = 1 roll (firmware sends 2 but wrong)
++UPDATE public.sys_machines_v2 SET rolls_per_alarm = 1 WHERE machine_id IN ('T1.3-M02', 'N1-M01', 'N2-M02');
++
++-- T1.1-M03 (Stretch Film): default 1, no production tracking needed
++-- Already covered by DEFAULT 1
++
++-- Step 3: Update the trigger to use rolls_per_alarm instead of alarm_count directly
++CREATE OR REPLACE FUNCTION public.distribute_production_to_ledger()
++RETURNS TRIGGER AS $$
++DECLARE
++  rec RECORD;
++  product_count INTEGER;
++  machine_rolls_per_alarm INTEGER;
++  qty_per_product NUMERIC;
++BEGIN
++  -- Look up how many rolls this machine produces per alarm pulse
++  SELECT COALESCE(rolls_per_alarm, 1) INTO machine_rolls_per_alarm
++  FROM public.sys_machines_v2
++  WHERE machine_id = NEW.machine_id;
++
++  -- Count how many active products this machine has (for splitting)
++  SELECT COUNT(*) INTO product_count
++  FROM public.machine_active_products
++  WHERE machine_id = NEW.machine_id;
++
++  IF product_count = 0 THEN
++    RETURN NEW;
++  END IF;
++
++  -- Each product gets an equal share of the actual rolls produced
++  qty_per_product := machine_rolls_per_alarm::NUMERIC / product_count;
++
++  -- Insert one ledger row per active product
++  FOR rec IN
++    SELECT product_sku
++    FROM public.machine_active_products
++    WHERE machine_id = NEW.machine_id
++  LOOP
++    BEGIN
++      INSERT INTO public.stock_ledger_v2 (
++        sku, change_qty, event_type, ref_doc, notes, timestamp
++      ) VALUES (
++        rec.product_sku,
++        qty_per_product,
++        'Production',
++        NEW.id::text,
++        'Auto-Log: ' || NEW.machine_id || ' (Split ' || product_count || ')',
++        NOW()
++      );
++    EXCEPTION WHEN OTHERS THEN
++      RAISE WARNING 'distribute_production_to_ledger: skipped sku=% for machine=% err=%',
++        rec.product_sku, NEW.machine_id, SQLERRM;
++    END;
++  END LOOP;
++
++  RETURN NEW;
++END;
++$$ LANGUAGE plpgsql SECURITY DEFINER;
++
++-- Verify
++SELECT machine_id, name, base_width, rolls_per_alarm FROM public.sys_machines_v2 ORDER BY machine_id;
+diff --git a/src/pages/FactoryLiveOS.tsx b/src/pages/FactoryLiveOS.tsx
+index d29c9f0..a791ab2 100644
+--- a/src/pages/FactoryLiveOS.tsx
++++ b/src/pages/FactoryLiveOS.tsx
+@@ -192,9 +192,7 @@ const DetailPanel = ({ machine, onClose }: { machine: MachineCard; onClose: () =
+                                         ) : null}
+                                     </div>
+                                     <div className="text-sm font-black text-white">
+-                                        +{['T1.3-M02'].includes(log.machine_id)
+-                                            ? Math.round((log.output_qty || 0) / 2)
+-                                            : (log.output_qty || 0)}
++                                        +{log.output_qty || 0}
+                                     </div>
+                                 </div>
+                             ))}
+@@ -333,11 +331,8 @@ const FactoryLiveOS = () => {
+                 const id = log.machine_id;
+                 const t = new Date(log.created_at).getTime();
+ 
+-                // Machines with known firmware over-reporting (sends alarm_count=2 but produces 1 roll)
+-                const HALF_COUNT_MACHINES = ['T1.3-M02'];
+-                const count = HALF_COUNT_MACHINES.includes(id)
+-                    ? Math.round(Number(log.output_qty) / 2) || 0
+-                    : Number(log.output_qty) || 0;
++                // output_qty from production_logs_v2 is now computed correctly by the DB trigger
++                const count = Number(log.output_qty) || 0;
+ 
+                 if (count > 0) countMap[id] = (countMap[id] || 0) + count;
+ 
+commit fcf9ba43320d194c42dc291a5caafda818bb6432
+Author: Max Tan <khailoon94@gmail.com>
+Date:   Thu Jan 29 00:00:59 2026 +0800
+
+    chore: trigger rebuild for dnd import
+
+diff --git a/src/pages/DeliveryOrderManagement.tsx b/src/pages/DeliveryOrderManagement.tsx
+index e7b9038..ad96c07 100644
+--- a/src/pages/DeliveryOrderManagement.tsx
++++ b/src/pages/DeliveryOrderManagement.tsx
+@@ -1,5 +1,5 @@
+ import React, { useState, useEffect } from 'react';
+-import { DragDropContext, Droppable, Draggable, DropResult } from '@hello-pangea/dnd';
++import { DragDropContext, Droppable, Draggable, DropResult } from '@hello-pangea/dnd'; // re-trigger build
+ import { supabase } from '../services/supabase';
+ import { getV2Items } from '../services/apiV2';
+ import { determineZone, findBestFactory } from '../utils/logistics';

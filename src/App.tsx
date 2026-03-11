@@ -633,7 +633,7 @@ function App() {
             case 'update-password':
                 return <UpdatePassword />;
             case 'factory-live-os':
-                return <FactoryLiveOS />;
+                return <FactoryLiveOS onNavigate={setActivePage} />;
             case 'operators':
                 return <OperatorManagement />;
             case 'dev-log':

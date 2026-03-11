@@ -1,0 +1,11 @@
+﻿[dotenv@17.3.1] injecting env (0) from .env.local -- tip: ΓÜí∩╕Å secrets for agents: https://dotenvx.com/as2
+[dotenv@17.3.1] injecting env (0) from .env -- tip: ≡ƒñû agentic secret storage: https://dotenvx.com/as2
+Running: END IF
+Running: RETURN NEW
+Running: $$ LANGUAGE plpgsql SECURITY DEFINER
+Running: UPDATE public.machine_active_products 
+ SET yield = 4 
+ WHERE machine_id = 'T1.2
+Re-inserting correct ledger entries for T1.2 today...
+Deleted old bad ledger rows. 
+Inserted correct ledger rows. 

@@ -1,6 +1,7 @@
 import React, { useState, useEffect, useCallback } from 'react';
 import { DragDropContext, Droppable, Draggable, DropResult } from '@hello-pangea/dnd';
 import { supabase } from '../services/supabase';
+import { getV2Items } from '../services/apiV2';
 import { WAREHOUSES } from '../data/factoryData';
 import { SalesOrder, User } from '../types';
 import { Calendar, User as UserIcon, Truck, MapPin, Package } from 'lucide-react';
@@ -26,6 +27,30 @@ const OrderSummary: React.FC<OrderSummaryProps> = ({ user: _user }) => {
     const [selectedDate, setSelectedDate] = useState<string>(new Date().toISOString().split('T')[0]);
     const [loading, setLoading] = useState(false);
     const [activeTab, setActiveTab] = useState<Location>(LOCATIONS[0] || 'Unknown');
+    const [skuNameMap, setSkuNameMap] = useState<Record<string, string>>({});
+
+    // Fetch master item names for SKU resolution
+    useEffect(() => {
+        const fetchItemNames = async () => {
+            try {
+                const items = await getV2Items();
+                if (items) {
+                    const map: Record<string, string> = {};
+                    items.forEach(item => { map[item.sku] = item.name; });
+                    setSkuNameMap(map);
+                }
+            } catch (err) {
+                console.error('Failed to fetch item names:', err);
+            }
+        };
+        fetchItemNames();
+    }, []);
+
+    // Resolve item name: prefer current name from master catalog, fallback to stored name
+    const resolveItemName = (item: { product: string; sku?: string }) => {
+        if (item.sku && skuNameMap[item.sku]) return skuNameMap[item.sku];
+        return item.product;
+    };
 
     // --- FETCH ---
     const fetchData = useCallback(async () => {
@@ -187,7 +212,8 @@ const OrderSummary: React.FC<OrderSummaryProps> = ({ user: _user }) => {
     // Production summary
     const productSummary = activeTabOrders.reduce((acc, order) => {
         order.items.forEach(item => {
-            acc[item.product] = (acc[item.product] || 0) + (item.quantity || 0);
+            const name = resolveItemName(item);
+            acc[name] = (acc[name] || 0) + (item.quantity || 0);
         });
         return acc;
     }, {} as Record<string, number>);
@@ -283,6 +309,7 @@ const OrderSummary: React.FC<OrderSummaryProps> = ({ user: _user }) => {
                                             label="📦 Unassigned"
                                             orders={colOrders}
                                             isUnassigned
+                                            resolveItemName={resolveItemName}
                                         />
                                     );
                                 })()}
@@ -296,6 +323,7 @@ const OrderSummary: React.FC<OrderSummaryProps> = ({ user: _user }) => {
                                             droppableId={driverId}
                                             label={getDriverName(driverId)}
                                             orders={colOrders}
+                                            resolveItemName={resolveItemName}
                                         />
                                     );
                                 })}
@@ -314,7 +342,8 @@ const DriverColumn: React.FC<{
     label: string;
     orders: SalesOrder[];
     isUnassigned?: boolean;
-}> = ({ droppableId, label, orders, isUnassigned }) => (
+    resolveItemName: (item: { product: string; sku?: string }) => string;
+}> = ({ droppableId, label, orders, isUnassigned, resolveItemName }) => (
     <div className={`flex flex-col gap-4 rounded-2xl p-4 border transition-all ${isUnassigned ? 'bg-slate-900/50 border-dashed border-slate-700' : 'bg-slate-900/50 border-slate-800'
         }`}>
         {/* Column Header */}
@@ -385,7 +414,7 @@ const DriverColumn: React.FC<{
                                     <div className="bg-black/30 rounded-lg p-2 space-y-1">
                                         {order.items.map((item, idx) => (
                                             <div key={idx} className="flex justify-between text-xs">
-                                                <span className="text-gray-300">{item.product}</span>
+                                                <span className="text-gray-300">{resolveItemName(item)}</span>
                                                 <span className="font-mono text-gray-400">x{item.quantity}</span>
                                             </div>
                                         ))}

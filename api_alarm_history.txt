@@ -1,0 +1,43 @@
+﻿commit 3517928214a64fa92764f5c56b6b6379df06815b
+Author: Max Tan <khailoon94@gmail.com>
+Date:   Fri Feb 27 12:36:47 2026 +0800
+
+    feat: unify locations into sys_locations_v2 and fix stock ledger foreign key
+
+diff --git a/api/alarm.ts b/api/alarm.ts
+index 2e5731b..6dca294 100644
+--- a/api/alarm.ts
++++ b/api/alarm.ts
+@@ -82,10 +82,29 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
+             return row;
+         });
+ 
+-        console.log(`Inserting ${insertRows.length} log(s):`, JSON.stringify(insertRows));
++        console.log(`Inserting ${insertRows.length} log(s) into V1:`, JSON.stringify(insertRows));
+ 
+-        const { error } = await supabase.from('production_logs').insert(insertRows);
+-        if (error) throw error;
++        const { error: v1Error } = await supabase.from('production_logs').insert(insertRows);
++        if (v1Error) {
++            console.error('V1 Insert Error:', v1Error);
++            throw v1Error;
++        }
++
++        // --- EXPLICIT V2 INSERT TO BYPASS BROKEN TRIGGERS ---
++        const v2InsertRows = insertRows.map(row => ({
++            machine_id: row.machine_id,
++            sku: row.product_sku || null, // V2 uses "sku" instead of "product_sku"
++            output_qty: row.alarm_count,
++            note: `Auto-logged from Lane: ${row.lane_id}`
++        }));
++
++        console.log(`Inserting ${v2InsertRows.length} log(s) into V2:`, JSON.stringify(v2InsertRows));
++
++        // Let it fail silently if V2 has issues, so we don't break V1 ESP32 logic
++        const { error: v2Error } = await supabase.from('production_logs_v2').insert(v2InsertRows);
++        if (v2Error) {
++            console.error('V2 Insert Error (Non-Fatal):', v2Error);
++        }
+ 
+         return res.status(200).json({
+             status: 'ok',

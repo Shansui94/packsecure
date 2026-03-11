@@ -1,0 +1,42 @@
+﻿[
+  {
+    machine_id: 'T1.2-M01',
+    lane_id: 'Lane2',
+    product_sku: 'BW-SL-CLR-100Mx25CMx4ROLL-GRN',
+    updated_at: '2026-03-05T07:15:39.845+00:00',
+    cutting_size: 25,
+    yield: 1
+  },
+  {
+    machine_id: 'T1.2-M01',
+    lane_id: 'Lane1',
+    product_sku: 'BW-SL-CLR-100Mx50CMx2ROLL-ORN',
+    updated_at: '2026-03-05T07:15:40.978+00:00',
+    cutting_size: 50,
+    yield: 1
+  },
+  {
+    machine_id: 'T1.3-M02',
+    lane_id: 'Single',
+    product_sku: 'BW-SL-BLK-100Mx100CMx1ROLL-GRN',
+    updated_at: '2026-03-05T18:18:37.191+00:00',
+    cutting_size: 100,
+    yield: 1
+  },
+  {
+    machine_id: 'N1-M01',
+    lane_id: 'Single',
+    product_sku: 'BW-SL-CLR-100Mx100CMx1ROLL-RED',
+    updated_at: '2026-03-06T02:41:52.117+00:00',
+    cutting_size: 100,
+    yield: 1
+  },
+  {
+    machine_id: 'N2-M02',
+    lane_id: 'Single',
+    product_sku: 'BW-SL-SLR-100Mx100CMx1ROLL-RED',
+    updated_at: '2026-03-04T07:39:30.698+00:00',
+    cutting_size: 100,
+    yield: 1
+  }
+]

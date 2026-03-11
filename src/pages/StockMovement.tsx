@@ -98,7 +98,7 @@ const StockMovement: React.FC<{ user?: any }> = ({ user }) => {
     const updateCartQty = (sku: string, delta: number) => {
         setCart(cart.map(c => {
             if (c.sku === sku) {
-                const newQty = Math.max(1, c.qty + delta);
+                const newQty = Math.max(0, c.qty + delta);
                 return { ...c, qty: newQty };
             }
             return c;
@@ -106,8 +106,12 @@ const StockMovement: React.FC<{ user?: any }> = ({ user }) => {
     };
 
     const setManualQty = (sku: string, value: string) => {
+        if (value === '') {
+            setCart(cart.map(c => c.sku === sku ? { ...c, qty: 0 } : c));
+            return;
+        }
         const num = parseInt(value);
-        if (!isNaN(num) && num >= 1) {
+        if (!isNaN(num) && num >= 0) {
             setCart(cart.map(c => c.sku === sku ? { ...c, qty: num } : c));
         }
     };
@@ -123,7 +127,8 @@ const StockMovement: React.FC<{ user?: any }> = ({ user }) => {
 
     const handleSubmit = async (e: React.FormEvent) => {
         e.preventDefault();
-        if (cart.length === 0) return showToast('Cart is empty. Please add items.', 'err');
+        const validItems = cart.filter(item => item.qty > 0);
+        if (validItems.length === 0) return showToast('No items with a valid quantity to submit.', 'err');
         if (!selectedLocation) return showToast('Please select a warehouse location.', 'err');
 
         setLoading(true);
@@ -131,7 +136,7 @@ const StockMovement: React.FC<{ user?: any }> = ({ user }) => {
             const txnType = mode === 'in' ? 'Stock In' : 'Stock Out';
             const multiplier = mode === 'in' ? 1 : -1;
 
-            const inserts = cart.map(item => ({
+            const inserts = validItems.map(item => ({
                 sku: item.sku,
                 change_qty: item.qty * multiplier,
                 event_type: txnType,
@@ -146,7 +151,7 @@ const StockMovement: React.FC<{ user?: any }> = ({ user }) => {
 
             if (error) throw error;
 
-            showToast(`${txnType} recorded for ${cart.length} items!`, 'ok');
+            showToast(`${txnType} recorded for ${validItems.length} items!`, 'ok');
 
             setCart([]);
             setSkuSearch('');
@@ -182,19 +187,19 @@ const StockMovement: React.FC<{ user?: any }> = ({ user }) => {
                 )}
 
                 {/* Header */}
-                <div className="mb-8 flex items-end justify-between">
+                <div className="mb-6 flex flex-col md:flex-row md:items-end justify-between gap-4">
                     <div>
-                        <h1 className="text-3xl font-black tracking-tighter text-white mb-2 flex items-center gap-3">
+                        <h1 className="text-2xl md:text-3xl font-black tracking-tighter text-white mb-1 md:mb-2 flex items-center gap-2 md:gap-3">
                             <ShoppingCart className={textClass} size={28} />
                             Stock Movement
                         </h1>
-                        <p className="text-gray-500 text-sm">Batch process multi-SKU inward and outward movements.</p>
+                        <p className="text-gray-500 text-xs md:text-sm">Batch process multi-SKU inward and outward movements.</p>
                     </div>
                     {/* Mode Toggle */}
-                    <div className="flex bg-black/40 rounded-xl p-1 border border-white/5 shadow-xl">
+                    <div className="flex bg-black/40 rounded-xl p-1 border border-white/5 shadow-xl w-full md:w-auto">
                         <button
                             onClick={() => setMode('in')}
-                            className={`flex items-center gap-2 px-6 py-2.5 rounded-lg font-bold text-sm uppercase tracking-wider transition-all ${isIn
+                            className={`flex flex-1 md:flex-none justify-center items-center gap-2 px-4 md:px-6 py-2.5 rounded-lg font-bold text-xs md:text-sm uppercase tracking-wider transition-all ${isIn
                                 ? 'bg-green-600/20 text-green-400 border border-green-500/30 shadow-lg shadow-green-900/20'
                                 : 'text-gray-500 hover:text-gray-300 border border-transparent'
                                 }`}
@@ -203,7 +208,7 @@ const StockMovement: React.FC<{ user?: any }> = ({ user }) => {
                         </button>
                         <button
                             onClick={() => setMode('out')}
-                            className={`flex items-center gap-2 px-6 py-2.5 rounded-lg font-bold text-sm uppercase tracking-wider transition-all ${!isIn
+                            className={`flex flex-1 md:flex-none justify-center items-center gap-2 px-4 md:px-6 py-2.5 rounded-lg font-bold text-xs md:text-sm uppercase tracking-wider transition-all ${!isIn
                                 ? 'bg-orange-600/20 text-orange-400 border border-orange-500/30 shadow-lg shadow-orange-900/20'
                                 : 'text-gray-500 hover:text-gray-300 border border-transparent'
                                 }`}
@@ -232,7 +237,7 @@ const StockMovement: React.FC<{ user?: any }> = ({ user }) => {
                                     placeholder="Scan barcode or type SKU / Item Name to add to list..."
                                     className="w-full bg-transparent border-none py-5 pl-4 pr-6 text-base font-medium focus:outline-none text-white placeholder-gray-600"
                                 />
-                                <div className="pr-5 flex items-center">
+                                <div className="pr-5 hidden md:flex items-center">
                                     <div className="text-[10px] uppercase tracking-widest text-gray-600 border border-gray-700/50 rounded px-2 py-1 bg-white/5">Auto-focus</div>
                                 </div>
                             </div>
@@ -285,44 +290,58 @@ const StockMovement: React.FC<{ user?: any }> = ({ user }) => {
                                 ) : (
                                     <div className="space-y-2">
                                         {cart.map((item, index) => (
-                                            <div key={`${item.sku}-${index}`} className="group flex items-center bg-white/5 hover:bg-white-[0.07] border border-transparent hover:border-white/10 rounded-xl p-3 pr-4 transition-all duration-200">
+                                            <div key={`${item.sku}-${index}`} className="group flex flex-col sm:flex-row sm:items-center bg-white/5 hover:bg-white-[0.07] border border-transparent hover:border-white/10 rounded-xl p-3 sm:pr-4 gap-3 sm:gap-0 transition-all duration-200">
 
-                                                {/* Number */}
-                                                <div className="w-8 text-center text-[10px] font-mono text-gray-600 font-bold">
-                                                    {(index + 1).toString().padStart(2, '0')}
-                                                </div>
-
-                                                {/* Info */}
-                                                <div className="flex-1 min-w-0 pl-2 pr-6">
-                                                    <div className="font-bold text-white text-base truncate">{item.sku}</div>
-                                                    <div className="text-xs text-gray-500 truncate mt-0.5">{item.name}</div>
-                                                </div>
-
-                                                {/* Qty Controls */}
-                                                <div className="flex items-center bg-black/40 rounded-lg p-1 border border-white/5 mr-4 ring-1 ring-inset ring-transparent focus-within:ring-white/20 transition-all">
-                                                    <button type="button" onClick={() => updateCartQty(item.sku, -1)} className="w-9 h-9 flex items-center justify-center rounded-md hover:bg-white/10 text-gray-400 hover:text-white transition-colors">
-                                                        <Minus size={16} />
-                                                    </button>
-                                                    <input
-                                                        type="text"
-                                                        value={item.qty}
-                                                        onChange={(e) => setManualQty(item.sku, e.target.value)}
-                                                        className="w-14 text-center bg-transparent border-none text-lg font-black font-mono focus:outline-none text-white"
-                                                    />
-                                                    <button type="button" onClick={() => updateCartQty(item.sku, 1)} className="w-9 h-9 flex items-center justify-center rounded-md hover:bg-white/10 text-gray-400 hover:text-white transition-colors">
-                                                        <Plus size={16} />
+                                                {/* Top Row on Mobile / Left Side on Desktop */}
+                                                <div className="flex items-center justify-between w-full sm:w-auto sm:flex-1 min-w-0 pr-0 sm:pr-6">
+                                                    <div className="flex items-center min-w-0 flex-1">
+                                                        {/* Number */}
+                                                        <div className="w-8 shrink-0 text-center text-[10px] sm:text-xs font-mono text-gray-600 font-bold">
+                                                            {(index + 1).toString().padStart(2, '0')}
+                                                        </div>
+                                                        {/* Info */}
+                                                        <div className="flex-1 min-w-0 pl-2">
+                                                            <div className="font-bold text-white text-sm sm:text-base truncate">{item.sku}</div>
+                                                            <div className="text-[10px] sm:text-xs text-gray-300 truncate mt-0.5">{item.name}</div>
+                                                        </div>
+                                                    </div>
+                                                    
+                                                    {/* Mobile-only Remove (top right) */}
+                                                    <button type="button" onClick={() => removeFromCart(item.sku)} className="sm:hidden w-8 h-8 shrink-0 flex items-center justify-center rounded-full bg-red-500/10 hover:bg-red-500/20 text-red-500 hover:text-red-400 transition-colors ml-2">
+                                                        <X size={16} />
                                                     </button>
                                                 </div>
 
-                                                {/* Total Change visual */}
-                                                <div className={`w-20 text-right font-black font-mono text-lg ${textClass} mr-6`}>
-                                                    {isIn ? '+' : '-'}{item.qty}
-                                                </div>
+                                                {/* Bottom Row on Mobile / Right Side on Desktop */}
+                                                <div className="flex items-center justify-between sm:justify-end w-full sm:w-auto pl-10 sm:pl-0">
+                                                    {/* Qty Controls */}
+                                                    <div className="flex items-center bg-black/40 rounded-lg p-1 border border-white/5 sm:mr-4 ring-1 ring-inset ring-transparent focus-within:ring-white/20 transition-all">
+                                                        <button type="button" onClick={() => updateCartQty(item.sku, -1)} className="w-8 sm:w-9 h-8 sm:h-9 flex items-center justify-center rounded-md hover:bg-white/10 text-gray-400 hover:text-white transition-colors">
+                                                            <Minus size={14} className="sm:hidden" />
+                                                            <Minus size={16} className="hidden sm:block" />
+                                                        </button>
+                                                        <input
+                                                            type="text"
+                                                            value={item.qty}
+                                                            onChange={(e) => setManualQty(item.sku, e.target.value)}
+                                                            className="w-12 sm:w-14 text-center bg-transparent border-none text-base sm:text-lg font-black font-mono focus:outline-none text-white"
+                                                        />
+                                                        <button type="button" onClick={() => updateCartQty(item.sku, 1)} className="w-8 sm:w-9 h-8 sm:h-9 flex items-center justify-center rounded-md hover:bg-white/10 text-gray-400 hover:text-white transition-colors">
+                                                            <Plus size={14} className="sm:hidden" />
+                                                            <Plus size={16} className="hidden sm:block" />
+                                                        </button>
+                                                    </div>
 
-                                                {/* Remove */}
-                                                <button type="button" onClick={() => removeFromCart(item.sku)} className="w-8 h-8 flex items-center justify-center rounded-full hover:bg-red-500/20 text-gray-600 hover:text-red-400 transition-colors opacity-50 group-hover:opacity-100">
-                                                    <X size={16} />
-                                                </button>
+                                                    {/* Total Change visual */}
+                                                    <div className={`text-right font-black font-mono text-base sm:text-lg ${textClass} sm:mr-6`}>
+                                                        {isIn ? '+' : '-'}{item.qty}
+                                                    </div>
+
+                                                    {/* Desktop Remove */}
+                                                    <button type="button" onClick={() => removeFromCart(item.sku)} className="hidden sm:flex w-8 h-8 shrink-0 flex items-center justify-center rounded-full hover:bg-red-500/20 text-gray-600 hover:text-red-400 transition-colors opacity-50 group-hover:opacity-100 ml-4 lg:ml-0">
+                                                        <X size={16} />
+                                                    </button>
+                                                </div>
                                             </div>
                                         ))}
                                     </div>

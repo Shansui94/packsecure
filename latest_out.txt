@@ -1,0 +1,11 @@
+﻿Last 10 min V1 records (14:22 UTC to now):
+
+  14:31:48 UTC  T1.2-M01      lane=Lane2   alarm_count=1
+  14:31:48 UTC  T1.2-M01      lane=Lane1   alarm_count=1
+  14:29:35 UTC  N1-M01        lane=Single  alarm_count=2 ΓåÉ BAD
+  14:27:13 UTC  T1.3-M02      lane=Single  alarm_count=2 ΓåÉ BAD
+  14:26:36 UTC  N2-M02        lane=Single  alarm_count=2 ΓåÉ BAD
+  14:26:35 UTC  T1.2-M01      lane=Lane2   alarm_count=1
+  14:26:35 UTC  T1.2-M01      lane=Lane1   alarm_count=1
+  14:24:27 UTC  N1-M01        lane=Single  alarm_count=1
+  14:24:04 UTC  N1-M01        lane=Single  alarm_count=1

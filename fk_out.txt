@@ -1,0 +1,4 @@
+﻿[dotenv@17.3.1] injecting env (0) from .env.local -- tip: ΓÜÖ∩╕Å  enable debug logging with { debug: true }
+[dotenv@17.3.1] injecting env (0) from .env -- tip: ΓÜÖ∩╕Å  override existing env vars with { override: true }
+=== Testing insert with machine_id="T1.2" ===
+Γ¥î Insert Failed: insert or update on table "production_logs_v2" violates foreign key constraint "production_logs_v2_machine_id_fkey"

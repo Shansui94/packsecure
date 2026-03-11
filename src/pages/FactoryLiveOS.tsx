@@ -1,6 +1,10 @@
 import { useEffect, useState, useCallback } from 'react';
 import { supabase } from '../services/supabase';
-import { Activity, Cpu, Zap, AlertTriangle, X, Box, Wifi, WifiOff, ChevronRight, RefreshCw } from 'lucide-react';
+import {
+    Activity, Cpu, Zap, AlertTriangle, X, Box, Wifi, WifiOff, ChevronRight, RefreshCw,
+    Truck, Package, BarChart3, ArrowUpDown, FileBarChart, ClipboardList, TrendingDown,
+    Plus, Calendar, Check, Clock, Play, Trash2
+} from 'lucide-react';
 
 // ─── Types ───────────────────────────────────────────────────────────────────
 
@@ -29,6 +33,44 @@ interface ProductionLogRow {
     machine_id: string;
     sku: string | null;
     output_qty: number;
+}
+
+interface StockItem {
+    sku: string;
+    current_stock: number;
+    name?: string;
+}
+
+interface OrderSummaryData {
+    total: number;
+    pending: number;
+    shipped: number;
+    delivered: number;
+    driverSummary: { name: string; count: number; driverId: string }[];
+}
+
+interface MachineProductionBreakdown {
+    machine_id: string;
+    machine_name: string;
+    skus: { sku: string; qty: number }[];
+    total: number;
+}
+
+interface ScheduleTask {
+    id: string;
+    machine_id: string;
+    sku: string;
+    target_qty: number;
+    scheduled_time: string | null;
+    notes: string | null;
+    status: 'Pending' | 'In-Progress' | 'Done' | 'Cancelled';
+    created_by: string | null;
+    created_at: string;
+}
+
+interface SkuOption {
+    sku: string;
+    name: string;
 }
 
 // ─── Helpers ──────────────────────────────────────────────────────────────────
@@ -287,12 +329,32 @@ const MachineCardView = ({ machine, onClick }: { machine: MachineCard; onClick: 
 
 // ─── Main Component ───────────────────────────────────────────────────────────
 
-const FactoryLiveOS = () => {
+interface FactoryLiveOSProps {
+    onNavigate?: (page: string) => void;
+}
+
+const FactoryLiveOS: React.FC<FactoryLiveOSProps> = ({ onNavigate }) => {
     const [machines, setMachines] = useState<MachineCard[]>([]);
     const [selectedMachine, setSelectedMachine] = useState<MachineCard | null>(null);
     const [lastUpdate, setLastUpdate] = useState(new Date());
     const [loading, setLoading] = useState(true);
     const [clock, setClock] = useState(new Date());
+
+    // Manager Dashboard Data
+    const [orderSummary, setOrderSummary] = useState<OrderSummaryData>({ total: 0, pending: 0, shipped: 0, delivered: 0, driverSummary: [] });
+    const [lowStockItems, setLowStockItems] = useState<StockItem[]>([]);
+    const [productionBreakdown, setProductionBreakdown] = useState<MachineProductionBreakdown[]>([]);
+
+    // Production Schedule
+    const [schedule, setSchedule] = useState<ScheduleTask[]>([]);
+    const [showScheduleModal, setShowScheduleModal] = useState(false);
+    const [skuList, setSkuList] = useState<SkuOption[]>([]);
+    const [formMachine, setFormMachine] = useState('');
+    const [formSku, setFormSku] = useState('');
+    const [formQty, setFormQty] = useState(100);
+    const [formTime, setFormTime] = useState('');
+    const [formNotes, setFormNotes] = useState('');
+    const [skuSearch, setSkuSearch] = useState('');
 
     // Clock tick
     useEffect(() => {
@@ -300,17 +362,28 @@ const FactoryLiveOS = () => {
         return () => clearInterval(t);
     }, []);
 
+    // ─── Machine Data ─────────────────────────────────────────────────────────
     const loadData = useCallback(async () => {
         const today = new Date(); today.setHours(0, 0, 0, 0);
         const todayISO = today.toISOString();
+        const todayStr = new Date().toLocaleDateString('en-CA'); // YYYY-MM-DD
 
-        const [machinesRes, iotRes, logsRes, activeRes] = await Promise.all([
+        const [machinesRes, iotRes, logsRes, activeRes, ordersRes, stockRes, driversRes] = await Promise.all([
             supabase.from('sys_machines_v2').select('machine_id, name, factory_id, base_width, type').order('factory_id'),
             supabase.from('iot_device_configs').select('mac_address, machine_id, last_heartbeat'),
             supabase.from('production_logs_v2').select('machine_id, output_qty, created_at, sku, log_id').gte('created_at', todayISO),
             supabase.from('machine_active_products').select('machine_id, product_sku'),
+            // Manager: Today's orders
+            supabase.from('sales_orders').select('id, status, driver_id, items, deadline, order_date')
+                .neq('status', 'Cancelled')
+                .or(`deadline.eq.${todayStr},order_date.eq.${todayStr}`),
+            // Manager: Stock levels
+            supabase.rpc('get_live_stock_viewer'),
+            // Manager: Driver names
+            supabase.from('users_public').select('id, name, email, role').eq('role', 'Driver'),
         ]);
 
+        // ─── Machine Processing (existing) ────────────────────────────────
         const iotMap: Record<string, { last_heartbeat: string; mac: string }> = {};
         (iotRes.data || []).forEach((d: any) => {
             iotMap[d.machine_id] = { last_heartbeat: d.last_heartbeat, mac: d.mac_address };
@@ -321,7 +394,6 @@ const FactoryLiveOS = () => {
 
         // Aggregate logs
         const countMap: Record<string, number> = {};
-        const lastProdMap: Record<string, string> = {};
         const rebootMap: Record<string, number> = {};
         const gapMap: Record<string, { start: string, end: string, duration_min: number }[]> = {};
         const lastTimeMap: Record<string, number> = {};
@@ -331,9 +403,7 @@ const FactoryLiveOS = () => {
                 const id = log.machine_id;
                 const t = new Date(log.created_at).getTime();
 
-                // output_qty from production_logs_v2 is now computed correctly by the DB trigger
                 const count = Number(log.output_qty) || 0;
-
                 if (count > 0) countMap[id] = (countMap[id] || 0) + count;
 
                 if (lastTimeMap[id]) {
@@ -348,7 +418,6 @@ const FactoryLiveOS = () => {
                     }
                 }
                 lastTimeMap[id] = t;
-                if (!lastProdMap[id] || t > new Date(lastProdMap[id]).getTime()) lastProdMap[id] = log.created_at;
             });
 
         const cards: MachineCard[] = (machinesRes.data || [])
@@ -370,6 +439,85 @@ const FactoryLiveOS = () => {
             }));
 
         setMachines(cards);
+
+        // ─── Manager: Production Breakdown by Machine × SKU ───────────────
+        const machineSkuMap: Record<string, Record<string, number>> = {};
+        (logsRes.data || []).forEach((log: any) => {
+            const mid = log.machine_id;
+            const sku = (log.sku && log.sku.trim().toUpperCase() !== 'UNKNOWN') ? log.sku : (activeMap[mid] || 'Unknown');
+            const qty = Number(log.output_qty) || 0;
+            if (qty <= 0) return;
+            if (!machineSkuMap[mid]) machineSkuMap[mid] = {};
+            machineSkuMap[mid][sku] = (machineSkuMap[mid][sku] || 0) + qty;
+        });
+
+        const machineNameMap: Record<string, string> = {};
+        (machinesRes.data || []).forEach((m: any) => { machineNameMap[m.machine_id] = m.name; });
+
+        const breakdown: MachineProductionBreakdown[] = Object.entries(machineSkuMap)
+            .map(([mid, skuMap]) => ({
+                machine_id: mid,
+                machine_name: machineNameMap[mid] || mid,
+                skus: Object.entries(skuMap).map(([sku, qty]) => ({ sku, qty })).sort((a, b) => b.qty - a.qty),
+                total: Object.values(skuMap).reduce((s, v) => s + v, 0)
+            }))
+            .sort((a, b) => b.total - a.total);
+
+        setProductionBreakdown(breakdown);
+
+        // ─── Manager: Order Processing ────────────────────────────────────
+        const orders = ordersRes.data || [];
+        const driverNameMap: Record<string, string> = {};
+        (driversRes.data || []).forEach((d: any) => {
+            driverNameMap[d.id] = d.name || d.email?.split('@')[0] || 'Unknown';
+        });
+
+        const pending = orders.filter(o => o.status === 'New' || o.status === 'Planned' || o.status === 'In-Production' || o.status === 'Ready-to-Ship').length;
+        const shipped = orders.filter(o => o.status === 'Shipped').length;
+        const delivered = orders.filter(o => o.status === 'Delivered').length;
+
+        // Driver summary
+        const driverCountMap: Record<string, number> = {};
+        orders.filter(o => o.driver_id && o.status !== 'Delivered').forEach(o => {
+            driverCountMap[o.driver_id] = (driverCountMap[o.driver_id] || 0) + 1;
+        });
+
+        const driverSummary = Object.entries(driverCountMap)
+            .map(([driverId, count]) => ({
+                driverId,
+                name: driverNameMap[driverId] || 'Unknown',
+                count
+            }))
+            .sort((a, b) => b.count - a.count);
+
+        setOrderSummary({ total: orders.length, pending, shipped, delivered, driverSummary });
+
+        // ─── Manager: Low Stock ───────────────────────────────────────────
+        const stockData = stockRes.data || [];
+        const lowStock = stockData
+            .filter((item: any) => item.current_stock < 20 && item.current_stock >= 0)
+            .map((item: any) => ({ sku: item.sku, current_stock: item.current_stock, name: item.name || item.sku }))
+            .sort((a: StockItem, b: StockItem) => a.current_stock - b.current_stock);
+        setLowStockItems(lowStock);
+
+        // ─── Manager: Production Schedule ─────────────────────────────────
+        const todayStart = new Date(); todayStart.setHours(0, 0, 0, 0);
+        const { data: scheduleData } = await supabase.from('production_schedule')
+            .select('*')
+            .gte('created_at', todayStart.toISOString())
+            .neq('status', 'Cancelled')
+            .order('scheduled_time', { ascending: true, nullsFirst: false });
+        if (scheduleData) setSchedule(scheduleData as ScheduleTask[]);
+
+        // SKU list for form
+        if (skuList.length === 0) {
+            const { data: items } = await supabase.from('master_items_v2')
+                .select('sku, name')
+                .eq('status', 'Active')
+                .order('name');
+            if (items) setSkuList(items.map((i: any) => ({ sku: i.sku, name: i.name })));
+        }
+
         setLastUpdate(new Date());
         setLoading(false);
     }, []);
@@ -385,6 +533,8 @@ const FactoryLiveOS = () => {
             .on('postgres_changes', { event: 'INSERT', schema: 'public', table: 'production_logs' }, loadData)
             .on('postgres_changes', { event: '*', schema: 'public', table: 'iot_device_configs' }, loadData)
             .on('postgres_changes', { event: '*', schema: 'public', table: 'machine_active_products' }, loadData)
+            .on('postgres_changes', { event: '*', schema: 'public', table: 'sales_orders' }, loadData)
+            .on('postgres_changes', { event: '*', schema: 'public', table: 'production_schedule' }, loadData)
             .subscribe();
 
         return () => { clearInterval(interval); supabase.removeChannel(channel); };
@@ -394,6 +544,56 @@ const FactoryLiveOS = () => {
     const producingCount = machines.filter(m => m.isProducing).length;
     const totalRolls = machines.reduce((s, m) => s + m.today_count, 0);
     const alertCount = machines.reduce((s, m) => s + m.reboot_count, 0);
+
+    const navigate = (page: string) => {
+        if (onNavigate) onNavigate(page);
+    };
+
+    // ─── Schedule Handlers ────────────────────────────────────────────────
+    const handleAddTask = async () => {
+        if (!formMachine || !formSku || formQty <= 0) return;
+        // Convert HH:MM time string to today's full timestamp
+        let scheduledTimestamp: string | null = null;
+        if (formTime) {
+            const [h, m] = formTime.split(':').map(Number);
+            const d = new Date();
+            d.setHours(h, m, 0, 0);
+            scheduledTimestamp = d.toISOString();
+        }
+        await supabase.from('production_schedule').insert({
+            machine_id: formMachine,
+            sku: formSku,
+            target_qty: formQty,
+            scheduled_time: scheduledTimestamp,
+            notes: formNotes || null,
+            status: 'Pending',
+            created_by: 'Manager',
+        });
+        setShowScheduleModal(false);
+        setFormMachine('');
+        setFormSku('');
+        setFormQty(100);
+        setFormTime('');
+        setFormNotes('');
+        setSkuSearch('');
+        loadData();
+    };
+
+    const handleUpdateStatus = async (id: string, status: string) => {
+        await supabase.from('production_schedule').update({ status, updated_at: new Date().toISOString() }).eq('id', id);
+        loadData();
+    };
+
+    const handleDeleteTask = async (id: string) => {
+        await supabase.from('production_schedule').update({ status: 'Cancelled', updated_at: new Date().toISOString() }).eq('id', id);
+        loadData();
+    };
+
+    const getMachineName = (mid: string) => machines.find(m => m.machine_id === mid)?.name || mid;
+
+    const filteredSkus = skuSearch
+        ? skuList.filter(s => s.sku.toLowerCase().includes(skuSearch.toLowerCase()) || s.name.toLowerCase().includes(skuSearch.toLowerCase())).slice(0, 8)
+        : skuList.slice(0, 8);
 
     return (
         <div className="min-h-screen bg-[#070710] text-white flex flex-col">
@@ -424,12 +624,14 @@ const FactoryLiveOS = () => {
                 </button>
             </header>
 
-            {/* ── SUMMARY BAR ── */}
-            <div className="border-b border-white/5 bg-black/20 px-6 py-3 grid grid-cols-4 gap-4">
+            {/* ── SUMMARY BAR (6-col) ── */}
+            <div className="border-b border-white/5 bg-black/20 px-6 py-3 grid grid-cols-3 md:grid-cols-6 gap-3">
                 {[
                     { label: 'Online', value: onlineCount, icon: Zap, color: 'text-cyan-400', bg: 'bg-cyan-500/10' },
                     { label: 'Producing', value: producingCount, icon: Cpu, color: 'text-emerald-400', bg: 'bg-emerald-500/10' },
-                    { label: 'Total Rolls Today', value: totalRolls.toLocaleString(), icon: Box, color: 'text-cyan-400', bg: 'bg-cyan-500/10' },
+                    { label: 'Rolls Today', value: totalRolls.toLocaleString(), icon: Box, color: 'text-cyan-400', bg: 'bg-cyan-500/10' },
+                    { label: 'Orders', value: orderSummary.total, icon: ClipboardList, color: 'text-blue-400', bg: 'bg-blue-500/10' },
+                    { label: 'Low Stock', value: lowStockItems.length, icon: TrendingDown, color: lowStockItems.length > 0 ? 'text-orange-400' : 'text-gray-600', bg: lowStockItems.length > 0 ? 'bg-orange-500/10' : 'bg-white/5' },
                     { label: 'Alerts', value: alertCount, icon: AlertTriangle, color: alertCount > 0 ? 'text-orange-400' : 'text-gray-600', bg: alertCount > 0 ? 'bg-orange-500/10' : 'bg-white/5' },
                 ].map(s => (
                     <div key={s.label} className={`${s.bg} rounded-xl px-4 py-2.5 flex items-center gap-3`}>
@@ -442,8 +644,8 @@ const FactoryLiveOS = () => {
                 ))}
             </div>
 
-            {/* ── MACHINE GRID ── */}
-            <main className="flex-1 p-6">
+            {/* ── MAIN CONTENT ── */}
+            <main className="flex-1 p-6 overflow-y-auto space-y-8">
                 {loading ? (
                     <div className="flex items-center justify-center h-64">
                         <div className="flex flex-col items-center gap-3">
@@ -452,24 +654,424 @@ const FactoryLiveOS = () => {
                         </div>
                     </div>
                 ) : (
-                    <div className="grid grid-cols-2 xl:grid-cols-4 gap-4">
-                        {machines.map(m => (
-                            <MachineCardView key={m.machine_id} machine={m} onClick={() => setSelectedMachine(m)} />
-                        ))}
-                    </div>
-                )}
+                    <>
+                        {/* ── MACHINE GRID ── */}
+                        <section>
+                            <div className="flex items-center justify-between mb-4">
+                                <h2 className="text-xs font-black uppercase tracking-[0.15em] text-gray-400 flex items-center gap-2">
+                                    <Cpu size={14} /> Machine Status
+                                </h2>
+                                <div className="text-[10px] text-gray-700 font-mono uppercase tracking-widest">
+                                    {machines.filter(m => m.factory_id === 'N1' || m.factory_id === 'N2').length} Nilai · {machines.filter(m => m.factory_id === 'T1').length} Taiping
+                                </div>
+                            </div>
+                            <div className="grid grid-cols-2 xl:grid-cols-4 gap-4">
+                                {machines.map(m => (
+                                    <MachineCardView key={m.machine_id} machine={m} onClick={() => setSelectedMachine(m)} />
+                                ))}
+                            </div>
+                        </section>
 
-                {/* Factory divider by location */}
-                {!loading && machines.length > 0 && (
-                    <div className="mt-6 text-center text-[10px] text-gray-700 font-mono uppercase tracking-widest">
-                        ── {machines.filter(m => m.factory_id === 'N1' || m.factory_id === 'N2').length} Nilai · {machines.filter(m => m.factory_id === 'T1').length} Taiping ──
-                    </div>
+                        {/* ── PRODUCTION BREAKDOWN ── */}
+                        {productionBreakdown.length > 0 && (
+                            <section>
+                                <div className="flex items-center justify-between mb-4">
+                                    <h2 className="text-xs font-black uppercase tracking-[0.15em] text-gray-400 flex items-center gap-2">
+                                        <BarChart3 size={14} /> Today's Production Breakdown
+                                    </h2>
+                                    <div className="text-[10px] text-gray-600 font-mono">
+                                        {productionBreakdown.reduce((s, m) => s + m.total, 0).toLocaleString()} rolls total
+                                    </div>
+                                </div>
+                                <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                                    {productionBreakdown.map(machine => (
+                                        <div key={machine.machine_id} className="bg-[#0d0d14] border border-white/5 rounded-xl overflow-hidden">
+                                            {/* Machine Header */}
+                                            <div className="px-4 py-3 border-b border-white/5 flex items-center justify-between bg-white/[0.02]">
+                                                <div>
+                                                    <div className="text-sm font-bold text-white">{machine.machine_name}</div>
+                                                    <div className="text-[10px] text-gray-600 font-mono">{machine.machine_id}</div>
+                                                </div>
+                                                <div className="text-right">
+                                                    <div className="text-xl font-black text-cyan-400">{machine.total.toLocaleString()}</div>
+                                                    <div className="text-[9px] text-gray-600 uppercase tracking-widest">rolls</div>
+                                                </div>
+                                            </div>
+                                            {/* SKU Rows */}
+                                            <div className="divide-y divide-white/5">
+                                                {machine.skus.map(({ sku, qty }) => {
+                                                    const pct = machine.total > 0 ? (qty / machine.total) * 100 : 0;
+                                                    return (
+                                                        <div key={sku} className="px-4 py-2.5 flex items-center gap-3 relative overflow-hidden">
+                                                            {/* Progress bar background */}
+                                                            <div
+                                                                className="absolute inset-y-0 left-0 bg-cyan-500/5"
+                                                                style={{ width: `${pct}%` }}
+                                                            />
+                                                            <div className="relative z-10 flex-1 min-w-0">
+                                                                <div className="text-xs font-mono text-gray-300 truncate" title={sku}>{sku}</div>
+                                                            </div>
+                                                            <div className="relative z-10 flex items-center gap-2">
+                                                                <div className="text-xs text-gray-500 font-mono w-10 text-right">{pct.toFixed(0)}%</div>
+                                                                <div className="text-sm font-black text-white w-12 text-right">{qty}</div>
+                                                            </div>
+                                                        </div>
+                                                    );
+                                                })}
+                                            </div>
+                                        </div>
+                                    ))}
+                                </div>
+                            </section>
+                        )}
+
+                        {/* ── PRODUCTION SCHEDULE ── */}
+                        <section>
+                            <div className="flex items-center justify-between mb-4">
+                                <h2 className="text-xs font-black uppercase tracking-[0.15em] text-gray-400 flex items-center gap-2">
+                                    <Calendar size={14} /> Production Schedule
+                                    {schedule.filter(t => t.status === 'Pending').length > 0 && (
+                                        <span className="bg-blue-500/20 text-blue-400 px-2 py-0.5 rounded-full text-[10px] font-bold">
+                                            {schedule.filter(t => t.status === 'Pending').length} pending
+                                        </span>
+                                    )}
+                                </h2>
+                                <button
+                                    onClick={() => setShowScheduleModal(true)}
+                                    className="flex items-center gap-1.5 px-3 py-1.5 rounded-lg bg-blue-600 hover:bg-blue-500 text-white text-xs font-bold transition-colors"
+                                >
+                                    <Plus size={14} /> 排产
+                                </button>
+                            </div>
+
+                            {schedule.length === 0 ? (
+                                <div className="bg-[#0d0d14] border border-dashed border-white/10 rounded-xl p-8 text-center">
+                                    <Calendar size={24} className="text-gray-700 mx-auto mb-2" />
+                                    <div className="text-sm text-gray-600">No production tasks scheduled today</div>
+                                    <button
+                                        onClick={() => setShowScheduleModal(true)}
+                                        className="mt-3 text-xs text-blue-400 hover:text-blue-300 font-bold"
+                                    >
+                                        + Create First Task
+                                    </button>
+                                </div>
+                            ) : (
+                                <div className="space-y-2">
+                                    {schedule.map(task => {
+                                        const statusConfig = {
+                                            'Pending': { bg: 'bg-yellow-500/10', border: 'border-yellow-500/20', text: 'text-yellow-400', icon: Clock },
+                                            'In-Progress': { bg: 'bg-blue-500/10', border: 'border-blue-500/20', text: 'text-blue-400', icon: Play },
+                                            'Done': { bg: 'bg-emerald-500/10', border: 'border-emerald-500/20', text: 'text-emerald-400', icon: Check },
+                                            'Cancelled': { bg: 'bg-red-500/10', border: 'border-red-500/20', text: 'text-red-400', icon: X },
+                                        }[task.status] || { bg: 'bg-white/5', border: 'border-white/10', text: 'text-gray-400', icon: Clock };
+                                        const StatusIcon = statusConfig.icon;
+
+                                        return (
+                                            <div key={task.id} className={`${statusConfig.bg} border ${statusConfig.border} rounded-xl px-4 py-3 flex items-center gap-4`}>
+                                                {/* Status Icon */}
+                                                <div className={`w-8 h-8 rounded-lg ${statusConfig.bg} flex items-center justify-center`}>
+                                                    <StatusIcon size={16} className={statusConfig.text} />
+                                                </div>
+
+                                                {/* Machine */}
+                                                <div className="w-36">
+                                                    <div className="text-xs font-bold text-white">{getMachineName(task.machine_id)}</div>
+                                                    <div className="text-[10px] text-gray-600 font-mono">{task.machine_id}</div>
+                                                </div>
+
+                                                {/* SKU */}
+                                                <div className="flex-1 min-w-0">
+                                                    <div className="text-xs font-mono text-cyan-300 truncate" title={task.sku}>{task.sku}</div>
+                                                    {task.notes && <div className="text-[10px] text-gray-500 truncate">{task.notes}</div>}
+                                                </div>
+
+                                                {/* Qty */}
+                                                <div className="text-right w-20">
+                                                    <div className="text-lg font-black text-white">{task.target_qty}</div>
+                                                    <div className="text-[9px] text-gray-600 uppercase">target</div>
+                                                </div>
+
+                                                {/* Time */}
+                                                <div className="text-right w-16">
+                                                    {task.scheduled_time ? (
+                                                        <div className="text-xs font-mono text-gray-400">
+                                                            {new Date(task.scheduled_time).toLocaleTimeString('en-MY', { hour: '2-digit', minute: '2-digit' })}
+                                                        </div>
+                                                    ) : (
+                                                        <div className="text-[10px] text-gray-700">No time</div>
+                                                    )}
+                                                </div>
+
+                                                {/* Actions */}
+                                                <div className="flex gap-1">
+                                                    {task.status === 'Pending' && (
+                                                        <button onClick={() => handleUpdateStatus(task.id, 'In-Progress')} className="p-1.5 rounded-lg bg-blue-500/20 hover:bg-blue-500/30 text-blue-400 transition-colors" title="Start">
+                                                            <Play size={12} />
+                                                        </button>
+                                                    )}
+                                                    {task.status === 'In-Progress' && (
+                                                        <button onClick={() => handleUpdateStatus(task.id, 'Done')} className="p-1.5 rounded-lg bg-emerald-500/20 hover:bg-emerald-500/30 text-emerald-400 transition-colors" title="Complete">
+                                                            <Check size={12} />
+                                                        </button>
+                                                    )}
+                                                    {task.status !== 'Done' && (
+                                                        <button onClick={() => handleDeleteTask(task.id)} className="p-1.5 rounded-lg bg-red-500/10 hover:bg-red-500/20 text-red-400 transition-colors" title="Cancel">
+                                                            <Trash2 size={12} />
+                                                        </button>
+                                                    )}
+                                                </div>
+                                            </div>
+                                        );
+                                    })}
+                                </div>
+                            )}
+                        </section>
+
+                        {/* ── TODAY'S DELIVERY OVERVIEW ── */}
+                        <section>
+                            <div className="flex items-center justify-between mb-4">
+                                <h2 className="text-xs font-black uppercase tracking-[0.15em] text-gray-400 flex items-center gap-2">
+                                    <Truck size={14} /> Today's Delivery
+                                </h2>
+                                {onNavigate && (
+                                    <button onClick={() => navigate('delivery')} className="text-[10px] text-blue-400 hover:text-blue-300 font-bold uppercase tracking-wider flex items-center gap-1 transition-colors">
+                                        View All <ChevronRight size={12} />
+                                    </button>
+                                )}
+                            </div>
+
+                            {/* Status Cards */}
+                            <div className="grid grid-cols-2 md:grid-cols-4 gap-3 mb-4">
+                                {[
+                                    { label: 'Pending', value: orderSummary.pending, color: 'text-yellow-400', bg: 'bg-yellow-500/10', border: 'border-yellow-500/20' },
+                                    { label: 'Shipped', value: orderSummary.shipped, color: 'text-blue-400', bg: 'bg-blue-500/10', border: 'border-blue-500/20' },
+                                    { label: 'Delivered', value: orderSummary.delivered, color: 'text-emerald-400', bg: 'bg-emerald-500/10', border: 'border-emerald-500/20' },
+                                    { label: 'Total', value: orderSummary.total, color: 'text-white', bg: 'bg-white/5', border: 'border-white/10' },
+                                ].map(s => (
+                                    <div key={s.label} className={`${s.bg} border ${s.border} rounded-xl px-4 py-3`}>
+                                        <div className={`text-3xl font-black ${s.color} leading-none`}>{s.value}</div>
+                                        <div className="text-[10px] text-gray-500 uppercase tracking-widest mt-1">{s.label}</div>
+                                    </div>
+                                ))}
+                            </div>
+
+                            {/* Driver Assignment Summary */}
+                            {orderSummary.driverSummary.length > 0 && (
+                                <div className="bg-[#0d0d14] border border-white/5 rounded-xl p-4">
+                                    <div className="text-[10px] text-gray-500 uppercase tracking-widest mb-3 font-bold">Driver Assignments</div>
+                                    <div className="flex flex-wrap gap-2">
+                                        {orderSummary.driverSummary.map(d => (
+                                            <div key={d.driverId} className="flex items-center gap-2 bg-blue-500/10 border border-blue-500/20 rounded-lg px-3 py-2">
+                                                <div className="w-7 h-7 rounded-full bg-gradient-to-br from-blue-600 to-cyan-600 flex items-center justify-center text-xs font-bold text-white">
+                                                    {d.name.charAt(0).toUpperCase()}
+                                                </div>
+                                                <div>
+                                                    <div className="text-sm font-bold text-white leading-none">{d.name}</div>
+                                                    <div className="text-[10px] text-blue-400 font-mono">{d.count} trips</div>
+                                                </div>
+                                            </div>
+                                        ))}
+                                    </div>
+                                </div>
+                            )}
+                        </section>
+
+                        {/* ── LOW STOCK ALERTS ── */}
+                        {lowStockItems.length > 0 && (
+                            <section>
+                                <div className="flex items-center justify-between mb-4">
+                                    <h2 className="text-xs font-black uppercase tracking-[0.15em] text-orange-400 flex items-center gap-2">
+                                        <AlertTriangle size={14} /> Low Stock Alerts
+                                        <span className="bg-orange-500/20 text-orange-400 px-2 py-0.5 rounded-full text-[10px] font-bold">{lowStockItems.length}</span>
+                                    </h2>
+                                    {onNavigate && (
+                                        <button onClick={() => navigate('livestock')} className="text-[10px] text-blue-400 hover:text-blue-300 font-bold uppercase tracking-wider flex items-center gap-1 transition-colors">
+                                            Live Stock <ChevronRight size={12} />
+                                        </button>
+                                    )}
+                                </div>
+                                <div className="grid grid-cols-2 md:grid-cols-4 lg:grid-cols-6 gap-3">
+                                    {lowStockItems.slice(0, 12).map(item => {
+                                        const isCritical = item.current_stock < 5;
+                                        return (
+                                            <div key={item.sku} className={`rounded-xl px-3 py-2.5 border ${isCritical
+                                                ? 'bg-red-500/10 border-red-500/30'
+                                                : 'bg-orange-500/10 border-orange-500/20'
+                                                }`}>
+                                                <div className={`text-[10px] font-mono truncate mb-1 ${isCritical ? 'text-red-400' : 'text-orange-400'}`} title={item.sku}>
+                                                    {item.name || item.sku}
+                                                </div>
+                                                <div className={`text-2xl font-black leading-none ${isCritical ? 'text-red-400' : 'text-orange-300'}`}>
+                                                    {item.current_stock}
+                                                </div>
+                                                {isCritical && (
+                                                    <div className="text-[9px] text-red-500 font-bold uppercase mt-1 animate-pulse">CRITICAL</div>
+                                                )}
+                                            </div>
+                                        );
+                                    })}
+                                </div>
+                            </section>
+                        )}
+
+                        {/* ── QUICK ACTIONS ── */}
+                        {onNavigate && (
+                            <section>
+                                <h2 className="text-xs font-black uppercase tracking-[0.15em] text-gray-400 flex items-center gap-2 mb-4">
+                                    <Zap size={14} /> Quick Actions
+                                </h2>
+                                <div className="grid grid-cols-2 md:grid-cols-3 lg:grid-cols-5 gap-3">
+                                    {[
+                                        { id: 'delivery', label: 'Trip Management', icon: Truck, color: 'from-blue-600 to-cyan-600' },
+                                        { id: 'order-summary', label: 'Daily Prep', icon: FileBarChart, color: 'from-purple-600 to-pink-600' },
+                                        { id: 'livestock', label: 'Live Stock', icon: BarChart3, color: 'from-emerald-600 to-teal-600' },
+                                        { id: 'stock-movement', label: 'Stock Movement', icon: ArrowUpDown, color: 'from-orange-600 to-amber-600' },
+                                        { id: 'production', label: 'Production Logs', icon: Package, color: 'from-slate-600 to-zinc-600' },
+                                    ].map(action => (
+                                        <button
+                                            key={action.id}
+                                            onClick={() => navigate(action.id)}
+                                            className="group bg-[#0d0d14] border border-white/5 hover:border-white/20 rounded-xl p-4 text-left transition-all duration-300 hover:scale-[1.02]"
+                                        >
+                                            <div className={`w-10 h-10 rounded-lg bg-gradient-to-br ${action.color} flex items-center justify-center mb-3 group-hover:scale-110 transition-transform`}>
+                                                <action.icon size={18} className="text-white" />
+                                            </div>
+                                            <div className="text-sm font-bold text-gray-300 group-hover:text-white transition-colors">{action.label}</div>
+                                        </button>
+                                    ))}
+                                </div>
+                            </section>
+                        )}
+                    </>
                 )}
             </main>
 
             {/* ── DETAIL PANEL ── */}
             {selectedMachine && (
                 <DetailPanel machine={selectedMachine} onClose={() => setSelectedMachine(null)} />
+            )}
+
+            {/* ── SCHEDULE MODAL ── */}
+            {showScheduleModal && (
+                <div className="fixed inset-0 z-[100] flex items-center justify-center">
+                    <div className="absolute inset-0 bg-black/70 backdrop-blur-sm" onClick={() => setShowScheduleModal(false)} />
+                    <div className="relative bg-[#0d0d1a] border border-white/10 rounded-2xl shadow-2xl w-full max-w-lg mx-4 overflow-hidden">
+                        {/* Modal Header */}
+                        <div className="px-6 py-4 border-b border-white/5 flex items-center justify-between">
+                            <h3 className="text-sm font-black uppercase tracking-wider text-white flex items-center gap-2">
+                                <Calendar size={16} className="text-blue-400" /> 新增排产任务
+                            </h3>
+                            <button onClick={() => setShowScheduleModal(false)} className="p-1 rounded-lg hover:bg-white/10 text-gray-500 hover:text-white transition-colors">
+                                <X size={18} />
+                            </button>
+                        </div>
+
+                        {/* Form */}
+                        <div className="p-6 space-y-4">
+                            {/* Machine Select */}
+                            <div>
+                                <label className="text-[10px] text-gray-500 uppercase tracking-widest font-bold mb-1.5 block">Machine *</label>
+                                <select
+                                    value={formMachine}
+                                    onChange={e => setFormMachine(e.target.value)}
+                                    className="w-full bg-black/40 border border-white/10 rounded-xl px-4 py-2.5 text-sm text-white focus:border-blue-500 focus:outline-none appearance-none"
+                                >
+                                    <option value="">Select Machine...</option>
+                                    {machines.map(m => (
+                                        <option key={m.machine_id} value={m.machine_id}>
+                                            {m.name} ({m.machine_id})
+                                        </option>
+                                    ))}
+                                </select>
+                            </div>
+
+                            {/* SKU Search */}
+                            <div>
+                                <label className="text-[10px] text-gray-500 uppercase tracking-widest font-bold mb-1.5 block">Product SKU *</label>
+                                <input
+                                    type="text"
+                                    placeholder="Search SKU or product name..."
+                                    value={formSku || skuSearch}
+                                    onChange={e => { setSkuSearch(e.target.value); setFormSku(''); }}
+                                    className="w-full bg-black/40 border border-white/10 rounded-xl px-4 py-2.5 text-sm text-white focus:border-blue-500 focus:outline-none font-mono"
+                                />
+                                {skuSearch && !formSku && (
+                                    <div className="mt-1 bg-[#0a0a12] border border-white/10 rounded-xl max-h-40 overflow-y-auto">
+                                        {filteredSkus.length > 0 ? filteredSkus.map(s => (
+                                            <button
+                                                key={s.sku}
+                                                onClick={() => { setFormSku(s.sku); setSkuSearch(''); }}
+                                                className="w-full px-4 py-2 text-left hover:bg-blue-500/10 transition-colors border-b border-white/5 last:border-0"
+                                            >
+                                                <div className="text-xs font-mono text-cyan-300 truncate">{s.sku}</div>
+                                                <div className="text-[10px] text-gray-500 truncate">{s.name}</div>
+                                            </button>
+                                        )) : (
+                                            <div className="px-4 py-3 text-xs text-gray-600">No matching SKUs found</div>
+                                        )}
+                                    </div>
+                                )}
+                                {formSku && (
+                                    <div className="mt-1 text-[10px] text-cyan-400 font-mono bg-cyan-500/10 px-3 py-1 rounded-lg inline-block">
+                                        ✓ {formSku}
+                                    </div>
+                                )}
+                            </div>
+
+                            {/* Qty & Time row */}
+                            <div className="grid grid-cols-2 gap-3">
+                                <div>
+                                    <label className="text-[10px] text-gray-500 uppercase tracking-widest font-bold mb-1.5 block">Quantity *</label>
+                                    <input
+                                        type="number"
+                                        min={1}
+                                        value={formQty}
+                                        onChange={e => setFormQty(Number(e.target.value))}
+                                        className="w-full bg-black/40 border border-white/10 rounded-xl px-4 py-2.5 text-sm text-white focus:border-blue-500 focus:outline-none"
+                                    />
+                                </div>
+                                <div>
+                                    <label className="text-[10px] text-gray-500 uppercase tracking-widest font-bold mb-1.5 block">Scheduled Time</label>
+                                    <input
+                                        type="time"
+                                        value={formTime}
+                                        onChange={e => setFormTime(e.target.value)}
+                                        className="w-full bg-black/40 border border-white/10 rounded-xl px-4 py-2.5 text-sm text-white focus:border-blue-500 focus:outline-none"
+                                    />
+                                </div>
+                            </div>
+
+                            {/* Notes */}
+                            <div>
+                                <label className="text-[10px] text-gray-500 uppercase tracking-widest font-bold mb-1.5 block">Notes (Optional)</label>
+                                <input
+                                    type="text"
+                                    placeholder="e.g. Urgent customer order, priority..."
+                                    value={formNotes}
+                                    onChange={e => setFormNotes(e.target.value)}
+                                    className="w-full bg-black/40 border border-white/10 rounded-xl px-4 py-2.5 text-sm text-white focus:border-blue-500 focus:outline-none"
+                                />
+                            </div>
+                        </div>
+
+                        {/* Modal Footer */}
+                        <div className="px-6 py-4 border-t border-white/5 flex justify-end gap-3">
+                            <button
+                                onClick={() => setShowScheduleModal(false)}
+                                className="px-4 py-2 rounded-xl text-xs font-bold text-gray-400 hover:text-white hover:bg-white/10 transition-colors"
+                            >
+                                Cancel
+                            </button>
+                            <button
+                                onClick={handleAddTask}
+                                disabled={!formMachine || !formSku || formQty <= 0}
+                                className="px-6 py-2 rounded-xl text-xs font-bold bg-blue-600 hover:bg-blue-500 text-white disabled:opacity-30 disabled:cursor-not-allowed transition-colors flex items-center gap-2"
+                            >
+                                <Plus size={14} /> Add Task
+                            </button>
+                        </div>
+                    </div>
+                </div>
             )}
         </div>
     );
