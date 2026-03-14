@@ -46,6 +46,7 @@ import LeaveCalendar from './pages/LeaveCalendar';
 import SOPCenter from './pages/SOPCenter';
 import WorkPhotoLog from './pages/WorkPhotoLog';
 import PersonalMonthlyReport from './pages/PersonalMonthlyReport';
+import MachineSchedule from './pages/MachineSchedule';
 
 import { User, UserRole, InventoryItem, ProductionLog as ProductionLogType, JobOrder } from './types';
 import AIAgentWidget from './components/AIAgentWidget';
@@ -181,8 +182,8 @@ function App() {
         // Define allowable pages per role
         const allowedPages: Record<string, string[]> = {
             'SuperAdmin': ['*'], // The Only One with Full Access
-            'Admin': ['profile', 'construction', 'factory-live-os', 'dashboard', 'data-v2', 'customer-import', 'universal-intake', 'scanner', 'jobs', 'livestock', 'inventory', 'recipes', 'products', 'delivery', 'order-summary', 'dispatch', 'loading-dock', 'production', 'report-history', 'users', 'hr', 'claims', 'simple-stock', 'maintenance', 'lorry-management', 'iot', 'driver-management', 'operators', 'dev-log', 'leave-calendar', 'personal-report'],
-            'Manager': ['profile', 'construction', 'factory-live-os', 'dashboard', 'data-v2', 'customer-import', 'universal-intake', 'jobs', 'livestock', 'inventory', 'recipes', 'products', 'delivery', 'order-summary', 'dispatch', 'loading-dock', 'production', 'report-history', 'hr', 'claims', 'simple-stock', 'maintenance', 'lorry-management', 'iot', 'driver-management', 'operators', 'leave-calendar', 'personal-report'],
+            'Admin': ['profile', 'construction', 'factory-live-os', 'dashboard', 'data-v2', 'customer-import', 'universal-intake', 'scanner', 'jobs', 'livestock', 'inventory', 'recipes', 'products', 'delivery', 'order-summary', 'dispatch', 'loading-dock', 'production', 'report-history', 'users', 'hr', 'claims', 'simple-stock', 'maintenance', 'lorry-management', 'iot', 'driver-management', 'operators', 'dev-log', 'leave-calendar', 'personal-report', 'machine-schedule'],
+            'Manager': ['profile', 'construction', 'factory-live-os', 'dashboard', 'data-v2', 'customer-import', 'universal-intake', 'jobs', 'livestock', 'inventory', 'recipes', 'products', 'delivery', 'order-summary', 'dispatch', 'loading-dock', 'production', 'report-history', 'hr', 'claims', 'simple-stock', 'maintenance', 'lorry-management', 'iot', 'driver-management', 'operators', 'leave-calendar', 'personal-report', 'machine-schedule'],
             'Driver': ['delivery-driver', 'delivery-history', 'leave-calendar', 'lorry-service', 'claims', 'profile', 'personal-report'],
             'Operator': ['scanner', 'leave-calendar', 'profile', 'personal-report'],
             'Device': ['scanner'],
@@ -193,9 +194,9 @@ function App() {
 
         let allowed = allowedPages[role] || [];
 
-        // OVERRIDE WITH DB TARGETED ROLE PERMISSIONS
+        // MERGE WITH DB TARGETED ROLE PERMISSIONS
         if (dbAllowedPages !== null) {
-            allowed = Array.from(dbAllowedPages);
+            allowed = [...new Set([...allowed, ...Array.from(dbAllowedPages)])];
             // Ensure essential UI pages are always kept
             allowed.push('profile', 'login', 'construction', 'dashboard');
         }
@@ -688,6 +689,8 @@ function App() {
                 return <WorkPhotoLog user={user} />;
             case 'personal-report':
                 return <PersonalMonthlyReport user={user} />;
+            case 'machine-schedule':
+                return <MachineSchedule user={user} />;
             case 'operator-dashboard':
                 return <UnderConstruction title="Coming Soon" />;
             case 'data':
