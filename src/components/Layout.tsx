@@ -116,14 +116,21 @@ const Layout: React.FC<LayoutProps> = ({ children, activePage, setActivePage, us
 
     const NavItem = ({ id, icon: Icon, label, roles, badge }: { id: string, icon: any, label: string, roles?: string[], badge?: number }) => {
         const isSuperAdmin = userRole === 'SuperAdmin' || user?.employeeId === '001';
-        if (isSuperAdmin) { /* SuperAdmin sees everything */ }
-        else if (dbAllowedPages !== null) {
-            // DB permissions exist for this role → use them exclusively
-            if (!dbAllowedPages.has(id)) return null;
-        } else if (roles && userRole && !roles.includes(userRole)) {
-            // Fallback to hardcoded roles array
-            return null;
+        
+        let hasAccess = false;
+
+        if (isSuperAdmin) {
+            hasAccess = true;
+        } else {
+            // Check hardcoded roles
+            const hasHardcodedAccess = roles && userRole && roles.includes(userRole);
+            // Check DB granted permissions
+            const hasDbAccess = dbAllowedPages !== null && dbAllowedPages.has(id);
+            
+            hasAccess = hasHardcodedAccess || hasDbAccess;
         }
+
+        if (!hasAccess) return null;
 
         const isActive = activePage === id;
 
