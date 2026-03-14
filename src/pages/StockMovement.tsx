@@ -76,6 +76,12 @@ const StockMovement: React.FC<{ user?: any }> = ({ user }) => {
         }
     };
 
+    // Helper to get name from SKU
+    const getItemName = (sku: string) => {
+        const item = items.find(i => i.sku === sku);
+        return item ? item.name : 'Unknown Product';
+    };
+
     // SKU autocomplete filter
     const filteredItems = items.filter(i =>
         !skuSearch ||
@@ -253,8 +259,8 @@ const StockMovement: React.FC<{ user?: any }> = ({ user }) => {
                                             className="w-full text-left px-5 py-4 hover:bg-white/5 flex justify-between items-center gap-4 border-b border-white/5 last:border-0 transition-colors group"
                                         >
                                             <div>
-                                                <div className="font-bold text-white text-base group-hover:text-cyan-400 transition-colors">{item.sku}</div>
-                                                <div className="text-sm text-gray-500 mt-0.5">{item.name}</div>
+                                                <div className="font-bold text-white text-base group-hover:text-cyan-400 transition-colors">{item.name}</div>
+                                                <div className="text-sm text-gray-500 mt-0.5 font-mono">{item.sku}</div>
                                             </div>
                                             <div className="flex items-center gap-3">
                                                 <span className="text-[10px] px-2.5 py-1 rounded-full bg-white/5 text-gray-400 shrink-0 font-medium tracking-widest uppercase">{item.type}</span>
@@ -301,8 +307,8 @@ const StockMovement: React.FC<{ user?: any }> = ({ user }) => {
                                                         </div>
                                                         {/* Info */}
                                                         <div className="flex-1 min-w-0 pl-2">
-                                                            <div className="font-bold text-white text-sm sm:text-base truncate">{item.sku}</div>
-                                                            <div className="text-[10px] sm:text-xs text-gray-300 truncate mt-0.5">{item.name}</div>
+                                                            <div className="font-bold text-white text-sm sm:text-base truncate">{item.name}</div>
+                                                            <div className="text-[10px] sm:text-xs text-gray-300 truncate mt-0.5 font-mono">{item.sku}</div>
                                                         </div>
                                                     </div>
                                                     
@@ -456,8 +462,11 @@ const StockMovement: React.FC<{ user?: any }> = ({ user }) => {
                                                     <div key={row.txn_id} className="px-4 py-3 rounded-xl hover:bg-white/5 transition-colors flex items-start gap-3">
                                                         <div className={`mt-1.5 w-2 h-2 rounded-full shrink-0 ${isPositive ? 'bg-green-500' : 'bg-orange-500'}`} />
                                                         <div className="flex-1 min-w-0">
-                                                            <div className="flex justify-between items-start mb-0.5">
-                                                                <span className="font-bold text-white text-sm truncate pr-2" title={row.sku}>{row.sku}</span>
+                                                            <div className="flex justify-between items-start mb-0.5 gap-2">
+                                                                <div className="flex flex-col flex-1 min-w-0">
+                                                                    <span className="font-bold text-white text-sm truncate" title={getItemName(row.sku)}>{getItemName(row.sku)}</span>
+                                                                    <span className="text-[10px] text-gray-500 font-mono truncate">{row.sku}</span>
+                                                                </div>
                                                                 <span className={`font-black font-mono text-sm shrink-0 ${isPositive ? 'text-green-400' : 'text-orange-400'}`}>
                                                                     {isPositive ? '+' : ''}{row.change_qty.toLocaleString()}
                                                                 </span>

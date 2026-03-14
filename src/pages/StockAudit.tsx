@@ -152,8 +152,8 @@ const StockAudit: React.FC = () => {
     // Filter audit list by search during counting
     const visibleAuditList = auditList.filter(item =>
         search === '' ||
-        item.sku.toLowerCase().includes(search.toLowerCase()) ||
-        item.name.toLowerCase().includes(search.toLowerCase())
+        item.name.toLowerCase().includes(search.toLowerCase()) ||
+        item.sku.toLowerCase().includes(search.toLowerCase())
     );
 
     const countedItemsCount = auditList.filter(a => a.physicalQty.trim() !== '').length;
@@ -310,10 +310,10 @@ const StockAudit: React.FC = () => {
                                                     {/* Product Info */}
                                                     <div className="col-span-1 md:col-span-5 flex flex-col min-w-0">
                                                         <div className="flex items-center gap-2 mb-1">
-                                                            <span className="font-black text-cyan-50 text-lg truncate pr-2">{item.sku}</span>
+                                                            <span className="font-black text-cyan-50 text-base md:text-lg truncate pr-2">{item.name}</span>
                                                             {item.physicalQty !== '' && <CheckCircle2 size={14} className="text-green-500 shrink-0" />}
                                                         </div>
-                                                        <span className="text-sm text-cyan-200/80 font-bold truncate">{item.name}</span>
+                                                        <span className="text-xs md:text-sm text-cyan-200/60 font-mono truncate">{item.sku}</span>
                                                     </div>
 
                                                     {/* System Qty (Mobile vs Desktop) */}

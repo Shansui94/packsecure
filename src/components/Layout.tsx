@@ -45,8 +45,9 @@ const Layout: React.FC<LayoutProps> = ({ children, activePage, setActivePage, us
 
     const toggleMobileMenu = () => setIsMobileMenuOpen(!isMobileMenuOpen);
 
-    // Special User Check
+    // Special User Checks
     const isVivian = user?.email === 'diyadmin1111@gmail.com';
+    const isNeoson = user?.email === 'neosonchun@gmail.com';
 
     useEffect(() => {
         if (user) {
@@ -73,14 +74,23 @@ const Layout: React.FC<LayoutProps> = ({ children, activePage, setActivePage, us
             .eq('role_name', userRole)
             .then(({ data }) => {
                 if (data && data.length > 0) {
-                    const allowed = new Set<string>(
+                    const allowedSet = new Set<string>(
                         data.filter(r => r.allowed).map(r => r.page_id)
                     );
-                    setDbAllowedPages(allowed);
+                    
+                    // --- SPECIAL OVERRIDES MATCHING App.tsx ---
+                    if (user?.email === 'neosonchun@gmail.com') {
+                        ['delivery-driver', 'delivery-history', 'leave-calendar', 'lorry-service'].forEach(p => allowedSet.add(p));
+                    }
+                    if (user?.email === 'diyadmin1111@gmail.com') {
+                        ['order-summary', 'driver-management'].forEach(p => allowedSet.add(p));
+                    }
+
+                    setDbAllowedPages(allowedSet);
                 }
                 // If no DB records for this role, keep null → fall back to hardcoded
             });
-    }, [userRole]);
+    }, [userRole, user?.email]);
 
     const fetchTaskCount = async () => {
         if (!user) return;
@@ -262,34 +272,36 @@ const Layout: React.FC<LayoutProps> = ({ children, activePage, setActivePage, us
                                     <NavItem id="iot" icon={Cpu} label="IOT SETTINGS" roles={['SuperAdmin', 'Admin', 'Manager']} />
                                     <NavItem id="dev-log" icon={Activity} label="Dev Log" roles={['SuperAdmin', 'Admin']} />
                                     <div className="h-4" />
+                                    {!isNeoson && <NavItem id="personal-report" icon={FileText} label="My Monthly Report" roles={['SuperAdmin', 'Admin', 'Manager']} />}
                                     <NavItem id="claims" icon={FileCheck} label="Claims" roles={['SuperAdmin', 'Admin', 'Manager']} />
                                 </NavGroup>
-
-                                <NavGroup title="Productivity">
-                                    <NavItem id="sop-center" icon={BookOpen} label="SOP 指南" roles={['SuperAdmin', 'Admin', 'Manager']} />
-                                    <NavItem id="work-photos" icon={Camera} label="📸 工作记录" roles={['SuperAdmin', 'Admin', 'Manager']} />
-                                    <NavItem id="notes" icon={FileText} label="Notes" roles={['SuperAdmin', 'Admin', 'Manager']} />
-                                    <NavItem id="tasks" icon={ClipboardList} label="Tasks" roles={['SuperAdmin', 'Admin', 'Manager']} badge={taskCount} />
-                                </NavGroup>
+                                {!isNeoson && (
+                                    <NavGroup title="Productivity">
+                                        <NavItem id="sop-center" icon={BookOpen} label="SOP 指南" roles={['SuperAdmin', 'Admin', 'Manager']} />
+                                        <NavItem id="work-photos" icon={Camera} label="📸 工作记录" roles={['SuperAdmin', 'Admin', 'Manager']} />
+                                        <NavItem id="notes" icon={FileText} label="Notes" roles={['SuperAdmin', 'Admin', 'Manager']} />
+                                        <NavItem id="tasks" icon={ClipboardList} label="Tasks" roles={['SuperAdmin', 'Admin', 'Manager']} badge={taskCount} />
+                                    </NavGroup>
+                                )}
                             </>
                         )}
 
                         {/* DRIVER VIEW */}
-                        {userRole === 'Driver' && (
+                        {(userRole === 'Driver' || isNeoson) && (
                             <>
                                 <NavGroup title="Driver Workspace">
-                                    <NavItem id="delivery-driver" icon={Package} label="My Delivery" roles={['Driver']} />
-                                    <NavItem id="delivery-history" icon={ClipboardList} label="My History" roles={['Driver']} />
-                                    <NavItem id="driver-leave" icon={Calendar} label="Apply Cuti" roles={['Driver']} />
-                                    <NavItem id="lorry-service" icon={Truck} label="Lorry Service" roles={['Driver']} />
-                                    {/* <NavItem id="claims" icon={FileCheck} label="My Claims" roles={['Driver']} /> */}
+                                    <NavItem id="delivery-driver" icon={Package} label="My Delivery" roles={['Driver', 'Manager']} />
+                                    <NavItem id="delivery-history" icon={ClipboardList} label="My History" roles={['Driver', 'Manager']} />
+                                    <NavItem id="driver-leave" icon={Calendar} label="Apply Cuti" roles={['Driver', 'Manager']} />
+                                    <NavItem id="lorry-service" icon={Truck} label="Lorry Service" roles={['Driver', 'Manager']} />
+                                    <NavItem id="personal-report" icon={FileText} label="My Monthly Report" roles={['Driver', 'Manager']} />
                                 </NavGroup>
 
                                 <NavGroup title="Productivity">
-                                    <NavItem id="sop-center" icon={BookOpen} label="SOP 指南" roles={['Driver']} />
-                                    <NavItem id="work-photos" icon={Camera} label="📸 工作记录" roles={['Driver']} />
-                                    <NavItem id="notes" icon={FileText} label="Notes" roles={['Driver']} />
-                                    <NavItem id="tasks" icon={ClipboardList} label="Tasks" roles={['Driver']} badge={taskCount} />
+                                    <NavItem id="sop-center" icon={BookOpen} label="SOP 指南" roles={['Driver', 'Manager']} />
+                                    <NavItem id="work-photos" icon={Camera} label="📸 工作记录" roles={['Driver', 'Manager']} />
+                                    <NavItem id="notes" icon={FileText} label="Notes" roles={['Driver', 'Manager']} />
+                                    <NavItem id="tasks" icon={ClipboardList} label="Tasks" roles={['Driver', 'Manager']} badge={taskCount} />
                                 </NavGroup>
                             </>
                         )}
@@ -300,6 +312,7 @@ const Layout: React.FC<LayoutProps> = ({ children, activePage, setActivePage, us
                                 <NavGroup title="HR Workspace">
                                     <NavItem id="hr" icon={Users} label="HR Portal" roles={['HR']} />
                                     <NavItem id="driver-leave" icon={Calendar} label="Apply Leave" roles={['HR']} />
+                                    <NavItem id="personal-report" icon={FileText} label="My Monthly Report" roles={['HR']} />
                                 </NavGroup>
 
                                 <NavGroup title="Productivity">
@@ -316,6 +329,7 @@ const Layout: React.FC<LayoutProps> = ({ children, activePage, setActivePage, us
                             <>
                                 <NavGroup title="Production Floor">
                                     <NavItem id="scanner" icon={Scan} label="Production Control" roles={['Operator']} />
+                                    <NavItem id="personal-report" icon={FileText} label="My Monthly Report" roles={['Operator']} />
                                 </NavGroup>
 
                                 <NavGroup title="Productivity">

@@ -45,6 +45,7 @@ import DevLog from './pages/DevLog';
 import LeaveCalendar from './pages/LeaveCalendar';
 import SOPCenter from './pages/SOPCenter';
 import WorkPhotoLog from './pages/WorkPhotoLog';
+import PersonalMonthlyReport from './pages/PersonalMonthlyReport';
 
 import { User, UserRole, InventoryItem, ProductionLog as ProductionLogType, JobOrder } from './types';
 import AIAgentWidget from './components/AIAgentWidget';
@@ -180,14 +181,14 @@ function App() {
         // Define allowable pages per role
         const allowedPages: Record<string, string[]> = {
             'SuperAdmin': ['*'], // The Only One with Full Access
-            'Admin': ['profile', 'construction', 'factory-live-os', 'dashboard', 'data-v2', 'customer-import', 'universal-intake', 'scanner', 'jobs', 'livestock', 'inventory', 'recipes', 'products', 'delivery', 'order-summary', 'dispatch', 'loading-dock', 'production', 'report-history', 'users', 'hr', 'claims', 'simple-stock', 'maintenance', 'lorry-management', 'iot', 'driver-management', 'operators', 'dev-log', 'leave-calendar'],
-            'Manager': ['profile', 'construction', 'factory-live-os', 'dashboard', 'data-v2', 'customer-import', 'universal-intake', 'jobs', 'livestock', 'inventory', 'recipes', 'products', 'delivery', 'order-summary', 'dispatch', 'loading-dock', 'production', 'report-history', 'hr', 'claims', 'simple-stock', 'maintenance', 'lorry-management', 'iot', 'driver-management', 'operators', 'leave-calendar'],
-            'Driver': ['delivery-driver', 'delivery-history', 'leave-calendar', 'lorry-service', 'claims', 'profile'],
-            'Operator': ['scanner', 'leave-calendar', 'profile'],
+            'Admin': ['profile', 'construction', 'factory-live-os', 'dashboard', 'data-v2', 'customer-import', 'universal-intake', 'scanner', 'jobs', 'livestock', 'inventory', 'recipes', 'products', 'delivery', 'order-summary', 'dispatch', 'loading-dock', 'production', 'report-history', 'users', 'hr', 'claims', 'simple-stock', 'maintenance', 'lorry-management', 'iot', 'driver-management', 'operators', 'dev-log', 'leave-calendar', 'personal-report'],
+            'Manager': ['profile', 'construction', 'factory-live-os', 'dashboard', 'data-v2', 'customer-import', 'universal-intake', 'jobs', 'livestock', 'inventory', 'recipes', 'products', 'delivery', 'order-summary', 'dispatch', 'loading-dock', 'production', 'report-history', 'hr', 'claims', 'simple-stock', 'maintenance', 'lorry-management', 'iot', 'driver-management', 'operators', 'leave-calendar', 'personal-report'],
+            'Driver': ['delivery-driver', 'delivery-history', 'leave-calendar', 'lorry-service', 'claims', 'profile', 'personal-report'],
+            'Operator': ['scanner', 'leave-calendar', 'profile', 'personal-report'],
             'Device': ['scanner'],
-            'HR': ['profile', 'hr', 'leave-calendar', 'notes', 'tasks'],
-            'Sales': ['profile', 'construction'],
-            'Finance': ['profile', 'construction']
+            'HR': ['profile', 'hr', 'leave-calendar', 'notes', 'tasks', 'personal-report'],
+            'Sales': ['profile', 'construction', 'personal-report'],
+            'Finance': ['profile', 'construction', 'personal-report']
         };
 
         let allowed = allowedPages[role] || [];
@@ -685,6 +686,8 @@ function App() {
                 return <SOPCenter userRole={user?.role} user={user} />;
             case 'work-photos':
                 return <WorkPhotoLog user={user} />;
+            case 'personal-report':
+                return <PersonalMonthlyReport user={user} />;
             case 'operator-dashboard':
                 return <UnderConstruction title="Coming Soon" />;
             case 'data':
