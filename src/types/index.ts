@@ -104,7 +104,9 @@ export interface SalesOrder {
     driverId?: string; // NEW: Assigned Driver ID
     driverName?: string; // NEW: Resolved Driver Name for display
     deliveryAddress?: string; // Mapped from delivery_address
-    zone?: string; // Mapped from zone
+    zone?: string; // Mapped from zone (Legacy/Location Region)
+    trip_origin?: string; // NEW: Origin Location (e.g. TAIPING, NILAI)
+    trip_drop_count?: number; // NEW: Total destinations
     factoryId?: string; // NEW: Factory ID (T1/N1)
     tripSequence?: number; // Mapped from trip_sequence
     sourceLocation?: string; // NEW: Source Location (e.g., OPM Lama, SPD)
@@ -116,6 +118,16 @@ export interface SalesOrder {
     pod_photo_url?: string;
     pod_signed_by?: string;
     pod_timestamp?: string;
+}
+
+export interface DeliveryRate {
+    id: string;
+    origin: string;
+    location_name: string;
+    base_rate: number;
+    max_places: number;
+    extra_rate_per_place: number;
+    notes?: string;
 }
 
 export interface LogisticsTrip {

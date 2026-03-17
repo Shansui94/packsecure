@@ -324,11 +324,14 @@ const HRPortal: React.FC<{ user?: any }> = ({ user }) => {
     const [loadingPayroll, setLoadingPayroll] = useState(false);
     const [generatingPayroll, setGeneratingPayroll] = useState(false);
 
-    // Zone rates
-    const [zoneRates, setZoneRates] = useState<{ id: string; zone_name: string; rate: number; notes: string }[]>([]);
+    // Delivery rates
+    const [deliveryRates, setDeliveryRates] = useState<{ id: string; origin: string; location_name: string; base_rate: number; max_places: number; extra_rate_per_place: number; notes: string }[]>([]);
     const [showZoneEditor, setShowZoneEditor] = useState(false);
-    const [newZoneName, setNewZoneName] = useState('');
-    const [newZoneRate, setNewZoneRate] = useState('');
+    const [newRateOrigin, setNewRateOrigin] = useState('TAIPING');
+    const [newRateLocation, setNewRateLocation] = useState('');
+    const [newRateBase, setNewRateBase] = useState('');
+    const [newRateMaxPlaces, setNewRateMaxPlaces] = useState('3');
+    const [newRateExtra, setNewRateExtra] = useState('');
     const [newZoneNotes, setNewZoneNotes] = useState('');
     const [savingZone, setSavingZone] = useState(false);
 
@@ -381,27 +384,34 @@ const HRPortal: React.FC<{ user?: any }> = ({ user }) => {
     };
 
     // ── Zone Rates ───────────────────────────────────────────
-    const fetchZoneRates = useCallback(async () => {
-        const { data } = await supabase.from('zone_trip_rates').select('*').order('zone_name');
-        setZoneRates(data || []);
+    const fetchDeliveryRates = useCallback(async () => {
+        const { data } = await supabase.from('delivery_rates').select('*').order('origin').order('location_name');
+        setDeliveryRates(data || []);
     }, []);
 
     const handleAddZone = async () => {
-        if (!newZoneName.trim() || !newZoneRate) return;
+        if (!newRateLocation.trim() || !newRateBase || !newRateOrigin) return;
         setSavingZone(true);
-        await supabase.from('zone_trip_rates').upsert(
-            { zone_name: newZoneName.trim(), rate: Number(newZoneRate), notes: newZoneNotes },
-            { onConflict: 'zone_name' }
+        await supabase.from('delivery_rates').upsert(
+            { 
+                origin: newRateOrigin.trim(), 
+                location_name: newRateLocation.trim(), 
+                base_rate: Number(newRateBase), 
+                max_places: Number(newRateMaxPlaces),
+                extra_rate_per_place: Number(newRateExtra),
+                notes: newZoneNotes 
+            },
+            { onConflict: 'origin, location_name' }
         );
-        setNewZoneName(''); setNewZoneRate(''); setNewZoneNotes('');
-        await fetchZoneRates();
+        setNewRateLocation(''); setNewRateBase(''); setNewRateExtra(''); setNewZoneNotes('');
+        await fetchDeliveryRates();
         setSavingZone(false);
     };
 
     const handleDeleteZone = async (id: string) => {
-        if (!window.confirm('Delete this zone rate?')) return;
-        await supabase.from('zone_trip_rates').delete().eq('id', id);
-        fetchZoneRates();
+        if (!window.confirm('Delete this rate?')) return;
+        await supabase.from('delivery_rates').delete().eq('id', id);
+        fetchDeliveryRates();
     };
 
     // ── Payroll ──────────────────────────────────────────────
@@ -422,15 +432,15 @@ const HRPortal: React.FC<{ user?: any }> = ({ user }) => {
 
         // Driver trips with zone info for zone-based allowance
         const { data: trips } = await supabase.from('sales_orders')
-            .select('driver_id, zone, delivery_zone')
+            .select('driver_id, zone, delivery_zone, trip_origin, trip_drop_count')
             .eq('status', 'Delivered')
             .gte('pod_timestamp', new Date(payYear, payMonth - 1, 1).toISOString())
             .lte('pod_timestamp', new Date(payYear, payMonth, 0, 23, 59, 59).toISOString());
 
-        // Zone rates lookup
-        const { data: zr } = await supabase.from('zone_trip_rates').select('zone_name, rate');
-        const zoneRateMap: Record<string, number> = {};
-        (zr || []).forEach((z: any) => { zoneRateMap[z.zone_name?.toLowerCase()] = Number(z.rate); });
+        // Delivery Rates lookup
+        const { data: dr } = await supabase.from('delivery_rates').select('*');
+        const rateMap: Record<string, any> = {};
+        (dr || []).forEach((r: any) => { rateMap[`${r.origin}-${r.location_name}`.toLowerCase()] = r; });
 
         // Approved leave (for attendance bonus check)
         const { data: leaves } = await supabase.from('employee_leave')
@@ -441,21 +451,32 @@ const HRPortal: React.FC<{ user?: any }> = ({ user }) => {
         const { data: existing } = await supabase.from('payroll_records')
             .select('*').eq('month', payMonth).eq('year', payYear);
 
-        // Build driver trip earnings map using zone rates
+        // Build driver trip earnings map using origin+zone rates
         // tripEarningsMap[auth_user_id] = { totalEarnings, tripCount, tripDetails }
         const tripEarningsMap: Record<string, { total: number; count: number; breakdown: string[] }> = {};
         (trips || []).forEach((t: any) => {
             if (!t.driver_id) return;
+            const origin = (t.trip_origin || 'TAIPING').toLowerCase();
             const zone = (t.zone || t.delivery_zone || '').toLowerCase();
-            const rate = zoneRateMap[zone] ?? null;
+            const key = `${origin}-${zone}`;
+            const rateInfo = rateMap[key];
+            
+            const drops = Math.max(1, t.trip_drop_count || 1);
+
             if (!tripEarningsMap[t.driver_id]) tripEarningsMap[t.driver_id] = { total: 0, count: 0, breakdown: [] };
             tripEarningsMap[t.driver_id].count += 1;
-            if (rate !== null) {
-                tripEarningsMap[t.driver_id].total += rate;
-                tripEarningsMap[t.driver_id].breakdown.push(`${t.zone || t.delivery_zone}: RM${rate}`);
+            
+            if (rateInfo) {
+                const base = Number(rateInfo.base_rate) || 0;
+                const maxPlaces = Number(rateInfo.max_places) || 0;
+                const extraPlaces = Math.max(0, drops - maxPlaces);
+                const extraRate = extraPlaces * (Number(rateInfo.extra_rate_per_place) || 0);
+                const totalTripMoney = base + extraRate;
+
+                tripEarningsMap[t.driver_id].total += totalTripMoney;
+                tripEarningsMap[t.driver_id].breakdown.push(`${t.zone || t.delivery_zone} (${drops} drops): RM${totalTripMoney}`);
             } else {
-                // No zone rate — flag it
-                tripEarningsMap[t.driver_id].breakdown.push(`${t.zone || t.delivery_zone || 'Unknown'}: ⚠️ no rate`);
+                tripEarningsMap[t.driver_id].breakdown.push(`${t.zone || t.delivery_zone || 'Unknown'} (${drops} drops): ⚠️ no rate`);
             }
         });
 
@@ -507,7 +528,7 @@ const HRPortal: React.FC<{ user?: any }> = ({ user }) => {
         setLoadingPayroll(false);
     }, [payMonth, payYear]);
 
-    useEffect(() => { if (activeTab === 'payroll') { fetchPayroll(); fetchZoneRates(); } }, [activeTab, fetchPayroll, fetchZoneRates]);
+    useEffect(() => { if (activeTab === 'payroll') { fetchPayroll(); fetchDeliveryRates(); } }, [activeTab, fetchPayroll, fetchDeliveryRates]);
 
     const handleGeneratePayroll = async () => {
         if (!window.confirm(`Generate payroll for ${MONTH_NAMES[payMonth - 1]} ${payYear}?`)) return;
@@ -739,29 +760,34 @@ const HRPortal: React.FC<{ user?: any }> = ({ user }) => {
                     </div>
 
 
-                    {/* Zone Rates Manager */}
+                    {/* Delivery Rates Manager */}
                     <div className="mb-5 bg-[#0d0d12] border border-amber-500/20 rounded-2xl overflow-hidden">
                         <button
                             onClick={() => setShowZoneEditor(v => !v)}
                             className="w-full px-4 py-3 flex items-center justify-between hover:bg-white/[0.02] transition-colors">
                             <div className="flex items-center gap-2 text-amber-400 font-bold text-xs uppercase tracking-widest">
-                                <MapPin size={13} /> Zone Trip Rates
+                                <MapPin size={13} /> Driver Payroll Rates
                             </div>
-                            <span className="text-[10px] text-gray-500">{zoneRates.length} zones configured · click to {showZoneEditor ? 'collapse' : 'expand'}</span>
+                            <span className="text-[10px] text-gray-500">{deliveryRates.length} rates configured · click to {showZoneEditor ? 'collapse' : 'expand'}</span>
                         </button>
                         {showZoneEditor && (
                             <div className="border-t border-white/5 p-4 space-y-3">
                                 {/* Existing zones */}
-                                {zoneRates.length > 0 && (
-                                    <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-2 mb-3">
-                                        {zoneRates.map(z => (
+                                {deliveryRates.length > 0 && (
+                                    <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-2 mb-3 max-h-96 overflow-y-auto custom-scrollbar">
+                                        {deliveryRates.map(z => (
                                             <div key={z.id} className="flex items-center justify-between bg-black/30 border border-white/5 rounded-xl px-3 py-2">
                                                 <div>
-                                                    <div className="text-sm font-bold text-white">{z.zone_name}</div>
-                                                    <div className="text-[10px] text-amber-400 font-mono">RM {Number(z.rate).toFixed(2)}</div>
+                                                    <div className="flex items-center gap-2">
+                                                        <span className="text-[9px] bg-blue-500/20 text-blue-400 px-1.5 py-0.5 rounded uppercase font-black">{z.origin}</span>
+                                                        <span className="text-sm font-bold text-white uppercase">{z.location_name}</span>
+                                                    </div>
+                                                    <div className="text-[10px] text-amber-400 font-mono mt-1">
+                                                        Base: RM{Number(z.base_rate).toFixed(2)} | Max: {z.max_places} drops | +RM{Number(z.extra_rate_per_place).toFixed(2)}/drop
+                                                    </div>
                                                     {z.notes && <div className="text-[10px] text-gray-600">{z.notes}</div>}
                                                 </div>
-                                                <button onClick={() => handleDeleteZone(z.id)} className="p-1.5 rounded-lg text-gray-600 hover:text-red-400 hover:bg-red-500/10 transition-colors">
+                                                <button onClick={() => handleDeleteZone(z.id)} className="p-1.5 rounded-lg text-gray-600 hover:text-red-400 hover:bg-red-500/10 transition-colors h-fit">
                                                     <Trash2 size={12} />
                                                 </button>
                                             </div>
@@ -769,21 +795,25 @@ const HRPortal: React.FC<{ user?: any }> = ({ user }) => {
                                     </div>
                                 )}
                                 {/* Add new zone */}
-                                <div className="flex gap-2 flex-wrap">
-                                    <input type="text" value={newZoneName} onChange={e => setNewZoneName(e.target.value)}
-                                        placeholder="Zone name (e.g. KL, Seremban)"
-                                        className="flex-1 min-w-[140px] bg-black/40 border border-white/10 rounded-xl px-3 py-2 text-sm text-white placeholder-gray-700 focus:outline-none focus:border-amber-500/50" />
-                                    <input type="number" value={newZoneRate} onChange={e => setNewZoneRate(e.target.value)}
-                                        placeholder="Rate (RM)"
-                                        className="w-28 bg-black/40 border border-white/10 rounded-xl px-3 py-2 text-sm text-white placeholder-gray-700 focus:outline-none focus:border-amber-500/50" />
-                                    <input type="text" value={newZoneNotes} onChange={e => setNewZoneNotes(e.target.value)}
-                                        placeholder="Notes (optional)"
-                                        className="flex-1 min-w-[120px] bg-black/40 border border-white/10 rounded-xl px-3 py-2 text-sm text-white placeholder-gray-700 focus:outline-none focus:border-amber-500/50" />
-                                    <button onClick={handleAddZone} disabled={savingZone || !newZoneName || !newZoneRate}
-                                        className="px-4 py-2 bg-amber-600 hover:bg-amber-500 disabled:opacity-50 rounded-xl text-xs font-bold text-white flex items-center gap-1.5 transition-colors">
-                                        {savingZone ? <Loader size={12} className="animate-spin" /> : <Plus size={12} />}
-                                        Add Zone
-                                    </button>
+                                <div className="flex flex-col gap-2 bg-black/20 p-3 rounded-xl border border-white/5">
+                                    <div className="text-xs font-bold text-slate-400 uppercase tracking-widest mb-1">Add / Update Rate</div>
+                                    <div className="grid grid-cols-2 lg:grid-cols-5 gap-2">
+                                        <select value={newRateOrigin} onChange={e => setNewRateOrigin(e.target.value)} className="bg-black/40 border border-white/10 rounded-xl px-3 py-2 text-sm text-white focus:outline-none focus:border-amber-500/50">
+                                            <option value="TAIPING">TAIPING</option>
+                                            <option value="NILAI">NILAI</option>
+                                        </select>
+                                        <input type="text" value={newRateLocation} onChange={e => setNewRateLocation(e.target.value)} placeholder="Destination (e.g. KL)" className="bg-black/40 border border-white/10 rounded-xl px-3 py-2 text-sm text-white focus:outline-none focus:border-amber-500/50" />
+                                        <input type="number" value={newRateBase} onChange={e => setNewRateBase(e.target.value)} placeholder="Base Rate (RM)" className="bg-black/40 border border-white/10 rounded-xl px-3 py-2 text-sm text-white focus:outline-none focus:border-amber-500/50" />
+                                        <input type="number" value={newRateMaxPlaces} onChange={e => setNewRateMaxPlaces(e.target.value)} placeholder="Max Drops" className="bg-black/40 border border-white/10 rounded-xl px-3 py-2 text-sm text-white focus:outline-none focus:border-amber-500/50" />
+                                        <input type="number" value={newRateExtra} onChange={e => setNewRateExtra(e.target.value)} placeholder="Extra Rate/Drop" className="bg-black/40 border border-white/10 rounded-xl px-3 py-2 text-sm text-white focus:outline-none focus:border-amber-500/50" />
+                                    </div>
+                                    <div className="flex gap-2 mt-1">
+                                        <input type="text" value={newZoneNotes} onChange={e => setNewZoneNotes(e.target.value)} placeholder="Notes (optional)" className="flex-1 bg-black/40 border border-white/10 rounded-xl px-3 py-2 text-sm text-white focus:outline-none focus:border-amber-500/50" />
+                                        <button onClick={handleAddZone} disabled={savingZone || !newRateLocation || !newRateBase} className="px-6 py-2 bg-amber-600 hover:bg-amber-500 disabled:opacity-50 rounded-xl text-xs font-bold text-white flex items-center justify-center gap-1.5 transition-colors">
+                                            {savingZone ? <Loader size={12} className="animate-spin" /> : <Plus size={12} />}
+                                            Save Rate
+                                        </button>
+                                    </div>
                                 </div>
                             </div>
                         )}

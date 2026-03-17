@@ -254,7 +254,12 @@ const DriverDelivery: React.FC<DriverDeliveryProps> = ({ user }) => {
                                 <div className="flex justify-between items-start mb-6">
                                     {/* Swapped: State is now main title, Customer is subtitle */}
                                     <div>
-                                        <h2 className="text-lg font-black text-white line-clamp-1">{order.deliveryAddress || 'No State'}</h2>
+                                        <div className="flex items-center flex-wrap gap-2 mb-1.5">
+                                            {(order as any).trip_origin && <span className="text-[10px] font-black uppercase bg-blue-500/20 text-blue-400 px-2 py-0.5 rounded border border-blue-500/20">{(order as any).trip_origin}</span>}
+                                            {order.zone && <span className="text-[10px] font-black uppercase bg-amber-500/20 text-amber-500 px-2 py-0.5 rounded border border-amber-500/20">{order.zone}</span>}
+                                            {(order as any).trip_drop_count > 1 && <span className="text-[10px] font-black uppercase bg-emerald-500/20 text-emerald-400 px-2 py-0.5 rounded border border-emerald-500/20">{(order as any).trip_drop_count} Drops</span>}
+                                        </div>
+                                        <h2 className="text-lg font-black text-white line-clamp-2 leading-tight">{order.deliveryAddress || order.zone || 'No Route Specified'}</h2>
                                         {(order as any).deliveryDate && (
                                             <div className="flex items-center gap-2 mt-1 text-xs font-bold uppercase tracking-wider">
                                                 <span className="text-orange-500">

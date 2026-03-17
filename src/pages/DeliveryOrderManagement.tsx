@@ -170,6 +170,12 @@ const DeliveryOrderManagement: React.FC = () => {
     const [selectedV2Item, setSelectedV2Item] = useState<V2Item | null>(null);
     const [currentItemLoc, setCurrentItemLoc] = useState('SPD'); // New Location state
 
+    // --- Driver Payroll Rate State ---
+    const [deliveryRates, setDeliveryRates] = useState<any[]>([]);
+    const [tripOrigin, setTripOrigin] = useState('TAIPING');
+    const [tripCategory, setTripCategory] = useState('');
+    const [tripDropCount, setTripDropCount] = useState<number>(1);
+
     const [isReassignModalOpen, setIsReassignModalOpen] = useState(false);
     const [reassignOrder, setReassignOrder] = useState<SalesOrder | null>(null);
 
@@ -219,16 +225,23 @@ const DeliveryOrderManagement: React.FC = () => {
 
             if (serviceData) setLorryServices(serviceData);
 
-            const [usersRes, ordersRes, itemsRes, leavesRes, lorriesRes, servicesRes] = await Promise.all([
+            const [usersRes, ordersRes, itemsRes, leavesRes, lorriesRes, servicesRes, ratesRes] = await Promise.all([
                 supabase.from('users_public').select('*'),
                 supabase.from('sales_orders').select('*').order('trip_sequence', { ascending: true }).order('created_at', { ascending: false }),
                 getV2Items(),
                 supabase.from('driver_leave').select('*'),
                 supabase.from('lorries').select('*'),
-                supabase.from('lorry_service_requests').select('*').eq('status', 'Scheduled')
+                supabase.from('lorry_service_requests').select('*').eq('status', 'Scheduled'),
+                supabase.from('delivery_rates').select('*').order('location_name')
             ]);
 
             // ... (rest of existing logic)
+            if (ratesRes.data) {
+                console.log("DEBUG: deliveryRates fetched -> ", ratesRes.data);
+                setDeliveryRates(ratesRes.data);
+            } else {
+                console.warn("DEBUG: failed to fetch deliveryRates -> ", ratesRes.error);
+            }
             if (leavesRes.data) {
                 // console.log("Loaded leaves:", leavesRes.data.length); 
                 // TEMPORARY DEBUG: Check if we can verify other users' leaves
@@ -760,7 +773,9 @@ const DeliveryOrderManagement: React.FC = () => {
                 order_number: doNumber,
                 customer: finalCustomer,
                 delivery_address: newOrderAddress,
-                zone: zone,
+                zone: tripCategory || determineZone(newOrderAddress || ''),
+                trip_origin: tripOrigin,
+                trip_drop_count: tripDropCount,
                 factory_id: bestFactory.id,
                 driver_id: selectedDriverId || null,
                 items: newOrderItems,
@@ -853,6 +868,9 @@ const DeliveryOrderManagement: React.FC = () => {
         setNewOrderDeliveryDate(getTomorrowStr());
         setNewOrderItems([]);
         setNewOrderNotes(''); // Reset Notes
+        setTripOrigin('TAIPING');
+        setTripCategory('');
+        setTripDropCount(1);
     };
 
     function getDriverName(driverId?: string) {
@@ -1184,6 +1202,9 @@ const DeliveryOrderManagement: React.FC = () => {
                                                                 setNewOrderAddress(order.deliveryAddress || '');
                                                                 setNewOrderDeliveryDate(order.deadline || '');
                                                                 setNewOrderNotes(order.notes || '');
+                                                                setTripOrigin(order.trip_origin || 'TAIPING');
+                                                                setTripCategory(order.zone || '');
+                                                                setTripDropCount(order.trip_drop_count || 1);
 
                                                                 // Extract legacy location from remark if sourceLocation is missing
                                                                 const itemsWithExtractedLoc = (order.items || []).map(item => {
@@ -1423,6 +1444,62 @@ const DeliveryOrderManagement: React.FC = () => {
                                             {newOrderDeliveryDate && (
                                                 <span className="text-blue-500/80">Selected: {formatDateDMY(newOrderDeliveryDate)}</span>
                                             )}
+                                        </div>
+                                    </div>
+                                </div>
+
+                                {/* DESTINATIONS (Delivery Address) */}
+                                <div>
+                                    <label className="block text-xs font-bold text-slate-500 uppercase mb-2">Destinations (e.g., KL, PJ, Subang)</label>
+                                    <input
+                                        type="text"
+                                        placeholder="Enter all delivery locations for this trip..."
+                                        className="w-full bg-slate-900 border border-slate-800 rounded-xl px-4 py-3 text-sm text-slate-200 focus:border-blue-500/50 outline-none placeholder:text-slate-600 mb-4"
+                                        value={newOrderAddress}
+                                        onChange={e => {
+                                            setNewOrderAddress(e.target.value);
+                                            // Auto-calc drops based on commas
+                                            const drops = e.target.value.split(',').filter(s => s.trim().length > 0).length || 1;
+                                            setTripDropCount(drops);
+                                        }}
+                                    />
+
+                                    {/* DRIVER PAYROLL RATES: Origin, Category, Drops */}
+                                    <div className="grid grid-cols-3 gap-4 bg-slate-900/50 p-4 border border-slate-800 rounded-xl">
+                                        <div>
+                                            <label className="block text-[10px] font-bold text-blue-500/80 uppercase tracking-widest mb-2">Origin</label>
+                                            <select
+                                                className="w-full bg-slate-950 border border-slate-800 rounded-lg px-3 py-2 text-xs text-white focus:border-blue-500/50 outline-none"
+                                                value={tripOrigin}
+                                                onChange={e => setTripOrigin(e.target.value)}
+                                            >
+                                                <option value="TAIPING">Taiping</option>
+                                                <option value="NILAI">Nilai</option>
+                                            </select>
+                                        </div>
+                                        <div>
+                                            <label className="block text-[10px] font-bold text-blue-500/80 uppercase tracking-widest mb-2">Trip Category</label>
+                                            <select
+                                                className="w-full bg-slate-950 border border-slate-800 rounded-lg px-3 py-2 text-xs text-white focus:border-blue-500/50 outline-none"
+                                                value={tripCategory}
+                                                onChange={e => setTripCategory(e.target.value)}
+                                            >
+                                                <option value="">-- Auto/Manual --</option>
+                                                {/* Unique location names for the selected origin */}
+                                                {Array.from(new Set(deliveryRates.filter(r => r.origin === tripOrigin).map(r => r.location_name))).map(loc => (
+                                                    <option key={loc} value={loc}>{loc}</option>
+                                                ))}
+                                            </select>
+                                        </div>
+                                        <div>
+                                            <label className="block text-[10px] font-bold text-emerald-500/80 uppercase tracking-widest mb-2">Total Drops</label>
+                                            <input
+                                                type="number"
+                                                min={1}
+                                                className="w-full bg-slate-950 border border-slate-800 rounded-lg px-3 py-2 text-xs text-white focus:border-emerald-500/50 outline-none"
+                                                value={tripDropCount}
+                                                onChange={e => setTripDropCount(parseInt(e.target.value) || 1)}
+                                            />
                                         </div>
                                     </div>
                                 </div>
