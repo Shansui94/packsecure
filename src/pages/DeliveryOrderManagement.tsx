@@ -769,6 +769,27 @@ const DeliveryOrderManagement: React.FC = () => {
             const zone = determineZone(newOrderAddress || '');
             const bestFactory = findBestFactory(zone, newOrderItems, stockMap);
 
+            // Auto-Push Unlisted Trip Category to HR Payroll Rates
+            if (tripCategory) {
+                const categoryExists = deliveryRates.some(r => r.origin === tripOrigin && r.location_name === tripCategory);
+                if (!categoryExists) {
+                    try {
+                        await supabase.from('delivery_rates').insert({
+                            origin: tripOrigin,
+                            location_name: tripCategory,
+                            base_rate: 0,
+                            max_places: 1,
+                            extra_rate_per_place: 0,
+                            notes: "Auto-imported from Trip form. HR please update rate."
+                        });
+                        // Technically we should update local state here but since this closes modal immediately it's fine.
+                        console.log("Auto-pushed new category to HR rates.");
+                    } catch (e) {
+                        console.error("Failed to auto-push category", e);
+                    }
+                }
+            }
+
             const payload: any = {
                 order_number: doNumber,
                 customer: finalCustomer,
