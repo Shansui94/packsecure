@@ -1496,15 +1496,22 @@ const DeliveryOrderManagement: React.FC = () => {
                                             <input
                                                 list="trip-category-list"
                                                 placeholder="-- Auto/Manual --"
-                                                className="w-full bg-slate-950 border border-slate-800 rounded-lg px-3 py-2 text-xs text-white focus:border-blue-500/50 outline-none"
+                                                className={`w-full bg-slate-950 border rounded-lg px-3 py-2 text-xs text-white focus:outline-none transition-colors ${
+                                                    tripCategory && !deliveryRates.some(r => r.origin === tripOrigin && r.location_name === tripCategory)
+                                                        ? 'border-red-500/80 focus:border-red-500 text-red-100' // Invalid styling
+                                                        : 'border-slate-800 focus:border-blue-500/50'     // Normal styling
+                                                }`}
                                                 value={tripCategory}
-                                                onChange={e => setTripCategory(e.target.value)}
+                                                onChange={e => setTripCategory(e.target.value.toUpperCase())}
                                             />
                                             <datalist id="trip-category-list">
                                                 {Array.from(new Set(deliveryRates.filter(r => r.origin === tripOrigin).map(r => r.location_name))).map(loc => (
                                                     <option key={loc} value={loc} />
                                                 ))}
                                             </datalist>
+                                            {tripCategory && !deliveryRates.some(r => r.origin === tripOrigin && r.location_name === tripCategory) && (
+                                                <div className="absolute mt-1 text-[9px] font-bold text-red-400">⚠️ Unlisted category. Pay will be RM0.</div>
+                                            )}
                                         </div>
                                         <div>
                                             <label className="block text-[10px] font-bold text-emerald-500/80 uppercase tracking-widest mb-2">Total Drops</label>
