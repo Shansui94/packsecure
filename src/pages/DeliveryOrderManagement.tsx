@@ -1394,16 +1394,30 @@ const DeliveryOrderManagement: React.FC = () => {
                                     <div>
                                         <label className="block text-xs font-bold text-slate-500 uppercase mb-2">Assigned Driver</label>
                                         <div className="relative">
-                                            <UserIcon className="absolute left-3 top-3 text-slate-600" size={16} />
-                                            <select
-                                                className="w-full bg-slate-900 border border-slate-800 rounded-xl pl-10 pr-10 py-3 text-sm text-slate-200 focus:border-blue-500/50 outline-none appearance-none"
-                                                value={selectedDriverId}
-                                                onChange={e => setSelectedDriverId(e.target.value)}
-                                            >
-                                                <option value="">-- Unassigned --</option>
-                                                {drivers.map(d => <option key={d.uid} value={d.uid}>{d.name || d.email}</option>)}
-                                            </select>
-                                            <div className="absolute right-4 top-4 pointer-events-none text-slate-600">▼</div>
+                                            <UserIcon className="absolute left-3 top-3.5 text-slate-600 z-10" size={16} />
+                                            <input
+                                                list="drivers-list"
+                                                className="w-full bg-slate-900 border border-slate-800 rounded-xl pl-10 pr-10 py-3 text-sm text-slate-200 focus:border-blue-500/50 outline-none"
+                                                placeholder="-- Type or Select Driver --"
+                                                value={drivers.find(d => d.uid === selectedDriverId)?.name || drivers.find(d => d.uid === selectedDriverId)?.email || selectedDriverId}
+                                                onChange={e => {
+                                                    const val = e.target.value;
+                                                    // Find the driver by name/email to get their UID
+                                                    const matchedDriver = drivers.find(d => (d.name || d.email) === val);
+                                                    if (matchedDriver) {
+                                                        setSelectedDriverId(matchedDriver.uid);
+                                                    } else {
+                                                        setSelectedDriverId(val); // Fallback to raw string if typed manually without matching
+                                                    }
+                                                }}
+                                                onBlur={e => {
+                                                    // Optional cleanup: If they empty it, set unassigned
+                                                    if (!e.target.value) setSelectedDriverId('');
+                                                }}
+                                            />
+                                            <datalist id="drivers-list">
+                                                {drivers.map(d => <option key={d.uid} value={d.name || d.email} />)}
+                                            </datalist>
                                         </div>
                                     </div>
                                     <div>
@@ -1479,17 +1493,18 @@ const DeliveryOrderManagement: React.FC = () => {
                                         </div>
                                         <div>
                                             <label className="block text-[10px] font-bold text-blue-500/80 uppercase tracking-widest mb-2">Trip Category</label>
-                                            <select
+                                            <input
+                                                list="trip-category-list"
+                                                placeholder="-- Auto/Manual --"
                                                 className="w-full bg-slate-950 border border-slate-800 rounded-lg px-3 py-2 text-xs text-white focus:border-blue-500/50 outline-none"
                                                 value={tripCategory}
                                                 onChange={e => setTripCategory(e.target.value)}
-                                            >
-                                                <option value="">-- Auto/Manual --</option>
-                                                {/* Unique location names for the selected origin */}
+                                            />
+                                            <datalist id="trip-category-list">
                                                 {Array.from(new Set(deliveryRates.filter(r => r.origin === tripOrigin).map(r => r.location_name))).map(loc => (
-                                                    <option key={loc} value={loc}>{loc}</option>
+                                                    <option key={loc} value={loc} />
                                                 ))}
-                                            </select>
+                                            </datalist>
                                         </div>
                                         <div>
                                             <label className="block text-[10px] font-bold text-emerald-500/80 uppercase tracking-widest mb-2">Total Drops</label>
