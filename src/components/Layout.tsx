@@ -266,7 +266,6 @@ const Layout: React.FC<LayoutProps> = ({ children, activePage, setActivePage, us
                                     <NavItem id="order-summary" icon={FileBarChart} label="Daily Prep" roles={['SuperAdmin', 'Admin', 'Manager']} />
                                     <NavItem id="maintenance" icon={Wrench} label="Maintenance Control" roles={['SuperAdmin', 'Admin', 'Manager']} />
                                     <NavItem id="lorry-management" icon={Truck} label="Lorry Fleet" roles={['SuperAdmin', 'Admin', 'Manager']} />
-                                    <NavItem id="loading-dock" icon={ClipboardList} label="Loading Dock" roles={['SuperAdmin', 'Admin', 'Manager']} />
                                     <NavItem id="production" icon={Database} label="Production Logs" roles={['SuperAdmin', 'Admin', 'Manager']} />
                                     <NavItem id="report-history" icon={FileText} label="Reports" roles={['SuperAdmin', 'Admin', 'Manager']} />
                                 </NavGroup>

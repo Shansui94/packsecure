@@ -21,7 +21,7 @@ import LorryService from './pages/LorryService';
 import MaintenanceManagement from './pages/MaintenanceManagement';
 import LorryManagement from './pages/LorryManagement';
 // import Dispatch from './pages/Dispatch';
-import LoadingDock from './pages/LoadingDock';
+// import LoadingDock from './pages/LoadingDock';
 import MachineLabels from './pages/MachineLabels';
 import ExecutiveReports from './pages/ExecutiveReports';
 import DataManagement from './pages/DataManagement';
@@ -182,8 +182,8 @@ function App() {
         // Define allowable pages per role
         const allowedPages: Record<string, string[]> = {
             'SuperAdmin': ['*'], // The Only One with Full Access
-            'Admin': ['profile', 'construction', 'factory-live-os', 'dashboard', 'data-v2', 'customer-import', 'universal-intake', 'scanner', 'jobs', 'livestock', 'inventory', 'recipes', 'products', 'delivery', 'order-summary', 'dispatch', 'loading-dock', 'production', 'report-history', 'users', 'hr', 'claims', 'simple-stock', 'maintenance', 'lorry-management', 'iot', 'driver-management', 'operators', 'dev-log', 'leave-calendar', 'personal-report', 'machine-schedule'],
-            'Manager': ['profile', 'construction', 'factory-live-os', 'dashboard', 'data-v2', 'customer-import', 'universal-intake', 'jobs', 'livestock', 'inventory', 'recipes', 'products', 'delivery', 'order-summary', 'dispatch', 'loading-dock', 'production', 'report-history', 'hr', 'claims', 'simple-stock', 'maintenance', 'lorry-management', 'iot', 'driver-management', 'operators', 'leave-calendar', 'personal-report', 'machine-schedule'],
+            'Admin': ['profile', 'construction', 'factory-live-os', 'dashboard', 'data-v2', 'customer-import', 'universal-intake', 'scanner', 'jobs', 'livestock', 'inventory', 'recipes', 'products', 'delivery', 'order-summary', 'dispatch', 'production', 'report-history', 'users', 'hr', 'claims', 'simple-stock', 'maintenance', 'lorry-management', 'iot', 'driver-management', 'operators', 'dev-log', 'leave-calendar', 'personal-report', 'machine-schedule'],
+            'Manager': ['profile', 'construction', 'factory-live-os', 'dashboard', 'data-v2', 'customer-import', 'universal-intake', 'jobs', 'livestock', 'inventory', 'recipes', 'products', 'delivery', 'order-summary', 'dispatch', 'production', 'report-history', 'hr', 'claims', 'simple-stock', 'maintenance', 'lorry-management', 'iot', 'driver-management', 'operators', 'leave-calendar', 'personal-report', 'machine-schedule'],
             'Driver': ['delivery-driver', 'delivery-history', 'leave-calendar', 'lorry-service', 'claims', 'profile', 'personal-report'],
             'Operator': ['scanner', 'leave-calendar', 'profile', 'personal-report'],
             'Device': ['scanner'],
@@ -647,8 +647,8 @@ function App() {
                 return <LorryManagement />;
             case 'dispatch':
                 return null; // <Dispatch />;
-            case 'loading-dock':
-                return <LoadingDock />;
+            // case 'loading-dock':
+            //    return <LoadingDock />;
             case 'data-v2':
                 return <DataManagement />;
             case 'admin-data':

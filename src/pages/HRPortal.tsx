@@ -45,7 +45,6 @@ const ALL_PAGES = [
     { id: 'delivery', label: 'Trip Management', group: 'Logistics' },
     { id: 'order-summary', label: 'Daily Prep', group: 'Logistics' },
     { id: 'lorry-management', label: 'Lorry Fleet', group: 'Logistics' },
-    { id: 'loading-dock', label: 'Loading Dock', group: 'Logistics' },
     { id: 'delivery-driver', label: 'My Delivery', group: 'Driver' },
     { id: 'delivery-history', label: 'My History', group: 'Driver' },
     { id: 'lorry-service', label: 'Lorry Service', group: 'Driver' },
