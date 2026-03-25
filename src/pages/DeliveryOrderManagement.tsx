@@ -2,10 +2,10 @@ import React, { useState, useEffect } from 'react';
 import { DragDropContext, Droppable, Draggable, DropResult } from '@hello-pangea/dnd';
 import { supabase } from '../services/supabase';
 import { getV2Items } from '../services/apiV2';
-import { determineZone, determineState, findBestFactory } from '../utils/logistics';
+import { determineState, findBestFactory } from '../utils/logistics';
 import {
     Plus, Search, Calendar, FileText, X, Truck,
-    User as UserIcon, Box, Zap, Trash2, Scissors, AlertTriangle, MapPin, Wrench
+    User as UserIcon, Box, Zap, Trash2, Scissors, AlertTriangle, MapPin, Wrench, Package
 } from 'lucide-react';
 import { WAREHOUSES } from '../data/factoryData';
 import {
@@ -157,6 +157,7 @@ const DeliveryOrderManagement: React.FC = () => {
 
     // New Order Form State
     const [selectedDriverId, setSelectedDriverId] = useState('');
+    const [deliveryMethod, setDeliveryMethod] = useState<'Company Delivery' | 'Customer Pick Up'>('Company Delivery');
     const getTodayStr = () => new Date().toLocaleDateString('en-CA'); // YYYY-MM-DD 本地时间
     const getTomorrowStr = () => { const d = new Date(); d.setDate(d.getDate() + 1); return d.toLocaleDateString('en-CA'); };
     const [newOrderDate, setNewOrderDate] = useState(getTodayStr); // 默认今天
@@ -766,8 +767,7 @@ const DeliveryOrderManagement: React.FC = () => {
                 doNumber = `DO-${new Date().getFullYear()}-${Math.floor(Math.random() * 10000).toString().padStart(4, '0')}`;
             }
 
-            const zone = determineZone(newOrderAddress || '');
-            const bestFactory = findBestFactory(zone, newOrderItems, stockMap);
+            const bestFactory = findBestFactory((tripCategory || '') as any, newOrderItems, stockMap);
 
             // Auto-Push Unlisted Trip Category to HR Payroll Rates
             if (tripCategory) {
@@ -794,11 +794,12 @@ const DeliveryOrderManagement: React.FC = () => {
                 order_number: doNumber,
                 customer: finalCustomer,
                 delivery_address: newOrderAddress,
-                zone: tripCategory || determineZone(newOrderAddress || ''),
+                zone: tripCategory || '',
                 trip_origin: tripOrigin,
                 trip_drop_count: tripDropCount,
                 factory_id: bestFactory.id,
-                driver_id: selectedDriverId || null,
+                delivery_method: deliveryMethod, // NEW: Delivery method
+                driver_id: deliveryMethod === 'Customer Pick Up' ? null : (selectedDriverId || null),
                 items: newOrderItems,
                 status: 'New',
                 order_date: newOrderDate || new Date().toISOString().split("T")[0],
@@ -841,7 +842,7 @@ const DeliveryOrderManagement: React.FC = () => {
                 const existing = customerDB.find(c => c.name.toLowerCase() === orderCustomer.toLowerCase());
                 if (!existing && newOrderAddress) {
                     supabase.from('sys_customers').insert({
-                        name: orderCustomer, address: newOrderAddress, zone: determineZone(newOrderAddress)
+                        name: orderCustomer, address: newOrderAddress, zone: tripCategory || ''
                     }).then(() => {
                         supabase.from('sys_customers').select('*').then(res => res.data && setCustomerDB(res.data));
                     });
@@ -882,8 +883,9 @@ const DeliveryOrderManagement: React.FC = () => {
 
     const handleCloseModal = () => {
         setIsCreateModalOpen(false);
-        setEditingOrderId(null); setNewOrderDate(getTodayStr());
+        setNewOrderDate(getTodayStr());
         setSelectedDriverId('');
+        setDeliveryMethod('Company Delivery');
         setOrderCustomer('');
         setNewOrderAddress('');
         setNewOrderDeliveryDate(getTomorrowStr());
@@ -1413,33 +1415,57 @@ const DeliveryOrderManagement: React.FC = () => {
                                 {/* Section 1: Basic Info (Simpler) */}
                                 <div className="grid grid-cols-2 gap-4">
                                     <div>
-                                        <label className="block text-xs font-bold text-slate-500 uppercase mb-2">Assigned Driver</label>
-                                        <div className="relative">
-                                            <UserIcon className="absolute left-3 top-3.5 text-slate-600 z-10" size={16} />
-                                            <input
-                                                list="drivers-list"
-                                                className="w-full bg-slate-900 border border-slate-800 rounded-xl pl-10 pr-10 py-3 text-sm text-slate-200 focus:border-blue-500/50 outline-none"
-                                                placeholder="-- Type or Select Driver --"
-                                                value={drivers.find(d => d.uid === selectedDriverId)?.name || drivers.find(d => d.uid === selectedDriverId)?.email || selectedDriverId}
-                                                onChange={e => {
-                                                    const val = e.target.value;
-                                                    // Find the driver by name/email to get their UID
-                                                    const matchedDriver = drivers.find(d => (d.name || d.email) === val);
-                                                    if (matchedDriver) {
-                                                        setSelectedDriverId(matchedDriver.uid);
-                                                    } else {
-                                                        setSelectedDriverId(val); // Fallback to raw string if typed manually without matching
-                                                    }
-                                                }}
-                                                onBlur={e => {
-                                                    // Optional cleanup: If they empty it, set unassigned
-                                                    if (!e.target.value) setSelectedDriverId('');
-                                                }}
-                                            />
-                                            <datalist id="drivers-list">
-                                                {drivers.map(d => <option key={d.uid} value={d.name || d.email} />)}
-                                            </datalist>
+                                        <label className="block text-xs font-bold text-slate-500 uppercase mb-2">Delivery Method</label>
+                                        <div className="flex bg-slate-900 border border-slate-800 rounded-xl overflow-hidden p-1 mb-3">
+                                            <button 
+                                                onClick={() => { setDeliveryMethod('Company Delivery'); setSelectedDriverId(''); }}
+                                                className={`flex-1 py-2 text-xs font-bold transition-all rounded-lg ${deliveryMethod === 'Company Delivery' ? 'bg-blue-600 text-white shadow-lg shadow-blue-900/40' : 'text-slate-400 hover:text-white'}`}
+                                            >Company Delivery</button>
+                                            <button 
+                                                onClick={() => { setDeliveryMethod('Customer Pick Up'); setSelectedDriverId(''); }}
+                                                className={`flex-1 py-2 text-xs font-bold transition-all rounded-lg ${deliveryMethod === 'Customer Pick Up' ? 'bg-orange-600 text-white shadow-lg shadow-orange-900/40' : 'text-slate-400 hover:text-white'}`}
+                                            >Customer Pick Up</button>
                                         </div>
+
+                                        {deliveryMethod === 'Company Delivery' ? (
+                                            <>
+                                                <label className="block text-xs font-bold text-slate-500 uppercase mb-2">Assigned Driver</label>
+                                                <div className="relative">
+                                                    <UserIcon className="absolute left-3 top-3.5 text-slate-600 z-10" size={16} />
+                                                    <input
+                                                        list="drivers-list"
+                                                        className="w-full bg-slate-900 border border-slate-800 rounded-xl pl-10 pr-10 py-3 text-sm text-slate-200 focus:border-blue-500/50 outline-none"
+                                                        placeholder="-- Type or Select Driver --"
+                                                        value={drivers.find(d => d.uid === selectedDriverId)?.name || drivers.find(d => d.uid === selectedDriverId)?.email || selectedDriverId || ''}
+                                                        onChange={e => {
+                                                            const val = e.target.value;
+                                                            // Find the driver by name/email to get their UID
+                                                            const matchedDriver = drivers.find(d => (d.name || d.email) === val);
+                                                            if (matchedDriver) {
+                                                                setSelectedDriverId(matchedDriver.uid);
+                                                            } else {
+                                                                setSelectedDriverId(val); // Fallback to raw string if typed manually without matching
+                                                            }
+                                                        }}
+                                                        onBlur={e => {
+                                                            // Optional cleanup: If they empty it, set unassigned
+                                                            if (!e.target.value) setSelectedDriverId('');
+                                                        }}
+                                                    />
+                                                    <datalist id="drivers-list">
+                                                        {drivers.map(d => <option key={d.uid} value={d.name || d.email || ''} />)}
+                                                    </datalist>
+                                                </div>
+                                            </>
+                                        ) : (
+                                            <div className="bg-orange-500/10 border border-orange-500/20 text-orange-400 p-3 rounded-xl flex items-center gap-3">
+                                                <Package className="shrink-0" size={18} />
+                                                <div className="text-xs">
+                                                    <span className="font-bold block tracking-wider uppercase mb-0.5">Pick Up Selected</span>
+                                                    No driver assignment required. Operator will scan on site.
+                                                </div>
+                                            </div>
+                                        )}
                                     </div>
                                     <div>
                                         <div className="grid grid-cols-2 gap-4">

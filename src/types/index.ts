@@ -101,6 +101,7 @@ export interface SalesOrder {
     deadline: string;
     notes?: string;
     totalAmount?: number; // Optional for now
+    delivery_method?: 'Company Delivery' | 'Customer Pick Up' | string; // NEW: Delivery method
     driverId?: string; // NEW: Assigned Driver ID
     driverName?: string; // NEW: Resolved Driver Name for display
     deliveryAddress?: string; // Mapped from delivery_address
