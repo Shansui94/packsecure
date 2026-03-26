@@ -1,0 +1,28 @@
+=== Looking up drivers: Dean & Ameer ===
+  Dean | EID: 8499 | UID: c3eeab28-5960-4bef-b5d3-28d69dfa0b5d
+  Ameer | EID: 3190 | UID: d7316083-f889-47ca-a258-c7b5175891dc
+
+=== Orders for Dean (since 2026-03-19) ===
+  Found 6 orders:
+  1. [DO-2026-1684] Status: New | Customer: General Customer | OrderDate: 2026-03-26 | Dest: BM | Created: 2026-03-26T01:15:49.74177+00:00
+  2. [DO-2026-9160] Status: Delivered | Customer: General Customer | OrderDate: 2026-03-26 | Dest: IPOH | Created: 2026-03-25T09:43:51.738872+00:00
+  3. [DO-2026-8039] Status: New | Customer: General Customer | OrderDate: 2026-03-24 | Dest: East | Created: 2026-03-24T08:17:53.43937+00:00
+  4. [DO-2026-3017] Status: Delivered | Customer: General Customer | OrderDate: 2026-03-23 | Dest: Central_Left | Created: 2026-03-23T07:37:40.822896+00:00
+  5. [DO-2026-6194] Status: Delivered | Customer: General Customer | OrderDate: 2026-03-20 | Dest: Central_Left | Created: 2026-03-20T04:16:03.032601+00:00
+  6. [DO-2026-2454] Status: Delivered | Customer: General Customer | OrderDate: 2026-03-19 | Dest: simpang empat | Created: 2026-03-19T07:23:27.347578+00:00
+
+=== Orders for Ameer (since 2026-03-19) ===
+  Found 4 orders:
+  1. [DO-2026-2912] Status: New | Customer: General Customer | OrderDate: 2026-03-26 | Dest: IPOH | Created: 2026-03-26T01:48:13.269055+00:00
+  2. [DO-2026-9440] Status: Delivered | Customer: General Customer | OrderDate: 2026-03-24 | Dest: Central_Right | Created: 2026-03-24T08:32:03.715992+00:00
+  3. [DO-2026-3888] Status: New | Customer: General Customer | OrderDate: 2026-03-24 | Dest: Central_Left | Created: 2026-03-24T08:27:48.188703+00:00
+  4. [DO-2026-5261] Status: Delivered | Customer: General Customer | OrderDate: 2026-03-19 | Dest: sitiawan | Created: 2026-03-19T03:53:38.343857+00:00
+
+=== All CANCELLED orders in last 7 days ===
+  Found 1 cancelled orders:
+  1. [DO-2026-9711] Customer: General Customer | Driver: f1e0b372 | Created: 2026-03-20T04:09:18.835635+00:00
+
+=== All orders created TODAY (2026-03-26) ===
+  Found 2 orders created today:
+  1. [DO-2026-2912] Status: New | Customer: General Customer | Driver: Ameer | Origin: TAIPING | Dest: IPOH | Created: 2026-03-26T01:48:13.269055+00:00
+  2. [DO-2026-1684] Status: New | Customer: General Customer | Driver: Dean | Origin: TAIPING | Dest: BM | Created: 2026-03-26T01:15:49.74177+00:00

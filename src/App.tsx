@@ -47,6 +47,7 @@ import SOPCenter from './pages/SOPCenter';
 import WorkPhotoLog from './pages/WorkPhotoLog';
 import PersonalMonthlyReport from './pages/PersonalMonthlyReport';
 import MachineSchedule from './pages/MachineSchedule';
+import AILocationDemo from './pages/AILocationDemo';
 
 import { User, UserRole, InventoryItem, ProductionLog as ProductionLogType, JobOrder } from './types';
 import AIAgentWidget from './components/AIAgentWidget';
@@ -691,6 +692,8 @@ function App() {
                 return <PersonalMonthlyReport user={user} />;
             case 'machine-schedule':
                 return <MachineSchedule user={user} />;
+            case 'ai-location':
+                return <AILocationDemo />;
             case 'operator-dashboard':
                 return <UnderConstruction title="Coming Soon" />;
             case 'data':
