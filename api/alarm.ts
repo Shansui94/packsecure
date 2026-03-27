@@ -46,19 +46,7 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
 
         const isReboot = (alarm_count === 0);
         
-        // --- 1. BUILD V1 ROWS ---
-        const insertRowsV1 = lanes.map((laneId: string) => {
-            const laneData = activeLaneMap[laneId] ?? activeLaneMap['Single'] ?? null;
-            const resolvedSku = (laneData?.sku && laneData.sku !== 'UNKNOWN') ? laneData.sku : 'UNKNOWN-BUBBLEWRAP';
-            return {
-                machine_id,
-                lane_id: laneId,
-                alarm_count: isReboot ? 0 : (laneData?.yield ?? 1),
-                product_sku: resolvedSku,
-            };
-        });
-
-        // --- 2. BUILD V2 ROWS ---
+        // --- 1. NATIVE V2 INSERTION ---
         const insertRowsV2 = lanes.map((laneId: string) => {
             const laneData = activeLaneMap[laneId] ?? activeLaneMap['Single'] ?? null;
             const resolvedSku = (laneData?.sku && laneData.sku !== 'UNKNOWN') ? laneData.sku : 'UNKNOWN-BUBBLEWRAP';
@@ -69,36 +57,17 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
             };
         });
 
-        // --- 3. DUAL WRITE (Safe parallel execution) ---
-        // We write to both independently so that V2's Live Stock Dashboard updates in real time,
-        // while preserving V1's operational stability. If V2 fails, V1 still succeeds.
-        const [v1Res, v2Res] = await Promise.allSettled([
-            supabase.from('production_logs').insert(insertRowsV1),
-            supabase.from('production_logs_v2').insert(insertRowsV2)
-        ]);
+        const { error: v2Error } = await supabase.from('production_logs_v2').insert(insertRowsV2);
 
-        let v1Error = null;
-        if (v1Res.status === 'rejected') v1Error = v1Res.reason;
-        else if (v1Res.value.error) v1Error = v1Res.value.error;
-
-        let v2Error = null;
-        if (v2Res.status === 'rejected') v2Error = v2Res.reason;
-        else if (v2Res.value.error) v2Error = v2Res.value.error;
-
-        if (v1Error) {
-            console.error('CRITICAL: V1 Insert Error:', v1Error);
-            throw v1Error; // Must throw to let ESP32 retry if V1 fails
-        }
-        
         if (v2Error) {
-            // Soft fail: log it, but don't crash the ESP32 pulse
-            console.error('Warning: V2 Insert Error (Non-fatal):', v2Error);
+            console.error('CRITICAL: V2 Insert Error:', v2Error);
+            throw v2Error; // Must throw to let ESP32 retry if it fails
         }
 
         return res.status(200).json({
             status: 'ok',
-            message: `Logged to V1 & V2`,
-            lanes: insertRowsV1,
+            message: `Logged to V2 Native`,
+            lanes: insertRowsV2,
         });
 
     } catch (e: any) {

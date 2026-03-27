@@ -530,7 +530,7 @@ const FactoryLiveOS: React.FC<FactoryLiveOSProps> = ({ onNavigate }) => {
 
         // Realtime: new production log → refresh
         const channel = supabase.channel('factory-live-os')
-            .on('postgres_changes', { event: 'INSERT', schema: 'public', table: 'production_logs' }, loadData)
+            .on('postgres_changes', { event: 'INSERT', schema: 'public', table: 'production_logs_v2' }, loadData)
             .on('postgres_changes', { event: '*', schema: 'public', table: 'iot_device_configs' }, loadData)
             .on('postgres_changes', { event: '*', schema: 'public', table: 'machine_active_products' }, loadData)
             .on('postgres_changes', { event: '*', schema: 'public', table: 'sales_orders' }, loadData)

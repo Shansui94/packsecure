@@ -692,31 +692,27 @@ const ProductionControl: React.FC<ProductionControlProps> = ({ user, jobs = [] }
         setActiveJob(job || null);
     }, [jobs, selectedMachine]);
 
-    // Fetch Logs — query V1 (production_logs) directly so per-lane SKUs are shown correctly.
-    // production_logs_v2 is a trigger-merged view that can lose the second lane's SKU.
+    // Fetch Logs — query V2 table directly which contains strictly normalized SKUs and Output Quantities
     const fetchUserLogs = async () => {
         const targetMachine = machineMetadata?.id || selectedMachine;
         if (!targetMachine) return;
 
-        // Machines where firmware sends alarm_count=2 but actually produces 1 roll
-        const HALF_COUNT_MACHINES = ['T1.3-M02', 'N1-M01', 'N2-M02'];
-        const isHalfCount = HALF_COUNT_MACHINES.includes(targetMachine);
-
-        const { data } = await supabase.from('production_logs')
-            .select('id, product_sku, alarm_count, lane_id, created_at')
+        const { data } = await supabase.from('production_logs_v2')
+            .select('log_id, sku, output_qty, created_at')
             .eq('machine_id', targetMachine)
-            .not('product_sku', 'is', null)
+            .not('sku', 'is', null)
             .order('created_at', { ascending: false })
             .limit(30);
 
         if (data) {
             const mapped: ProductionLog[] = data.map((log: any) => ({
-                Log_ID: log.id,
+                Log_ID: log.log_id,
                 Timestamp: log.created_at,
                 Job_ID: 'N/A',
                 Operator_Email: '',
-                Output_Qty: isHalfCount ? Math.round((log.alarm_count || 1) / 2) : (log.alarm_count || 1),
-                Note: log.product_sku || 'Production Log',
+                // V2 output_qty is natively driven by yield configuration. No more fractional logic!
+                Output_Qty: log.output_qty || 1,
+                Note: log.sku || 'Production Log',
             }));
             setRecentLogs(mapped);
         }
@@ -727,7 +723,7 @@ const ProductionControl: React.FC<ProductionControlProps> = ({ user, jobs = [] }
         if (selectedMachine) {
             fetchUserLogs();
             const sub = supabase.channel('machine-logs-broad')
-                .on('postgres_changes', { event: 'INSERT', schema: 'public', table: 'production_logs' },
+                .on('postgres_changes', { event: 'INSERT', schema: 'public', table: 'production_logs_v2' },
                     (payload) => {
                         if (payload.new.machine_id === (machineMetadata?.id || selectedMachine)) {
                             fetchUserLogs();

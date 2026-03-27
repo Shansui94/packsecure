@@ -19,12 +19,12 @@ const ProductionLog: React.FC<ProductionLogProps> = ({ userRole }) => {
     const fetchLogs = async () => {
         setLoading(true);
         try {
-            // UPDATED: Use the unified view
+            // UPDATED: Use the unified V2 table directly
             let query = supabase
-                .from('v_production_logs_unified') // Changed from 'production_logs'
+                .from('production_logs_v2')
                 .select('*')
                 .order('created_at', { ascending: false })
-                .limit(5000); // Increased from default 1000 to 5000
+                .limit(5000);
 
             if (filterDate) {
                 const startOfDay = new Date(filterDate);
@@ -52,14 +52,16 @@ const ProductionLog: React.FC<ProductionLogProps> = ({ userRole }) => {
             });
 
             if (data) {
-                // UPDATED: Map fields from the View (sku, quantity) to the UI format
+                // UPDATED: Map fields from the V2 schema to the UI format
                 const mappedData = data.map((item: any) => ({
                     ...item,
-                    // View returns 'quantity', map to UI's 'quantity_produced'
-                    quantity_produced: item.quantity,
-                    // View returns 'sku', map to UI's 'product_id'
+                    quantity_produced: item.output_qty,
                     product_id: item.sku || 'UNKNOWN',
-                    unit_id: 'Unit'
+                    job_id: 'N/A',
+                    operator_id: 'Auto',
+                    session_id: 'N/A',
+                    note: '',
+                    unit_id: 'Roll'
                 }));
                 setLogs(mappedData);
             }

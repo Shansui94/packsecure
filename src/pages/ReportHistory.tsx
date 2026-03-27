@@ -47,7 +47,7 @@ const ReportHistory: React.FC<ReportHistoryProps> = ({ user }: ReportHistoryProp
             endOfDay.setHours(23, 59, 59, 999);
 
             const { data: logs, error } = await supabase
-                .from('production_logs')
+                .from('production_logs_v2')
                 .select('*')
                 .gte('created_at', startOfDay.toISOString())
                 .lte('created_at', endOfDay.toISOString())
@@ -59,7 +59,7 @@ const ReportHistory: React.FC<ReportHistoryProps> = ({ user }: ReportHistoryProp
             const summaryMap: Record<string, MachineDailySummary> = {};
 
             logs?.forEach((log: any) => {
-                const machineId = log.machine_id || log.job_id;
+                const machineId = log.machine_id;
                 if (!machineId) return;
 
                 if (!summaryMap[machineId]) {
@@ -78,16 +78,16 @@ const ReportHistory: React.FC<ReportHistoryProps> = ({ user }: ReportHistoryProp
 
                 const summary = summaryMap[machineId];
                 summary.logs.push({
-                    Log_ID: log.id,
+                    Log_ID: log.log_id,
                     Timestamp: log.created_at,
-                    Job_ID: log.job_id,
-                    Operator_Email: log.operator_id ? (userMap[log.operator_id]?.name || 'Unknown') : 'Auto',
-                    Output_Qty: log.alarm_count || 1,
-                    Note: log.product_sku,
+                    Job_ID: 'N/A',
+                    Operator_Email: 'Auto',
+                    Output_Qty: log.output_qty || 1,
+                    Note: log.sku,
                     formattedDate: new Date(log.created_at).toLocaleTimeString()
                 } as any);
 
-                summary.totalQty += (Number(log.alarm_count) || 1);
+                summary.totalQty += (Number(log.output_qty) || 1);
                 summary.logCount++;
             });
 
