@@ -1,0 +1,3 @@
+src/pages/PersonalMonthlyReport.tsx(39,12): error TS6133: 'loggedInProfile' is declared but its value is never read.
+src/pages/PersonalMonthlyReport.tsx(112,19): error TS6133: 'userEmail' is declared but its value is never read.
+src/pages/ProductionControl.tsx(36,83): error TS6133: 'operatorId' is declared but its value is never read.

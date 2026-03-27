@@ -33,7 +33,7 @@ interface ProductionLaneProps {
     className?: string;
 }
 
-const ProductionLane: React.FC<ProductionLaneProps> = ({ laneId, machineMetadata, operatorId, jobs, onProductionComplete, onBeforeProduce, className }) => {
+const ProductionLane: React.FC<ProductionLaneProps> = ({ laneId, machineMetadata, jobs, onProductionComplete, onBeforeProduce, className }) => {
 
     // ... (Keep existing state)
     const [step, setStep] = useState<1 | 2 | 3>(1);

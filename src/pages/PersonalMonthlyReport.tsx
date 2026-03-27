@@ -36,7 +36,7 @@ const PersonalMonthlyReport: React.FC<Props> = ({ user }) => {
     const [loading, setLoading] = useState(true);
 
     // Profile state for the logged-in user
-    const [loggedInProfile, setLoggedInProfile] = useState<any>(null);
+    const [, setLoggedInProfile] = useState<any>(null);
 
     // HR/Admin Selector States
     const [selectedEmployeeId, setSelectedEmployeeId] = useState<string>(user.uid || user.id);
@@ -109,7 +109,6 @@ const PersonalMonthlyReport: React.FC<Props> = ({ user }) => {
             setViewedProfile(profileData);
             
             const activeEmpId = profileData ? profileData.employee_id : (selectedEmployeeId === (user.uid || user.id) ? user.employeeId : undefined);
-            const userEmail = profileData ? profileData.email : (selectedEmployeeId === (user.uid || user.id) ? user.email : '');
 
             // B. Production Logs
             const { data: prodData } = await supabase

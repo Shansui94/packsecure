@@ -29,6 +29,11 @@ DROP TABLE IF EXISTS public.zone_trip_rates CASCADE; -- <-- NEW: The active tabl
 DROP TABLE IF EXISTS public.logistics_deliveries_v2 CASCADE;
 DROP TABLE IF EXISTS public.logistics_delivery_orders CASCADE;
 DROP TABLE IF EXISTS public.logistics_trips CASCADE;
+DROP TABLE IF EXISTS public.delivery_items_v2 CASCADE; -- <-- NEW: Delivery items are stored as JSONB in `sales_orders`
+
+-- 🗑️ 4. EXPERIMENTAL MACHINE LOGS
+DROP TABLE IF EXISTS public.machine_live_output CASCADE; -- <-- NEW: 0 references in code
+DROP TABLE IF EXISTS public.maintenance_logs CASCADE; -- <-- NEW: 0 references in code
 
 DROP VIEW IF EXISTS public.v2_inventory_snapshot CASCADE; -- <-- The active view is `v2_inventory_view`
 DROP VIEW IF EXISTS public.v2_reserved_stock CASCADE; -- <-- NEW: Unused draft view
