@@ -70,15 +70,23 @@ const PersonalMonthlyReport: React.FC<Props> = ({ user }) => {
             // If Manager/HR/Admin/SuperAdmin, fetch all employees
             const role = data?.role || user.role;
             if (['SuperAdmin', 'Admin', 'Manager', 'HR'].includes(role)) {
-                const { data: allEmp } = await supabase
-                    .from('sys_users_v2')
-                    .select('auth_user_id, name, employee_id, role, status')
-                    .eq('status', 'Active')
-                    .order('name');
-                if (allEmp) {
-                    // Filter out rows without auth_user_id if any, or just show them
-                    setEmployeesList(allEmp.filter(e => e.auth_user_id));
+                const [v2Res, pubRes] = await Promise.all([
+                    supabase.from('sys_users_v2').select('auth_user_id, name, employee_id, role, status').eq('status', 'Active'),
+                    supabase.from('users_public').select('id, name, employee_id, role, status').eq('status', 'Active')
+                ]);
+                
+                let merged: any[] = [];
+                if (v2Res.data) {
+                    merged = [...v2Res.data.filter(e => e.auth_user_id).map(e => ({...e, uid: e.auth_user_id}))];
                 }
+                if (pubRes.data) {
+                    pubRes.data.forEach(p => {
+                        if (!merged.find(m => m.uid === p.id)) {
+                            merged.push({...p, uid: p.id, auth_user_id: p.id});
+                        }
+                    });
+                }
+                setEmployeesList(merged.sort((a,b) => (a.name || '').localeCompare(b.name || '')));
             }
         };
         fetchPermissions();
@@ -100,11 +108,24 @@ const PersonalMonthlyReport: React.FC<Props> = ({ user }) => {
 
         try {
             // A. Fetch Viewed User Profile
-            const { data: profileData } = await supabase
+            let { data: profileData } = await supabase
                 .from('sys_users_v2')
                 .select('*')
                 .eq('auth_user_id', selectedEmployeeId)
                 .single();
+
+            if (!profileData) {
+                // Check users_public (for standalone Drivers)
+                const { data: pubData } = await supabase
+                    .from('users_public')
+                    .select('*')
+                    .eq('id', selectedEmployeeId)
+                    .single();
+                
+                if (pubData) {
+                    profileData = { ...pubData, auth_user_id: pubData.id };
+                }
+            }
 
             setViewedProfile(profileData);
             
