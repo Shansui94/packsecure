@@ -14,7 +14,7 @@ import { determineZone } from '../utils/logistics';
 
 
 // --- TYPES ---
-type TabType = 'items' | 'machines' | 'vehicles' | 'customers' | 'partners' | 'recipes' | 'factories';
+type TabType = 'items' | 'machines' | 'vehicles' | 'customers' | 'recipes' | 'factories';
 
 interface DataItem {
     id: string; // Unified ID for UI
@@ -28,7 +28,6 @@ const TABS = [
     { id: 'customers', label: 'Customers', icon: Users, color: 'text-green-400', bg: 'bg-green-500/10' },
     { id: 'machines', label: 'Machines', icon: Settings, color: 'text-purple-400', bg: 'bg-purple-500/10' },
     { id: 'factories', label: 'Factories / Hubs', icon: LayoutGrid, color: 'text-teal-400', bg: 'bg-teal-500/10' },
-    { id: 'partners', label: 'Suppliers', icon: Users, color: 'text-cyan-400', bg: 'bg-cyan-500/10' },
     { id: 'recipes', label: 'BOM Recipes', icon: FlaskConical, color: 'text-pink-400', bg: 'bg-pink-500/10' },
 ];
 
@@ -348,10 +347,6 @@ export default function DataManagement() {
                     query = supabase.from('sys_machines_v2').select('*').order('machine_id');
                     mapFn = (i) => ({ ...i, id: i.machine_id, title: i.name, subtitle: i.type });
                     break;
-                case 'partners':
-                    query = supabase.from('crm_partners_v2').select('*').order('partner_id');
-                    mapFn = (i) => ({ ...i, id: i.partner_id, title: i.name, subtitle: i.type });
-                    break;
                 case 'recipes':
                     query = supabase.from('bom_headers_v2').select('*, bom_items_v2(*)').order('created_at', { ascending: false }).limit(1000);
                     mapFn = (i) => ({ ...i, id: i.recipe_id, title: i.product_sku, subtitle: `${i.bom_items_v2?.length || 0} Ingredients` });
@@ -408,7 +403,6 @@ export default function DataManagement() {
                 case 'vehicles': table = 'sys_vehicles'; pk = 'id'; break;
                 case 'customers': table = 'sys_customers'; pk = 'id'; break;
                 case 'machines': table = 'sys_machines_v2'; pk = 'machine_id'; break;
-                case 'partners': table = 'crm_partners_v2'; pk = 'partner_id'; break;
                 case 'recipes': table = 'bom_headers_v2'; pk = 'recipe_id'; break;
                 case 'factories': table = 'sys_locations_v2'; pk = 'loc_id'; break;
             }
@@ -466,7 +460,6 @@ export default function DataManagement() {
                 case 'vehicles': table = 'sys_vehicles'; pkField = 'id'; break;
                 case 'customers': table = 'sys_customers'; pkField = 'id'; break;
                 case 'machines': table = 'sys_machines_v2'; pkField = 'machine_id'; break;
-                case 'partners': table = 'crm_partners_v2'; pkField = 'partner_id'; break;
                 case 'recipes': table = 'bom_headers_v2'; pkField = 'recipe_id'; break;
                 case 'factories': table = 'sys_locations_v2'; pkField = 'loc_id'; break;
             }
@@ -499,7 +492,6 @@ export default function DataManagement() {
                 case 'vehicles': table = 'sys_vehicles'; break;
                 case 'customers': table = 'sys_customers'; break;
                 case 'machines': table = 'sys_machines_v2'; break;
-                case 'partners': table = 'crm_partners_v2'; break;
                 case 'recipes': table = 'bom_headers_v2'; break;
                 case 'factories': table = 'sys_locations_v2'; break;
             }
@@ -851,7 +843,7 @@ export default function DataManagement() {
                                 )}
 
                                 {/* GENERIC FALLBACK FOR OTHERS */}
-                                {['partners', 'recipes'].includes(activeTab) && (
+                                {['recipes'].includes(activeTab) && (
                                     <div className="text-gray-500 italic p-4 border border-dashed border-white/10 rounded-xl">
                                         Generic editor for {activeTab} coming soon.
                                         <pre className="text-xs mt-2 text-gray-600 overflow-auto">{JSON.stringify(form, null, 2)}</pre>
