@@ -194,7 +194,7 @@ const PersonalMonthlyReport: React.FC<Props> = ({ user }) => {
             if (profileData?.role === 'Driver' || (!profileData && user.role === 'Driver')) {
                 const { data: deliveryData } = await supabase
                     .from('sales_orders')
-                    .select('pod_timestamp, zone, delivery_zone, created_at')
+                    .select('pod_timestamp, zone, delivery_address, created_at')
                     .eq('driver_id', selectedEmployeeId) 
                     .eq('status', 'Delivered')
                     .gte('created_at', startDateTs)
@@ -248,7 +248,7 @@ const PersonalMonthlyReport: React.FC<Props> = ({ user }) => {
                 return ts && ts.startsWith(dateStr);
             });
             const tripCount = dayDeliveries.length;
-            const zones = dayDeliveries.map(d => d.zone || d.delivery_zone).filter(Boolean);
+            const zones = dayDeliveries.map(d => d.zone || d.delivery_address).filter(Boolean);
 
             matrix.push({
                 dateStr,
