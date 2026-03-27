@@ -22,6 +22,7 @@ interface DailyMetrics {
     outputQty: number;
     alarmCount: number;
     tripCount: number;
+    tripEarnings: number;
     zones: string[];
     photoCount: number;
     leaveStatus: string | null;
@@ -52,6 +53,7 @@ const PersonalMonthlyReport: React.FC<Props> = ({ user }) => {
     const [leaves, setLeaves] = useState<any[]>([]);
     const [payroll, setPayroll] = useState<any | null>(null);
     const [deliveries, setDeliveries] = useState<any[]>([]);
+    const [deliveryRates, setDeliveryRates] = useState<any[]>([]);
 
     const daysInMonth = new Date(selectedYear, selectedMonth, 0).getDate();
 
@@ -192,9 +194,12 @@ const PersonalMonthlyReport: React.FC<Props> = ({ user }) => {
 
             // G. Deliveries (For Drivers)
             if (profileData?.role === 'Driver' || (!profileData && user.role === 'Driver')) {
+                const { data: dr } = await supabase.from('delivery_rates').select('*');
+                setDeliveryRates(dr || []);
+
                 const { data: deliveryData } = await supabase
                     .from('sales_orders')
-                    .select('pod_timestamp, zone, delivery_address, created_at')
+                    .select('pod_timestamp, zone, delivery_address, created_at, trip_origin, trip_drop_count')
                     .eq('driver_id', selectedEmployeeId) 
                     .eq('status', 'Delivered')
                     .gte('created_at', startDateTs)
@@ -202,6 +207,7 @@ const PersonalMonthlyReport: React.FC<Props> = ({ user }) => {
                 setDeliveries(deliveryData || []);
             } else {
                 setDeliveries([]);
+                setDeliveryRates([]);
             }
 
         } catch (error) {
@@ -248,7 +254,27 @@ const PersonalMonthlyReport: React.FC<Props> = ({ user }) => {
                 return ts && ts.startsWith(dateStr);
             });
             const tripCount = dayDeliveries.length;
-            const zones = dayDeliveries.map(d => d.zone || d.delivery_address).filter(Boolean);
+            const DayZones = dayDeliveries.map(d => d.zone || d.delivery_address).filter(Boolean);
+
+            let tripEarnings = 0;
+            const rateMap: Record<string, any> = {};
+            deliveryRates.forEach(r => { rateMap[`${r.origin}-${r.location_name}`.toLowerCase()] = r; });
+
+            dayDeliveries.forEach(t => {
+                const origin = (t.trip_origin || 'TAIPING').toLowerCase();
+                const zone = (t.zone || '').toLowerCase();
+                const key = `${origin}-${zone}`;
+                const rateInfo = rateMap[key];
+                const drops = Math.max(1, t.trip_drop_count || 1);
+
+                if (rateInfo) {
+                    const base = Number(rateInfo.base_rate) || 0;
+                    const maxPlaces = Number(rateInfo.max_places) || 0;
+                    const extraPlaces = Math.max(0, drops - maxPlaces);
+                    const extraRate = extraPlaces * (Number(rateInfo.extra_rate_per_place) || 0);
+                    tripEarnings += (base + extraRate);
+                }
+            });
 
             matrix.push({
                 dateStr,
@@ -260,7 +286,8 @@ const PersonalMonthlyReport: React.FC<Props> = ({ user }) => {
                 outputQty,
                 alarmCount,
                 tripCount,
-                zones,
+                tripEarnings,
+                zones: DayZones,
                 photoCount: dayPhotos.length,
                 leaveStatus: dayLeave ? dayLeave.status : null
             });
@@ -508,7 +535,12 @@ const PersonalMonthlyReport: React.FC<Props> = ({ user }) => {
                                             <td className="px-5 py-4 whitespace-nowrap text-right">
                                                 {isDriver ? (
                                                     day.tripCount > 0 ? (
-                                                        <span className="font-mono text-amber-400 font-bold">{day.tripCount} <span className="text-[10px] text-gray-500">trips</span></span>
+                                                        <div className="flex flex-col items-end">
+                                                            <span className="font-mono text-amber-400 font-bold">{day.tripCount} <span className="text-[10px] text-gray-500">trips</span></span>
+                                                            {day.tripEarnings > 0 && (
+                                                                <span className="text-[10px] text-green-400 font-mono mt-0.5">+ RM{day.tripEarnings.toFixed(2)}</span>
+                                                            )}
+                                                        </div>
                                                     ) : <span className="text-gray-700 font-mono">—</span>
                                                 ) : (
                                                     day.outputQty > 0 ? (
