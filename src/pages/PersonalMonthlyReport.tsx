@@ -194,11 +194,11 @@ const PersonalMonthlyReport: React.FC<Props> = ({ user }) => {
             if (profileData?.role === 'Driver' || (!profileData && user.role === 'Driver')) {
                 const { data: deliveryData } = await supabase
                     .from('sales_orders')
-                    .select('pod_timestamp, zone, delivery_zone')
+                    .select('pod_timestamp, zone, delivery_zone, created_at')
                     .eq('driver_id', selectedEmployeeId) 
                     .eq('status', 'Delivered')
-                    .gte('pod_timestamp', startDateTs)
-                    .lte('pod_timestamp', endDateTs);
+                    .gte('created_at', startDateTs)
+                    .lte('created_at', endDateTs);
                 setDeliveries(deliveryData || []);
             } else {
                 setDeliveries([]);
@@ -242,8 +242,11 @@ const PersonalMonthlyReport: React.FC<Props> = ({ user }) => {
             // Leave
             const dayLeave = leaves.find(l => dateStr >= l.start_date && dateStr <= l.end_date);
 
-            // Deliveries
-            const dayDeliveries = deliveries.filter(d => d.pod_timestamp && d.pod_timestamp.startsWith(dateStr));
+            // Deliveries (Fallback to created_at if pod_timestamp is missing due to HR manual override)
+            const dayDeliveries = deliveries.filter(d => {
+                const ts = d.pod_timestamp || d.created_at;
+                return ts && ts.startsWith(dateStr);
+            });
             const tripCount = dayDeliveries.length;
             const zones = dayDeliveries.map(d => d.zone || d.delivery_zone).filter(Boolean);
 
