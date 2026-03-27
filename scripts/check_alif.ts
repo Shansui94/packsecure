@@ -1,42 +1,23 @@
+
 import { createClient } from '@supabase/supabase-js';
 
 const SUPABASE_URL = 'https://kdahubyhwndgyloaljak.supabase.co';
 const SUPABASE_KEY = 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6ImtkYWh1Ynlod25kZ3lsb2FsamFrIiwicm9sZSI6ImFub24iLCJpYXQiOjE3NjUzODY4ODksImV4cCI6MjA4MDk2Mjg4OX0.mzTtQ6zpfvRY07372UH_M4dvKPzHBDkiydwosUYPs-8';
+
 const supabase = createClient(SUPABASE_URL, SUPABASE_KEY);
 
 async function checkAlif() {
-    console.log("Looking up Alif...");
-    const { data: users, error: uErr } = await supabase.from('sys_users_v2').select('*').ilike('name', '%Alif%');
-    if (uErr) return console.error(uErr);
-    if (!users || users.length === 0) return console.log("No Alif found.");
-    
-    // There might be multiple Alifs, print them all
-    users.forEach(u => console.log(`- ${u.name} (UID: ${u.auth_user_id})`));
+    console.log('--- Checking User Alif ---');
 
-    const alifId = users[0].auth_user_id;
-    console.log(`\nUsing ${users[0].name} UUID: ${alifId}\n`);
+    const { data: users, error } = await supabase
+        .from('sys_users_v2')
+        .select('*')
+        .ilike('email', '%alif%');
 
-    // Fetch Alif's trips on March 8 
-    const { data: trips, error: tErr } = await supabase
-        .from('sales_orders')
-        .select('id, order_number, status, order_date, pod_timestamp, trip_origin, zone, delivery_address')
-        .eq('driver_id', alifId)
-        .or(`order_date.gte.2026-03-08,pod_timestamp.gte.2026-03-08`)
-        .order('pod_timestamp', { ascending: true });
-
-    if (tErr) return console.error(tErr);
-    
-    // Filter to just March 8
-    const march8Trips = trips?.filter(t => {
-        const podStr = t.pod_timestamp ? t.pod_timestamp : null;
-        const odStr = t.order_date ? t.order_date : null;
-        return (podStr && podStr.startsWith('2026-03-08')) || (odStr && odStr.startsWith('2026-03-08'));
-    });
-
-    console.log(`Found ${march8Trips?.length} trips for March 8th:`);
-    march8Trips?.forEach((t, i) => {
-        console.log(`${i+1}. [${t.order_number}] Status: ${t.status} | OrderDate: ${t.order_date} | POD: ${t.pod_timestamp} | Dest: ${t.delivery_address} / ${t.zone}`);
-    });
+    if (error) console.error(error);
+    else {
+        users.forEach(u => console.log(JSON.stringify(u, null, 2)));
+    }
 }
 
 checkAlif();

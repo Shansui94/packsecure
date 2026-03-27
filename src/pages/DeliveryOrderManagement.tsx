@@ -194,9 +194,6 @@ const DeliveryOrderManagement: React.FC = () => {
     const [driverLeaves, setDriverLeaves] = useState<any[]>([]);
     const [scheduledServices, setScheduledServices] = useState<any[]>([]);
 
-    // Save Confirmation Toast State
-    const [toast, setToast] = useState<{ type: 'success' | 'error'; message: string; doNumber?: string } | null>(null);
-
 
     // AI Autocomplete State
     // AI Autocomplete State (Unused)
@@ -830,8 +827,7 @@ const DeliveryOrderManagement: React.FC = () => {
             if (editingOrderId) {
                 const { error } = await supabase.from('sales_orders').update(payload).eq('id', editingOrderId);
                 if (error) throw error;
-                setToast({ type: 'success', message: `Order Updated!`, doNumber: doNumber });
-                setTimeout(() => setToast(null), 4000);
+                alert(`Order Updated!\nAssigned to ${bestFactory.name}`);
 
                 // Optimistic Update: Edit
                 newOrderObj = { ...orders.find(o => o.id === editingOrderId)!, ...payload, id: editingOrderId, orderNumber: doNumber };
@@ -869,9 +865,6 @@ const DeliveryOrderManagement: React.FC = () => {
                         deliveryAddress: data.delivery_address,
                         tripSequence: data.trip_sequence || 999
                     };
-                    // ✅ SUCCESS TOAST — show the DO number so user knows it's saved
-                    setToast({ type: 'success', message: `Order Created Successfully!`, doNumber: data.order_number });
-                    setTimeout(() => setToast(null), 5000);
                 }
             }
 
@@ -882,9 +875,7 @@ const DeliveryOrderManagement: React.FC = () => {
             await fetchData();
 
         } catch (err: any) {
-            // ❌ ERROR TOAST — persistent, won't auto-dismiss
-            setToast({ type: 'error', message: `Save Failed! ${err.message} — Please check your network and retry. Do NOT close this page!` });
-            return; // DON'T close the modal on error so user can retry
+            alert("Error: " + err.message);
         } finally {
             setIsSubmitting(false);
         }
@@ -1917,35 +1908,6 @@ const DeliveryOrderManagement: React.FC = () => {
                 </div>
             )}
 
-
-            {/* 🔔 Save Confirmation Toast */}
-            {toast && (
-                <div className={`fixed top-6 left-1/2 -translate-x-1/2 z-[9999] animate-bounce-in px-6 py-4 rounded-2xl shadow-2xl flex items-center gap-4 min-w-[340px] max-w-[500px] border-2 ${
-                    toast.type === 'success'
-                        ? 'bg-emerald-950/95 border-emerald-500/50 text-emerald-100'
-                        : 'bg-red-950/95 border-red-500/50 text-red-100'
-                }`}>
-                    <div className={`w-10 h-10 rounded-full flex items-center justify-center flex-shrink-0 text-xl ${
-                        toast.type === 'success' ? 'bg-emerald-500/20' : 'bg-red-500/20'
-                    }`}>
-                        {toast.type === 'success' ? '✅' : '❌'}
-                    </div>
-                    <div className="flex-1">
-                        <p className="font-bold text-sm">{toast.message}</p>
-                        {toast.doNumber && (
-                            <p className={`text-xs mt-1 font-mono ${toast.type === 'success' ? 'text-emerald-400' : 'text-red-400'}`}>
-                                📋 {toast.doNumber}
-                            </p>
-                        )}
-                    </div>
-                    <button
-                        onClick={() => setToast(null)}
-                        className="text-white/50 hover:text-white text-lg"
-                    >
-                        ✕
-                    </button>
-                </div>
-            )}
 
         </div >
     );
