@@ -23,7 +23,7 @@ interface DailyMetrics {
     alarmCount: number;
     tripCount: number;
     tripEarnings: number;
-    zones: string[];
+    tripDetails: string[];
     photoCount: number;
     leaveStatus: string | null;
     shiftStart: string | null;
@@ -254,15 +254,17 @@ const PersonalMonthlyReport: React.FC<Props> = ({ user }) => {
                 return ts && ts.startsWith(dateStr);
             });
             const tripCount = dayDeliveries.length;
-            const DayZones = dayDeliveries.map(d => d.zone || d.delivery_address).filter(Boolean);
+            const tripDetails: string[] = [];
 
             let tripEarnings = 0;
             const rateMap: Record<string, any> = {};
             deliveryRates.forEach(r => { rateMap[`${r.origin}-${r.location_name}`.toLowerCase()] = r; });
 
             dayDeliveries.forEach(t => {
-                const origin = (t.trip_origin || 'TAIPING').toLowerCase();
-                const zone = (t.zone || '').toLowerCase();
+                const originRaw = t.trip_origin || 'TAIPING';
+                const origin = originRaw.toLowerCase();
+                const zoneRaw = t.zone || t.delivery_address || 'Unknown';
+                const zone = zoneRaw.toLowerCase();
                 const key = `${origin}-${zone}`;
                 const rateInfo = rateMap[key];
                 const drops = Math.max(1, t.trip_drop_count || 1);
@@ -274,6 +276,9 @@ const PersonalMonthlyReport: React.FC<Props> = ({ user }) => {
                     const extraRate = extraPlaces * (Number(rateInfo.extra_rate_per_place) || 0);
                     tripEarnings += (base + extraRate);
                 }
+
+                // Push formatting: "TAIPING ➞ KLANG (2 Drops)"
+                tripDetails.push(`${originRaw} ➞ ${zoneRaw} (${drops} Drop${drops > 1 ? 's' : ''})`);
             });
 
             matrix.push({
@@ -287,7 +292,7 @@ const PersonalMonthlyReport: React.FC<Props> = ({ user }) => {
                 alarmCount,
                 tripCount,
                 tripEarnings,
-                zones: DayZones,
+                tripDetails,
                 photoCount: dayPhotos.length,
                 leaveStatus: dayLeave ? dayLeave.status : null
             });
@@ -487,7 +492,7 @@ const PersonalMonthlyReport: React.FC<Props> = ({ user }) => {
                                         <th className="px-5 py-4 text-left font-black text-[10px] uppercase tracking-widest text-gray-500 w-32">Status</th>
                                         <th className="px-5 py-4 text-left font-black text-[10px] uppercase tracking-widest text-gray-500">Scan In/Out</th>
                                         <th className="px-5 py-4 text-right font-black text-[10px] uppercase tracking-widest text-gray-500">{isDriver ? 'Trips' : 'Output'}</th>
-                                        {!isDriver && <th className="px-5 py-4 text-center font-black text-[10px] uppercase tracking-widest text-gray-500">Alarms</th>}
+                                        <th className="px-5 py-4 text-center font-black text-[10px] uppercase tracking-widest text-gray-500">{isDriver ? 'Trip Details' : 'Alarms'}</th>
                                         <th className="px-5 py-4 text-center font-black text-[10px] uppercase tracking-widest text-gray-500">Photos</th>
                                     </tr>
                                 </thead>
@@ -548,7 +553,17 @@ const PersonalMonthlyReport: React.FC<Props> = ({ user }) => {
                                                     ) : <span className="text-gray-700 font-mono">—</span>
                                                 )}
                                             </td>
-                                            {!isDriver && (
+                                            {isDriver ? (
+                                                <td className="px-5 py-4 whitespace-nowrap text-center">
+                                                    {day.tripDetails && day.tripDetails.length > 0 ? (
+                                                        <div className="flex flex-col items-center gap-1.5">
+                                                            {day.tripDetails.map((td, idx) => (
+                                                                <span key={idx} className="text-[10px] bg-blue-500/10 text-blue-400 border border-blue-500/20 px-2 py-0.5 rounded font-mono shadow-sm">{td}</span>
+                                                            ))}
+                                                        </div>
+                                                    ) : <span className="text-gray-700 font-mono">—</span>}
+                                                </td>
+                                            ) : (
                                                 <td className="px-5 py-4 whitespace-nowrap text-center">
                                                     {day.alarmCount > 0 ? (
                                                         <span className="inline-flex items-center justify-center w-6 h-6 rounded-full bg-red-500/20 text-red-400 text-xs font-bold border border-red-500/30">
