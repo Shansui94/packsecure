@@ -1,0 +1,6 @@
+0da53b9 Emergency Rollback: Revert AI Embedding and Toast changes
+5dfbe6d feat: AI Embedding infrastructure + save confirmation toast for delivery orders
+b390c24 fix(ui): dynamic zone parsing and isDriverProfile fix
+928c33b refactor: Remove deprecated Loading Dock page
+d1f1998 feat: Auto-push unlisted Trip Categories to HR delivery_rates table
+

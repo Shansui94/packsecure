@@ -1,0 +1,2 @@
+=== Testing Insert into production_logs (v1) ===
+❌ INSERT INTO V1 FAILED: record "new" has no field "sku" null null

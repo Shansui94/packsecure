@@ -1,0 +1,22 @@
+Checking since: 2026-03-26T22:35:00+00:00 (= MYT 06:35 27-Mar)
+
+New production_logs_v2 after fix: 0
+New stock_ledger_v2 Production after fix: 0
+
+Latest 5 production_logs_v2 rows:
+  d44bd9d0-838d-46c2-aef3-6eed506b2727 | BW-SL-CLR-100Mx100CMx1ROLL-RED | qty: 1 | 2026-03-26T22:23:57.670205+00:00
+  c53a481b-cc99-4de8-b358-75c58133c84c | BW-SL-CLR-100Mx100CMx1ROLL-RED | qty: 1 | 2026-03-26T22:23:57.670205+00:00
+  ca98f242-2212-41a8-b90a-652618fcb877 | BW-SL-CLR-100Mx100CMx1ROLL-RED | qty: 1 | 2026-03-26T22:23:32.837393+00:00
+  b43d3569-eb77-4687-80bc-95b5adc00f9d | BW-SL-CLR-100Mx100CMx1ROLL-RED | qty: 1 | 2026-03-26T22:18:41.360463+00:00
+  7f7e98c6-8591-45fc-bfe7-b2842d65247f | BW-SL-CLR-100Mx100CMx1ROLL-RED | qty: 1 | 2026-03-26T22:18:41.360463+00:00
+
+Latest 5 stock_ledger_v2 Production entries:
+  d44bd9d0-838d-46c2-aef3-6eed506b2727 | BW-SL-CLR-100Mx100CMx1ROLL-RED | qty: 1 | 2026-03-26T22:23:57.670205+00:00
+  c53a481b-cc99-4de8-b358-75c58133c84c | BW-SL-CLR-100Mx100CMx1ROLL-RED | qty: 1 | 2026-03-26T22:23:57.670205+00:00
+  ca98f242-2212-41a8-b90a-652618fcb877 | BW-SL-CLR-100Mx100CMx1ROLL-RED | qty: 1 | 2026-03-26T22:23:32.837393+00:00
+  b43d3569-eb77-4687-80bc-95b5adc00f9d | BW-SL-CLR-100Mx100CMx1ROLL-RED | qty: 1 | 2026-03-26T22:18:41.360463+00:00
+  7f7e98c6-8591-45fc-bfe7-b2842d65247f | BW-SL-CLR-100Mx100CMx1ROLL-RED | qty: 1 | 2026-03-26T22:18:41.360463+00:00
+
+New production_logs (v1) after fix: 0
+
+⚠️ No new production_logs_v2 rows — machines may not be running.

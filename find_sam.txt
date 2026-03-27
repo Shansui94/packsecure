@@ -1,0 +1,5 @@
+Found drivers matching Sam: [ { id: 'f05747b6-e464-43fb-8672-1931e2bbad26', name: 'SAM' } ]
+
+Looking for orders assigned to driver_id: f05747b6-e464-43fb-8672-1931e2bbad26
+Recent DOs for Sam: null
+Recent Trips for Sam: null

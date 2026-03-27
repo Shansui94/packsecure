@@ -1,0 +1,11 @@
+=== Testing Manual V1 Insert (To Catch Trigger Errors) ===
+Attempting insert: {
+  machine_id: 'T1.2-M01',
+  lane_id: 'Lane1',
+  alarm_count: 1,
+  product_sku: 'BW-SL-CLR-100Mx100CMx1ROLL-RED',
+  created_at: '2026-03-27T02:11:11.977Z'
+}
+
+❌ ERROR: System is rejecting V1 inserts!
+Details: record "new" has no field "alarm_count" null null

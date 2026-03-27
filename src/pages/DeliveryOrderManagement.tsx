@@ -179,8 +179,8 @@ const DeliveryOrderManagement: React.FC = () => {
     const [isReassignModalOpen, setIsReassignModalOpen] = useState(false);
     const [reassignOrder, setReassignOrder] = useState<SalesOrder | null>(null);
 
-    // Submission guard — prevents double-click duplicate trips
     const [isSubmitting, setIsSubmitting] = useState(false);
+    const [toast, setToast] = useState<{ message: string, type: 'error' | 'success'} | null>(null);
 
     // Split Order State
     const [isSplitModalOpen, setIsSplitModalOpen] = useState(false);
@@ -816,6 +816,12 @@ const DeliveryOrderManagement: React.FC = () => {
             if (payload.driver_id && effectiveDate) {
                 // Double check it's not "null" string or something weird
                 if (String(payload.driver_id) !== 'null' && String(payload.driver_id) !== '') {
+                    // Prevent pushing raw strings (like "Sam") into a UUID column
+                    const isUUID = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i.test(payload.driver_id);
+                    if (!isUUID) {
+                        throw new Error(`The driver "${payload.driver_id}" must be selected from the valid list. Did you type the name without selecting?`);
+                    }
+
                     const ok = checkDriverAvailability(payload.driver_id, effectiveDate);
                     if (!ok) return; // User cancelled or blocked
                 }
@@ -874,7 +880,8 @@ const DeliveryOrderManagement: React.FC = () => {
             await fetchData();
 
         } catch (err: any) {
-            alert("Error: " + err.message);
+            console.error("Save Error:", err);
+            setToast({ message: "SAVE FAILED: " + (err.message || 'Unknown network error. Please screenshot this and contact IT.'), type: 'error' });
         } finally {
             setIsSubmitting(false);
         }
@@ -892,6 +899,7 @@ const DeliveryOrderManagement: React.FC = () => {
         setTripOrigin('TAIPING');
         setTripCategory('');
         setTripDropCount(1);
+        setToast(null); // Clear toast on close
     };
 
     function getDriverName(driverId?: string) {
@@ -1398,9 +1406,16 @@ const DeliveryOrderManagement: React.FC = () => {
                                         {editingOrderId ? <FileText className="text-blue-400" /> : <Plus className="text-blue-400" />}
                                         {editingOrderId ? 'Edit Trip' : 'Create New Trip'}
                                     </h2>
-                                    <p className="text-xs text-slate-500 mt-1">Manage trip details and items.</p>
+                                    {toast ? (
+                                        <div className={`mt-3 px-3 py-2 rounded-lg flex items-center gap-2 text-xs font-bold border-2 ${toast.type === 'error' ? 'bg-red-900/50 text-red-200 border-red-500/50' : 'bg-emerald-900/50 text-emerald-200 border-emerald-500/50'}`}>
+                                            <AlertTriangle size={14} />
+                                            {toast.message}
+                                        </div>
+                                    ) : (
+                                        <p className="text-xs text-slate-500 mt-1">Manage trip details and items.</p>
+                                    )}
                                 </div>
-                                <div className="flex items-center gap-2">
+                                <div className="flex items-center gap-2 self-start">
                                     <button onClick={handleCloseModal} className="p-2 hover:bg-slate-800 rounded-lg text-slate-500 hover:text-white transition-all">
                                         <X size={20} />
                                     </button>
@@ -1420,15 +1435,18 @@ const DeliveryOrderManagement: React.FC = () => {
                                                 list="drivers-list"
                                                 className="w-full bg-slate-900 border border-slate-800 rounded-xl pl-10 pr-10 py-3 text-sm text-slate-200 focus:border-blue-500/50 outline-none"
                                                 placeholder="-- Type or Select Driver --"
-                                                value={drivers.find(d => d.uid === selectedDriverId)?.name || drivers.find(d => d.uid === selectedDriverId)?.email || selectedDriverId}
+                                                value={drivers.find(d => d.uid === selectedDriverId)?.name || drivers.find(d => d.uid === selectedDriverId)?.email || selectedDriverId || ''}
                                                 onChange={e => {
                                                     const val = e.target.value;
-                                                    // Find the driver by name/email to get their UID
-                                                    const matchedDriver = drivers.find(d => (d.name || d.email) === val);
+                                                    // Robust case-insensitive matching to find the driver UID
+                                                    const matchedDriver = drivers.find(d => 
+                                                        (d.name || '').toLowerCase() === val.toLowerCase() || 
+                                                        (d.email || '').toLowerCase() === val.toLowerCase()
+                                                    );
                                                     if (matchedDriver) {
                                                         setSelectedDriverId(matchedDriver.uid);
                                                     } else {
-                                                        setSelectedDriverId(val); // Fallback to raw string if typed manually without matching
+                                                        setSelectedDriverId(val); // Fallback to raw string (will be caught by UUID check on save)
                                                     }
                                                 }}
                                                 onBlur={e => {
@@ -1437,7 +1455,7 @@ const DeliveryOrderManagement: React.FC = () => {
                                                 }}
                                             />
                                             <datalist id="drivers-list">
-                                                {drivers.map(d => <option key={d.uid} value={d.name || d.email} />)}
+                                                {drivers.map(d => <option key={d.uid} value={d.name || d.email || ''} />)}
                                             </datalist>
                                         </div>
                                     </div>

@@ -1,0 +1,24 @@
+=== 1. Triggers on production_logs_v2 ===
+  RPC exec_sql not available, trying raw query...
+  pg_trigger: Could not find the table 'public.pg_trigger' in the schema cache
+
+=== 2. stock_ledger_v2 column schema ===
+  Error: Could not find the function public.exec_sql(sql) in the schema cache
+  Attempting test insert to see schema...
+  Insert error: insert or update on table "stock_ledger_v2" violates foreign key constraint "stock_ledger_v2_sku_fkey" Key (sku)=(__TEST__) is not present in table "master_items_v2". null
+
+=== 3. production_logs_v2 schema ===
+  Known columns: log_id, job_id, sku, machine_id, operator_id, start_time, end_time, output_qty, reject_qty, batch_code, created_at, note
+  ⚠️ The trigger uses NEW.alarm_count but v2 table has output_qty!
+  ⚠️ The trigger uses NEW.id but v2 table has log_id!
+
+=== 4. machine_active_products ===
+  Found 5 entries
+  {"machine_id":"N1-M01","lane_id":"Single","product_sku":"BW-SL-CLR-100Mx100CMx1ROLL-RED","updated_at":"2026-03-06T02:41:52.117+00:00","cutting_size":100,"yield":1}
+  {"machine_id":"T1.3-M02","lane_id":"Single","product_sku":"BW-SL-CLR-100Mx100CMx1ROLL-RED","updated_at":"2026-03-26T11:08:14.856+00:00","cutting_size":100,"yield":1}
+  {"machine_id":"T1.2-M01","lane_id":"Lane1","product_sku":"BW-SL-CLR-100Mx100CMx1ROLL-RED","updated_at":"2026-03-26T19:00:40.797+00:00","cutting_size":100,"yield":1}
+  {"machine_id":"T1.2-M01","lane_id":"Lane2","product_sku":"BW-SL-CLR-100Mx100CMx1ROLL-RED","updated_at":"2026-03-26T19:00:44.105+00:00","cutting_size":100,"yield":1}
+  {"machine_id":"N2-M02","lane_id":"Single","product_sku":"BW-SL-SLR-100Mx100CMx1ROLL-RED","updated_at":"2026-03-04T07:39:30.698+00:00","cutting_size":100,"yield":1}
+
+=== 5. Checking for v2_inventory_view ===
+  View data: [{"sku":"AIRTUBE-15CM-300M","name":"AIRTUBE-15CM-300M","type":"FG","uom":"Unit","min_stock_level":null,"status":"Active","supply_type":"Manufactured","loc_id":"Nilai","current_stock":-20,"last_updated":"2026-03-10T00:38:12.962486+00:00"},{"sku":"AIRTUBE-15CM-300M","name":"AIRTUBE-15CM-300M","type":"FG","uom":"Unit","min_stock_level":null,"status":"Active","supply_type":"Manufactured","loc_id":"OPM Corner","current_stock":-24,"last_updated":"2026-03-17T05:22:55.77744+00:00"},{"sku":"AIRTUBE-15CM-50M","name":"AIRTUBE-15CM-50M","type":"FG","uom":"Unit","min_stock_level":null,"status":"Active","supply_type":"Manufactured","loc_id":"Unassigned","current_stock":0,"last_updated":null}]

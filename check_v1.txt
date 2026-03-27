@@ -1,0 +1,3 @@
+=== API only writes to production_logs (v1) ===
+New production_logs (v1) entries: 0
+RPC Error: Could not find the function public.exec_sql(sql) in the schema cache

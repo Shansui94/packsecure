@@ -1,0 +1,23 @@
+=== MERAH (RED) Production Today ===
+Total pulses today: 271
+  T1.2-M01: 248 rolls
+  T1.3-M02: 23 rolls
+  TOTAL MERAH produced today: 271 rolls
+
+=== MERAH production in last 2 hours (since 2026-03-26T11:49:17.504Z) ===
+  Pulses in last 2h: 67, Total rolls: 67
+
+=== MERAH dispatched via orders today ===
+  [DO-2026-4537] Tahir | New | MERAH x30 | TANJUNG SEPAT
+  [DO-2026-9724] Tahir | New | MERAH x24 | KL
+  [DO-2026-4322] Taufik | New | MERAH x60 | TELUK INTAN
+  [DO-2026-6428] Dean | New | MERAH x10 | KL
+  [DO-2026-5657] WAN | New | MERAH x20 | BM
+  [DO-2026-8213] SAM | Delivered | MERAH x40 | JOHOR
+  [DO-2026-1684] Dean | New | MERAH x20 | BM
+  TOTAL MERAH out today: 204
+
+=== Summary ===
+  Produced today:  +271
+  Dispatched today: -204
+  Net change:      +67
