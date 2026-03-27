@@ -123,36 +123,52 @@ const EmployeeModal: React.FC<{
 
         // 1. SUPABASE AUTH SYNC
         if (isNew && authPassword) {
-            const { data: authData, error: authErr } = await supabaseAdmin.auth.admin.createUser({
-                email: validEmail,
-                password: authPassword,
-                email_confirm: true,
-                user_metadata: { name: form.name, role: form.role }
-            });
-            if (authErr) {
-                setError('Auth Error: ' + authErr.message);
-                setSaving(false);
-                return;
+            try {
+                // Try to use the secure Vercel API first
+                const res = await fetch('/api/manage-employee', {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify({ action: 'create', email: validEmail, password: authPassword, name: form.name, role: form.role })
+                });
+                
+                if (!res.ok) {
+                    // Fallback to direct supabaseAdmin for local development (npm run dev)
+                    const { data: authData, error: authErr } = await supabaseAdmin.auth.admin.createUser({
+                        email: validEmail, password: authPassword, email_confirm: true, user_metadata: { name: form.name, role: form.role }
+                    });
+                    if (authErr) {
+                        setError('Auth Error: ' + authErr.message + ' (Please check Vercel Env Vars)');
+                        setSaving(false); return;
+                    }
+                    targetAuthId = authData.user.id;
+                } else {
+                    const data = await res.json();
+                    targetAuthId = data.user.id;
+                }
+            } catch (err: any) {
+                setError('API Error: ' + err.message);
+                setSaving(false); return;
             }
-            targetAuthId = authData.user.id;
         } else if (authPassword && targetAuthId) {
             // Update password if PIN is supplied
-            const { error: pwdErr } = await supabaseAdmin.auth.admin.updateUserById(targetAuthId, {
-                password: authPassword
-            });
-            if (pwdErr) console.error("Update password error:", pwdErr);
+            try {
+                await fetch('/api/manage-employee', {
+                    method: 'POST', headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify({ action: 'update_password', targetAuthId, password: authPassword })
+                });
+                await supabaseAdmin.auth.admin.updateUserById(targetAuthId, { password: authPassword });
+            } catch (e) { console.error(e); }
         }
 
         // Separately: if admin explicitly typed a new login password, update Auth password directly
         if (!isNew && newPassword.trim().length >= 6 && targetAuthId) {
-            const { error: pwdErr } = await supabaseAdmin.auth.admin.updateUserById(targetAuthId, {
-                password: newPassword.trim()
-            });
-            if (pwdErr) {
-                setError('Password update failed: ' + pwdErr.message);
-                setSaving(false);
-                return;
-            }
+            try {
+                await fetch('/api/manage-employee', {
+                    method: 'POST', headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify({ action: 'update_password', targetAuthId, password: newPassword.trim() })
+                });
+                await supabaseAdmin.auth.admin.updateUserById(targetAuthId, { password: newPassword.trim() });
+            } catch (e) { console.error(e); }
         }
 
         const payload: any = {
