@@ -14,7 +14,6 @@ import {
     Truck,
     Package,
     Calendar,
-    FileCheck,
     Database,
     FileText,
     Wrench,
@@ -280,7 +279,6 @@ const Layout: React.FC<LayoutProps> = ({ children, activePage, setActivePage, us
                                     <NavItem id="dev-log" icon={Activity} label="Dev Log" roles={['SuperAdmin', 'Admin']} />
                                     <div className="h-4" />
                                     {!isNeoson && <NavItem id="personal-report" icon={FileText} label="My Monthly Report" roles={['SuperAdmin', 'Admin', 'Manager']} />}
-                                    <NavItem id="claims" icon={FileCheck} label="Claims" roles={['SuperAdmin', 'Admin', 'Manager']} />
                                 </NavGroup>
                                 {!isNeoson && (
                                     <NavGroup title="Productivity">

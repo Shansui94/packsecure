@@ -27,7 +27,7 @@ import ExecutiveReports from './pages/ExecutiveReports';
 import DataManagement from './pages/DataManagement';
 import ReportHistory from './pages/ReportHistory';
 import UnderConstruction from './pages/UnderConstruction';
-import ClaimsManagement from './pages/ClaimsManagement';
+
 import UpdatePassword from './pages/UpdatePassword';
 import OrderSummary from './pages/OrderSummary'; // New Page
 // import CustomerImport from './pages/CustomerImport'; // Added Import Page
@@ -182,9 +182,9 @@ function App() {
         // Define allowable pages per role
         const allowedPages: Record<string, string[]> = {
             'SuperAdmin': ['*'], // The Only One with Full Access
-            'Admin': ['profile', 'construction', 'factory-live-os', 'dashboard', 'data-v2', 'customer-import', 'universal-intake', 'scanner', 'jobs', 'livestock', 'inventory', 'recipes', 'products', 'delivery', 'order-summary', 'dispatch', 'production', 'report-history', 'users', 'hr', 'claims', 'simple-stock', 'maintenance', 'lorry-management', 'iot', 'driver-management', 'operators', 'dev-log', 'leave-calendar', 'personal-report', 'machine-schedule'],
-            'Manager': ['profile', 'construction', 'factory-live-os', 'dashboard', 'data-v2', 'customer-import', 'universal-intake', 'jobs', 'livestock', 'inventory', 'recipes', 'products', 'delivery', 'order-summary', 'dispatch', 'production', 'report-history', 'hr', 'claims', 'simple-stock', 'maintenance', 'lorry-management', 'iot', 'driver-management', 'operators', 'leave-calendar', 'personal-report', 'machine-schedule'],
-            'Driver': ['delivery-driver', 'delivery-history', 'leave-calendar', 'lorry-service', 'claims', 'profile', 'personal-report'],
+            'Admin': ['profile', 'construction', 'factory-live-os', 'dashboard', 'data-v2', 'customer-import', 'universal-intake', 'scanner', 'jobs', 'livestock', 'inventory', 'recipes', 'products', 'delivery', 'order-summary', 'dispatch', 'production', 'report-history', 'users', 'hr', 'simple-stock', 'maintenance', 'lorry-management', 'iot', 'driver-management', 'operators', 'dev-log', 'leave-calendar', 'personal-report', 'machine-schedule'],
+            'Manager': ['profile', 'construction', 'factory-live-os', 'dashboard', 'data-v2', 'customer-import', 'universal-intake', 'jobs', 'livestock', 'inventory', 'recipes', 'products', 'delivery', 'order-summary', 'dispatch', 'production', 'report-history', 'hr', 'simple-stock', 'maintenance', 'lorry-management', 'iot', 'driver-management', 'operators', 'leave-calendar', 'personal-report', 'machine-schedule'],
+            'Driver': ['delivery-driver', 'delivery-history', 'leave-calendar', 'lorry-service', 'profile', 'personal-report'],
             'Operator': ['scanner', 'leave-calendar', 'profile', 'personal-report'],
             'Device': ['scanner'],
             'HR': ['profile', 'hr', 'leave-calendar', 'notes', 'tasks', 'personal-report'],
@@ -666,8 +666,6 @@ function App() {
                 return <DriverManagement currentUser={user} />;
             case 'hr':
                 return <HRPortal user={user} />;
-            case 'claims':
-                return <ClaimsManagement user={user} />;
             case 'update-password':
                 return <UpdatePassword />;
             case 'factory-live-os':
