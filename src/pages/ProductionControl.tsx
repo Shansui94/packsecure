@@ -11,7 +11,7 @@ import {
 } from '../data/constants';
 import { getRecommendedPackaging } from '../utils/packagingRules';
 import { getBubbleWrapSku } from '../utils/skuMapper';
-import { Box, Settings, Clock, Layers, LogOut, Calendar, Package, Truck, CheckCircle, X } from 'lucide-react';
+import { Box, Settings, Clock, Layers, LogOut, Calendar, Package } from 'lucide-react';
 
 
 import { JobOrder, ProductionLog, User } from '../types';
@@ -493,7 +493,6 @@ const ProductionLane: React.FC<ProductionLaneProps> = ({ laneId, machineMetadata
                 })()}
 
             </div>
-
         </div>
     );
 };
@@ -541,12 +540,6 @@ const ProductionControl: React.FC<ProductionControlProps> = ({ user, jobs = [] }
         status: string;
     }
     const [scheduleTasks, setScheduleTasks] = useState<ScheduleItem[]>([]);
-
-    // Customer Pick Up State
-    const [pickupOrders, setPickupOrders] = useState<any[]>([]);
-    const [isPickupModalOpen, setIsPickupModalOpen] = useState(false);
-    const [selectedPickup, setSelectedPickup] = useState<any | null>(null);
-    const [pickupSubmitting, setPickupSubmitting] = useState(false);
 
     const handlePinPress = (num: number) => {
         if (pinCode.length < 4) {
@@ -674,34 +667,6 @@ const ProductionControl: React.FC<ProductionControlProps> = ({ user, jobs = [] }
             .subscribe();
         return () => { supabase.removeChannel(sub); };
     }, [selectedMachine, machineMetadata]);
-
-    // Fetch Pick Up Orders
-    useEffect(() => {
-        const fetchPickups = async () => {
-            const { data } = await supabase
-                .from('sales_orders')
-                .select('*')
-                .eq('delivery_method', 'Customer Pick Up')
-                .in('status', ['Assigned', 'New', 'Loaded'])
-                .order('deadline', { ascending: false });
-
-            if (data) {
-                // Parse items if they are text
-                const parsedData = data.map(order => ({
-                    ...order,
-                    items: typeof order.items === 'string' ? JSON.parse(order.items) : order.items
-                }));
-                setPickupOrders(parsedData);
-            }
-        };
-        fetchPickups();
-
-        const pickupSub = supabase.channel('pickup-orders')
-            .on('postgres_changes', { event: '*', schema: 'public', table: 'sales_orders', filter: "driver_id=eq.Customer Pick Up" }, fetchPickups)
-            .subscribe();
-
-        return () => { supabase.removeChannel(pickupSub); };
-    }, []);
 
     // Effect: Resolve Machine Metadata
     useEffect(() => {
@@ -848,23 +813,6 @@ const ProductionControl: React.FC<ProductionControlProps> = ({ user, jobs = [] }
                                 </div>
                             ))}
                         </div>
-                    </div>
-
-                    {/* NEW: CUSTOMER PICK UP WIDGET */}
-                    <div className="flex flex-col gap-2 mx-4 max-w-xs animate-fade-in-up">
-                        <div className="flex items-center justify-between text-xs text-orange-400/80 px-1">
-                            <span className="uppercase font-bold tracking-wider flex items-center gap-1"><Package size={12} /> 自提订单 / Pick-Ups</span>
-                        </div>
-                        <button
-                            onClick={() => setIsPickupModalOpen(true)}
-                            className="bg-orange-600/20 hover:bg-orange-600/40 border border-orange-500/30 p-2 rounded-lg flex-shrink-0 w-full shadow-lg transition-colors flex items-center justify-between group"
-                        >
-                            <div className="text-orange-100 font-bold text-sm flex items-center gap-2">
-                                <Truck size={16} className="text-orange-400 group-hover:translate-x-1 transition-transform" />
-                                {pickupOrders.length} Pending
-                            </div>
-                            <span className="text-xs bg-orange-500 text-white px-2 py-0.5 rounded shadow-lg">View</span>
-                        </button>
                     </div>
 
                     <div className="flex items-center gap-2">
@@ -1133,133 +1081,6 @@ const ProductionControl: React.FC<ProductionControlProps> = ({ user, jobs = [] }
                     </div>
                 )}
             </div>
-            {/* CUSTOMER PICK UP MODAL */}
-            {isPickupModalOpen && (
-                <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/80 backdrop-blur-md animate-in fade-in duration-200">
-                    <div className="bg-slate-900 border border-orange-500/30 rounded-2xl w-full max-w-4xl max-h-[90vh] flex flex-col shadow-[0_0_50px_rgba(234,88,12,0.15)] overflow-hidden">
-                        
-                        <div className="p-4 md:p-6 border-b border-white/10 flex justify-between items-center bg-black/20">
-                            <div>
-                                <h2 className="text-xl md:text-2xl font-black text-white flex items-center gap-3">
-                                    <Package className="text-orange-400" />
-                                    Customer Pick Up (自提订单)
-                                </h2>
-                                <p className="text-gray-400 text-xs mt-1">Select an order below to load items into the customer's vehicle.</p>
-                            </div>
-                            <button onClick={() => { setIsPickupModalOpen(false); setSelectedPickup(null); }} className="text-gray-400 hover:text-white p-2 bg-white/5 hover:bg-white/10 rounded-xl transition-colors">
-                                <X size={24} />
-                            </button>
-                        </div>
-
-                        <div className="flex-1 overflow-y-auto p-4 md:p-6 custom-scrollbar bg-slate-900">
-                            {!selectedPickup ? (
-                                pickupOrders.length === 0 ? (
-                                    <div className="h-40 flex flex-col items-center justify-center text-gray-500 font-bold">
-                                        <CheckCircle size={40} className="mb-2 opacity-50 text-green-500" />
-                                        All caught up! No pending pick-ups.
-                                    </div>
-                                ) : (
-                                    <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-                                        {pickupOrders.map(order => (
-                                            <div key={order.id} className="bg-slate-800 border border-white/10 rounded-xl p-4 flex flex-col justify-between hover:border-orange-500/50 transition-colors shadow-lg">
-                                                <div>
-                                                    <div className="flex justify-between items-start mb-2">
-                                                        <span className="text-cyan-400 font-bold font-mono tracking-wider">{order.order_number}</span>
-                                                        <span className="bg-orange-500/20 text-orange-400 px-2 py-0.5 rounded text-xs font-bold uppercase">{order.status}</span>
-                                                    </div>
-                                                    <h3 className="font-bold text-white mb-1 truncate">{order.customer_name}</h3>
-                                                    <p className="text-xs text-gray-400 mb-4">{order.items?.length || 0} Items Scheduled for Pick Up.</p>
-                                                </div>
-                                                <button 
-                                                    onClick={() => setSelectedPickup(order)}
-                                                    className="w-full bg-blue-600 hover:bg-blue-500 text-white font-bold py-2 rounded-lg flex items-center justify-center gap-2 transition-colors"
-                                                >
-                                                    <Package size={16} /> Load Items (Naik Barang)
-                                                </button>
-                                            </div>
-                                        ))}
-                                    </div>
-                                )
-                            ) : (
-                                <div className="space-y-4 animate-slide-up">
-                                    <button onClick={() => setSelectedPickup(null)} className="text-blue-400 hover:text-white text-xs font-bold uppercase tracking-wider mb-2 flex items-center gap-1">
-                                        &larr; Back to List
-                                    </button>
-                                    
-                                    <div className="bg-black/30 border border-white/10 p-4 rounded-xl">
-                                        <h3 className="text-lg font-bold text-white">{selectedPickup.order_number} <span className="text-gray-400">— {selectedPickup.customer_name}</span></h3>
-                                        <div className="mt-4 space-y-2">
-                                            {selectedPickup.items?.map((item: any, idx: number) => (
-                                                <div key={idx} className="flex justify-between items-center bg-slate-800 p-3 rounded-lg border border-white/5">
-                                                    <div>
-                                                        <p className="font-bold text-gray-200">{item.sku}</p>
-                                                        {item.remark && <p className="text-xs text-gray-400">{item.remark}</p>}
-                                                    </div>
-                                                    <div className="text-right">
-                                                        <span className="font-black text-xl text-white">{item.quantity}</span>
-                                                        <span className="text-xs text-gray-500 ml-1">PCS</span>
-                                                    </div>
-                                                </div>
-                                            ))}
-                                        </div>
-                                    </div>
-
-                                    {!operatorId ? (
-                                        <div className="bg-red-500/10 border border-red-500/50 text-red-400 p-4 rounded-xl flex items-center gap-3">
-                                            <LogOut size={24} />
-                                            <div>
-                                                <p className="font-bold text-sm">Please Clock In</p>
-                                                <p className="text-xs">You must be clocked into the machine to confirm loading.</p>
-                                            </div>
-                                        </div>
-                                    ) : (
-                                        <button
-                                            disabled={pickupSubmitting}
-                                            onClick={async () => {
-                                                setPickupSubmitting(true);
-                                                try {
-                                                    // Deduct Stock
-                                                    for (const item of selectedPickup.items || []) {
-                                                        const qtyToDeduct = item.quantity;
-                                                        if (qtyToDeduct > 0) {
-                                                            await supabase.from('stock_ledger_v2').insert({
-                                                                sku: item.sku,
-                                                                change_qty: -qtyToDeduct,
-                                                                event_type: 'Transfer Out',
-                                                                loc_id: 'Unassigned',
-                                                                ref_doc: selectedPickup.order_number,
-                                                                notes: `Customer Pick Up by Operator: ${operatorName || 'Unknown Operator'}`
-                                                            });
-                                                        }
-                                                    }
-
-                                                    // Mark order as Delivered
-                                                    const { error } = await supabase.from('sales_orders').update({
-                                                        status: 'Delivered',
-                                                        pod_timestamp: new Date().toISOString()
-                                                    }).eq('id', selectedPickup.id);
-                                                    
-                                                    if (error) throw error;
-                                                    
-                                                    setSelectedPickup(null);
-                                                } catch (err: any) {
-                                                    alert("Failed to confirm load: " + err.message);
-                                                } finally {
-                                                    setPickupSubmitting(false);
-                                                }
-                                            }}
-                                            className={`w-full py-4 rounded-xl font-black shadow-lg text-lg flex items-center justify-center gap-2 transition-all ${pickupSubmitting ? 'bg-gray-600 cursor-not-allowed opacity-70' : 'bg-green-600 hover:bg-green-500 hover:scale-[1.01] active:scale-95 text-white shadow-[0_0_30px_rgba(22,163,74,0.3)] border-b-4 border-green-800'}`}
-                                        >
-                                            {pickupSubmitting ? <div className="w-5 h-5 border-2 border-white border-t-transparent rounded-full animate-spin" /> : <CheckCircle size={24} />}
-                                            {pickupSubmitting ? 'PROCESSING...' : 'CONFIRM LOAD (NAIK BARANG)'}
-                                        </button>
-                                    )}
-                                </div>
-                            )}
-                        </div>
-                    </div>
-                </div>
-            )}
             <style>{`
                 .custom-scrollbar::-webkit-scrollbar { width: 4px; }
                 .custom-scrollbar::-webkit-scrollbar-thumb { background: #334155; border-radius: 4px; }

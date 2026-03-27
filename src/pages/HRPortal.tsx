@@ -431,7 +431,7 @@ const HRPortal: React.FC<{ user?: any }> = ({ user }) => {
 
         // Driver trips with zone info for zone-based allowance
         const { data: trips } = await supabase.from('sales_orders')
-            .select('driver_id, zone, trip_origin, trip_drop_count, delivery_address')
+            .select('driver_id, zone, delivery_zone, trip_origin, trip_drop_count')
             .eq('status', 'Delivered')
             .gte('pod_timestamp', new Date(payYear, payMonth - 1, 1).toISOString())
             .lte('pod_timestamp', new Date(payYear, payMonth, 0, 23, 59, 59).toISOString());
@@ -456,7 +456,7 @@ const HRPortal: React.FC<{ user?: any }> = ({ user }) => {
         (trips || []).forEach((t: any) => {
             if (!t.driver_id) return;
             const origin = (t.trip_origin || 'TAIPING').toLowerCase();
-            const zone = (t.zone || '').toLowerCase(); // Note: Migrating to delivery_address shortly
+            const zone = (t.zone || t.delivery_zone || '').toLowerCase();
             const key = `${origin}-${zone}`;
             const rateInfo = rateMap[key];
             
@@ -473,9 +473,9 @@ const HRPortal: React.FC<{ user?: any }> = ({ user }) => {
                 const totalTripMoney = base + extraRate;
 
                 tripEarningsMap[t.driver_id].total += totalTripMoney;
-                tripEarningsMap[t.driver_id].breakdown.push(`${t.zone} (${drops} drops): RM${totalTripMoney}`);
+                tripEarningsMap[t.driver_id].breakdown.push(`${t.zone || t.delivery_zone} (${drops} drops): RM${totalTripMoney}`);
             } else {
-                tripEarningsMap[t.driver_id].breakdown.push(`${t.zone || 'Unknown'} (${drops} drops): ⚠️ no rate`);
+                tripEarningsMap[t.driver_id].breakdown.push(`${t.zone || t.delivery_zone || 'Unknown'} (${drops} drops): ⚠️ no rate`);
             }
         });
 

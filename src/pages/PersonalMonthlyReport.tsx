@@ -1,7 +1,7 @@
 import React, { useState, useEffect, useMemo } from 'react';
 import {
     CalendarDays, Award, AlertTriangle, Camera,
-    DollarSign, Clock, ChevronLeft, ChevronRight, Truck, MapPin, User as UserIcon
+    DollarSign, Clock, ChevronLeft, ChevronRight, Activity, Users, Truck, MapPin
 } from 'lucide-react';
 import { supabase } from '../services/supabase';
 
@@ -27,7 +27,6 @@ interface DailyMetrics {
     leaveStatus: string | null;
     shiftStart: string | null;
     shiftEnd: string | null;
-    trips: any[];
 }
 
 const PersonalMonthlyReport: React.FC<Props> = ({ user }) => {
@@ -36,7 +35,8 @@ const PersonalMonthlyReport: React.FC<Props> = ({ user }) => {
     const [selectedYear, setSelectedYear] = useState(today.getFullYear());
     const [loading, setLoading] = useState(true);
 
-
+    // Profile state for the logged-in user
+    const [loggedInProfile, setLoggedInProfile] = useState<any>(null);
 
     // HR/Admin Selector States
     const [selectedEmployeeId, setSelectedEmployeeId] = useState<string>(user.uid || user.id);
@@ -52,7 +52,6 @@ const PersonalMonthlyReport: React.FC<Props> = ({ user }) => {
     const [leaves, setLeaves] = useState<any[]>([]);
     const [payroll, setPayroll] = useState<any | null>(null);
     const [deliveries, setDeliveries] = useState<any[]>([]);
-    const [deliveryRates, setDeliveryRates] = useState<any[]>([]);
 
     const daysInMonth = new Date(selectedYear, selectedMonth, 0).getDate();
 
@@ -66,6 +65,8 @@ const PersonalMonthlyReport: React.FC<Props> = ({ user }) => {
                 .eq('auth_user_id', user.uid || user.id)
                 .single();
             
+            setLoggedInProfile(data || { role: user.role });
+
             // If Manager/HR/Admin/SuperAdmin, fetch all employees
             const role = data?.role || user.role;
             if (['SuperAdmin', 'Admin', 'Manager', 'HR'].includes(role)) {
@@ -108,6 +109,7 @@ const PersonalMonthlyReport: React.FC<Props> = ({ user }) => {
             setViewedProfile(profileData);
             
             const activeEmpId = profileData ? profileData.employee_id : (selectedEmployeeId === (user.uid || user.id) ? user.employeeId : undefined);
+            const userEmail = profileData ? profileData.email : (selectedEmployeeId === (user.uid || user.id) ? user.email : '');
 
             // B. Production Logs
             const { data: prodData } = await supabase
@@ -168,45 +170,18 @@ const PersonalMonthlyReport: React.FC<Props> = ({ user }) => {
                 setPayroll(null);
             }
 
-            // G. Deliveries & Rates (For Drivers)
-            const isDriverProfile = profileData?.role === 'Driver' || (!profileData && user.role === 'Driver');
-            if (isDriverProfile) {
-                // Fetch HR Rates for commission calculation
-                const { data: routeRates } = await supabase.from('delivery_rates').select('*');
-                setDeliveryRates(routeRates || []);
-
-                // Fetch trips: either completed this month, or created this month and pending
-                const { data: deliveryData, error: dErr } = await supabase
+            // G. Deliveries (For Drivers)
+            if (profileData?.role === 'Driver' || (!profileData && user.role === 'Driver')) {
+                const { data: deliveryData } = await supabase
                     .from('sales_orders')
-                    .select('id, order_number, status, order_date, pod_timestamp, zone, trip_origin, trip_drop_count')
-                    .eq('driver_id', selectedEmployeeId)
-                    .or(`pod_timestamp.gte.${startDateTs},order_date.gte.${firstDay}`);
-                
-                if (dErr) console.error("Query Error: ", dErr);
-
-                // Client-side exact filtering
-                const validDeliveries = (deliveryData || []).filter(d => {
-                    if (d.status === 'Delivered' && d.pod_timestamp) {
-                        return d.pod_timestamp >= startDateTs && d.pod_timestamp <= endDateTs;
-                    }
-                    if (d.order_date) {
-                        const od = d.order_date.split('T')[0];
-                        return od >= firstDay && od <= lastDayStr;
-                    }
-                    return false;
-                });
-                
-                // Sort by pod_timestamp, fallback to order_date
-                validDeliveries.sort((a, b) => {
-                    const dateA = a.pod_timestamp || a.order_date;
-                    const dateB = b.pod_timestamp || b.order_date;
-                    return new Date(dateB).getTime() - new Date(dateA).getTime();
-                });
-
-                setDeliveries(validDeliveries);
+                    .select('pod_timestamp, zone, delivery_zone')
+                    .eq('driver_id', selectedEmployeeId) 
+                    .eq('status', 'Delivered')
+                    .gte('pod_timestamp', startDateTs)
+                    .lte('pod_timestamp', endDateTs);
+                setDeliveries(deliveryData || []);
             } else {
                 setDeliveries([]);
-                setDeliveryRates([]);
             }
 
         } catch (error) {
@@ -248,12 +223,9 @@ const PersonalMonthlyReport: React.FC<Props> = ({ user }) => {
             const dayLeave = leaves.find(l => dateStr >= l.start_date && dateStr <= l.end_date);
 
             // Deliveries
-            const dayDeliveries = deliveries.filter(d => {
-                const targetDateStr = d.pod_timestamp || d.order_date;
-                return targetDateStr && targetDateStr.startsWith(dateStr);
-            });
+            const dayDeliveries = deliveries.filter(d => d.pod_timestamp && d.pod_timestamp.startsWith(dateStr));
             const tripCount = dayDeliveries.length;
-            const zones = dayDeliveries.map(d => d.zone).filter(Boolean);
+            const zones = dayDeliveries.map(d => d.zone || d.delivery_zone).filter(Boolean);
 
             matrix.push({
                 dateStr,
@@ -266,7 +238,6 @@ const PersonalMonthlyReport: React.FC<Props> = ({ user }) => {
                 alarmCount,
                 tripCount,
                 zones,
-                trips: dayDeliveries,
                 photoCount: dayPhotos.length,
                 leaveStatus: dayLeave ? dayLeave.status : null
             });
@@ -285,61 +256,43 @@ const PersonalMonthlyReport: React.FC<Props> = ({ user }) => {
     const canSelectEmployee = employeesList.length > 0;
     const isDriver = viewedProfile?.role === 'Driver' || (!viewedProfile && user?.role === 'Driver');
 
-    // Calculate Estimated Commission
-    const estimatedCommission = useMemo(() => {
-        if (!isDriver) return 0;
-        let total = 0;
-        deliveries.forEach(trip => {
-            const r = deliveryRates.find(r => 
-                (r.origin || '').toLowerCase() === (trip.trip_origin || '').toLowerCase() &&
-                (r.location_name || '').toLowerCase() === (trip.zone || '').toLowerCase()
-            );
-            
-            if (r) {
-                const base = r.base_rate || 0;
-                const drops = trip.trip_drop_count || 1;
-                const maxP = r.max_places || 1;
-                const extra = r.extra_rate_per_place || 0;
-                
-                total += base + (Math.max(0, drops - maxP) * extra);
-            }
-        });
-        return total;
-    }, [deliveries, deliveryRates, isDriver]);
-
     return (
         <div className="min-h-screen bg-[#07070a] text-white p-4 md:p-6 font-sans">
             {/* Header Area */}
             <div className="max-w-6xl mx-auto flex flex-col md:flex-row justify-between items-start md:items-center gap-6 mb-8">
-                
-                {/* Profile Badge & Selector */}
-                <div className="flex items-center gap-4 bg-[#0d0d12] border border-white/5 pr-6 rounded-3xl overflow-hidden shadow-2xl">
-                    <div className="bg-gradient-to-br from-blue-600 to-indigo-600 p-4 shrink-0 flex items-center justify-center">
-                        <UserIcon className="text-white" size={32} />
-                    </div>
-                    <div className="py-2">
-                        <p className="text-[10px] text-blue-400 font-bold uppercase tracking-widest mb-0.5">Report For</p>
+                <div className="flex flex-col gap-2">
+                    <h1 className="text-3xl font-black bg-clip-text text-transparent bg-gradient-to-r from-blue-400 to-indigo-500 mb-1 flex items-center gap-3">
+                        <Activity className="text-blue-500" size={28} />
+                        Monthly Report
+                    </h1>
+                    <div className="flex items-center gap-3">
+                        <p className="text-sm text-gray-500">
+                            Viewing analytics for:
+                        </p>
                         {canSelectEmployee ? (
-                            <select 
-                                value={selectedEmployeeId}
-                                onChange={(e) => setSelectedEmployeeId(e.target.value)}
-                                className="bg-transparent border-none text-xl font-black text-white focus:outline-none focus:ring-0 appearance-none cursor-pointer p-0 -ml-1 pr-6 hover:text-blue-300 transition-colors"
-                            >
-                                {employeesList.map(emp => (
-                                    <option key={emp.auth_user_id} value={emp.auth_user_id} className="bg-slate-900 text-sm">
-                                        {emp.name || emp.employee_id} ({emp.role})
-                                    </option>
-                                ))}
-                            </select>
+                            <div className="relative group">
+                                <div className="absolute inset-y-0 left-0 pl-3 flex items-center pointer-events-none">
+                                    <Users size={14} className="text-gray-400 group-hover:text-blue-400 transition-colors" />
+                                </div>
+                                <select 
+                                    value={selectedEmployeeId}
+                                    onChange={(e) => setSelectedEmployeeId(e.target.value)}
+                                    className="pl-9 pr-8 py-1.5 bg-[#0d0d12] border border-white/10 hover:border-blue-500/50 rounded-lg text-sm font-bold text-white focus:outline-none focus:ring-2 focus:ring-blue-500/50 appearance-none cursor-pointer transition-colors"
+                                >
+                                    {employeesList.map(emp => (
+                                        <option key={emp.auth_user_id} value={emp.auth_user_id}>
+                                            {emp.name || emp.employee_id} ({emp.role})
+                                        </option>
+                                    ))}
+                                </select>
+                            </div>
                         ) : (
-                            <h1 className="text-xl font-black text-white">
-                                {viewedProfile?.name || user?.name}
-                            </h1>
+                            <span className="text-sm font-bold text-gray-300 bg-white/5 px-3 py-1 rounded-lg border border-white/10">
+                                {viewedProfile?.name || user?.name} ({viewedProfile?.role || user?.role})
+                            </span>
                         )}
-                        <p className="text-xs text-gray-500 font-medium">Role: <span className="text-gray-400">{viewedProfile?.role || user?.role}</span></p>
                     </div>
                 </div>
-
 
                 <div className="flex items-center gap-3 bg-[#0d0d12] border border-white/10 rounded-2xl px-5 py-3 shadow-lg">
                     <button onClick={() => changeMonth(-1)} className="p-2 rounded-xl hover:bg-white/10 text-gray-400 hover:text-white transition-all">
@@ -407,12 +360,12 @@ const PersonalMonthlyReport: React.FC<Props> = ({ user }) => {
                             <div className="flex items-start justify-between">
                                 <div>
                                     <p className={`text-[10px] uppercase tracking-widest font-black mb-1 ${isDriver ? 'text-orange-400' : 'text-red-400'}`}>
-                                        {isDriver ? 'Destinations' : 'Anomalies'}
+                                        {isDriver ? 'Zones Visited' : 'Anomalies'}
                                     </p>
                                     <h3 className="text-3xl font-black text-white">
-                                        {isDriver ? Array.from(new Set(deliveries.map(d => d.zone).filter(Boolean))).length : totalAlarms}
+                                        {isDriver ? Array.from(new Set(deliveries.map(d => d.zone || d.delivery_zone).filter(Boolean))).length : totalAlarms}
                                     </h3>
-                                    <p className="text-xs text-gray-400 mt-2">{isDriver ? 'Unique locations visited' : 'Alarms / Rejects handled'}</p>
+                                    <p className="text-xs text-gray-400 mt-2">{isDriver ? 'Unique delivery areas' : 'Alarms / Rejects handled'}</p>
                                 </div>
                                 <div className={`p-3 rounded-2xl border ${isDriver ? 'bg-orange-500/10 text-orange-500 border-orange-500/20' : 'bg-red-500/10 text-red-500 border-red-500/20'}`}>
                                     {isDriver ? <MapPin size={20} /> : <AlertTriangle size={20} />}
@@ -448,12 +401,8 @@ const PersonalMonthlyReport: React.FC<Props> = ({ user }) => {
                                         </>
                                     ) : (
                                         <>
-                                            <h3 className="text-2xl font-black text-green-400">
-                                                {isDriver ? `RM ${estimatedCommission.toLocaleString('en-MY', { minimumFractionDigits: 2 })}` : 'Pending Calc.'}
-                                            </h3>
-                                            <p className="text-[10px] text-green-500/60 mt-2 uppercase font-bold tracking-wider">
-                                                {isDriver ? 'Estimated Earnings' : 'Subject to final HR review'}
-                                            </p>
+                                            <h3 className="text-lg font-black text-gray-400 italic mt-2">Pending Calc.</h3>
+                                            <p className="text-[10px] text-gray-500 mt-2 uppercase">Subject to final HR review</p>
                                         </>
                                     )}
                                 </div>
@@ -486,7 +435,7 @@ const PersonalMonthlyReport: React.FC<Props> = ({ user }) => {
                                         <th className="px-5 py-4 text-left font-black text-[10px] uppercase tracking-widest text-gray-500 w-32">Status</th>
                                         <th className="px-5 py-4 text-left font-black text-[10px] uppercase tracking-widest text-gray-500">Scan In/Out</th>
                                         <th className="px-5 py-4 text-right font-black text-[10px] uppercase tracking-widest text-gray-500">{isDriver ? 'Trips' : 'Output'}</th>
-                                        <th className="px-5 py-4 text-center font-black text-[10px] uppercase tracking-widest text-gray-500">{isDriver ? 'Location / Destination' : 'Alarms'}</th>
+                                        <th className="px-5 py-4 text-center font-black text-[10px] uppercase tracking-widest text-gray-500">{isDriver ? 'Zones' : 'Alarms'}</th>
                                         <th className="px-5 py-4 text-center font-black text-[10px] uppercase tracking-widest text-gray-500">Photos</th>
                                     </tr>
                                 </thead>
@@ -544,27 +493,10 @@ const PersonalMonthlyReport: React.FC<Props> = ({ user }) => {
                                             </td>
                                             <td className="px-5 py-4 whitespace-nowrap text-center">
                                                 {isDriver ? (
-                                                    day.trips && day.trips.length > 0 ? (
-                                                        <div className="flex flex-col items-center gap-2">
-                                                            {day.trips.map((t, idx) => (
-                                                                <div key={idx} className="flex flex-col items-center bg-black/40 border border-white/5 rounded-lg p-1.5 w-full min-w-[140px]">
-                                                                    <span className="text-[10px] font-black text-white/90 uppercase tracking-widest truncate max-w-[160px]" title={t.order_number}>
-                                                                        {t.trip_origin || 'null'} ➔ {t.zone || 'null'}
-                                                                    </span>
-                                                                    <div className="flex items-center gap-2 mt-1">
-                                                                        <span className="text-[9px] text-gray-400 font-bold flex items-center gap-1">
-                                                                            <MapPin size={10} className="text-gray-500" />
-                                                                            {t.trip_drop_count > 1 ? `${t.trip_drop_count} DROPS` : '1 DROP'}
-                                                                        </span>
-                                                                        <span className={`text-[8px] uppercase tracking-widest px-1 py-0.5 rounded border ${
-                                                                            t.status === 'Delivered' ? 'bg-emerald-500/10 text-emerald-400 border-emerald-500/20' : 
-                                                                            t.status === 'In-Transit' ? 'bg-blue-500/10 text-blue-400 border-blue-500/20' : 
-                                                                            'bg-amber-500/10 text-amber-500 border-amber-500/20'
-                                                                        }`}>
-                                                                            {t.status === 'Delivered' ? 'DONE' : t.status}
-                                                                        </span>
-                                                                    </div>
-                                                                </div>
+                                                    day.zones.length > 0 ? (
+                                                        <div className="flex flex-col items-center gap-1">
+                                                            {Array.from(new Set(day.zones)).map((z, idx) => (
+                                                                <span key={idx} className="text-[9px] bg-orange-500/10 text-orange-400 border border-orange-500/20 px-1.5 py-0.5 rounded uppercase">{z}</span>
                                                             ))}
                                                         </div>
                                                     ) : <span className="text-gray-700 font-mono">—</span>
