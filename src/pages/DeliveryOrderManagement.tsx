@@ -137,6 +137,8 @@ const SearchableSelect: React.FC<SearchableSelectProps> = ({ label, icon, option
 };
 
 const DeliveryOrderManagement: React.FC = () => {
+    const getSafeOrigin = (o?: string) => (o || '').toUpperCase().trim();
+
     // --- STATE ---
     const [orders, setOrders] = useState<SalesOrder[]>([]);
     const [drivers, setDrivers] = useState<User[]>([]);
@@ -771,7 +773,7 @@ const DeliveryOrderManagement: React.FC = () => {
 
             // Auto-Push Unlisted Trip Category to HR Payroll Rates
             if (tripCategory) {
-                const categoryExists = deliveryRates.some(r => r.origin === tripOrigin && r.location_name === tripCategory);
+                const categoryExists = deliveryRates.some(r => getSafeOrigin(r.origin) === getSafeOrigin(tripOrigin) && r.location_name === tripCategory);
                 if (!categoryExists) {
                     try {
                         await supabase.from('delivery_rates').insert({
@@ -1536,7 +1538,7 @@ const DeliveryOrderManagement: React.FC = () => {
                                                 list="trip-category-list"
                                                 placeholder="-- Auto/Manual --"
                                                 className={`w-full bg-slate-950 border rounded-lg px-3 py-2 text-xs text-white focus:outline-none transition-colors ${
-                                                    tripCategory && !deliveryRates.some(r => r.origin === tripOrigin && r.location_name === tripCategory)
+                                                    tripCategory && !deliveryRates.some(r => getSafeOrigin(r.origin) === getSafeOrigin(tripOrigin) && r.location_name === tripCategory)
                                                         ? 'border-red-500/80 focus:border-red-500 text-red-100' // Invalid styling
                                                         : 'border-slate-800 focus:border-blue-500/50'     // Normal styling
                                                 }`}
@@ -1544,11 +1546,11 @@ const DeliveryOrderManagement: React.FC = () => {
                                                 onChange={e => setTripCategory(e.target.value.toUpperCase())}
                                             />
                                             <datalist id="trip-category-list">
-                                                {Array.from(new Set(deliveryRates.filter(r => r.origin === tripOrigin).map(r => r.location_name))).map(loc => (
+                                                {Array.from(new Set(deliveryRates.filter(r => getSafeOrigin(r.origin) === getSafeOrigin(tripOrigin)).map(r => r.location_name))).map(loc => (
                                                     <option key={loc} value={loc} />
                                                 ))}
                                             </datalist>
-                                            {tripCategory && !deliveryRates.some(r => r.origin === tripOrigin && r.location_name === tripCategory) && (
+                                            {tripCategory && !deliveryRates.some(r => getSafeOrigin(r.origin) === getSafeOrigin(tripOrigin) && r.location_name === tripCategory) && (
                                                 <div className="absolute mt-1 text-[9px] font-bold text-red-400">⚠️ Unlisted category. Pay will be RM0.</div>
                                             )}
                                         </div>
