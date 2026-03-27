@@ -1,7 +1,7 @@
 import React, { useState, useEffect, useMemo } from 'react';
 import {
     CalendarDays, Award, AlertTriangle, Camera,
-    DollarSign, Clock, ChevronLeft, ChevronRight, Activity, Users, Truck, MapPin
+    DollarSign, Clock, ChevronLeft, ChevronRight, Activity, Users, Truck
 } from 'lucide-react';
 import { supabase } from '../services/supabase';
 
@@ -378,23 +378,25 @@ const PersonalMonthlyReport: React.FC<Props> = ({ user }) => {
                         </div>
 
                         {/* Alarms / Zones Card */}
-                        <div className={`bg-gradient-to-br from-[#0d0d12] to-black border border-white/5 rounded-3xl p-5 shadow-2xl relative overflow-hidden group transition-colors ${isDriver ? 'hover:border-orange-500/30' : 'hover:border-red-500/30'}`}>
-                            <div className={`absolute -right-4 -top-4 w-24 h-24 rounded-full blur-2xl transition-all ${isDriver ? 'bg-orange-500/10 group-hover:bg-orange-500/20' : 'bg-red-500/10 group-hover:bg-red-500/20'}`}></div>
-                            <div className="flex items-start justify-between">
-                                <div>
-                                    <p className={`text-[10px] uppercase tracking-widest font-black mb-1 ${isDriver ? 'text-orange-400' : 'text-red-400'}`}>
-                                        {isDriver ? 'Zones Visited' : 'Anomalies'}
-                                    </p>
-                                    <h3 className="text-3xl font-black text-white">
-                                        {isDriver ? Array.from(new Set(deliveries.map(d => d.zone || d.delivery_zone).filter(Boolean))).length : totalAlarms}
-                                    </h3>
-                                    <p className="text-xs text-gray-400 mt-2">{isDriver ? 'Unique delivery areas' : 'Alarms / Rejects handled'}</p>
-                                </div>
-                                <div className={`p-3 rounded-2xl border ${isDriver ? 'bg-orange-500/10 text-orange-500 border-orange-500/20' : 'bg-red-500/10 text-red-500 border-red-500/20'}`}>
-                                    {isDriver ? <MapPin size={20} /> : <AlertTriangle size={20} />}
+                        {!isDriver && (
+                            <div className="bg-gradient-to-br from-[#0d0d12] to-black border border-white/5 rounded-3xl p-5 shadow-2xl relative overflow-hidden group transition-colors hover:border-red-500/30">
+                                <div className="absolute -right-4 -top-4 w-24 h-24 rounded-full blur-2xl transition-all bg-red-500/10 group-hover:bg-red-500/20"></div>
+                                <div className="flex items-start justify-between">
+                                    <div>
+                                        <p className="text-[10px] uppercase tracking-widest font-black mb-1 text-red-400">
+                                            Anomalies
+                                        </p>
+                                        <h3 className="text-3xl font-black text-white">
+                                            {totalAlarms}
+                                        </h3>
+                                        <p className="text-xs text-gray-400 mt-2">Alarms / Rejects handled</p>
+                                    </div>
+                                    <div className="p-3 rounded-2xl border bg-red-500/10 text-red-500 border-red-500/20">
+                                        <AlertTriangle size={20} />
+                                    </div>
                                 </div>
                             </div>
-                        </div>
+                        )}
 
                         {/* Photo Logs Card */}
                         <div className="bg-gradient-to-br from-[#0d0d12] to-black border border-white/5 rounded-3xl p-5 shadow-2xl relative overflow-hidden group hover:border-violet-500/30 transition-colors">
@@ -458,7 +460,7 @@ const PersonalMonthlyReport: React.FC<Props> = ({ user }) => {
                                         <th className="px-5 py-4 text-left font-black text-[10px] uppercase tracking-widest text-gray-500 w-32">Status</th>
                                         <th className="px-5 py-4 text-left font-black text-[10px] uppercase tracking-widest text-gray-500">Scan In/Out</th>
                                         <th className="px-5 py-4 text-right font-black text-[10px] uppercase tracking-widest text-gray-500">{isDriver ? 'Trips' : 'Output'}</th>
-                                        <th className="px-5 py-4 text-center font-black text-[10px] uppercase tracking-widest text-gray-500">{isDriver ? 'Zones' : 'Alarms'}</th>
+                                        {!isDriver && <th className="px-5 py-4 text-center font-black text-[10px] uppercase tracking-widest text-gray-500">Alarms</th>}
                                         <th className="px-5 py-4 text-center font-black text-[10px] uppercase tracking-widest text-gray-500">Photos</th>
                                     </tr>
                                 </thead>
@@ -514,23 +516,15 @@ const PersonalMonthlyReport: React.FC<Props> = ({ user }) => {
                                                     ) : <span className="text-gray-700 font-mono">—</span>
                                                 )}
                                             </td>
-                                            <td className="px-5 py-4 whitespace-nowrap text-center">
-                                                {isDriver ? (
-                                                    day.zones.length > 0 ? (
-                                                        <div className="flex flex-col items-center gap-1">
-                                                            {Array.from(new Set(day.zones)).map((z, idx) => (
-                                                                <span key={idx} className="text-[9px] bg-orange-500/10 text-orange-400 border border-orange-500/20 px-1.5 py-0.5 rounded uppercase">{z}</span>
-                                                            ))}
-                                                        </div>
-                                                    ) : <span className="text-gray-700 font-mono">—</span>
-                                                ) : (
-                                                    day.alarmCount > 0 ? (
+                                            {!isDriver && (
+                                                <td className="px-5 py-4 whitespace-nowrap text-center">
+                                                    {day.alarmCount > 0 ? (
                                                         <span className="inline-flex items-center justify-center w-6 h-6 rounded-full bg-red-500/20 text-red-400 text-xs font-bold border border-red-500/30">
                                                             {day.alarmCount}
                                                         </span>
-                                                    ) : <span className="text-gray-700 font-mono">—</span>
-                                                )}
-                                            </td>
+                                                    ) : <span className="text-gray-700 font-mono">—</span>}
+                                                </td>
+                                            )}
                                             <td className="px-5 py-4 whitespace-nowrap text-center">
                                                 {day.photoCount > 0 ? (
                                                     <div className="flex items-center justify-center gap-1.5 text-violet-400">
