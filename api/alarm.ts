@@ -6,22 +6,13 @@ const supabaseKey = (process.env.SUPABASE_SERVICE_ROLE_KEY || process.env.VITE_S
 const supabase = createClient(supabaseUrl, supabaseKey);
 
 // ─── Machine Layout Config ────────────────────────────────────────────────────
-// Define how many fixed lanes each machine has and their IDs.
-// Single-lane machines use ['Single'], dual-lane uses ['Lane1', 'Lane2'], etc.
 const MACHINE_LANES: Record<string, string[]> = {
-    'T1.2-M01': ['Lane1', 'Lane2'],  // 200cm → 2 fixed lanes
+    'T1.2-M01': ['Lane1', 'Lane2'],
     'N1-M01': ['Single'],
     'N2-M02': ['Single'],
     'T1.3-M02': ['Single'],
 };
 const DEFAULT_LANES = ['Single'];
-
-// Server-side dedup REMOVED (2026-03-09):
-// The ESP32 firmware already enforces a 270s debounce at the hardware level,
-// so real duplicate pulses are physically impossible. The old 10s dedup window
-// was ACTIVELY HARMFUL: when WiFi recovered after an outage, the ESP32 would
-// replay its buffered queue at 3s intervals, and the dedup killed all of them
-// except the first — causing permanent data loss during downtime windows.
 
 // ─── Handler ──────────────────────────────────────────────────────────────────
 
@@ -40,15 +31,12 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
         const lanes = MACHINE_LANES[machine_id] || DEFAULT_LANES;
         console.log(`Alarm from ${machine_id} | alarm_count=${alarm_count} | lanes=${lanes.join(',')}`);
 
-        // ── Fetch all active products for this machine (all lanes) ──
         const { data: activeProducts } = await supabase
             .from('machine_active_products')
             .select('product_sku, lane_id, yield')
             .eq('machine_id', machine_id);
 
-        // Build a map: lane_id → { product_sku, yield }
         const activeLaneMap: Record<string, { sku: string | null; yield: number }> = {};
-
         (activeProducts || []).forEach((p: any) => {
             activeLaneMap[p.lane_id] = {
                 sku: p.product_sku || null,
@@ -56,44 +44,61 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
             };
         });
 
-        // ── Build one log insert per lane ──
-        // IMPORTANT: We IGNORE the firmware's alarm_count for quantity calculation.
-        // The firmware batches queued pulses (e.g. 2 pending → sends alarm_count=2),
-        // but we always use the DB yield config as the source of truth for quantity.
-        // alarm_count=0 is a special reboot signal — the only case where we use it.
         const isReboot = (alarm_count === 0);
-        const insertRows = lanes.map((laneId: string) => {
-            // Look up this specific lane's active product only — no cross-lane fallback.
-            // For single-lane machines that were configured under 'Single', also check that key.
+        
+        // --- 1. BUILD V1 ROWS ---
+        const insertRowsV1 = lanes.map((laneId: string) => {
             const laneData = activeLaneMap[laneId] ?? activeLaneMap['Single'] ?? null;
-
-            const row: any = {
+            const resolvedSku = (laneData?.sku && laneData.sku !== 'UNKNOWN') ? laneData.sku : 'UNKNOWN-BUBBLEWRAP';
+            return {
                 machine_id,
                 lane_id: laneId,
-                // ALWAYS use DB yield — never firmware alarm_count (could be batched)
                 alarm_count: isReboot ? 0 : (laneData?.yield ?? 1),
+                product_sku: resolvedSku,
             };
-            // Assign SKU: use lane's active product, or fall back to UNKNOWN-BUBBLEWRAP
-            // so that production counts are never silently dropped from the stock ledger.
-            const resolvedSku = (laneData?.sku && laneData.sku !== 'UNKNOWN')
-                ? laneData.sku
-                : 'UNKNOWN-BUBBLEWRAP';
-            row.product_sku = resolvedSku;
-            return row;
         });
 
-        console.log(`Inserting ${insertRows.length} log(s):`, JSON.stringify(insertRows));
+        // --- 2. BUILD V2 ROWS ---
+        const insertRowsV2 = lanes.map((laneId: string) => {
+            const laneData = activeLaneMap[laneId] ?? activeLaneMap['Single'] ?? null;
+            const resolvedSku = (laneData?.sku && laneData.sku !== 'UNKNOWN') ? laneData.sku : 'UNKNOWN-BUBBLEWRAP';
+            return {
+                machine_id,
+                output_qty: isReboot ? 0 : (laneData?.yield ?? 1),
+                sku: resolvedSku,
+            };
+        });
 
-        const { error: v1Error } = await supabase.from('production_logs').insert(insertRows);
+        // --- 3. DUAL WRITE (Safe parallel execution) ---
+        // We write to both independently so that V2's Live Stock Dashboard updates in real time,
+        // while preserving V1's operational stability. If V2 fails, V1 still succeeds.
+        const [v1Res, v2Res] = await Promise.allSettled([
+            supabase.from('production_logs').insert(insertRowsV1),
+            supabase.from('production_logs_v2').insert(insertRowsV2)
+        ]);
+
+        let v1Error = null;
+        if (v1Res.status === 'rejected') v1Error = v1Res.reason;
+        else if (v1Res.value.error) v1Error = v1Res.value.error;
+
+        let v2Error = null;
+        if (v2Res.status === 'rejected') v2Error = v2Res.reason;
+        else if (v2Res.value.error) v2Error = v2Res.value.error;
+
         if (v1Error) {
-            console.error('V1 Insert Error:', v1Error);
-            throw v1Error;
+            console.error('CRITICAL: V1 Insert Error:', v1Error);
+            throw v1Error; // Must throw to let ESP32 retry if V1 fails
+        }
+        
+        if (v2Error) {
+            // Soft fail: log it, but don't crash the ESP32 pulse
+            console.error('Warning: V2 Insert Error (Non-fatal):', v2Error);
         }
 
         return res.status(200).json({
             status: 'ok',
-            message: `Logged ${insertRows.length} lane(s)`,
-            lanes: insertRows.map((r: any) => ({ lane: r.lane_id, sku: r.product_sku || 'none', count: r.alarm_count })),
+            message: `Logged to V1 & V2`,
+            lanes: insertRowsV1,
         });
 
     } catch (e: any) {
