@@ -178,22 +178,27 @@ const ProductionLane: React.FC<ProductionLaneProps> = ({ laneId, machineMetadata
 
         const channel = supabase.channel(channelName)
             .on('postgres_changes',
-                { event: 'INSERT', schema: 'public', table: 'production_logs' },
+                { event: 'INSERT', schema: 'public', table: 'production_logs_v2' },
                 async (payload) => { // Async handler
                     const newLog = payload.new;
-                    // For old T1.2 firmware (v1.0.0) which sends 'UNKNOWN' sku and 'Unknown' lane_id, we still want to count it
-                    const isOldFirmwareSkipped = newLog.product_sku === 'UNKNOWN' && newLog.lane_id === 'Unknown';
+                    
+                    const logSku = newLog.sku || newLog.product_sku;
+                    const logQty = newLog.output_qty || newLog.alarm_count || 1;
+                    const logLane = newLog.lane_id || newLog.source_lane;
 
-                    if (!isOldFirmwareSkipped && (newLog.machine_id !== machineId || newLog.product_sku !== activeSku)) return;
+                    // For old T1.2 firmware (v1.0.0) which sends 'UNKNOWN' sku and 'Unknown' lane_id, we still want to count it
+                    const isOldFirmwareSkipped = logSku === 'UNKNOWN' && logLane === 'Unknown';
+
+                    if (!isOldFirmwareSkipped && (newLog.machine_id !== machineId || logSku !== activeSku)) return;
                     // Filter to only count logs from this lane (ignore if it's the old firmware 'Unknown' lane)
-                    if (!isOldFirmwareSkipped && newLog.lane_id && newLog.lane_id !== laneId) return;
+                    if (!isOldFirmwareSkipped && logLane && logLane !== laneId) return;
 
                     console.log(`[Lane: ${laneId}] ⚡ MATCHED SIGNAL:`, newLog);
-                    const qty = newLog.alarm_count || 1;
-                    setLiveCount(prev => prev + qty);
+                    setLiveCount(prev => prev + logQty);
 
                     // --- AUTO-UPDATE MATCHING JOB ---
                     const currentProduct = `${selectedLayer} ${selectedMaterial} ${selectedSize}`;
+                    const qty = logQty;
                     const matchingJob = jobs.find(j =>
                         (j.machine === machineId || j.Machine_ID === machineId) &&
                         j.status !== 'Completed' &&
@@ -603,8 +608,14 @@ const ProductionControl: React.FC<ProductionControlProps> = ({ user, jobs = [] }
                     // LOGIN — record clock-in in operator_attendance
                     const today = new Date().toISOString().split('T')[0];
                     const clockInTime = new Date().toISOString();
+                    const currentMachine = machineMetadata?.id || selectedMachine || null;
                     await supabase.from('operator_attendance')
-                        .upsert({ operator_id: user.employee_id, date: today, clock_in: clockInTime },
+                        .upsert({ 
+                            operator_id: user.employee_id, 
+                            date: today, 
+                            clock_in: clockInTime,
+                            machine_id: currentMachine
+                        },
                             { onConflict: 'operator_id,date', ignoreDuplicates: true });
                     setOperatorId(user.id);
                     setOperatorName(user.name);

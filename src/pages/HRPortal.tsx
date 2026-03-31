@@ -3,7 +3,7 @@ import { supabase } from '../services/supabase';
 import {
     Users, Download, AlertCircle,
     Wallet, Plus, Edit2, Save, X, ToggleLeft, Trash2,
-    ToggleRight, Star, Award, MapPin, DollarSign, ChevronLeft, ChevronRight, Loader, Shield
+    ToggleRight, Star, Award, MapPin, DollarSign, ChevronLeft, ChevronRight, ChevronDown, ChevronUp, Loader, Shield
 } from 'lucide-react';
 
 // ── SUPABASE ADMIN (FOR AUTH MANAGEMENT) ──────────────────────
@@ -342,6 +342,7 @@ const HRPortal: React.FC<{ user?: any }> = ({ user }) => {
     // Delivery rates
     const [deliveryRates, setDeliveryRates] = useState<{ id: string; origin: string; location_name: string; base_rate: number; max_places: number; extra_rate_per_place: number; notes: string }[]>([]);
     const [showZoneEditor, setShowZoneEditor] = useState(false);
+    const [showZoneForm, setShowZoneForm] = useState(false);
     const [newRateOrigin, setNewRateOrigin] = useState('TAIPING');
     const [newRateLocation, setNewRateLocation] = useState('');
     const [newRateBase, setNewRateBase] = useState('');
@@ -427,6 +428,17 @@ const HRPortal: React.FC<{ user?: any }> = ({ user }) => {
         if (!window.confirm('Delete this rate?')) return;
         await supabase.from('delivery_rates').delete().eq('id', id);
         fetchDeliveryRates();
+    };
+
+    const handleEditZone = (z: any) => {
+        setNewRateOrigin(z.origin || 'TAIPING');
+        setNewRateLocation(z.location_name || '');
+        setNewRateBase(z.base_rate?.toString() || '');
+        setNewRateMaxPlaces(z.max_places?.toString() || '0');
+        setNewRateExtra(z.extra_rate_per_place?.toString() || '');
+        setNewZoneNotes(z.notes || '');
+        setShowZoneForm(true);
+        setShowZoneEditor(true);
     };
 
     // ── Payroll ──────────────────────────────────────────────
@@ -777,59 +789,72 @@ const HRPortal: React.FC<{ user?: any }> = ({ user }) => {
 
                     {/* Delivery Rates Manager */}
                     <div className="mb-5 bg-[#0d0d12] border border-amber-500/20 rounded-2xl overflow-hidden">
-                        <button
-                            onClick={() => setShowZoneEditor(v => !v)}
-                            className="w-full px-4 py-3 flex items-center justify-between hover:bg-white/[0.02] transition-colors">
-                            <div className="flex items-center gap-2 text-amber-400 font-bold text-xs uppercase tracking-widest">
-                                <MapPin size={13} /> Driver Payroll Rates
+                        <div className="w-full px-4 py-3 flex items-center justify-between border-b border-white/5 bg-black/20 hover:bg-white/[0.02] transition-colors">
+                            <div className="flex items-center gap-2 text-amber-400 font-bold text-xs uppercase tracking-widest cursor-pointer mt-1" onClick={() => setShowZoneEditor(v => !v)}>
+                                <MapPin size={14} /> Driver Payroll Rates
+                                <span className="text-[10px] text-zinc-500 lowercase ml-2 font-normal hidden sm:inline">({deliveryRates.length} configured)</span>
                             </div>
-                            <span className="text-[10px] text-gray-500">{deliveryRates.length} rates configured · click to {showZoneEditor ? 'collapse' : 'expand'}</span>
-                        </button>
+                            <div className="flex items-center gap-2">
+                                <button onClick={() => { setShowZoneForm(v => !v); setShowZoneEditor(true); }} className="px-3 py-1.5 bg-amber-500/10 hover:bg-amber-500/20 text-amber-400 font-bold text-[10px] uppercase tracking-widest rounded-lg transition-colors border border-amber-500/20 flex items-center gap-1.5">
+                                    {showZoneForm ? <X size={12} /> : <Plus size={12} />}
+                                    {showZoneForm ? 'Close Form' : 'Add / Update'}
+                                </button>
+                                <button onClick={() => setShowZoneEditor(v => !v)} className="p-1 hover:bg-white/5 rounded-lg text-zinc-500 hover:text-white transition-colors">
+                                    {showZoneEditor ? <ChevronUp size={18} /> : <ChevronDown size={18} />}
+                                </button>
+                            </div>
+                        </div>
                         {showZoneEditor && (
                             <div className="border-t border-white/5 p-4 space-y-3">
                                 {/* Existing zones */}
                                 {deliveryRates.length > 0 && (
-                                    <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-2 mb-3 max-h-96 overflow-y-auto custom-scrollbar">
-                                        {deliveryRates.map(z => (
-                                            <div key={z.id} className="flex items-center justify-between bg-black/30 border border-white/5 rounded-xl px-3 py-2">
-                                                <div>
-                                                    <div className="flex items-center gap-2">
-                                                        <span className="text-[9px] bg-blue-500/20 text-blue-400 px-1.5 py-0.5 rounded uppercase font-black">{z.origin}</span>
-                                                        <span className="text-sm font-bold text-white uppercase">{z.location_name}</span>
-                                                    </div>
-                                                    <div className="text-[10px] text-amber-400 font-mono mt-1">
-                                                        Base: RM{Number(z.base_rate).toFixed(2)} | Max: {z.max_places} drops | +RM{Number(z.extra_rate_per_place).toFixed(2)}/drop
-                                                    </div>
-                                                    {z.notes && <div className="text-[10px] text-gray-600">{z.notes}</div>}
-                                                </div>
-                                                <button onClick={() => handleDeleteZone(z.id)} className="p-1.5 rounded-lg text-gray-600 hover:text-red-400 hover:bg-red-500/10 transition-colors h-fit">
-                                                    <Trash2 size={12} />
-                                                </button>
-                                            </div>
-                                        ))}
+                                    <div className="mb-3 max-h-[500px] overflow-auto custom-scrollbar rounded-xl border border-white/5 relative">
+                                        <table className="w-full text-sm text-left border-collapse">
+                                            <thead className="sticky top-0 bg-[#0d0d12] shadow-sm z-10 backdrop-blur-xl">
+                                                <tr className="text-[10px] text-zinc-500 uppercase tracking-widest border-b border-white/10">
+                                                    <th className="px-4 py-3 font-bold">Origin</th>
+                                                    <th className="px-4 py-3 font-bold">Destination</th>
+                                                    <th className="px-4 py-3 font-bold">Base (RM)</th>
+                                                    <th className="px-4 py-3 font-bold">Max Drops</th>
+                                                    <th className="px-4 py-3 font-bold">+Rate / Drop</th>
+                                                    <th className="px-4 py-3 font-bold">Notes</th>
+                                                    <th className="px-4 py-3"></th>
+                                                </tr>
+                                            </thead>
+                                            <tbody className="divide-y divide-white/[0.03] bg-black/20">
+                                                {deliveryRates.map(z => (
+                                                    <tr key={z.id} className="hover:bg-white/[0.03] group transition-colors">
+                                                        <td className="px-4 py-2.5 w-24">
+                                                            <span className="text-[9px] bg-blue-500/10 border border-blue-500/20 text-blue-400 px-1.5 py-0.5 rounded uppercase font-black">{z.origin}</span>
+                                                        </td>
+                                                        <td className="px-4 py-2.5 text-xs font-bold text-white uppercase">{z.location_name}</td>
+                                                        <td className="px-4 py-2.5 text-xs font-mono text-amber-400">
+                                                            {Number(z.base_rate).toFixed(2)}
+                                                        </td>
+                                                        <td className="px-4 py-2.5 text-xs font-mono text-zinc-300">
+                                                            {z.max_places}
+                                                        </td>
+                                                        <td className="px-4 py-2.5 text-xs font-mono text-amber-400">
+                                                            {Number(z.extra_rate_per_place).toFixed(2)}
+                                                        </td>
+                                                        <td className="px-4 py-2.5 text-[10px] text-zinc-500 max-w-[120px] truncate">{z.notes || '-'}</td>
+                                                        <td className="px-4 py-2.5 w-20 text-right">
+                                                            <div className="flex items-center justify-end gap-1 opacity-0 group-hover:opacity-100 transition-all">
+                                                                <button onClick={() => handleEditZone(z)} className="p-1.5 rounded-lg text-zinc-500 hover:text-blue-400 hover:bg-blue-500/10 transition-colors">
+                                                                    <Edit2 size={13} />
+                                                                </button>
+                                                                <button onClick={() => handleDeleteZone(z.id)} className="p-1.5 rounded-lg text-zinc-500 hover:text-red-400 hover:bg-red-500/10 transition-colors">
+                                                                    <Trash2 size={13} />
+                                                                </button>
+                                                            </div>
+                                                        </td>
+                                                    </tr>
+                                                ))}
+                                            </tbody>
+                                        </table>
                                     </div>
                                 )}
-                                {/* Add new zone */}
-                                <div className="flex flex-col gap-2 bg-black/20 p-3 rounded-xl border border-white/5">
-                                    <div className="text-xs font-bold text-slate-400 uppercase tracking-widest mb-1">Add / Update Rate</div>
-                                    <div className="grid grid-cols-2 lg:grid-cols-5 gap-2">
-                                        <select value={newRateOrigin} onChange={e => setNewRateOrigin(e.target.value)} className="bg-black/40 border border-white/10 rounded-xl px-3 py-2 text-sm text-white focus:outline-none focus:border-amber-500/50">
-                                            <option value="TAIPING">TAIPING</option>
-                                            <option value="NILAI">NILAI</option>
-                                        </select>
-                                        <input type="text" value={newRateLocation} onChange={e => setNewRateLocation(e.target.value)} placeholder="Destination (e.g. KL)" className="bg-black/40 border border-white/10 rounded-xl px-3 py-2 text-sm text-white focus:outline-none focus:border-amber-500/50" />
-                                        <input type="number" value={newRateBase} onChange={e => setNewRateBase(e.target.value)} placeholder="Base Rate (RM)" className="bg-black/40 border border-white/10 rounded-xl px-3 py-2 text-sm text-white focus:outline-none focus:border-amber-500/50" />
-                                        <input type="number" value={newRateMaxPlaces} onChange={e => setNewRateMaxPlaces(e.target.value)} placeholder="Max Drops" className="bg-black/40 border border-white/10 rounded-xl px-3 py-2 text-sm text-white focus:outline-none focus:border-amber-500/50" />
-                                        <input type="number" value={newRateExtra} onChange={e => setNewRateExtra(e.target.value)} placeholder="Extra Rate/Drop" className="bg-black/40 border border-white/10 rounded-xl px-3 py-2 text-sm text-white focus:outline-none focus:border-amber-500/50" />
-                                    </div>
-                                    <div className="flex gap-2 mt-1">
-                                        <input type="text" value={newZoneNotes} onChange={e => setNewZoneNotes(e.target.value)} placeholder="Notes (optional)" className="flex-1 bg-black/40 border border-white/10 rounded-xl px-3 py-2 text-sm text-white focus:outline-none focus:border-amber-500/50" />
-                                        <button onClick={handleAddZone} disabled={savingZone || !newRateLocation || !newRateBase} className="px-6 py-2 bg-amber-600 hover:bg-amber-500 disabled:opacity-50 rounded-xl text-xs font-bold text-white flex items-center justify-center gap-1.5 transition-colors">
-                                            {savingZone ? <Loader size={12} className="animate-spin" /> : <Plus size={12} />}
-                                            Save Rate
-                                        </button>
-                                    </div>
-                                </div>
+
                             </div>
                         )}
                     </div>
@@ -915,6 +940,59 @@ const HRPortal: React.FC<{ user?: any }> = ({ user }) => {
                     onClose={() => setEditingEmp(null)}
                     onSave={fetchEmployees}
                 />
+            )}
+        {/* Zone Form Modal */}
+            {showZoneForm && (
+                <div className="fixed inset-0 z-[60] bg-black/80 backdrop-blur-sm flex items-center justify-center p-4 animate-in fade-in duration-200">
+                    <div className="bg-[#0d0d12] border border-amber-500/30 rounded-3xl w-full max-w-lg overflow-hidden shadow-2xl relative">
+                        <div className="bg-amber-500/5 p-6 flex flex-col gap-4">
+                            <button onClick={() => setShowZoneForm(false)} className="absolute top-4 right-4 p-2 hover:bg-white/10 text-zinc-400 hover:text-white rounded-xl transition-colors">
+                                <X size={16} />
+                            </button>
+                            <div className="text-sm font-black text-amber-500 uppercase tracking-widest flex items-center gap-2 pr-8 mb-2">
+                                <MapPin size={16} /> {newRateLocation ? `Update Rate: ${newRateLocation}` : 'Add New Delivery Rate'}
+                            </div>
+
+                            <div className="grid grid-cols-2 gap-4">
+                                <div>
+                                    <label className="block text-[10px] text-amber-500/70 font-bold uppercase tracking-widest mb-1.5">Origin</label>
+                                    <select value={newRateOrigin} onChange={e => setNewRateOrigin(e.target.value)} className="w-full bg-black/40 border border-amber-500/20 rounded-xl px-4 py-3 text-sm font-bold text-white focus:outline-none focus:border-amber-400 transition-colors">
+                                        <option value="TAIPING">TAIPING</option>
+                                        <option value="NILAI">NILAI</option>
+                                    </select>
+                                </div>
+                                <div className="col-span-2">
+                                    <label className="block text-[10px] text-amber-500/70 font-bold uppercase tracking-widest mb-1.5">Destination (Location)</label>
+                                    <input type="text" value={newRateLocation} onChange={e => setNewRateLocation(e.target.value)} placeholder="e.g. KUALA LUMPUR" className="w-full bg-black/40 border border-amber-500/20 rounded-xl px-4 py-3 text-sm text-white font-bold uppercase focus:outline-none focus:border-amber-400 transition-colors" />
+                                </div>
+                                <div>
+                                    <label className="block text-[10px] text-amber-500/70 font-bold uppercase tracking-widest mb-1.5">Base Rate (RM)</label>
+                                    <input type="number" value={newRateBase} onChange={e => setNewRateBase(e.target.value)} placeholder="0" className="w-full bg-black/40 border border-amber-500/20 rounded-xl px-4 py-3 text-sm font-mono text-amber-400 focus:outline-none focus:border-amber-400 transition-colors" />
+                                </div>
+                                <div>
+                                    <label className="block text-[10px] text-amber-500/70 font-bold uppercase tracking-widest mb-1.5">Max Free Drops</label>
+                                    <input type="number" value={newRateMaxPlaces} onChange={e => setNewRateMaxPlaces(e.target.value)} placeholder="0" className="w-full bg-black/40 border border-amber-500/20 rounded-xl px-4 py-3 text-sm font-mono text-white focus:outline-none focus:border-amber-400 transition-colors" />
+                                </div>
+                                <div>
+                                    <label className="block text-[10px] text-amber-500/70 font-bold uppercase tracking-widest mb-1.5">+ Extra Rate / Drop</label>
+                                    <input type="number" value={newRateExtra} onChange={e => setNewRateExtra(e.target.value)} placeholder="0" className="w-full bg-black/40 border border-amber-500/20 rounded-xl px-4 py-3 text-sm font-mono text-amber-400 focus:outline-none focus:border-amber-400 transition-colors" />
+                                </div>
+                                <div className="col-span-2 mt-2">
+                                    <label className="block text-[10px] text-zinc-500 font-bold uppercase tracking-widest mb-1.5">Internal Notes</label>
+                                    <input type="text" value={newZoneNotes} onChange={e => setNewZoneNotes(e.target.value)} placeholder="Optional specific instructions" className="w-full bg-black/40 border border-white/10 rounded-xl px-4 py-3 text-sm text-zinc-400 focus:outline-none focus:border-amber-500/50 transition-colors" />
+                                </div>
+                            </div>
+                            
+                            <div className="flex gap-3 justify-end mt-4 pt-4 border-t border-white/5">
+                                <button onClick={() => setShowZoneForm(false)} className="px-5 py-3 rounded-xl text-sm font-bold text-zinc-400 hover:text-white hover:bg-white/5 transition-colors">Cancel</button>
+                                <button onClick={() => { handleAddZone(); setShowZoneForm(false); }} disabled={savingZone || !newRateLocation || !newRateBase} className="px-8 py-3 bg-amber-500 hover:bg-amber-400 text-black disabled:opacity-50 disabled:bg-zinc-700 disabled:text-zinc-500 rounded-xl text-sm font-black flex items-center justify-center gap-2 transition-colors shadow-lg shadow-amber-500/20">
+                                    {savingZone ? <Loader size={16} className="animate-spin" /> : <Save size={16} />}
+                                    Save Rate
+                                </button>
+                            </div>
+                        </div>
+                    </div>
+                </div>
             )}
         </div>
     );

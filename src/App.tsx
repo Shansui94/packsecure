@@ -47,12 +47,14 @@ import SOPCenter from './pages/SOPCenter';
 import WorkPhotoLog from './pages/WorkPhotoLog';
 import PersonalMonthlyReport from './pages/PersonalMonthlyReport';
 import MachineSchedule from './pages/MachineSchedule';
+import ActivityLogs from './pages/ActivityLogs';
 
 import { User, UserRole, InventoryItem, ProductionLog as ProductionLogType, JobOrder } from './types';
 import AIAgentWidget from './components/AIAgentWidget';
 
 import { supabase } from './services/supabase';
 import { Session } from '@supabase/supabase-js';
+import { logActivity } from './utils/logger';
 
 // --- CONFIGURATION ---
 
@@ -70,10 +72,48 @@ function App() {
         return localStorage.getItem('lastActivePage') || 'factory-live-os';
     });
 
-    // Persist activePage
+    // Persist activePage and Log Activity
     useEffect(() => {
         localStorage.setItem('lastActivePage', activePage);
-    }, [activePage]);
+        
+        // Log page view when activePage changes and user is loaded
+        if (user && activePage !== 'login') {
+            logActivity(user, 'PAGE_VIEW', { page: activePage });
+        }
+    }, [activePage, user]);
+
+    // Global Click Tracker to record button clicks and creations
+    useEffect(() => {
+        if (!user) return;
+        
+        const handleGlobalClick = (e: MouseEvent) => {
+            const target = e.target as HTMLElement;
+            const clickable = target.closest('button, a, [role="button"], input[type="submit"]') as HTMLElement;
+            
+            if (clickable) {
+                // Extract identifying information about what was clicked
+                const actionText = (clickable.innerText || clickable.textContent || clickable.getAttribute('aria-label') || clickable.title || '').trim().substring(0, 50);
+                const actionId = clickable.id || 'unknown_node';
+                
+                // We only want to log 'action-oriented' clicks to avoid flooding the DB
+                const textLower = actionText.toLowerCase();
+                const keywords = ['save', 'submit', 'create', 'delete', 'add', 'update', 'complete', 'start', 'stop', 'confirm', 'print', 'finish', 'post', 'allow', 'reject', 'approve'];
+                
+                const isActionable = keywords.some(k => textLower.includes(k));
+                
+                if (isActionable && actionText.length > 0) {
+                    logActivity(user, `BUTTON_CLICK`, {
+                        page: activePage,
+                        button_text: actionText,
+                        element_id: actionId
+                    });
+                }
+            }
+        };
+
+        document.addEventListener('click', handleGlobalClick, { capture: true });
+        return () => document.removeEventListener('click', handleGlobalClick, { capture: true });
+    }, [user, activePage]);
 
     // Global State (Synced with Firestore)
     const [inventory, setInventory] = useState<InventoryItem[]>([]);
@@ -182,14 +222,14 @@ function App() {
         // Define allowable pages per role
         const allowedPages: Record<string, string[]> = {
             'SuperAdmin': ['*'], // The Only One with Full Access
-            'Admin': ['profile', 'construction', 'factory-live-os', 'dashboard', 'data-v2', 'customer-import', 'universal-intake', 'scanner', 'jobs', 'livestock', 'inventory', 'recipes', 'products', 'delivery', 'order-summary', 'dispatch', 'production', 'report-history', 'users', 'hr', 'simple-stock', 'maintenance', 'lorry-management', 'iot', 'driver-management', 'operators', 'dev-log', 'leave-calendar', 'personal-report', 'machine-schedule'],
-            'Manager': ['profile', 'construction', 'factory-live-os', 'dashboard', 'data-v2', 'customer-import', 'universal-intake', 'jobs', 'livestock', 'inventory', 'recipes', 'products', 'delivery', 'order-summary', 'dispatch', 'production', 'report-history', 'hr', 'simple-stock', 'maintenance', 'lorry-management', 'iot', 'driver-management', 'operators', 'leave-calendar', 'personal-report', 'machine-schedule'],
-            'Driver': ['delivery-driver', 'delivery-history', 'leave-calendar', 'lorry-service', 'profile', 'personal-report'],
-            'Operator': ['scanner', 'leave-calendar', 'profile', 'personal-report'],
+            'Admin': ['profile', 'construction', 'factory-live-os', 'dashboard', 'data-v2', 'customer-import', 'universal-intake', 'scanner', 'jobs', 'livestock', 'inventory', 'recipes', 'products', 'delivery', 'order-summary', 'dispatch', 'production', 'report-history', 'users', 'hr', 'simple-stock', 'maintenance', 'lorry-management', 'iot', 'driver-management', 'operators', 'dev-log', 'leave-calendar', 'personal-report', 'machine-schedule', 'activity-logs'],
+            'Manager': ['profile', 'construction', 'factory-live-os', 'dashboard', 'data-v2', 'customer-import', 'universal-intake', 'jobs', 'livestock', 'inventory', 'recipes', 'products', 'delivery', 'order-summary', 'dispatch', 'production', 'report-history', 'hr', 'simple-stock', 'maintenance', 'lorry-management', 'iot', 'driver-management', 'operators', 'leave-calendar', 'personal-report', 'machine-schedule', 'activity-logs'],
+            'Driver': ['delivery-driver', 'delivery-history', 'leave-calendar', 'lorry-service', 'profile', 'personal-report', 'activity-logs'],
+            'Operator': ['scanner', 'leave-calendar', 'profile', 'personal-report', 'activity-logs'],
             'Device': ['scanner'],
-            'HR': ['profile', 'hr', 'leave-calendar', 'notes', 'tasks', 'personal-report'],
-            'Sales': ['profile', 'construction', 'personal-report'],
-            'Finance': ['profile', 'construction', 'personal-report']
+            'HR': ['profile', 'hr', 'leave-calendar', 'notes', 'tasks', 'personal-report', 'activity-logs'],
+            'Sales': ['profile', 'construction', 'personal-report', 'activity-logs'],
+            'Finance': ['profile', 'construction', 'personal-report', 'activity-logs']
         };
 
         let allowed = allowedPages[role] || [];
@@ -209,6 +249,11 @@ function App() {
         // --- SPECIAL USER OVERRIDE (Neoson - Manager + Driver) ---
         if (user.email === 'neosonchun@gmail.com') {
             allowed = [...allowed, 'delivery-driver', 'delivery-history', 'leave-calendar'];
+        }
+
+        // --- SPECIAL USER OVERRIDE (Baby - Operator / Stock Audit) ---
+        if (user.employeeId === '0014' || user.email === 'driver.0014@packsecure.local' || user.name?.toLowerCase() === 'baby') {
+            allowed = [...allowed, 'stock-audit'];
         }
 
         const isAllowed = allowed.includes('*') || allowed.includes(activePage);
@@ -313,6 +358,13 @@ function App() {
                 loginTime: new Date().toLocaleTimeString()
             });
             setIsLoggedIn(true);
+
+            // Log successful Login once per session
+            const userObj = { email: currentUser.email || '', name, role: role as UserRole, uid: currentUser.id, status: status as any, loginTime: new Date().toLocaleTimeString(), gps: 'Unknown' };
+            if (!sessionStorage.getItem('hasLoggedSessionIn')) {
+                logActivity(userObj, 'LOGIN', { method: 'auth_success' });
+                sessionStorage.setItem('hasLoggedSessionIn', 'true');
+            }
 
             // Initial Routing Logic (Force correct landing page)
             if (!localStorage.getItem('lastActivePage')) {
@@ -689,6 +741,8 @@ function App() {
                 return <PersonalMonthlyReport user={user} />;
             case 'machine-schedule':
                 return <MachineSchedule user={user} />;
+            case 'activity-logs':
+                return <ActivityLogs user={user} />;
             case 'operator-dashboard':
                 return <UnderConstruction title="Coming Soon" />;
             case 'data':
@@ -712,6 +766,11 @@ function App() {
             localStorage.removeItem('selectedMachine');
             localStorage.removeItem('device_machine_id'); // 清除 IoT 绑定
             localStorage.removeItem('lastActivePage'); // Force clean state on next login
+            sessionStorage.removeItem('hasLoggedSessionIn'); // Clear login tracking flag
+            
+            if (user) {
+                logActivity(user, 'LOGOUT', { method: 'explicit_logout' });
+            }
         } catch (error) {
             console.error("Error logging out:", error);
         }

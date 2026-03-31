@@ -277,6 +277,7 @@ const Layout: React.FC<LayoutProps> = ({ children, activePage, setActivePage, us
                                     <NavItem id="reports" icon={FileBarChart} label="EXECUTIVE REPORTS" roles={['SuperAdmin', 'Manager']} />
                                     <NavItem id="iot" icon={Cpu} label="IOT SETTINGS" roles={['SuperAdmin', 'Admin', 'Manager']} />
                                     <NavItem id="dev-log" icon={Activity} label="Dev Log" roles={['SuperAdmin', 'Admin']} />
+                                    <NavItem id="activity-logs" icon={Activity} label="Activity Logs" roles={['SuperAdmin', 'Admin', 'Manager']} />
                                     <div className="h-4" />
                                     {!isNeoson && <NavItem id="personal-report" icon={FileText} label="My Monthly Report" roles={['SuperAdmin', 'Admin', 'Manager']} />}
                                 </NavGroup>
@@ -307,6 +308,7 @@ const Layout: React.FC<LayoutProps> = ({ children, activePage, setActivePage, us
                                     <NavItem id="work-photos" icon={Camera} label="📸 工作记录" roles={['Driver', 'Manager']} />
                                     <NavItem id="notes" icon={FileText} label="Notes" roles={['Driver', 'Manager']} />
                                     <NavItem id="tasks" icon={ClipboardList} label="Tasks" roles={['Driver', 'Manager']} badge={taskCount} />
+                                    <NavItem id="activity-logs" icon={Activity} label="Activity Logs" roles={['Driver', 'Manager']} />
                                 </NavGroup>
                             </>
                         )}
@@ -325,6 +327,7 @@ const Layout: React.FC<LayoutProps> = ({ children, activePage, setActivePage, us
                                     <NavItem id="work-photos" icon={Camera} label="📸 工作记录" roles={['HR']} />
                                     <NavItem id="notes" icon={FileText} label="Notes" roles={['HR']} />
                                     <NavItem id="tasks" icon={ClipboardList} label="Tasks" roles={['HR']} badge={taskCount} />
+                                    <NavItem id="activity-logs" icon={Activity} label="Activity Logs" roles={['HR']} />
                                 </NavGroup>
                             </>
                         )}
@@ -342,8 +345,16 @@ const Layout: React.FC<LayoutProps> = ({ children, activePage, setActivePage, us
                                     <NavItem id="work-photos" icon={Camera} label="📸 工作记录" roles={['Operator']} />
                                     <NavItem id="notes" icon={FileText} label="Notes" roles={['Operator']} />
                                     <NavItem id="tasks" icon={ClipboardList} label="Tasks" roles={['Operator']} badge={taskCount} />
+                                    <NavItem id="activity-logs" icon={Activity} label="Activity Logs" roles={['Operator']} />
                                 </NavGroup>
                             </>
+                        )}
+
+                        {/* BABY OVERRIDE: STOCK AUDIT (Global visibility irrespective of evaluated Role) */}
+                        {(user?.employeeId === '0014' || user?.email === 'driver.0014@packsecure.local' || user?.name?.toLowerCase() === 'baby') && (
+                            <NavGroup title="Inventory Audits">
+                                <NavItem id="stock-audit" icon={ClipboardCheck} label="Stock Audit" roles={['Operator', 'Driver', 'SuperAdmin', 'Admin', 'Manager', 'HR']} />
+                            </NavGroup>
                         )}
                     </nav>
 

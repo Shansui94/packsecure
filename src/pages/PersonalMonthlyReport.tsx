@@ -28,6 +28,7 @@ interface DailyMetrics {
     leaveStatus: string | null;
     shiftStart: string | null;
     shiftEnd: string | null;
+    machinesOperated: string[];
 }
 
 const PersonalMonthlyReport: React.FC<Props> = ({ user }) => {
@@ -51,6 +52,7 @@ const PersonalMonthlyReport: React.FC<Props> = ({ user }) => {
     const [attendanceShifts, setAttendanceShifts] = useState<any[]>([]);
     const [photoLogs, setPhotoLogs] = useState<any[]>([]);
     const [leaves, setLeaves] = useState<any[]>([]);
+    const [plannedMachines, setPlannedMachines] = useState<any[]>([]);
     const [payroll, setPayroll] = useState<any | null>(null);
     const [deliveries, setDeliveries] = useState<any[]>([]);
     const [deliveryRates, setDeliveryRates] = useState<any[]>([]);
@@ -133,10 +135,9 @@ const PersonalMonthlyReport: React.FC<Props> = ({ user }) => {
             
             const activeEmpId = profileData ? profileData.employee_id : (selectedEmployeeId === (user.uid || user.id) ? user.employeeId : undefined);
 
-            // B. Production Logs
             const { data: prodData } = await supabase
                 .from('production_logs_v2')
-                .select('created_at, output_qty, reject_qty, alarm_count')
+                .select('created_at, output_qty, reject_qty, alarm_count, machine_id, job_id')
                 .eq('operator_id', selectedEmployeeId)
                 .gte('created_at', startDateTs)
                 .lte('created_at', endDateTs);
@@ -147,13 +148,14 @@ const PersonalMonthlyReport: React.FC<Props> = ({ user }) => {
             if (activeEmpId) {
                 const { data } = await supabase
                     .from('operator_attendance')
-                    .select('date, clock_in, clock_out, hours_worked')
+                    .select('date, clock_in, clock_out, hours_worked, machine_id')
                     .eq('operator_id', activeEmpId)
                     .gte('date', firstDay)
                     .lte('date', lastDayStr);
                 attendanceData = data || [];
             }
             setAttendanceShifts(attendanceData);
+            setPlannedMachines([]);
 
             // D. Photos
             if (activeEmpId) {
@@ -244,6 +246,16 @@ const PersonalMonthlyReport: React.FC<Props> = ({ user }) => {
 
             // Shift
             const dayShift = attendanceShifts.find(s => s.date === dateStr);
+            const dayPlans = plannedMachines.filter(s => s.shift_date === dateStr);
+
+            const machinesOperated = Array.from(new Set([
+                ...dayPlans.map(p => p.machine_id),
+                ...dayProd.map(p => {
+                    if (p.machine_id && p.machine_id.trim() !== '') return p.machine_id;
+                    if (p.job_id && String(p.job_id).startsWith('JOB-')) return String(p.job_id).split('-')[1];
+                    return null;
+                })
+            ].filter(Boolean)));
 
             // Leave
             const dayLeave = leaves.find(l => dateStr >= l.start_date && dateStr <= l.end_date);
@@ -264,8 +276,19 @@ const PersonalMonthlyReport: React.FC<Props> = ({ user }) => {
                 const originRaw = t.trip_origin || 'TAIPING';
                 const origin = originRaw.toLowerCase();
                 const zoneRaw = t.zone || t.delivery_address || 'Unknown';
-                const zone = zoneRaw.toLowerCase();
-                const key = `${origin}-${zone}`;
+                let calcZone = zoneRaw.toLowerCase();
+                let displayZone = zoneRaw;
+
+                // Map internal system zones to actual HR Trip Categories
+                if (zoneRaw === 'Central_Right') {
+                    displayZone = 'KL';
+                    calcZone = 'kl';
+                } else if (zoneRaw === 'Central_Left') {
+                    displayZone = 'SELANGOR';
+                    calcZone = 'selangor';
+                }
+
+                const key = `${origin}-${calcZone}`;
                 const rateInfo = rateMap[key];
                 const drops = Math.max(1, t.trip_drop_count || 1);
 
@@ -277,8 +300,8 @@ const PersonalMonthlyReport: React.FC<Props> = ({ user }) => {
                     tripEarnings += (base + extraRate);
                 }
 
-                // Push formatting: "TAIPING ➞ KLANG (2 Drops)"
-                tripDetails.push(`${originRaw} ➞ ${zoneRaw} (${drops} Drop${drops > 1 ? 's' : ''})`);
+                // Push formatting: "TAIPING ➞ KL (2 Drops)"
+                tripDetails.push(`${originRaw} ➞ ${displayZone} (${drops} Drop${drops > 1 ? 's' : ''})`);
             });
 
             matrix.push({
@@ -294,11 +317,12 @@ const PersonalMonthlyReport: React.FC<Props> = ({ user }) => {
                 tripEarnings,
                 tripDetails,
                 photoCount: dayPhotos.length,
-                leaveStatus: dayLeave ? dayLeave.status : null
+                leaveStatus: dayLeave ? dayLeave.status : null,
+                machinesOperated
             });
         }
         return matrix;
-    }, [productionLogs, attendanceShifts, photoLogs, leaves, daysInMonth, selectedYear, selectedMonth]);
+    }, [productionLogs, attendanceShifts, photoLogs, leaves, plannedMachines, deliveries, deliveryRates, daysInMonth, selectedYear, selectedMonth]);
 
     // Summary Aggregates
     const totalOutput = dailyMetrics.reduce((sum, d) => sum + d.outputQty, 0);
@@ -492,7 +516,7 @@ const PersonalMonthlyReport: React.FC<Props> = ({ user }) => {
                                         <th className="px-5 py-4 text-left font-black text-[10px] uppercase tracking-widest text-gray-500 w-32">Status</th>
                                         <th className="px-5 py-4 text-left font-black text-[10px] uppercase tracking-widest text-gray-500">Scan In/Out</th>
                                         <th className="px-5 py-4 text-right font-black text-[10px] uppercase tracking-widest text-gray-500">{isDriver ? 'Trips' : 'Output'}</th>
-                                        <th className="px-5 py-4 text-center font-black text-[10px] uppercase tracking-widest text-gray-500">{isDriver ? 'Trip Details' : 'Alarms'}</th>
+                                        <th className="px-5 py-4 text-center font-black text-[10px] uppercase tracking-widest text-gray-500">{isDriver ? 'Trip Details' : 'Machines / Alarms'}</th>
                                         <th className="px-5 py-4 text-center font-black text-[10px] uppercase tracking-widest text-gray-500">Photos</th>
                                     </tr>
                                 </thead>
@@ -565,11 +589,23 @@ const PersonalMonthlyReport: React.FC<Props> = ({ user }) => {
                                                 </td>
                                             ) : (
                                                 <td className="px-5 py-4 whitespace-nowrap text-center">
-                                                    {day.alarmCount > 0 ? (
-                                                        <span className="inline-flex items-center justify-center w-6 h-6 rounded-full bg-red-500/20 text-red-400 text-xs font-bold border border-red-500/30">
-                                                            {day.alarmCount}
-                                                        </span>
-                                                    ) : <span className="text-gray-700 font-mono">—</span>}
+                                                    <div className="flex flex-col items-center gap-1.5">
+                                                        {day.machinesOperated.length > 0 && (
+                                                            <div className="flex flex-wrap justify-center gap-1">
+                                                                {day.machinesOperated.map(m => (
+                                                                    <span key={m} className="text-[10px] bg-blue-500/10 text-blue-400 border border-blue-500/20 px-2 py-0.5 rounded font-mono shadow-sm">{m}</span>
+                                                                ))}
+                                                            </div>
+                                                        )}
+                                                        {day.alarmCount > 0 && (
+                                                            <span className="inline-flex items-center justify-center px-1.5 py-0.5 rounded bg-red-500/10 text-red-500 text-[10px] font-bold border border-red-500/20" title={`${day.alarmCount} anomalies recorded`}>
+                                                                {day.alarmCount} Alarms
+                                                            </span>
+                                                        )}
+                                                        {day.machinesOperated.length === 0 && day.alarmCount === 0 && (
+                                                            <span className="text-gray-700 font-mono">—</span>
+                                                        )}
+                                                    </div>
                                                 </td>
                                             )}
                                             <td className="px-5 py-4 whitespace-nowrap text-center">

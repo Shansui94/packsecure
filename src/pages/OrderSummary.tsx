@@ -1,10 +1,11 @@
 import React, { useState, useEffect, useCallback } from 'react';
 import { DragDropContext, Droppable, Draggable, DropResult } from '@hello-pangea/dnd';
 import { supabase } from '../services/supabase';
-import { getV2Items } from '../services/apiV2';
+import { getV2Items, getInventoryStatus } from '../services/apiV2';
 import { WAREHOUSES } from '../data/factoryData';
 import { SalesOrder, User } from '../types';
 import { Calendar, User as UserIcon, Truck, MapPin, Package } from 'lucide-react';
+
 const LOCATIONS = WAREHOUSES;
 type Location = string;
 
@@ -27,23 +28,50 @@ const OrderSummary: React.FC<OrderSummaryProps> = ({ user: _user }) => {
     const [selectedDate, setSelectedDate] = useState<string>(new Date().toISOString().split('T')[0]);
     const [loading, setLoading] = useState(false);
     const [activeTab, setActiveTab] = useState<Location>(LOCATIONS[0] || 'Unknown');
-    const [skuNameMap, setSkuNameMap] = useState<Record<string, string>>({});
 
-    // Fetch master item names for SKU resolution
+    const [skuNameMap, setSkuNameMap] = useState<Record<string, string>>({});
+    // Maps [LocationName] -> [ItemName] -> StockQty
+    const [stockMapByLoc, setStockMapByLoc] = useState<Record<string, Record<string, number>>>({});
+
+    // Fetch master item names and inventory status for SKU resolution and stock display
     useEffect(() => {
-        const fetchItemNames = async () => {
+        const fetchItemData = async () => {
             try {
-                const items = await getV2Items();
+                const [items, inventory] = await Promise.all([
+                    getV2Items(),
+                    getInventoryStatus()
+                ]);
+
                 if (items) {
-                    const map: Record<string, string> = {};
-                    items.forEach(item => { map[item.sku] = item.name; });
-                    setSkuNameMap(map);
+                    const nameMap: Record<string, string> = {};
+                    items.forEach(item => { nameMap[item.sku] = item.name; });
+                    setSkuNameMap(nameMap);
+
+                    if (inventory) {
+                        // 1. Group stock by Location -> SKU
+                        const locSkuStock: Record<string, Record<string, number>> = {};
+                        inventory.forEach(inv => {
+                            const loc = inv.loc_id || 'Unknown';
+                            if (!locSkuStock[loc]) locSkuStock[loc] = {};
+                            locSkuStock[loc][inv.sku] = (locSkuStock[loc][inv.sku] || 0) + inv.current_stock;
+                        });
+
+                        // 2. Map SKU back to Item Name per location
+                        const finalStockMap: Record<string, Record<string, number>> = {};
+                        Object.keys(locSkuStock).forEach(loc => {
+                            finalStockMap[loc] = {};
+                            items.forEach(item => {
+                                finalStockMap[loc][item.name] = locSkuStock[loc][item.sku] || 0;
+                            });
+                        });
+                        setStockMapByLoc(finalStockMap);
+                    }
                 }
             } catch (err) {
-                console.error('Failed to fetch item names:', err);
+                console.error('Failed to fetch item data:', err);
             }
         };
-        fetchItemNames();
+        fetchItemData();
     }, []);
 
     // Resolve item name: prefer current name from master catalog, fallback to stored name
@@ -213,10 +241,32 @@ const OrderSummary: React.FC<OrderSummaryProps> = ({ user: _user }) => {
     const productSummary = activeTabOrders.reduce((acc, order) => {
         order.items.forEach(item => {
             const name = resolveItemName(item);
-            acc[name] = (acc[name] || 0) + (item.quantity || 0);
+            if (!acc[name]) acc[name] = { qty: 0, sku: item.sku };
+            acc[name].qty += (item.quantity || 0);
+            if (item.sku && !acc[name].sku) acc[name].sku = item.sku;
         });
         return acc;
-    }, {} as Record<string, number>);
+    }, {} as Record<string, { qty: number; sku?: string }>);
+
+    // Categorization logic
+    const categorizeProduct = (name: string, sku?: string): string => {
+        const s = (sku || '').toLowerCase();
+        const lower = name.toLowerCase();
+        
+        if (s.startsWith('bw') || lower.includes('single') || lower.includes('double') || lower.includes('layer') || lower.includes('bubble')) return '🫧 Bubble Wrap';
+        if (lower.includes('stretch film') || lower.includes('sf') || lower.includes('hand roll')) return '📦 Stretch Film';
+        if (lower.includes('foam') || lower.includes('pe foam')) return '🛡️ PE Foam';
+        if (lower.includes('corrugated') || lower.includes('box') || lower.includes('carton') || lower.includes('edge')) return '🗂️ Cartons & Edge Protectors';
+        if (lower.includes('core') || lower.includes('paper')) return '📜 Paper Cores';
+        return '🔹 Others';
+    };
+
+    const groupedSummary = Object.entries(productSummary).reduce((acc, [product, data]) => {
+        const cat = categorizeProduct(product, data.sku);
+        if (!acc[cat]) acc[cat] = [];
+        acc[cat].push({ product, qty: data.qty });
+        return acc;
+    }, {} as Record<string, { product: string; qty: number }[]>);
 
     // Build column list: unassigned + all drivers who have orders in this tab
     const driverIdsInTab = [...new Set(
@@ -280,11 +330,45 @@ const OrderSummary: React.FC<OrderSummaryProps> = ({ user: _user }) => {
                             {Object.keys(productSummary).length === 0 ? (
                                 <div className="text-xs text-gray-500 italic">No production requirements found.</div>
                             ) : (
-                                <div className="grid grid-cols-2 md:grid-cols-4 lg:grid-cols-6 gap-3">
-                                    {Object.entries(productSummary).map(([product, qty]) => (
-                                        <div key={product} className="bg-[#121215] border border-white/10 rounded-lg px-3 py-2 flex flex-col">
-                                            <span className="text-[10px] text-gray-400 font-mono truncate" title={product}>{product}</span>
-                                            <span className="text-lg font-bold text-white">{qty}</span>
+                                <div className="flex flex-col gap-6">
+                                    {Object.entries(groupedSummary).map(([category, items]) => (
+                                        <div key={category}>
+                                            <h3 className="text-[11px] font-bold text-blue-300/70 border-b border-blue-500/20 pb-1 mb-3 uppercase tracking-wider">
+                                                {category}
+                                            </h3>
+                                            <div className="grid grid-cols-2 md:grid-cols-4 lg:grid-cols-6 gap-3">
+                                                {items.map(({ product, qty }) => {
+                                                    let lookupLoc = activeTab;
+                                                    // Fallbacks for sub-locations sharing the same warehouse
+                                                    if (activeTab === 'OPM Corner' && !stockMapByLoc['OPM Corner']) lookupLoc = 'SPD';
+                                                    
+                                                    const stock = stockMapByLoc[lookupLoc]?.[product] || 0;
+                                                    const deficit = qty - stock;
+                                                    const hasDeficit = deficit > 0;
+                                                    return (
+                                                    <div key={product} className={`bg-[#121215] border rounded-lg px-3 py-2 flex flex-col relative overflow-hidden transition-colors ${hasDeficit ? 'border-red-500/30' : 'border-white/10'}`}>
+                                                        {hasDeficit && <div className="absolute top-0 right-0 w-1.5 h-1.5 bg-red-500 rounded-full mt-2 mr-2 shadow-[0_0_5px_rgba(239,68,68,0.8)]"></div>}
+                                                        <span className="text-[10px] text-gray-400 font-mono truncate mb-1" title={product}>{product}</span>
+                                                        <div className="flex items-end justify-between mt-1">
+                                                            <div className="flex flex-col">
+                                                                <span className="text-[9px] text-gray-500 uppercase tracking-widest">Req</span>
+                                                                <span className="text-lg font-black text-white leading-none">{qty}</span>
+                                                            </div>
+                                                            <div className="w-px h-6 bg-white/10 mx-2"></div>
+                                                            <div className="flex flex-col items-end">
+                                                                <span className="text-[9px] text-gray-500 uppercase tracking-widest">Stock</span>
+                                                                <span className={`text-md font-bold leading-none ${stock >= qty ? 'text-green-500' : 'text-amber-400'}`}>{stock}</span>
+                                                            </div>
+                                                        </div>
+                                                        {hasDeficit && (
+                                                            <span className="text-[9px] font-bold text-red-400 mt-1.5 bg-red-500/10 px-1.5 py-0.5 rounded truncate w-fit">
+                                                                Shortage: {deficit}
+                                                            </span>
+                                                        )}
+                                                    </div>
+                                                    );
+                                                })}
+                                            </div>
                                         </div>
                                     ))}
                                 </div>
