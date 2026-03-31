@@ -201,11 +201,11 @@ const PersonalMonthlyReport: React.FC<Props> = ({ user }) => {
 
                 const { data: deliveryData } = await supabase
                     .from('sales_orders')
-                    .select('pod_timestamp, zone, delivery_address, created_at, trip_origin, trip_drop_count')
+                    .select('order_date, pod_timestamp, zone, delivery_address, created_at, trip_origin, trip_drop_count')
                     .eq('driver_id', selectedEmployeeId) 
                     .eq('status', 'Delivered')
-                    .gte('created_at', startDateTs)
-                    .lte('created_at', endDateTs);
+                    .gte('order_date', startDateTs.split('T')[0])
+                    .lte('order_date', endDateTs.split('T')[0]);
                 setDeliveries(deliveryData || []);
             } else {
                 setDeliveries([]);
@@ -260,9 +260,9 @@ const PersonalMonthlyReport: React.FC<Props> = ({ user }) => {
             // Leave
             const dayLeave = leaves.find(l => dateStr >= l.start_date && dateStr <= l.end_date);
 
-            // Deliveries (Fallback to created_at if pod_timestamp is missing due to HR manual override)
+            // Deliveries (Strictly based on DO Date per user request)
             const dayDeliveries = deliveries.filter(d => {
-                const ts = d.pod_timestamp || d.created_at;
+                const ts = d.order_date || d.created_at;
                 return ts && ts.startsWith(dateStr);
             });
             const tripCount = dayDeliveries.length;
