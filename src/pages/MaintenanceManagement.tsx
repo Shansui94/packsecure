@@ -1,7 +1,7 @@
 
 import React, { useState, useEffect } from 'react';
 import { supabase } from '../services/supabase';
-import { Wrench, Calendar, Truck, User } from 'lucide-react';
+import { Wrench, Calendar, Truck, User, Trash2, XCircle } from 'lucide-react';
 
 const NILAI_DRIVERS = ['SAM', 'Mahadi', 'Ayam', 'Tahir'];
 
@@ -11,7 +11,7 @@ const isNilaiDriver = (name?: string) =>
 const MaintenanceManagement: React.FC<{ user?: any }> = ({ user }) => {
     const [requests, setRequests] = useState<any[]>([]);
     const [loading, setLoading] = useState(true);
-    const [activeTab, setActiveTab] = useState<'pending' | 'history'>('pending');
+    const [activeTab, setActiveTab] = useState<'pending' | 'history' | 'rejected'>('pending');
 
     // Factory filter: Neoson → Taiping (non-Nilai), Eric → Nilai
     const isNeoson = user?.employeeId === '009';
@@ -131,6 +131,27 @@ const MaintenanceManagement: React.FC<{ user?: any }> = ({ user }) => {
         }
     };
 
+    // --- ACTIONS ---
+    const handleReject = async (id: string) => {
+        if (!confirm('Are you sure you want to reject this request?')) return;
+        const { error } = await supabase
+            .from('lorry_service_requests')
+            .update({ status: 'Rejected' })
+            .eq('id', id);
+        if (error) alert("Error: " + error.message);
+        else fetchRequests();
+    };
+
+    const handleDelete = async (id: string) => {
+        if (!confirm('Are you sure you want to permanently delete this request?')) return;
+        const { error } = await supabase
+            .from('lorry_service_requests')
+            .delete()
+            .eq('id', id);
+        if (error) alert("Error: " + error.message);
+        else fetchRequests();
+    };
+
     // Auto-Archive Past Requests
     useEffect(() => {
         const autoArchive = async () => {
@@ -174,9 +195,11 @@ const MaintenanceManagement: React.FC<{ user?: any }> = ({ user }) => {
         return true; // Admins see all
     });
 
-    const pendingList = factoryFiltered.filter(r => r.status !== 'Completed');
+    const pendingList = factoryFiltered.filter(r => r.status !== 'Completed' && r.status !== 'Rejected');
     const historyList = factoryFiltered.filter(r => r.status === 'Completed');
-    const displayList = activeTab === 'pending' ? pendingList : historyList;
+    const rejectedList = factoryFiltered.filter(r => r.status === 'Rejected');
+    
+    const displayList = activeTab === 'pending' ? pendingList : activeTab === 'history' ? historyList : rejectedList;
 
     return (
         <div className="p-8 bg-[#121215] min-h-screen text-slate-100 relative">
@@ -203,6 +226,13 @@ const MaintenanceManagement: React.FC<{ user?: any }> = ({ user }) => {
                         }`}
                 >
                     Service History ({historyList.length})
+                </button>
+                <button
+                    onClick={() => setActiveTab('rejected')}
+                    className={`px-6 py-3 rounded-xl font-bold uppercase text-xs tracking-widest transition-all ${activeTab === 'rejected' ? 'bg-red-600/20 text-red-500 border border-red-500/30' : 'bg-slate-900 text-slate-500 hover:bg-slate-800'
+                        }`}
+                >
+                    Rejected ({rejectedList.length})
                 </button>
             </div>
 
@@ -236,7 +266,8 @@ const MaintenanceManagement: React.FC<{ user?: any }> = ({ user }) => {
                                     <div className="text-[10px] font-black text-slate-500 uppercase mb-1">Status</div>
                                     <div className={`text-xs font-bold uppercase px-3 py-1 rounded-full ${req.status === 'Completed' ? 'bg-green-500/10 text-green-500' :
                                         req.status === 'Scheduled' ? 'bg-blue-500/10 text-blue-500' :
-                                            'bg-amber-500/10 text-amber-500'
+                                            req.status === 'Rejected' ? 'bg-red-500/10 text-red-500' :
+                                                'bg-amber-500/10 text-amber-500'
                                         }`}>
                                         {req.status}
                                     </div>
@@ -250,11 +281,29 @@ const MaintenanceManagement: React.FC<{ user?: any }> = ({ user }) => {
                             </div>
 
                             <div className="flex gap-2 w-full md:w-auto">
+                                {req.status !== 'Completed' && req.status !== 'Rejected' && (
+                                    <>
+                                        <button
+                                            onClick={() => openScheduleModal(req.id)}
+                                            className="w-full md:w-auto px-6 py-3 bg-slate-800 hover:bg-slate-700 text-white rounded-xl text-xs font-bold uppercase transition-all flex items-center justify-center gap-2"
+                                        >
+                                            <Calendar size={14} /> Schedule
+                                        </button>
+                                        <button
+                                            onClick={() => handleReject(req.id)}
+                                            className="w-full md:w-auto px-4 py-3 bg-red-900/40 hover:bg-red-900/60 text-red-400 rounded-xl text-xs font-bold uppercase transition-all flex items-center justify-center gap-2"
+                                            title="Reject Request"
+                                        >
+                                            <XCircle size={14} />
+                                        </button>
+                                    </>
+                                )}
                                 <button
-                                    onClick={() => openScheduleModal(req.id)}
-                                    className="w-full md:w-auto px-6 py-3 bg-slate-800 hover:bg-slate-700 text-white rounded-xl text-xs font-bold uppercase transition-all flex items-center justify-center gap-2"
+                                    onClick={() => handleDelete(req.id)}
+                                    className="w-full md:w-auto px-4 py-3 bg-slate-800 hover:bg-red-900/60 text-slate-500 hover:text-red-400 rounded-xl text-xs font-bold uppercase transition-all flex items-center justify-center gap-2"
+                                    title="Delete Record"
                                 >
-                                    <Calendar size={14} /> Schedule
+                                    <Trash2 size={14} />
                                 </button>
                             </div>
                         </div>
