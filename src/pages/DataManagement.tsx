@@ -9,8 +9,6 @@ import {
 import { CommandDeck } from '../components/CommandDeck';
 
 import { AIChatWidget } from '../components/AIChatWidget';
-import { determineZone } from '../utils/logistics';
-
 
 
 // --- TYPES ---
@@ -236,12 +234,8 @@ const SmartImportModal = ({ isOpen, onClose, onImport, activeTab }: any) => {
                                         <div className="w-1/4 text-gray-400 font-mono text-xs">{row.phone}</div>
                                         <div className="flex-1 text-gray-300 truncate text-xs" title={row.address}>{row.address}</div>
                                         <div className="w-24">
-                                            <span className={`text-[10px] px-2 py-1 rounded-full font-bold border ${!row.address ? 'bg-gray-800 text-gray-500 border-transparent' :
-                                                determineZone(row.address) === 'North' ? 'bg-blue-500/20 text-blue-300 border-blue-500/30' :
-                                                    determineZone(row.address) === 'South' ? 'bg-orange-500/20 text-orange-300 border-orange-500/30' :
-                                                        'bg-purple-500/20 text-purple-300 border-purple-500/30'
-                                                }`}>
-                                                {row.address ? determineZone(row.address) : 'N/A'}
+                                            <span className={`text-[10px] px-2 py-1 rounded-full font-bold border ${!row.zone ? 'bg-gray-800 text-gray-500 border-transparent' : 'bg-purple-500/20 text-purple-300 border-purple-500/30'}`}>
+                                                {row.zone || 'Unassigned'}
                                             </span>
                                         </div>
                                     </div>
@@ -507,7 +501,6 @@ export default function DataManagement() {
 
                     // Infer Zone
                     let zone = r.zone;
-                    if (!zone && address) zone = determineZone(address);
 
                     return {
                         name, address, phone, zone,

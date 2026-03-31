@@ -2,7 +2,7 @@ import React, { useState, useEffect } from 'react';
 import { DragDropContext, Droppable, Draggable, DropResult } from '@hello-pangea/dnd';
 import { supabase } from '../services/supabase';
 import { getV2Items } from '../services/apiV2';
-import { determineZone, determineState, findBestFactory } from '../utils/logistics';
+import { determineState, findBestFactory } from '../utils/logistics';
 import {
     Plus, Search, Calendar, FileText, X, Truck,
     User as UserIcon, Box, Zap, Trash2, Scissors, AlertTriangle, MapPin, Wrench
@@ -768,7 +768,7 @@ const DeliveryOrderManagement: React.FC = () => {
                 doNumber = `DO-${new Date().getFullYear()}-${Math.floor(Math.random() * 10000).toString().padStart(4, '0')}`;
             }
 
-            const zone = determineZone(newOrderAddress || '');
+            const zone = tripCategory || '';
             const bestFactory = findBestFactory(zone, newOrderItems, stockMap);
 
             // Auto-Push Unlisted Trip Category to HR Payroll Rates
@@ -796,7 +796,7 @@ const DeliveryOrderManagement: React.FC = () => {
                 order_number: doNumber,
                 customer: finalCustomer,
                 delivery_address: newOrderAddress,
-                zone: tripCategory || determineZone(newOrderAddress || ''),
+                zone: tripCategory || '',
                 trip_origin: tripOrigin,
                 trip_drop_count: tripDropCount,
                 factory_id: bestFactory.id,
@@ -849,7 +849,7 @@ const DeliveryOrderManagement: React.FC = () => {
                 const existing = customerDB.find(c => c.name.toLowerCase() === orderCustomer.toLowerCase());
                 if (!existing && newOrderAddress) {
                     supabase.from('sys_customers').insert({
-                        name: orderCustomer, address: newOrderAddress, zone: determineZone(newOrderAddress)
+                        name: orderCustomer, address: newOrderAddress, zone: tripCategory || ''
                     }).then(() => {
                         supabase.from('sys_customers').select('*').then(res => res.data && setCustomerDB(res.data));
                     });

@@ -140,7 +140,7 @@ export const determineState = (address: string): string => {
 
 // Approximation of "score" based on Zone (0-100)
 // Higher is shorter distance / better
-const getZoneDistanceScore = (zone: DeliveryZone, factoryId: string): number => {
+const getZoneDistanceScore = (zone: string, factoryId: string): number => {
     if (factoryId.includes('OPM') || factoryId === 'SPD') { // North
         if (zone === 'North') return 100;
         if (zone === 'Central_Left' || zone === 'Central_Right') return 40;
@@ -159,7 +159,7 @@ const getZoneDistanceScore = (zone: DeliveryZone, factoryId: string): number => 
 // Returns 0-100 score (100 = Full Stock, 0 = No Stock)
 
 
-export const findBestFactory = (zone: DeliveryZone, items: any[], stockMap: Record<string, any>) => {
+export const findBestFactory = (zone: string, items: any[], stockMap: Record<string, any>) => {
     const scored = WAREHOUSE_COORDS.map(f => {
         // 1. Distance Score (40%)
         const distScore = getZoneDistanceScore(zone, f.id);
