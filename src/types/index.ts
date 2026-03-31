@@ -42,7 +42,7 @@ export interface User {
 }
 
 // 3. Job Order (Production Task)
-export type DeliveryZone = 'North' | 'Central' | 'Central_Left' | 'Central_Right' | 'South' | 'East';
+export type DeliveryZone = string;
 export type DeliveryStatus = 'Pending' | 'In-Transit' | 'Delivered';
 
 export interface JobOrder {
@@ -67,7 +67,7 @@ export interface JobOrder {
 
     // Logistics Fields
     deliveryAddress?: string;
-    deliveryZone?: 'North' | 'Central' | 'Central_Left' | 'Central_Right' | 'South' | 'East';
+    deliveryZone?: string;
     deliveryStatus?: DeliveryStatus;
     driverId?: string; // ID of the assigned Lorry/Driver
     orderIndex?: number; // For Kanban ordering
@@ -171,7 +171,7 @@ export interface Lorry {
     plateNumber: string;
     driverName: string;
     driverUserId: string; // Map to User.uid
-    preferredZone: 'North' | 'Central' | 'Central_Left' | 'Central_Right' | 'South' | 'East';
+    preferredZone?: string;
     status: 'Available' | 'On-Route' | 'Maintenance';
 }
 

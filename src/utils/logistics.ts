@@ -1,5 +1,4 @@
 
-import { DeliveryZone } from '../types';
 
 // Haversine Formula for GPS Distance (km)
 export const calculateDistance = (lat1: number, lon1: number, lat2: number, lon2: number): number => {
@@ -82,37 +81,7 @@ export const calculateLoad = (items: any[], vehicle: any) => {
     };
 };
 
-export const determineZone = (address: string): DeliveryZone => {
-    const lowerAddr = address.toLowerCase();
 
-    // Central_Left
-    const leftKeywords = [
-        'klang', 'dengkil', 'puchong', 'kapar', 'shah alam', 'puncak alam',
-        'telok panglima', 'tanjung karang', 'sabak bernam', 'kuala selangor',
-        'subang jaya', 'jenjarom', 'petaling jaya', 'pj', 'nilai', 'melaka', 'n. sembilan',
-        'negeri sembilan'
-    ];
-
-    if (leftKeywords.some(k => lowerAddr.includes(k))) return 'Central_Left';
-
-    // Central_Right
-    const rightKeywords = [
-        'rawang', 'kuala lumpur', 'kl', 'cheras', 'sungai buloh',
-        'semenyih', 'seri kembangan', 'batu caves', 'balakong', 'kajang',
-        'ampang', 'selayang', 'kepong', 'bandar baru bangi', 'serdang',
-        'serendah', 'batang kali', 'tmn danau kota', 'sepang'
-    ];
-
-    if (rightKeywords.some(k => lowerAddr.includes(k))) return 'Central_Right';
-
-    // Fallbacks (Simple heuristics for other zones)
-    if (lowerAddr.includes('johor') || lowerAddr.includes('jb')) return 'South';
-    if (lowerAddr.includes('penang') || lowerAddr.includes('kedah') || lowerAddr.includes('perak')) return 'North';
-    if (lowerAddr.includes('pahang') || lowerAddr.includes('terengganu') || lowerAddr.includes('kelantan')) return 'East';
-
-    // Default
-    return 'Central_Left';
-};
 
 export const determineState = (address: string): string => {
     const lowerAddr = address.toLowerCase();
@@ -141,18 +110,21 @@ export const determineState = (address: string): string => {
 // Approximation of "score" based on Zone (0-100)
 // Higher is shorter distance / better
 const getZoneDistanceScore = (zone: string, factoryId: string): number => {
+    // Basic heuristics: if the zone text includes North/Penang, favor North factories.
+    const lowerZone = (zone || '').toLowerCase();
+    
     if (factoryId.includes('OPM') || factoryId === 'SPD') { // North
-        if (zone === 'North') return 100;
-        if (zone === 'Central_Left' || zone === 'Central_Right') return 40;
-        return 10; // South/East is very far
+        if (lowerZone.includes('north') || lowerZone.includes('penang') || lowerZone.includes('perak')) return 100;
+        if (lowerZone.includes('kl') || lowerZone.includes('selangor')) return 40;
+        return 10;
     }
     if (factoryId === 'Nilai') { // Nilai (Central/South)
-        if (zone === 'Central_Left' || zone === 'Central_Right') return 100;
-        if (zone === 'South') return 90;
-        if (zone === 'East') return 80;
-        if (zone === 'North') return 30;
+        if (lowerZone.includes('kl') || lowerZone.includes('selangor')) return 100;
+        if (lowerZone.includes('south') || lowerZone.includes('johor')) return 90;
+        if (lowerZone.includes('east') || lowerZone.includes('pahang')) return 80;
+        if (lowerZone.includes('north') || lowerZone.includes('penang')) return 30;
     }
-    return 0;
+    return 50; // Default flat score
 };
 
 // Check if Factory has enough stock for all items

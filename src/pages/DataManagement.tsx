@@ -775,14 +775,7 @@ export default function DataManagement() {
                                     <div className="grid grid-cols-2 gap-6">
                                         <InputGroup label="Customer Name" value={form.name} onChange={(v: any) => setForm({ ...form, name: v })} required colSpan={2} />
 
-                                        <SelectGroup label="Delivery Zone" value={form.zone} onChange={(v: any) => setForm({ ...form, zone: v })}>
-                                            <option value="">Select Zone...</option>
-                                            <option value="North">North (Penang/Perak)</option>
-                                            <option value="Central_Left">Central Left (Klang/Shah Alam)</option>
-                                            <option value="Central_Right">Central Right (KL/Rawang)</option>
-                                            <option value="South">South (Johor/Melaka)</option>
-                                            <option value="East">East Coast</option>
-                                        </SelectGroup>
+                                        <InputGroup label="Trip Category / Zone" value={form.zone} onChange={(v: any) => setForm({ ...form, zone: v })} placeholder="e.g. KL, SELANGOR" />
 
                                         <InputGroup label="Contact Person" value={form.contact_person} onChange={(v: any) => setForm({ ...form, contact_person: v })} />
 

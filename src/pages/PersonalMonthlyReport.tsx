@@ -279,15 +279,6 @@ const PersonalMonthlyReport: React.FC<Props> = ({ user }) => {
                 let calcZone = zoneRaw.toLowerCase();
                 let displayZone = zoneRaw;
 
-                // Map internal system zones to actual HR Trip Categories
-                if (zoneRaw === 'Central_Right') {
-                    displayZone = 'KL';
-                    calcZone = 'kl';
-                } else if (zoneRaw === 'Central_Left') {
-                    displayZone = 'SELANGOR';
-                    calcZone = 'selangor';
-                }
-
                 const key = `${origin}-${calcZone}`;
                 const rateInfo = rateMap[key];
                 const drops = Math.max(1, t.trip_drop_count || 1);
