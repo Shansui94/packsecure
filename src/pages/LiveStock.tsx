@@ -592,7 +592,24 @@ const LiveStock: React.FC = () => {
 
                     <div className="h-6 w-px bg-slate-200 dark:bg-white/10 hidden lg:block mx-1"></div>
 
-                    <div className="flex items-center gap-2 shrink-0">
+                    {/* LOCATION FILTER */}
+                    <div className="flex items-center gap-2 flex-wrap sm:flex-nowrap overflow-x-auto custom-scrollbar pb-1 sm:pb-0">
+                        <MapPin size={14} className="text-slate-400 dark:text-gray-500 shrink-0 hidden sm:block" />
+                        {['All', ...WAREHOUSES].map(w => (
+                            <button
+                                key={w}
+                                onClick={() => setLocationFilter(w)}
+                                className={`px-3 py-1.5 rounded-lg text-xs font-bold uppercase transition-all whitespace-nowrap ${locationFilter === w
+                                    ? 'bg-violet-100 dark:bg-violet-500/20 text-violet-700 dark:text-violet-400 border border-violet-200 dark:border-violet-500/30 shadow-sm'
+                                    : 'bg-white dark:bg-white/5 text-slate-600 dark:text-gray-400 border border-slate-200 dark:border-white/5 hover:bg-slate-100 dark:hover:text-white'
+                                    }`}
+                            >
+                                {w === 'All' ? 'All Locs' : w}
+                            </button>
+                        ))}
+                    </div>
+
+                    <div className="flex items-center gap-2 shrink-0 ml-auto lg:ml-0">
                         {/* VIEW MODE TOGGLE */}
                         <div className="flex bg-slate-200 dark:bg-black/50 rounded-xl p-1 border border-slate-300 dark:border-white/10 shadow-inner">
                             <button
