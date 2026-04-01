@@ -1,0 +1,1 @@
+["id","order_number","customer","items","status","order_date","deadline","notes","created_at","updated_at","driver_id","has_driver_changes","trip_id","stop_sequence","pod_signature_url","pod_photo_url","pod_signed_by","pod_timestamp","delivery_address","zone","factory_id","trip_sequence","trip_origin","trip_drop_count","delivery_method"]

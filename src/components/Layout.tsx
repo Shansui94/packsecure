@@ -23,7 +23,9 @@ import {
     Activity,
     ClipboardCheck,
     BookOpen,
-    Camera
+    Camera,
+    Sun,
+    Moon
 } from 'lucide-react';
 import { supabase } from '../services/supabase';
 
@@ -39,8 +41,20 @@ interface LayoutProps {
 const Layout: React.FC<LayoutProps> = ({ children, activePage, setActivePage, userRole, user, onLogout }) => {
     const [isMobileMenuOpen, setIsMobileMenuOpen] = useState(false);
     const [taskCount, setTaskCount] = useState(0);
+    const [theme, setTheme] = useState(localStorage.getItem('theme') || 'dark');
     // DB-driven page permissions: Set<page_id> of allowed pages for this role
     const [dbAllowedPages, setDbAllowedPages] = useState<Set<string> | null>(null);
+
+    useEffect(() => {
+        if (theme === 'dark') {
+            document.documentElement.classList.add('dark');
+        } else {
+            document.documentElement.classList.remove('dark');
+        }
+        localStorage.setItem('theme', theme);
+    }, [theme]);
+
+    const toggleTheme = () => setTheme(theme === 'dark' ? 'light' : 'dark');
 
     const toggleMobileMenu = () => setIsMobileMenuOpen(!isMobileMenuOpen);
 
@@ -186,11 +200,16 @@ const Layout: React.FC<LayoutProps> = ({ children, activePage, setActivePage, us
                         <div className="w-8 h-8 rounded-lg bg-green-500/20 flex items-center justify-center text-green-500 font-bold shadow-lg shadow-green-900/40">
                             P
                         </div>
-                        <span className="font-bold text-lg tracking-tight text-white">PackSecure</span>
+                        <span className="font-bold text-lg tracking-tight text-white dark:text-white">PackSecure</span>
                     </div>
-                    <button onClick={toggleMobileMenu} className="p-2 text-gray-400 active:text-white">
-                        {isMobileMenuOpen ? <X size={24} /> : <Menu size={24} />}
-                    </button>
+                    <div className="flex items-center gap-2">
+                        <button onClick={toggleTheme} className="p-2 text-gray-400 hover:text-amber-400 transition-colors">
+                            {theme === 'dark' ? <Moon size={20} /> : <Sun size={20} className="text-amber-500" />}
+                        </button>
+                        <button onClick={toggleMobileMenu} className="p-2 text-gray-400 active:text-white">
+                            {isMobileMenuOpen ? <X size={24} /> : <Menu size={24} />}
+                        </button>
+                    </div>
                 </div>
             )}
 
@@ -389,13 +408,22 @@ const Layout: React.FC<LayoutProps> = ({ children, activePage, setActivePage, us
                             </div>
                         </button>
 
-                        <button
-                            onClick={onLogout}
-                            className="mt-3 w-full flex items-center justify-center gap-2 p-2.5 text-gray-500 hover:text-red-400 hover:bg-red-500/10 rounded-lg transition-all text-xs font-bold uppercase tracking-wider"
-                        >
-                            <LogOut size={14} />
-                            <span>Sign Out</span>
-                        </button>
+                        <div className="flex items-center gap-2 mt-3">
+                            <button
+                                onClick={toggleTheme}
+                                className="flex-1 flex items-center justify-center gap-2 p-2.5 text-gray-400 hover:text-amber-400 hover:bg-white/5 rounded-lg transition-all text-xs font-bold uppercase tracking-wider"
+                            >
+                                {theme === 'dark' ? <Moon size={14} /> : <Sun size={14} className="text-amber-500" />}
+                                <span>{theme === 'dark' ? 'Dark' : 'Light'}</span>
+                            </button>
+                            <button
+                                onClick={onLogout}
+                                className="flex-1 flex items-center justify-center gap-2 p-2.5 text-gray-500 hover:text-red-400 hover:bg-red-500/10 rounded-lg transition-all text-xs font-bold uppercase tracking-wider"
+                            >
+                                <LogOut size={14} />
+                                <span>Quit</span>
+                            </button>
+                        </div>
                     </div>
                 </aside>
 

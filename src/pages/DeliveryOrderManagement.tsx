@@ -5,7 +5,7 @@ import { getV2Items } from '../services/apiV2';
 import { determineState, findBestFactory } from '../utils/logistics';
 import {
     Plus, Search, Calendar, FileText, X, Truck,
-    User as UserIcon, Box, Zap, Trash2, Scissors, AlertTriangle, MapPin, Wrench
+    User as UserIcon, Box, Zap, Trash2, Scissors, AlertTriangle, MapPin, Wrench, LayoutGrid, List, ArrowUp, ArrowDown
 } from 'lucide-react';
 import { WAREHOUSES } from '../data/factoryData';
 import {
@@ -148,6 +148,8 @@ const DeliveryOrderManagement: React.FC = () => {
     const [isCreateModalOpen, setIsCreateModalOpen] = useState(false);
     const [searchTerm, setSearchTerm] = useState('');
     const [statusFilter, setStatusFilter] = useState<string>('All');
+    const [viewMode, setViewMode] = useState<'kanban' | 'table'>('kanban');
+    const [sortConfig, setSortConfig] = useState<{ key: string, dir: 'asc'|'desc' } | null>(null);
 
 
 
@@ -421,7 +423,37 @@ const DeliveryOrderManagement: React.FC = () => {
             o.customer.toLowerCase().includes(searchTerm.toLowerCase()))
     );
 
+    const handleSort = (key: string) => {
+        let dir: 'asc' | 'desc' = 'asc';
+        if (sortConfig && sortConfig.key === key && sortConfig.dir === 'asc') dir = 'desc';
+        setSortConfig({ key, dir });
+    };
 
+    const sortedOrders = React.useMemo(() => {
+        let sortable = [...filteredOrders];
+        if (sortConfig !== null) {
+            sortable.sort((a, b) => {
+                let aVal: any; let bVal: any;
+                if (sortConfig.key === 'driver') {
+                    aVal = drivers.find(d => d.uid === a.driverId)?.name || ''; bVal = drivers.find(d => d.uid === b.driverId)?.name || '';
+                } else if (sortConfig.key === 'orderNumber') {
+                    aVal = a.orderNumber || ''; bVal = b.orderNumber || '';
+                } else if (sortConfig.key === 'destinations') {
+                    aVal = a.deliveryAddress || ''; bVal = b.deliveryAddress || '';
+                } else if (sortConfig.key === 'dates') {
+                    aVal = new Date(a.deadline || a.orderDate || '').getTime(); bVal = new Date(b.deadline || b.orderDate || '').getTime();
+                } else if (sortConfig.key === 'status') {
+                    aVal = a.status || ''; bVal = b.status || '';
+                } else if (sortConfig.key === 'items') {
+                    aVal = (a.items || []).length; bVal = (b.items || []).length;
+                }
+                if (aVal < bVal) return sortConfig.dir === 'asc' ? -1 : 1;
+                if (aVal > bVal) return sortConfig.dir === 'asc' ? 1 : -1;
+                return 0;
+            });
+        }
+        return sortable;
+    }, [filteredOrders, sortConfig, drivers]);
 
     // Stock Visibility
     const [stockMap, setStockMap] = useState<Record<string, number>>({});
@@ -1125,38 +1157,58 @@ const DeliveryOrderManagement: React.FC = () => {
                     />
                 </div>
 
-                {/* Status Tabs */}
-                <div className="flex bg-slate-900 p-1 rounded-xl border border-slate-800">
-                    {/* Filter Tabs */}
-                    {/* Removed: 'Prepared', 'In Transit' as per user request (Simplifying workflow) */}
-                    {['All', 'Pending Approval', 'Delivered', 'Cancelled'].map(status => (
+                {/* Status Tabs & View Toggle */}
+                <div className="flex bg-slate-900 p-1 rounded-xl border border-slate-800 justify-between">
+                    <div className="flex">
+                        {/* Filter Tabs */}
+                        {['All', 'Pending Approval', 'Delivered', 'Cancelled'].map(status => (
+                            <button
+                                key={status}
+                                onClick={() => setStatusFilter(status)}
+                                className={`px-4 py-2 rounded-lg text-xs font-bold uppercase tracking-wider transition-all
+                                    ${statusFilter === status
+                                        ? 'bg-blue-600 text-white shadow-lg shadow-blue-900/50'
+                                        : 'bg-slate-800 text-slate-400 hover:bg-slate-700'
+                                    }`}
+                            >
+                                {status === 'Delivered' ? 'Loaded' : (status === 'Pending Approval' ? (
+                                    <span className="flex items-center gap-2">
+                                        Pending
+                                        {orders.filter(o => o.status === 'Pending Approval').length > 0 && (
+                                            <span className="bg-red-500 text-white text-[10px] px-1.5 rounded-full animate-pulse">
+                                                {orders.filter(o => o.status === 'Pending Approval').length}
+                                            </span>
+                                        )}
+                                    </span>
+                                ) : status === 'All' ? 'Active' : status)}
+                            </button>
+                        ))}
+                    </div>
+                    
+                    {/* View Mode Toggle */}
+                    <div className="flex ml-4 border-l border-slate-700 pl-4 gap-1">
                         <button
-                            key={status}
-                            onClick={() => setStatusFilter(status)}
-                            className={`px-4 py-2 rounded-lg text-xs font-bold uppercase tracking-wider transition-all
-                                ${statusFilter === status
-                                    ? 'bg-blue-600 text-white shadow-lg shadow-blue-900/50'
-                                    : 'bg-slate-800 text-slate-400 hover:bg-slate-700'
-                                }`}
+                            onClick={() => setViewMode('kanban')}
+                            className={`p-2 rounded-lg transition-all ${viewMode === 'kanban' ? 'bg-blue-600 text-white shadow-lg shadow-blue-900/50' : 'text-slate-400 hover:bg-slate-800'}`}
+                            title="Kanban Board"
                         >
-                            {status === 'Delivered' ? 'Loaded' : (status === 'Pending Approval' ? (
-                                <span className="flex items-center gap-2">
-                                    Pending
-                                    {orders.filter(o => o.status === 'Pending Approval').length > 0 && (
-                                        <span className="bg-red-500 text-white text-[10px] px-1.5 rounded-full animate-pulse">
-                                            {orders.filter(o => o.status === 'Pending Approval').length}
-                                        </span>
-                                    )}
-                                </span>
-                            ) : status === 'All' ? 'Active' : status)}
+                            <LayoutGrid size={18} />
                         </button>
-                    ))}
+                        <button
+                            onClick={() => setViewMode('table')}
+                            className={`p-2 rounded-lg transition-all ${viewMode === 'table' ? 'bg-blue-600 text-white shadow-lg shadow-blue-900/50' : 'text-slate-400 hover:bg-slate-800'}`}
+                            title="Table View"
+                        >
+                            <List size={18} />
+                        </button>
+                    </div>
                 </div>
             </div>
 
-            {/* --- MAIN GRID --- */}
-            <DragDropContext onDragEnd={onDragEnd}>
-                <div className="grid grid-cols-1 md:grid-cols-2 xl:grid-cols-3 gap-6">
+            {/* --- MAIN GRID / TABLE --- */}
+            {viewMode === 'kanban' ? (
+                <DragDropContext onDragEnd={onDragEnd}>
+                    <div className="grid grid-cols-1 md:grid-cols-2 xl:grid-cols-3 gap-6">
                     {/* Add Unassigned Pseudo-Driver if not in list */}
                     {[
                         { uid: 'unassigned', name: '📦 Unassigned / New', email: '', role: 'Driver' } as User,
@@ -1393,8 +1445,129 @@ const DeliveryOrderManagement: React.FC = () => {
                             </div>
                         );
                     })}
+                    </div>
+                </DragDropContext>
+            ) : (
+                <div className="bg-slate-900/50 rounded-2xl border border-slate-800 overflow-hidden shadow-xl">
+                    <div className="overflow-x-auto">
+                        <table className="w-full text-left border-collapse whitespace-nowrap">
+                            <thead>
+                                <tr className="bg-slate-900 text-[10px] text-slate-400 uppercase tracking-widest border-b border-slate-800">
+                                    <th className="p-4 font-bold cursor-pointer hover:text-white" onClick={() => handleSort('driver')}>
+                                        <div className="flex items-center gap-1">Driver / Sequence {sortConfig?.key === 'driver' && (sortConfig.dir === 'asc' ? <ArrowUp size={12}/> : <ArrowDown size={12}/>)}</div>
+                                    </th>
+                                    <th className="p-4 font-bold cursor-pointer hover:text-white" onClick={() => handleSort('orderNumber')}>
+                                        <div className="flex items-center gap-1">Order No {sortConfig?.key === 'orderNumber' && (sortConfig.dir === 'asc' ? <ArrowUp size={12}/> : <ArrowDown size={12}/>)}</div>
+                                    </th>
+                                    <th className="p-4 font-bold cursor-pointer hover:text-white" onClick={() => handleSort('destinations')}>
+                                        <div className="flex items-center gap-1">Destinations {sortConfig?.key === 'destinations' && (sortConfig.dir === 'asc' ? <ArrowUp size={12}/> : <ArrowDown size={12}/>)}</div>
+                                    </th>
+                                    <th className="p-4 font-bold cursor-pointer hover:text-white" onClick={() => handleSort('dates')}>
+                                        <div className="flex items-center gap-1">Dates {sortConfig?.key === 'dates' && (sortConfig.dir === 'asc' ? <ArrowUp size={12}/> : <ArrowDown size={12}/>)}</div>
+                                    </th>
+                                    <th className="p-4 font-bold cursor-pointer hover:text-white" onClick={() => handleSort('status')}>
+                                        <div className="flex items-center gap-1">Status {sortConfig?.key === 'status' && (sortConfig.dir === 'asc' ? <ArrowUp size={12}/> : <ArrowDown size={12}/>)}</div>
+                                    </th>
+                                    <th className="p-4 font-bold text-center cursor-pointer hover:text-white" onClick={() => handleSort('items')}>
+                                        <div className="flex items-center justify-center gap-1">Items {sortConfig?.key === 'items' && (sortConfig.dir === 'asc' ? <ArrowUp size={12}/> : <ArrowDown size={12}/>)}</div>
+                                    </th>
+                                    <th className="p-4 font-bold text-right">Actions</th>
+                                </tr>
+                            </thead>
+                            <tbody className="divide-y divide-slate-800/50">
+                                {sortedOrders.length === 0 ? (
+                                    <tr>
+                                        <td colSpan={7} className="p-8 text-center text-slate-500 italic">No trips found matching criteria.</td>
+                                    </tr>
+                                ) : (
+                                    sortedOrders.map(order => {
+                                        const driver = drivers.find(d => d.uid === order.driverId);
+                                        const driverName = driver?.name || 'Unassigned';
+                                        
+                                        return (
+                                            <tr key={order.id} className="hover:bg-slate-800/50 transition-colors group cursor-pointer" onClick={() => {
+                                                setEditingOrderId(order.id); setNewOrderDate(order.orderDate || '');
+                                                setSelectedDriverId(order.driverId || '');
+                                                setOrderCustomer(order.customer);
+                                                setNewOrderAddress(order.deliveryAddress || '');
+                                                setNewOrderDeliveryDate(order.deadline || '');
+                                                setNewOrderNotes(order.notes || '');
+                                                setTripOrigin(order.trip_origin || 'TAIPING');
+                                                setTripCategory(order.zone || '');
+                                                setTripDropCount(order.trip_drop_count || 1);
+
+                                                const itemsWithExtractedLoc = (order.items || []).map(item => {
+                                                    if (!item.sourceLocation && item.remark && item.remark.includes('(Loc:')) {
+                                                        const locMatch = item.remark.match(/\(Loc:\s*(.*?)\)/);
+                                                        if (locMatch && locMatch[1]) return { ...item, sourceLocation: locMatch[1] };
+                                                    }
+                                                    return item;
+                                                });
+                                                setNewOrderItems(itemsWithExtractedLoc);
+                                                setIsCreateModalOpen(true);
+                                            }}>
+                                                <td className="p-4">
+                                                    <div className="font-bold text-white text-sm">{driverName}</div>
+                                                    <div className="text-[10px] text-slate-500 font-mono mt-0.5">Sequence: <span className="text-blue-400 font-bold">{order.tripSequence === 999 ? 'New / Pending' : (order.tripSequence || 1)}</span></div>
+                                                </td>
+                                                <td className="p-4">
+                                                    <div className="font-mono text-sm font-black text-blue-400 bg-blue-500/10 px-2 py-1 rounded inline-block border border-blue-500/20 tracking-wide">
+                                                        {order.orderNumber}
+                                                    </div>
+                                                </td>
+                                                <td className="p-4 max-w-[200px] truncate">
+                                                    <div className="text-sm text-slate-200 truncate">{order.deliveryAddress || '-'}</div>
+                                                    {order.deliveryAddress && (
+                                                        <div className={`text-[9px] font-bold px-1.5 py-0.5 mt-1 rounded border uppercase tracking-wider inline-block ${getStateColor(determineState(order.deliveryAddress))}`}>
+                                                            {determineState(order.deliveryAddress)}
+                                                        </div>
+                                                    )}
+                                                </td>
+                                                <td className="p-4">
+                                                    <div className="text-xs text-slate-500 flex flex-col gap-0.5">
+                                                        <div><span className="text-[9px] font-black uppercase tracking-tighter">Ord:</span> <span className="text-slate-300 font-medium">{formatDateDMY(order.orderDate)}</span></div>
+                                                        <div><span className="text-[9px] font-black uppercase text-blue-500/50 tracking-tighter">Del:</span> <span className="text-blue-400 font-bold">{formatDateDMY(order.deadline) || "No Date"}</span></div>
+                                                    </div>
+                                                </td>
+                                                <td className="p-4">
+                                                    <div className={`text-[10px] font-bold px-2 py-1 rounded uppercase tracking-wider border inline-block ${order.status === 'New' ? 'text-amber-400 border-amber-500/20 bg-amber-500/10' :
+                                                        order.status === 'Delivered' ? 'text-emerald-400 border-emerald-500/20 bg-emerald-500/10' :
+                                                        order.status === 'Pending Approval' ? 'text-red-400 border-red-500/20 bg-red-500/10 animate-pulse' :
+                                                        'text-slate-400 border-slate-700 bg-slate-800'
+                                                    }`}>
+                                                        {order.status}
+                                                    </div>
+                                                </td>
+                                                <td className="p-4 text-center">
+                                                    <span className="text-xs bg-[#18181b] border border-[#27272a] text-slate-300 font-bold px-2 py-1.5 rounded-lg shadow-sm">{(order.items || []).length} items</span>
+                                                </td>
+                                                <td className="p-4 text-right">
+                                                    <div className="flex items-center justify-end gap-1.5 opacity-100 lg:opacity-0 group-hover:opacity-100 transition-opacity">
+                                                        <button onClick={(e) => { e.stopPropagation(); handleDeleteOrder(order.id, order.orderNumber); }} className="p-2 text-red-500 bg-red-500/10 hover:bg-red-500/20 rounded-md transition-colors" title="Cancel">
+                                                            <Trash2 size={16} />
+                                                        </button>
+                                                        <button onClick={(e) => { e.stopPropagation(); setReassignOrder(order); setIsReassignModalOpen(true); }} className="p-2 text-blue-400 bg-blue-500/10 hover:bg-blue-500/20 rounded-md transition-colors" title="Change Driver">
+                                                            <UserIcon size={16} />
+                                                        </button>
+                                                        <button onClick={(e) => { e.stopPropagation(); setSplitOrder(order); setSplitItems({}); setSplitTargetDriverId(''); setSplitTargetDate(''); setIsSplitModalOpen(true); }} className="p-2 text-orange-400 bg-orange-500/10 hover:bg-orange-500/20 rounded-md transition-colors" title="Split Order">
+                                                            <Scissors size={16} />
+                                                        </button>
+                                                        {order.status === 'Pending Approval' && (
+                                                            <button onClick={(e) => { e.stopPropagation(); handleApproveAmendment(order); }} className="p-2 text-white bg-red-600 hover:bg-red-500 shadow-md shadow-red-900/50 rounded-md transition-colors" title="Approve">
+                                                                <Zap size={16} />
+                                                            </button>
+                                                        )}
+                                                    </div>
+                                                </td>
+                                            </tr>
+                                        );
+                                    })
+                                )}
+                            </tbody>
+                        </table>
+                    </div>
                 </div>
-            </DragDropContext>
+            )}
 
             {/* --- CREATE / EDIT MODAL --- */}
             {

@@ -2,6 +2,7 @@ import React, { useState, useEffect } from 'react';
 import { supabase } from '../services/supabase';
 import { getV2Items } from '../services/apiV2';
 import { V2Item } from '../types/v2';
+import { User } from '../types';
 import { ClipboardCheck, Search, Filter, Warehouse, CheckCircle2, ChevronRight, Calculator, Check, AlertCircle } from 'lucide-react';
 
 import { WAREHOUSES } from '../data/factoryData';
@@ -16,7 +17,11 @@ interface AuditItem extends V2Item {
 // Removed local WAREHOUSES const, using imported one
 const ITEM_TYPES = ['All', 'Raw', 'WiP', 'FG'];
 
-const StockAudit: React.FC = () => {
+interface StockAuditProps {
+    user: User | null;
+}
+
+const StockAudit: React.FC<StockAuditProps> = ({ user }) => {
     const [items, setItems] = useState<V2Item[]>([]);
     const [systemBalances, setSystemBalances] = useState<Record<string, Record<string, number>>>({});
 
@@ -132,6 +137,8 @@ const StockAudit: React.FC = () => {
                 loc_id: warehouse, // NEW: Apply to specific location
                 ref_doc: `AUDIT-${new Date().toISOString().split('T')[0].replace(/-/g, '')}`,
                 notes: `Auto-adjusted from Audit at [${warehouse}]. System: ${adj?.systemQty}, Actual: ${adj?.physical}`,
+                created_by: user?.uid || null,
+                created_by_name: user?.name || null,
             }));
 
             const { error } = await supabase.from('stock_ledger_v2').insert(inserts);

@@ -236,7 +236,8 @@ const EmployeeModal: React.FC<{
                                     🔑 Reset Login Password
                                 </label>
                                 <input
-                                    type="password"
+                                    type="text"
+                                    style={{ WebkitTextSecurity: 'disc' } as any}
                                     value={newPassword}
                                     onChange={e => setNewPassword(e.target.value)}
                                     placeholder="New password (min 6 chars) — blank = no change"
@@ -461,8 +462,8 @@ const HRPortal: React.FC<{ user?: any }> = ({ user }) => {
         const { data: trips } = await supabase.from('sales_orders')
             .select('driver_id, zone, delivery_zone, trip_origin, trip_drop_count')
             .eq('status', 'Delivered')
-            .gte('pod_timestamp', new Date(payYear, payMonth - 1, 1).toISOString())
-            .lte('pod_timestamp', new Date(payYear, payMonth, 0, 23, 59, 59).toISOString());
+            .gte('deadline', firstDay)
+            .lte('deadline', lastDay);
 
         // Delivery Rates lookup
         const { data: dr } = await supabase.from('delivery_rates').select('*');

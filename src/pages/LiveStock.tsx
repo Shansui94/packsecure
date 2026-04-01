@@ -1,6 +1,6 @@
 import React, { useState, useEffect, useMemo } from 'react';
 import { supabase } from '../services/supabase';
-import { Search, RefreshCw, Box, Filter, X, TrendingUp, TrendingDown, Package, Clipboard, ArrowUpDown } from 'lucide-react';
+import { Search, RefreshCw, Box, Filter, X, TrendingUp, TrendingDown, Package, Clipboard, ArrowUpDown, Truck, Calendar, MapPin, Hash, ChevronLeft, ChevronRight, LayoutGrid, List } from 'lucide-react';
 import { WAREHOUSES } from '../data/factoryData';
 
 // --- TYPES ---
@@ -23,13 +23,32 @@ interface LedgerRow {
     ref_doc: string;
     notes: string;
     timestamp: string;
+    created_by_name?: string;
+    do_driver_name?: string;
 }
 
-const TYPE_COLOR: Record<string, string> = {
-    FG: 'from-cyan-500/10 to-cyan-500/0 border-cyan-500/20 text-cyan-400',
-    Raw: 'from-amber-500/10 to-amber-500/0 border-amber-500/20 text-amber-400',
-    WiP: 'from-violet-500/10 to-violet-500/0 border-violet-500/20 text-violet-400',
-    Packaging: 'from-pink-500/10 to-pink-500/0 border-pink-500/20 text-pink-400',
+const TYPE_STYLE: Record<string, { bgCard: string, badge: string }> = {
+    FG: {
+        bgCard: 'bg-gradient-to-br from-cyan-50/50 to-white border-cyan-100 hover:border-cyan-300 dark:from-cyan-500/10 dark:to-transparent dark:border-cyan-500/20 active:scale-[0.99] transition-all',
+        badge: 'bg-cyan-100/50 text-cyan-700 border-cyan-200 dark:bg-black/30 dark:border-cyan-500/20 dark:text-cyan-400'
+    },
+    Raw: {
+        bgCard: 'bg-gradient-to-br from-amber-50/50 to-white border-amber-100 hover:border-amber-300 dark:from-amber-500/10 dark:to-transparent dark:border-amber-500/20 active:scale-[0.99] transition-all',
+        badge: 'bg-amber-100/50 text-amber-700 border-amber-200 dark:bg-black/30 dark:border-amber-500/20 dark:text-amber-400'
+    },
+    WiP: {
+        bgCard: 'bg-gradient-to-br from-violet-50/50 to-white border-violet-100 hover:border-violet-300 dark:from-violet-500/10 dark:to-transparent dark:border-violet-500/20 active:scale-[0.99] transition-all',
+        badge: 'bg-violet-100/50 text-violet-700 border-violet-200 dark:bg-black/30 dark:border-violet-500/20 dark:text-violet-400'
+    },
+    Packaging: {
+        bgCard: 'bg-gradient-to-br from-pink-50/50 to-white border-pink-100 hover:border-pink-300 dark:from-pink-500/10 dark:to-transparent dark:border-pink-500/20 active:scale-[0.99] transition-all',
+        badge: 'bg-pink-100/50 text-pink-700 border-pink-200 dark:bg-black/30 dark:border-pink-500/20 dark:text-pink-400'
+    },
+};
+
+const DEFAULT_STYLE = {
+    bgCard: 'bg-slate-50 border-slate-200 hover:border-slate-300 dark:from-white/5 dark:to-transparent dark:border-white/10 active:scale-[0.99] transition-all',
+    badge: 'bg-slate-100 text-slate-500 border-slate-200 dark:bg-black/30 dark:border-white/10 dark:text-gray-400'
 };
 
 const TYPE_LABEL: Record<string, string> = {
@@ -37,18 +56,18 @@ const TYPE_LABEL: Record<string, string> = {
 };
 
 const EVENT_STYLE: Record<string, { icon: React.FC<any>; color: string; bg: string }> = {
-    'Production': { icon: TrendingUp, color: 'text-green-400', bg: 'bg-green-500/10' },
-    'Stock In': { icon: TrendingUp, color: 'text-cyan-400', bg: 'bg-cyan-500/10' },
-    'Stock Out': { icon: TrendingDown, color: 'text-red-400', bg: 'bg-red-500/10' },
-    'Audit Adjustment': { icon: Clipboard, color: 'text-purple-400', bg: 'bg-purple-500/10' },
-    'Transfer': { icon: ArrowUpDown, color: 'text-amber-400', bg: 'bg-amber-500/10' },
+    'Production': { icon: TrendingUp, color: 'text-green-600 dark:text-green-400', bg: 'bg-green-100 dark:bg-green-500/10' },
+    'Stock In': { icon: TrendingUp, color: 'text-cyan-600 dark:text-cyan-400', bg: 'bg-cyan-100 dark:bg-cyan-500/10' },
+    'Stock Out': { icon: TrendingDown, color: 'text-red-600 dark:text-red-400', bg: 'bg-red-100 dark:bg-red-500/10' },
+    'Audit Adjustment': { icon: Clipboard, color: 'text-purple-600 dark:text-purple-400', bg: 'bg-purple-100 dark:bg-purple-500/10' },
+    'Transfer': { icon: ArrowUpDown, color: 'text-amber-600 dark:text-amber-400', bg: 'bg-amber-100 dark:bg-amber-500/10' },
 };
 
 const getEventStyle = (type: string, qty: number) => {
     if (EVENT_STYLE[type]) return EVENT_STYLE[type];
     return qty >= 0
-        ? { icon: TrendingUp, color: 'text-green-400', bg: 'bg-green-500/10' }
-        : { icon: TrendingDown, color: 'text-red-400', bg: 'bg-red-500/10' };
+        ? { icon: TrendingUp, color: 'text-green-600 dark:text-green-400', bg: 'bg-green-100 dark:bg-green-500/10' }
+        : { icon: TrendingDown, color: 'text-red-600 dark:text-red-400', bg: 'bg-red-100 dark:bg-red-500/10' };
 };
 
 const LOW_STOCK_THRESHOLD = 50;
@@ -57,116 +76,357 @@ const LOW_STOCK_THRESHOLD = 50;
 const DetailPanel: React.FC<{ item: StockRow; locFilter: string; onClose: () => void }> = ({ item, locFilter, onClose }) => {
     const [ledger, setLedger] = useState<LedgerRow[]>([]);
     const [loading, setLoading] = useState(true);
+    const [timeFilter, setTimeFilter] = useState<'Day' | 'All'>('Day');
+    const [selectedDate, setSelectedDate] = useState<Date>(new Date());
+
+    const [selectedTxn, setSelectedTxn] = useState<LedgerRow | null>(null);
+    const [doDetails, setDoDetails] = useState<any | null>(null);
+    const [loadingDO, setLoadingDO] = useState(false);
+
+    const handleTxnClick = async (row: LedgerRow) => {
+        setSelectedTxn(row);
+        if ((row.event_type === 'Transfer Out' || row.event_type === 'Delivered') && row.ref_doc && row.ref_doc.startsWith('DO-')) {
+            setLoadingDO(true);
+            const { data } = await supabase.from('sales_orders').select('*').eq('order_number', row.ref_doc).maybeSingle();
+            setDoDetails(data);
+            setLoadingDO(false);
+        } else {
+            setDoDetails(null);
+        }
+    };
 
     useEffect(() => {
         setLoading(true);
         let q = supabase
             .from('stock_ledger_v2')
-            .select('txn_id, sku, change_qty, event_type, loc_id, ref_doc, notes, timestamp')
+            .select('txn_id, sku, change_qty, event_type, loc_id, ref_doc, notes, timestamp, created_by_name')
             .eq('sku', item.sku)
             .order('timestamp', { ascending: false })
-            .limit(50);
+            .limit(3000);
 
         if (locFilter !== 'All') q = q.eq('loc_id', locFilter);
 
-        q.then(({ data }) => {
-            setLedger(data || []);
+        if (timeFilter === 'Day') {
+            const start = new Date(selectedDate);
+            start.setHours(0, 0, 0, 0);
+            const end = new Date(selectedDate);
+            end.setHours(23, 59, 59, 999);
+            q = q.gte('timestamp', start.toISOString()).lte('timestamp', end.toISOString());
+        }
+
+        q.then(async ({ data }) => {
+            const rows = data || [];
+            
+            if (rows.length > 0) {
+                const doRefs = [...new Set(rows.map(r => r.ref_doc).filter(ref => ref?.startsWith('DO-')))];
+                if (doRefs.length > 0) {
+                    const { data: doData } = await supabase
+                        .from('sales_orders')
+                        .select('order_number, driver_id')
+                        .in('order_number', doRefs);
+                        
+                    if (doData && doData.length > 0) {
+                        const driverIds = [...new Set(doData.map(d => d.driver_id).filter(Boolean))];
+                        if (driverIds.length > 0) {
+                            const { data: driverData } = await supabase
+                                .from('users_public')
+                                .select('id, name')
+                                .in('id', driverIds);
+                                
+                            const driverMap = new Map();
+                            driverData?.forEach(d => driverMap.set(d.id, d.name));
+                            
+                            const doDriverMap = new Map();
+                            doData.forEach(d => doDriverMap.set(d.order_number, driverMap.get(d.driver_id)));
+                            
+                            rows.forEach(r => {
+                                if (r.ref_doc && doDriverMap.has(r.ref_doc)) {
+                                    r.do_driver_name = doDriverMap.get(r.ref_doc);
+                                }
+                            });
+                        }
+                    }
+                }
+            }
+            
+            setLedger(rows);
             setLoading(false);
         });
-    }, [item.sku, locFilter]);
+    }, [item.sku, locFilter, timeFilter, selectedDate]);
 
     const totalIn = ledger.filter(r => r.change_qty > 0).reduce((s, r) => s + r.change_qty, 0);
-    const totalOut = ledger.filter(r => r.change_qty < 0).reduce((s, r) => s + r.change_qty, 0);
+    const totalOut = ledger.filter(r => r.change_qty < 0).reduce((s, r) => s + Math.abs(r.change_qty), 0);
+
+    const groupLedger = (records: LedgerRow[]) => {
+        const grouped: LedgerRow[] = [];
+        records.forEach(r => {
+            const dateStr = new Date(r.timestamp).toLocaleDateString('en-MY');
+            const isProduction = r.event_type === 'Production' || r.event_type === 'Stock In';
+            const refStr = isProduction ? '' : (r.ref_doc || '');
+            
+            const existing = grouped.find(g => 
+                g.event_type === r.event_type && 
+                new Date(g.timestamp).toLocaleDateString('en-MY') === dateStr &&
+                (isProduction ? true : (g.ref_doc || '') === refStr) &&
+                (g.created_by_name || '') === (r.created_by_name || '') &&
+                (g.do_driver_name || '') === (r.do_driver_name || '')
+            );
+            
+            if (existing) {
+                existing.change_qty = Number(existing.change_qty) + Number(r.change_qty);
+                if (!existing.notes?.includes('(Aggregated Daily Total)')) {
+                    existing.notes = `(Aggregated Daily Total) ` + (existing.notes || '');
+                }
+            } else {
+                grouped.push({ ...r, change_qty: Number(r.change_qty) });
+            }
+        });
+        return grouped;
+    };
+
+    const ledgerIn = groupLedger(ledger.filter(r => r.change_qty > 0));
+    const ledgerOut = groupLedger(ledger.filter(r => r.change_qty < 0));
+
+    const renderRow = (row: LedgerRow) => {
+        const style = getEventStyle(row.event_type, row.change_qty);
+        const Icon = style.icon;
+        const isPos = row.change_qty > 0;
+        return (
+            <button key={row.txn_id} onClick={() => handleTxnClick(row)} className="w-full text-left px-5 py-3 flex items-start gap-3 hover:bg-slate-100 dark:hover:bg-white/[0.05] transition-colors border-b border-slate-200/50 dark:border-white/5 cursor-pointer group">
+                <div className={`mt-0.5 w-8 h-8 rounded-xl ${style.bg} flex items-center justify-center shrink-0 border border-transparent dark:border-white/5 group-hover:scale-110 transition-transform`}>
+                    <Icon size={14} className={style.color} />
+                </div>
+                <div className="flex-1 min-w-0">
+                    <div className="flex items-baseline justify-between gap-2">
+                        <span className={`text-xs font-black tracking-wide ${style.color}`}>{row.event_type}</span>
+                        <span className={`text-base font-black tabular-nums shrink-0 ${isPos ? 'text-green-600 dark:text-green-400' : 'text-red-600 dark:text-red-400'}`}>
+                            {isPos ? '+' : ''}{row.change_qty}
+                        </span>
+                    </div>
+                    {(row.ref_doc || row.notes) && (
+                        <div className="text-[11px] text-slate-500 dark:text-gray-400 mt-1 truncate font-mono bg-slate-100 dark:bg-black/20 px-2 py-0.5 rounded border border-slate-200 dark:border-white/5 inline-block max-w-full">
+                            {row.ref_doc || row.notes}
+                        </div>
+                    )}
+                    <div className="flex items-center justify-between mt-1.5">
+                        <div className="text-[10px] text-slate-400 dark:text-gray-600 font-mono flex items-center gap-2">
+                            <span>{new Date(row.timestamp).toLocaleString('en-MY', { day: '2-digit', month: 'short', hour: '2-digit', minute: '2-digit' })}</span>
+                            
+                            {row.do_driver_name ? (
+                                <span className="text-violet-600 dark:text-violet-400 font-bold tracking-widest uppercase bg-violet-100 dark:bg-violet-500/10 px-1.5 py-0.5 rounded border border-violet-200 dark:border-violet-500/20">
+                                    🚚 {row.do_driver_name}
+                                </span>
+                            ) : row.created_by_name ? (
+                                <span className="text-blue-600 dark:text-blue-400/80 font-bold tracking-widest uppercase bg-blue-100 dark:bg-blue-500/10 px-1.5 py-0.5 rounded border border-blue-200 dark:border-blue-500/20">
+                                    👤 {row.created_by_name}
+                                </span>
+                            ) : null}
+                        </div>
+                        {row.loc_id && locFilter === 'All' && (
+                            <div className="text-[10px] text-violet-500 dark:text-violet-400/80 uppercase font-black">
+                                {row.loc_id}
+                            </div>
+                        )}
+                    </div>
+                </div>
+            </button>
+        );
+    };
 
     return (
         <div className="fixed inset-0 z-50 flex items-stretch justify-end">
-            <div className="absolute inset-0 bg-black/60 backdrop-blur-sm" onClick={onClose} />
-            <div className="relative w-full max-w-md bg-[#0a0a0f] border-l border-white/10 flex flex-col overflow-hidden shadow-2xl">
+            <div className="absolute inset-0 bg-slate-900/40 dark:bg-black/60 backdrop-blur-sm" onClick={onClose} />
+            <div className="relative w-full max-w-4xl bg-white dark:bg-[#08080c] border-l border-slate-200 dark:border-white/10 flex flex-col overflow-hidden shadow-2xl">
 
                 {/* Header */}
-                <div className="p-5 border-b border-white/5 flex items-start justify-between shrink-0">
+                <div className="p-6 border-b border-slate-200 dark:border-white/5 flex items-start justify-between shrink-0 bg-slate-50 dark:bg-gradient-to-r dark:from-blue-500/5 dark:to-transparent">
                     <div className="flex-1 min-w-0 pr-3">
-                        <div className="text-white font-black text-base leading-tight truncate" title={item.name}>{item.name}</div>
-                        <div className="text-[11px] text-gray-500 font-mono mt-0.5 truncate">{item.sku}</div>
-                        {locFilter !== 'All' && (
-                            <div className="text-[10px] text-violet-400 font-mono mt-1 uppercase tracking-widest">📍 {locFilter}</div>
-                        )}
+                        <div className="text-slate-900 dark:text-white font-black text-2xl leading-tight truncate tracking-tight">{item.name}</div>
+                        <div className="text-sm text-blue-600 dark:text-blue-400 font-mono mt-1 font-bold">{item.sku}</div>
+                        <div className="flex items-center gap-3 mt-3 overflow-x-auto pb-1 custom-scrollbar">
+                            {locFilter !== 'All' && (
+                                <div className="text-xs text-violet-700 dark:text-violet-400 font-black uppercase tracking-widest px-2 py-1 bg-violet-100 dark:bg-violet-500/10 shrink-0 inline-block rounded border border-violet-200 dark:border-violet-500/20">📍 {locFilter}</div>
+                            )}
+                            <div className="flex items-center border border-slate-200 bg-white dark:bg-black/40 rounded-lg p-1 dark:border-white/5 shrink-0 shadow-sm">
+                                {timeFilter === 'Day' && (
+                                    <div className="flex items-center mr-2 bg-slate-50 dark:bg-white/5 rounded border border-slate-200 dark:border-white/10">
+                                        <button onClick={() => {
+                                            const d = new Date(selectedDate); d.setDate(d.getDate() - 1); setSelectedDate(d);
+                                        }} className="p-1 hover:bg-slate-200 dark:hover:bg-white/10 rounded-l text-slate-500 dark:text-gray-400 dark:hover:text-white transition-colors">
+                                            <ChevronLeft size={16} />
+                                        </button>
+                                        <span className="text-[11px] font-bold px-2 text-cyan-700 dark:text-cyan-400 w-24 text-center font-mono">
+                                            {selectedDate.toLocaleDateString('en-GB', { day: '2-digit', month: 'short', year: 'numeric' })}
+                                        </span>
+                                        <button onClick={() => {
+                                            const d = new Date(selectedDate); d.setDate(d.getDate() + 1); setSelectedDate(d);
+                                        }} className="p-1 hover:bg-slate-200 dark:hover:bg-white/10 rounded-r text-slate-500 dark:text-gray-400 dark:hover:text-white transition-colors">
+                                            <ChevronRight size={16} />
+                                        </button>
+                                    </div>
+                                )}
+                                <button onClick={() => setTimeFilter('Day')} className={`px-3 py-1.5 rounded text-[10px] font-black uppercase tracking-widest transition-all ${timeFilter === 'Day' ? 'bg-cyan-100 dark:bg-cyan-500/20 text-cyan-700 dark:text-cyan-400' : 'text-slate-500 dark:text-gray-500 hover:text-slate-700 dark:hover:text-gray-300'}`}>Daily</button>
+                                <button onClick={() => setTimeFilter('All')} className={`px-3 py-1.5 rounded text-[10px] font-black uppercase tracking-widest transition-all ${timeFilter === 'All' ? 'bg-amber-100 dark:bg-amber-500/20 text-amber-700 dark:text-amber-400' : 'text-slate-500 dark:text-gray-500 hover:text-slate-700 dark:hover:text-gray-300'}`}>All Time</button>
+                            </div>
+                        </div>
                     </div>
-                    <button onClick={onClose} className="p-2 rounded-xl bg-white/5 hover:bg-white/10 text-gray-400 hover:text-white transition-all shrink-0">
-                        <X size={16} />
+                    <button onClick={onClose} className="p-3 rounded-xl bg-slate-100 hover:bg-slate-200 dark:bg-white/5 dark:hover:bg-white/10 text-slate-500 dark:text-gray-400 dark:hover:text-white transition-all shrink-0 border border-slate-200 dark:border-white/5 shadow-sm">
+                        <X size={20} />
                     </button>
                 </div>
 
                 {/* Summary Strip */}
-                <div className="grid grid-cols-3 border-b border-white/5 shrink-0">
-                    <div className="px-4 py-3 border-r border-white/5 text-center">
-                        <div className="text-[10px] text-gray-500 uppercase tracking-widest mb-0.5">Stock</div>
-                        <div className={`text-xl font-black ${item.current_stock < 0 ? 'text-red-400' : item.current_stock < LOW_STOCK_THRESHOLD ? 'text-amber-400' : 'text-white'}`}>
+                <div className="grid grid-cols-3 border-b border-slate-200 dark:border-white/5 shrink-0 bg-slate-50 dark:bg-[#0a0a0f]">
+                    <div className="px-6 py-4 border-r border-slate-200 dark:border-white/5 text-center flex flex-col items-center justify-center">
+                        <div className="text-xs text-slate-500 dark:text-gray-500 font-black uppercase tracking-widest mb-1">Live Balance</div>
+                        <div className={`text-3xl font-black ${item.current_stock < 0 ? 'text-red-500 dark:text-red-400' : item.current_stock < LOW_STOCK_THRESHOLD ? 'text-amber-500 dark:text-amber-400' : 'text-slate-800 dark:text-white'}`}>
                             {Number(item.current_stock).toLocaleString()}
                         </div>
                     </div>
-                    <div className="px-4 py-3 border-r border-white/5 text-center">
-                        <div className="text-[10px] text-gray-500 uppercase tracking-widest mb-0.5">In</div>
-                        <div className="text-xl font-black text-green-400">+{totalIn.toLocaleString()}</div>
+                    <div className="px-6 py-4 border-r border-slate-200 dark:border-white/5 text-center flex flex-col items-center justify-center">
+                        <div className="text-xs text-green-600 dark:text-green-500/70 font-black uppercase tracking-widest mb-1">Total IN</div>
+                        <div className="text-2xl font-black text-green-600 dark:text-green-400">+{totalIn.toLocaleString()}</div>
                     </div>
-                    <div className="px-4 py-3 text-center">
-                        <div className="text-[10px] text-gray-500 uppercase tracking-widest mb-0.5">Out</div>
-                        <div className="text-xl font-black text-red-400">{totalOut.toLocaleString()}</div>
+                    <div className="px-6 py-4 text-center flex flex-col items-center justify-center">
+                        <div className="text-xs text-red-600 dark:text-red-500/70 font-black uppercase tracking-widest mb-1">Total OUT</div>
+                        <div className="text-2xl font-black text-red-600 dark:text-red-400">{totalOut.toLocaleString()}</div>
                     </div>
                 </div>
 
-                {/* Ledger */}
-                <div className="px-5 py-3 border-b border-white/5 shrink-0">
-                    <span className="text-[10px] text-gray-500 uppercase tracking-widest">Recent Movements (last 50)</span>
-                </div>
-                <div className="flex-1 overflow-y-auto">
-                    {loading ? (
-                        <div className="flex items-center justify-center py-16">
-                            <div className="w-6 h-6 border-2 border-cyan-500/30 border-t-cyan-500 rounded-full animate-spin" />
+                {/* Ledger Columns */}
+                <div className="flex-1 overflow-hidden flex flex-col md:flex-row bg-white dark:bg-[#050508]">
+                    {/* LEFT COLUMN: IN */}
+                    <div className="flex-1 flex flex-col border-b md:border-b-0 md:border-r border-slate-200 dark:border-white/5 md:w-1/2">
+                        <div className="px-6 py-3 border-b border-slate-200 dark:border-white/5 bg-green-50 dark:bg-green-500/5 flex items-center gap-2">
+                            <TrendingUp size={16} className="text-green-600 dark:text-green-500" />
+                            <span className="text-xs text-green-700 dark:text-green-400 font-black uppercase tracking-widest">Stock In</span>
                         </div>
-                    ) : ledger.length === 0 ? (
-                        <div className="text-center py-16 text-gray-600">
-                            <Package size={32} className="mx-auto mb-2 opacity-30" />
-                            <div className="text-sm">No movements found</div>
+                        <div className="flex-1 overflow-y-auto custom-scrollbar pb-6 text-sm">
+                            {loading ? (
+                                <div className="flex justify-center py-20"><div className="w-8 h-8 rounded-full border-t-2 border-green-500 animate-spin" /></div>
+                            ) : ledgerIn.length === 0 ? (
+                                <div className="text-center py-20 text-slate-400 dark:text-gray-600 font-bold bg-slate-50 dark:bg-white/[0.01] m-4 rounded-2xl border border-slate-200 dark:border-white/5">No IN records</div>
+                            ) : (
+                                ledgerIn.map(renderRow)
+                            )}
                         </div>
-                    ) : (
-                        <div className="divide-y divide-white/5">
-                            {ledger.map(row => {
-                                const style = getEventStyle(row.event_type, row.change_qty);
-                                const Icon = style.icon;
-                                const isPos = row.change_qty > 0;
-                                return (
-                                    <div key={row.txn_id} className="px-5 py-3 flex items-start gap-3 hover:bg-white/[0.02]">
-                                        <div className={`mt-0.5 w-7 h-7 rounded-lg ${style.bg} flex items-center justify-center shrink-0`}>
-                                            <Icon size={13} className={style.color} />
-                                        </div>
-                                        <div className="flex-1 min-w-0">
-                                            <div className="flex items-baseline justify-between gap-2">
-                                                <span className={`text-xs font-bold ${style.color}`}>{row.event_type}</span>
-                                                <span className={`text-sm font-black tabular-nums shrink-0 ${isPos ? 'text-green-400' : 'text-red-400'}`}>
-                                                    {isPos ? '+' : ''}{row.change_qty}
-                                                </span>
-                                            </div>
-                                            {row.loc_id && locFilter === 'All' && (
-                                                <div className="text-[10px] text-gray-500 mt-0.5">📍 {row.loc_id}</div>
-                                            )}
-                                            {row.ref_doc && (
-                                                <div className="text-[10px] text-gray-600 font-mono mt-0.5 truncate">{row.ref_doc}</div>
-                                            )}
-                                            {row.notes && (
-                                                <div className="text-[10px] text-gray-700 mt-0.5 truncate" title={row.notes}>{row.notes}</div>
-                                            )}
-                                            <div className="text-[10px] text-gray-600 mt-0.5 font-mono">
-                                                {new Date(row.timestamp).toLocaleString('en-MY', { day: '2-digit', month: 'short', hour: '2-digit', minute: '2-digit' })}
-                                            </div>
-                                        </div>
-                                    </div>
-                                );
-                            })}
+                    </div>
+
+                    {/* RIGHT COLUMN: OUT */}
+                    <div className="flex-1 flex flex-col md:w-1/2">
+                        <div className="px-6 py-3 border-b border-slate-200 dark:border-white/5 bg-red-50 dark:bg-red-500/5 flex items-center gap-2">
+                            <TrendingDown size={16} className="text-red-600 dark:text-red-500" />
+                            <span className="text-xs text-red-700 dark:text-red-400 font-black uppercase tracking-widest">Stock Out</span>
                         </div>
-                    )}
+                        <div className="flex-1 overflow-y-auto custom-scrollbar pb-6 text-sm">
+                            {loading ? (
+                                <div className="flex justify-center py-20"><div className="w-8 h-8 rounded-full border-t-2 border-red-500 animate-spin" /></div>
+                            ) : ledgerOut.length === 0 ? (
+                                <div className="text-center py-20 text-slate-400 dark:text-gray-600 font-bold bg-slate-50 dark:bg-white/[0.01] m-4 rounded-2xl border border-slate-200 dark:border-white/5">No OUT records</div>
+                            ) : (
+                                ledgerOut.map(renderRow)
+                            )}
+                        </div>
+                    </div>
                 </div>
             </div>
+
+            {/* TRANSACTION DETAIL MODAL */}
+            {selectedTxn && (
+                <div className="fixed inset-0 z-[60] flex items-center justify-center p-4 bg-slate-900/60 dark:bg-black/80 backdrop-blur-xl animate-in fade-in duration-200">
+                    <div className="bg-white dark:bg-[#0f0f13] border border-slate-200 dark:border-white/10 rounded-3xl w-full max-w-lg flex flex-col shadow-2xl relative overflow-hidden">
+                        
+                        {/* Header */}
+                        <div className="p-6 border-b border-slate-200 dark:border-white/5 flex items-center justify-between">
+                            <div className="flex items-center gap-4">
+                                <div className={`w-12 h-12 rounded-2xl flex items-center justify-center border ${selectedTxn.change_qty > 0 ? 'bg-green-100 border-green-200 text-green-600 dark:bg-green-500/10 dark:border-green-500/20 dark:text-green-400' : 'bg-red-100 border-red-200 text-red-600 dark:bg-red-500/10 dark:border-red-500/20 dark:text-red-400'}`}>
+                                    {selectedTxn.change_qty > 0 ? <TrendingUp size={24} /> : <TrendingDown size={24} />}
+                                </div>
+                                <div>
+                                    <h2 className="text-xl font-black text-slate-900 dark:text-white">{selectedTxn.event_type}</h2>
+                                    <p className="text-xs text-slate-500 dark:text-gray-500 font-mono mt-0.5">{new Date(selectedTxn.timestamp).toLocaleString()}</p>
+                                </div>
+                            </div>
+                            <button onClick={() => setSelectedTxn(null)} className="p-2 rounded-xl hover:bg-slate-100 dark:hover:bg-white/5 text-slate-400 dark:text-gray-400 transition-colors">
+                                <X size={20} />
+                            </button>
+                        </div>
+
+                        {/* Body */}
+                        <div className="p-6 space-y-5 flex-1 overflow-y-auto bg-slate-50 dark:bg-black/20">
+                            
+                            {/* Qty & Ref Banner */}
+                            <div className="grid grid-cols-2 gap-3">
+                                <div className="bg-white dark:bg-[#15151a] p-4 rounded-2xl border border-slate-200 dark:border-white/5 shadow-sm">
+                                    <div className="text-[10px] text-slate-500 dark:text-gray-500 font-bold uppercase tracking-widest mb-1 flex items-center gap-1.5"><Hash size={12}/> Net Quantity</div>
+                                    <div className={`text-2xl font-black tracking-tight ${selectedTxn.change_qty > 0 ? 'text-green-600 dark:text-green-400' : 'text-red-600 dark:text-red-400'}`}>
+                                        {selectedTxn.change_qty > 0 ? '+' : ''}{selectedTxn.change_qty}
+                                    </div>
+                                </div>
+                                <div className="bg-white dark:bg-[#15151a] p-4 rounded-2xl border border-slate-200 dark:border-white/5 shadow-sm">
+                                    <div className="text-[10px] text-slate-500 dark:text-gray-500 font-bold uppercase tracking-widest mb-1 flex items-center gap-1.5"><MapPin size={12}/> Trigger Location</div>
+                                    <div className="text-base font-bold text-slate-800 dark:text-white truncate mt-1">
+                                        {selectedTxn.loc_id || 'System Core'}
+                                    </div>
+                                </div>
+                            </div>
+
+                            {/* Reference info */}
+                            <div className="bg-blue-50 dark:bg-blue-500/5 border border-blue-100 dark:border-blue-500/10 p-5 rounded-2xl shadow-sm">
+                                <div className="text-[10px] text-blue-600 dark:text-blue-400/80 font-black uppercase tracking-widest mb-2 flex items-center gap-2"><Clipboard size={14}/> Transaction Reference</div>
+                                <div className="text-slate-800 dark:text-white font-mono text-sm break-all">{selectedTxn.ref_doc || selectedTxn.notes || 'No reference documented for this event.'}</div>
+                                {selectedTxn.ref_doc && selectedTxn.notes && (
+                                    <div className="mt-3 text-xs text-slate-500 dark:text-gray-400 border-t border-blue-200 dark:border-white/5 pt-3">
+                                        Note: {selectedTxn.notes}
+                                    </div>
+                                )}
+                            </div>
+
+                            {/* DO DETAILS IF APPLICABLE */}
+                            {loadingDO && (
+                                <div className="flex flex-col items-center justify-center p-6 bg-white dark:bg-white/5 rounded-2xl border border-slate-200 dark:border-white/5 border-dashed">
+                                    <div className="w-6 h-6 border-2 border-blue-500 border-t-transparent rounded-full animate-spin mb-3"></div>
+                                    <div className="text-xs text-blue-600 dark:text-blue-400 font-bold animate-pulse">Fetching Delivery Route...</div>
+                                </div>
+                            )}
+
+                            {doDetails && (
+                                <div className="mt-4 border border-violet-200 dark:border-violet-500/20 bg-white dark:bg-violet-500/5 rounded-2xl overflow-hidden shadow-xl">
+                                    <div className="px-5 py-3 border-b border-violet-100 dark:border-violet-500/10 bg-violet-50 dark:bg-violet-500/10 flex items-center gap-2">
+                                        <Truck size={16} className="text-violet-600 dark:text-violet-400" />
+                                        <span className="text-xs font-black text-violet-700 dark:text-violet-300 uppercase tracking-widest">Assigned Delivery (DO)</span>
+                                    </div>
+                                    <div className="p-5 space-y-4">
+                                        <div>
+                                            <div className="text-[10px] text-slate-500 dark:text-gray-500 font-bold uppercase tracking-widest">Route Dest</div>
+                                            <div className="text-sm font-bold text-slate-800 dark:text-white leading-relaxed mt-1">{doDetails.delivery_address || doDetails.zone}</div>
+                                        </div>
+                                        {doDetails.customer && (
+                                            <div>
+                                                <div className="text-[10px] text-slate-500 dark:text-gray-500 font-bold uppercase tracking-widest">Customer</div>
+                                                <div className="text-sm font-bold text-slate-800 dark:text-white mt-1">{doDetails.customer}</div>
+                                            </div>
+                                        )}
+                                        {doDetails.items && doDetails.items.length > 0 && (
+                                            <div className="pt-2">
+                                                <div className="text-[10px] text-slate-500 dark:text-gray-500 font-bold uppercase tracking-widest mb-2">Truck Load Manifest</div>
+                                                <div className="space-y-1.5 bg-slate-50 dark:bg-black/40 rounded-xl p-3 border border-slate-200 dark:border-white/5">
+                                                    {doDetails.items.map((it: any, i: number) => (
+                                                        <div key={i} className={`flex justify-between items-start text-xs ${it.sku === selectedTxn.sku ? 'bg-amber-100 dark:bg-amber-500/20 text-amber-800 dark:text-amber-300 px-2 py-1 -mx-2 rounded font-bold' : 'text-slate-600 dark:text-gray-300'}`}>
+                                                            <span className="truncate pr-4 leading-tight">{it.product}</span>
+                                                            <span className="font-mono font-bold shrink-0">x{it.quantity}</span>
+                                                        </div>
+                                                    ))}
+                                                </div>
+                                            </div>
+                                        )}
+                                    </div>
+                                </div>
+                            )}
+                        </div>
+                    </div>
+                </div>
+            )}
         </div>
     );
 };
@@ -180,6 +440,13 @@ const LiveStock: React.FC = () => {
     const [typeFilter, setTypeFilter] = useState<string>('All');
     const [locationFilter, setLocationFilter] = useState<string>('All');
     const [selectedItem, setSelectedItem] = useState<StockRow | null>(null);
+    const [viewMode, setViewMode] = useState<'card' | 'list'>(() => {
+        return (localStorage.getItem('livestock_view') as 'card' | 'list') || 'card';
+    });
+
+    useEffect(() => {
+        localStorage.setItem('livestock_view', viewMode);
+    }, [viewMode]);
 
     const fetchStock = async () => {
         setLoading(true);
@@ -243,79 +510,79 @@ const LiveStock: React.FC = () => {
     const negativeCount = filtered.filter(r => r.current_stock < 0).length;
 
     const getStockColor = (qty: number) => {
-        if (qty < 0) return 'text-red-500';
-        if (qty < LOW_STOCK_THRESHOLD) return 'text-amber-400';
-        return 'text-white';
+        if (qty < 0) return 'text-red-600 dark:text-red-500';
+        if (qty < LOW_STOCK_THRESHOLD) return 'text-amber-600 dark:text-amber-400';
+        return 'text-slate-900 dark:text-white';
     };
 
     const getStockBadge = (qty: number) => {
-        if (qty < 0) return { label: 'NEGATIVE', cls: 'bg-red-500/15 text-red-400 border-red-500/30' };
-        if (qty < LOW_STOCK_THRESHOLD) return { label: 'LOW STOCK', cls: 'bg-amber-500/15 text-amber-400 border-amber-500/30' };
-        return { label: 'IN STOCK', cls: 'bg-green-500/15 text-green-400 border-green-500/30' };
+        if (qty < 0) return { label: 'NEGATIVE', cls: 'bg-red-100 text-red-700 border-red-200 dark:bg-red-500/15 dark:text-red-400 dark:border-red-500/30' };
+        if (qty < LOW_STOCK_THRESHOLD) return { label: 'LOW STOCK', cls: 'bg-amber-100 text-amber-700 border-amber-200 dark:bg-amber-500/15 dark:text-amber-400 dark:border-amber-500/30' };
+        return { label: 'IN STOCK', cls: 'bg-green-100 text-green-700 border-green-200 dark:bg-green-500/15 dark:text-green-400 dark:border-green-500/30' };
     };
 
     return (
-        <div className="min-h-screen bg-[#0a0a0e] text-white p-4 md:p-8 pb-24">
+        <div className="min-h-screen bg-white dark:bg-[#0a0a0e] text-slate-900 dark:text-white p-4 md:p-8 pb-24 transition-colors duration-300">
             <div className="max-w-7xl mx-auto">
 
                 {/* ── Header ── */}
                 <div className="flex flex-col md:flex-row md:items-end justify-between gap-4 mb-8">
                     <div>
-                        <h1 className="text-3xl font-black tracking-tighter text-transparent bg-clip-text bg-gradient-to-r from-cyan-400 via-blue-400 to-violet-500 mb-1">
+                        <h1 className="text-3xl font-black tracking-tighter text-transparent bg-clip-text bg-gradient-to-r from-cyan-600 via-blue-600 to-violet-600 dark:from-cyan-400 dark:via-blue-400 dark:to-violet-500 mb-1">
                             LIVE STOCK
                         </h1>
-                        <p className="text-gray-500 text-xs font-mono flex items-center gap-2">
+                        <p className="text-slate-500 dark:text-gray-500 text-xs font-mono flex items-center gap-2">
                             <span className="w-1.5 h-1.5 rounded-full bg-green-500 animate-pulse inline-block" />
                             LIVE · REFRESHED: {lastUpdated || '—'}
                         </p>
                     </div>
 
                     <div className="flex gap-3 flex-wrap">
-                        <div className="bg-white/5 border border-white/10 rounded-xl px-4 py-3 min-w-[100px]">
-                            <div className="text-[10px] text-gray-500 font-bold uppercase mb-0.5">SKUs</div>
-                            <div className="text-xl font-black">{totalItems}</div>
+                        <div className="bg-slate-50 dark:bg-white/5 border border-slate-200 dark:border-white/10 rounded-xl px-4 py-3 min-w-[100px] shadow-sm">
+                            <div className="text-[10px] text-slate-500 dark:text-gray-500 font-bold uppercase mb-0.5">SKUs</div>
+                            <div className="text-xl font-black text-slate-800 dark:text-white">{totalItems}</div>
                         </div>
-                        <div className="bg-white/5 border border-white/10 rounded-xl px-4 py-3 min-w-[100px]">
-                            <div className="text-[10px] text-gray-500 font-bold uppercase mb-0.5">Total Units</div>
-                            <div className="text-xl font-black">{totalQty.toLocaleString()}</div>
+                        <div className="bg-slate-50 dark:bg-white/5 border border-slate-200 dark:border-white/10 rounded-xl px-4 py-3 min-w-[100px] shadow-sm">
+                            <div className="text-[10px] text-slate-500 dark:text-gray-500 font-bold uppercase mb-0.5">Total Units</div>
+                            <div className="text-xl font-black text-slate-800 dark:text-white">{totalQty.toLocaleString()}</div>
                         </div>
                         {lowStockCount > 0 && (
-                            <div className="bg-amber-500/10 border border-amber-500/20 rounded-xl px-4 py-3 min-w-[100px]">
-                                <div className="text-[10px] text-amber-400 font-bold uppercase mb-0.5">Low Stock</div>
-                                <div className="text-xl font-black text-amber-400">{lowStockCount}</div>
+                            <div className="bg-amber-50 border border-amber-200 dark:bg-amber-500/10 dark:border-amber-500/20 rounded-xl px-4 py-3 min-w-[100px] shadow-sm">
+                                <div className="text-[10px] text-amber-600 dark:text-amber-400 font-bold uppercase mb-0.5">Low Stock</div>
+                                <div className="text-xl font-black text-amber-600 dark:text-amber-400">{lowStockCount}</div>
                             </div>
                         )}
                         {negativeCount > 0 && (
-                            <div className="bg-red-500/10 border border-red-500/20 rounded-xl px-4 py-3 min-w-[100px]">
-                                <div className="text-[10px] text-red-400 font-bold uppercase mb-0.5">Negative</div>
-                                <div className="text-xl font-black text-red-400">{negativeCount}</div>
+                            <div className="bg-red-50 border border-red-200 dark:bg-red-500/10 dark:border-red-500/20 rounded-xl px-4 py-3 min-w-[100px] shadow-sm">
+                                <div className="text-[10px] text-red-600 dark:text-red-400 font-bold uppercase mb-0.5">Negative</div>
+                                <div className="text-xl font-black text-red-600 dark:text-red-400">{negativeCount}</div>
                             </div>
                         )}
                     </div>
                 </div>
 
                 {/* ── Controls ── */}
-                <div className="flex flex-col sm:flex-row gap-3 mb-6">
-                    <div className="relative flex-1 max-w-sm">
-                        <Search className="absolute left-3 top-1/2 -translate-y-1/2 text-gray-500" size={16} />
+                <div className="flex flex-col lg:flex-row lg:items-center gap-3 mb-6 bg-slate-50 dark:bg-[#12121a] p-3 rounded-2xl border border-slate-200 dark:border-white/10 shadow-sm relative z-10">
+                    <div className="relative flex-1 min-w-[200px]">
+                        <Search className="absolute left-3 top-1/2 -translate-y-1/2 text-slate-400 dark:text-gray-500" size={16} />
                         <input
                             type="text"
                             placeholder="Search SKU or name..."
                             value={search}
                             onChange={e => setSearch(e.target.value)}
-                            className="w-full bg-white/5 border border-white/10 rounded-xl pl-9 pr-4 py-2.5 text-sm focus:outline-none focus:border-cyan-500/50 text-white placeholder-gray-600"
+                            className="w-full bg-white dark:bg-black/50 border border-slate-300 dark:border-white/10 rounded-xl pl-9 pr-4 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-cyan-500/50 text-slate-900 dark:text-white placeholder-slate-400 dark:placeholder-gray-600"
                         />
                     </div>
 
-                    <div className="flex items-center gap-2 flex-wrap">
-                        <Filter size={14} className="text-gray-500" />
+                    <div className="flex items-center gap-2 flex-wrap sm:flex-nowrap overflow-x-auto custom-scrollbar  pb-1 sm:pb-0">
+                        <Filter size={14} className="text-slate-400 dark:text-gray-500 shrink-0 hidden sm:block" />
                         {['All', ...allTypes].map(t => (
                             <button
                                 key={t}
                                 onClick={() => setTypeFilter(t)}
-                                className={`px-3 py-2 rounded-lg text-xs font-bold uppercase transition-all ${typeFilter === t
-                                    ? 'bg-cyan-500/20 text-cyan-400 border border-cyan-500/30'
-                                    : 'bg-white/5 text-gray-500 border border-white/5 hover:text-white'
+                                className={`px-3 py-1.5 rounded-lg text-xs font-bold uppercase transition-all whitespace-nowrap ${typeFilter === t
+                                    ? 'bg-cyan-100 dark:bg-cyan-500/20 text-cyan-700 dark:text-cyan-400 border border-cyan-200 dark:border-cyan-500/30 shadow-sm'
+                                    : 'bg-white dark:bg-white/5 text-slate-600 dark:text-gray-400 border border-slate-200 dark:border-white/5 hover:bg-slate-100 dark:hover:text-white'
                                     }`}
                             >
                                 {t === 'All' ? 'All Types' : (TYPE_LABEL[t] || t)}
@@ -323,54 +590,59 @@ const LiveStock: React.FC = () => {
                         ))}
                     </div>
 
-                    <div className="flex items-center gap-2 flex-wrap">
-                        <span className="text-gray-500 font-bold uppercase text-[10px]">Location:</span>
-                        {['All', ...WAREHOUSES].map(w => (
-                            <button
-                                key={w}
-                                onClick={() => setLocationFilter(w)}
-                                className={`px-3 py-2 rounded-lg text-xs font-bold uppercase transition-all ${locationFilter === w
-                                    ? 'bg-violet-500/20 text-violet-400 border border-violet-500/30'
-                                    : 'bg-white/5 text-gray-500 border border-white/5 hover:text-white'
-                                    }`}
-                            >
-                                {w}
-                            </button>
-                        ))}
-                    </div>
+                    <div className="h-6 w-px bg-slate-200 dark:bg-white/10 hidden lg:block mx-1"></div>
 
-                    <button
-                        onClick={fetchStock}
-                        className="px-4 bg-white/5 hover:bg-white/10 border border-white/10 rounded-xl flex items-center justify-center transition-colors"
-                    >
-                        <RefreshCw size={16} className={`text-cyan-400 ${loading ? 'animate-spin' : ''}`} />
-                    </button>
+                    <div className="flex items-center gap-2 shrink-0">
+                        {/* VIEW MODE TOGGLE */}
+                        <div className="flex bg-slate-200 dark:bg-black/50 rounded-xl p-1 border border-slate-300 dark:border-white/10 shadow-inner">
+                            <button
+                                onClick={() => setViewMode('card')}
+                                className={`p-1.5 rounded-lg transition-all ${viewMode === 'card' ? 'bg-white dark:bg-white/10 text-cyan-600 dark:text-cyan-400 shadow-sm' : 'text-slate-500 dark:text-gray-500 hover:text-slate-800 dark:hover:text-gray-300'}`}
+                            >
+                                <LayoutGrid size={16} />
+                            </button>
+                            <button
+                                onClick={() => setViewMode('list')}
+                                className={`p-1.5 rounded-lg transition-all ${viewMode === 'list' ? 'bg-white dark:bg-white/10 text-cyan-600 dark:text-cyan-400 shadow-sm' : 'text-slate-500 dark:text-gray-500 hover:text-slate-800 dark:hover:text-gray-300'}`}
+                            >
+                                <List size={16} />
+                            </button>
+                        </div>
+                        
+                        <button
+                            onClick={fetchStock}
+                            className="p-2 sm:px-4 sm:py-2 bg-white dark:bg-white/5 hover:bg-slate-100 dark:hover:bg-white/10 border border-slate-300 dark:border-white/10 rounded-xl flex items-center justify-center transition-colors shadow-sm"
+                        >
+                            <RefreshCw size={16} className={`text-cyan-600 dark:text-cyan-400 ${loading ? 'animate-spin' : ''}`} />
+                        </button>
+                    </div>
                 </div>
 
-                {/* ── Grid ── */}
+                {/* ── Content ── */}
                 {loading && rows.length === 0 ? (
                     <div className="flex justify-center py-24">
                         <div className="animate-spin rounded-full h-10 w-10 border-b-2 border-cyan-500" />
                     </div>
                 ) : filtered.length === 0 ? (
-                    <div className="text-center py-24 text-gray-600 border border-dashed border-white/5 rounded-2xl">
+                    <div className="text-center py-24 text-slate-500 dark:text-gray-600 border border-dashed border-slate-300 dark:border-white/5 rounded-2xl bg-slate-50 dark:bg-transparent">
                         <Box size={40} className="mx-auto mb-3 opacity-20" />
-                        <p>No items found.</p>
+                        <p className="font-medium">No items found.</p>
                     </div>
-                ) : (
+                ) : viewMode === 'card' ? (
+                    /* CARD GRID VIEW */
                     <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 gap-4">
                         {filtered.map(item => {
                             const badge = getStockBadge(item.current_stock);
-                            const typeStyle = TYPE_COLOR[item.type] || 'from-white/5 to-white/0 border-white/10 text-gray-400';
+                            const styleConfig = TYPE_STYLE[item.type] || DEFAULT_STYLE;
                             return (
                                 <button
                                     key={item.sku}
                                     onClick={() => setSelectedItem(item)}
-                                    className={`relative bg-gradient-to-br ${typeStyle} border rounded-2xl p-5 hover:scale-[1.02] hover:brightness-110 active:scale-[0.99] transition-all text-left cursor-pointer w-full`}
+                                    className={`relative border rounded-2xl p-5 text-left cursor-pointer w-full shadow-sm ${styleConfig.bgCard}`}
                                 >
                                     {/* Type tag */}
                                     <div className="flex justify-between items-start mb-4">
-                                        <span className={`text-[10px] font-black uppercase px-2 py-1 rounded-full border ${typeStyle} bg-black/30`}>
+                                        <span className={`text-[10px] font-black uppercase px-2 py-1 rounded-full border ${styleConfig.badge}`}>
                                             {item.type}
                                         </span>
                                         <span className={`text-[10px] font-bold uppercase px-2 py-1 rounded-full border ${badge.cls}`}>
@@ -380,16 +652,50 @@ const LiveStock: React.FC = () => {
 
                                     {/* SKU + Name */}
                                     <div className="mb-5">
-                                        <div className="font-black text-white text-base tracking-tight leading-tight mb-0.5 truncate" title={item.name}>{item.name}</div>
-                                        <div className="text-[11px] text-gray-400 truncate font-mono" title={item.sku}>{item.sku}</div>
+                                        <div className="font-black text-slate-800 dark:text-white text-base tracking-tight leading-tight mb-0.5 truncate" title={item.name}>{item.name}</div>
+                                        <div className="text-[11px] text-slate-500 dark:text-gray-400 truncate font-mono" title={item.sku}>{item.sku}</div>
                                     </div>
 
                                     {/* Stock Number */}
-                                    <div className="border-t border-white/5 pt-3 flex items-end justify-between">
-                                        <div className="text-[10px] text-gray-500 font-mono uppercase">
+                                    <div className="border-t border-slate-200 dark:border-white/5 pt-3 flex items-end justify-between">
+                                        <div className="text-[10px] text-slate-400 dark:text-gray-500 font-mono uppercase">
                                             {item.uom || 'unit'}
                                         </div>
                                         <div className={`text-3xl font-black tracking-tighter ${getStockColor(item.current_stock)}`}>
+                                            {Number(item.current_stock).toLocaleString()}
+                                        </div>
+                                    </div>
+                                </button>
+                            );
+                        })}
+                    </div>
+                ) : (
+                    /* DENSE LIST VIEW (Mobile Optimized) */
+                    <div className="flex flex-col space-y-2 bg-slate-50 dark:bg-black/20 p-2 rounded-2xl border border-slate-200 dark:border-white/5">
+                        {filtered.map((item, idx) => {
+                            const styleConfig = TYPE_STYLE[item.type] || DEFAULT_STYLE;
+                            return (
+                                <button 
+                                    key={item.sku}
+                                    onClick={() => setSelectedItem(item)} 
+                                    className={`flex items-center justify-between p-3 sm:px-4 bg-white dark:bg-[#12121a] border border-slate-200 dark:border-white/10 rounded-xl hover:bg-slate-100 dark:hover:bg-white/5 text-left active:scale-[0.99] transition-all shadow-sm ${idx % 2 === 0 ? 'bg-white dark:bg-[#12121a]' : 'bg-slate-50/50 dark:bg-[#12121a]/50'}`}
+                                >
+                                    <div className="flex items-center gap-3 flex-1 min-w-0 pr-2">
+                                        <span className={`text-[10px] font-black uppercase px-2 py-1 rounded-lg w-16 text-center shrink-0 border shadow-sm ${styleConfig.badge}`}>
+                                            {item.type}
+                                        </span>
+                                        <div className="flex flex-col min-w-0 flex-1">
+                                            <div className="font-bold text-slate-800 dark:text-white text-xs sm:text-sm truncate w-full leading-tight">
+                                                {item.name}
+                                            </div>
+                                            {/* Hide SKU on extremely small screens to save space, show faintly otherwise */}
+                                            <div className="text-[10px] text-slate-400 dark:text-gray-600 font-mono truncate hidden sm:block mt-0.5">
+                                                {item.sku}
+                                            </div>
+                                        </div>
+                                    </div>
+                                    <div className="flex flex-col items-end shrink-0 pl-3 border-l border-slate-200 dark:border-white/10">
+                                        <div className={`text-lg sm:text-xl font-black tracking-tighter ${getStockColor(item.current_stock)}`}>
                                             {Number(item.current_stock).toLocaleString()}
                                         </div>
                                     </div>

@@ -1,7 +1,7 @@
 import React, { useState, useEffect, useMemo } from 'react';
 import {
     CalendarDays, Award, AlertTriangle, Camera,
-    DollarSign, Clock, ChevronLeft, ChevronRight, Activity, Users, Truck
+    DollarSign, Clock, ChevronLeft, ChevronRight, Activity, Users, Truck, X
 } from 'lucide-react';
 import { supabase } from '../services/supabase';
 
@@ -23,7 +23,14 @@ interface DailyMetrics {
     alarmCount: number;
     tripCount: number;
     tripEarnings: number;
-    tripDetails: string[];
+    tripDetails: {
+        id: string;
+        order_number: string;
+        customer: string;
+        items: any[];
+        notes: string;
+        displayString: string;
+    }[];
     photoCount: number;
     leaveStatus: string | null;
     shiftStart: string | null;
@@ -56,6 +63,7 @@ const PersonalMonthlyReport: React.FC<Props> = ({ user }) => {
     const [payroll, setPayroll] = useState<any | null>(null);
     const [deliveries, setDeliveries] = useState<any[]>([]);
     const [deliveryRates, setDeliveryRates] = useState<any[]>([]);
+    const [selectedTrip, setSelectedTrip] = useState<any | null>(null);
 
     const daysInMonth = new Date(selectedYear, selectedMonth, 0).getDate();
 
@@ -201,11 +209,11 @@ const PersonalMonthlyReport: React.FC<Props> = ({ user }) => {
 
                 const { data: deliveryData } = await supabase
                     .from('sales_orders')
-                    .select('order_date, pod_timestamp, zone, delivery_address, created_at, trip_origin, trip_drop_count')
+                    .select('id, order_number, customer, items, notes, order_date, pod_timestamp, deadline, zone, delivery_address, created_at, trip_origin, trip_drop_count')
                     .eq('driver_id', selectedEmployeeId) 
                     .eq('status', 'Delivered')
-                    .gte('order_date', startDateTs.split('T')[0])
-                    .lte('order_date', endDateTs.split('T')[0]);
+                    .gte('deadline', startDateTs.split('T')[0])
+                    .lte('deadline', endDateTs.split('T')[0]);
                 setDeliveries(deliveryData || []);
             } else {
                 setDeliveries([]);
@@ -260,13 +268,12 @@ const PersonalMonthlyReport: React.FC<Props> = ({ user }) => {
             // Leave
             const dayLeave = leaves.find(l => dateStr >= l.start_date && dateStr <= l.end_date);
 
-            // Deliveries (Strictly based on DO Date per user request)
             const dayDeliveries = deliveries.filter(d => {
-                const ts = d.order_date || d.created_at;
+                const ts = d.deadline || d.created_at;
                 return ts && ts.startsWith(dateStr);
             });
             const tripCount = dayDeliveries.length;
-            const tripDetails: string[] = [];
+            const tripDetails: any[] = [];
 
             let tripEarnings = 0;
             const rateMap: Record<string, any> = {};
@@ -292,7 +299,14 @@ const PersonalMonthlyReport: React.FC<Props> = ({ user }) => {
                 }
 
                 // Push formatting: "TAIPING ➞ KL (2 Drops)"
-                tripDetails.push(`${originRaw} ➞ ${displayZone} (${drops} Drop${drops > 1 ? 's' : ''})`);
+                tripDetails.push({
+                    id: t.id,
+                    order_number: t.order_number,
+                    customer: t.customer,
+                    items: t.items,
+                    notes: t.notes,
+                    displayString: `${originRaw} ➞ ${displayZone} (${drops} Drop${drops > 1 ? 's' : ''})`
+                });
             });
 
             matrix.push({
@@ -573,7 +587,13 @@ const PersonalMonthlyReport: React.FC<Props> = ({ user }) => {
                                                     {day.tripDetails && day.tripDetails.length > 0 ? (
                                                         <div className="flex flex-col items-center gap-1.5">
                                                             {day.tripDetails.map((td, idx) => (
-                                                                <span key={idx} className="text-[10px] bg-blue-500/10 text-blue-400 border border-blue-500/20 px-2 py-0.5 rounded font-mono shadow-sm">{td}</span>
+                                                                <button 
+                                                                    key={idx} 
+                                                                    onClick={() => setSelectedTrip(td)}
+                                                                    className="text-[10px] bg-blue-500/10 text-blue-400 border border-blue-500/20 hover:bg-blue-500/20 hover:text-blue-300 px-2 py-0.5 rounded font-mono shadow-sm cursor-pointer transition-colors"
+                                                                >
+                                                                    {td.displayString}
+                                                                </button>
                                                             ))}
                                                         </div>
                                                     ) : <span className="text-gray-700 font-mono">—</span>}
@@ -615,6 +635,102 @@ const PersonalMonthlyReport: React.FC<Props> = ({ user }) => {
                             </table>
                         </div>
                         
+                    </div>
+                </div>
+            )}
+            {/* Trip Detail Modal */}
+            {selectedTrip && (
+                <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/60 backdrop-blur-sm animate-in fade-in duration-200">
+                    <div className="bg-[#09090b] border border-slate-800 rounded-2xl w-full max-w-lg flex flex-col shadow-2xl shadow-black relative overflow-hidden">
+                        {/* Header */}
+                        <div className="p-5 border-b border-white/5 bg-slate-900/50 flex justify-between items-start">
+                            <div className="flex items-center gap-3">
+                                <div className="p-2.5 rounded-xl bg-blue-500/10 text-blue-400 border border-blue-500/20">
+                                    <Truck size={20} />
+                                </div>
+                                <div>
+                                    <h2 className="text-lg font-black text-white flex items-center gap-2">
+                                        {selectedTrip.order_number || 'Unknown DO'}
+                                    </h2>
+                                    <p className="text-[10px] uppercase font-bold text-gray-400 tracking-widest mt-0.5">
+                                        Trip Details
+                                    </p>
+                                </div>
+                            </div>
+                            <button 
+                                onClick={() => setSelectedTrip(null)}
+                                className="p-2 -mr-2 -mt-2 text-gray-500 hover:text-white hover:bg-white/5 rounded-xl transition-colors"
+                            >
+                                <X size={20} />
+                            </button>
+                        </div>
+                        
+                        {/* Body */}
+                        <div className="flex-1 overflow-y-auto p-5 space-y-5 custom-scrollbar bg-slate-950">
+                            
+                            {/* Route & Customer */}
+                            <div className="space-y-4 bg-[#0d0d12] border border-white/5 p-4 rounded-xl">
+                                <div>
+                                    <div className="text-[10px] text-gray-500 font-bold uppercase tracking-widest mb-1">Route summary</div>
+                                    <div className="text-sm font-bold text-blue-400 font-mono bg-blue-500/10 inline-block px-3 py-1 rounded border border-blue-500/20">
+                                        {selectedTrip.displayString}
+                                    </div>
+                                </div>
+                                {selectedTrip.customer && (
+                                    <div>
+                                        <div className="text-[10px] text-gray-500 font-bold uppercase tracking-widest mb-1">Customer</div>
+                                        <div className="text-sm font-bold text-gray-200">
+                                            {selectedTrip.customer}
+                                        </div>
+                                    </div>
+                                )}
+                            </div>
+
+                            {/* Items List */}
+                            <div>
+                                <h3 className="text-xs font-bold text-gray-400 uppercase tracking-widest mb-3 flex items-center gap-2">
+                                    <div className="w-1.5 h-1.5 rounded-full bg-blue-500"></div> Load Items
+                                </h3>
+                                
+                                {selectedTrip.items && selectedTrip.items.length > 0 ? (
+                                    <div className="space-y-2">
+                                        {selectedTrip.items.map((item: any, idx: number) => (
+                                            <div key={idx} className="bg-[#121214] border border-[#27272a] p-3 rounded-lg flex items-center justify-between gap-3 group hover:border-blue-500/30 transition-colors">
+                                                <div className="flex-1 min-w-0">
+                                                    <div className="text-xs font-bold text-gray-200 truncate">{item.product}</div>
+                                                    {(item.remark || item.sourceLocation) && (
+                                                        <div className="text-[10px] font-mono text-gray-500 mt-1 truncate">
+                                                            {item.sourceLocation && <span className="text-blue-400 mr-2">[{item.sourceLocation}]</span>}
+                                                            {item.remark}
+                                                        </div>
+                                                    )}
+                                                </div>
+                                                <div className="flex items-center gap-2 pl-3 border-l border-white/5 shrink-0">
+                                                    <span className="text-lg font-black font-mono text-white">x{item.quantity}</span>
+                                                </div>
+                                            </div>
+                                        ))}
+                                    </div>
+                                ) : (
+                                    <div className="p-4 bg-white/5 border border-white/5 rounded-xl text-center text-xs text-gray-500 font-bold">
+                                        No items recorded for this trip.
+                                    </div>
+                                )}
+                            </div>
+
+                            {/* Notes */}
+                            {selectedTrip.notes && (
+                                <div>
+                                    <h3 className="text-[10px] font-bold text-gray-500 uppercase tracking-widest mb-2 flex items-center gap-2">
+                                        Trip Notes
+                                    </h3>
+                                    <div className="bg-amber-500/5 border border-amber-500/20 p-3 rounded-xl text-xs text-amber-200/80 leading-relaxed font-medium">
+                                        {selectedTrip.notes}
+                                    </div>
+                                </div>
+                            )}
+
+                        </div>
                     </div>
                 </div>
             )}

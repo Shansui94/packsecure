@@ -675,9 +675,9 @@ function App() {
             case 'stock-movement':
                 return <StockMovement user={user} />;
             case 'stock-audit':
-                return <StockAudit />;
+                return <StockAudit user={user} />;
             case 'audit-report':
-                return <AuditReport />;
+                return <AuditReport user={user} />;
             case 'products':
             case 'product-library': // 兼容旧路由键
                 return <ProductLibrary />;

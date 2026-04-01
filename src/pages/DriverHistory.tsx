@@ -23,14 +23,11 @@ const DriverHistory: React.FC<DriverHistoryProps> = ({ user }) => {
                 .select('*')
                 .eq('driver_id', user.uid)
                 .eq('status', 'Delivered')
-                .order('pod_timestamp', { ascending: false });
+                .order('deadline', { ascending: false });
 
             if (selectedDate) {
-                // Filter by POD timestamp date
-                // pod_timestamp is ISO string, so we use gte/lte for the day
-                const startOfDay = new Date(selectedDate).toISOString();
-                const endOfDay = new Date(new Date(selectedDate).setHours(23, 59, 59, 999)).toISOString();
-                query = query.gte('pod_timestamp', startOfDay).lte('pod_timestamp', endOfDay);
+                // Filter by Deadline Date
+                query = query.gte('deadline', selectedDate).lte('deadline', selectedDate + 'T23:59:59');
             }
 
             const { data } = await query;
@@ -112,9 +109,16 @@ const DriverHistory: React.FC<DriverHistoryProps> = ({ user }) => {
                                 </span>
                             </div>
 
-                            <div className="flex items-center gap-2 text-xs text-slate-400 font-mono mt-3 pt-3 border-t border-slate-800">
-                                <Calendar size={12} />
-                                {order.pod_timestamp ? new Date(order.pod_timestamp).toLocaleString() : (order as any).deliveryDate}
+                            <div className="flex flex-col gap-1 mt-3 pt-3 border-t border-slate-800">
+                                <div className="flex items-center gap-2 text-xs text-blue-400 font-bold uppercase tracking-widest">
+                                    <Calendar size={12} className="text-blue-500" />
+                                    Delivery Date: {(order as any).deliveryDate}
+                                </div>
+                                {order.pod_timestamp && (
+                                    <div className="text-[10px] text-slate-600 font-mono flex items-center gap-2">
+                                        System Logged: {new Date(order.pod_timestamp).toLocaleString()}
+                                    </div>
+                                )}
                             </div>
                         </div>
                     ))

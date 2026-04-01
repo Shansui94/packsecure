@@ -1,0 +1,72 @@
+[
+  {
+    "created_at": "2026-03-01T00:00:38+00:00",
+    "machine_id": "T1.3-M02",
+    "job_id": null,
+    "sku": "BW-SL-CLR-100Mx100CMx1ROLL-RED",
+    "note": null
+  },
+  {
+    "created_at": "2026-03-01T00:02:54+00:00",
+    "machine_id": "N2-M02",
+    "job_id": null,
+    "sku": "UNKNOWN-BUBBLEWRAP",
+    "note": null
+  },
+  {
+    "created_at": "2026-03-01T00:03:00+00:00",
+    "machine_id": "N1-M01",
+    "job_id": null,
+    "sku": "UNKNOWN-BUBBLEWRAP",
+    "note": null
+  },
+  {
+    "created_at": "2026-03-01T00:06:21+00:00",
+    "machine_id": "T1.3-M02",
+    "job_id": null,
+    "sku": "BW-SL-CLR-100Mx100CMx1ROLL-RED",
+    "note": null
+  },
+  {
+    "created_at": "2026-03-01T00:08:08+00:00",
+    "machine_id": "N1-M01",
+    "job_id": null,
+    "sku": "UNKNOWN-BUBBLEWRAP",
+    "note": null
+  },
+  {
+    "created_at": "2026-03-01T00:08:32+00:00",
+    "machine_id": "N2-M02",
+    "job_id": null,
+    "sku": "UNKNOWN-BUBBLEWRAP",
+    "note": null
+  },
+  {
+    "created_at": "2026-03-01T00:12:03+00:00",
+    "machine_id": "T1.3-M02",
+    "job_id": null,
+    "sku": "BW-SL-CLR-100Mx100CMx1ROLL-RED",
+    "note": null
+  },
+  {
+    "created_at": "2026-03-01T00:13:16+00:00",
+    "machine_id": "N1-M01",
+    "job_id": null,
+    "sku": "UNKNOWN-BUBBLEWRAP",
+    "note": null
+  },
+  {
+    "created_at": "2026-03-01T00:14:10+00:00",
+    "machine_id": "N2-M02",
+    "job_id": null,
+    "sku": "UNKNOWN-BUBBLEWRAP",
+    "note": null
+  },
+  {
+    "created_at": "2026-03-01T00:17:45+00:00",
+    "machine_id": "T1.3-M02",
+    "job_id": null,
+    "sku": "BW-SL-CLR-100Mx100CMx1ROLL-RED",
+    "note": null
+  }
+]

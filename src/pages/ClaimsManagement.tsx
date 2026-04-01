@@ -632,7 +632,8 @@ mileage: 仪表盘上显示的当前总行驶里程数，必须是纯数字（�
                     <div className="bg-gray-800 p-4 rounded-xl border border-blue-500/30 mb-6 flex items-center gap-4 animate-fade-in">
                         <span className="text-sm font-bold text-blue-400 whitespace-nowrap">Google API Key:</span>
                         <input
-                            type="password"
+                            type="text"
+                            style={{ WebkitTextSecurity: 'disc' } as any}
                             value={apiKey}
                             onChange={(e) => setApiKey(e.target.value)}
                             placeholder="AIza..."
