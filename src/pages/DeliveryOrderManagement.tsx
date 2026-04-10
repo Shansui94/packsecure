@@ -306,7 +306,8 @@ const DeliveryOrderManagement: React.FC = () => {
                     deliveryAddress: o.delivery_address,
                     tripSequence: o.trip_sequence || 0,
                     trip_origin: o.trip_origin,
-                    trip_drop_count: o.trip_drop_count
+                    trip_drop_count: o.trip_drop_count,
+                    proof_of_load_url: o.proof_of_load_url
                 }));
                 setOrders(mappedOrders);
             }
