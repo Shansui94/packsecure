@@ -1,6 +1,6 @@
 import React, { useState, useEffect, useMemo } from 'react';
 import { supabase } from '../services/supabase';
-import { Search, RefreshCw, Box, Filter, X, TrendingUp, TrendingDown, Package, Clipboard, ArrowUpDown, Truck, Calendar, MapPin, Hash, ChevronLeft, ChevronRight, LayoutGrid, List } from 'lucide-react';
+import { Search, RefreshCw, Box, Filter, X, TrendingUp, TrendingDown, Clipboard, ArrowUpDown, Truck, MapPin, Hash, ChevronLeft, ChevronRight, LayoutGrid, List } from 'lucide-react';
 import { WAREHOUSES } from '../data/factoryData';
 
 // --- TYPES ---
@@ -141,7 +141,7 @@ const DetailPanel: React.FC<{ item: StockRow; locFilter: string; onClose: () => 
                             
                             rows.forEach(r => {
                                 if (r.ref_doc && doDriverMap.has(r.ref_doc)) {
-                                    r.do_driver_name = doDriverMap.get(r.ref_doc);
+                                    (r as any).do_driver_name = doDriverMap.get(r.ref_doc);
                                 }
                             });
                         }
@@ -649,7 +649,7 @@ const LiveStock: React.FC = () => {
                     /* CATEGORISED HORIZONTAL ROW VIEW */
                     <div className="space-y-6">
                         {(() => {
-                            const renderMiniCard = (item: StockItem) => {
+                            const renderMiniCard = (item: StockRow) => {
                                 const badge = getStockBadge(item.current_stock);
                                 const styleConfig = TYPE_STYLE[item.type] || DEFAULT_STYLE;
                                 return (
@@ -674,7 +674,7 @@ const LiveStock: React.FC = () => {
                                 );
                             };
 
-                            const renderCategorisedRow = (title: string, items: StockItem[]) => {
+                            const renderCategorisedRow = (title: string, items: StockRow[]) => {
                                 if (items.length === 0) return null;
                                 return (
                                     <div className="mb-6">
@@ -686,7 +686,7 @@ const LiveStock: React.FC = () => {
                                 );
                             };
 
-                            const isBW = (i: StockItem) => i.type === 'Bubble Wrap' || i.sku.startsWith('BW-');
+                            const isBW = (i: StockRow) => i.type === 'Bubble Wrap' || i.sku.startsWith('BW-');
 
                             const slClear = filtered.filter(i => isBW(i) && i.sku.includes('-SL-CLR'));
                             const dlClear = filtered.filter(i => isBW(i) && i.sku.includes('-DL-CLR'));
