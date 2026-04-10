@@ -1,0 +1,282 @@
+[
+  {
+    "sku": "AWB-2000STACK-4",
+    "change_qty": -12,
+    "ref_doc": "DO-2026-6156",
+    "notes": "补救修复: DO-2026-6156 自动出库",
+    "timestamp": "2026-04-08T08:00:00+00:00"
+  },
+  {
+    "sku": "BW-SL-CLR-100Mx100CMx1ROLL-RED",
+    "change_qty": -10,
+    "ref_doc": "DO-2026-3115",
+    "notes": "补救修复: DO-2026-3115 自动出库",
+    "timestamp": "2026-04-08T08:00:00+00:00"
+  },
+  {
+    "sku": "AWB-350ROLL-24",
+    "change_qty": -12,
+    "ref_doc": "DO-2026-6156",
+    "notes": "补救修复: DO-2026-6156 自动出库",
+    "timestamp": "2026-04-08T08:00:00+00:00"
+  },
+  {
+    "sku": "SF-CLEAR",
+    "change_qty": -288,
+    "ref_doc": "DO-2026-9374",
+    "notes": "补救修复: DO-2026-9374 自动出库",
+    "timestamp": "2026-04-08T08:00:00+00:00"
+  },
+  {
+    "sku": "BW-SL-CLR-100Mx50CMx2ROLL-ORN",
+    "change_qty": -82,
+    "ref_doc": "DO-2026-3965",
+    "notes": "补救修复: DO-2026-3965 自动出库",
+    "timestamp": "2026-04-08T08:00:00+00:00"
+  },
+  {
+    "sku": "AIRTUBE-25CM-300M",
+    "change_qty": -12,
+    "ref_doc": "DO-2026-6156",
+    "notes": "补救修复: DO-2026-6156 自动出库",
+    "timestamp": "2026-04-08T08:00:00+00:00"
+  },
+  {
+    "sku": "SF-CLEAR",
+    "change_qty": -20,
+    "ref_doc": "DO-2026-6156",
+    "notes": "补救修复: DO-2026-6156 自动出库",
+    "timestamp": "2026-04-08T08:00:00+00:00"
+  },
+  {
+    "sku": "BW-DL-CLR-100Mx100CMx1ROLL-YEL",
+    "change_qty": -81,
+    "ref_doc": "DO-2026-2819",
+    "notes": "补救修复: DO-2026-2819 自动出库",
+    "timestamp": "2026-04-08T08:00:00+00:00"
+  },
+  {
+    "sku": "AWB-5000STACK-2",
+    "change_qty": -6,
+    "ref_doc": "DO-2026-1465",
+    "notes": "补救修复: DO-2026-1465 自动出库",
+    "timestamp": "2026-04-08T08:00:00+00:00"
+  },
+  {
+    "sku": "CUKUPP-CLEAR-TAPE-160M",
+    "change_qty": -2,
+    "ref_doc": "DO-2026-1465",
+    "notes": "补救修复: DO-2026-1465 自动出库",
+    "timestamp": "2026-04-08T08:00:00+00:00"
+  },
+  {
+    "sku": "BW-DL-CLR-100Mx100CMx1ROLL-RED",
+    "change_qty": -60,
+    "ref_doc": "DO-2026-4643",
+    "notes": "补救修复: DO-2026-4643 自动出库",
+    "timestamp": "2026-04-08T08:00:00+00:00"
+  },
+  {
+    "sku": "BW-SL-CLR-100Mx50CMx2ROLL-ORN",
+    "change_qty": -65,
+    "ref_doc": "DO-2026-6287",
+    "notes": "补救修复: DO-2026-6287 自动出库",
+    "timestamp": "2026-04-08T08:00:00+00:00"
+  },
+  {
+    "sku": "CUKUPP-W38",
+    "change_qty": -6,
+    "ref_doc": "DO-2026-6156",
+    "notes": "补救修复: DO-2026-6156 自动出库",
+    "timestamp": "2026-04-08T08:00:00+00:00"
+  },
+  {
+    "sku": "BW-DL-CLR-100Mx100CMx1ROLL-YEL",
+    "change_qty": -78,
+    "ref_doc": "DO-2026-6156",
+    "notes": "补救修复: DO-2026-6156 自动出库",
+    "timestamp": "2026-04-08T08:00:00+00:00"
+  },
+  {
+    "sku": "BW-SL-BLK-100Mx100CMx1ROLL-BLU",
+    "change_qty": -82,
+    "ref_doc": "DO-2026-6336",
+    "notes": "补救修复: DO-2026-6336 自动出库",
+    "timestamp": "2026-04-08T08:00:00+00:00"
+  },
+  {
+    "sku": "BW-DL-CLR-100Mx100CMx1ROLL-YEL",
+    "change_qty": -20,
+    "ref_doc": "DO-2026-1710",
+    "notes": "补救修复: DO-2026-1710 自动出库",
+    "timestamp": "2026-04-08T08:00:00+00:00"
+  },
+  {
+    "sku": "SF-BLACK",
+    "change_qty": -2,
+    "ref_doc": "DO-2026-1710",
+    "notes": "补救修复: DO-2026-1710 自动出库",
+    "timestamp": "2026-04-08T08:00:00+00:00"
+  },
+  {
+    "sku": "BW-SL-CLR-100Mx50CMx2ROLL-ORN",
+    "change_qty": -45,
+    "ref_doc": "DO-2026-1465",
+    "notes": "补救修复: DO-2026-1465 自动出库",
+    "timestamp": "2026-04-08T08:00:00+00:00"
+  },
+  {
+    "sku": "CUKUPP-FRAGILE-TAPE-80M",
+    "change_qty": -20,
+    "ref_doc": "DO-2026-3744",
+    "notes": "补救修复: DO-2026-3744 自动出库",
+    "timestamp": "2026-04-08T08:00:00+00:00"
+  },
+  {
+    "sku": "BW-SL-CLR-100Mx50CMx2ROLL-ORN",
+    "change_qty": -20,
+    "ref_doc": "DO-2026-1710",
+    "notes": "补救修复: DO-2026-1710 自动出库",
+    "timestamp": "2026-04-08T08:00:00+00:00"
+  },
+  {
+    "sku": "BW-SL-CLR-100Mx100CMx1ROLL-RED",
+    "change_qty": -20,
+    "ref_doc": "DO-2026-1465",
+    "notes": "补救修复: DO-2026-1465 自动出库",
+    "timestamp": "2026-04-08T08:00:00+00:00"
+  },
+  {
+    "sku": "BW-SL-CLR-100Mx100CMx1ROLL-BLU",
+    "change_qty": -82,
+    "ref_doc": "DO-2026-2061",
+    "notes": "补救修复: DO-2026-2061 自动出库",
+    "timestamp": "2026-04-08T08:00:00+00:00"
+  },
+  {
+    "sku": "AWB-350ROLL-24",
+    "change_qty": -30,
+    "ref_doc": "DO-2026-7309",
+    "notes": "Auto-deduct: Order Created",
+    "timestamp": "2026-04-08T08:00:00+00:00"
+  },
+  {
+    "sku": "BW-SL-CLR-100Mx100CMx1ROLL-RED",
+    "change_qty": -82,
+    "ref_doc": "DO-2026-2034",
+    "notes": "补救修复: DO-2026-2034 自动出库",
+    "timestamp": "2026-04-08T08:00:00+00:00"
+  },
+  {
+    "sku": "BW-DL-CLR-100Mx100CMx1ROLL-YEL",
+    "change_qty": -50,
+    "ref_doc": "DO-2026-3862",
+    "notes": "补救修复: DO-2026-3862 自动出库",
+    "timestamp": "2026-04-08T08:00:00+00:00"
+  },
+  {
+    "sku": "BW-SL-CLR-100Mx33CMx3ROLL-BLU",
+    "change_qty": -15,
+    "ref_doc": "DO-2026-4643",
+    "notes": "补救修复: DO-2026-4643 自动出库",
+    "timestamp": "2026-04-08T08:00:00+00:00"
+  },
+  {
+    "sku": "AIRTUBE-60CM-300M",
+    "change_qty": -10,
+    "ref_doc": "DO-2026-7309",
+    "notes": "Auto-deduct: Order Created",
+    "timestamp": "2026-04-08T08:00:00+00:00"
+  },
+  {
+    "sku": "CUKUPP-W25",
+    "change_qty": -6,
+    "ref_doc": "DO-2026-6156",
+    "notes": "补救修复: DO-2026-6156 自动出库",
+    "timestamp": "2026-04-08T08:00:00+00:00"
+  },
+  {
+    "sku": "SF-BLACK",
+    "change_qty": -4,
+    "ref_doc": "DO-2026-1465",
+    "notes": "补救修复: DO-2026-1465 自动出库",
+    "timestamp": "2026-04-08T08:00:00+00:00"
+  },
+  {
+    "sku": "BW-SL-CLR-100Mx100CMx1ROLL-RED",
+    "change_qty": -82,
+    "ref_doc": "DO-2026-2901",
+    "notes": "补救修复: DO-2026-2901 自动出库",
+    "timestamp": "2026-04-08T08:00:00+00:00"
+  },
+  {
+    "sku": "BW-SL-BLK-100Mx100CMx1ROLL-BLU",
+    "change_qty": -82,
+    "ref_doc": "DO-2026-2030",
+    "notes": "补救修复: DO-2026-2030 自动出库",
+    "timestamp": "2026-04-08T08:00:00+00:00"
+  },
+  {
+    "sku": "BW-SL-CLR-100Mx100CMx1ROLL-RED",
+    "change_qty": -42,
+    "ref_doc": "DO-2026-1710",
+    "notes": "补救修复: DO-2026-1710 自动出库",
+    "timestamp": "2026-04-08T08:00:00+00:00"
+  },
+  {
+    "sku": "SF-CLEAR",
+    "change_qty": -60,
+    "ref_doc": "DO-2026-7309",
+    "notes": "Auto-deduct: Order Created",
+    "timestamp": "2026-04-08T08:00:00+00:00"
+  },
+  {
+    "sku": "W28-ROLL",
+    "change_qty": -247,
+    "ref_doc": "DO-2026-7309",
+    "notes": "Auto-deduct: Order Created",
+    "timestamp": "2026-04-08T08:00:00+00:00"
+  },
+  {
+    "sku": "SF-CLEAR",
+    "change_qty": -5,
+    "ref_doc": "DO-2026-1710",
+    "notes": "补救修复: DO-2026-1710 自动出库",
+    "timestamp": "2026-04-08T08:00:00+00:00"
+  },
+  {
+    "sku": "BW-SL-CLR-100Mx100CMx1ROLL-RED",
+    "change_qty": -30,
+    "ref_doc": "DO-2026-3862",
+    "notes": "补救修复: DO-2026-3862 自动出库",
+    "timestamp": "2026-04-08T08:00:00+00:00"
+  },
+  {
+    "sku": "BW-SL-CLR-100Mx100CMx1ROLL-RED",
+    "change_qty": -60,
+    "ref_doc": "DO-2026-7309",
+    "notes": "Auto-deduct: Order Created",
+    "timestamp": "2026-04-08T08:00:00+00:00"
+  },
+  {
+    "sku": "BW-SL-CLR-100Mx100CMx1ROLL-BLU",
+    "change_qty": -6,
+    "ref_doc": "DO-2026-4643",
+    "notes": "补救修复: DO-2026-4643 自动出库",
+    "timestamp": "2026-04-08T08:00:00+00:00"
+  },
+  {
+    "sku": "AIRTUBE-40CM-300M",
+    "change_qty": -10,
+    "ref_doc": "DO-2026-7309",
+    "notes": "Auto-deduct: Order Created",
+    "timestamp": "2026-04-08T08:00:00+00:00"
+  },
+  {
+    "sku": "BW-DL-CLR-100Mx100CMx1ROLL-YEL",
+    "change_qty": -58,
+    "ref_doc": "DO-2026-3115",
+    "notes": "补救修复: DO-2026-3115 自动出库",
+    "timestamp": "2026-04-08T08:00:00+00:00"
+  }
+]

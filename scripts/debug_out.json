@@ -1,0 +1,198 @@
+{
+  "logs": [
+    {
+      "log_id": "806a2f75-4d9e-4945-89f1-82db42950d43",
+      "job_id": null,
+      "sku": "BW-SL-CLR-100Mx100CMx1ROLL-RED",
+      "machine_id": "T1.3-M02",
+      "operator_id": null,
+      "start_time": null,
+      "end_time": null,
+      "output_qty": 1,
+      "reject_qty": 0,
+      "batch_code": null,
+      "created_at": "2026-04-03T01:11:02.478486+00:00",
+      "note": null
+    },
+    {
+      "log_id": "c214b4f7-c0c3-4e96-8313-1f3ab14b7f6f",
+      "job_id": null,
+      "sku": "BW-DL-CLR-100Mx100CMx1ROLL-YEL",
+      "machine_id": "T1.2-M01",
+      "operator_id": null,
+      "start_time": null,
+      "end_time": null,
+      "output_qty": 1,
+      "reject_qty": 0,
+      "batch_code": null,
+      "created_at": "2026-04-03T01:10:09.64105+00:00",
+      "note": null
+    },
+    {
+      "log_id": "3b5842a4-34bc-4c54-8e2f-badc82cfe225",
+      "job_id": null,
+      "sku": "BW-DL-CLR-100Mx100CMx1ROLL-YEL",
+      "machine_id": "T1.2-M01",
+      "operator_id": null,
+      "start_time": null,
+      "end_time": null,
+      "output_qty": 1,
+      "reject_qty": 0,
+      "batch_code": null,
+      "created_at": "2026-04-03T01:10:09.64105+00:00",
+      "note": null
+    },
+    {
+      "log_id": "e3a9e1e6-f92b-4a0a-a1e8-7bead8f881d6",
+      "job_id": null,
+      "sku": "BW-SL-CLR-100Mx100CMx1ROLL-RED",
+      "machine_id": "T1.3-M02",
+      "operator_id": null,
+      "start_time": null,
+      "end_time": null,
+      "output_qty": 1,
+      "reject_qty": 0,
+      "batch_code": null,
+      "created_at": "2026-04-03T01:05:20.587768+00:00",
+      "note": null
+    },
+    {
+      "log_id": "81761aab-afe9-4b2d-931f-5e8fce736136",
+      "job_id": null,
+      "sku": "BW-DL-CLR-100Mx100CMx1ROLL-YEL",
+      "machine_id": "T1.2-M01",
+      "operator_id": null,
+      "start_time": null,
+      "end_time": null,
+      "output_qty": 1,
+      "reject_qty": 0,
+      "batch_code": null,
+      "created_at": "2026-04-03T01:04:58.100432+00:00",
+      "note": null
+    },
+    {
+      "log_id": "c6386cf2-a589-4497-8779-7690502e9353",
+      "job_id": null,
+      "sku": "BW-DL-CLR-100Mx100CMx1ROLL-YEL",
+      "machine_id": "T1.2-M01",
+      "operator_id": null,
+      "start_time": null,
+      "end_time": null,
+      "output_qty": 1,
+      "reject_qty": 0,
+      "batch_code": null,
+      "created_at": "2026-04-03T01:04:58.100432+00:00",
+      "note": null
+    },
+    {
+      "log_id": "152f10fb-7ee2-4d23-a11a-8281382e2064",
+      "job_id": null,
+      "sku": "BW-DL-CLR-100Mx100CMx1ROLL-YEL",
+      "machine_id": "T1.2-M01",
+      "operator_id": null,
+      "start_time": null,
+      "end_time": null,
+      "output_qty": 1,
+      "reject_qty": 0,
+      "batch_code": null,
+      "created_at": "2026-04-03T00:59:47.118487+00:00",
+      "note": null
+    },
+    {
+      "log_id": "de435cb2-6c08-489e-9ff1-b53d4c2818ed",
+      "job_id": null,
+      "sku": "BW-DL-CLR-100Mx100CMx1ROLL-YEL",
+      "machine_id": "T1.2-M01",
+      "operator_id": null,
+      "start_time": null,
+      "end_time": null,
+      "output_qty": 1,
+      "reject_qty": 0,
+      "batch_code": null,
+      "created_at": "2026-04-03T00:59:47.118487+00:00",
+      "note": null
+    },
+    {
+      "log_id": "fbaab3f7-1286-4b36-b6c6-2339d48a3375",
+      "job_id": null,
+      "sku": "BW-SL-CLR-100Mx100CMx1ROLL-RED",
+      "machine_id": "T1.3-M02",
+      "operator_id": null,
+      "start_time": null,
+      "end_time": null,
+      "output_qty": 1,
+      "reject_qty": 0,
+      "batch_code": null,
+      "created_at": "2026-04-03T00:59:38.189036+00:00",
+      "note": null
+    },
+    {
+      "log_id": "e5d534a2-cf2e-45a4-a7aa-d5387b8a637d",
+      "job_id": null,
+      "sku": "BW-DL-CLR-100Mx100CMx1ROLL-YEL",
+      "machine_id": "T1.2-M01",
+      "operator_id": null,
+      "start_time": null,
+      "end_time": null,
+      "output_qty": 1,
+      "reject_qty": 0,
+      "batch_code": null,
+      "created_at": "2026-04-03T00:54:36.017157+00:00",
+      "note": null
+    }
+  ],
+  "heartbeats": null,
+  "active": [
+    {
+      "machine_id": "T1.3-M02",
+      "lane_id": "Single",
+      "product_sku": "BW-SL-CLR-100Mx100CMx1ROLL-RED",
+      "updated_at": "2026-04-03T00:06:44.428+00:00",
+      "cutting_size": 100,
+      "yield": 1
+    }
+  ],
+  "master": null,
+  "all_active": [
+    {
+      "machine_id": "T1.3-M02",
+      "lane_id": "Single",
+      "product_sku": "BW-SL-CLR-100Mx100CMx1ROLL-RED",
+      "updated_at": "2026-04-03T00:06:44.428+00:00",
+      "cutting_size": 100,
+      "yield": 1
+    },
+    {
+      "machine_id": "T1.2-M01",
+      "lane_id": "Lane1",
+      "product_sku": "BW-DL-CLR-100Mx100CMx1ROLL-YEL",
+      "updated_at": "2026-04-03T00:08:11.644+00:00",
+      "cutting_size": 100,
+      "yield": 1
+    },
+    {
+      "machine_id": "T1.2-M01",
+      "lane_id": "Lane2",
+      "product_sku": "BW-DL-CLR-100Mx100CMx1ROLL-YEL",
+      "updated_at": "2026-04-03T00:08:17.76+00:00",
+      "cutting_size": 100,
+      "yield": 1
+    },
+    {
+      "machine_id": "N1-M01",
+      "lane_id": "Single",
+      "product_sku": "BW-SL-CLR-100Mx100CMx1ROLL-RED",
+      "updated_at": "2026-03-30T08:26:15.258+00:00",
+      "cutting_size": 100,
+      "yield": 1
+    },
+    {
+      "machine_id": "N2-M02",
+      "lane_id": "Single",
+      "product_sku": "BW-SL-SLR-100Mx100CMx1ROLL-RED",
+      "updated_at": "2026-03-04T07:39:30.698+00:00",
+      "cutting_size": 100,
+      "yield": 1
+    }
+  ]
+}

@@ -1,0 +1,9 @@
+Checking DO: DO-2026-0265
+
+=== SALES ORDER ===
+Created At: 2026/3/31 19:13:06
+Order Date: 2026-03-31
+Driver ID: 33309909-7102-41da-adc7-44606fdcb09a
+Status: Delivered
+Delivery Address: bukit mertajam 
+POD (Delivered) Timestamp: 2026/3/31 21:48:30

@@ -1,0 +1,55 @@
+{
+  "itemResponse": {
+    "error": null,
+    "data": [
+      {
+        "sku": "CUKUPP-DARKGREEN-17",
+        "name": "CUKUPP-DARKGREEN-17",
+        "type": "FG",
+        "supply_type": "Manufactured",
+        "uom": "Unit",
+        "width_mm": null,
+        "length_m": null,
+        "thickness_mic": null,
+        "net_weight_kg": null,
+        "core_weight_kg": null,
+        "gross_weight_kg": null,
+        "pack_qty": null,
+        "volume_cbm": null,
+        "box_dims": null,
+        "min_stock_level": null,
+        "reorder_qty": null,
+        "estimated_cost": null,
+        "status": "Active",
+        "created_at": "2026-01-28T08:52:57.466891+00:00",
+        "supplier": null,
+        "brand": null,
+        "function_usage": null,
+        "legacy_code": null,
+        "packaging_type": null,
+        "description": null,
+        "min_stock_alert": 0,
+        "pack_length_cm": 0,
+        "pack_width_cm": 0,
+        "pack_height_cm": 0,
+        "volume_m3": 0,
+        "nickname": null
+      }
+    ],
+    "count": null,
+    "status": 200,
+    "statusText": "OK"
+  },
+  "triggerItemResponse": {
+    "error": {
+      "code": "42703",
+      "details": null,
+      "hint": null,
+      "message": "column master_items_v2.product_sku does not exist"
+    },
+    "data": null,
+    "count": null,
+    "status": 400,
+    "statusText": "Bad Request"
+  }
+}

@@ -1,0 +1,29 @@
+=== MERAH (BW-SL-CLR-100Mx100CMx1ROLL-RED) Live Stock ===
+- OPM Lama: -190
+- SPD: 0
+- Unassigned: -10
+- Nilai: -174
+
+=> Total Live Stock: -374
+
+=== Recent Ledger Entries for MERAH ===
+[2026-04-09T08:00:00+00:00] Transfer Out | Qty: -82 | Ref: DO-2026-3592 | Notes: Auto-deduct: Order Created
+[2026-04-09T08:00:00+00:00] Transfer Out | Qty: -38 | Ref: DO-2026-5681 | Notes: Auto-deduct: Order Created
+[2026-04-09T08:00:00+00:00] Transfer Out | Qty: -30 | Ref: DO-2026-0586 | Notes: Auto-deduct: Order Created
+[2026-04-09T08:00:00+00:00] Transfer Out | Qty: -82 | Ref: DO-2026-3403 | Notes: Auto-deduct: Order Created
+[2026-04-09T08:00:00+00:00] Transfer Out | Qty: -52 | Ref: DO-2026-9600 | Notes: Auto-deduct: Order Created
+[2026-04-09T08:00:00+00:00] Transfer Out | Qty: -50 | Ref: DO-2026-7984 | Notes: Auto-deduct: Order Created
+[2026-04-09T08:00:00+00:00] Transfer Out | Qty: -21 | Ref: DO-2026-5258 | Notes: Auto-deduct: Order Created
+[2026-04-09T08:00:00+00:00] Transfer Out | Qty: -74 | Ref: DO-2026-2862 | Notes: Auto-deduct: Order Created
+[2026-04-08T11:14:55.816595+00:00] Production | Qty: 1 | Ref: db0f5f22-a2e7-428e-a8bd-5e1d4e67d950 | Notes: API-Log: T1.3-M02
+[2026-04-08T11:14:19.714061+00:00] Production | Qty: 1 | Ref: 9f58a7fd-3ba5-4933-8870-2817ca42a16f | Notes: API-Log: T1.2-M01
+[2026-04-08T11:14:19.714061+00:00] Production | Qty: 1 | Ref: 287489fc-ce7a-4985-b812-9ed2312a3781 | Notes: API-Log: T1.2-M01
+[2026-04-08T11:09:13.916279+00:00] Production | Qty: 1 | Ref: ed3fc1a5-d8c9-416c-bc52-eac9d0f665ab | Notes: API-Log: T1.3-M02
+[2026-04-08T11:09:08.442117+00:00] Production | Qty: 1 | Ref: 7e2b0505-9d2d-45b3-abc0-81c80cc32ec5 | Notes: API-Log: T1.2-M01
+[2026-04-08T11:09:08.442117+00:00] Production | Qty: 1 | Ref: 8823a441-dc11-4d6c-941d-d67dc5e6f216 | Notes: API-Log: T1.2-M01
+[2026-04-08T11:03:56.658571+00:00] Production | Qty: 1 | Ref: 2fca1796-bdd0-4682-b5f5-43f26f54781e | Notes: API-Log: T1.2-M01
+[2026-04-08T11:03:56.658571+00:00] Production | Qty: 1 | Ref: 6d6613ae-9854-46d4-a579-76de2dc45c75 | Notes: API-Log: T1.2-M01
+[2026-04-08T11:03:31.793844+00:00] Production | Qty: 1 | Ref: 24668a71-e38d-414a-bbb6-549f7f09cb42 | Notes: API-Log: T1.3-M02
+[2026-04-08T10:58:45.742914+00:00] Production | Qty: 1 | Ref: f4c47348-0241-4709-9000-0ba4d961f516 | Notes: API-Log: T1.2-M01
+[2026-04-08T10:58:45.742914+00:00] Production | Qty: 1 | Ref: c0d2f50f-1bf1-487d-beba-9e24994ca55e | Notes: API-Log: T1.2-M01
+[2026-04-08T10:57:49.745513+00:00] Production | Qty: 1 | Ref: 18efd24a-4160-48d7-b05b-10125f18c9f0 | Notes: API-Log: T1.3-M02

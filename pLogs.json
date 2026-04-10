@@ -1,0 +1,5707 @@
+[
+  {
+    "log_id": "ebb2645a-ea82-418a-b17e-7876722b7e56",
+    "created_at": "2026-04-01T00:02:42.503812+00:00",
+    "machine_id": "T1.3-M02",
+    "sku": "BW-SL-CLR-100Mx100CMx1ROLL-RED",
+    "output_qty": 1
+  },
+  {
+    "log_id": "8003a751-3057-4658-ae48-352b729592e4",
+    "created_at": "2026-04-01T00:04:40.358963+00:00",
+    "machine_id": "T1.2-M01",
+    "sku": "BW-SL-CLR-100Mx100CMx1ROLL-RED",
+    "output_qty": 1
+  },
+  {
+    "log_id": "eaad3ef2-c284-4dec-998e-fefb7c46e2a6",
+    "created_at": "2026-04-01T00:04:40.358963+00:00",
+    "machine_id": "T1.2-M01",
+    "sku": "BW-SL-CLR-100Mx100CMx1ROLL-RED",
+    "output_qty": 1
+  },
+  {
+    "log_id": "8548f3d5-7ee7-4369-be05-1b1591bd2a95",
+    "created_at": "2026-04-01T00:08:24.641598+00:00",
+    "machine_id": "T1.3-M02",
+    "sku": "BW-SL-CLR-100Mx100CMx1ROLL-RED",
+    "output_qty": 1
+  },
+  {
+    "log_id": "09453ed8-b8f0-4943-99c1-80c9e0136330",
+    "created_at": "2026-04-01T00:10:01.575906+00:00",
+    "machine_id": "T1.2-M01",
+    "sku": "BW-SL-CLR-100Mx100CMx1ROLL-RED",
+    "output_qty": 1
+  },
+  {
+    "log_id": "ac92e3eb-4b33-4db9-a61f-2a29db49cbc0",
+    "created_at": "2026-04-01T00:10:01.575906+00:00",
+    "machine_id": "T1.2-M01",
+    "sku": "BW-SL-CLR-100Mx100CMx1ROLL-RED",
+    "output_qty": 1
+  },
+  {
+    "log_id": "a0c74965-d9db-43d9-a9c0-5ef1ed91eb3a",
+    "created_at": "2026-04-01T00:14:06.881193+00:00",
+    "machine_id": "T1.3-M02",
+    "sku": "BW-SL-CLR-100Mx100CMx1ROLL-RED",
+    "output_qty": 1
+  },
+  {
+    "log_id": "d91a9e3b-1978-4188-b453-6ae35e43e5d1",
+    "created_at": "2026-04-01T00:15:23.842425+00:00",
+    "machine_id": "T1.2-M01",
+    "sku": "BW-SL-CLR-100Mx100CMx1ROLL-RED",
+    "output_qty": 1
+  },
+  {
+    "log_id": "bf3917a0-2fd2-4f23-9a03-a133ef1d5293",
+    "created_at": "2026-04-01T00:15:23.842425+00:00",
+    "machine_id": "T1.2-M01",
+    "sku": "BW-SL-CLR-100Mx100CMx1ROLL-RED",
+    "output_qty": 1
+  },
+  {
+    "log_id": "d62a5512-f9ee-4cf1-a213-655a7c8331bf",
+    "created_at": "2026-04-01T00:19:48.967382+00:00",
+    "machine_id": "T1.3-M02",
+    "sku": "BW-SL-CLR-100Mx100CMx1ROLL-RED",
+    "output_qty": 1
+  },
+  {
+    "log_id": "2b6b834d-cf67-4340-a425-26baabcccc92",
+    "created_at": "2026-04-01T00:20:46.055749+00:00",
+    "machine_id": "T1.2-M01",
+    "sku": "BW-SL-CLR-100Mx100CMx1ROLL-RED",
+    "output_qty": 1
+  },
+  {
+    "log_id": "ab118cf6-4144-428e-a715-1bd6a9e54f9c",
+    "created_at": "2026-04-01T00:20:46.055749+00:00",
+    "machine_id": "T1.2-M01",
+    "sku": "BW-SL-CLR-100Mx100CMx1ROLL-RED",
+    "output_qty": 1
+  },
+  {
+    "log_id": "2e44f3c0-81ff-41a9-b0e9-08e8cd439f24",
+    "created_at": "2026-04-01T00:25:32.86515+00:00",
+    "machine_id": "T1.3-M02",
+    "sku": "BW-SL-CLR-100Mx100CMx1ROLL-RED",
+    "output_qty": 1
+  },
+  {
+    "log_id": "d6a46a36-7d4d-4fde-96b4-010f088cde7a",
+    "created_at": "2026-04-01T00:26:07.919392+00:00",
+    "machine_id": "T1.2-M01",
+    "sku": "BW-SL-CLR-100Mx100CMx1ROLL-RED",
+    "output_qty": 1
+  },
+  {
+    "log_id": "6fa712f5-c5be-4964-8c0e-9acc88a83edd",
+    "created_at": "2026-04-01T00:26:07.919392+00:00",
+    "machine_id": "T1.2-M01",
+    "sku": "BW-SL-CLR-100Mx100CMx1ROLL-RED",
+    "output_qty": 1
+  },
+  {
+    "log_id": "c917d51b-2fa1-46a7-bb0d-aae3843d00a8",
+    "created_at": "2026-04-01T00:31:13.783762+00:00",
+    "machine_id": "T1.3-M02",
+    "sku": "BW-SL-CLR-100Mx100CMx1ROLL-RED",
+    "output_qty": 1
+  },
+  {
+    "log_id": "1517ec2e-9102-4aa4-b2fd-7c7e6f871198",
+    "created_at": "2026-04-01T00:36:55.055627+00:00",
+    "machine_id": "T1.3-M02",
+    "sku": "BW-SL-CLR-100Mx100CMx1ROLL-RED",
+    "output_qty": 1
+  },
+  {
+    "log_id": "dc1e825d-4f1c-4675-ae16-dbaaa47624d8",
+    "created_at": "2026-04-01T00:42:37.724265+00:00",
+    "machine_id": "T1.3-M02",
+    "sku": "BW-SL-CLR-100Mx100CMx1ROLL-RED",
+    "output_qty": 1
+  },
+  {
+    "log_id": "d0b2e2e6-5c99-4714-95ac-3fc2c770c62f",
+    "created_at": "2026-04-01T00:48:20.367084+00:00",
+    "machine_id": "T1.3-M02",
+    "sku": "BW-SL-CLR-100Mx100CMx1ROLL-RED",
+    "output_qty": 1
+  },
+  {
+    "log_id": "f614295d-bcc2-46de-8ba2-7b1f1f0b8b51",
+    "created_at": "2026-04-01T00:54:01.732022+00:00",
+    "machine_id": "T1.3-M02",
+    "sku": "BW-SL-CLR-100Mx100CMx1ROLL-RED",
+    "output_qty": 1
+  },
+  {
+    "log_id": "e752c48e-ec04-4638-ab19-feedcfb94787",
+    "created_at": "2026-04-01T00:59:44.095335+00:00",
+    "machine_id": "T1.3-M02",
+    "sku": "BW-SL-CLR-100Mx100CMx1ROLL-RED",
+    "output_qty": 1
+  },
+  {
+    "log_id": "b05c9c6c-675c-4820-85fd-09f092e7f8c1",
+    "created_at": "2026-04-01T01:05:26.254254+00:00",
+    "machine_id": "T1.3-M02",
+    "sku": "BW-SL-CLR-100Mx100CMx1ROLL-RED",
+    "output_qty": 1
+  },
+  {
+    "log_id": "38e5c748-9394-4e18-b77b-1c1275c9d9fe",
+    "created_at": "2026-04-01T01:11:07.755579+00:00",
+    "machine_id": "T1.3-M02",
+    "sku": "BW-SL-CLR-100Mx100CMx1ROLL-RED",
+    "output_qty": 1
+  },
+  {
+    "log_id": "fe11ffd2-0d8b-4481-b314-8896d52fe415",
+    "created_at": "2026-04-01T01:16:49.817446+00:00",
+    "machine_id": "T1.3-M02",
+    "sku": "BW-SL-CLR-100Mx100CMx1ROLL-RED",
+    "output_qty": 1
+  },
+  {
+    "log_id": "ac9b90ea-22ef-4c1b-835a-7d83d81758b1",
+    "created_at": "2026-04-01T01:22:32.524074+00:00",
+    "machine_id": "T1.3-M02",
+    "sku": "BW-SL-CLR-100Mx100CMx1ROLL-RED",
+    "output_qty": 1
+  },
+  {
+    "log_id": "c8c89726-a778-4d53-97e5-298a9d501339",
+    "created_at": "2026-04-01T01:28:13.946079+00:00",
+    "machine_id": "T1.3-M02",
+    "sku": "BW-SL-CLR-100Mx100CMx1ROLL-RED",
+    "output_qty": 1
+  },
+  {
+    "log_id": "6ec1e8b8-9ba6-472b-89d3-db36ec26cfec",
+    "created_at": "2026-04-01T01:33:56.574983+00:00",
+    "machine_id": "T1.3-M02",
+    "sku": "BW-SL-CLR-100Mx100CMx1ROLL-RED",
+    "output_qty": 1
+  },
+  {
+    "log_id": "a97ac1b6-d64b-4506-b99f-db1eb1ab983e",
+    "created_at": "2026-04-01T01:39:38.151147+00:00",
+    "machine_id": "T1.3-M02",
+    "sku": "BW-SL-CLR-100Mx100CMx1ROLL-RED",
+    "output_qty": 1
+  },
+  {
+    "log_id": "0cdc9898-8590-40f7-9eca-0d7fbb114f5c",
+    "created_at": "2026-04-01T01:45:20.705394+00:00",
+    "machine_id": "T1.3-M02",
+    "sku": "BW-SL-CLR-100Mx100CMx1ROLL-RED",
+    "output_qty": 1
+  },
+  {
+    "log_id": "5a6a2972-867b-47aa-8a08-2a444fbe94a9",
+    "created_at": "2026-04-01T01:51:02.379136+00:00",
+    "machine_id": "T1.3-M02",
+    "sku": "BW-SL-CLR-100Mx100CMx1ROLL-RED",
+    "output_qty": 1
+  },
+  {
+    "log_id": "73913e05-a698-4f95-8c2f-e0acd26615ae",
+    "created_at": "2026-04-01T01:56:44.753979+00:00",
+    "machine_id": "T1.3-M02",
+    "sku": "BW-SL-CLR-100Mx100CMx1ROLL-RED",
+    "output_qty": 1
+  },
+  {
+    "log_id": "35b12269-2235-4018-916f-0bb5345260b9",
+    "created_at": "2026-04-01T02:02:26.599732+00:00",
+    "machine_id": "T1.3-M02",
+    "sku": "BW-SL-CLR-100Mx100CMx1ROLL-RED",
+    "output_qty": 1
+  },
+  {
+    "log_id": "704d39e4-1257-4d8e-b952-5accf14c326b",
+    "created_at": "2026-04-01T02:08:09.685101+00:00",
+    "machine_id": "T1.3-M02",
+    "sku": "BW-SL-CLR-100Mx100CMx1ROLL-RED",
+    "output_qty": 1
+  },
+  {
+    "log_id": "48eb974e-550f-4898-a4f8-b1bf045b8ef6",
+    "created_at": "2026-04-01T02:13:50.860336+00:00",
+    "machine_id": "T1.3-M02",
+    "sku": "BW-SL-CLR-100Mx100CMx1ROLL-RED",
+    "output_qty": 1
+  },
+  {
+    "log_id": "398707e8-1d74-4d59-bc37-bdb0581eb684",
+    "created_at": "2026-04-01T02:19:32.723073+00:00",
+    "machine_id": "T1.3-M02",
+    "sku": "BW-SL-CLR-100Mx100CMx1ROLL-RED",
+    "output_qty": 1
+  },
+  {
+    "log_id": "3b9f11d2-e78b-4fb0-affd-9150800442ed",
+    "created_at": "2026-04-01T02:25:14.893096+00:00",
+    "machine_id": "T1.3-M02",
+    "sku": "BW-SL-CLR-100Mx100CMx1ROLL-RED",
+    "output_qty": 1
+  },
+  {
+    "log_id": "6ec53c3d-267b-415f-b0f3-05bdae065893",
+    "created_at": "2026-04-01T02:30:57.53771+00:00",
+    "machine_id": "T1.3-M02",
+    "sku": "BW-SL-CLR-100Mx100CMx1ROLL-RED",
+    "output_qty": 1
+  },
+  {
+    "log_id": "b3880a31-4531-49f7-b4bb-e9122dd495ab",
+    "created_at": "2026-04-01T02:36:38.906588+00:00",
+    "machine_id": "T1.3-M02",
+    "sku": "BW-SL-CLR-100Mx100CMx1ROLL-RED",
+    "output_qty": 1
+  },
+  {
+    "log_id": "0ae8e31c-b9e3-4ae1-b987-d650128d70d3",
+    "created_at": "2026-04-01T02:42:20.903708+00:00",
+    "machine_id": "T1.3-M02",
+    "sku": "BW-SL-CLR-100Mx100CMx1ROLL-RED",
+    "output_qty": 1
+  },
+  {
+    "log_id": "5fb4a78a-b999-4e95-afdb-a04cb831ef7a",
+    "created_at": "2026-04-01T02:48:03.257766+00:00",
+    "machine_id": "T1.3-M02",
+    "sku": "BW-SL-CLR-100Mx100CMx1ROLL-RED",
+    "output_qty": 1
+  },
+  {
+    "log_id": "08f62f71-3581-4282-ac4b-d8c7bd2670bc",
+    "created_at": "2026-04-01T02:53:44.961711+00:00",
+    "machine_id": "T1.3-M02",
+    "sku": "BW-SL-CLR-100Mx100CMx1ROLL-RED",
+    "output_qty": 1
+  },
+  {
+    "log_id": "ab74533f-ba8e-44b5-ba20-f618933fb2dc",
+    "created_at": "2026-04-01T02:59:26.990488+00:00",
+    "machine_id": "T1.3-M02",
+    "sku": "BW-SL-CLR-100Mx100CMx1ROLL-RED",
+    "output_qty": 1
+  },
+  {
+    "log_id": "2a7eef7f-68e1-4b13-af1a-27991ea5384b",
+    "created_at": "2026-04-01T03:05:09.319995+00:00",
+    "machine_id": "T1.3-M02",
+    "sku": "BW-SL-CLR-100Mx100CMx1ROLL-RED",
+    "output_qty": 1
+  },
+  {
+    "log_id": "985d5781-f7ba-484c-a28f-d9560ef02999",
+    "created_at": "2026-04-01T03:10:51.638012+00:00",
+    "machine_id": "T1.3-M02",
+    "sku": "BW-SL-CLR-100Mx100CMx1ROLL-RED",
+    "output_qty": 1
+  },
+  {
+    "log_id": "12a6e5b4-4d20-4d86-a233-65d882003ace",
+    "created_at": "2026-04-01T03:16:33.304144+00:00",
+    "machine_id": "T1.3-M02",
+    "sku": "BW-SL-CLR-100Mx100CMx1ROLL-RED",
+    "output_qty": 1
+  },
+  {
+    "log_id": "13822b56-8b03-4f46-a52e-2a8a217a4008",
+    "created_at": "2026-04-01T03:22:15.69782+00:00",
+    "machine_id": "T1.3-M02",
+    "sku": "BW-SL-CLR-100Mx100CMx1ROLL-RED",
+    "output_qty": 1
+  },
+  {
+    "log_id": "3dabf1e5-54b5-4b84-bee6-5b10579da886",
+    "created_at": "2026-04-01T03:27:57.375953+00:00",
+    "machine_id": "T1.3-M02",
+    "sku": "BW-SL-CLR-100Mx100CMx1ROLL-RED",
+    "output_qty": 1
+  },
+  {
+    "log_id": "4c81aa05-e5c3-402f-9a37-9b72aad8a193",
+    "created_at": "2026-04-01T03:51:21.031426+00:00",
+    "machine_id": "T1.2-M01",
+    "sku": "BW-SL-CLR-100Mx100CMx1ROLL-RED",
+    "output_qty": 1
+  },
+  {
+    "log_id": "4423e822-860a-401f-b46d-832e4dbc55e0",
+    "created_at": "2026-04-01T03:56:44.043095+00:00",
+    "machine_id": "T1.2-M01",
+    "sku": "BW-SL-CLR-100Mx100CMx1ROLL-RED",
+    "output_qty": 1
+  },
+  {
+    "log_id": "23d6519e-1c73-4de7-84d3-3c868242acf2",
+    "created_at": "2026-04-01T04:02:08.130764+00:00",
+    "machine_id": "T1.2-M01",
+    "sku": "BW-SL-CLR-100Mx100CMx1ROLL-RED",
+    "output_qty": 1
+  },
+  {
+    "log_id": "95067c09-8854-41c3-afaa-54533a55de3a",
+    "created_at": "2026-04-01T04:07:30.782405+00:00",
+    "machine_id": "T1.2-M01",
+    "sku": "BW-SL-CLR-100Mx100CMx1ROLL-RED",
+    "output_qty": 1
+  },
+  {
+    "log_id": "48e5a398-42ff-4633-8bcf-c002b6ccb9fe",
+    "created_at": "2026-04-01T04:12:54.19126+00:00",
+    "machine_id": "T1.2-M01",
+    "sku": "BW-SL-CLR-100Mx100CMx1ROLL-RED",
+    "output_qty": 1
+  },
+  {
+    "log_id": "dde700d1-f7ea-448a-9f7a-1e3a9af06798",
+    "created_at": "2026-04-01T04:18:17.48472+00:00",
+    "machine_id": "T1.2-M01",
+    "sku": "BW-SL-CLR-100Mx100CMx1ROLL-RED",
+    "output_qty": 1
+  },
+  {
+    "log_id": "ebfe952d-d124-49d4-a6f2-3f9471f8cf2f",
+    "created_at": "2026-04-01T04:23:40.75214+00:00",
+    "machine_id": "T1.2-M01",
+    "sku": "BW-SL-CLR-100Mx100CMx1ROLL-RED",
+    "output_qty": 1
+  },
+  {
+    "log_id": "49eeb6f2-7793-40a3-9996-07571492485f",
+    "created_at": "2026-04-01T04:29:04.042941+00:00",
+    "machine_id": "T1.2-M01",
+    "sku": "BW-SL-CLR-100Mx100CMx1ROLL-RED",
+    "output_qty": 1
+  },
+  {
+    "log_id": "fafc7e8c-519d-44b9-aa3f-08c1dbfc26d6",
+    "created_at": "2026-04-01T04:34:27.355211+00:00",
+    "machine_id": "T1.2-M01",
+    "sku": "BW-SL-CLR-100Mx100CMx1ROLL-RED",
+    "output_qty": 1
+  },
+  {
+    "log_id": "52108182-ef55-495b-8b1c-7b8f6d1c4d31",
+    "created_at": "2026-04-01T04:39:50.455189+00:00",
+    "machine_id": "T1.2-M01",
+    "sku": "BW-SL-CLR-100Mx100CMx1ROLL-RED",
+    "output_qty": 1
+  },
+  {
+    "log_id": "2abc11b3-de37-4020-8fbc-cb3ce9e4a9aa",
+    "created_at": "2026-04-01T04:45:13.696302+00:00",
+    "machine_id": "T1.2-M01",
+    "sku": "BW-SL-CLR-100Mx100CMx1ROLL-RED",
+    "output_qty": 1
+  },
+  {
+    "log_id": "7a205def-6d8d-4835-98a0-232c47eb8217",
+    "created_at": "2026-04-01T04:50:37.42461+00:00",
+    "machine_id": "T1.2-M01",
+    "sku": "BW-SL-CLR-100Mx100CMx1ROLL-RED",
+    "output_qty": 1
+  },
+  {
+    "log_id": "45a5d302-01b2-445c-a30e-d7175f12dcf9",
+    "created_at": "2026-04-01T04:56:00.680084+00:00",
+    "machine_id": "T1.2-M01",
+    "sku": "BW-SL-CLR-100Mx100CMx1ROLL-RED",
+    "output_qty": 1
+  },
+  {
+    "log_id": "e0b1ec04-9349-4380-856b-615f31f6226e",
+    "created_at": "2026-04-01T05:01:24.062088+00:00",
+    "machine_id": "T1.2-M01",
+    "sku": "BW-SL-CLR-100Mx100CMx1ROLL-RED",
+    "output_qty": 1
+  },
+  {
+    "log_id": "f6c1fa9c-ede8-4318-a122-ae4559b6afc1",
+    "created_at": "2026-04-01T05:06:46.562828+00:00",
+    "machine_id": "T1.2-M01",
+    "sku": "BW-SL-CLR-100Mx100CMx1ROLL-RED",
+    "output_qty": 1
+  },
+  {
+    "log_id": "5058037a-1eeb-422c-bdb3-8650a6a8b951",
+    "created_at": "2026-04-01T05:12:10.285869+00:00",
+    "machine_id": "T1.2-M01",
+    "sku": "BW-SL-CLR-100Mx100CMx1ROLL-RED",
+    "output_qty": 1
+  },
+  {
+    "log_id": "61dad895-784a-43a6-9c88-f9df1d20deb6",
+    "created_at": "2026-04-01T05:17:33.004689+00:00",
+    "machine_id": "T1.2-M01",
+    "sku": "BW-SL-CLR-100Mx100CMx1ROLL-RED",
+    "output_qty": 1
+  },
+  {
+    "log_id": "b23961e7-ff04-4472-9c3b-e01134355eb6",
+    "created_at": "2026-04-01T05:22:56.874842+00:00",
+    "machine_id": "T1.2-M01",
+    "sku": "BW-SL-CLR-100Mx100CMx1ROLL-RED",
+    "output_qty": 1
+  },
+  {
+    "log_id": "2aa0a3b1-fa7b-42a9-b3ff-032a099570ff",
+    "created_at": "2026-04-01T05:28:19.531205+00:00",
+    "machine_id": "T1.2-M01",
+    "sku": "BW-SL-CLR-100Mx100CMx1ROLL-RED",
+    "output_qty": 1
+  },
+  {
+    "log_id": "8c47be18-79e3-4eb2-8a2a-ca3beb65fe5f",
+    "created_at": "2026-04-01T05:33:43.942332+00:00",
+    "machine_id": "T1.2-M01",
+    "sku": "BW-SL-CLR-100Mx100CMx1ROLL-RED",
+    "output_qty": 1
+  },
+  {
+    "log_id": "d0c6198a-b1de-482c-995d-50590a74725b",
+    "created_at": "2026-04-01T05:39:06.423748+00:00",
+    "machine_id": "T1.2-M01",
+    "sku": "BW-SL-CLR-100Mx100CMx1ROLL-RED",
+    "output_qty": 1
+  },
+  {
+    "log_id": "714f1945-bdc9-4979-b3b7-3b21ea8ad46a",
+    "created_at": "2026-04-01T05:44:29.314437+00:00",
+    "machine_id": "T1.2-M01",
+    "sku": "BW-SL-CLR-100Mx100CMx1ROLL-RED",
+    "output_qty": 1
+  },
+  {
+    "log_id": "f69d1d94-cd9b-434a-8855-7525e5d15b7e",
+    "created_at": "2026-04-01T05:49:52.54275+00:00",
+    "machine_id": "T1.2-M01",
+    "sku": "BW-SL-CLR-100Mx100CMx1ROLL-RED",
+    "output_qty": 1
+  },
+  {
+    "log_id": "094d4a8d-fdd0-4947-b040-66ac9a82f31a",
+    "created_at": "2026-04-01T05:55:15.840324+00:00",
+    "machine_id": "T1.2-M01",
+    "sku": "BW-SL-CLR-100Mx100CMx1ROLL-RED",
+    "output_qty": 1
+  },
+  {
+    "log_id": "daf465a4-e865-489a-87fe-14b72284cf43",
+    "created_at": "2026-04-01T06:00:40.057645+00:00",
+    "machine_id": "T1.2-M01",
+    "sku": "BW-SL-CLR-100Mx100CMx1ROLL-RED",
+    "output_qty": 1
+  },
+  {
+    "log_id": "86ad972a-30f9-43ef-9628-9730b0c90ca9",
+    "created_at": "2026-04-01T06:06:02.843179+00:00",
+    "machine_id": "T1.2-M01",
+    "sku": "BW-SL-CLR-100Mx100CMx1ROLL-RED",
+    "output_qty": 1
+  },
+  {
+    "log_id": "c134fea2-2498-4eff-b10a-c2b86a7bec68",
+    "created_at": "2026-04-01T06:11:25.995777+00:00",
+    "machine_id": "T1.2-M01",
+    "sku": "BW-SL-CLR-100Mx100CMx1ROLL-RED",
+    "output_qty": 1
+  },
+  {
+    "log_id": "06dd56c3-f0d3-4ee5-9873-ae5bdb04651e",
+    "created_at": "2026-04-01T06:16:48.938683+00:00",
+    "machine_id": "T1.2-M01",
+    "sku": "BW-SL-CLR-100Mx100CMx1ROLL-RED",
+    "output_qty": 1
+  },
+  {
+    "log_id": "e1bab26c-8391-41fa-a3ff-e958df884c33",
+    "created_at": "2026-04-01T06:22:12.230153+00:00",
+    "machine_id": "T1.2-M01",
+    "sku": "BW-SL-CLR-100Mx100CMx1ROLL-RED",
+    "output_qty": 1
+  },
+  {
+    "log_id": "277c270b-772b-4ecd-8cb3-e1e58415bca0",
+    "created_at": "2026-04-01T06:27:35.376544+00:00",
+    "machine_id": "T1.2-M01",
+    "sku": "BW-SL-CLR-100Mx100CMx1ROLL-RED",
+    "output_qty": 1
+  },
+  {
+    "log_id": "acf2fb0a-e890-401a-a0ba-941de32bec45",
+    "created_at": "2026-04-01T06:32:58.599449+00:00",
+    "machine_id": "T1.2-M01",
+    "sku": "BW-SL-CLR-100Mx100CMx1ROLL-RED",
+    "output_qty": 1
+  },
+  {
+    "log_id": "367b82d9-fa56-43be-834e-7f0d8f68b57c",
+    "created_at": "2026-04-01T06:38:21.827917+00:00",
+    "machine_id": "T1.2-M01",
+    "sku": "BW-SL-CLR-100Mx100CMx1ROLL-RED",
+    "output_qty": 1
+  },
+  {
+    "log_id": "613c63f5-a12a-411f-8089-beba42e733bc",
+    "created_at": "2026-04-01T06:43:45.056953+00:00",
+    "machine_id": "T1.2-M01",
+    "sku": "BW-SL-CLR-100Mx100CMx1ROLL-RED",
+    "output_qty": 1
+  },
+  {
+    "log_id": "6bbac1bc-4868-4856-8246-250de323ce1d",
+    "created_at": "2026-04-01T06:49:08.338756+00:00",
+    "machine_id": "T1.2-M01",
+    "sku": "BW-SL-CLR-100Mx100CMx1ROLL-RED",
+    "output_qty": 1
+  },
+  {
+    "log_id": "253ad758-3195-4bf2-91da-a76958d0e24a",
+    "created_at": "2026-04-01T06:54:31.575653+00:00",
+    "machine_id": "T1.2-M01",
+    "sku": "BW-SL-CLR-100Mx100CMx1ROLL-RED",
+    "output_qty": 1
+  },
+  {
+    "log_id": "8c64eb94-9349-4ca9-9a86-93eb881aaa65",
+    "created_at": "2026-04-01T06:59:54.834598+00:00",
+    "machine_id": "T1.2-M01",
+    "sku": "BW-SL-CLR-100Mx100CMx1ROLL-RED",
+    "output_qty": 1
+  },
+  {
+    "log_id": "88105d33-786d-452f-8892-b3e0deb99a46",
+    "created_at": "2026-04-01T07:05:19.41026+00:00",
+    "machine_id": "T1.2-M01",
+    "sku": "BW-SL-CLR-100Mx100CMx1ROLL-RED",
+    "output_qty": 1
+  },
+  {
+    "log_id": "78c26a48-b2f8-4f7d-bac0-819bd469e4e5",
+    "created_at": "2026-04-01T07:10:41.341825+00:00",
+    "machine_id": "T1.2-M01",
+    "sku": "BW-SL-CLR-100Mx100CMx1ROLL-RED",
+    "output_qty": 1
+  },
+  {
+    "log_id": "a7e2997f-ef29-4fd3-ac39-b064e001569e",
+    "created_at": "2026-04-01T07:16:04.678374+00:00",
+    "machine_id": "T1.2-M01",
+    "sku": "BW-SL-CLR-100Mx100CMx1ROLL-RED",
+    "output_qty": 1
+  },
+  {
+    "log_id": "0f38f990-8c06-4a67-8373-c5e8a88c1d8d",
+    "created_at": "2026-04-01T07:21:28.59118+00:00",
+    "machine_id": "T1.2-M01",
+    "sku": "BW-SL-CLR-100Mx100CMx1ROLL-RED",
+    "output_qty": 1
+  },
+  {
+    "log_id": "1f56c39f-8f8c-410a-9a8d-5324c2d14b43",
+    "created_at": "2026-04-01T07:26:51.39246+00:00",
+    "machine_id": "T1.2-M01",
+    "sku": "BW-SL-CLR-100Mx100CMx1ROLL-RED",
+    "output_qty": 1
+  },
+  {
+    "log_id": "e88abbdd-8389-43d3-acae-d50451e18d71",
+    "created_at": "2026-04-01T07:32:14.592578+00:00",
+    "machine_id": "T1.2-M01",
+    "sku": "BW-SL-CLR-100Mx100CMx1ROLL-RED",
+    "output_qty": 1
+  },
+  {
+    "log_id": "0b8b47f2-005f-4d60-bc23-0e2080d9fee9",
+    "created_at": "2026-04-01T07:37:37.963065+00:00",
+    "machine_id": "T1.2-M01",
+    "sku": "BW-SL-CLR-100Mx100CMx1ROLL-RED",
+    "output_qty": 1
+  },
+  {
+    "log_id": "e546a090-a13e-487e-a547-6328cef7ecec",
+    "created_at": "2026-04-01T07:43:01.613459+00:00",
+    "machine_id": "T1.2-M01",
+    "sku": "BW-SL-CLR-100Mx100CMx1ROLL-RED",
+    "output_qty": 1
+  },
+  {
+    "log_id": "bfa07737-9a5b-475f-93f0-8477d51d041d",
+    "created_at": "2026-04-01T07:48:24.982915+00:00",
+    "machine_id": "T1.2-M01",
+    "sku": "BW-SL-CLR-100Mx100CMx1ROLL-RED",
+    "output_qty": 1
+  },
+  {
+    "log_id": "3a3c1b60-71cf-4133-b600-cdf126ed6242",
+    "created_at": "2026-04-01T07:53:49.808422+00:00",
+    "machine_id": "T1.2-M01",
+    "sku": "BW-SL-CLR-100Mx100CMx1ROLL-RED",
+    "output_qty": 1
+  },
+  {
+    "log_id": "54a3bc70-d154-41ff-b73c-3eba44dd85b2",
+    "created_at": "2026-04-01T07:59:11.07108+00:00",
+    "machine_id": "T1.2-M01",
+    "sku": "BW-SL-CLR-100Mx100CMx1ROLL-RED",
+    "output_qty": 1
+  },
+  {
+    "log_id": "3041f891-4bf6-4031-9fa9-617b71e10791",
+    "created_at": "2026-04-01T08:04:34.367108+00:00",
+    "machine_id": "T1.2-M01",
+    "sku": "BW-SL-CLR-100Mx100CMx1ROLL-RED",
+    "output_qty": 1
+  },
+  {
+    "log_id": "c06b291a-a397-4993-9ecd-c1f35921caa6",
+    "created_at": "2026-04-01T08:09:57.625381+00:00",
+    "machine_id": "T1.2-M01",
+    "sku": "BW-SL-CLR-100Mx100CMx1ROLL-RED",
+    "output_qty": 1
+  },
+  {
+    "log_id": "47b07b8e-b94a-44eb-b286-74b0d28c7ab9",
+    "created_at": "2026-04-01T08:15:21.337522+00:00",
+    "machine_id": "T1.2-M01",
+    "sku": "BW-SL-CLR-100Mx100CMx1ROLL-RED",
+    "output_qty": 1
+  },
+  {
+    "log_id": "0d29c37a-8a4c-4fbf-bab8-e6a7bf4fb53a",
+    "created_at": "2026-04-01T08:20:44.141342+00:00",
+    "machine_id": "T1.2-M01",
+    "sku": "BW-SL-CLR-100Mx100CMx1ROLL-RED",
+    "output_qty": 1
+  },
+  {
+    "log_id": "55614819-7bd7-40b7-843a-2515d4c694a8",
+    "created_at": "2026-04-01T08:26:07.447625+00:00",
+    "machine_id": "T1.2-M01",
+    "sku": "BW-SL-CLR-100Mx100CMx1ROLL-RED",
+    "output_qty": 1
+  },
+  {
+    "log_id": "da30a2ae-9bc4-403f-9daf-b4a8788a1b95",
+    "created_at": "2026-04-01T08:31:30.76252+00:00",
+    "machine_id": "T1.2-M01",
+    "sku": "BW-SL-CLR-100Mx100CMx1ROLL-RED",
+    "output_qty": 1
+  },
+  {
+    "log_id": "932d9395-8964-4445-b43e-2898073257e5",
+    "created_at": "2026-04-01T08:36:53.925528+00:00",
+    "machine_id": "T1.2-M01",
+    "sku": "BW-SL-CLR-100Mx100CMx1ROLL-RED",
+    "output_qty": 1
+  },
+  {
+    "log_id": "351807af-3435-4fb8-99a9-785418910f38",
+    "created_at": "2026-04-01T08:42:17.354562+00:00",
+    "machine_id": "T1.2-M01",
+    "sku": "BW-SL-CLR-100Mx100CMx1ROLL-RED",
+    "output_qty": 1
+  },
+  {
+    "log_id": "3843f2bc-d9e1-4172-9187-ede7fdbde162",
+    "created_at": "2026-04-01T08:42:17.354562+00:00",
+    "machine_id": "T1.2-M01",
+    "sku": "BW-SL-CLR-100Mx25CMx4ROLL-GRN",
+    "output_qty": 1
+  },
+  {
+    "log_id": "fb393669-f394-4694-9aa3-635078728358",
+    "created_at": "2026-04-01T08:47:40.441706+00:00",
+    "machine_id": "T1.2-M01",
+    "sku": "BW-SL-CLR-100Mx100CMx1ROLL-RED",
+    "output_qty": 1
+  },
+  {
+    "log_id": "dfd0f41d-9071-4c7a-b5bd-40ac46b05a18",
+    "created_at": "2026-04-01T08:47:40.441706+00:00",
+    "machine_id": "T1.2-M01",
+    "sku": "BW-SL-CLR-100Mx25CMx4ROLL-GRN",
+    "output_qty": 1
+  },
+  {
+    "log_id": "30a1b69a-fa03-472b-a427-1bdb59153ad3",
+    "created_at": "2026-04-01T08:53:03.931243+00:00",
+    "machine_id": "T1.2-M01",
+    "sku": "BW-SL-CLR-100Mx100CMx1ROLL-RED",
+    "output_qty": 1
+  },
+  {
+    "log_id": "ba0ac99a-29f1-4640-80da-2572d8a9fcfa",
+    "created_at": "2026-04-01T08:53:03.931243+00:00",
+    "machine_id": "T1.2-M01",
+    "sku": "BW-SL-CLR-100Mx25CMx4ROLL-GRN",
+    "output_qty": 1
+  },
+  {
+    "log_id": "1e81dad6-8de5-4284-a6c0-675763025112",
+    "created_at": "2026-04-01T08:58:27.479082+00:00",
+    "machine_id": "T1.2-M01",
+    "sku": "BW-SL-CLR-100Mx100CMx1ROLL-RED",
+    "output_qty": 1
+  },
+  {
+    "log_id": "6d9faf71-a24a-4319-aada-3a125c6c382f",
+    "created_at": "2026-04-01T08:58:27.479082+00:00",
+    "machine_id": "T1.2-M01",
+    "sku": "BW-SL-CLR-100Mx25CMx4ROLL-GRN",
+    "output_qty": 1
+  },
+  {
+    "log_id": "3ec0875f-7bc8-4d73-9107-ae496b4131cf",
+    "created_at": "2026-04-01T09:03:50.260868+00:00",
+    "machine_id": "T1.2-M01",
+    "sku": "BW-SL-CLR-100Mx100CMx1ROLL-RED",
+    "output_qty": 1
+  },
+  {
+    "log_id": "3bbbb4bd-8340-4bee-a55d-7c6c8c6ee8b0",
+    "created_at": "2026-04-01T09:03:50.260868+00:00",
+    "machine_id": "T1.2-M01",
+    "sku": "BW-SL-CLR-100Mx25CMx4ROLL-GRN",
+    "output_qty": 1
+  },
+  {
+    "log_id": "e41e7c91-d22f-4091-aa24-6f8cdd94ad31",
+    "created_at": "2026-04-01T09:09:13.349515+00:00",
+    "machine_id": "T1.2-M01",
+    "sku": "BW-SL-CLR-100Mx100CMx1ROLL-RED",
+    "output_qty": 1
+  },
+  {
+    "log_id": "a067c969-bdbe-40d9-a4ab-dea0d49d6e71",
+    "created_at": "2026-04-01T09:09:13.349515+00:00",
+    "machine_id": "T1.2-M01",
+    "sku": "BW-SL-CLR-100Mx25CMx4ROLL-GRN",
+    "output_qty": 1
+  },
+  {
+    "log_id": "68a8720d-847c-4b4d-b62b-356c893e209d",
+    "created_at": "2026-04-01T09:14:37.024694+00:00",
+    "machine_id": "T1.2-M01",
+    "sku": "BW-SL-CLR-100Mx100CMx1ROLL-RED",
+    "output_qty": 1
+  },
+  {
+    "log_id": "05676cbc-a4d4-498a-a20e-3969a70d9125",
+    "created_at": "2026-04-01T09:14:37.024694+00:00",
+    "machine_id": "T1.2-M01",
+    "sku": "BW-SL-CLR-100Mx25CMx4ROLL-GRN",
+    "output_qty": 1
+  },
+  {
+    "log_id": "8947de78-9e61-4658-a172-f72f9af526fb",
+    "created_at": "2026-04-01T09:20:00.241895+00:00",
+    "machine_id": "T1.2-M01",
+    "sku": "BW-SL-CLR-100Mx100CMx1ROLL-RED",
+    "output_qty": 1
+  },
+  {
+    "log_id": "7af95fd3-e9a0-49c0-98cc-58e9d116881e",
+    "created_at": "2026-04-01T09:20:00.241895+00:00",
+    "machine_id": "T1.2-M01",
+    "sku": "BW-SL-CLR-100Mx25CMx4ROLL-GRN",
+    "output_qty": 1
+  },
+  {
+    "log_id": "d3053809-6e71-4124-a3fb-0d0a8e1f2f13",
+    "created_at": "2026-04-01T09:25:22.908574+00:00",
+    "machine_id": "T1.2-M01",
+    "sku": "BW-SL-CLR-100Mx100CMx1ROLL-RED",
+    "output_qty": 1
+  },
+  {
+    "log_id": "a141511f-4728-4a3b-a407-b90277859991",
+    "created_at": "2026-04-01T09:25:22.908574+00:00",
+    "machine_id": "T1.2-M01",
+    "sku": "BW-SL-CLR-100Mx25CMx4ROLL-GRN",
+    "output_qty": 1
+  },
+  {
+    "log_id": "eb99af23-2c57-4dc8-b4df-b7de06aa2a75",
+    "created_at": "2026-04-01T09:30:46.655471+00:00",
+    "machine_id": "T1.2-M01",
+    "sku": "BW-SL-CLR-100Mx100CMx1ROLL-RED",
+    "output_qty": 1
+  },
+  {
+    "log_id": "d7f23773-ebf9-4d5a-bd2c-471bd98ccd5f",
+    "created_at": "2026-04-01T09:30:46.655471+00:00",
+    "machine_id": "T1.2-M01",
+    "sku": "BW-SL-CLR-100Mx25CMx4ROLL-GRN",
+    "output_qty": 1
+  },
+  {
+    "log_id": "05950f56-ea74-486d-9d12-f23142f45162",
+    "created_at": "2026-04-01T09:36:09.829552+00:00",
+    "machine_id": "T1.2-M01",
+    "sku": "BW-SL-CLR-100Mx100CMx1ROLL-RED",
+    "output_qty": 1
+  },
+  {
+    "log_id": "bf1c1aaf-1a7c-4f0b-a1f2-c4097cbcec6f",
+    "created_at": "2026-04-01T09:36:09.829552+00:00",
+    "machine_id": "T1.2-M01",
+    "sku": "BW-SL-CLR-100Mx25CMx4ROLL-GRN",
+    "output_qty": 1
+  },
+  {
+    "log_id": "11a5842f-36c3-4289-b10f-ddfbe758106e",
+    "created_at": "2026-04-01T09:41:32.582345+00:00",
+    "machine_id": "T1.2-M01",
+    "sku": "BW-SL-CLR-100Mx100CMx1ROLL-RED",
+    "output_qty": 1
+  },
+  {
+    "log_id": "a7892e61-e918-439d-bfff-1fa44d6f8cd7",
+    "created_at": "2026-04-01T09:41:32.582345+00:00",
+    "machine_id": "T1.2-M01",
+    "sku": "BW-SL-CLR-100Mx25CMx4ROLL-GRN",
+    "output_qty": 1
+  },
+  {
+    "log_id": "69018639-5ee0-48a4-ac32-41e39a381a8b",
+    "created_at": "2026-04-01T09:46:55.891426+00:00",
+    "machine_id": "T1.2-M01",
+    "sku": "BW-SL-CLR-100Mx100CMx1ROLL-RED",
+    "output_qty": 1
+  },
+  {
+    "log_id": "76cd48ce-5bcc-478c-a014-07814134a3c2",
+    "created_at": "2026-04-01T09:46:55.891426+00:00",
+    "machine_id": "T1.2-M01",
+    "sku": "BW-SL-CLR-100Mx25CMx4ROLL-GRN",
+    "output_qty": 1
+  },
+  {
+    "log_id": "e1da56e9-156a-46d1-8408-419f932e7ed4",
+    "created_at": "2026-04-01T09:52:18.97415+00:00",
+    "machine_id": "T1.2-M01",
+    "sku": "BW-SL-CLR-100Mx100CMx1ROLL-RED",
+    "output_qty": 1
+  },
+  {
+    "log_id": "a1f8d96a-f13e-4b69-abeb-ecc3967a3259",
+    "created_at": "2026-04-01T09:52:18.97415+00:00",
+    "machine_id": "T1.2-M01",
+    "sku": "BW-SL-CLR-100Mx25CMx4ROLL-GRN",
+    "output_qty": 1
+  },
+  {
+    "log_id": "ffebad33-28a8-43e3-a47e-23c1d3a32884",
+    "created_at": "2026-04-01T09:57:42.236019+00:00",
+    "machine_id": "T1.2-M01",
+    "sku": "BW-SL-CLR-100Mx100CMx1ROLL-RED",
+    "output_qty": 1
+  },
+  {
+    "log_id": "02388380-e080-4936-85aa-aa8eca660c47",
+    "created_at": "2026-04-01T09:57:42.236019+00:00",
+    "machine_id": "T1.2-M01",
+    "sku": "BW-SL-CLR-100Mx25CMx4ROLL-GRN",
+    "output_qty": 1
+  },
+  {
+    "log_id": "be329057-4983-41f0-9b7b-ed2e01c9fe13",
+    "created_at": "2026-04-01T10:03:05.460892+00:00",
+    "machine_id": "T1.2-M01",
+    "sku": "BW-SL-CLR-100Mx100CMx1ROLL-RED",
+    "output_qty": 1
+  },
+  {
+    "log_id": "a2813aa2-8557-4696-b837-3e1de9bb8e32",
+    "created_at": "2026-04-01T10:03:05.460892+00:00",
+    "machine_id": "T1.2-M01",
+    "sku": "BW-SL-CLR-100Mx25CMx4ROLL-GRN",
+    "output_qty": 1
+  },
+  {
+    "log_id": "7b4e5c35-1b47-4fae-97d4-ca0939ee83ae",
+    "created_at": "2026-04-01T10:08:28.630198+00:00",
+    "machine_id": "T1.2-M01",
+    "sku": "BW-SL-CLR-100Mx100CMx1ROLL-RED",
+    "output_qty": 1
+  },
+  {
+    "log_id": "2d2c8e94-f1ae-4b55-9b40-54ec246f4826",
+    "created_at": "2026-04-01T10:08:28.630198+00:00",
+    "machine_id": "T1.2-M01",
+    "sku": "BW-SL-CLR-100Mx25CMx4ROLL-GRN",
+    "output_qty": 1
+  },
+  {
+    "log_id": "f95884d9-bfba-4cad-86b8-4f2f520e09fe",
+    "created_at": "2026-04-01T10:13:51.835558+00:00",
+    "machine_id": "T1.2-M01",
+    "sku": "BW-SL-CLR-100Mx100CMx1ROLL-RED",
+    "output_qty": 1
+  },
+  {
+    "log_id": "8814e8f4-c31a-4e97-bb1d-61ecc76c1fe5",
+    "created_at": "2026-04-01T10:13:51.835558+00:00",
+    "machine_id": "T1.2-M01",
+    "sku": "BW-SL-CLR-100Mx25CMx4ROLL-GRN",
+    "output_qty": 1
+  },
+  {
+    "log_id": "66325057-603d-4a8a-b1ff-18cf4c2b015c",
+    "created_at": "2026-04-01T10:19:17.207412+00:00",
+    "machine_id": "T1.2-M01",
+    "sku": "BW-SL-CLR-100Mx100CMx1ROLL-RED",
+    "output_qty": 1
+  },
+  {
+    "log_id": "e4b574e7-8f1c-4a6f-b983-02211a362692",
+    "created_at": "2026-04-01T10:19:17.207412+00:00",
+    "machine_id": "T1.2-M01",
+    "sku": "BW-SL-CLR-100Mx25CMx4ROLL-GRN",
+    "output_qty": 1
+  },
+  {
+    "log_id": "8456a99a-3587-43b0-82e0-fd984d29e591",
+    "created_at": "2026-04-01T10:24:38.258042+00:00",
+    "machine_id": "T1.2-M01",
+    "sku": "BW-SL-CLR-100Mx100CMx1ROLL-RED",
+    "output_qty": 1
+  },
+  {
+    "log_id": "6ca38f62-7e59-434f-b97d-429b2814e28e",
+    "created_at": "2026-04-01T10:24:38.258042+00:00",
+    "machine_id": "T1.2-M01",
+    "sku": "BW-SL-CLR-100Mx25CMx4ROLL-GRN",
+    "output_qty": 1
+  },
+  {
+    "log_id": "d0b30de3-969c-43bb-b305-c769977b656d",
+    "created_at": "2026-04-01T10:30:01.402989+00:00",
+    "machine_id": "T1.2-M01",
+    "sku": "BW-SL-CLR-100Mx100CMx1ROLL-RED",
+    "output_qty": 1
+  },
+  {
+    "log_id": "299c3042-6ec7-4c0c-8624-5f566c68dde8",
+    "created_at": "2026-04-01T10:30:01.402989+00:00",
+    "machine_id": "T1.2-M01",
+    "sku": "BW-SL-CLR-100Mx25CMx4ROLL-GRN",
+    "output_qty": 1
+  },
+  {
+    "log_id": "cb222546-abca-4c72-aff7-f34d4b6e0879",
+    "created_at": "2026-04-01T10:35:26.209945+00:00",
+    "machine_id": "T1.2-M01",
+    "sku": "BW-SL-CLR-100Mx100CMx1ROLL-RED",
+    "output_qty": 1
+  },
+  {
+    "log_id": "e88bd8eb-61fa-462a-af05-ed345f6d28b1",
+    "created_at": "2026-04-01T10:35:26.209945+00:00",
+    "machine_id": "T1.2-M01",
+    "sku": "BW-SL-CLR-100Mx25CMx4ROLL-GRN",
+    "output_qty": 1
+  },
+  {
+    "log_id": "f8f0df68-90d6-488d-8979-e5b037483025",
+    "created_at": "2026-04-01T10:40:48.346481+00:00",
+    "machine_id": "T1.2-M01",
+    "sku": "BW-SL-CLR-100Mx100CMx1ROLL-RED",
+    "output_qty": 1
+  },
+  {
+    "log_id": "db23e435-99af-40fc-a584-8ca69c52db8c",
+    "created_at": "2026-04-01T10:40:48.346481+00:00",
+    "machine_id": "T1.2-M01",
+    "sku": "BW-SL-CLR-100Mx25CMx4ROLL-GRN",
+    "output_qty": 1
+  },
+  {
+    "log_id": "7d71acd3-9386-4533-b750-94a7b2707d57",
+    "created_at": "2026-04-01T10:46:11.061989+00:00",
+    "machine_id": "T1.2-M01",
+    "sku": "BW-SL-CLR-100Mx100CMx1ROLL-RED",
+    "output_qty": 1
+  },
+  {
+    "log_id": "da4139fb-b4a6-4317-b636-1d900589b271",
+    "created_at": "2026-04-01T10:46:11.061989+00:00",
+    "machine_id": "T1.2-M01",
+    "sku": "BW-SL-CLR-100Mx25CMx4ROLL-GRN",
+    "output_qty": 1
+  },
+  {
+    "log_id": "11e06609-92da-4819-92f3-e6bd295e7ea1",
+    "created_at": "2026-04-01T10:46:50.791562+00:00",
+    "machine_id": "T1.3-M02",
+    "sku": "BW-SL-CLR-100Mx100CMx1ROLL-RED",
+    "output_qty": 1
+  },
+  {
+    "log_id": "34344d7d-ee8d-4506-8c13-0b8c38fb86a4",
+    "created_at": "2026-04-01T10:51:34.288642+00:00",
+    "machine_id": "T1.2-M01",
+    "sku": "BW-SL-CLR-100Mx100CMx1ROLL-RED",
+    "output_qty": 1
+  },
+  {
+    "log_id": "13160917-e11c-4662-9fc5-b3b0ca0c35b2",
+    "created_at": "2026-04-01T10:51:34.288642+00:00",
+    "machine_id": "T1.2-M01",
+    "sku": "BW-SL-CLR-100Mx25CMx4ROLL-GRN",
+    "output_qty": 1
+  },
+  {
+    "log_id": "94ce009e-8996-4a99-9732-662d00cb994f",
+    "created_at": "2026-04-01T10:52:33.423353+00:00",
+    "machine_id": "T1.3-M02",
+    "sku": "BW-SL-CLR-100Mx100CMx1ROLL-RED",
+    "output_qty": 1
+  },
+  {
+    "log_id": "28e92562-7f7c-4dc5-9fbc-24fa756f9e82",
+    "created_at": "2026-04-01T10:56:57.526285+00:00",
+    "machine_id": "T1.2-M01",
+    "sku": "BW-SL-CLR-100Mx100CMx1ROLL-RED",
+    "output_qty": 1
+  },
+  {
+    "log_id": "2b0212dd-f3b9-4c01-9aaa-8d296f2ef54f",
+    "created_at": "2026-04-01T10:56:57.526285+00:00",
+    "machine_id": "T1.2-M01",
+    "sku": "BW-SL-CLR-100Mx25CMx4ROLL-GRN",
+    "output_qty": 1
+  },
+  {
+    "log_id": "c2d2d68c-a5f6-488d-aea8-1ae2c5469866",
+    "created_at": "2026-04-01T10:58:14.887988+00:00",
+    "machine_id": "T1.3-M02",
+    "sku": "BW-SL-CLR-100Mx100CMx1ROLL-RED",
+    "output_qty": 1
+  },
+  {
+    "log_id": "d5def3cf-1045-40a6-9308-d9bb8b053e5a",
+    "created_at": "2026-04-01T11:02:20.669394+00:00",
+    "machine_id": "T1.2-M01",
+    "sku": "BW-SL-CLR-100Mx100CMx1ROLL-RED",
+    "output_qty": 1
+  },
+  {
+    "log_id": "a208a806-c063-4dd2-8939-70a6d47c0167",
+    "created_at": "2026-04-01T11:02:20.669394+00:00",
+    "machine_id": "T1.2-M01",
+    "sku": "BW-SL-CLR-100Mx25CMx4ROLL-GRN",
+    "output_qty": 1
+  },
+  {
+    "log_id": "116419a5-fbfa-474e-a939-e3657b41fe92",
+    "created_at": "2026-04-01T11:03:56.496067+00:00",
+    "machine_id": "T1.3-M02",
+    "sku": "BW-SL-CLR-100Mx100CMx1ROLL-RED",
+    "output_qty": 1
+  },
+  {
+    "log_id": "73fc7df1-634a-4069-aad2-5fea29ff7338",
+    "created_at": "2026-04-01T11:07:44.316465+00:00",
+    "machine_id": "T1.2-M01",
+    "sku": "BW-SL-CLR-100Mx100CMx1ROLL-RED",
+    "output_qty": 1
+  },
+  {
+    "log_id": "d18148f2-681e-4443-b1d6-2f23b52cfd9e",
+    "created_at": "2026-04-01T11:07:44.316465+00:00",
+    "machine_id": "T1.2-M01",
+    "sku": "BW-SL-CLR-100Mx25CMx4ROLL-GRN",
+    "output_qty": 1
+  },
+  {
+    "log_id": "424e4be4-e68e-4c5f-a802-447e47652392",
+    "created_at": "2026-04-01T11:09:38.738426+00:00",
+    "machine_id": "T1.3-M02",
+    "sku": "BW-SL-CLR-100Mx100CMx1ROLL-RED",
+    "output_qty": 1
+  },
+  {
+    "log_id": "b0bcce7c-a75b-4a2d-825f-24862d0f8f5e",
+    "created_at": "2026-04-01T11:13:07.142603+00:00",
+    "machine_id": "T1.2-M01",
+    "sku": "BW-SL-CLR-100Mx100CMx1ROLL-RED",
+    "output_qty": 1
+  },
+  {
+    "log_id": "0a4a1ff5-9715-4195-bd16-5a3545995d83",
+    "created_at": "2026-04-01T11:13:07.142603+00:00",
+    "machine_id": "T1.2-M01",
+    "sku": "BW-SL-CLR-100Mx25CMx4ROLL-GRN",
+    "output_qty": 1
+  },
+  {
+    "log_id": "39c304d9-d886-4b87-a1c3-88c668243244",
+    "created_at": "2026-04-01T11:15:23.800692+00:00",
+    "machine_id": "T1.3-M02",
+    "sku": "BW-SL-CLR-100Mx100CMx1ROLL-RED",
+    "output_qty": 1
+  },
+  {
+    "log_id": "fb8415fb-f1e4-46dc-bf76-01c771bfb42c",
+    "created_at": "2026-04-01T11:18:30.325688+00:00",
+    "machine_id": "T1.2-M01",
+    "sku": "BW-SL-CLR-100Mx100CMx1ROLL-RED",
+    "output_qty": 1
+  },
+  {
+    "log_id": "971c63f2-4eaa-4809-ab67-c754497c97bd",
+    "created_at": "2026-04-01T11:18:30.325688+00:00",
+    "machine_id": "T1.2-M01",
+    "sku": "BW-SL-CLR-100Mx25CMx4ROLL-GRN",
+    "output_qty": 1
+  },
+  {
+    "log_id": "ddd758d8-1779-4c99-b7e0-108fc66fc040",
+    "created_at": "2026-04-01T11:21:02.751015+00:00",
+    "machine_id": "T1.3-M02",
+    "sku": "BW-SL-CLR-100Mx100CMx1ROLL-RED",
+    "output_qty": 1
+  },
+  {
+    "log_id": "206b38e6-fec6-4ce3-a678-95f8df57c855",
+    "created_at": "2026-04-01T11:23:53.775049+00:00",
+    "machine_id": "T1.2-M01",
+    "sku": "BW-SL-CLR-100Mx100CMx1ROLL-RED",
+    "output_qty": 1
+  },
+  {
+    "log_id": "44b7c056-64f2-4e13-b59f-ee4d6c26f705",
+    "created_at": "2026-04-01T11:23:53.775049+00:00",
+    "machine_id": "T1.2-M01",
+    "sku": "BW-SL-CLR-100Mx25CMx4ROLL-GRN",
+    "output_qty": 1
+  },
+  {
+    "log_id": "28cce32f-8152-4812-8d92-af0e78bc91ae",
+    "created_at": "2026-04-01T11:26:51.618833+00:00",
+    "machine_id": "T1.3-M02",
+    "sku": "BW-SL-CLR-100Mx100CMx1ROLL-RED",
+    "output_qty": 1
+  },
+  {
+    "log_id": "c5d29fff-a7ca-4d9a-9d40-206e4f564730",
+    "created_at": "2026-04-01T11:29:16.653625+00:00",
+    "machine_id": "T1.2-M01",
+    "sku": "BW-SL-CLR-100Mx100CMx1ROLL-RED",
+    "output_qty": 1
+  },
+  {
+    "log_id": "6434ea67-2c5b-4b16-9362-5218952a1206",
+    "created_at": "2026-04-01T11:29:16.653625+00:00",
+    "machine_id": "T1.2-M01",
+    "sku": "BW-SL-CLR-100Mx25CMx4ROLL-GRN",
+    "output_qty": 1
+  },
+  {
+    "log_id": "8a13a444-5439-4abb-bc43-d9791b72d8ab",
+    "created_at": "2026-04-01T11:32:26.39051+00:00",
+    "machine_id": "T1.3-M02",
+    "sku": "BW-SL-CLR-100Mx100CMx1ROLL-RED",
+    "output_qty": 1
+  },
+  {
+    "log_id": "c96190db-d55d-486c-a109-84e1fad63312",
+    "created_at": "2026-04-01T11:34:39.794017+00:00",
+    "machine_id": "T1.2-M01",
+    "sku": "BW-SL-CLR-100Mx100CMx1ROLL-RED",
+    "output_qty": 1
+  },
+  {
+    "log_id": "e5604f02-d8cd-43df-b4fd-768f5f28fb80",
+    "created_at": "2026-04-01T11:34:39.794017+00:00",
+    "machine_id": "T1.2-M01",
+    "sku": "BW-SL-CLR-100Mx25CMx4ROLL-GRN",
+    "output_qty": 1
+  },
+  {
+    "log_id": "f67501fe-0a54-43e5-9397-e40beae6240c",
+    "created_at": "2026-04-01T11:38:10.962888+00:00",
+    "machine_id": "T1.3-M02",
+    "sku": "BW-SL-CLR-100Mx100CMx1ROLL-RED",
+    "output_qty": 1
+  },
+  {
+    "log_id": "3bffca30-4a46-4fc4-a206-64435a204047",
+    "created_at": "2026-04-01T11:40:03.043553+00:00",
+    "machine_id": "T1.2-M01",
+    "sku": "BW-SL-CLR-100Mx100CMx1ROLL-RED",
+    "output_qty": 1
+  },
+  {
+    "log_id": "80ece461-7c40-4cdb-9ce3-c9b407fb2367",
+    "created_at": "2026-04-01T11:40:03.043553+00:00",
+    "machine_id": "T1.2-M01",
+    "sku": "BW-SL-CLR-100Mx25CMx4ROLL-GRN",
+    "output_qty": 1
+  },
+  {
+    "log_id": "2f390140-831a-498d-bfd5-dcc6445bf23c",
+    "created_at": "2026-04-01T11:43:51.071088+00:00",
+    "machine_id": "T1.3-M02",
+    "sku": "BW-SL-CLR-100Mx100CMx1ROLL-RED",
+    "output_qty": 1
+  },
+  {
+    "log_id": "3f0e63fa-c81e-4522-92ee-2b9509d818e0",
+    "created_at": "2026-04-01T11:45:26.726114+00:00",
+    "machine_id": "T1.2-M01",
+    "sku": "BW-SL-CLR-100Mx100CMx1ROLL-RED",
+    "output_qty": 1
+  },
+  {
+    "log_id": "1b9aee3f-b46a-4163-a52e-68901ac978c8",
+    "created_at": "2026-04-01T11:45:26.726114+00:00",
+    "machine_id": "T1.2-M01",
+    "sku": "BW-SL-CLR-100Mx25CMx4ROLL-GRN",
+    "output_qty": 1
+  },
+  {
+    "log_id": "4471d5b1-840f-4476-a3db-cfffeb481333",
+    "created_at": "2026-04-01T11:49:34.095562+00:00",
+    "machine_id": "T1.3-M02",
+    "sku": "BW-SL-CLR-100Mx100CMx1ROLL-RED",
+    "output_qty": 1
+  },
+  {
+    "log_id": "bcce8713-7c88-49f7-ab9c-875ed8224193",
+    "created_at": "2026-04-01T11:50:49.803049+00:00",
+    "machine_id": "T1.2-M01",
+    "sku": "BW-SL-CLR-100Mx100CMx1ROLL-RED",
+    "output_qty": 1
+  },
+  {
+    "log_id": "26925054-76e4-45cb-97ed-4d2f8951aeb4",
+    "created_at": "2026-04-01T11:50:49.803049+00:00",
+    "machine_id": "T1.2-M01",
+    "sku": "BW-SL-CLR-100Mx25CMx4ROLL-GRN",
+    "output_qty": 1
+  },
+  {
+    "log_id": "b84eb5ce-9c07-4eb1-953b-b66232d0f32e",
+    "created_at": "2026-04-01T11:55:14.879379+00:00",
+    "machine_id": "T1.3-M02",
+    "sku": "BW-SL-CLR-100Mx100CMx1ROLL-RED",
+    "output_qty": 1
+  },
+  {
+    "log_id": "da18ad6b-8437-478f-8f60-68ed024ee6cb",
+    "created_at": "2026-04-01T11:56:12.764869+00:00",
+    "machine_id": "T1.2-M01",
+    "sku": "BW-SL-CLR-100Mx100CMx1ROLL-RED",
+    "output_qty": 1
+  },
+  {
+    "log_id": "9a760f78-dec9-4f0f-b887-0c285df86209",
+    "created_at": "2026-04-01T11:56:12.764869+00:00",
+    "machine_id": "T1.2-M01",
+    "sku": "BW-SL-CLR-100Mx25CMx4ROLL-GRN",
+    "output_qty": 1
+  },
+  {
+    "log_id": "001e5965-024e-4ad9-8328-de67369a39d3",
+    "created_at": "2026-04-01T12:00:57.048976+00:00",
+    "machine_id": "T1.3-M02",
+    "sku": "BW-SL-CLR-100Mx100CMx1ROLL-RED",
+    "output_qty": 1
+  },
+  {
+    "log_id": "b8966c65-e858-4e81-ae83-cca81c3d7b8c",
+    "created_at": "2026-04-01T12:01:36.275704+00:00",
+    "machine_id": "T1.2-M01",
+    "sku": "BW-SL-CLR-100Mx100CMx1ROLL-RED",
+    "output_qty": 1
+  },
+  {
+    "log_id": "d17d4abe-1057-4f78-affc-0c144489d93f",
+    "created_at": "2026-04-01T12:01:36.275704+00:00",
+    "machine_id": "T1.2-M01",
+    "sku": "BW-SL-CLR-100Mx25CMx4ROLL-GRN",
+    "output_qty": 1
+  },
+  {
+    "log_id": "d0620dcb-3dda-4735-a2b3-bc1a0c44bfea",
+    "created_at": "2026-04-01T12:06:39.205833+00:00",
+    "machine_id": "T1.3-M02",
+    "sku": "BW-SL-CLR-100Mx100CMx1ROLL-RED",
+    "output_qty": 1
+  },
+  {
+    "log_id": "45ca1090-a2b6-4291-8a03-f14b6b735d1e",
+    "created_at": "2026-04-01T12:06:59.141184+00:00",
+    "machine_id": "T1.2-M01",
+    "sku": "BW-SL-CLR-100Mx100CMx1ROLL-RED",
+    "output_qty": 1
+  },
+  {
+    "log_id": "e8736f8d-0f83-4953-9ea8-056a4b61bedd",
+    "created_at": "2026-04-01T12:06:59.141184+00:00",
+    "machine_id": "T1.2-M01",
+    "sku": "BW-SL-CLR-100Mx25CMx4ROLL-GRN",
+    "output_qty": 1
+  },
+  {
+    "log_id": "24b12164-502e-4db6-aa34-f49c61675e44",
+    "created_at": "2026-04-01T12:12:21.406342+00:00",
+    "machine_id": "T1.3-M02",
+    "sku": "BW-SL-CLR-100Mx100CMx1ROLL-RED",
+    "output_qty": 1
+  },
+  {
+    "log_id": "a8f59a8c-de60-4f21-87b7-a09cba76ff47",
+    "created_at": "2026-04-01T12:12:22.500512+00:00",
+    "machine_id": "T1.2-M01",
+    "sku": "BW-SL-CLR-100Mx100CMx1ROLL-RED",
+    "output_qty": 1
+  },
+  {
+    "log_id": "26febdaa-cc71-4ff4-af32-9043ccf742db",
+    "created_at": "2026-04-01T12:12:22.500512+00:00",
+    "machine_id": "T1.2-M01",
+    "sku": "BW-SL-CLR-100Mx25CMx4ROLL-GRN",
+    "output_qty": 1
+  },
+  {
+    "log_id": "2cf304f4-0a16-40fa-8673-f448479d0624",
+    "created_at": "2026-04-01T12:17:45.885818+00:00",
+    "machine_id": "T1.2-M01",
+    "sku": "BW-SL-CLR-100Mx100CMx1ROLL-RED",
+    "output_qty": 1
+  },
+  {
+    "log_id": "9ca454b6-0d13-400f-b975-fb15b51a31f9",
+    "created_at": "2026-04-01T12:17:45.885818+00:00",
+    "machine_id": "T1.2-M01",
+    "sku": "BW-SL-CLR-100Mx25CMx4ROLL-GRN",
+    "output_qty": 1
+  },
+  {
+    "log_id": "f382a03e-605a-4ba5-b7a2-c88744f64d5d",
+    "created_at": "2026-04-01T12:18:07.832251+00:00",
+    "machine_id": "T1.3-M02",
+    "sku": "BW-SL-CLR-100Mx100CMx1ROLL-RED",
+    "output_qty": 1
+  },
+  {
+    "log_id": "76137ff1-605d-47a7-acf1-408cd690a54e",
+    "created_at": "2026-04-01T12:23:09.78931+00:00",
+    "machine_id": "T1.2-M01",
+    "sku": "BW-SL-CLR-100Mx100CMx1ROLL-RED",
+    "output_qty": 1
+  },
+  {
+    "log_id": "1e871dbd-5cdc-411e-841c-1e2a51a28667",
+    "created_at": "2026-04-01T12:23:09.78931+00:00",
+    "machine_id": "T1.2-M01",
+    "sku": "BW-SL-CLR-100Mx100CMx1ROLL-RED",
+    "output_qty": 1
+  },
+  {
+    "log_id": "10a6fe9d-9a85-4210-8e1f-cc0689bce3ec",
+    "created_at": "2026-04-01T12:23:44.876358+00:00",
+    "machine_id": "T1.3-M02",
+    "sku": "BW-SL-CLR-100Mx100CMx1ROLL-RED",
+    "output_qty": 1
+  },
+  {
+    "log_id": "76a064d9-869e-4049-b91a-b24a0c53b9af",
+    "created_at": "2026-04-01T12:28:32.053318+00:00",
+    "machine_id": "T1.2-M01",
+    "sku": "BW-SL-CLR-100Mx100CMx1ROLL-RED",
+    "output_qty": 1
+  },
+  {
+    "log_id": "45a4ed45-ed90-4f60-b5d7-9f94466d34d2",
+    "created_at": "2026-04-01T12:28:32.053318+00:00",
+    "machine_id": "T1.2-M01",
+    "sku": "BW-SL-CLR-100Mx100CMx1ROLL-RED",
+    "output_qty": 1
+  },
+  {
+    "log_id": "2ac79644-f913-4534-b4c3-0891ede7b1ce",
+    "created_at": "2026-04-01T12:29:27.159411+00:00",
+    "machine_id": "T1.3-M02",
+    "sku": "BW-SL-CLR-100Mx100CMx1ROLL-RED",
+    "output_qty": 1
+  },
+  {
+    "log_id": "7018a98e-aa1b-4446-a941-9d34da28e73f",
+    "created_at": "2026-04-01T12:33:55.640625+00:00",
+    "machine_id": "T1.2-M01",
+    "sku": "BW-SL-CLR-100Mx100CMx1ROLL-RED",
+    "output_qty": 1
+  },
+  {
+    "log_id": "40812b55-b183-48dc-92c1-c0867be97085",
+    "created_at": "2026-04-01T12:35:08.7434+00:00",
+    "machine_id": "T1.3-M02",
+    "sku": "BW-SL-CLR-100Mx100CMx1ROLL-RED",
+    "output_qty": 1
+  },
+  {
+    "log_id": "4aa00087-821a-4914-aaa5-c3462832a700",
+    "created_at": "2026-04-01T12:39:18.367418+00:00",
+    "machine_id": "T1.2-M01",
+    "sku": "BW-SL-CLR-100Mx100CMx1ROLL-RED",
+    "output_qty": 1
+  },
+  {
+    "log_id": "fe86a702-43a6-4aca-8b28-22d0733ab0be",
+    "created_at": "2026-04-01T12:40:50.9047+00:00",
+    "machine_id": "T1.3-M02",
+    "sku": "BW-SL-CLR-100Mx100CMx1ROLL-RED",
+    "output_qty": 1
+  },
+  {
+    "log_id": "7cbb6ca9-2ce0-446d-abed-eb01559fec1c",
+    "created_at": "2026-04-01T12:44:41.934306+00:00",
+    "machine_id": "T1.2-M01",
+    "sku": "BW-SL-CLR-100Mx100CMx1ROLL-RED",
+    "output_qty": 1
+  },
+  {
+    "log_id": "694c554e-0fe5-47da-bf48-596345457e80",
+    "created_at": "2026-04-01T12:46:32.900483+00:00",
+    "machine_id": "T1.3-M02",
+    "sku": "BW-SL-CLR-100Mx100CMx1ROLL-RED",
+    "output_qty": 1
+  },
+  {
+    "log_id": "aa5a14f6-1819-4a70-a401-e1884f6bd5c2",
+    "created_at": "2026-04-01T12:50:04.828272+00:00",
+    "machine_id": "T1.2-M01",
+    "sku": "BW-SL-CLR-100Mx100CMx1ROLL-RED",
+    "output_qty": 1
+  },
+  {
+    "log_id": "8055352f-6aee-4e6a-b865-f78ed1acdf7a",
+    "created_at": "2026-04-01T12:52:15.334903+00:00",
+    "machine_id": "T1.3-M02",
+    "sku": "BW-SL-CLR-100Mx100CMx1ROLL-RED",
+    "output_qty": 1
+  },
+  {
+    "log_id": "e0c53cac-2401-4c95-9a9b-66685c07f06c",
+    "created_at": "2026-04-01T12:55:28.552632+00:00",
+    "machine_id": "T1.2-M01",
+    "sku": "BW-SL-CLR-100Mx100CMx1ROLL-RED",
+    "output_qty": 1
+  },
+  {
+    "log_id": "2f88a25e-6f8b-446a-a897-74f2dcd09ad3",
+    "created_at": "2026-04-01T12:57:57.227712+00:00",
+    "machine_id": "T1.3-M02",
+    "sku": "BW-SL-CLR-100Mx100CMx1ROLL-RED",
+    "output_qty": 1
+  },
+  {
+    "log_id": "37fcff28-09ce-43a9-b832-d0cc0483e8eb",
+    "created_at": "2026-04-01T13:00:51.466526+00:00",
+    "machine_id": "T1.2-M01",
+    "sku": "BW-SL-CLR-100Mx100CMx1ROLL-RED",
+    "output_qty": 1
+  },
+  {
+    "log_id": "d06cfd2e-6cb6-4ddd-a928-fbbb6742aa51",
+    "created_at": "2026-04-01T13:03:38.938004+00:00",
+    "machine_id": "T1.3-M02",
+    "sku": "BW-SL-CLR-100Mx100CMx1ROLL-RED",
+    "output_qty": 1
+  },
+  {
+    "log_id": "434ffa76-e49c-412c-90bf-52907b75ab5e",
+    "created_at": "2026-04-01T13:06:14.990418+00:00",
+    "machine_id": "T1.2-M01",
+    "sku": "BW-SL-CLR-100Mx100CMx1ROLL-RED",
+    "output_qty": 1
+  },
+  {
+    "log_id": "eedd3c5c-ea72-4bf7-bf11-9123d8780684",
+    "created_at": "2026-04-01T13:09:22.025814+00:00",
+    "machine_id": "T1.3-M02",
+    "sku": "BW-SL-CLR-100Mx100CMx1ROLL-RED",
+    "output_qty": 1
+  },
+  {
+    "log_id": "b37886ea-60b5-4195-9226-4d0932c3363c",
+    "created_at": "2026-04-01T13:11:37.712331+00:00",
+    "machine_id": "T1.2-M01",
+    "sku": "BW-SL-CLR-100Mx100CMx1ROLL-RED",
+    "output_qty": 1
+  },
+  {
+    "log_id": "5285018e-63e8-40c7-bcb1-b0ce08cb4741",
+    "created_at": "2026-04-01T13:15:03.374271+00:00",
+    "machine_id": "T1.3-M02",
+    "sku": "BW-SL-CLR-100Mx100CMx1ROLL-RED",
+    "output_qty": 1
+  },
+  {
+    "log_id": "bc5bb09b-278e-49e8-bde0-557cd3d98586",
+    "created_at": "2026-04-01T13:17:00.911952+00:00",
+    "machine_id": "T1.2-M01",
+    "sku": "BW-SL-CLR-100Mx100CMx1ROLL-RED",
+    "output_qty": 1
+  },
+  {
+    "log_id": "04f5782b-b853-4bd8-b383-3a36c6c286e9",
+    "created_at": "2026-04-01T13:20:45.712304+00:00",
+    "machine_id": "T1.3-M02",
+    "sku": "BW-SL-CLR-100Mx100CMx1ROLL-RED",
+    "output_qty": 1
+  },
+  {
+    "log_id": "4cac2c70-89bb-4b13-802d-060f26a17140",
+    "created_at": "2026-04-01T13:22:24.081149+00:00",
+    "machine_id": "T1.2-M01",
+    "sku": "BW-SL-CLR-100Mx100CMx1ROLL-RED",
+    "output_qty": 1
+  },
+  {
+    "log_id": "2d5241cf-5871-444f-b9c5-a19f4eb267e7",
+    "created_at": "2026-04-01T13:26:27.602258+00:00",
+    "machine_id": "T1.3-M02",
+    "sku": "BW-SL-CLR-100Mx100CMx1ROLL-RED",
+    "output_qty": 1
+  },
+  {
+    "log_id": "65146774-b704-4e78-8fd4-af7cdc88184e",
+    "created_at": "2026-04-01T13:27:47.225996+00:00",
+    "machine_id": "T1.2-M01",
+    "sku": "BW-SL-CLR-100Mx100CMx1ROLL-RED",
+    "output_qty": 1
+  },
+  {
+    "log_id": "8b9b1402-0c04-4273-8941-3e9f0b502d60",
+    "created_at": "2026-04-01T13:32:10.29911+00:00",
+    "machine_id": "T1.3-M02",
+    "sku": "BW-SL-CLR-100Mx100CMx1ROLL-RED",
+    "output_qty": 1
+  },
+  {
+    "log_id": "6108e332-83be-4932-9ca8-cb7e51d3daf5",
+    "created_at": "2026-04-01T13:33:10.682638+00:00",
+    "machine_id": "T1.2-M01",
+    "sku": "BW-SL-CLR-100Mx100CMx1ROLL-RED",
+    "output_qty": 1
+  },
+  {
+    "log_id": "8df03f87-c914-4b75-98c0-d0a5b4ecd558",
+    "created_at": "2026-04-01T13:37:52.731706+00:00",
+    "machine_id": "T1.3-M02",
+    "sku": "BW-SL-CLR-100Mx100CMx1ROLL-RED",
+    "output_qty": 1
+  },
+  {
+    "log_id": "f70d0901-1857-4bca-a741-b012c2ba7ddf",
+    "created_at": "2026-04-01T13:38:33.567086+00:00",
+    "machine_id": "T1.2-M01",
+    "sku": "BW-SL-CLR-100Mx100CMx1ROLL-RED",
+    "output_qty": 1
+  },
+  {
+    "log_id": "4012f33f-d093-484a-9cbd-4304c14c98f9",
+    "created_at": "2026-04-01T13:44:26.136761+00:00",
+    "machine_id": "T1.3-M02",
+    "sku": "BW-SL-CLR-100Mx100CMx1ROLL-RED",
+    "output_qty": 1
+  },
+  {
+    "log_id": "6b683df0-5a1f-46fe-92b7-9fe5f4bf588f",
+    "created_at": "2026-04-01T13:49:15.287531+00:00",
+    "machine_id": "T1.3-M02",
+    "sku": "BW-SL-CLR-100Mx100CMx1ROLL-RED",
+    "output_qty": 1
+  },
+  {
+    "log_id": "55c727a0-0d57-4db4-b66b-5fa4751c94e1",
+    "created_at": "2026-04-01T13:49:20.444133+00:00",
+    "machine_id": "T1.2-M01",
+    "sku": "BW-SL-CLR-100Mx100CMx1ROLL-RED",
+    "output_qty": 1
+  },
+  {
+    "log_id": "d377ece9-2572-4b18-b539-d01ae6068cbb",
+    "created_at": "2026-04-01T13:54:43.201601+00:00",
+    "machine_id": "T1.2-M01",
+    "sku": "BW-SL-CLR-100Mx100CMx1ROLL-RED",
+    "output_qty": 1
+  },
+  {
+    "log_id": "bfd7e18f-272a-4107-9d1f-659c9e54f9f1",
+    "created_at": "2026-04-01T13:54:57.397388+00:00",
+    "machine_id": "T1.3-M02",
+    "sku": "BW-SL-CLR-100Mx100CMx1ROLL-RED",
+    "output_qty": 1
+  },
+  {
+    "log_id": "bdf727f3-ae9d-4c7e-a22e-e12d804a3939",
+    "created_at": "2026-04-01T14:00:06.299051+00:00",
+    "machine_id": "T1.2-M01",
+    "sku": "BW-SL-CLR-100Mx100CMx1ROLL-RED",
+    "output_qty": 1
+  },
+  {
+    "log_id": "1b1b0dc3-f08c-40b2-88eb-5df341a6cf54",
+    "created_at": "2026-04-01T14:00:40.607228+00:00",
+    "machine_id": "T1.3-M02",
+    "sku": "BW-SL-CLR-100Mx100CMx1ROLL-RED",
+    "output_qty": 1
+  },
+  {
+    "log_id": "e845a827-6cba-411c-b2db-21cf4f5fd67e",
+    "created_at": "2026-04-01T14:05:29.425142+00:00",
+    "machine_id": "T1.2-M01",
+    "sku": "BW-SL-CLR-100Mx100CMx1ROLL-RED",
+    "output_qty": 1
+  },
+  {
+    "log_id": "c8892688-00cf-4d7a-86bb-9ee867e744d3",
+    "created_at": "2026-04-01T14:06:21.458749+00:00",
+    "machine_id": "T1.3-M02",
+    "sku": "BW-SL-CLR-100Mx100CMx1ROLL-RED",
+    "output_qty": 1
+  },
+  {
+    "log_id": "e6c582cc-f408-406e-9f59-61e463701251",
+    "created_at": "2026-04-01T14:10:52.581564+00:00",
+    "machine_id": "T1.2-M01",
+    "sku": "BW-SL-CLR-100Mx100CMx1ROLL-RED",
+    "output_qty": 1
+  },
+  {
+    "log_id": "cf99d4cb-dbd6-4925-b158-7da0c21a3cf0",
+    "created_at": "2026-04-01T14:12:03.909579+00:00",
+    "machine_id": "T1.3-M02",
+    "sku": "BW-SL-CLR-100Mx100CMx1ROLL-RED",
+    "output_qty": 1
+  },
+  {
+    "log_id": "d72b1f16-881b-4b0a-b472-17241344cf2f",
+    "created_at": "2026-04-01T14:16:15.870482+00:00",
+    "machine_id": "T1.2-M01",
+    "sku": "BW-SL-CLR-100Mx100CMx1ROLL-RED",
+    "output_qty": 1
+  },
+  {
+    "log_id": "62e8d3b5-e03e-4219-8657-95142796d5fb",
+    "created_at": "2026-04-01T14:17:45.404249+00:00",
+    "machine_id": "T1.3-M02",
+    "sku": "BW-SL-CLR-100Mx100CMx1ROLL-RED",
+    "output_qty": 1
+  },
+  {
+    "log_id": "dd25f5f6-4984-4e59-8519-8ff222f0f172",
+    "created_at": "2026-04-01T14:21:38.910305+00:00",
+    "machine_id": "T1.2-M01",
+    "sku": "BW-SL-CLR-100Mx100CMx1ROLL-RED",
+    "output_qty": 1
+  },
+  {
+    "log_id": "ff3dbcd6-eddd-4d86-9910-5daad4536fbb",
+    "created_at": "2026-04-01T14:23:27.498104+00:00",
+    "machine_id": "T1.3-M02",
+    "sku": "BW-SL-CLR-100Mx100CMx1ROLL-RED",
+    "output_qty": 1
+  },
+  {
+    "log_id": "4a7d4a4e-7b7c-44c3-8b62-e0b4d2a519e7",
+    "created_at": "2026-04-01T14:27:02.120529+00:00",
+    "machine_id": "T1.2-M01",
+    "sku": "BW-SL-CLR-100Mx100CMx1ROLL-RED",
+    "output_qty": 1
+  },
+  {
+    "log_id": "009f6b40-da04-491e-8fdc-7b5029a35876",
+    "created_at": "2026-04-01T14:29:10.370216+00:00",
+    "machine_id": "T1.3-M02",
+    "sku": "BW-SL-CLR-100Mx100CMx1ROLL-RED",
+    "output_qty": 1
+  },
+  {
+    "log_id": "1391fe36-d9da-4f37-b8a9-8ba87e21a125",
+    "created_at": "2026-04-01T14:32:25.331635+00:00",
+    "machine_id": "T1.2-M01",
+    "sku": "BW-SL-CLR-100Mx100CMx1ROLL-RED",
+    "output_qty": 1
+  },
+  {
+    "log_id": "123f13fe-32a6-45a6-a472-277c5b6652c0",
+    "created_at": "2026-04-01T14:34:52.165759+00:00",
+    "machine_id": "T1.3-M02",
+    "sku": "BW-SL-CLR-100Mx100CMx1ROLL-RED",
+    "output_qty": 1
+  },
+  {
+    "log_id": "2e49d803-0131-438d-beb1-f5a1dcb5fda9",
+    "created_at": "2026-04-01T14:37:48.549556+00:00",
+    "machine_id": "T1.2-M01",
+    "sku": "BW-SL-CLR-100Mx100CMx1ROLL-RED",
+    "output_qty": 1
+  },
+  {
+    "log_id": "b025157c-4dd0-4214-bbe5-ecf958d78ceb",
+    "created_at": "2026-04-01T14:40:34.186347+00:00",
+    "machine_id": "T1.3-M02",
+    "sku": "BW-SL-CLR-100Mx100CMx1ROLL-RED",
+    "output_qty": 1
+  },
+  {
+    "log_id": "b1f50800-be32-4fcf-90f4-652371bd46ef",
+    "created_at": "2026-04-01T14:43:11.704707+00:00",
+    "machine_id": "T1.2-M01",
+    "sku": "BW-SL-CLR-100Mx100CMx1ROLL-RED",
+    "output_qty": 1
+  },
+  {
+    "log_id": "667c6b2e-9a6d-47f4-9e3e-4586481d02c3",
+    "created_at": "2026-04-01T14:46:18.59755+00:00",
+    "machine_id": "T1.3-M02",
+    "sku": "BW-SL-CLR-100Mx100CMx1ROLL-RED",
+    "output_qty": 1
+  },
+  {
+    "log_id": "a1af221a-1f5a-4d52-b080-96bb907121c7",
+    "created_at": "2026-04-01T14:48:35.288759+00:00",
+    "machine_id": "T1.2-M01",
+    "sku": "BW-SL-CLR-100Mx100CMx1ROLL-RED",
+    "output_qty": 1
+  },
+  {
+    "log_id": "7a56cdd4-f6a4-4753-b017-c6393e81b11e",
+    "created_at": "2026-04-01T14:52:18.616475+00:00",
+    "machine_id": "T1.3-M02",
+    "sku": "BW-SL-CLR-100Mx100CMx1ROLL-RED",
+    "output_qty": 1
+  },
+  {
+    "log_id": "8ce4b069-8e56-4e7e-8eac-014870956c09",
+    "created_at": "2026-04-01T14:53:59.974595+00:00",
+    "machine_id": "T1.2-M01",
+    "sku": "BW-SL-CLR-100Mx100CMx1ROLL-RED",
+    "output_qty": 1
+  },
+  {
+    "log_id": "f586fdf0-19aa-467e-8c1e-9db69f6a3577",
+    "created_at": "2026-04-01T14:57:39.637492+00:00",
+    "machine_id": "T1.3-M02",
+    "sku": "BW-SL-CLR-100Mx100CMx1ROLL-RED",
+    "output_qty": 1
+  },
+  {
+    "log_id": "33b348fe-4783-4ac9-ab82-73e635a86283",
+    "created_at": "2026-04-01T14:59:24.21413+00:00",
+    "machine_id": "T1.2-M01",
+    "sku": "BW-SL-CLR-100Mx100CMx1ROLL-RED",
+    "output_qty": 1
+  },
+  {
+    "log_id": "26313b70-0cec-46f9-99c1-61727c7e0af8",
+    "created_at": "2026-04-01T15:03:22.212972+00:00",
+    "machine_id": "T1.3-M02",
+    "sku": "BW-SL-CLR-100Mx100CMx1ROLL-RED",
+    "output_qty": 1
+  },
+  {
+    "log_id": "7563ac4f-a86c-4755-9ad6-7f7408ba7691",
+    "created_at": "2026-04-01T15:04:48.225848+00:00",
+    "machine_id": "T1.2-M01",
+    "sku": "BW-SL-CLR-100Mx100CMx1ROLL-RED",
+    "output_qty": 1
+  },
+  {
+    "log_id": "efc344b8-e0a0-4694-b26e-48a434f04ea0",
+    "created_at": "2026-04-01T15:09:04.223683+00:00",
+    "machine_id": "T1.3-M02",
+    "sku": "BW-SL-CLR-100Mx100CMx1ROLL-RED",
+    "output_qty": 1
+  },
+  {
+    "log_id": "62d959ad-95d2-4a5f-8d50-b3d50f6a395a",
+    "created_at": "2026-04-01T15:10:07.584939+00:00",
+    "machine_id": "T1.2-M01",
+    "sku": "BW-SL-CLR-100Mx100CMx1ROLL-RED",
+    "output_qty": 1
+  },
+  {
+    "log_id": "8c9f063e-4711-4e1e-a855-d11b3c501aee",
+    "created_at": "2026-04-01T15:14:45.899072+00:00",
+    "machine_id": "T1.3-M02",
+    "sku": "BW-SL-CLR-100Mx100CMx1ROLL-RED",
+    "output_qty": 1
+  },
+  {
+    "log_id": "2d811c1c-e4c8-4d0d-9dcf-a48c0aaffa1f",
+    "created_at": "2026-04-01T15:15:31.400243+00:00",
+    "machine_id": "T1.2-M01",
+    "sku": "BW-SL-CLR-100Mx100CMx1ROLL-RED",
+    "output_qty": 1
+  },
+  {
+    "log_id": "b578d6d4-42fd-4829-b807-729551b4f6d3",
+    "created_at": "2026-04-01T15:20:27.871754+00:00",
+    "machine_id": "T1.3-M02",
+    "sku": "BW-SL-CLR-100Mx100CMx1ROLL-RED",
+    "output_qty": 1
+  },
+  {
+    "log_id": "134c9beb-48fa-412c-95bf-986115cfa311",
+    "created_at": "2026-04-01T15:20:54.325168+00:00",
+    "machine_id": "T1.2-M01",
+    "sku": "BW-SL-CLR-100Mx100CMx1ROLL-RED",
+    "output_qty": 1
+  },
+  {
+    "log_id": "6d341c9d-4966-44e7-8cd2-13535049a041",
+    "created_at": "2026-04-01T15:26:11.516113+00:00",
+    "machine_id": "T1.3-M02",
+    "sku": "BW-SL-CLR-100Mx100CMx1ROLL-RED",
+    "output_qty": 1
+  },
+  {
+    "log_id": "890ee00e-2b56-4eba-ae44-6acf18e0a9c9",
+    "created_at": "2026-04-01T15:26:17.189739+00:00",
+    "machine_id": "T1.2-M01",
+    "sku": "BW-SL-CLR-100Mx100CMx1ROLL-RED",
+    "output_qty": 1
+  },
+  {
+    "log_id": "4537384c-ee5d-4ee9-a242-e7890bc0ac00",
+    "created_at": "2026-04-01T15:31:40.569876+00:00",
+    "machine_id": "T1.2-M01",
+    "sku": "BW-SL-CLR-100Mx100CMx1ROLL-RED",
+    "output_qty": 1
+  },
+  {
+    "log_id": "dc5d07e5-2efe-43b0-8d3d-eaccc7cf4976",
+    "created_at": "2026-04-01T15:31:52.040175+00:00",
+    "machine_id": "T1.3-M02",
+    "sku": "BW-SL-CLR-100Mx100CMx1ROLL-RED",
+    "output_qty": 1
+  },
+  {
+    "log_id": "7b05d637-896d-4dab-be39-caeaaf7de1c9",
+    "created_at": "2026-04-01T15:37:05.733058+00:00",
+    "machine_id": "T1.2-M01",
+    "sku": "BW-SL-CLR-100Mx100CMx1ROLL-RED",
+    "output_qty": 1
+  },
+  {
+    "log_id": "f42e1ad4-554f-449f-87d0-db228b74fa9a",
+    "created_at": "2026-04-01T15:37:34.046443+00:00",
+    "machine_id": "T1.3-M02",
+    "sku": "BW-SL-CLR-100Mx100CMx1ROLL-RED",
+    "output_qty": 1
+  },
+  {
+    "log_id": "2b00a201-2454-45ca-9f40-4b5e9835eb46",
+    "created_at": "2026-04-01T15:42:26.959919+00:00",
+    "machine_id": "T1.2-M01",
+    "sku": "BW-SL-CLR-100Mx100CMx1ROLL-RED",
+    "output_qty": 1
+  },
+  {
+    "log_id": "e039ea8d-3fc3-47a0-be67-41ffe9c70514",
+    "created_at": "2026-04-01T15:43:16.786073+00:00",
+    "machine_id": "T1.3-M02",
+    "sku": "BW-SL-CLR-100Mx100CMx1ROLL-RED",
+    "output_qty": 1
+  },
+  {
+    "log_id": "f0160048-2bdc-4b88-a2dd-4e756e268860",
+    "created_at": "2026-04-01T15:47:49.974245+00:00",
+    "machine_id": "T1.2-M01",
+    "sku": "BW-SL-CLR-100Mx100CMx1ROLL-RED",
+    "output_qty": 1
+  },
+  {
+    "log_id": "a23262d4-3b02-4974-8b14-29e320ba550b",
+    "created_at": "2026-04-01T15:48:58.561168+00:00",
+    "machine_id": "T1.3-M02",
+    "sku": "BW-SL-CLR-100Mx100CMx1ROLL-RED",
+    "output_qty": 1
+  },
+  {
+    "log_id": "e1e7aad0-b0a2-4913-99c0-2a9971e46b60",
+    "created_at": "2026-04-01T15:53:13.258528+00:00",
+    "machine_id": "T1.2-M01",
+    "sku": "BW-SL-CLR-100Mx100CMx1ROLL-RED",
+    "output_qty": 1
+  },
+  {
+    "log_id": "893c5329-f3c8-4f3a-9661-58cd7acdc989",
+    "created_at": "2026-04-01T15:54:41.670897+00:00",
+    "machine_id": "T1.3-M02",
+    "sku": "BW-SL-CLR-100Mx100CMx1ROLL-RED",
+    "output_qty": 1
+  },
+  {
+    "log_id": "3fb7f8a8-674c-4b10-9de2-361bc6ca222e",
+    "created_at": "2026-04-01T15:58:36.374353+00:00",
+    "machine_id": "T1.2-M01",
+    "sku": "BW-SL-CLR-100Mx100CMx1ROLL-RED",
+    "output_qty": 1
+  },
+  {
+    "log_id": "af590df4-1180-4d20-85a8-cf9e5e1ad800",
+    "created_at": "2026-04-01T16:00:22.438642+00:00",
+    "machine_id": "T1.3-M02",
+    "sku": "BW-SL-CLR-100Mx100CMx1ROLL-RED",
+    "output_qty": 1
+  },
+  {
+    "log_id": "60f8cb94-ca96-43d6-928c-795b08f5bd4c",
+    "created_at": "2026-04-01T16:04:00.124762+00:00",
+    "machine_id": "T1.2-M01",
+    "sku": "BW-SL-CLR-100Mx100CMx1ROLL-RED",
+    "output_qty": 1
+  },
+  {
+    "log_id": "6bf0678d-e284-4d9f-b511-33129d982637",
+    "created_at": "2026-04-01T16:06:05.019959+00:00",
+    "machine_id": "T1.3-M02",
+    "sku": "BW-SL-CLR-100Mx100CMx1ROLL-RED",
+    "output_qty": 1
+  },
+  {
+    "log_id": "4a572fed-f221-4858-afbd-c162963792d1",
+    "created_at": "2026-04-01T16:09:22.632916+00:00",
+    "machine_id": "T1.2-M01",
+    "sku": "BW-SL-CLR-100Mx100CMx1ROLL-RED",
+    "output_qty": 1
+  },
+  {
+    "log_id": "5440c559-8124-4b2e-abb2-51ad629a8f63",
+    "created_at": "2026-04-01T16:11:47.232515+00:00",
+    "machine_id": "T1.3-M02",
+    "sku": "BW-SL-CLR-100Mx100CMx1ROLL-RED",
+    "output_qty": 1
+  },
+  {
+    "log_id": "7d70117a-3899-4cff-b8bf-878189d0a4f6",
+    "created_at": "2026-04-01T16:14:45.937189+00:00",
+    "machine_id": "T1.2-M01",
+    "sku": "BW-SL-CLR-100Mx100CMx1ROLL-RED",
+    "output_qty": 1
+  },
+  {
+    "log_id": "a4f08e3a-1acc-4ae3-9b5b-c522fc0e3e43",
+    "created_at": "2026-04-01T16:17:28.396526+00:00",
+    "machine_id": "T1.3-M02",
+    "sku": "BW-SL-CLR-100Mx100CMx1ROLL-RED",
+    "output_qty": 1
+  },
+  {
+    "log_id": "eb7c5802-95bc-4855-8d88-354d8869cd49",
+    "created_at": "2026-04-01T16:20:09.492952+00:00",
+    "machine_id": "T1.2-M01",
+    "sku": "BW-SL-CLR-100Mx100CMx1ROLL-RED",
+    "output_qty": 1
+  },
+  {
+    "log_id": "ef9235bf-d78a-4134-a3a5-25f137344b38",
+    "created_at": "2026-04-01T16:23:11.1347+00:00",
+    "machine_id": "T1.3-M02",
+    "sku": "BW-SL-CLR-100Mx100CMx1ROLL-RED",
+    "output_qty": 1
+  },
+  {
+    "log_id": "b62b20ec-1c54-44d1-b3af-7a60c8f06b8c",
+    "created_at": "2026-04-01T16:25:33.229266+00:00",
+    "machine_id": "T1.2-M01",
+    "sku": "BW-SL-CLR-100Mx100CMx1ROLL-RED",
+    "output_qty": 1
+  },
+  {
+    "log_id": "3ad40c81-3ab5-4736-a475-460127f140f6",
+    "created_at": "2026-04-01T16:28:52.655032+00:00",
+    "machine_id": "T1.3-M02",
+    "sku": "BW-SL-CLR-100Mx100CMx1ROLL-RED",
+    "output_qty": 1
+  },
+  {
+    "log_id": "4a27679f-8b3c-44aa-acae-d5973ccd6722",
+    "created_at": "2026-04-01T16:30:55.50554+00:00",
+    "machine_id": "T1.2-M01",
+    "sku": "BW-SL-CLR-100Mx100CMx1ROLL-RED",
+    "output_qty": 1
+  },
+  {
+    "log_id": "5c294d3b-256e-4537-b382-6722446b173b",
+    "created_at": "2026-04-01T16:34:34.959357+00:00",
+    "machine_id": "T1.3-M02",
+    "sku": "BW-SL-CLR-100Mx100CMx1ROLL-RED",
+    "output_qty": 1
+  },
+  {
+    "log_id": "81538aeb-4f79-4049-b9e8-15e5faabd44b",
+    "created_at": "2026-04-01T16:36:18.59322+00:00",
+    "machine_id": "T1.2-M01",
+    "sku": "BW-SL-CLR-100Mx100CMx1ROLL-RED",
+    "output_qty": 1
+  },
+  {
+    "log_id": "69ac4c99-e874-4877-9635-3234127b16b5",
+    "created_at": "2026-04-01T16:40:16.489781+00:00",
+    "machine_id": "T1.3-M02",
+    "sku": "BW-SL-CLR-100Mx100CMx1ROLL-RED",
+    "output_qty": 1
+  },
+  {
+    "log_id": "a8396e2f-b6bd-4cb0-8436-c524d7b6b87a",
+    "created_at": "2026-04-01T16:41:41.752089+00:00",
+    "machine_id": "T1.2-M01",
+    "sku": "BW-SL-CLR-100Mx100CMx1ROLL-RED",
+    "output_qty": 1
+  },
+  {
+    "log_id": "6c4f1252-facd-4861-a60b-a4b3148d47cb",
+    "created_at": "2026-04-01T16:45:59.027464+00:00",
+    "machine_id": "T1.3-M02",
+    "sku": "BW-SL-CLR-100Mx100CMx1ROLL-RED",
+    "output_qty": 1
+  },
+  {
+    "log_id": "1f1e1374-77ed-47d6-8e22-2f03f2d826b5",
+    "created_at": "2026-04-01T16:47:05.065245+00:00",
+    "machine_id": "T1.2-M01",
+    "sku": "BW-SL-CLR-100Mx100CMx1ROLL-RED",
+    "output_qty": 1
+  },
+  {
+    "log_id": "1867ad03-2c2d-4561-8df8-8c12e919ccd3",
+    "created_at": "2026-04-01T16:51:40.634677+00:00",
+    "machine_id": "T1.3-M02",
+    "sku": "BW-SL-CLR-100Mx100CMx1ROLL-RED",
+    "output_qty": 1
+  },
+  {
+    "log_id": "82dee748-9a8a-474b-8c94-02d12b8cee51",
+    "created_at": "2026-04-01T16:52:28.16565+00:00",
+    "machine_id": "T1.2-M01",
+    "sku": "BW-SL-CLR-100Mx100CMx1ROLL-RED",
+    "output_qty": 1
+  },
+  {
+    "log_id": "a899573d-5b79-4710-ae8f-db82982369f2",
+    "created_at": "2026-04-01T16:57:22.681384+00:00",
+    "machine_id": "T1.3-M02",
+    "sku": "BW-SL-CLR-100Mx100CMx1ROLL-RED",
+    "output_qty": 1
+  },
+  {
+    "log_id": "4389a110-4f7f-4221-814d-ce6b6ee66908",
+    "created_at": "2026-04-01T16:57:51.53951+00:00",
+    "machine_id": "T1.2-M01",
+    "sku": "BW-SL-CLR-100Mx100CMx1ROLL-RED",
+    "output_qty": 1
+  },
+  {
+    "log_id": "6c2b6648-0828-4ea4-b245-958958a97e89",
+    "created_at": "2026-04-01T17:03:05.634406+00:00",
+    "machine_id": "T1.3-M02",
+    "sku": "BW-SL-CLR-100Mx100CMx1ROLL-RED",
+    "output_qty": 1
+  },
+  {
+    "log_id": "8fb73a3f-0a75-48ce-bd69-cc1a32c942bb",
+    "created_at": "2026-04-01T17:03:15.094619+00:00",
+    "machine_id": "T1.2-M01",
+    "sku": "BW-SL-CLR-100Mx100CMx1ROLL-RED",
+    "output_qty": 1
+  },
+  {
+    "log_id": "c07e5f22-5d68-4f86-a321-2d2c34223c0d",
+    "created_at": "2026-04-01T17:08:37.742247+00:00",
+    "machine_id": "T1.2-M01",
+    "sku": "BW-SL-CLR-100Mx100CMx1ROLL-RED",
+    "output_qty": 1
+  },
+  {
+    "log_id": "952cf62c-fd55-49fe-8187-1b26f26e569b",
+    "created_at": "2026-04-01T17:08:37.742247+00:00",
+    "machine_id": "T1.2-M01",
+    "sku": "BW-SL-CLR-100Mx100CMx1ROLL-RED",
+    "output_qty": 1
+  },
+  {
+    "log_id": "2b96d79e-651c-40a8-8c3b-82f9e42b1d9b",
+    "created_at": "2026-04-01T17:08:47.284337+00:00",
+    "machine_id": "T1.3-M02",
+    "sku": "BW-SL-CLR-100Mx100CMx1ROLL-RED",
+    "output_qty": 1
+  },
+  {
+    "log_id": "d584ab25-722c-47e4-9214-89935ebd3d6e",
+    "created_at": "2026-04-01T17:14:03.233953+00:00",
+    "machine_id": "T1.2-M01",
+    "sku": "BW-SL-CLR-100Mx100CMx1ROLL-RED",
+    "output_qty": 1
+  },
+  {
+    "log_id": "56ce664f-b762-49b4-8f80-d75c295f1a11",
+    "created_at": "2026-04-01T17:14:03.233953+00:00",
+    "machine_id": "T1.2-M01",
+    "sku": "BW-SL-CLR-100Mx100CMx1ROLL-RED",
+    "output_qty": 1
+  },
+  {
+    "log_id": "52e9f7b5-bb83-4009-9e02-68574158c4c5",
+    "created_at": "2026-04-01T17:14:29.507114+00:00",
+    "machine_id": "T1.3-M02",
+    "sku": "BW-SL-CLR-100Mx100CMx1ROLL-RED",
+    "output_qty": 1
+  },
+  {
+    "log_id": "f5fd2844-80d6-4b5e-a8d4-954f2ecd7861",
+    "created_at": "2026-04-01T17:19:32.304301+00:00",
+    "machine_id": "T1.2-M01",
+    "sku": "BW-SL-CLR-100Mx100CMx1ROLL-RED",
+    "output_qty": 1
+  },
+  {
+    "log_id": "9f4649de-8aa0-42c7-a381-96eb1a1e9eab",
+    "created_at": "2026-04-01T17:19:32.304301+00:00",
+    "machine_id": "T1.2-M01",
+    "sku": "BW-SL-CLR-100Mx100CMx1ROLL-RED",
+    "output_qty": 1
+  },
+  {
+    "log_id": "4c5b6d3d-b490-4205-888e-568ed0a646c8",
+    "created_at": "2026-04-01T17:20:11.170155+00:00",
+    "machine_id": "T1.3-M02",
+    "sku": "BW-SL-CLR-100Mx100CMx1ROLL-RED",
+    "output_qty": 1
+  },
+  {
+    "log_id": "2427c29c-1639-4158-9d2e-883840df6440",
+    "created_at": "2026-04-01T17:25:02.211733+00:00",
+    "machine_id": "T1.2-M01",
+    "sku": "BW-SL-CLR-100Mx100CMx1ROLL-RED",
+    "output_qty": 1
+  },
+  {
+    "log_id": "2fda78fd-d454-4b4d-a5c3-89b90b7fa743",
+    "created_at": "2026-04-01T17:25:02.211733+00:00",
+    "machine_id": "T1.2-M01",
+    "sku": "BW-SL-CLR-100Mx100CMx1ROLL-RED",
+    "output_qty": 1
+  },
+  {
+    "log_id": "ab82fb0d-946a-47b7-a7d2-e24dee2de87e",
+    "created_at": "2026-04-01T17:25:53.186476+00:00",
+    "machine_id": "T1.3-M02",
+    "sku": "BW-SL-CLR-100Mx100CMx1ROLL-RED",
+    "output_qty": 1
+  },
+  {
+    "log_id": "c38d4c74-874b-44ac-b5b0-45ef6c817424",
+    "created_at": "2026-04-01T17:30:32.085636+00:00",
+    "machine_id": "T1.2-M01",
+    "sku": "BW-SL-CLR-100Mx100CMx1ROLL-RED",
+    "output_qty": 1
+  },
+  {
+    "log_id": "cea3fb14-0e47-478c-9b55-8cac5bbe24c5",
+    "created_at": "2026-04-01T17:30:32.085636+00:00",
+    "machine_id": "T1.2-M01",
+    "sku": "BW-SL-CLR-100Mx100CMx1ROLL-RED",
+    "output_qty": 1
+  },
+  {
+    "log_id": "f93c021b-983e-4987-a490-61c2dba95d09",
+    "created_at": "2026-04-01T17:31:35.055309+00:00",
+    "machine_id": "T1.3-M02",
+    "sku": "BW-SL-CLR-100Mx100CMx1ROLL-RED",
+    "output_qty": 1
+  },
+  {
+    "log_id": "4fc785b7-9a7c-428d-b8e5-aeac8fb4487e",
+    "created_at": "2026-04-01T17:36:02.107115+00:00",
+    "machine_id": "T1.2-M01",
+    "sku": "BW-SL-CLR-100Mx100CMx1ROLL-RED",
+    "output_qty": 1
+  },
+  {
+    "log_id": "6bccba90-8831-432b-a868-44261dcaed17",
+    "created_at": "2026-04-01T17:36:02.107115+00:00",
+    "machine_id": "T1.2-M01",
+    "sku": "BW-SL-CLR-100Mx100CMx1ROLL-RED",
+    "output_qty": 1
+  },
+  {
+    "log_id": "dd5d8579-fa19-49ec-b7ac-bcf3bfb284c7",
+    "created_at": "2026-04-01T17:37:17.442158+00:00",
+    "machine_id": "T1.3-M02",
+    "sku": "BW-SL-CLR-100Mx100CMx1ROLL-RED",
+    "output_qty": 1
+  },
+  {
+    "log_id": "910c0bec-e3cc-46f7-91d2-fc58c5b3b276",
+    "created_at": "2026-04-01T17:41:31.96684+00:00",
+    "machine_id": "T1.2-M01",
+    "sku": "BW-SL-CLR-100Mx100CMx1ROLL-RED",
+    "output_qty": 1
+  },
+  {
+    "log_id": "1dcbc009-8ef5-4d57-8b59-eb3095db34da",
+    "created_at": "2026-04-01T17:41:31.96684+00:00",
+    "machine_id": "T1.2-M01",
+    "sku": "BW-SL-CLR-100Mx100CMx1ROLL-RED",
+    "output_qty": 1
+  },
+  {
+    "log_id": "1cdfdc17-096e-4e2a-95d4-83e2eb57121c",
+    "created_at": "2026-04-01T17:42:58.658822+00:00",
+    "machine_id": "T1.3-M02",
+    "sku": "BW-SL-CLR-100Mx100CMx1ROLL-RED",
+    "output_qty": 1
+  },
+  {
+    "log_id": "1bc85933-1d42-4e3e-8eea-d197237bbb1e",
+    "created_at": "2026-04-01T17:47:02.379596+00:00",
+    "machine_id": "T1.2-M01",
+    "sku": "BW-SL-CLR-100Mx100CMx1ROLL-RED",
+    "output_qty": 1
+  },
+  {
+    "log_id": "cefa0c1c-4b5b-41b3-b606-fdc31aaf387c",
+    "created_at": "2026-04-01T17:47:02.379596+00:00",
+    "machine_id": "T1.2-M01",
+    "sku": "BW-SL-CLR-100Mx100CMx1ROLL-RED",
+    "output_qty": 1
+  },
+  {
+    "log_id": "6b74361b-2465-4149-a312-1d6d30210fd1",
+    "created_at": "2026-04-01T17:48:40.922738+00:00",
+    "machine_id": "T1.3-M02",
+    "sku": "BW-SL-CLR-100Mx100CMx1ROLL-RED",
+    "output_qty": 1
+  },
+  {
+    "log_id": "57837478-ed27-4c11-a1b0-87a284437f15",
+    "created_at": "2026-04-01T17:52:31.784741+00:00",
+    "machine_id": "T1.2-M01",
+    "sku": "BW-SL-CLR-100Mx100CMx1ROLL-RED",
+    "output_qty": 1
+  },
+  {
+    "log_id": "d1eaedec-bc90-4a18-95f4-a0d4ef675a38",
+    "created_at": "2026-04-01T17:52:31.784741+00:00",
+    "machine_id": "T1.2-M01",
+    "sku": "BW-SL-CLR-100Mx100CMx1ROLL-RED",
+    "output_qty": 1
+  },
+  {
+    "log_id": "c32baf64-da78-4b17-aa9e-496a69028c91",
+    "created_at": "2026-04-01T17:54:22.763248+00:00",
+    "machine_id": "T1.3-M02",
+    "sku": "BW-SL-CLR-100Mx100CMx1ROLL-RED",
+    "output_qty": 1
+  },
+  {
+    "log_id": "5ea2ac6c-e913-49ae-8952-67720c3c116d",
+    "created_at": "2026-04-01T17:58:02.109538+00:00",
+    "machine_id": "T1.2-M01",
+    "sku": "BW-SL-CLR-100Mx100CMx1ROLL-RED",
+    "output_qty": 1
+  },
+  {
+    "log_id": "20b87ee0-58c5-42b3-8786-eff2b1cb28ac",
+    "created_at": "2026-04-01T17:58:02.109538+00:00",
+    "machine_id": "T1.2-M01",
+    "sku": "BW-SL-CLR-100Mx100CMx1ROLL-RED",
+    "output_qty": 1
+  },
+  {
+    "log_id": "df59b7fa-5d63-4294-bf9c-11642326b12e",
+    "created_at": "2026-04-01T18:00:05.84922+00:00",
+    "machine_id": "T1.3-M02",
+    "sku": "BW-SL-CLR-100Mx100CMx1ROLL-RED",
+    "output_qty": 1
+  },
+  {
+    "log_id": "5a823b88-060f-4357-b5bc-dd5f835a6bae",
+    "created_at": "2026-04-01T18:03:31.654479+00:00",
+    "machine_id": "T1.2-M01",
+    "sku": "BW-SL-CLR-100Mx100CMx1ROLL-RED",
+    "output_qty": 1
+  },
+  {
+    "log_id": "e6a84d03-100f-4326-8dfa-af0518ac38d5",
+    "created_at": "2026-04-01T18:03:31.654479+00:00",
+    "machine_id": "T1.2-M01",
+    "sku": "BW-SL-CLR-100Mx100CMx1ROLL-RED",
+    "output_qty": 1
+  },
+  {
+    "log_id": "6c4fb13f-75de-4c24-92a7-39e978f0cff1",
+    "created_at": "2026-04-01T18:05:47.380335+00:00",
+    "machine_id": "T1.3-M02",
+    "sku": "BW-SL-CLR-100Mx100CMx1ROLL-RED",
+    "output_qty": 1
+  },
+  {
+    "log_id": "3f8ddeeb-b9a1-44c9-9a4b-265e3617b394",
+    "created_at": "2026-04-01T18:09:01.563322+00:00",
+    "machine_id": "T1.2-M01",
+    "sku": "BW-SL-CLR-100Mx100CMx1ROLL-RED",
+    "output_qty": 1
+  },
+  {
+    "log_id": "2221d43f-e2c0-4d23-8ae6-4634d7ff8c9c",
+    "created_at": "2026-04-01T18:09:01.563322+00:00",
+    "machine_id": "T1.2-M01",
+    "sku": "BW-SL-CLR-100Mx100CMx1ROLL-RED",
+    "output_qty": 1
+  },
+  {
+    "log_id": "666a38cf-90e7-4ca9-8df7-95dd186eafdf",
+    "created_at": "2026-04-01T18:11:29.246326+00:00",
+    "machine_id": "T1.3-M02",
+    "sku": "BW-SL-CLR-100Mx100CMx1ROLL-RED",
+    "output_qty": 1
+  },
+  {
+    "log_id": "8db2086a-5adb-43e8-bda8-63570a20c50d",
+    "created_at": "2026-04-01T18:14:31.352995+00:00",
+    "machine_id": "T1.2-M01",
+    "sku": "BW-SL-CLR-100Mx100CMx1ROLL-RED",
+    "output_qty": 1
+  },
+  {
+    "log_id": "82d2808d-0761-467e-a5c7-c38d3b4489f2",
+    "created_at": "2026-04-01T18:14:31.352995+00:00",
+    "machine_id": "T1.2-M01",
+    "sku": "BW-SL-CLR-100Mx100CMx1ROLL-RED",
+    "output_qty": 1
+  },
+  {
+    "log_id": "fe7b96d8-4367-4a89-bedf-e02937542e0e",
+    "created_at": "2026-04-01T18:17:11.094646+00:00",
+    "machine_id": "T1.3-M02",
+    "sku": "BW-SL-CLR-100Mx100CMx1ROLL-RED",
+    "output_qty": 1
+  },
+  {
+    "log_id": "d66c87d1-6acc-483b-aad4-3a63c38aaafe",
+    "created_at": "2026-04-01T18:20:01.353262+00:00",
+    "machine_id": "T1.2-M01",
+    "sku": "BW-SL-CLR-100Mx100CMx1ROLL-RED",
+    "output_qty": 1
+  },
+  {
+    "log_id": "9a415b0b-43f1-4390-b164-628ee7e55735",
+    "created_at": "2026-04-01T18:20:01.353262+00:00",
+    "machine_id": "T1.2-M01",
+    "sku": "BW-SL-CLR-100Mx100CMx1ROLL-RED",
+    "output_qty": 1
+  },
+  {
+    "log_id": "05ed5a94-d521-4ea7-8d18-38de227179ab",
+    "created_at": "2026-04-01T18:22:53.237152+00:00",
+    "machine_id": "T1.3-M02",
+    "sku": "BW-SL-CLR-100Mx100CMx1ROLL-RED",
+    "output_qty": 1
+  },
+  {
+    "log_id": "1faf737a-195f-4773-a892-2594d291ee19",
+    "created_at": "2026-04-01T18:25:31.198795+00:00",
+    "machine_id": "T1.2-M01",
+    "sku": "BW-SL-CLR-100Mx100CMx1ROLL-RED",
+    "output_qty": 1
+  },
+  {
+    "log_id": "8e97312c-1647-4531-ad61-42d41fac52ec",
+    "created_at": "2026-04-01T18:25:31.198795+00:00",
+    "machine_id": "T1.2-M01",
+    "sku": "BW-SL-CLR-100Mx100CMx1ROLL-RED",
+    "output_qty": 1
+  },
+  {
+    "log_id": "aef7e208-98df-4768-b64a-257dd92d2b00",
+    "created_at": "2026-04-01T18:28:35.379432+00:00",
+    "machine_id": "T1.3-M02",
+    "sku": "BW-SL-CLR-100Mx100CMx1ROLL-RED",
+    "output_qty": 1
+  },
+  {
+    "log_id": "74013641-ffd6-4ed6-a800-1609e410419b",
+    "created_at": "2026-04-01T18:31:01.307002+00:00",
+    "machine_id": "T1.2-M01",
+    "sku": "BW-SL-CLR-100Mx100CMx1ROLL-RED",
+    "output_qty": 1
+  },
+  {
+    "log_id": "eec5d69f-4887-461c-8634-4d3bd1b6a694",
+    "created_at": "2026-04-01T18:31:01.307002+00:00",
+    "machine_id": "T1.2-M01",
+    "sku": "BW-SL-CLR-100Mx100CMx1ROLL-RED",
+    "output_qty": 1
+  },
+  {
+    "log_id": "fe114ed2-a3aa-43cc-96e4-03cd0652d891",
+    "created_at": "2026-04-01T18:34:17.064335+00:00",
+    "machine_id": "T1.3-M02",
+    "sku": "BW-SL-CLR-100Mx100CMx1ROLL-RED",
+    "output_qty": 1
+  },
+  {
+    "log_id": "792d02f4-82a8-4fe9-a84a-b738051d3ecb",
+    "created_at": "2026-04-01T18:36:31.064261+00:00",
+    "machine_id": "T1.2-M01",
+    "sku": "BW-SL-CLR-100Mx100CMx1ROLL-RED",
+    "output_qty": 1
+  },
+  {
+    "log_id": "25050ac1-88b2-46b0-87ad-c1aeb0d4ac98",
+    "created_at": "2026-04-01T18:36:31.064261+00:00",
+    "machine_id": "T1.2-M01",
+    "sku": "BW-SL-CLR-100Mx100CMx1ROLL-RED",
+    "output_qty": 1
+  },
+  {
+    "log_id": "f3f4e29b-04d2-4a57-9030-9e173d665026",
+    "created_at": "2026-04-01T18:39:59.022677+00:00",
+    "machine_id": "T1.3-M02",
+    "sku": "BW-SL-CLR-100Mx100CMx1ROLL-RED",
+    "output_qty": 1
+  },
+  {
+    "log_id": "0d825c10-c942-4373-aece-4d5f2cc218bf",
+    "created_at": "2026-04-01T18:42:00.93848+00:00",
+    "machine_id": "T1.2-M01",
+    "sku": "BW-SL-CLR-100Mx100CMx1ROLL-RED",
+    "output_qty": 1
+  },
+  {
+    "log_id": "fdbaafa2-6c3f-452d-9b56-5796dd484f61",
+    "created_at": "2026-04-01T18:42:00.93848+00:00",
+    "machine_id": "T1.2-M01",
+    "sku": "BW-SL-CLR-100Mx100CMx1ROLL-RED",
+    "output_qty": 1
+  },
+  {
+    "log_id": "6caad37b-2972-47ad-834d-28176441c85b",
+    "created_at": "2026-04-01T18:45:41.666106+00:00",
+    "machine_id": "T1.3-M02",
+    "sku": "BW-SL-CLR-100Mx100CMx1ROLL-RED",
+    "output_qty": 1
+  },
+  {
+    "log_id": "4a3b002b-d84f-4495-af66-e064472c07a0",
+    "created_at": "2026-04-01T18:47:31.180761+00:00",
+    "machine_id": "T1.2-M01",
+    "sku": "BW-SL-CLR-100Mx100CMx1ROLL-RED",
+    "output_qty": 1
+  },
+  {
+    "log_id": "702f5a40-25c4-46a6-aa62-c1833695a33d",
+    "created_at": "2026-04-01T18:47:31.180761+00:00",
+    "machine_id": "T1.2-M01",
+    "sku": "BW-SL-CLR-100Mx100CMx1ROLL-RED",
+    "output_qty": 1
+  },
+  {
+    "log_id": "eab90e27-00be-48b4-9c8e-e38c25e5c607",
+    "created_at": "2026-04-01T18:51:23.148558+00:00",
+    "machine_id": "T1.3-M02",
+    "sku": "BW-SL-CLR-100Mx100CMx1ROLL-RED",
+    "output_qty": 1
+  },
+  {
+    "log_id": "cb285674-a4cd-4f55-8fd8-0c687d695f37",
+    "created_at": "2026-04-01T18:53:00.905551+00:00",
+    "machine_id": "T1.2-M01",
+    "sku": "BW-SL-CLR-100Mx100CMx1ROLL-RED",
+    "output_qty": 1
+  },
+  {
+    "log_id": "3624fd8c-1b96-4b71-8101-61c7e44b4cf1",
+    "created_at": "2026-04-01T18:53:00.905551+00:00",
+    "machine_id": "T1.2-M01",
+    "sku": "BW-SL-CLR-100Mx100CMx1ROLL-RED",
+    "output_qty": 1
+  },
+  {
+    "log_id": "2247ecd1-8f1c-4cd7-878c-09114c21c8aa",
+    "created_at": "2026-04-01T18:57:05.742697+00:00",
+    "machine_id": "T1.3-M02",
+    "sku": "BW-SL-CLR-100Mx100CMx1ROLL-RED",
+    "output_qty": 1
+  },
+  {
+    "log_id": "bda0b732-aff9-467c-b4ff-dc634c654e8e",
+    "created_at": "2026-04-01T18:58:30.652213+00:00",
+    "machine_id": "T1.2-M01",
+    "sku": "BW-SL-CLR-100Mx100CMx1ROLL-RED",
+    "output_qty": 1
+  },
+  {
+    "log_id": "bce56d63-7b74-4893-9122-cdee3b36f0b3",
+    "created_at": "2026-04-01T18:58:30.652213+00:00",
+    "machine_id": "T1.2-M01",
+    "sku": "BW-SL-CLR-100Mx100CMx1ROLL-RED",
+    "output_qty": 1
+  },
+  {
+    "log_id": "7e0267c1-b25b-4ea6-be4c-b549e4b67722",
+    "created_at": "2026-04-01T19:02:47.821687+00:00",
+    "machine_id": "T1.3-M02",
+    "sku": "BW-SL-CLR-100Mx100CMx1ROLL-RED",
+    "output_qty": 1
+  },
+  {
+    "log_id": "5bd43a26-d59f-4fee-a7e3-f9f04bb4fe8e",
+    "created_at": "2026-04-01T19:04:00.488406+00:00",
+    "machine_id": "T1.2-M01",
+    "sku": "BW-SL-CLR-100Mx100CMx1ROLL-RED",
+    "output_qty": 1
+  },
+  {
+    "log_id": "df5ed984-425e-4775-836e-c4b1bf5d0393",
+    "created_at": "2026-04-01T19:04:00.488406+00:00",
+    "machine_id": "T1.2-M01",
+    "sku": "BW-SL-CLR-100Mx100CMx1ROLL-RED",
+    "output_qty": 1
+  },
+  {
+    "log_id": "6a44a22d-3e18-4e6e-8eca-a234391c4216",
+    "created_at": "2026-04-01T19:08:29.584654+00:00",
+    "machine_id": "T1.3-M02",
+    "sku": "BW-SL-CLR-100Mx100CMx1ROLL-RED",
+    "output_qty": 1
+  },
+  {
+    "log_id": "a3bd1f28-f5da-4402-afcb-68849a19ea66",
+    "created_at": "2026-04-01T19:09:30.533783+00:00",
+    "machine_id": "T1.2-M01",
+    "sku": "BW-SL-CLR-100Mx100CMx1ROLL-RED",
+    "output_qty": 1
+  },
+  {
+    "log_id": "08f04e68-12dc-448b-a174-5298bf1a82f4",
+    "created_at": "2026-04-01T19:09:30.533783+00:00",
+    "machine_id": "T1.2-M01",
+    "sku": "BW-SL-CLR-100Mx100CMx1ROLL-RED",
+    "output_qty": 1
+  },
+  {
+    "log_id": "45b8aa75-e242-44da-af69-e5f0ae6c5122",
+    "created_at": "2026-04-01T19:14:11.981447+00:00",
+    "machine_id": "T1.3-M02",
+    "sku": "BW-SL-CLR-100Mx100CMx1ROLL-RED",
+    "output_qty": 1
+  },
+  {
+    "log_id": "961e3816-47bc-42d7-bd97-e9147e5bad6f",
+    "created_at": "2026-04-01T19:15:00.382256+00:00",
+    "machine_id": "T1.2-M01",
+    "sku": "BW-SL-CLR-100Mx100CMx1ROLL-RED",
+    "output_qty": 1
+  },
+  {
+    "log_id": "6ee3b8b4-cc42-414c-9a56-c90b1401a86f",
+    "created_at": "2026-04-01T19:15:00.382256+00:00",
+    "machine_id": "T1.2-M01",
+    "sku": "BW-SL-CLR-100Mx100CMx1ROLL-RED",
+    "output_qty": 1
+  },
+  {
+    "log_id": "e0380577-cdaa-4317-8916-6ea0c1b683ad",
+    "created_at": "2026-04-01T19:19:53.596155+00:00",
+    "machine_id": "T1.3-M02",
+    "sku": "BW-SL-CLR-100Mx100CMx1ROLL-RED",
+    "output_qty": 1
+  },
+  {
+    "log_id": "3064de4e-2c5b-40c2-963c-f2a4654377fe",
+    "created_at": "2026-04-01T19:20:30.215972+00:00",
+    "machine_id": "T1.2-M01",
+    "sku": "BW-SL-CLR-100Mx100CMx1ROLL-RED",
+    "output_qty": 1
+  },
+  {
+    "log_id": "a2d027ec-0b68-4908-87bb-89f930651a7a",
+    "created_at": "2026-04-01T19:20:30.215972+00:00",
+    "machine_id": "T1.2-M01",
+    "sku": "BW-SL-CLR-100Mx100CMx1ROLL-RED",
+    "output_qty": 1
+  },
+  {
+    "log_id": "18310014-2eb1-4626-9a0b-6c348edfdfe5",
+    "created_at": "2026-04-01T19:25:35.934753+00:00",
+    "machine_id": "T1.3-M02",
+    "sku": "BW-SL-CLR-100Mx100CMx1ROLL-RED",
+    "output_qty": 1
+  },
+  {
+    "log_id": "1f3eabd5-c823-42b9-9d0e-fe1b14a2e92e",
+    "created_at": "2026-04-01T19:26:00.151106+00:00",
+    "machine_id": "T1.2-M01",
+    "sku": "BW-SL-CLR-100Mx100CMx1ROLL-RED",
+    "output_qty": 1
+  },
+  {
+    "log_id": "30251eb6-72f6-4b47-afe7-2552830c9d2c",
+    "created_at": "2026-04-01T19:26:00.151106+00:00",
+    "machine_id": "T1.2-M01",
+    "sku": "BW-SL-CLR-100Mx100CMx1ROLL-RED",
+    "output_qty": 1
+  },
+  {
+    "log_id": "7235700b-06e5-4504-8709-db593be12c6c",
+    "created_at": "2026-04-01T19:31:18.40585+00:00",
+    "machine_id": "T1.3-M02",
+    "sku": "BW-SL-CLR-100Mx100CMx1ROLL-RED",
+    "output_qty": 1
+  },
+  {
+    "log_id": "0b4ff664-5bdb-4b51-be8a-be4ca905aadb",
+    "created_at": "2026-04-01T19:31:30.190297+00:00",
+    "machine_id": "T1.2-M01",
+    "sku": "BW-SL-CLR-100Mx100CMx1ROLL-RED",
+    "output_qty": 1
+  },
+  {
+    "log_id": "e0fbb018-bcf2-4287-986a-19ddb24b26d4",
+    "created_at": "2026-04-01T19:31:30.190297+00:00",
+    "machine_id": "T1.2-M01",
+    "sku": "BW-SL-CLR-100Mx100CMx1ROLL-RED",
+    "output_qty": 1
+  },
+  {
+    "log_id": "52d95712-f5d4-44e4-bdc4-409468cc99b3",
+    "created_at": "2026-04-01T19:36:59.980719+00:00",
+    "machine_id": "T1.3-M02",
+    "sku": "BW-SL-CLR-100Mx100CMx1ROLL-RED",
+    "output_qty": 1
+  },
+  {
+    "log_id": "b5bf1039-b86c-41a7-b5e1-21e3f8e3a8da",
+    "created_at": "2026-04-01T19:37:00.539136+00:00",
+    "machine_id": "T1.2-M01",
+    "sku": "BW-SL-CLR-100Mx100CMx1ROLL-RED",
+    "output_qty": 1
+  },
+  {
+    "log_id": "0e30beb7-53f2-43f9-a3a3-b0ae3676ac64",
+    "created_at": "2026-04-01T19:37:00.539136+00:00",
+    "machine_id": "T1.2-M01",
+    "sku": "BW-SL-CLR-100Mx100CMx1ROLL-RED",
+    "output_qty": 1
+  },
+  {
+    "log_id": "eca16275-b28e-44e3-9546-25db780b5629",
+    "created_at": "2026-04-01T19:42:30.42461+00:00",
+    "machine_id": "T1.2-M01",
+    "sku": "BW-SL-CLR-100Mx100CMx1ROLL-RED",
+    "output_qty": 1
+  },
+  {
+    "log_id": "79ad111b-6765-4eff-a9b0-92382f472fef",
+    "created_at": "2026-04-01T19:42:30.42461+00:00",
+    "machine_id": "T1.2-M01",
+    "sku": "BW-SL-CLR-100Mx100CMx1ROLL-RED",
+    "output_qty": 1
+  },
+  {
+    "log_id": "90d59504-588e-452d-80fa-6a763a742d38",
+    "created_at": "2026-04-01T19:42:41.71073+00:00",
+    "machine_id": "T1.3-M02",
+    "sku": "BW-SL-CLR-100Mx100CMx1ROLL-RED",
+    "output_qty": 1
+  },
+  {
+    "log_id": "9f770d33-dca9-400d-bdaf-e149ce9957fd",
+    "created_at": "2026-04-01T19:47:59.715354+00:00",
+    "machine_id": "T1.2-M01",
+    "sku": "BW-SL-CLR-100Mx100CMx1ROLL-RED",
+    "output_qty": 1
+  },
+  {
+    "log_id": "c042bb41-31b4-4ef0-bf6a-f31e210318f5",
+    "created_at": "2026-04-01T19:47:59.715354+00:00",
+    "machine_id": "T1.2-M01",
+    "sku": "BW-SL-CLR-100Mx100CMx1ROLL-RED",
+    "output_qty": 1
+  },
+  {
+    "log_id": "fccea76e-70bc-42fa-b9bf-b1c15731c29c",
+    "created_at": "2026-04-01T19:48:23.696327+00:00",
+    "machine_id": "T1.3-M02",
+    "sku": "BW-SL-CLR-100Mx100CMx1ROLL-RED",
+    "output_qty": 1
+  },
+  {
+    "log_id": "4afd2bbb-6344-410e-a338-f215c2f19445",
+    "created_at": "2026-04-01T19:53:29.636023+00:00",
+    "machine_id": "T1.2-M01",
+    "sku": "BW-SL-CLR-100Mx100CMx1ROLL-RED",
+    "output_qty": 1
+  },
+  {
+    "log_id": "9b278b4e-3458-45e4-9579-16fdd9c898af",
+    "created_at": "2026-04-01T19:53:29.636023+00:00",
+    "machine_id": "T1.2-M01",
+    "sku": "BW-SL-CLR-100Mx100CMx1ROLL-RED",
+    "output_qty": 1
+  },
+  {
+    "log_id": "d40a512c-9618-4f36-8192-b12935c76536",
+    "created_at": "2026-04-01T19:54:05.769436+00:00",
+    "machine_id": "T1.3-M02",
+    "sku": "BW-SL-CLR-100Mx100CMx1ROLL-RED",
+    "output_qty": 1
+  },
+  {
+    "log_id": "27f89cac-3bd1-4a9e-b93e-eaf2f91f4bc6",
+    "created_at": "2026-04-01T19:59:00.016635+00:00",
+    "machine_id": "T1.2-M01",
+    "sku": "BW-SL-CLR-100Mx100CMx1ROLL-RED",
+    "output_qty": 1
+  },
+  {
+    "log_id": "f874dd71-8a5d-4f91-97e8-a257285c0b04",
+    "created_at": "2026-04-01T19:59:00.016635+00:00",
+    "machine_id": "T1.2-M01",
+    "sku": "BW-SL-CLR-100Mx100CMx1ROLL-RED",
+    "output_qty": 1
+  },
+  {
+    "log_id": "35e94839-1a33-46cb-b9cd-abdf81b3a2ec",
+    "created_at": "2026-04-01T19:59:47.647323+00:00",
+    "machine_id": "T1.3-M02",
+    "sku": "BW-SL-CLR-100Mx100CMx1ROLL-RED",
+    "output_qty": 1
+  },
+  {
+    "log_id": "25c06df0-242f-490d-a737-2c35d3f75d8b",
+    "created_at": "2026-04-01T20:04:30.232397+00:00",
+    "machine_id": "T1.2-M01",
+    "sku": "BW-SL-CLR-100Mx100CMx1ROLL-RED",
+    "output_qty": 1
+  },
+  {
+    "log_id": "2f35db1e-0618-48da-9ca2-01dfd6060989",
+    "created_at": "2026-04-01T20:04:30.232397+00:00",
+    "machine_id": "T1.2-M01",
+    "sku": "BW-SL-CLR-100Mx100CMx1ROLL-RED",
+    "output_qty": 1
+  },
+  {
+    "log_id": "5b7f0e01-e759-47eb-8e46-c7df88c86acf",
+    "created_at": "2026-04-01T20:05:29.933781+00:00",
+    "machine_id": "T1.3-M02",
+    "sku": "BW-SL-CLR-100Mx100CMx1ROLL-RED",
+    "output_qty": 1
+  },
+  {
+    "log_id": "3535c247-084a-4565-aaa3-a49887dd506a",
+    "created_at": "2026-04-01T20:09:59.918258+00:00",
+    "machine_id": "T1.2-M01",
+    "sku": "BW-SL-CLR-100Mx100CMx1ROLL-RED",
+    "output_qty": 1
+  },
+  {
+    "log_id": "26d2afa8-0b6b-4fd7-8b20-00e9b4cc7607",
+    "created_at": "2026-04-01T20:09:59.918258+00:00",
+    "machine_id": "T1.2-M01",
+    "sku": "BW-SL-CLR-100Mx100CMx1ROLL-RED",
+    "output_qty": 1
+  },
+  {
+    "log_id": "8af4a635-6920-4709-9672-9530bf171ac3",
+    "created_at": "2026-04-01T20:11:11.846187+00:00",
+    "machine_id": "T1.3-M02",
+    "sku": "BW-SL-CLR-100Mx100CMx1ROLL-RED",
+    "output_qty": 1
+  },
+  {
+    "log_id": "a7db4e15-86d8-47ad-9a33-293de2ec2e17",
+    "created_at": "2026-04-01T20:15:29.246317+00:00",
+    "machine_id": "T1.2-M01",
+    "sku": "BW-SL-CLR-100Mx100CMx1ROLL-RED",
+    "output_qty": 1
+  },
+  {
+    "log_id": "ebb5ac5f-229c-425b-95f5-694b6afd428e",
+    "created_at": "2026-04-01T20:15:29.246317+00:00",
+    "machine_id": "T1.2-M01",
+    "sku": "BW-SL-CLR-100Mx100CMx1ROLL-RED",
+    "output_qty": 1
+  },
+  {
+    "log_id": "c2c9e273-5526-40e7-b366-642f3cae9980",
+    "created_at": "2026-04-01T20:16:54.409662+00:00",
+    "machine_id": "T1.3-M02",
+    "sku": "BW-SL-CLR-100Mx100CMx1ROLL-RED",
+    "output_qty": 1
+  },
+  {
+    "log_id": "49da80aa-0c3e-4146-8138-a293e04d3753",
+    "created_at": "2026-04-01T20:20:59.399515+00:00",
+    "machine_id": "T1.2-M01",
+    "sku": "BW-SL-CLR-100Mx100CMx1ROLL-RED",
+    "output_qty": 1
+  },
+  {
+    "log_id": "efa7d18e-80ef-4f48-824f-b5c9179d3737",
+    "created_at": "2026-04-01T20:20:59.399515+00:00",
+    "machine_id": "T1.2-M01",
+    "sku": "BW-SL-CLR-100Mx100CMx1ROLL-RED",
+    "output_qty": 1
+  },
+  {
+    "log_id": "9957889b-847b-4f1b-b1a3-e5b9209fab8c",
+    "created_at": "2026-04-01T20:22:35.937292+00:00",
+    "machine_id": "T1.3-M02",
+    "sku": "BW-SL-CLR-100Mx100CMx1ROLL-RED",
+    "output_qty": 1
+  },
+  {
+    "log_id": "081ce667-369a-43a4-826d-5a4399872921",
+    "created_at": "2026-04-01T20:26:30.112299+00:00",
+    "machine_id": "T1.2-M01",
+    "sku": "BW-SL-CLR-100Mx100CMx1ROLL-RED",
+    "output_qty": 1
+  },
+  {
+    "log_id": "b05192c8-aa54-49c0-888d-58ae915951e4",
+    "created_at": "2026-04-01T20:26:30.112299+00:00",
+    "machine_id": "T1.2-M01",
+    "sku": "BW-SL-CLR-100Mx100CMx1ROLL-RED",
+    "output_qty": 1
+  },
+  {
+    "log_id": "b8f43aa2-ba97-4a42-9479-1bc4255c4956",
+    "created_at": "2026-04-01T20:28:18.541508+00:00",
+    "machine_id": "T1.3-M02",
+    "sku": "BW-SL-CLR-100Mx100CMx1ROLL-RED",
+    "output_qty": 1
+  },
+  {
+    "log_id": "a79f1e69-c492-4cc7-a8c7-fb7aab4850bb",
+    "created_at": "2026-04-01T20:31:58.688008+00:00",
+    "machine_id": "T1.2-M01",
+    "sku": "BW-SL-CLR-100Mx100CMx1ROLL-RED",
+    "output_qty": 1
+  },
+  {
+    "log_id": "7fddc096-bc4a-4a03-8684-c50349e05473",
+    "created_at": "2026-04-01T20:31:58.688008+00:00",
+    "machine_id": "T1.2-M01",
+    "sku": "BW-SL-CLR-100Mx100CMx1ROLL-RED",
+    "output_qty": 1
+  },
+  {
+    "log_id": "31d0a373-4c86-440c-8508-54a25794497b",
+    "created_at": "2026-04-01T20:33:59.903479+00:00",
+    "machine_id": "T1.3-M02",
+    "sku": "BW-SL-CLR-100Mx100CMx1ROLL-RED",
+    "output_qty": 1
+  },
+  {
+    "log_id": "3e70ec5a-a511-4fb4-87f2-4299fc2a1528",
+    "created_at": "2026-04-01T20:37:29.36571+00:00",
+    "machine_id": "T1.2-M01",
+    "sku": "BW-SL-CLR-100Mx100CMx1ROLL-RED",
+    "output_qty": 1
+  },
+  {
+    "log_id": "232e239c-edb2-44c0-8aa8-f99a4f6b1638",
+    "created_at": "2026-04-01T20:37:29.36571+00:00",
+    "machine_id": "T1.2-M01",
+    "sku": "BW-SL-CLR-100Mx100CMx1ROLL-RED",
+    "output_qty": 1
+  },
+  {
+    "log_id": "f9e7beb5-e0d6-4d99-b811-011375bc64fa",
+    "created_at": "2026-04-01T20:39:42.03284+00:00",
+    "machine_id": "T1.3-M02",
+    "sku": "BW-SL-CLR-100Mx100CMx1ROLL-RED",
+    "output_qty": 1
+  },
+  {
+    "log_id": "9b1c8d51-a2cf-4b64-b9be-6e8f6f7776b4",
+    "created_at": "2026-04-01T20:42:59.116039+00:00",
+    "machine_id": "T1.2-M01",
+    "sku": "BW-SL-CLR-100Mx100CMx1ROLL-RED",
+    "output_qty": 1
+  },
+  {
+    "log_id": "21f26f89-3e9a-404f-b770-55920d908981",
+    "created_at": "2026-04-01T20:42:59.116039+00:00",
+    "machine_id": "T1.2-M01",
+    "sku": "BW-SL-CLR-100Mx100CMx1ROLL-RED",
+    "output_qty": 1
+  },
+  {
+    "log_id": "7dd9a4df-643a-4548-8f3d-d02edea65c38",
+    "created_at": "2026-04-01T20:45:24.442986+00:00",
+    "machine_id": "T1.3-M02",
+    "sku": "BW-SL-CLR-100Mx100CMx1ROLL-RED",
+    "output_qty": 1
+  },
+  {
+    "log_id": "6c21a199-c604-4ec8-95e4-71f2c03b7d77",
+    "created_at": "2026-04-01T20:48:28.380266+00:00",
+    "machine_id": "T1.2-M01",
+    "sku": "BW-SL-CLR-100Mx100CMx1ROLL-RED",
+    "output_qty": 1
+  },
+  {
+    "log_id": "b89f1702-91ce-4f43-abf1-bf89c37bbc34",
+    "created_at": "2026-04-01T20:48:28.380266+00:00",
+    "machine_id": "T1.2-M01",
+    "sku": "BW-SL-CLR-100Mx100CMx1ROLL-RED",
+    "output_qty": 1
+  },
+  {
+    "log_id": "2028aca6-fbe8-4171-9485-952775f12955",
+    "created_at": "2026-04-01T20:51:06.131511+00:00",
+    "machine_id": "T1.3-M02",
+    "sku": "BW-SL-CLR-100Mx100CMx1ROLL-RED",
+    "output_qty": 1
+  },
+  {
+    "log_id": "d7fc2bc9-63a0-48ba-823e-c73bcba82a6e",
+    "created_at": "2026-04-01T20:53:58.191941+00:00",
+    "machine_id": "T1.2-M01",
+    "sku": "BW-SL-CLR-100Mx100CMx1ROLL-RED",
+    "output_qty": 1
+  },
+  {
+    "log_id": "ab0ee3db-dd35-4f82-8e39-84462836159f",
+    "created_at": "2026-04-01T20:53:58.191941+00:00",
+    "machine_id": "T1.2-M01",
+    "sku": "BW-SL-CLR-100Mx100CMx1ROLL-RED",
+    "output_qty": 1
+  },
+  {
+    "log_id": "ac791028-e1ad-4365-8d80-160746bbcd79",
+    "created_at": "2026-04-01T20:56:48.196113+00:00",
+    "machine_id": "T1.3-M02",
+    "sku": "BW-SL-CLR-100Mx100CMx1ROLL-RED",
+    "output_qty": 1
+  },
+  {
+    "log_id": "45d4e337-926f-46d2-94fe-6b4552d5e372",
+    "created_at": "2026-04-01T20:59:28.153378+00:00",
+    "machine_id": "T1.2-M01",
+    "sku": "BW-SL-CLR-100Mx100CMx1ROLL-RED",
+    "output_qty": 1
+  },
+  {
+    "log_id": "8ad5bdc5-a7c5-4cc2-bb37-bc9e9d15758e",
+    "created_at": "2026-04-01T20:59:28.153378+00:00",
+    "machine_id": "T1.2-M01",
+    "sku": "BW-SL-CLR-100Mx100CMx1ROLL-RED",
+    "output_qty": 1
+  },
+  {
+    "log_id": "2cdca70b-f68e-4b39-96b1-95e74b1bef5b",
+    "created_at": "2026-04-01T21:02:30.42525+00:00",
+    "machine_id": "T1.3-M02",
+    "sku": "BW-SL-CLR-100Mx100CMx1ROLL-RED",
+    "output_qty": 1
+  },
+  {
+    "log_id": "633d0a95-72f8-4672-9a82-cdd35502e29c",
+    "created_at": "2026-04-01T21:04:57.921311+00:00",
+    "machine_id": "T1.2-M01",
+    "sku": "BW-SL-CLR-100Mx100CMx1ROLL-RED",
+    "output_qty": 1
+  },
+  {
+    "log_id": "e64b6e46-9f11-4d30-b2d1-69ab7a3ed369",
+    "created_at": "2026-04-01T21:04:57.921311+00:00",
+    "machine_id": "T1.2-M01",
+    "sku": "BW-SL-CLR-100Mx100CMx1ROLL-RED",
+    "output_qty": 1
+  },
+  {
+    "log_id": "1b543550-4196-4185-a44a-7060e5c1b896",
+    "created_at": "2026-04-01T21:08:12.521524+00:00",
+    "machine_id": "T1.3-M02",
+    "sku": "BW-SL-CLR-100Mx100CMx1ROLL-RED",
+    "output_qty": 1
+  },
+  {
+    "log_id": "fe47b49d-c888-4165-a41b-7ada386476e3",
+    "created_at": "2026-04-01T21:10:27.841776+00:00",
+    "machine_id": "T1.2-M01",
+    "sku": "BW-SL-CLR-100Mx100CMx1ROLL-RED",
+    "output_qty": 1
+  },
+  {
+    "log_id": "201c864b-f9f3-4363-a575-8d81c3f4191c",
+    "created_at": "2026-04-01T21:10:27.841776+00:00",
+    "machine_id": "T1.2-M01",
+    "sku": "BW-SL-CLR-100Mx100CMx1ROLL-RED",
+    "output_qty": 1
+  },
+  {
+    "log_id": "d02274bb-13df-4980-a4b7-a7e596c2e6a9",
+    "created_at": "2026-04-01T21:13:54.709752+00:00",
+    "machine_id": "T1.3-M02",
+    "sku": "BW-SL-CLR-100Mx100CMx1ROLL-RED",
+    "output_qty": 1
+  },
+  {
+    "log_id": "32ece1d5-9192-4910-8378-1c37a138dff3",
+    "created_at": "2026-04-01T21:15:58.289304+00:00",
+    "machine_id": "T1.2-M01",
+    "sku": "BW-SL-CLR-100Mx100CMx1ROLL-RED",
+    "output_qty": 1
+  },
+  {
+    "log_id": "ab8b8013-1416-4467-8fed-0a296576a0ad",
+    "created_at": "2026-04-01T21:15:58.289304+00:00",
+    "machine_id": "T1.2-M01",
+    "sku": "BW-SL-CLR-100Mx100CMx1ROLL-RED",
+    "output_qty": 1
+  },
+  {
+    "log_id": "5c229717-2993-46c2-bbeb-8fcec5c6b47a",
+    "created_at": "2026-04-01T21:19:37.07309+00:00",
+    "machine_id": "T1.3-M02",
+    "sku": "BW-SL-CLR-100Mx100CMx1ROLL-RED",
+    "output_qty": 1
+  },
+  {
+    "log_id": "dd6a71b4-e9d2-4f89-9552-fd7d329c6652",
+    "created_at": "2026-04-01T21:21:28.564428+00:00",
+    "machine_id": "T1.2-M01",
+    "sku": "BW-SL-CLR-100Mx100CMx1ROLL-RED",
+    "output_qty": 1
+  },
+  {
+    "log_id": "9979c587-0675-44be-bd9b-38298e31a6ff",
+    "created_at": "2026-04-01T21:21:28.564428+00:00",
+    "machine_id": "T1.2-M01",
+    "sku": "BW-SL-CLR-100Mx100CMx1ROLL-RED",
+    "output_qty": 1
+  },
+  {
+    "log_id": "35fda2cd-20f1-4cab-911d-0773c21c0a47",
+    "created_at": "2026-04-01T21:25:19.961592+00:00",
+    "machine_id": "T1.3-M02",
+    "sku": "BW-SL-CLR-100Mx100CMx1ROLL-RED",
+    "output_qty": 1
+  },
+  {
+    "log_id": "befc58ad-15cf-4377-849d-63f182f5907d",
+    "created_at": "2026-04-01T21:26:58.518258+00:00",
+    "machine_id": "T1.2-M01",
+    "sku": "BW-SL-CLR-100Mx100CMx1ROLL-RED",
+    "output_qty": 1
+  },
+  {
+    "log_id": "1f70c30d-2350-4bb1-98c2-635091c9f339",
+    "created_at": "2026-04-01T21:26:58.518258+00:00",
+    "machine_id": "T1.2-M01",
+    "sku": "BW-SL-CLR-100Mx100CMx1ROLL-RED",
+    "output_qty": 1
+  },
+  {
+    "log_id": "a4752693-1428-47cd-872d-8d7b641decc9",
+    "created_at": "2026-04-01T21:31:00.592699+00:00",
+    "machine_id": "T1.3-M02",
+    "sku": "BW-SL-CLR-100Mx100CMx1ROLL-RED",
+    "output_qty": 1
+  },
+  {
+    "log_id": "e43f0b9d-0586-4055-9efb-f30e539a854a",
+    "created_at": "2026-04-01T21:32:27.336482+00:00",
+    "machine_id": "T1.2-M01",
+    "sku": "BW-SL-CLR-100Mx100CMx1ROLL-RED",
+    "output_qty": 1
+  },
+  {
+    "log_id": "c4f43197-dec9-4443-8904-7099085a98bd",
+    "created_at": "2026-04-01T21:32:27.336482+00:00",
+    "machine_id": "T1.2-M01",
+    "sku": "BW-SL-CLR-100Mx100CMx1ROLL-RED",
+    "output_qty": 1
+  },
+  {
+    "log_id": "6f9ac62e-2f0a-43f6-9cc2-e337fe9e2872",
+    "created_at": "2026-04-01T21:36:42.595701+00:00",
+    "machine_id": "T1.3-M02",
+    "sku": "BW-SL-CLR-100Mx100CMx1ROLL-RED",
+    "output_qty": 1
+  },
+  {
+    "log_id": "c0f9e481-2f82-4156-ac42-f22a42fc2ea6",
+    "created_at": "2026-04-01T21:37:57.207418+00:00",
+    "machine_id": "T1.2-M01",
+    "sku": "BW-SL-CLR-100Mx100CMx1ROLL-RED",
+    "output_qty": 1
+  },
+  {
+    "log_id": "ef31465b-d969-489f-a554-2370db3abe81",
+    "created_at": "2026-04-01T21:37:57.207418+00:00",
+    "machine_id": "T1.2-M01",
+    "sku": "BW-SL-CLR-100Mx100CMx1ROLL-RED",
+    "output_qty": 1
+  },
+  {
+    "log_id": "c6cdb6de-86fa-41ee-8c94-baaf7454224e",
+    "created_at": "2026-04-01T21:42:24.32723+00:00",
+    "machine_id": "T1.3-M02",
+    "sku": "BW-SL-CLR-100Mx100CMx1ROLL-RED",
+    "output_qty": 1
+  },
+  {
+    "log_id": "361b88c9-a823-4e02-801e-ec64c604f493",
+    "created_at": "2026-04-01T21:43:27.061248+00:00",
+    "machine_id": "T1.2-M01",
+    "sku": "BW-SL-CLR-100Mx100CMx1ROLL-RED",
+    "output_qty": 1
+  },
+  {
+    "log_id": "01a66acd-1e37-4be4-adef-93d9addba3be",
+    "created_at": "2026-04-01T21:43:27.061248+00:00",
+    "machine_id": "T1.2-M01",
+    "sku": "BW-SL-CLR-100Mx100CMx1ROLL-RED",
+    "output_qty": 1
+  },
+  {
+    "log_id": "c62df8a4-0064-450a-9b11-dce2eae0421c",
+    "created_at": "2026-04-01T21:48:07.021717+00:00",
+    "machine_id": "T1.3-M02",
+    "sku": "BW-SL-CLR-100Mx100CMx1ROLL-RED",
+    "output_qty": 1
+  },
+  {
+    "log_id": "20abd183-1c59-491d-b1b6-2d43e35eda5f",
+    "created_at": "2026-04-01T21:48:56.95934+00:00",
+    "machine_id": "T1.2-M01",
+    "sku": "BW-SL-CLR-100Mx100CMx1ROLL-RED",
+    "output_qty": 1
+  },
+  {
+    "log_id": "a243bb2b-10fd-49ef-81be-93964020d162",
+    "created_at": "2026-04-01T21:48:56.95934+00:00",
+    "machine_id": "T1.2-M01",
+    "sku": "BW-SL-CLR-100Mx100CMx1ROLL-RED",
+    "output_qty": 1
+  },
+  {
+    "log_id": "d950fb0b-697d-4567-9228-e14ad14d64e5",
+    "created_at": "2026-04-01T21:53:48.657837+00:00",
+    "machine_id": "T1.3-M02",
+    "sku": "BW-SL-CLR-100Mx100CMx1ROLL-RED",
+    "output_qty": 1
+  },
+  {
+    "log_id": "d1da6272-1c46-4f13-94a3-9107bf61cd32",
+    "created_at": "2026-04-01T21:54:26.836511+00:00",
+    "machine_id": "T1.2-M01",
+    "sku": "BW-SL-CLR-100Mx100CMx1ROLL-RED",
+    "output_qty": 1
+  },
+  {
+    "log_id": "c0a7f1e3-3d49-43ec-9c0b-7815173d0f07",
+    "created_at": "2026-04-01T21:54:26.836511+00:00",
+    "machine_id": "T1.2-M01",
+    "sku": "BW-SL-CLR-100Mx100CMx1ROLL-RED",
+    "output_qty": 1
+  },
+  {
+    "log_id": "eef4d17f-1799-404d-886d-ba1b6d9522a7",
+    "created_at": "2026-04-01T21:59:32.404126+00:00",
+    "machine_id": "T1.3-M02",
+    "sku": "BW-SL-CLR-100Mx100CMx1ROLL-RED",
+    "output_qty": 1
+  },
+  {
+    "log_id": "c45212a6-0cef-43f5-8edb-f9bb8444b7ad",
+    "created_at": "2026-04-01T21:59:56.685784+00:00",
+    "machine_id": "T1.2-M01",
+    "sku": "BW-SL-CLR-100Mx100CMx1ROLL-RED",
+    "output_qty": 1
+  },
+  {
+    "log_id": "bf3b6ccc-0a28-4548-af45-2c76dd0518d7",
+    "created_at": "2026-04-01T21:59:56.685784+00:00",
+    "machine_id": "T1.2-M01",
+    "sku": "BW-SL-CLR-100Mx100CMx1ROLL-RED",
+    "output_qty": 1
+  },
+  {
+    "log_id": "016f83a8-f66b-48b9-9c69-0fde412b3008",
+    "created_at": "2026-04-01T22:05:13.152773+00:00",
+    "machine_id": "T1.3-M02",
+    "sku": "BW-SL-CLR-100Mx100CMx1ROLL-RED",
+    "output_qty": 1
+  },
+  {
+    "log_id": "80eb249f-5b3b-4df5-97f0-b08f12358a31",
+    "created_at": "2026-04-01T22:05:26.655993+00:00",
+    "machine_id": "T1.2-M01",
+    "sku": "BW-SL-CLR-100Mx100CMx1ROLL-RED",
+    "output_qty": 1
+  },
+  {
+    "log_id": "ec6ed5b3-4ca7-4e9c-9a41-6eb7810103e2",
+    "created_at": "2026-04-01T22:05:26.655993+00:00",
+    "machine_id": "T1.2-M01",
+    "sku": "BW-SL-CLR-100Mx100CMx1ROLL-RED",
+    "output_qty": 1
+  },
+  {
+    "log_id": "a61fad80-4086-4037-b15a-14d8a975ba76",
+    "created_at": "2026-04-01T22:10:54.907148+00:00",
+    "machine_id": "T1.3-M02",
+    "sku": "BW-SL-CLR-100Mx100CMx1ROLL-RED",
+    "output_qty": 1
+  },
+  {
+    "log_id": "1c8d8651-b511-49c6-8467-d33fda401e36",
+    "created_at": "2026-04-01T22:10:56.373913+00:00",
+    "machine_id": "T1.2-M01",
+    "sku": "BW-SL-CLR-100Mx100CMx1ROLL-RED",
+    "output_qty": 1
+  },
+  {
+    "log_id": "271cad56-dd44-4776-9ef3-70f7fb949982",
+    "created_at": "2026-04-01T22:10:56.373913+00:00",
+    "machine_id": "T1.2-M01",
+    "sku": "BW-SL-CLR-100Mx100CMx1ROLL-RED",
+    "output_qty": 1
+  },
+  {
+    "log_id": "6c7849db-b9a8-4f6b-acb1-d0660fd9a6b3",
+    "created_at": "2026-04-01T22:16:27.380911+00:00",
+    "machine_id": "T1.2-M01",
+    "sku": "BW-SL-CLR-100Mx100CMx1ROLL-RED",
+    "output_qty": 1
+  },
+  {
+    "log_id": "2aff8a1c-7d55-459a-a2f6-6bde98647027",
+    "created_at": "2026-04-01T22:16:27.380911+00:00",
+    "machine_id": "T1.2-M01",
+    "sku": "BW-SL-CLR-100Mx100CMx1ROLL-RED",
+    "output_qty": 1
+  },
+  {
+    "log_id": "f47240c7-d1db-4982-84db-4cc8735d9432",
+    "created_at": "2026-04-01T22:16:37.100738+00:00",
+    "machine_id": "T1.3-M02",
+    "sku": "BW-SL-CLR-100Mx100CMx1ROLL-RED",
+    "output_qty": 1
+  },
+  {
+    "log_id": "917f1551-68bb-4ee8-9647-3b6d8e035d18",
+    "created_at": "2026-04-01T22:21:56.718267+00:00",
+    "machine_id": "T1.2-M01",
+    "sku": "BW-SL-CLR-100Mx100CMx1ROLL-RED",
+    "output_qty": 1
+  },
+  {
+    "log_id": "99e04146-e552-409c-94a2-acc605e7c1c0",
+    "created_at": "2026-04-01T22:21:56.718267+00:00",
+    "machine_id": "T1.2-M01",
+    "sku": "BW-SL-CLR-100Mx100CMx1ROLL-RED",
+    "output_qty": 1
+  },
+  {
+    "log_id": "29a47a48-936a-4b70-b92d-3e03dd1ab312",
+    "created_at": "2026-04-01T22:22:18.665709+00:00",
+    "machine_id": "T1.3-M02",
+    "sku": "BW-SL-CLR-100Mx100CMx1ROLL-RED",
+    "output_qty": 1
+  },
+  {
+    "log_id": "4e0d711d-30e8-4605-b743-1a64e301e34c",
+    "created_at": "2026-04-01T22:27:26.095336+00:00",
+    "machine_id": "T1.2-M01",
+    "sku": "BW-SL-CLR-100Mx100CMx1ROLL-RED",
+    "output_qty": 1
+  },
+  {
+    "log_id": "fbad3e65-8ad4-4b04-a6f5-9bd7d47fc9c6",
+    "created_at": "2026-04-01T22:27:26.095336+00:00",
+    "machine_id": "T1.2-M01",
+    "sku": "BW-SL-CLR-100Mx100CMx1ROLL-RED",
+    "output_qty": 1
+  },
+  {
+    "log_id": "57e48ea2-8c91-4390-b68e-f8fc306e1f2b",
+    "created_at": "2026-04-01T22:28:01.521797+00:00",
+    "machine_id": "T1.3-M02",
+    "sku": "BW-SL-CLR-100Mx100CMx1ROLL-RED",
+    "output_qty": 1
+  },
+  {
+    "log_id": "474a4212-f326-41fd-9228-38093552e67a",
+    "created_at": "2026-04-01T22:32:55.927105+00:00",
+    "machine_id": "T1.2-M01",
+    "sku": "BW-SL-CLR-100Mx100CMx1ROLL-RED",
+    "output_qty": 1
+  },
+  {
+    "log_id": "c093248b-cf66-4a68-8e1c-f07c0fa598b4",
+    "created_at": "2026-04-01T22:32:55.927105+00:00",
+    "machine_id": "T1.2-M01",
+    "sku": "BW-SL-CLR-100Mx100CMx1ROLL-RED",
+    "output_qty": 1
+  },
+  {
+    "log_id": "cbb174aa-f27d-4a39-8a61-61aa9bcf985d",
+    "created_at": "2026-04-01T22:33:42.705516+00:00",
+    "machine_id": "T1.3-M02",
+    "sku": "BW-SL-CLR-100Mx100CMx1ROLL-RED",
+    "output_qty": 1
+  },
+  {
+    "log_id": "bda864a9-b0cf-45c2-9f6c-d5171f6bcd77",
+    "created_at": "2026-04-01T22:38:25.876757+00:00",
+    "machine_id": "T1.2-M01",
+    "sku": "BW-SL-CLR-100Mx100CMx1ROLL-RED",
+    "output_qty": 1
+  },
+  {
+    "log_id": "ad350ec0-dbf1-4cb7-9031-7ac4266c9b9c",
+    "created_at": "2026-04-01T22:38:25.876757+00:00",
+    "machine_id": "T1.2-M01",
+    "sku": "BW-SL-CLR-100Mx100CMx1ROLL-RED",
+    "output_qty": 1
+  },
+  {
+    "log_id": "e07bbce6-d162-4a9e-abaa-49e434cb6f72",
+    "created_at": "2026-04-01T22:39:24.661843+00:00",
+    "machine_id": "T1.3-M02",
+    "sku": "BW-SL-CLR-100Mx100CMx1ROLL-RED",
+    "output_qty": 1
+  },
+  {
+    "log_id": "7adae11c-8070-471d-be34-0ab23a97acc4",
+    "created_at": "2026-04-01T22:43:56.855059+00:00",
+    "machine_id": "T1.2-M01",
+    "sku": "BW-SL-CLR-100Mx100CMx1ROLL-RED",
+    "output_qty": 1
+  },
+  {
+    "log_id": "3163814b-be62-4506-8e32-926b50af165c",
+    "created_at": "2026-04-01T22:43:56.855059+00:00",
+    "machine_id": "T1.2-M01",
+    "sku": "BW-SL-CLR-100Mx100CMx1ROLL-RED",
+    "output_qty": 1
+  },
+  {
+    "log_id": "fa917179-6ad1-44ae-950c-e2c6bf1df1ee",
+    "created_at": "2026-04-01T22:45:06.792838+00:00",
+    "machine_id": "T1.3-M02",
+    "sku": "BW-SL-CLR-100Mx100CMx1ROLL-RED",
+    "output_qty": 1
+  },
+  {
+    "log_id": "0280a066-2e48-49e8-a172-224554198ccd",
+    "created_at": "2026-04-01T22:49:25.502979+00:00",
+    "machine_id": "T1.2-M01",
+    "sku": "BW-SL-CLR-100Mx100CMx1ROLL-RED",
+    "output_qty": 1
+  },
+  {
+    "log_id": "8a15fa5c-7ee6-4989-9366-479a87c0c9c8",
+    "created_at": "2026-04-01T22:49:25.502979+00:00",
+    "machine_id": "T1.2-M01",
+    "sku": "BW-SL-CLR-100Mx100CMx1ROLL-RED",
+    "output_qty": 1
+  },
+  {
+    "log_id": "05828ee9-675e-4696-8225-2d3b29a010e7",
+    "created_at": "2026-04-01T22:50:48.757691+00:00",
+    "machine_id": "T1.3-M02",
+    "sku": "BW-SL-CLR-100Mx100CMx1ROLL-RED",
+    "output_qty": 1
+  },
+  {
+    "log_id": "3116b580-a3d3-493e-997b-491e1a4997a0",
+    "created_at": "2026-04-01T22:54:55.943731+00:00",
+    "machine_id": "T1.2-M01",
+    "sku": "BW-SL-CLR-100Mx100CMx1ROLL-RED",
+    "output_qty": 1
+  },
+  {
+    "log_id": "d6508804-dfb3-4ac4-894b-15bd23d1e811",
+    "created_at": "2026-04-01T22:54:55.943731+00:00",
+    "machine_id": "T1.2-M01",
+    "sku": "BW-SL-CLR-100Mx100CMx1ROLL-RED",
+    "output_qty": 1
+  },
+  {
+    "log_id": "2bde67ed-5156-4726-9e84-31745e0968bf",
+    "created_at": "2026-04-01T22:56:31.320457+00:00",
+    "machine_id": "T1.3-M02",
+    "sku": "BW-SL-CLR-100Mx100CMx1ROLL-RED",
+    "output_qty": 1
+  },
+  {
+    "log_id": "c6e92027-7e7c-45b2-b091-8d728e70684a",
+    "created_at": "2026-04-01T23:00:27.547407+00:00",
+    "machine_id": "T1.2-M01",
+    "sku": "BW-SL-CLR-100Mx100CMx1ROLL-RED",
+    "output_qty": 1
+  },
+  {
+    "log_id": "1c1ea802-7872-4a7e-94e9-130d0b12856f",
+    "created_at": "2026-04-01T23:00:27.547407+00:00",
+    "machine_id": "T1.2-M01",
+    "sku": "BW-SL-CLR-100Mx100CMx1ROLL-RED",
+    "output_qty": 1
+  },
+  {
+    "log_id": "74512304-696f-409e-a017-7a6d33842495",
+    "created_at": "2026-04-01T23:02:12.806486+00:00",
+    "machine_id": "T1.3-M02",
+    "sku": "BW-SL-CLR-100Mx100CMx1ROLL-RED",
+    "output_qty": 1
+  },
+  {
+    "log_id": "231df978-0708-4f8e-a7c3-f5252a4b333c",
+    "created_at": "2026-04-01T23:05:55.239722+00:00",
+    "machine_id": "T1.2-M01",
+    "sku": "BW-SL-CLR-100Mx100CMx1ROLL-RED",
+    "output_qty": 1
+  },
+  {
+    "log_id": "0e632e03-ed1e-432d-b17d-30f404cca3d9",
+    "created_at": "2026-04-01T23:05:55.239722+00:00",
+    "machine_id": "T1.2-M01",
+    "sku": "BW-SL-CLR-100Mx100CMx1ROLL-RED",
+    "output_qty": 1
+  },
+  {
+    "log_id": "0c307891-183b-4b52-a3d2-17a00bf79d75",
+    "created_at": "2026-04-01T23:07:55.960482+00:00",
+    "machine_id": "T1.3-M02",
+    "sku": "BW-SL-CLR-100Mx100CMx1ROLL-RED",
+    "output_qty": 1
+  },
+  {
+    "log_id": "34d1b045-e4d2-4f81-9041-9c22767cb912",
+    "created_at": "2026-04-01T23:11:25.312678+00:00",
+    "machine_id": "T1.2-M01",
+    "sku": "BW-SL-CLR-100Mx100CMx1ROLL-RED",
+    "output_qty": 1
+  },
+  {
+    "log_id": "969b6ccd-f0df-477d-801f-db6f9ebe7b9b",
+    "created_at": "2026-04-01T23:11:25.312678+00:00",
+    "machine_id": "T1.2-M01",
+    "sku": "BW-SL-CLR-100Mx100CMx1ROLL-RED",
+    "output_qty": 1
+  },
+  {
+    "log_id": "f170bf41-7d0b-4c67-a7d7-aea52a5a93ae",
+    "created_at": "2026-04-01T23:13:37.487485+00:00",
+    "machine_id": "T1.3-M02",
+    "sku": "BW-SL-CLR-100Mx100CMx1ROLL-RED",
+    "output_qty": 1
+  },
+  {
+    "log_id": "6475a9e8-56dd-400b-8ea2-f65373c7407c",
+    "created_at": "2026-04-01T23:16:54.935476+00:00",
+    "machine_id": "T1.2-M01",
+    "sku": "BW-SL-CLR-100Mx100CMx1ROLL-RED",
+    "output_qty": 1
+  },
+  {
+    "log_id": "5dea7404-081a-4d55-8de0-8eecb88306d6",
+    "created_at": "2026-04-01T23:16:54.935476+00:00",
+    "machine_id": "T1.2-M01",
+    "sku": "BW-SL-CLR-100Mx100CMx1ROLL-RED",
+    "output_qty": 1
+  },
+  {
+    "log_id": "ff122228-0953-456d-8a4d-b726ded8da27",
+    "created_at": "2026-04-01T23:19:19.060827+00:00",
+    "machine_id": "T1.3-M02",
+    "sku": "BW-SL-CLR-100Mx100CMx1ROLL-RED",
+    "output_qty": 1
+  },
+  {
+    "log_id": "e4ee601f-c8f7-43f3-b7f3-71027730249b",
+    "created_at": "2026-04-01T23:22:24.908961+00:00",
+    "machine_id": "T1.2-M01",
+    "sku": "BW-SL-CLR-100Mx100CMx1ROLL-RED",
+    "output_qty": 1
+  },
+  {
+    "log_id": "6865b897-dd99-4d41-b140-01ca112c2def",
+    "created_at": "2026-04-01T23:22:24.908961+00:00",
+    "machine_id": "T1.2-M01",
+    "sku": "BW-SL-CLR-100Mx100CMx1ROLL-RED",
+    "output_qty": 1
+  },
+  {
+    "log_id": "ef68a359-6fbc-4ebf-b82e-01e8d99f0044",
+    "created_at": "2026-04-01T23:25:00.983881+00:00",
+    "machine_id": "T1.3-M02",
+    "sku": "BW-SL-CLR-100Mx100CMx1ROLL-RED",
+    "output_qty": 1
+  },
+  {
+    "log_id": "1013c517-5dfb-4968-b0e7-d7c04540bb6c",
+    "created_at": "2026-04-01T23:27:50.569089+00:00",
+    "machine_id": "T1.2-M01",
+    "sku": "BW-SL-CLR-100Mx100CMx1ROLL-RED",
+    "output_qty": 1
+  },
+  {
+    "log_id": "1b775cd2-4672-4683-8dbf-86b71573cd00",
+    "created_at": "2026-04-01T23:27:50.569089+00:00",
+    "machine_id": "T1.2-M01",
+    "sku": "BW-SL-CLR-100Mx100CMx1ROLL-RED",
+    "output_qty": 1
+  },
+  {
+    "log_id": "90b0b12d-b45b-4a64-a3d9-f5ff3570e683",
+    "created_at": "2026-04-01T23:30:43.15395+00:00",
+    "machine_id": "T1.3-M02",
+    "sku": "BW-SL-CLR-100Mx100CMx1ROLL-RED",
+    "output_qty": 1
+  },
+  {
+    "log_id": "5bcf04b7-338c-46c7-ac5d-00833ddaa834",
+    "created_at": "2026-04-01T23:33:13.049562+00:00",
+    "machine_id": "T1.2-M01",
+    "sku": "BW-SL-CLR-100Mx100CMx1ROLL-RED",
+    "output_qty": 1
+  },
+  {
+    "log_id": "79d0b0f9-1cd6-4418-820d-1272b062d5e7",
+    "created_at": "2026-04-01T23:33:13.049562+00:00",
+    "machine_id": "T1.2-M01",
+    "sku": "BW-SL-CLR-100Mx100CMx1ROLL-RED",
+    "output_qty": 1
+  },
+  {
+    "log_id": "1e3c7f56-47b6-4d55-8f15-15a9e5508432",
+    "created_at": "2026-04-01T23:36:25.433473+00:00",
+    "machine_id": "T1.3-M02",
+    "sku": "BW-SL-CLR-100Mx100CMx1ROLL-RED",
+    "output_qty": 1
+  },
+  {
+    "log_id": "2b0b7c81-d7ec-4f91-b5d9-731d62ce870d",
+    "created_at": "2026-04-01T23:38:37.139156+00:00",
+    "machine_id": "T1.2-M01",
+    "sku": "BW-SL-CLR-100Mx100CMx1ROLL-RED",
+    "output_qty": 1
+  },
+  {
+    "log_id": "3fe6255a-8cca-4066-a1ab-1def29f3b63d",
+    "created_at": "2026-04-01T23:38:37.139156+00:00",
+    "machine_id": "T1.2-M01",
+    "sku": "BW-SL-CLR-100Mx100CMx1ROLL-RED",
+    "output_qty": 1
+  },
+  {
+    "log_id": "2a90f2b1-c806-4273-87e2-c21393d7ae27",
+    "created_at": "2026-04-01T23:42:07.265393+00:00",
+    "machine_id": "T1.3-M02",
+    "sku": "BW-SL-CLR-100Mx100CMx1ROLL-RED",
+    "output_qty": 1
+  },
+  {
+    "log_id": "0d79f2fd-9d40-4365-aeed-35fee677ff0e",
+    "created_at": "2026-04-01T23:43:58.212199+00:00",
+    "machine_id": "T1.2-M01",
+    "sku": "BW-SL-CLR-100Mx100CMx1ROLL-RED",
+    "output_qty": 1
+  },
+  {
+    "log_id": "30e4fb19-0f7d-44e2-93a1-9c401ad9745b",
+    "created_at": "2026-04-01T23:43:58.212199+00:00",
+    "machine_id": "T1.2-M01",
+    "sku": "BW-SL-CLR-100Mx100CMx1ROLL-RED",
+    "output_qty": 1
+  },
+  {
+    "log_id": "9d0b227e-5e7d-45af-9f1f-c5c206e1b824",
+    "created_at": "2026-04-01T23:47:49.138747+00:00",
+    "machine_id": "T1.3-M02",
+    "sku": "BW-SL-CLR-100Mx100CMx1ROLL-RED",
+    "output_qty": 1
+  },
+  {
+    "log_id": "8d6feb6a-e3cf-49b2-9621-e8f39205ef6c",
+    "created_at": "2026-04-01T23:49:20.16818+00:00",
+    "machine_id": "T1.2-M01",
+    "sku": "BW-SL-CLR-100Mx100CMx1ROLL-RED",
+    "output_qty": 1
+  },
+  {
+    "log_id": "521ae929-ba76-4902-95a2-2d90e812b3af",
+    "created_at": "2026-04-01T23:49:20.16818+00:00",
+    "machine_id": "T1.2-M01",
+    "sku": "BW-SL-CLR-100Mx100CMx1ROLL-RED",
+    "output_qty": 1
+  },
+  {
+    "log_id": "c717f61d-417e-4c2e-b21a-266f36176621",
+    "created_at": "2026-04-01T23:53:31.34715+00:00",
+    "machine_id": "T1.3-M02",
+    "sku": "BW-SL-CLR-100Mx100CMx1ROLL-RED",
+    "output_qty": 1
+  },
+  {
+    "log_id": "3d3193a6-ac54-43bd-a16f-816dad1c0550",
+    "created_at": "2026-04-01T23:54:42.547843+00:00",
+    "machine_id": "T1.2-M01",
+    "sku": "BW-SL-CLR-100Mx100CMx1ROLL-RED",
+    "output_qty": 1
+  },
+  {
+    "log_id": "15fb5b4b-dbc8-4331-8802-a26888bf3306",
+    "created_at": "2026-04-01T23:54:42.547843+00:00",
+    "machine_id": "T1.2-M01",
+    "sku": "BW-SL-CLR-100Mx100CMx1ROLL-RED",
+    "output_qty": 1
+  },
+  {
+    "log_id": "6ee525a5-82ad-440d-b189-63d256cbd1b8",
+    "created_at": "2026-04-01T23:59:13.164708+00:00",
+    "machine_id": "T1.3-M02",
+    "sku": "BW-SL-CLR-100Mx100CMx1ROLL-RED",
+    "output_qty": 1
+  },
+  {
+    "log_id": "d7ead9e3-bced-472a-bff2-b9399e1d302b",
+    "created_at": "2026-04-02T00:00:05.068919+00:00",
+    "machine_id": "T1.2-M01",
+    "sku": "BW-SL-CLR-100Mx100CMx1ROLL-RED",
+    "output_qty": 1
+  },
+  {
+    "log_id": "c49d012e-5db3-416e-b2d1-a2f5c1067ba1",
+    "created_at": "2026-04-02T00:00:05.068919+00:00",
+    "machine_id": "T1.2-M01",
+    "sku": "BW-SL-CLR-100Mx100CMx1ROLL-RED",
+    "output_qty": 1
+  },
+  {
+    "log_id": "4573d32f-689f-4fe4-8530-d5a63263328e",
+    "created_at": "2026-04-02T00:05:27.804194+00:00",
+    "machine_id": "T1.2-M01",
+    "sku": "BW-SL-CLR-100Mx100CMx1ROLL-RED",
+    "output_qty": 1
+  },
+  {
+    "log_id": "f421d416-a060-437f-b5b5-b7d2d62ced88",
+    "created_at": "2026-04-02T00:05:27.804194+00:00",
+    "machine_id": "T1.2-M01",
+    "sku": "BW-SL-CLR-100Mx100CMx1ROLL-RED",
+    "output_qty": 1
+  },
+  {
+    "log_id": "13682cdf-03f8-4486-b423-da5f9265a4a8",
+    "created_at": "2026-04-02T00:10:50.221876+00:00",
+    "machine_id": "T1.2-M01",
+    "sku": "BW-SL-CLR-100Mx100CMx1ROLL-RED",
+    "output_qty": 1
+  },
+  {
+    "log_id": "f8b0c48c-4a48-4e6a-8570-715630af8124",
+    "created_at": "2026-04-02T00:10:50.221876+00:00",
+    "machine_id": "T1.2-M01",
+    "sku": "BW-SL-CLR-100Mx100CMx1ROLL-RED",
+    "output_qty": 1
+  },
+  {
+    "log_id": "a5a12ed2-78b0-4625-a168-6e6e136a5492",
+    "created_at": "2026-04-02T00:16:13.258769+00:00",
+    "machine_id": "T1.2-M01",
+    "sku": "BW-SL-CLR-100Mx100CMx1ROLL-RED",
+    "output_qty": 1
+  },
+  {
+    "log_id": "d88b698c-2a83-4e64-83a6-f37f392a4891",
+    "created_at": "2026-04-02T00:16:13.258769+00:00",
+    "machine_id": "T1.2-M01",
+    "sku": "BW-SL-CLR-100Mx100CMx1ROLL-RED",
+    "output_qty": 1
+  },
+  {
+    "log_id": "7fdd1972-5e03-4f8e-9f76-09f47c8cabd8",
+    "created_at": "2026-04-02T00:21:35.055885+00:00",
+    "machine_id": "T1.2-M01",
+    "sku": "BW-SL-CLR-100Mx100CMx1ROLL-RED",
+    "output_qty": 1
+  },
+  {
+    "log_id": "ef883e53-19a9-4fe3-bf46-ab4294c222ae",
+    "created_at": "2026-04-02T00:21:35.055885+00:00",
+    "machine_id": "T1.2-M01",
+    "sku": "BW-SL-CLR-100Mx100CMx1ROLL-RED",
+    "output_qty": 1
+  },
+  {
+    "log_id": "e268f906-50e7-4e36-a32c-4e1f705ae2dc",
+    "created_at": "2026-04-02T00:26:57.512284+00:00",
+    "machine_id": "T1.2-M01",
+    "sku": "BW-SL-CLR-100Mx100CMx1ROLL-RED",
+    "output_qty": 1
+  },
+  {
+    "log_id": "72e8f2dc-6de9-43c4-a1d5-510a1b593121",
+    "created_at": "2026-04-02T00:26:57.512284+00:00",
+    "machine_id": "T1.2-M01",
+    "sku": "BW-SL-CLR-100Mx100CMx1ROLL-RED",
+    "output_qty": 1
+  },
+  {
+    "log_id": "4a34de62-5d36-48a9-930d-699e4a5bcdf8",
+    "created_at": "2026-04-02T00:32:19.807256+00:00",
+    "machine_id": "T1.2-M01",
+    "sku": "BW-SL-CLR-100Mx100CMx1ROLL-RED",
+    "output_qty": 1
+  },
+  {
+    "log_id": "4df74887-cecb-47c2-ac9a-785d66f45fdd",
+    "created_at": "2026-04-02T00:32:19.807256+00:00",
+    "machine_id": "T1.2-M01",
+    "sku": "BW-SL-CLR-100Mx100CMx1ROLL-RED",
+    "output_qty": 1
+  },
+  {
+    "log_id": "f75d76ff-0d40-4ab2-b020-32bde33cd767",
+    "created_at": "2026-04-02T00:37:41.738769+00:00",
+    "machine_id": "T1.2-M01",
+    "sku": "BW-SL-CLR-100Mx100CMx1ROLL-RED",
+    "output_qty": 1
+  },
+  {
+    "log_id": "58c664f5-8d8b-44c2-a0e4-b3e5cc2d441b",
+    "created_at": "2026-04-02T00:37:41.738769+00:00",
+    "machine_id": "T1.2-M01",
+    "sku": "BW-SL-CLR-100Mx100CMx1ROLL-RED",
+    "output_qty": 1
+  },
+  {
+    "log_id": "4400a43e-b5fb-4d80-927c-028982ebe13a",
+    "created_at": "2026-04-02T00:43:04.301673+00:00",
+    "machine_id": "T1.2-M01",
+    "sku": "BW-SL-CLR-100Mx100CMx1ROLL-RED",
+    "output_qty": 1
+  },
+  {
+    "log_id": "43e6a2e2-d165-4e16-a939-d4c6812ca694",
+    "created_at": "2026-04-02T00:43:04.301673+00:00",
+    "machine_id": "T1.2-M01",
+    "sku": "BW-SL-CLR-100Mx100CMx1ROLL-RED",
+    "output_qty": 1
+  },
+  {
+    "log_id": "97e0e825-0e6d-4c02-aef3-b8deed8ca15a",
+    "created_at": "2026-04-02T00:48:26.943655+00:00",
+    "machine_id": "T1.2-M01",
+    "sku": "BW-SL-CLR-100Mx100CMx1ROLL-RED",
+    "output_qty": 1
+  },
+  {
+    "log_id": "78a4f136-ff7a-440b-b1af-3c2ad24fd10a",
+    "created_at": "2026-04-02T00:48:26.943655+00:00",
+    "machine_id": "T1.2-M01",
+    "sku": "BW-SL-CLR-100Mx100CMx1ROLL-RED",
+    "output_qty": 1
+  },
+  {
+    "log_id": "dcf2d1ab-3d24-42b5-883b-eb15b66deec5",
+    "created_at": "2026-04-02T00:53:49.057626+00:00",
+    "machine_id": "T1.2-M01",
+    "sku": "BW-SL-CLR-100Mx100CMx1ROLL-RED",
+    "output_qty": 1
+  },
+  {
+    "log_id": "5626f873-9dd5-4d72-91eb-6230db54e4d4",
+    "created_at": "2026-04-02T00:53:49.057626+00:00",
+    "machine_id": "T1.2-M01",
+    "sku": "BW-SL-CLR-100Mx100CMx1ROLL-RED",
+    "output_qty": 1
+  },
+  {
+    "log_id": "33a76be8-997f-43e7-9f7f-2ece391bead0",
+    "created_at": "2026-04-02T00:59:11.921485+00:00",
+    "machine_id": "T1.2-M01",
+    "sku": "BW-SL-CLR-100Mx100CMx1ROLL-RED",
+    "output_qty": 1
+  },
+  {
+    "log_id": "c5431f72-1630-4c1d-bcfa-7f150a8e1151",
+    "created_at": "2026-04-02T00:59:11.921485+00:00",
+    "machine_id": "T1.2-M01",
+    "sku": "BW-SL-CLR-100Mx100CMx1ROLL-RED",
+    "output_qty": 1
+  },
+  {
+    "log_id": "760e0ce9-2a4c-461c-b355-53feb8bf8fef",
+    "created_at": "2026-04-02T01:04:34.003064+00:00",
+    "machine_id": "T1.2-M01",
+    "sku": "BW-SL-CLR-100Mx100CMx1ROLL-RED",
+    "output_qty": 1
+  },
+  {
+    "log_id": "7b494dd1-f040-4c2e-8c5d-93c0a456ab03",
+    "created_at": "2026-04-02T01:04:34.003064+00:00",
+    "machine_id": "T1.2-M01",
+    "sku": "BW-SL-CLR-100Mx100CMx1ROLL-RED",
+    "output_qty": 1
+  },
+  {
+    "log_id": "44cb3afc-1aae-40fb-b297-5b9c02b97e92",
+    "created_at": "2026-04-02T01:09:56.475465+00:00",
+    "machine_id": "T1.2-M01",
+    "sku": "BW-SL-CLR-100Mx100CMx1ROLL-RED",
+    "output_qty": 1
+  },
+  {
+    "log_id": "b6d1c37a-0ab3-498f-a1a7-816c417f0e07",
+    "created_at": "2026-04-02T01:09:56.475465+00:00",
+    "machine_id": "T1.2-M01",
+    "sku": "BW-SL-CLR-100Mx100CMx1ROLL-RED",
+    "output_qty": 1
+  },
+  {
+    "log_id": "03e0d3a0-c222-459c-917d-790550a3b634",
+    "created_at": "2026-04-02T01:15:18.98852+00:00",
+    "machine_id": "T1.2-M01",
+    "sku": "BW-SL-CLR-100Mx100CMx1ROLL-RED",
+    "output_qty": 1
+  },
+  {
+    "log_id": "c86d1b3c-1de2-462c-b7d5-2d73835b8374",
+    "created_at": "2026-04-02T01:15:18.98852+00:00",
+    "machine_id": "T1.2-M01",
+    "sku": "BW-SL-CLR-100Mx100CMx1ROLL-RED",
+    "output_qty": 1
+  },
+  {
+    "log_id": "31e20852-67f2-4b3c-b0a8-1fba72173605",
+    "created_at": "2026-04-02T01:20:42.213298+00:00",
+    "machine_id": "T1.2-M01",
+    "sku": "BW-SL-CLR-100Mx100CMx1ROLL-RED",
+    "output_qty": 1
+  },
+  {
+    "log_id": "b29cfe4c-9323-4466-b437-7d10d0f3e39a",
+    "created_at": "2026-04-02T01:20:42.213298+00:00",
+    "machine_id": "T1.2-M01",
+    "sku": "BW-SL-CLR-100Mx100CMx1ROLL-RED",
+    "output_qty": 1
+  },
+  {
+    "log_id": "cdb2f4fb-64b5-4377-8cc6-e8ddecf511ac",
+    "created_at": "2026-04-02T01:26:03.967226+00:00",
+    "machine_id": "T1.2-M01",
+    "sku": "BW-SL-CLR-100Mx100CMx1ROLL-RED",
+    "output_qty": 1
+  },
+  {
+    "log_id": "ff27f38c-593c-4b5c-909a-74e284ba2316",
+    "created_at": "2026-04-02T01:26:03.967226+00:00",
+    "machine_id": "T1.2-M01",
+    "sku": "BW-SL-CLR-100Mx100CMx1ROLL-RED",
+    "output_qty": 1
+  },
+  {
+    "log_id": "060d853d-66a6-4c25-8d06-3857c535a424",
+    "created_at": "2026-04-02T01:31:26.727014+00:00",
+    "machine_id": "T1.2-M01",
+    "sku": "BW-SL-CLR-100Mx100CMx1ROLL-RED",
+    "output_qty": 1
+  },
+  {
+    "log_id": "d358906e-adb9-4f55-9903-5d535fbcf28a",
+    "created_at": "2026-04-02T01:31:26.727014+00:00",
+    "machine_id": "T1.2-M01",
+    "sku": "BW-SL-CLR-100Mx100CMx1ROLL-RED",
+    "output_qty": 1
+  },
+  {
+    "log_id": "85422c97-d5c5-48b7-b4de-994e22ada226",
+    "created_at": "2026-04-02T01:36:49.433151+00:00",
+    "machine_id": "T1.2-M01",
+    "sku": "BW-SL-CLR-100Mx100CMx1ROLL-RED",
+    "output_qty": 1
+  },
+  {
+    "log_id": "acea9c5d-3c63-4374-8d78-ac3560e23d0f",
+    "created_at": "2026-04-02T01:36:49.433151+00:00",
+    "machine_id": "T1.2-M01",
+    "sku": "BW-SL-CLR-100Mx100CMx1ROLL-RED",
+    "output_qty": 1
+  },
+  {
+    "log_id": "731c2dbc-fe73-4e43-a75c-34db83a63823",
+    "created_at": "2026-04-02T01:42:11.552298+00:00",
+    "machine_id": "T1.2-M01",
+    "sku": "BW-SL-CLR-100Mx100CMx1ROLL-RED",
+    "output_qty": 1
+  },
+  {
+    "log_id": "87883a97-b9fd-40c0-94c8-a60b2a53dd8a",
+    "created_at": "2026-04-02T01:47:33.961068+00:00",
+    "machine_id": "T1.2-M01",
+    "sku": "BW-SL-CLR-100Mx100CMx1ROLL-RED",
+    "output_qty": 1
+  },
+  {
+    "log_id": "1977500a-d6b4-4494-8884-f928a3b3ccc1",
+    "created_at": "2026-04-02T01:52:56.826755+00:00",
+    "machine_id": "T1.2-M01",
+    "sku": "BW-SL-CLR-100Mx100CMx1ROLL-RED",
+    "output_qty": 1
+  },
+  {
+    "log_id": "938b2537-1647-463b-91fb-0180bba4d951",
+    "created_at": "2026-04-02T01:58:19.145392+00:00",
+    "machine_id": "T1.2-M01",
+    "sku": "BW-SL-CLR-100Mx100CMx1ROLL-RED",
+    "output_qty": 1
+  },
+  {
+    "log_id": "4d41c550-80b1-4782-b7d9-3f9f19592003",
+    "created_at": "2026-04-02T02:03:41.701511+00:00",
+    "machine_id": "T1.2-M01",
+    "sku": "BW-SL-CLR-100Mx100CMx1ROLL-RED",
+    "output_qty": 1
+  },
+  {
+    "log_id": "608283df-7c05-4f96-910e-380e8a8eda66",
+    "created_at": "2026-04-02T02:09:04.999549+00:00",
+    "machine_id": "T1.2-M01",
+    "sku": "BW-SL-CLR-100Mx100CMx1ROLL-RED",
+    "output_qty": 1
+  },
+  {
+    "log_id": "577df7c6-216b-48da-b980-1d57203ecad9",
+    "created_at": "2026-04-02T02:14:26.999126+00:00",
+    "machine_id": "T1.2-M01",
+    "sku": "BW-SL-CLR-100Mx100CMx1ROLL-RED",
+    "output_qty": 1
+  },
+  {
+    "log_id": "e314b4f8-4ea7-4df4-80fa-9f981d5e4ef4",
+    "created_at": "2026-04-02T02:19:49.694104+00:00",
+    "machine_id": "T1.2-M01",
+    "sku": "BW-SL-CLR-100Mx100CMx1ROLL-RED",
+    "output_qty": 1
+  },
+  {
+    "log_id": "6cf29972-299a-46a9-8294-f1f14b797681",
+    "created_at": "2026-04-02T02:25:12.290723+00:00",
+    "machine_id": "T1.2-M01",
+    "sku": "BW-SL-CLR-100Mx100CMx1ROLL-RED",
+    "output_qty": 1
+  },
+  {
+    "log_id": "5c7370b0-c9b2-4331-bf2e-eef94ee5c586",
+    "created_at": "2026-04-02T02:30:35.246533+00:00",
+    "machine_id": "T1.2-M01",
+    "sku": "BW-SL-CLR-100Mx100CMx1ROLL-RED",
+    "output_qty": 1
+  },
+  {
+    "log_id": "4c25857c-9425-4ac0-b38c-e3bf57efc22a",
+    "created_at": "2026-04-02T02:35:57.49044+00:00",
+    "machine_id": "T1.2-M01",
+    "sku": "BW-SL-CLR-100Mx100CMx1ROLL-RED",
+    "output_qty": 1
+  },
+  {
+    "log_id": "7e191993-1802-4f9c-96b5-afe3725a0d5b",
+    "created_at": "2026-04-02T02:41:20.339201+00:00",
+    "machine_id": "T1.2-M01",
+    "sku": "BW-SL-CLR-100Mx100CMx1ROLL-RED",
+    "output_qty": 1
+  },
+  {
+    "log_id": "d67cd240-e8c0-4bb7-87a7-707aa2da1d2f",
+    "created_at": "2026-04-02T02:46:40.625638+00:00",
+    "machine_id": "T1.2-M01",
+    "sku": "BW-SL-CLR-100Mx100CMx1ROLL-RED",
+    "output_qty": 1
+  },
+  {
+    "log_id": "a936f49a-519d-46f7-ac41-7dde5d2460ff",
+    "created_at": "2026-04-02T02:51:57.158171+00:00",
+    "machine_id": "T1.2-M01",
+    "sku": "BW-SL-CLR-100Mx100CMx1ROLL-RED",
+    "output_qty": 1
+  },
+  {
+    "log_id": "a3f8450f-8c90-41ce-bcc1-fe826a5e0882",
+    "created_at": "2026-04-02T02:51:57.158171+00:00",
+    "machine_id": "T1.2-M01",
+    "sku": "BW-SL-CLR-100Mx25CMx4ROLL-GRN",
+    "output_qty": 1
+  },
+  {
+    "log_id": "17c872e2-3bf2-43d3-9766-bcc44a8e8982",
+    "created_at": "2026-04-02T02:57:13.716879+00:00",
+    "machine_id": "T1.2-M01",
+    "sku": "BW-SL-CLR-100Mx100CMx1ROLL-RED",
+    "output_qty": 1
+  },
+  {
+    "log_id": "c60556a6-2615-4755-af16-1c6663645ea3",
+    "created_at": "2026-04-02T02:57:13.716879+00:00",
+    "machine_id": "T1.2-M01",
+    "sku": "BW-SL-CLR-100Mx25CMx4ROLL-GRN",
+    "output_qty": 1
+  },
+  {
+    "log_id": "a3b2c5cc-29ed-4dc7-8cdb-7e7a9ffb065e",
+    "created_at": "2026-04-02T03:02:31.003973+00:00",
+    "machine_id": "T1.2-M01",
+    "sku": "BW-SL-CLR-100Mx100CMx1ROLL-RED",
+    "output_qty": 1
+  },
+  {
+    "log_id": "d4b327c5-b80e-4605-8cc0-10e66be3f301",
+    "created_at": "2026-04-02T03:02:31.003973+00:00",
+    "machine_id": "T1.2-M01",
+    "sku": "BW-SL-CLR-100Mx25CMx4ROLL-GRN",
+    "output_qty": 1
+  },
+  {
+    "log_id": "529d1d35-4e1f-4005-bee2-fece49dcb76b",
+    "created_at": "2026-04-02T03:07:46.65295+00:00",
+    "machine_id": "T1.2-M01",
+    "sku": "BW-SL-CLR-100Mx100CMx1ROLL-RED",
+    "output_qty": 1
+  },
+  {
+    "log_id": "b5b7d7f7-27d6-47fc-801b-1f1afb9226fd",
+    "created_at": "2026-04-02T03:07:46.65295+00:00",
+    "machine_id": "T1.2-M01",
+    "sku": "BW-SL-CLR-100Mx25CMx4ROLL-GRN",
+    "output_qty": 1
+  },
+  {
+    "log_id": "0c5c8e24-1e80-47a2-aad6-93d155b2ee68",
+    "created_at": "2026-04-02T03:13:03.075026+00:00",
+    "machine_id": "T1.2-M01",
+    "sku": "BW-SL-CLR-100Mx100CMx1ROLL-RED",
+    "output_qty": 1
+  },
+  {
+    "log_id": "372478ee-9c1b-4ed9-91be-f9e06071c8cb",
+    "created_at": "2026-04-02T03:13:03.075026+00:00",
+    "machine_id": "T1.2-M01",
+    "sku": "BW-SL-CLR-100Mx25CMx4ROLL-GRN",
+    "output_qty": 1
+  },
+  {
+    "log_id": "a209fb9a-b7be-4fdf-b3b9-506691a87bfb",
+    "created_at": "2026-04-02T03:18:20.258682+00:00",
+    "machine_id": "T1.2-M01",
+    "sku": "BW-SL-CLR-100Mx100CMx1ROLL-RED",
+    "output_qty": 1
+  },
+  {
+    "log_id": "763fbdfb-afc2-41c0-af4f-979ab69692f0",
+    "created_at": "2026-04-02T03:18:20.258682+00:00",
+    "machine_id": "T1.2-M01",
+    "sku": "BW-SL-CLR-100Mx25CMx4ROLL-GRN",
+    "output_qty": 1
+  },
+  {
+    "log_id": "1a9b197a-8d77-483d-89f8-1bfc66ad830c",
+    "created_at": "2026-04-02T03:23:36.232488+00:00",
+    "machine_id": "T1.2-M01",
+    "sku": "BW-SL-CLR-100Mx100CMx1ROLL-RED",
+    "output_qty": 1
+  },
+  {
+    "log_id": "e5e47000-3a3c-4162-ac99-a7e1032dfaf7",
+    "created_at": "2026-04-02T03:23:36.232488+00:00",
+    "machine_id": "T1.2-M01",
+    "sku": "BW-SL-CLR-100Mx25CMx4ROLL-GRN",
+    "output_qty": 1
+  },
+  {
+    "log_id": "86cc570e-48cf-4d3f-a7a7-ef6c6cc8a649",
+    "created_at": "2026-04-02T03:28:53.662804+00:00",
+    "machine_id": "T1.2-M01",
+    "sku": "BW-SL-CLR-100Mx100CMx1ROLL-RED",
+    "output_qty": 1
+  },
+  {
+    "log_id": "8dccd6f6-bc4b-450e-8d7d-852475744308",
+    "created_at": "2026-04-02T03:28:53.662804+00:00",
+    "machine_id": "T1.2-M01",
+    "sku": "BW-SL-CLR-100Mx25CMx4ROLL-GRN",
+    "output_qty": 1
+  },
+  {
+    "log_id": "a0476d13-21ec-4d42-9713-3e11430956e9",
+    "created_at": "2026-04-02T03:34:16.570169+00:00",
+    "machine_id": "T1.2-M01",
+    "sku": "BW-SL-CLR-100Mx100CMx1ROLL-RED",
+    "output_qty": 1
+  },
+  {
+    "log_id": "a790a81d-fbd8-455a-8fa1-3564f1011c00",
+    "created_at": "2026-04-02T03:34:16.570169+00:00",
+    "machine_id": "T1.2-M01",
+    "sku": "BW-SL-CLR-100Mx25CMx4ROLL-GRN",
+    "output_qty": 1
+  },
+  {
+    "log_id": "f162dd32-5a43-4007-9c4e-b5049a36b736",
+    "created_at": "2026-04-02T03:39:40.351774+00:00",
+    "machine_id": "T1.2-M01",
+    "sku": "BW-SL-CLR-100Mx100CMx1ROLL-RED",
+    "output_qty": 1
+  },
+  {
+    "log_id": "9a6fe29d-e708-4f79-91f1-b43ac531732f",
+    "created_at": "2026-04-02T03:39:40.351774+00:00",
+    "machine_id": "T1.2-M01",
+    "sku": "BW-SL-CLR-100Mx25CMx4ROLL-GRN",
+    "output_qty": 1
+  },
+  {
+    "log_id": "7660d35c-e80c-48ea-b93d-f6c0f2c69813",
+    "created_at": "2026-04-02T03:45:03.295002+00:00",
+    "machine_id": "T1.2-M01",
+    "sku": "BW-SL-CLR-100Mx100CMx1ROLL-RED",
+    "output_qty": 1
+  },
+  {
+    "log_id": "dda5af2f-c868-44c0-8861-6dab9765a4ee",
+    "created_at": "2026-04-02T03:45:03.295002+00:00",
+    "machine_id": "T1.2-M01",
+    "sku": "BW-SL-CLR-100Mx25CMx4ROLL-GRN",
+    "output_qty": 1
+  },
+  {
+    "log_id": "ab53bc61-c738-4060-9f36-dfdf5e4371d8",
+    "created_at": "2026-04-02T03:50:27.469726+00:00",
+    "machine_id": "T1.2-M01",
+    "sku": "BW-SL-CLR-100Mx100CMx1ROLL-RED",
+    "output_qty": 1
+  },
+  {
+    "log_id": "d9653f76-da69-40bc-a700-48fbc1089e91",
+    "created_at": "2026-04-02T03:50:27.469726+00:00",
+    "machine_id": "T1.2-M01",
+    "sku": "BW-SL-CLR-100Mx25CMx4ROLL-GRN",
+    "output_qty": 1
+  },
+  {
+    "log_id": "86005ae9-2392-456a-b07f-a771670eb043",
+    "created_at": "2026-04-02T03:55:50.254076+00:00",
+    "machine_id": "T1.2-M01",
+    "sku": "BW-SL-CLR-100Mx100CMx1ROLL-RED",
+    "output_qty": 1
+  },
+  {
+    "log_id": "b6541783-e724-42a7-b357-a0dc3d14f53f",
+    "created_at": "2026-04-02T03:55:50.254076+00:00",
+    "machine_id": "T1.2-M01",
+    "sku": "BW-SL-CLR-100Mx25CMx4ROLL-GRN",
+    "output_qty": 1
+  },
+  {
+    "log_id": "48c224a8-ba5b-4f54-b5a1-fe910232615a",
+    "created_at": "2026-04-02T04:01:14.409989+00:00",
+    "machine_id": "T1.2-M01",
+    "sku": "BW-SL-CLR-100Mx100CMx1ROLL-RED",
+    "output_qty": 1
+  },
+  {
+    "log_id": "c72cec9d-cc1b-4401-b82a-edf58070868f",
+    "created_at": "2026-04-02T04:01:14.409989+00:00",
+    "machine_id": "T1.2-M01",
+    "sku": "BW-SL-CLR-100Mx25CMx4ROLL-GRN",
+    "output_qty": 1
+  },
+  {
+    "log_id": "1ee12370-6f70-488e-b21e-f1fc540ec90b",
+    "created_at": "2026-04-02T04:06:37.042519+00:00",
+    "machine_id": "T1.2-M01",
+    "sku": "BW-SL-CLR-100Mx100CMx1ROLL-RED",
+    "output_qty": 1
+  },
+  {
+    "log_id": "c2f11223-c1f9-422d-b260-3b303970a73d",
+    "created_at": "2026-04-02T04:06:37.042519+00:00",
+    "machine_id": "T1.2-M01",
+    "sku": "BW-SL-CLR-100Mx25CMx4ROLL-GRN",
+    "output_qty": 1
+  },
+  {
+    "log_id": "1690e18a-3c4b-462a-b5b9-9ad36e776c10",
+    "created_at": "2026-04-02T04:12:00.481948+00:00",
+    "machine_id": "T1.2-M01",
+    "sku": "BW-SL-CLR-100Mx100CMx1ROLL-RED",
+    "output_qty": 1
+  },
+  {
+    "log_id": "03f13352-db6c-4690-863a-7f4834f44f1b",
+    "created_at": "2026-04-02T04:12:00.481948+00:00",
+    "machine_id": "T1.2-M01",
+    "sku": "BW-SL-CLR-100Mx25CMx4ROLL-GRN",
+    "output_qty": 1
+  },
+  {
+    "log_id": "8bfec62c-0d54-489f-a7a9-dda1b9888f24",
+    "created_at": "2026-04-02T04:17:23.869564+00:00",
+    "machine_id": "T1.2-M01",
+    "sku": "BW-SL-CLR-100Mx100CMx1ROLL-RED",
+    "output_qty": 1
+  },
+  {
+    "log_id": "53336a85-568d-4fbf-8803-a093d8b9e064",
+    "created_at": "2026-04-02T04:17:23.869564+00:00",
+    "machine_id": "T1.2-M01",
+    "sku": "BW-SL-CLR-100Mx25CMx4ROLL-GRN",
+    "output_qty": 1
+  },
+  {
+    "log_id": "14eb071c-b667-441e-b8e7-c273ec9e5f31",
+    "created_at": "2026-04-02T04:22:47.267707+00:00",
+    "machine_id": "T1.2-M01",
+    "sku": "BW-SL-CLR-100Mx100CMx1ROLL-RED",
+    "output_qty": 1
+  },
+  {
+    "log_id": "2ad79067-12d4-4eea-b7d0-f1d05ad68453",
+    "created_at": "2026-04-02T04:22:47.267707+00:00",
+    "machine_id": "T1.2-M01",
+    "sku": "BW-SL-CLR-100Mx25CMx4ROLL-GRN",
+    "output_qty": 1
+  },
+  {
+    "log_id": "5ce9ba48-3e26-49c0-ace3-1fda9b74f2a0",
+    "created_at": "2026-04-02T04:28:10.437151+00:00",
+    "machine_id": "T1.2-M01",
+    "sku": "BW-SL-CLR-100Mx100CMx1ROLL-RED",
+    "output_qty": 1
+  },
+  {
+    "log_id": "17d139bb-0ee4-4361-a5c0-29e95b294550",
+    "created_at": "2026-04-02T04:28:10.437151+00:00",
+    "machine_id": "T1.2-M01",
+    "sku": "BW-SL-CLR-100Mx25CMx4ROLL-GRN",
+    "output_qty": 1
+  },
+  {
+    "log_id": "eebdee18-0f56-427f-9bd1-8cc8ee791056",
+    "created_at": "2026-04-02T04:33:33.77816+00:00",
+    "machine_id": "T1.2-M01",
+    "sku": "BW-SL-CLR-100Mx100CMx1ROLL-RED",
+    "output_qty": 1
+  },
+  {
+    "log_id": "aebcce6b-e784-41dc-b3b8-568760722cf3",
+    "created_at": "2026-04-02T04:33:33.77816+00:00",
+    "machine_id": "T1.2-M01",
+    "sku": "BW-SL-CLR-100Mx25CMx4ROLL-GRN",
+    "output_qty": 1
+  },
+  {
+    "log_id": "1c73a92b-0d21-4a73-81af-503b13723b79",
+    "created_at": "2026-04-02T04:38:57.293988+00:00",
+    "machine_id": "T1.2-M01",
+    "sku": "BW-SL-CLR-100Mx100CMx1ROLL-RED",
+    "output_qty": 1
+  },
+  {
+    "log_id": "cd973e4e-e0d7-45b2-abca-1ffd22901b15",
+    "created_at": "2026-04-02T04:38:57.293988+00:00",
+    "machine_id": "T1.2-M01",
+    "sku": "BW-SL-CLR-100Mx25CMx4ROLL-GRN",
+    "output_qty": 1
+  },
+  {
+    "log_id": "de44c1b7-8f8e-4148-a351-5e5f47e70384",
+    "created_at": "2026-04-02T04:44:20.430511+00:00",
+    "machine_id": "T1.2-M01",
+    "sku": "BW-SL-CLR-100Mx100CMx1ROLL-RED",
+    "output_qty": 1
+  },
+  {
+    "log_id": "6e0f0264-09ad-4aa6-aba4-4f90d43ce8bb",
+    "created_at": "2026-04-02T04:44:20.430511+00:00",
+    "machine_id": "T1.2-M01",
+    "sku": "BW-SL-CLR-100Mx25CMx4ROLL-GRN",
+    "output_qty": 1
+  },
+  {
+    "log_id": "7fae3f86-4cd9-4b69-bd4d-3a62b0d4a62e",
+    "created_at": "2026-04-02T04:49:43.857725+00:00",
+    "machine_id": "T1.2-M01",
+    "sku": "BW-SL-CLR-100Mx100CMx1ROLL-RED",
+    "output_qty": 1
+  },
+  {
+    "log_id": "bf81433b-6ba3-4d59-a724-39e8274823eb",
+    "created_at": "2026-04-02T04:49:43.857725+00:00",
+    "machine_id": "T1.2-M01",
+    "sku": "BW-SL-CLR-100Mx25CMx4ROLL-GRN",
+    "output_qty": 1
+  },
+  {
+    "log_id": "a92eccef-0861-4c4f-9dbd-6efd79c47433",
+    "created_at": "2026-04-02T04:55:07.349301+00:00",
+    "machine_id": "T1.2-M01",
+    "sku": "BW-SL-CLR-100Mx100CMx1ROLL-RED",
+    "output_qty": 1
+  },
+  {
+    "log_id": "563aea8c-e440-4d15-b321-dea94a447338",
+    "created_at": "2026-04-02T04:55:07.349301+00:00",
+    "machine_id": "T1.2-M01",
+    "sku": "BW-SL-CLR-100Mx25CMx4ROLL-GRN",
+    "output_qty": 1
+  },
+  {
+    "log_id": "97a485c6-47f5-467b-8145-2b7cd434593f",
+    "created_at": "2026-04-02T05:00:31.405517+00:00",
+    "machine_id": "T1.2-M01",
+    "sku": "BW-SL-CLR-100Mx100CMx1ROLL-RED",
+    "output_qty": 1
+  },
+  {
+    "log_id": "541c6918-f515-47aa-a1c3-fd1c304d143a",
+    "created_at": "2026-04-02T05:00:31.405517+00:00",
+    "machine_id": "T1.2-M01",
+    "sku": "BW-SL-CLR-100Mx25CMx4ROLL-GRN",
+    "output_qty": 1
+  },
+  {
+    "log_id": "a839ffbc-d5cd-4061-8cd1-c987ed5082d3",
+    "created_at": "2026-04-02T05:05:54.752139+00:00",
+    "machine_id": "T1.2-M01",
+    "sku": "BW-SL-CLR-100Mx100CMx1ROLL-RED",
+    "output_qty": 1
+  },
+  {
+    "log_id": "960f90dd-8abf-4f65-a2d1-391773066366",
+    "created_at": "2026-04-02T05:05:54.752139+00:00",
+    "machine_id": "T1.2-M01",
+    "sku": "BW-SL-CLR-100Mx25CMx4ROLL-GRN",
+    "output_qty": 1
+  },
+  {
+    "log_id": "7b574f78-3de3-4928-a2e7-8fd13a3eb9e2",
+    "created_at": "2026-04-02T05:11:17.284671+00:00",
+    "machine_id": "T1.2-M01",
+    "sku": "BW-SL-CLR-100Mx100CMx1ROLL-RED",
+    "output_qty": 1
+  },
+  {
+    "log_id": "615cb506-ac1e-4873-af32-a6c12b28288f",
+    "created_at": "2026-04-02T05:11:17.284671+00:00",
+    "machine_id": "T1.2-M01",
+    "sku": "BW-SL-CLR-100Mx25CMx4ROLL-GRN",
+    "output_qty": 1
+  },
+  {
+    "log_id": "67244cf7-2d3a-4511-a2cb-c34e9d82e29c",
+    "created_at": "2026-04-02T05:16:40.685081+00:00",
+    "machine_id": "T1.2-M01",
+    "sku": "BW-SL-CLR-100Mx100CMx1ROLL-RED",
+    "output_qty": 1
+  },
+  {
+    "log_id": "7b9e729c-1f1c-4a0b-8950-4916ddbc18e3",
+    "created_at": "2026-04-02T05:16:40.685081+00:00",
+    "machine_id": "T1.2-M01",
+    "sku": "BW-SL-CLR-100Mx25CMx4ROLL-GRN",
+    "output_qty": 1
+  },
+  {
+    "log_id": "6941bf78-8786-4fde-85c5-656f36b70654",
+    "created_at": "2026-04-02T05:22:03.914808+00:00",
+    "machine_id": "T1.2-M01",
+    "sku": "BW-SL-CLR-100Mx100CMx1ROLL-RED",
+    "output_qty": 1
+  },
+  {
+    "log_id": "83340e67-044a-481f-9c5f-f48cb3dd2fa2",
+    "created_at": "2026-04-02T05:22:03.914808+00:00",
+    "machine_id": "T1.2-M01",
+    "sku": "BW-SL-CLR-100Mx25CMx4ROLL-GRN",
+    "output_qty": 1
+  },
+  {
+    "log_id": "88af5674-8033-46c9-af26-109b68d7bee1",
+    "created_at": "2026-04-02T05:27:27.083938+00:00",
+    "machine_id": "T1.2-M01",
+    "sku": "BW-SL-CLR-100Mx100CMx1ROLL-RED",
+    "output_qty": 1
+  },
+  {
+    "log_id": "6f12d45b-a27d-41d6-8660-177de50523c3",
+    "created_at": "2026-04-02T05:27:27.083938+00:00",
+    "machine_id": "T1.2-M01",
+    "sku": "BW-SL-CLR-100Mx25CMx4ROLL-GRN",
+    "output_qty": 1
+  },
+  {
+    "log_id": "68f18e39-26b9-436a-84ca-6e95943e7fa8",
+    "created_at": "2026-04-02T05:32:51.987551+00:00",
+    "machine_id": "T1.2-M01",
+    "sku": "BW-SL-CLR-100Mx100CMx1ROLL-RED",
+    "output_qty": 1
+  },
+  {
+    "log_id": "eb0d26b6-9514-4ad8-b86d-161a0252ac00",
+    "created_at": "2026-04-02T05:32:51.987551+00:00",
+    "machine_id": "T1.2-M01",
+    "sku": "BW-SL-CLR-100Mx25CMx4ROLL-GRN",
+    "output_qty": 1
+  },
+  {
+    "log_id": "ef63cdce-f3ff-41c6-81e1-ac1c6b6ecc56",
+    "created_at": "2026-04-02T05:38:28.575652+00:00",
+    "machine_id": "T1.2-M01",
+    "sku": "BW-SL-CLR-100Mx100CMx1ROLL-RED",
+    "output_qty": 1
+  },
+  {
+    "log_id": "333ac539-7a1e-4d0a-99af-429f111d1c53",
+    "created_at": "2026-04-02T05:38:28.575652+00:00",
+    "machine_id": "T1.2-M01",
+    "sku": "BW-SL-CLR-100Mx25CMx4ROLL-GRN",
+    "output_qty": 1
+  },
+  {
+    "log_id": "9c7fdfca-3509-4178-adc5-e728dfea960c",
+    "created_at": "2026-04-02T05:44:05.206922+00:00",
+    "machine_id": "T1.2-M01",
+    "sku": "BW-SL-CLR-100Mx100CMx1ROLL-RED",
+    "output_qty": 1
+  },
+  {
+    "log_id": "6d8c6b38-c077-45c9-b108-e01eee69b330",
+    "created_at": "2026-04-02T05:44:05.206922+00:00",
+    "machine_id": "T1.2-M01",
+    "sku": "BW-SL-CLR-100Mx25CMx4ROLL-GRN",
+    "output_qty": 1
+  },
+  {
+    "log_id": "4febbac0-5526-4ef5-9f88-4f183161b9d1",
+    "created_at": "2026-04-02T05:49:42.202081+00:00",
+    "machine_id": "T1.2-M01",
+    "sku": "BW-SL-CLR-100Mx100CMx1ROLL-RED",
+    "output_qty": 1
+  },
+  {
+    "log_id": "52f81fcb-c422-4214-a1d3-783fd51b7808",
+    "created_at": "2026-04-02T05:49:42.202081+00:00",
+    "machine_id": "T1.2-M01",
+    "sku": "BW-SL-CLR-100Mx25CMx4ROLL-GRN",
+    "output_qty": 1
+  },
+  {
+    "log_id": "9802f5ac-7ac9-4aa3-9c0b-d67a920f7b2d",
+    "created_at": "2026-04-02T05:55:18.576972+00:00",
+    "machine_id": "T1.2-M01",
+    "sku": "BW-SL-CLR-100Mx100CMx1ROLL-RED",
+    "output_qty": 1
+  },
+  {
+    "log_id": "6fa1ba96-5842-4938-9760-c5a4b97bd3fd",
+    "created_at": "2026-04-02T05:55:18.576972+00:00",
+    "machine_id": "T1.2-M01",
+    "sku": "BW-SL-CLR-100Mx25CMx4ROLL-GRN",
+    "output_qty": 1
+  },
+  {
+    "log_id": "f9252942-b118-4e71-822b-f774d8a56221",
+    "created_at": "2026-04-02T06:00:56.002005+00:00",
+    "machine_id": "T1.2-M01",
+    "sku": "BW-SL-CLR-100Mx100CMx1ROLL-RED",
+    "output_qty": 1
+  },
+  {
+    "log_id": "c02c3831-e742-43c3-8cfa-2fe0d210847e",
+    "created_at": "2026-04-02T06:00:56.002005+00:00",
+    "machine_id": "T1.2-M01",
+    "sku": "BW-SL-CLR-100Mx25CMx4ROLL-GRN",
+    "output_qty": 1
+  },
+  {
+    "log_id": "8ef601e5-b510-47d8-85be-af7370b67459",
+    "created_at": "2026-04-02T06:06:32.343026+00:00",
+    "machine_id": "T1.2-M01",
+    "sku": "BW-SL-CLR-100Mx100CMx1ROLL-RED",
+    "output_qty": 1
+  },
+  {
+    "log_id": "a41f0197-0771-4872-a2a8-e5c8b384a339",
+    "created_at": "2026-04-02T06:06:32.343026+00:00",
+    "machine_id": "T1.2-M01",
+    "sku": "BW-SL-CLR-100Mx25CMx4ROLL-GRN",
+    "output_qty": 1
+  },
+  {
+    "log_id": "31400783-1b6e-47b0-8654-c4007a0fa806",
+    "created_at": "2026-04-02T06:12:08.886031+00:00",
+    "machine_id": "T1.2-M01",
+    "sku": "BW-SL-CLR-100Mx100CMx1ROLL-RED",
+    "output_qty": 1
+  },
+  {
+    "log_id": "d4312267-4cc4-486d-82bf-82659203f37a",
+    "created_at": "2026-04-02T06:12:08.886031+00:00",
+    "machine_id": "T1.2-M01",
+    "sku": "BW-SL-CLR-100Mx25CMx4ROLL-GRN",
+    "output_qty": 1
+  },
+  {
+    "log_id": "d891ed2a-909c-47e1-8eab-4c771505a4c5",
+    "created_at": "2026-04-02T06:17:45.351396+00:00",
+    "machine_id": "T1.2-M01",
+    "sku": "BW-SL-CLR-100Mx100CMx1ROLL-RED",
+    "output_qty": 1
+  },
+  {
+    "log_id": "f7e838c2-ee0f-411d-8a30-2a931125885b",
+    "created_at": "2026-04-02T06:17:45.351396+00:00",
+    "machine_id": "T1.2-M01",
+    "sku": "BW-SL-CLR-100Mx25CMx4ROLL-GRN",
+    "output_qty": 1
+  },
+  {
+    "log_id": "5c0104a9-be59-456f-90e9-453cbbc68f95",
+    "created_at": "2026-04-02T06:23:21.936754+00:00",
+    "machine_id": "T1.2-M01",
+    "sku": "BW-SL-CLR-100Mx100CMx1ROLL-RED",
+    "output_qty": 1
+  },
+  {
+    "log_id": "5ddbbd47-e746-436e-a552-7d5f7aa66ae0",
+    "created_at": "2026-04-02T06:23:21.936754+00:00",
+    "machine_id": "T1.2-M01",
+    "sku": "BW-SL-CLR-100Mx25CMx4ROLL-GRN",
+    "output_qty": 1
+  },
+  {
+    "log_id": "64aaefc1-073d-4874-96b5-31cbfeeb5b33",
+    "created_at": "2026-04-02T06:28:47.276258+00:00",
+    "machine_id": "T1.2-M01",
+    "sku": "BW-SL-CLR-100Mx100CMx1ROLL-RED",
+    "output_qty": 1
+  },
+  {
+    "log_id": "b22abf06-f771-4631-8eda-7d3de08529eb",
+    "created_at": "2026-04-02T06:28:47.276258+00:00",
+    "machine_id": "T1.2-M01",
+    "sku": "BW-SL-CLR-100Mx25CMx4ROLL-GRN",
+    "output_qty": 1
+  },
+  {
+    "log_id": "02bccd0b-ff3a-44d7-81c0-abba0ed28316",
+    "created_at": "2026-04-02T06:34:10.747809+00:00",
+    "machine_id": "T1.2-M01",
+    "sku": "BW-SL-CLR-100Mx100CMx1ROLL-RED",
+    "output_qty": 1
+  },
+  {
+    "log_id": "17512038-bb9d-46a2-9b99-f7a3a0fdcd8b",
+    "created_at": "2026-04-02T06:34:10.747809+00:00",
+    "machine_id": "T1.2-M01",
+    "sku": "BW-SL-CLR-100Mx25CMx4ROLL-GRN",
+    "output_qty": 1
+  },
+  {
+    "log_id": "e071abc0-cea0-4740-9104-4187b0558792",
+    "created_at": "2026-04-02T06:39:33.516261+00:00",
+    "machine_id": "T1.2-M01",
+    "sku": "BW-SL-CLR-100Mx100CMx1ROLL-RED",
+    "output_qty": 1
+  },
+  {
+    "log_id": "d614398c-94c7-4fe3-a321-c3411b8903cb",
+    "created_at": "2026-04-02T06:39:33.516261+00:00",
+    "machine_id": "T1.2-M01",
+    "sku": "BW-SL-CLR-100Mx25CMx4ROLL-GRN",
+    "output_qty": 1
+  },
+  {
+    "log_id": "554ba3e8-1dfa-4dc2-9432-09aa945a8c6e",
+    "created_at": "2026-04-02T06:44:57.090791+00:00",
+    "machine_id": "T1.2-M01",
+    "sku": "BW-SL-CLR-100Mx100CMx1ROLL-RED",
+    "output_qty": 1
+  },
+  {
+    "log_id": "f3f9cb75-f753-4626-917e-35f28f6c9de3",
+    "created_at": "2026-04-02T06:44:57.090791+00:00",
+    "machine_id": "T1.2-M01",
+    "sku": "BW-SL-CLR-100Mx25CMx4ROLL-GRN",
+    "output_qty": 1
+  },
+  {
+    "log_id": "192e7003-6d86-4b28-89bf-3692a881ebec",
+    "created_at": "2026-04-02T06:50:20.183569+00:00",
+    "machine_id": "T1.2-M01",
+    "sku": "BW-SL-CLR-100Mx100CMx1ROLL-RED",
+    "output_qty": 1
+  },
+  {
+    "log_id": "381193cb-a470-4fee-84d0-8e845ed50fab",
+    "created_at": "2026-04-02T06:50:20.183569+00:00",
+    "machine_id": "T1.2-M01",
+    "sku": "BW-SL-CLR-100Mx25CMx4ROLL-GRN",
+    "output_qty": 1
+  },
+  {
+    "log_id": "bc316fc4-193c-4040-8afa-80050fb175b2",
+    "created_at": "2026-04-02T06:55:43.403875+00:00",
+    "machine_id": "T1.2-M01",
+    "sku": "BW-SL-CLR-100Mx100CMx1ROLL-RED",
+    "output_qty": 1
+  },
+  {
+    "log_id": "d00ce526-f5f1-4ac7-ad22-31b3dd9842e2",
+    "created_at": "2026-04-02T06:55:43.403875+00:00",
+    "machine_id": "T1.2-M01",
+    "sku": "BW-SL-CLR-100Mx25CMx4ROLL-GRN",
+    "output_qty": 1
+  },
+  {
+    "log_id": "a7b8d25d-3904-41bf-b0f7-b6b395724ad6",
+    "created_at": "2026-04-02T07:01:05.141369+00:00",
+    "machine_id": "T1.2-M01",
+    "sku": "BW-SL-CLR-100Mx100CMx1ROLL-RED",
+    "output_qty": 1
+  },
+  {
+    "log_id": "06ec1165-20a5-4b49-9ce8-89ac483a31c9",
+    "created_at": "2026-04-02T07:01:05.141369+00:00",
+    "machine_id": "T1.2-M01",
+    "sku": "BW-SL-CLR-100Mx25CMx4ROLL-GRN",
+    "output_qty": 1
+  },
+  {
+    "log_id": "a241e27d-676e-4fe6-ac4a-1b5d5550015f",
+    "created_at": "2026-04-02T07:06:26.334576+00:00",
+    "machine_id": "T1.2-M01",
+    "sku": "BW-SL-CLR-100Mx100CMx1ROLL-RED",
+    "output_qty": 1
+  },
+  {
+    "log_id": "e6300803-b397-4741-a9a4-4bcf06bade5b",
+    "created_at": "2026-04-02T07:06:26.334576+00:00",
+    "machine_id": "T1.2-M01",
+    "sku": "BW-SL-CLR-100Mx25CMx4ROLL-GRN",
+    "output_qty": 1
+  },
+  {
+    "log_id": "f500490a-d37d-489e-bacf-72d16e5851d1",
+    "created_at": "2026-04-02T07:11:45.554626+00:00",
+    "machine_id": "T1.2-M01",
+    "sku": "BW-SL-CLR-100Mx100CMx1ROLL-RED",
+    "output_qty": 1
+  },
+  {
+    "log_id": "c9a79ab5-c4f4-4821-9a60-a28369fcc281",
+    "created_at": "2026-04-02T07:11:45.554626+00:00",
+    "machine_id": "T1.2-M01",
+    "sku": "BW-SL-CLR-100Mx25CMx4ROLL-GRN",
+    "output_qty": 1
+  },
+  {
+    "log_id": "d4e150c4-3c85-479c-9d78-b3ddf026243f",
+    "created_at": "2026-04-02T07:17:05.630896+00:00",
+    "machine_id": "T1.2-M01",
+    "sku": "BW-SL-CLR-100Mx100CMx1ROLL-RED",
+    "output_qty": 1
+  },
+  {
+    "log_id": "0c2dbae8-b8b2-4697-aa20-7050035940c1",
+    "created_at": "2026-04-02T07:17:05.630896+00:00",
+    "machine_id": "T1.2-M01",
+    "sku": "BW-SL-CLR-100Mx25CMx4ROLL-GRN",
+    "output_qty": 1
+  },
+  {
+    "log_id": "c25ae72d-2816-4b42-a7d0-3abdeaa62c36",
+    "created_at": "2026-04-02T07:22:26.620479+00:00",
+    "machine_id": "T1.2-M01",
+    "sku": "BW-SL-CLR-100Mx100CMx1ROLL-RED",
+    "output_qty": 1
+  },
+  {
+    "log_id": "7763448e-f3c4-469a-9232-a954abb94c0c",
+    "created_at": "2026-04-02T07:22:26.620479+00:00",
+    "machine_id": "T1.2-M01",
+    "sku": "BW-SL-CLR-100Mx25CMx4ROLL-GRN",
+    "output_qty": 1
+  },
+  {
+    "log_id": "9e0bd1f9-cfb4-49f7-b836-b18d9c849043",
+    "created_at": "2026-04-02T07:27:46.033502+00:00",
+    "machine_id": "T1.2-M01",
+    "sku": "BW-SL-CLR-100Mx100CMx1ROLL-RED",
+    "output_qty": 1
+  },
+  {
+    "log_id": "23645ca4-5358-4ec2-b45e-919b8d37e626",
+    "created_at": "2026-04-02T07:33:06.156604+00:00",
+    "machine_id": "T1.2-M01",
+    "sku": "BW-SL-CLR-100Mx100CMx1ROLL-RED",
+    "output_qty": 1
+  },
+  {
+    "log_id": "35400586-d802-462c-8637-e50e94715dde",
+    "created_at": "2026-04-02T07:38:26.403584+00:00",
+    "machine_id": "T1.2-M01",
+    "sku": "BW-SL-CLR-100Mx100CMx1ROLL-RED",
+    "output_qty": 1
+  },
+  {
+    "log_id": "13415206-16b5-4bc3-9adf-80b20b56e644",
+    "created_at": "2026-04-02T07:43:47.790959+00:00",
+    "machine_id": "T1.2-M01",
+    "sku": "BW-SL-CLR-100Mx100CMx1ROLL-RED",
+    "output_qty": 1
+  },
+  {
+    "log_id": "d08b701c-fe43-44b6-b1c6-8f9b5ee3a905",
+    "created_at": "2026-04-02T07:49:06.863261+00:00",
+    "machine_id": "T1.2-M01",
+    "sku": "BW-SL-CLR-100Mx100CMx1ROLL-RED",
+    "output_qty": 1
+  },
+  {
+    "log_id": "0747e041-df97-4798-959f-36cd1b8ec6ef",
+    "created_at": "2026-04-02T07:54:27.021244+00:00",
+    "machine_id": "T1.2-M01",
+    "sku": "BW-SL-CLR-100Mx100CMx1ROLL-RED",
+    "output_qty": 1
+  },
+  {
+    "log_id": "32661678-9139-43c8-9146-c738cf0b4efa",
+    "created_at": "2026-04-02T07:59:48.364975+00:00",
+    "machine_id": "T1.2-M01",
+    "sku": "BW-SL-CLR-100Mx100CMx1ROLL-RED",
+    "output_qty": 1
+  },
+  {
+    "log_id": "d7795c30-ef94-4fc1-84bd-a4a2dd326097",
+    "created_at": "2026-04-02T08:05:07.49069+00:00",
+    "machine_id": "T1.2-M01",
+    "sku": "BW-SL-CLR-100Mx100CMx1ROLL-RED",
+    "output_qty": 1
+  },
+  {
+    "log_id": "06ecc21c-c875-4215-b391-d9fc4d498f03",
+    "created_at": "2026-04-02T08:10:28.123242+00:00",
+    "machine_id": "T1.2-M01",
+    "sku": "BW-SL-CLR-100Mx100CMx1ROLL-RED",
+    "output_qty": 1
+  },
+  {
+    "log_id": "2b003cc9-d348-42d6-942f-141d6617981c",
+    "created_at": "2026-04-02T08:15:47.871852+00:00",
+    "machine_id": "T1.2-M01",
+    "sku": "BW-SL-CLR-100Mx100CMx1ROLL-RED",
+    "output_qty": 1
+  },
+  {
+    "log_id": "bb354678-1b54-4f2c-a7f0-7f5e608d1488",
+    "created_at": "2026-04-02T08:21:08.507589+00:00",
+    "machine_id": "T1.2-M01",
+    "sku": "BW-SL-CLR-100Mx100CMx1ROLL-RED",
+    "output_qty": 1
+  },
+  {
+    "log_id": "758b36c1-ee71-4d90-aa67-2e53dde1d925",
+    "created_at": "2026-04-02T08:26:29.75961+00:00",
+    "machine_id": "T1.2-M01",
+    "sku": "BW-SL-CLR-100Mx100CMx1ROLL-RED",
+    "output_qty": 1
+  },
+  {
+    "log_id": "b4b8a5ea-a925-4231-8104-f3e9880f3ee1",
+    "created_at": "2026-04-02T08:31:48.475063+00:00",
+    "machine_id": "T1.2-M01",
+    "sku": "BW-SL-CLR-100Mx100CMx1ROLL-RED",
+    "output_qty": 1
+  },
+  {
+    "log_id": "225497c3-4c47-4d51-8d72-567fea6c3574",
+    "created_at": "2026-04-02T08:37:09.47415+00:00",
+    "machine_id": "T1.2-M01",
+    "sku": "BW-SL-CLR-100Mx100CMx1ROLL-RED",
+    "output_qty": 1
+  },
+  {
+    "log_id": "4b1b15ac-8a8d-4db6-9799-0df6ce156475",
+    "created_at": "2026-04-02T08:42:29.910611+00:00",
+    "machine_id": "T1.2-M01",
+    "sku": "BW-SL-CLR-100Mx100CMx1ROLL-RED",
+    "output_qty": 1
+  },
+  {
+    "log_id": "7540f948-56da-4903-b8ea-3a1f94f3aff6",
+    "created_at": "2026-04-02T08:47:49.307633+00:00",
+    "machine_id": "T1.2-M01",
+    "sku": "BW-SL-CLR-100Mx100CMx1ROLL-RED",
+    "output_qty": 1
+  },
+  {
+    "log_id": "cc352c44-a62c-4b28-9643-33343b931dea",
+    "created_at": "2026-04-02T08:53:09.118485+00:00",
+    "machine_id": "T1.2-M01",
+    "sku": "BW-SL-CLR-100Mx100CMx1ROLL-RED",
+    "output_qty": 1
+  },
+  {
+    "log_id": "cad3a6a4-a86c-447c-80c3-0814f37ef1b7",
+    "created_at": "2026-04-02T08:58:29.185586+00:00",
+    "machine_id": "T1.2-M01",
+    "sku": "BW-SL-CLR-100Mx100CMx1ROLL-RED",
+    "output_qty": 1
+  },
+  {
+    "log_id": "c5ac471d-09b3-4660-a74f-a5381836a7f4",
+    "created_at": "2026-04-02T09:03:49.792702+00:00",
+    "machine_id": "T1.2-M01",
+    "sku": "BW-SL-CLR-100Mx100CMx1ROLL-RED",
+    "output_qty": 1
+  },
+  {
+    "log_id": "1a12a4df-a52f-4ca6-b206-02faaf3ff37b",
+    "created_at": "2026-04-02T09:09:09.603676+00:00",
+    "machine_id": "T1.2-M01",
+    "sku": "BW-SL-CLR-100Mx100CMx1ROLL-RED",
+    "output_qty": 1
+  },
+  {
+    "log_id": "4223f903-2ad4-4fc2-a80c-d0366bd62442",
+    "created_at": "2026-04-02T09:14:29.73631+00:00",
+    "machine_id": "T1.2-M01",
+    "sku": "BW-SL-CLR-100Mx100CMx1ROLL-RED",
+    "output_qty": 1
+  },
+  {
+    "log_id": "b4145b95-e501-4465-ba79-89ac276ef5dd",
+    "created_at": "2026-04-02T09:19:49.868432+00:00",
+    "machine_id": "T1.2-M01",
+    "sku": "BW-SL-CLR-100Mx100CMx1ROLL-RED",
+    "output_qty": 1
+  },
+  {
+    "log_id": "f66d348b-6968-49b7-a89b-840f96c0f3fd",
+    "created_at": "2026-04-02T09:25:10.437371+00:00",
+    "machine_id": "T1.2-M01",
+    "sku": "BW-SL-CLR-100Mx100CMx1ROLL-RED",
+    "output_qty": 1
+  },
+  {
+    "log_id": "457e0082-a4ee-4721-892c-6451e8d2be98",
+    "created_at": "2026-04-02T09:30:30.59076+00:00",
+    "machine_id": "T1.2-M01",
+    "sku": "BW-SL-CLR-100Mx100CMx1ROLL-RED",
+    "output_qty": 1
+  },
+  {
+    "log_id": "64677b3f-d02c-4892-8f89-3c983412028c",
+    "created_at": "2026-04-02T09:35:50.806049+00:00",
+    "machine_id": "T1.2-M01",
+    "sku": "BW-SL-CLR-100Mx100CMx1ROLL-RED",
+    "output_qty": 1
+  },
+  {
+    "log_id": "b35a6c3b-e105-4725-87b2-6dfc286c41e6",
+    "created_at": "2026-04-02T09:41:12.153266+00:00",
+    "machine_id": "T1.2-M01",
+    "sku": "BW-SL-CLR-100Mx100CMx1ROLL-RED",
+    "output_qty": 1
+  },
+  {
+    "log_id": "d2fd7f9c-67fb-4951-bc55-c284788993d6",
+    "created_at": "2026-04-02T09:46:31.088601+00:00",
+    "machine_id": "T1.2-M01",
+    "sku": "BW-SL-CLR-100Mx100CMx1ROLL-RED",
+    "output_qty": 1
+  },
+  {
+    "log_id": "195e1c2f-17ab-43ac-998b-d3cc8f18e01a",
+    "created_at": "2026-04-02T09:51:50.869892+00:00",
+    "machine_id": "T1.2-M01",
+    "sku": "BW-SL-CLR-100Mx100CMx1ROLL-RED",
+    "output_qty": 1
+  },
+  {
+    "log_id": "210e370b-ae20-477e-af58-641d76b021f2",
+    "created_at": "2026-04-02T09:57:11.022545+00:00",
+    "machine_id": "T1.2-M01",
+    "sku": "BW-SL-CLR-100Mx100CMx1ROLL-RED",
+    "output_qty": 1
+  },
+  {
+    "log_id": "7ea20efb-da7a-4905-8570-dbb6b89ce765",
+    "created_at": "2026-04-02T10:02:32.004619+00:00",
+    "machine_id": "T1.2-M01",
+    "sku": "BW-SL-CLR-100Mx100CMx1ROLL-RED",
+    "output_qty": 1
+  },
+  {
+    "log_id": "c4a73939-2799-46c3-a9d3-a4e2f373c70d",
+    "created_at": "2026-04-02T10:07:51.412233+00:00",
+    "machine_id": "T1.2-M01",
+    "sku": "BW-SL-CLR-100Mx100CMx1ROLL-RED",
+    "output_qty": 1
+  },
+  {
+    "log_id": "7ddc093d-f619-4cf5-b668-f88e1be7a9c5",
+    "created_at": "2026-04-02T10:13:11.608066+00:00",
+    "machine_id": "T1.2-M01",
+    "sku": "BW-SL-CLR-100Mx100CMx1ROLL-RED",
+    "output_qty": 1
+  },
+  {
+    "log_id": "bdbd893a-30ce-45fe-97c3-632b5fda205e",
+    "created_at": "2026-04-02T10:18:31.872042+00:00",
+    "machine_id": "T1.2-M01",
+    "sku": "BW-SL-CLR-100Mx100CMx1ROLL-RED",
+    "output_qty": 1
+  },
+  {
+    "log_id": "1554c9d7-09ae-490f-aff5-5b20d08e6fbe",
+    "created_at": "2026-04-02T10:23:52.382035+00:00",
+    "machine_id": "T1.2-M01",
+    "sku": "BW-SL-CLR-100Mx100CMx1ROLL-RED",
+    "output_qty": 1
+  },
+  {
+    "log_id": "e6820585-fe3f-41a3-ad96-fd65aba2bca8",
+    "created_at": "2026-04-02T10:29:12.829104+00:00",
+    "machine_id": "T1.2-M01",
+    "sku": "BW-SL-CLR-100Mx100CMx1ROLL-RED",
+    "output_qty": 1
+  },
+  {
+    "log_id": "69ec47a7-815b-4718-83aa-d8ee8bb281a3",
+    "created_at": "2026-04-02T10:34:32.790142+00:00",
+    "machine_id": "T1.2-M01",
+    "sku": "BW-SL-CLR-100Mx100CMx1ROLL-RED",
+    "output_qty": 1
+  },
+  {
+    "log_id": "9913b0e9-4528-4d04-91c0-050d4ed633f8",
+    "created_at": "2026-04-02T10:39:53.237317+00:00",
+    "machine_id": "T1.2-M01",
+    "sku": "BW-SL-CLR-100Mx100CMx1ROLL-RED",
+    "output_qty": 1
+  },
+  {
+    "log_id": "72e1d098-f49d-4570-8b31-83a6d59b2ab3",
+    "created_at": "2026-04-02T10:45:13.098592+00:00",
+    "machine_id": "T1.2-M01",
+    "sku": "BW-SL-CLR-100Mx100CMx1ROLL-RED",
+    "output_qty": 1
+  },
+  {
+    "log_id": "0499ce61-475d-4e1a-a0c8-a20835c9b8d6",
+    "created_at": "2026-04-02T10:50:33.722734+00:00",
+    "machine_id": "T1.2-M01",
+    "sku": "BW-SL-CLR-100Mx100CMx1ROLL-RED",
+    "output_qty": 1
+  },
+  {
+    "log_id": "dc90ebec-08db-4917-ba36-dc13cc4dcb6b",
+    "created_at": "2026-04-02T10:55:53.589749+00:00",
+    "machine_id": "T1.2-M01",
+    "sku": "BW-SL-CLR-100Mx100CMx1ROLL-RED",
+    "output_qty": 1
+  },
+  {
+    "log_id": "c60cf9c4-b42c-4a7a-88dc-e4d4d468b58c",
+    "created_at": "2026-04-02T11:01:14.701196+00:00",
+    "machine_id": "T1.2-M01",
+    "sku": "BW-SL-CLR-100Mx25CMx4ROLL-GRN",
+    "output_qty": 1
+  },
+  {
+    "log_id": "87940d56-b0c2-411a-bbb3-8ad023087be8",
+    "created_at": "2026-04-02T11:06:35.029348+00:00",
+    "machine_id": "T1.2-M01",
+    "sku": "BW-SL-CLR-100Mx25CMx4ROLL-GRN",
+    "output_qty": 1
+  },
+  {
+    "log_id": "629c06b9-1494-422d-9861-d1013f0b78d8",
+    "created_at": "2026-04-02T11:11:54.504171+00:00",
+    "machine_id": "T1.2-M01",
+    "sku": "BW-SL-CLR-100Mx25CMx4ROLL-GRN",
+    "output_qty": 1
+  },
+  {
+    "log_id": "e9539f8d-572e-424a-8027-b33389a1292c",
+    "created_at": "2026-04-02T11:17:14.440094+00:00",
+    "machine_id": "T1.2-M01",
+    "sku": "BW-SL-CLR-100Mx25CMx4ROLL-GRN",
+    "output_qty": 1
+  },
+  {
+    "log_id": "19588421-8a7b-421b-8f78-621ce88de225",
+    "created_at": "2026-04-02T11:22:34.592063+00:00",
+    "machine_id": "T1.2-M01",
+    "sku": "BW-SL-CLR-100Mx25CMx4ROLL-GRN",
+    "output_qty": 1
+  },
+  {
+    "log_id": "35347126-d44f-46d8-ae50-c9374f8f3c30",
+    "created_at": "2026-04-02T11:27:54.891022+00:00",
+    "machine_id": "T1.2-M01",
+    "sku": "BW-SL-CLR-100Mx25CMx4ROLL-GRN",
+    "output_qty": 1
+  },
+  {
+    "log_id": "3002be1b-6f78-4c26-bfda-eef8f6e3e225",
+    "created_at": "2026-04-02T11:33:15.285749+00:00",
+    "machine_id": "T1.2-M01",
+    "sku": "BW-SL-CLR-100Mx25CMx4ROLL-GRN",
+    "output_qty": 1
+  },
+  {
+    "log_id": "bf694b31-395e-41de-b1c1-231ead0fa84a",
+    "created_at": "2026-04-02T11:38:35.142128+00:00",
+    "machine_id": "T1.2-M01",
+    "sku": "BW-SL-CLR-100Mx25CMx4ROLL-GRN",
+    "output_qty": 1
+  },
+  {
+    "log_id": "3a2005a5-aa9a-468b-8b64-d51c354950c7",
+    "created_at": "2026-04-02T11:43:55.54179+00:00",
+    "machine_id": "T1.2-M01",
+    "sku": "BW-SL-CLR-100Mx25CMx4ROLL-GRN",
+    "output_qty": 1
+  },
+  {
+    "log_id": "37e0b967-9063-428e-89e2-69435e9dc1b1",
+    "created_at": "2026-04-02T11:49:15.622055+00:00",
+    "machine_id": "T1.2-M01",
+    "sku": "BW-SL-CLR-100Mx25CMx4ROLL-GRN",
+    "output_qty": 1
+  },
+  {
+    "log_id": "fcf83a07-8803-4f02-8f18-38f44d7e5863",
+    "created_at": "2026-04-02T11:54:35.730499+00:00",
+    "machine_id": "T1.2-M01",
+    "sku": "BW-SL-CLR-100Mx25CMx4ROLL-GRN",
+    "output_qty": 1
+  },
+  {
+    "log_id": "22868af5-f889-4228-800e-71806636c0ac",
+    "created_at": "2026-04-02T11:59:55.891131+00:00",
+    "machine_id": "T1.2-M01",
+    "sku": "BW-SL-CLR-100Mx25CMx4ROLL-GRN",
+    "output_qty": 1
+  },
+  {
+    "log_id": "8f8fdfa0-40e9-4502-a146-21657a807b8f",
+    "created_at": "2026-04-02T12:05:16.17687+00:00",
+    "machine_id": "T1.2-M01",
+    "sku": "BW-SL-CLR-100Mx25CMx4ROLL-GRN",
+    "output_qty": 1
+  },
+  {
+    "log_id": "bfdc5959-884a-4a92-8acc-fc35652b6fa4",
+    "created_at": "2026-04-02T12:10:36.285272+00:00",
+    "machine_id": "T1.2-M01",
+    "sku": "BW-SL-CLR-100Mx25CMx4ROLL-GRN",
+    "output_qty": 1
+  },
+  {
+    "log_id": "eb1a4bca-9ffc-4c4b-a21c-8e5bac49c4de",
+    "created_at": "2026-04-02T12:15:56.41527+00:00",
+    "machine_id": "T1.2-M01",
+    "sku": "BW-SL-CLR-100Mx25CMx4ROLL-GRN",
+    "output_qty": 1
+  },
+  {
+    "log_id": "a321e91b-2160-489c-bea7-05feea9f084f",
+    "created_at": "2026-04-02T12:21:17.308281+00:00",
+    "machine_id": "T1.2-M01",
+    "sku": "BW-SL-CLR-100Mx25CMx4ROLL-GRN",
+    "output_qty": 1
+  },
+  {
+    "log_id": "ba5d5e09-f83d-4889-9ca8-70bad5ce7830",
+    "created_at": "2026-04-02T12:26:36.88761+00:00",
+    "machine_id": "T1.2-M01",
+    "sku": "BW-SL-CLR-100Mx25CMx4ROLL-GRN",
+    "output_qty": 1
+  },
+  {
+    "log_id": "7066ee6a-a0a0-4a15-8ce7-089895e2e91b",
+    "created_at": "2026-04-02T12:31:56.983189+00:00",
+    "machine_id": "T1.2-M01",
+    "sku": "BW-SL-CLR-100Mx25CMx4ROLL-GRN",
+    "output_qty": 1
+  },
+  {
+    "log_id": "85097a3d-3b19-4042-bf79-b4407ff37d82",
+    "created_at": "2026-04-02T12:37:17.727219+00:00",
+    "machine_id": "T1.2-M01",
+    "sku": "BW-SL-CLR-100Mx25CMx4ROLL-GRN",
+    "output_qty": 1
+  },
+  {
+    "log_id": "c87fc581-7384-4860-8d3c-1b399be1c31f",
+    "created_at": "2026-04-02T12:42:37.302889+00:00",
+    "machine_id": "T1.2-M01",
+    "sku": "BW-SL-CLR-100Mx25CMx4ROLL-GRN",
+    "output_qty": 1
+  },
+  {
+    "log_id": "955c6f83-35e1-486a-8a5c-0d1f8da8a481",
+    "created_at": "2026-04-02T12:47:57.426345+00:00",
+    "machine_id": "T1.2-M01",
+    "sku": "BW-SL-CLR-100Mx25CMx4ROLL-GRN",
+    "output_qty": 1
+  },
+  {
+    "log_id": "26fb7500-ca4d-4169-8061-a1c4af12c3a0",
+    "created_at": "2026-04-02T12:53:17.722386+00:00",
+    "machine_id": "T1.2-M01",
+    "sku": "BW-SL-CLR-100Mx25CMx4ROLL-GRN",
+    "output_qty": 1
+  },
+  {
+    "log_id": "c6637185-8d0d-4b5e-91d7-de9b6f4a4d25",
+    "created_at": "2026-04-02T12:58:38.123617+00:00",
+    "machine_id": "T1.2-M01",
+    "sku": "BW-SL-CLR-100Mx25CMx4ROLL-GRN",
+    "output_qty": 1
+  },
+  {
+    "log_id": "a3f3118c-469f-4960-934a-3f185ca6b553",
+    "created_at": "2026-04-02T13:03:59.119548+00:00",
+    "machine_id": "T1.2-M01",
+    "sku": "BW-SL-CLR-100Mx25CMx4ROLL-GRN",
+    "output_qty": 1
+  },
+  {
+    "log_id": "d912c234-af9a-4947-9e32-2ac63dd6f4b9",
+    "created_at": "2026-04-02T13:09:17.970326+00:00",
+    "machine_id": "T1.2-M01",
+    "sku": "BW-SL-CLR-100Mx25CMx4ROLL-GRN",
+    "output_qty": 1
+  },
+  {
+    "log_id": "540898b2-c657-4333-9607-0e18c3755915",
+    "created_at": "2026-04-02T13:14:40.376444+00:00",
+    "machine_id": "T1.2-M01",
+    "sku": "BW-SL-CLR-100Mx25CMx4ROLL-GRN",
+    "output_qty": 1
+  },
+  {
+    "log_id": "e7756db3-0d08-426c-ad7a-a7d912729953",
+    "created_at": "2026-04-02T13:20:02.988572+00:00",
+    "machine_id": "T1.2-M01",
+    "sku": "BW-SL-CLR-100Mx25CMx4ROLL-GRN",
+    "output_qty": 1
+  },
+  {
+    "log_id": "d2b34283-1dd7-4ce6-8240-35be1093f2c3",
+    "created_at": "2026-04-02T13:25:24.856289+00:00",
+    "machine_id": "T1.2-M01",
+    "sku": "BW-SL-CLR-100Mx25CMx4ROLL-GRN",
+    "output_qty": 1
+  },
+  {
+    "log_id": "0e35235d-63b8-4da3-8009-22f15a0778c2",
+    "created_at": "2026-04-02T13:30:47.146977+00:00",
+    "machine_id": "T1.2-M01",
+    "sku": "BW-SL-CLR-100Mx25CMx4ROLL-GRN",
+    "output_qty": 1
+  },
+  {
+    "log_id": "fd092937-41f5-4be6-8829-1ee0ecffd062",
+    "created_at": "2026-04-02T13:36:09.779071+00:00",
+    "machine_id": "T1.2-M01",
+    "sku": "BW-SL-CLR-100Mx25CMx4ROLL-GRN",
+    "output_qty": 1
+  },
+  {
+    "log_id": "41a8c879-806f-4f59-885d-a5efe05205f4",
+    "created_at": "2026-04-02T13:41:32.135138+00:00",
+    "machine_id": "T1.2-M01",
+    "sku": "BW-SL-CLR-100Mx25CMx4ROLL-GRN",
+    "output_qty": 1
+  },
+  {
+    "log_id": "f744e5fe-1e7c-470b-ab5a-f2ed70003056",
+    "created_at": "2026-04-02T13:46:53.991057+00:00",
+    "machine_id": "T1.2-M01",
+    "sku": "BW-SL-CLR-100Mx25CMx4ROLL-GRN",
+    "output_qty": 1
+  },
+  {
+    "log_id": "cf4bbe4f-83f4-44ee-a051-5897c5f57622",
+    "created_at": "2026-04-02T13:52:17.302628+00:00",
+    "machine_id": "T1.2-M01",
+    "sku": "BW-SL-CLR-100Mx25CMx4ROLL-GRN",
+    "output_qty": 1
+  },
+  {
+    "log_id": "f23e9d25-6dec-4dee-a495-f6b22b8ed7b0",
+    "created_at": "2026-04-02T13:57:38.914712+00:00",
+    "machine_id": "T1.2-M01",
+    "sku": "BW-SL-CLR-100Mx25CMx4ROLL-GRN",
+    "output_qty": 1
+  },
+  {
+    "log_id": "98070ac5-00fe-4b9d-8061-5ca902ad4aca",
+    "created_at": "2026-04-02T14:03:00.731258+00:00",
+    "machine_id": "T1.2-M01",
+    "sku": "BW-SL-CLR-100Mx25CMx4ROLL-GRN",
+    "output_qty": 1
+  },
+  {
+    "log_id": "d14a2e9a-189f-4ac3-be70-31dbcb0f43f7",
+    "created_at": "2026-04-02T14:08:24.114298+00:00",
+    "machine_id": "T1.2-M01",
+    "sku": "BW-SL-CLR-100Mx25CMx4ROLL-GRN",
+    "output_qty": 1
+  },
+  {
+    "log_id": "efbf341d-815d-4b9b-8f20-496ffd2aecdb",
+    "created_at": "2026-04-02T14:13:45.125828+00:00",
+    "machine_id": "T1.2-M01",
+    "sku": "BW-SL-CLR-100Mx25CMx4ROLL-GRN",
+    "output_qty": 1
+  },
+  {
+    "log_id": "679fc3c4-ab6c-4e24-b992-27a04b8225f2",
+    "created_at": "2026-04-02T14:19:07.209372+00:00",
+    "machine_id": "T1.2-M01",
+    "sku": "BW-SL-CLR-100Mx25CMx4ROLL-GRN",
+    "output_qty": 1
+  },
+  {
+    "log_id": "5a52b7ee-5d16-4cf6-9e3d-5b784b4b05c4",
+    "created_at": "2026-04-02T14:24:30.70081+00:00",
+    "machine_id": "T1.2-M01",
+    "sku": "BW-SL-CLR-100Mx25CMx4ROLL-GRN",
+    "output_qty": 1
+  },
+  {
+    "log_id": "f46e3ee7-0848-4310-9ff0-21fb11879583",
+    "created_at": "2026-04-02T14:30:44.501404+00:00",
+    "machine_id": "T1.2-M01",
+    "sku": "BW-SL-CLR-100Mx25CMx4ROLL-GRN",
+    "output_qty": 1
+  },
+  {
+    "log_id": "7a012665-602b-46ba-a493-27d446de6c07",
+    "created_at": "2026-04-02T14:35:14.568947+00:00",
+    "machine_id": "T1.2-M01",
+    "sku": "BW-SL-CLR-100Mx25CMx4ROLL-GRN",
+    "output_qty": 1
+  },
+  {
+    "log_id": "54607b9f-1aba-4e16-8729-3161e3599838",
+    "created_at": "2026-04-02T14:40:35.754576+00:00",
+    "machine_id": "T1.2-M01",
+    "sku": "BW-SL-CLR-100Mx25CMx4ROLL-GRN",
+    "output_qty": 1
+  },
+  {
+    "log_id": "2ec8adbc-a62c-424f-b537-56f08afea021",
+    "created_at": "2026-04-02T14:45:57.928178+00:00",
+    "machine_id": "T1.2-M01",
+    "sku": "BW-SL-CLR-100Mx25CMx4ROLL-GRN",
+    "output_qty": 1
+  },
+  {
+    "log_id": "01aebe1f-8da6-422d-a1c7-867c1053fbb3",
+    "created_at": "2026-04-02T14:51:20.310159+00:00",
+    "machine_id": "T1.2-M01",
+    "sku": "BW-SL-CLR-100Mx25CMx4ROLL-GRN",
+    "output_qty": 1
+  },
+  {
+    "log_id": "ac73751a-3c69-44d4-a0cc-91e9232c6b9e",
+    "created_at": "2026-04-02T14:56:42.075+00:00",
+    "machine_id": "T1.2-M01",
+    "sku": "BW-SL-CLR-100Mx25CMx4ROLL-GRN",
+    "output_qty": 1
+  },
+  {
+    "log_id": "6b77698f-5c64-4d53-99f6-3083bed6bc08",
+    "created_at": "2026-04-02T15:02:05.255278+00:00",
+    "machine_id": "T1.2-M01",
+    "sku": "BW-SL-CLR-100Mx100CMx1ROLL-RED",
+    "output_qty": 1
+  },
+  {
+    "log_id": "63e009b2-a212-4dc5-a9ab-efa3cf8293b3",
+    "created_at": "2026-04-02T15:02:05.255278+00:00",
+    "machine_id": "T1.2-M01",
+    "sku": "BW-SL-CLR-100Mx100CMx1ROLL-RED",
+    "output_qty": 1
+  },
+  {
+    "log_id": "05384e4c-a03f-4a0a-96b3-1c21f8b9e760",
+    "created_at": "2026-04-02T15:07:27.214503+00:00",
+    "machine_id": "T1.2-M01",
+    "sku": "BW-SL-CLR-100Mx100CMx1ROLL-RED",
+    "output_qty": 1
+  },
+  {
+    "log_id": "efac673a-716b-4047-87d3-bb4ab0082a9a",
+    "created_at": "2026-04-02T15:07:27.214503+00:00",
+    "machine_id": "T1.2-M01",
+    "sku": "BW-SL-CLR-100Mx100CMx1ROLL-RED",
+    "output_qty": 1
+  },
+  {
+    "log_id": "2e872e21-7c1d-4eac-9725-f458dd379956",
+    "created_at": "2026-04-02T15:12:48.813851+00:00",
+    "machine_id": "T1.2-M01",
+    "sku": "BW-SL-CLR-100Mx100CMx1ROLL-RED",
+    "output_qty": 1
+  },
+  {
+    "log_id": "dc07872b-656e-435f-aaaa-020c8b4901a2",
+    "created_at": "2026-04-02T15:12:48.813851+00:00",
+    "machine_id": "T1.2-M01",
+    "sku": "BW-SL-CLR-100Mx100CMx1ROLL-RED",
+    "output_qty": 1
+  },
+  {
+    "log_id": "2bb925f3-ec09-4bbf-9fc1-1dc4b2fd262f",
+    "created_at": "2026-04-02T15:18:10.426492+00:00",
+    "machine_id": "T1.2-M01",
+    "sku": "BW-SL-CLR-100Mx100CMx1ROLL-RED",
+    "output_qty": 1
+  },
+  {
+    "log_id": "fb281b9b-6480-434e-ba4b-fcc445479337",
+    "created_at": "2026-04-02T15:18:10.426492+00:00",
+    "machine_id": "T1.2-M01",
+    "sku": "BW-SL-CLR-100Mx100CMx1ROLL-RED",
+    "output_qty": 1
+  },
+  {
+    "log_id": "69652a4d-e9b5-41cc-ab93-e605c811264a",
+    "created_at": "2026-04-02T15:23:32.60713+00:00",
+    "machine_id": "T1.2-M01",
+    "sku": "BW-SL-CLR-100Mx100CMx1ROLL-RED",
+    "output_qty": 1
+  },
+  {
+    "log_id": "fc7828b4-2c7d-4384-8d90-1478bd6a2c87",
+    "created_at": "2026-04-02T15:23:32.60713+00:00",
+    "machine_id": "T1.2-M01",
+    "sku": "BW-SL-CLR-100Mx100CMx1ROLL-RED",
+    "output_qty": 1
+  },
+  {
+    "log_id": "bc67849d-39d7-40dc-81c6-936c8104bfb9",
+    "created_at": "2026-04-02T15:28:54.598577+00:00",
+    "machine_id": "T1.2-M01",
+    "sku": "BW-SL-CLR-100Mx100CMx1ROLL-RED",
+    "output_qty": 1
+  },
+  {
+    "log_id": "06e1c09a-8056-4f21-a884-7dfa02071b94",
+    "created_at": "2026-04-02T15:28:54.598577+00:00",
+    "machine_id": "T1.2-M01",
+    "sku": "BW-SL-CLR-100Mx100CMx1ROLL-RED",
+    "output_qty": 1
+  },
+  {
+    "log_id": "a7a62be6-2d05-44cb-bf4d-335f3d458b63",
+    "created_at": "2026-04-02T15:34:17.455907+00:00",
+    "machine_id": "T1.2-M01",
+    "sku": "BW-SL-CLR-100Mx100CMx1ROLL-RED",
+    "output_qty": 1
+  },
+  {
+    "log_id": "e1eddbca-ce66-4b6b-a01e-a90f30899261",
+    "created_at": "2026-04-02T15:34:17.455907+00:00",
+    "machine_id": "T1.2-M01",
+    "sku": "BW-SL-CLR-100Mx100CMx1ROLL-RED",
+    "output_qty": 1
+  },
+  {
+    "log_id": "7ab44b23-1304-497e-93f8-c5f059836642",
+    "created_at": "2026-04-02T15:39:41.380132+00:00",
+    "machine_id": "T1.2-M01",
+    "sku": "BW-SL-CLR-100Mx100CMx1ROLL-RED",
+    "output_qty": 1
+  },
+  {
+    "log_id": "c21822d9-0370-480b-90eb-32cec3036d85",
+    "created_at": "2026-04-02T15:39:41.380132+00:00",
+    "machine_id": "T1.2-M01",
+    "sku": "BW-SL-CLR-100Mx100CMx1ROLL-RED",
+    "output_qty": 1
+  },
+  {
+    "log_id": "c5446060-6dea-4e73-81d1-e3cea42b8c41",
+    "created_at": "2026-04-02T15:45:01.345797+00:00",
+    "machine_id": "T1.2-M01",
+    "sku": "BW-SL-CLR-100Mx100CMx1ROLL-RED",
+    "output_qty": 1
+  },
+  {
+    "log_id": "b9b58b88-96db-47a2-9adc-7bf6ca236b7b",
+    "created_at": "2026-04-02T15:45:01.345797+00:00",
+    "machine_id": "T1.2-M01",
+    "sku": "BW-SL-CLR-100Mx100CMx1ROLL-RED",
+    "output_qty": 1
+  },
+  {
+    "log_id": "7eacfff2-9186-4f80-b6f9-dac68bacebd3",
+    "created_at": "2026-04-02T15:50:23.128187+00:00",
+    "machine_id": "T1.2-M01",
+    "sku": "BW-SL-CLR-100Mx100CMx1ROLL-RED",
+    "output_qty": 1
+  },
+  {
+    "log_id": "6482cb86-915d-4362-8922-e7fff9af6a44",
+    "created_at": "2026-04-02T15:50:23.128187+00:00",
+    "machine_id": "T1.2-M01",
+    "sku": "BW-SL-CLR-100Mx100CMx1ROLL-RED",
+    "output_qty": 1
+  },
+  {
+    "log_id": "9dda5b5d-f7c9-4dcd-ab0b-36a2e0e1e87c",
+    "created_at": "2026-04-02T15:55:45.323005+00:00",
+    "machine_id": "T1.2-M01",
+    "sku": "BW-SL-CLR-100Mx100CMx1ROLL-RED",
+    "output_qty": 1
+  },
+  {
+    "log_id": "06d0bd54-a6b2-4975-9147-7ad16b1e47f4",
+    "created_at": "2026-04-02T15:55:45.323005+00:00",
+    "machine_id": "T1.2-M01",
+    "sku": "BW-SL-CLR-100Mx100CMx1ROLL-RED",
+    "output_qty": 1
+  },
+  {
+    "log_id": "44c1fd1c-cac2-485d-8e94-c439c9a0cb39",
+    "created_at": "2026-04-02T16:01:07.611583+00:00",
+    "machine_id": "T1.2-M01",
+    "sku": "BW-SL-CLR-100Mx100CMx1ROLL-RED",
+    "output_qty": 1
+  },
+  {
+    "log_id": "83fee632-a968-4cb8-9bf3-350a612b3376",
+    "created_at": "2026-04-02T16:01:07.611583+00:00",
+    "machine_id": "T1.2-M01",
+    "sku": "BW-SL-CLR-100Mx100CMx1ROLL-RED",
+    "output_qty": 1
+  },
+  {
+    "log_id": "e38f07e2-2ec3-4f0d-89c8-d1c9cca7ab67",
+    "created_at": "2026-04-02T16:06:29.390493+00:00",
+    "machine_id": "T1.2-M01",
+    "sku": "BW-SL-CLR-100Mx100CMx1ROLL-RED",
+    "output_qty": 1
+  },
+  {
+    "log_id": "fe4673f4-afc2-49f2-8175-accf7f18ca10",
+    "created_at": "2026-04-02T16:06:29.390493+00:00",
+    "machine_id": "T1.2-M01",
+    "sku": "BW-SL-CLR-100Mx100CMx1ROLL-RED",
+    "output_qty": 1
+  },
+  {
+    "log_id": "c1c2ed07-75eb-46c3-b0f5-959dd234be72",
+    "created_at": "2026-04-02T16:11:52.089146+00:00",
+    "machine_id": "T1.2-M01",
+    "sku": "BW-SL-CLR-100Mx100CMx1ROLL-RED",
+    "output_qty": 1
+  },
+  {
+    "log_id": "f29b0a21-7dc9-44f1-af47-3269c20ef12d",
+    "created_at": "2026-04-02T16:11:52.089146+00:00",
+    "machine_id": "T1.2-M01",
+    "sku": "BW-SL-CLR-100Mx100CMx1ROLL-RED",
+    "output_qty": 1
+  },
+  {
+    "log_id": "829a7bd2-89c4-454a-a62f-65496b74cfab",
+    "created_at": "2026-04-02T16:17:14.301359+00:00",
+    "machine_id": "T1.2-M01",
+    "sku": "BW-SL-CLR-100Mx100CMx1ROLL-RED",
+    "output_qty": 1
+  },
+  {
+    "log_id": "5f2926b0-0e9d-40f4-8751-2047b4682a09",
+    "created_at": "2026-04-02T16:17:14.301359+00:00",
+    "machine_id": "T1.2-M01",
+    "sku": "BW-SL-CLR-100Mx100CMx1ROLL-RED",
+    "output_qty": 1
+  },
+  {
+    "log_id": "29016ffc-c533-4ff5-9e9e-f30a8ccce926",
+    "created_at": "2026-04-02T16:22:35.53951+00:00",
+    "machine_id": "T1.2-M01",
+    "sku": "BW-SL-CLR-100Mx100CMx1ROLL-RED",
+    "output_qty": 1
+  },
+  {
+    "log_id": "084697b0-19b7-454a-998b-ebfe7d433e9e",
+    "created_at": "2026-04-02T16:22:35.53951+00:00",
+    "machine_id": "T1.2-M01",
+    "sku": "BW-SL-CLR-100Mx100CMx1ROLL-RED",
+    "output_qty": 1
+  },
+  {
+    "log_id": "cdbfb4a8-a491-485b-822f-e51137423ff0",
+    "created_at": "2026-04-02T16:27:57.776593+00:00",
+    "machine_id": "T1.2-M01",
+    "sku": "BW-SL-CLR-100Mx100CMx1ROLL-RED",
+    "output_qty": 1
+  },
+  {
+    "log_id": "f5465b02-f872-4307-85a7-8aa741017c30",
+    "created_at": "2026-04-02T16:27:57.776593+00:00",
+    "machine_id": "T1.2-M01",
+    "sku": "BW-SL-CLR-100Mx100CMx1ROLL-RED",
+    "output_qty": 1
+  },
+  {
+    "log_id": "2f483f0a-3c09-446a-bc9e-3429de089bea",
+    "created_at": "2026-04-02T16:33:19.81463+00:00",
+    "machine_id": "T1.2-M01",
+    "sku": "BW-SL-CLR-100Mx100CMx1ROLL-RED",
+    "output_qty": 1
+  },
+  {
+    "log_id": "95604727-280a-4a84-90fd-8ea72d77b991",
+    "created_at": "2026-04-02T16:33:19.81463+00:00",
+    "machine_id": "T1.2-M01",
+    "sku": "BW-SL-CLR-100Mx100CMx1ROLL-RED",
+    "output_qty": 1
+  },
+  {
+    "log_id": "13d909d8-1e32-435f-862a-e5444b2c44b9",
+    "created_at": "2026-04-02T16:38:41.823154+00:00",
+    "machine_id": "T1.2-M01",
+    "sku": "BW-SL-CLR-100Mx100CMx1ROLL-RED",
+    "output_qty": 1
+  },
+  {
+    "log_id": "9216a091-5a23-4ae4-a27c-4b3b2ca832c8",
+    "created_at": "2026-04-02T16:38:41.823154+00:00",
+    "machine_id": "T1.2-M01",
+    "sku": "BW-SL-CLR-100Mx100CMx1ROLL-RED",
+    "output_qty": 1
+  },
+  {
+    "log_id": "c7019b2c-df0b-4ee8-b3c4-128c1a076a06",
+    "created_at": "2026-04-02T16:44:04.433499+00:00",
+    "machine_id": "T1.2-M01",
+    "sku": "BW-SL-CLR-100Mx100CMx1ROLL-RED",
+    "output_qty": 1
+  },
+  {
+    "log_id": "ea54fbfb-a0b9-4f6f-b696-a2b2f1265a65",
+    "created_at": "2026-04-02T16:44:04.433499+00:00",
+    "machine_id": "T1.2-M01",
+    "sku": "BW-SL-CLR-100Mx100CMx1ROLL-RED",
+    "output_qty": 1
+  },
+  {
+    "log_id": "7b57ee53-ef72-43ce-8227-491cb2fb51b4",
+    "created_at": "2026-04-02T16:49:26.693985+00:00",
+    "machine_id": "T1.2-M01",
+    "sku": "BW-SL-CLR-100Mx100CMx1ROLL-RED",
+    "output_qty": 1
+  },
+  {
+    "log_id": "4ef6c6aa-fd9a-4141-ae53-c398e884562c",
+    "created_at": "2026-04-02T16:49:26.693985+00:00",
+    "machine_id": "T1.2-M01",
+    "sku": "BW-SL-CLR-100Mx100CMx1ROLL-RED",
+    "output_qty": 1
+  },
+  {
+    "log_id": "38a22223-0c0c-4786-a858-9325def786d5",
+    "created_at": "2026-04-02T16:54:48.241339+00:00",
+    "machine_id": "T1.2-M01",
+    "sku": "BW-SL-CLR-100Mx100CMx1ROLL-RED",
+    "output_qty": 1
+  },
+  {
+    "log_id": "f702940f-86a5-4c5f-b928-dc782d3cf3b7",
+    "created_at": "2026-04-02T16:54:48.241339+00:00",
+    "machine_id": "T1.2-M01",
+    "sku": "BW-SL-CLR-100Mx100CMx1ROLL-RED",
+    "output_qty": 1
+  },
+  {
+    "log_id": "fe8635ed-5d36-4546-ae7b-150dae8c15be",
+    "created_at": "2026-04-02T17:00:10.296962+00:00",
+    "machine_id": "T1.2-M01",
+    "sku": "BW-SL-CLR-100Mx100CMx1ROLL-RED",
+    "output_qty": 1
+  },
+  {
+    "log_id": "b85159e7-c9b5-42a8-a104-6539daf88a96",
+    "created_at": "2026-04-02T17:00:10.296962+00:00",
+    "machine_id": "T1.2-M01",
+    "sku": "BW-SL-CLR-100Mx100CMx1ROLL-RED",
+    "output_qty": 1
+  },
+  {
+    "log_id": "819498cc-ca1e-4ff7-93a8-7692eb06eded",
+    "created_at": "2026-04-02T17:05:32.419591+00:00",
+    "machine_id": "T1.2-M01",
+    "sku": "BW-SL-CLR-100Mx100CMx1ROLL-RED",
+    "output_qty": 1
+  },
+  {
+    "log_id": "8d842634-93df-478f-91c1-132822ef836d",
+    "created_at": "2026-04-02T17:05:32.419591+00:00",
+    "machine_id": "T1.2-M01",
+    "sku": "BW-SL-CLR-100Mx100CMx1ROLL-RED",
+    "output_qty": 1
+  },
+  {
+    "log_id": "0cd5113a-6574-4bb0-a3ac-720abff2a0f8",
+    "created_at": "2026-04-02T17:44:17.474357+00:00",
+    "machine_id": "T1.2-M01",
+    "sku": "BW-SL-CLR-100Mx100CMx1ROLL-RED",
+    "output_qty": 1
+  },
+  {
+    "log_id": "c5fc630d-a23a-4d77-b075-4999c41adb84",
+    "created_at": "2026-04-02T17:44:17.474357+00:00",
+    "machine_id": "T1.2-M01",
+    "sku": "BW-SL-CLR-100Mx100CMx1ROLL-RED",
+    "output_qty": 1
+  }
+]

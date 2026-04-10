@@ -1,0 +1,67 @@
+{
+  "itemResponse": {
+    "error": null,
+    "data": [
+      {
+        "sku": "BW-SL-CLR-100Mx100CMx1ROLL-RED",
+        "name": "MERAH",
+        "type": "FG",
+        "supply_type": "Manufactured",
+        "uom": "Unit",
+        "width_mm": null,
+        "length_m": null,
+        "thickness_mic": null,
+        "net_weight_kg": null,
+        "core_weight_kg": null,
+        "gross_weight_kg": null,
+        "pack_qty": null,
+        "volume_cbm": null,
+        "box_dims": null,
+        "min_stock_level": null,
+        "reorder_qty": null,
+        "estimated_cost": null,
+        "status": "Active",
+        "created_at": "2026-01-28T08:52:57.466891+00:00",
+        "supplier": null,
+        "brand": null,
+        "function_usage": null,
+        "legacy_code": null,
+        "packaging_type": null,
+        "description": null,
+        "min_stock_alert": 0,
+        "pack_length_cm": 0,
+        "pack_width_cm": 0,
+        "pack_height_cm": 0,
+        "volume_m3": 0,
+        "nickname": "MERAH"
+      }
+    ],
+    "count": null,
+    "status": 200,
+    "statusText": "OK"
+  },
+  "triggerItemResponse": {
+    "error": {
+      "code": "42703",
+      "details": null,
+      "hint": "Perhaps you meant to reference the column \"stock_ledger_v2.created_by\".",
+      "message": "column stock_ledger_v2.created_at does not exist"
+    },
+    "data": null,
+    "count": null,
+    "status": 400,
+    "statusText": "Bad Request"
+  },
+  "locationResponse": {
+    "error": {
+      "code": "PGRST205",
+      "details": null,
+      "hint": "Perhaps you meant the table 'public.sys_locations_v2'",
+      "message": "Could not find the table 'public.warehouse_locations' in the schema cache"
+    },
+    "data": null,
+    "count": null,
+    "status": 404,
+    "statusText": "Not Found"
+  }
+}

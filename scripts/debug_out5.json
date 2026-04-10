@@ -1,0 +1,140 @@
+{
+  "triggerItemResponse": {
+    "error": null,
+    "data": [
+      {
+        "txn_id": "432b171f-dfe6-44e0-923a-883f6bfabae7",
+        "timestamp": "2026-04-03T01:11:02.478486+00:00",
+        "sku": "BW-SL-CLR-100Mx100CMx1ROLL-RED",
+        "loc_id": "OPM Lama",
+        "change_qty": 1,
+        "balance_after": null,
+        "event_type": "Production",
+        "ref_doc": "806a2f75-4d9e-4945-89f1-82db42950d43",
+        "notes": "API-Log: T1.3-M02",
+        "created_by": null,
+        "created_by_name": null
+      },
+      {
+        "txn_id": "5b075218-92fe-4bf9-860c-081d8edcaf30",
+        "timestamp": "2026-04-03T01:05:20.587768+00:00",
+        "sku": "BW-SL-CLR-100Mx100CMx1ROLL-RED",
+        "loc_id": "OPM Lama",
+        "change_qty": 1,
+        "balance_after": null,
+        "event_type": "Production",
+        "ref_doc": "e3a9e1e6-f92b-4a0a-a1e8-7bead8f881d6",
+        "notes": "API-Log: T1.3-M02",
+        "created_by": null,
+        "created_by_name": null
+      },
+      {
+        "txn_id": "d6e8b298-9165-424c-bd1c-b94bd1b15417",
+        "timestamp": "2026-04-03T00:59:38.189036+00:00",
+        "sku": "BW-SL-CLR-100Mx100CMx1ROLL-RED",
+        "loc_id": "OPM Lama",
+        "change_qty": 1,
+        "balance_after": null,
+        "event_type": "Production",
+        "ref_doc": "fbaab3f7-1286-4b36-b6c6-2339d48a3375",
+        "notes": "API-Log: T1.3-M02",
+        "created_by": null,
+        "created_by_name": null
+      },
+      {
+        "txn_id": "2b327ff9-b84b-4c57-9006-489357ba3bb9",
+        "timestamp": "2026-04-03T00:53:57.342146+00:00",
+        "sku": "BW-SL-CLR-100Mx100CMx1ROLL-RED",
+        "loc_id": "OPM Lama",
+        "change_qty": 1,
+        "balance_after": null,
+        "event_type": "Production",
+        "ref_doc": "8ab3d28e-2e79-45a8-99e0-055778972603",
+        "notes": "API-Log: T1.3-M02",
+        "created_by": null,
+        "created_by_name": null
+      },
+      {
+        "txn_id": "0b708fd2-2536-45df-bdb8-a16cd6cfff87",
+        "timestamp": "2026-04-03T00:48:14.411116+00:00",
+        "sku": "BW-SL-CLR-100Mx100CMx1ROLL-RED",
+        "loc_id": "OPM Lama",
+        "change_qty": 1,
+        "balance_after": null,
+        "event_type": "Production",
+        "ref_doc": "6b1985d6-e13f-4764-83b1-7c558a22e92c",
+        "notes": "API-Log: T1.3-M02",
+        "created_by": null,
+        "created_by_name": null
+      },
+      {
+        "txn_id": "630b54dc-ef3f-4bfb-87ee-e6b37ff8112c",
+        "timestamp": "2026-04-03T00:42:32.648803+00:00",
+        "sku": "BW-SL-CLR-100Mx100CMx1ROLL-RED",
+        "loc_id": "OPM Lama",
+        "change_qty": 1,
+        "balance_after": null,
+        "event_type": "Production",
+        "ref_doc": "8bad0f3f-54be-4212-83b5-2d676cc3b5ba",
+        "notes": "API-Log: T1.3-M02",
+        "created_by": null,
+        "created_by_name": null
+      },
+      {
+        "txn_id": "41eabbcf-49ad-42d7-a2d5-65d8a57d4119",
+        "timestamp": "2026-04-03T00:36:50.234705+00:00",
+        "sku": "BW-SL-CLR-100Mx100CMx1ROLL-RED",
+        "loc_id": "OPM Lama",
+        "change_qty": 1,
+        "balance_after": null,
+        "event_type": "Production",
+        "ref_doc": "b8843e2f-98b7-4fcf-8664-8dc3fc745bf3",
+        "notes": "API-Log: T1.3-M02",
+        "created_by": null,
+        "created_by_name": null
+      },
+      {
+        "txn_id": "ae508e3a-338f-4607-b201-619abae1616f",
+        "timestamp": "2026-04-03T00:31:08.139415+00:00",
+        "sku": "BW-SL-CLR-100Mx100CMx1ROLL-RED",
+        "loc_id": "OPM Lama",
+        "change_qty": 1,
+        "balance_after": null,
+        "event_type": "Production",
+        "ref_doc": "c5aee816-8871-4f50-8bf2-6406b00865f6",
+        "notes": "API-Log: T1.3-M02",
+        "created_by": null,
+        "created_by_name": null
+      },
+      {
+        "txn_id": "eb2f43e1-0a19-442b-81c9-b7fbbee790ea",
+        "timestamp": "2026-04-03T00:25:25.874699+00:00",
+        "sku": "BW-SL-CLR-100Mx100CMx1ROLL-RED",
+        "loc_id": "OPM Lama",
+        "change_qty": 1,
+        "balance_after": null,
+        "event_type": "Production",
+        "ref_doc": "05c5e4cb-2091-4248-9396-33a3bf622a6c",
+        "notes": "API-Log: T1.3-M02",
+        "created_by": null,
+        "created_by_name": null
+      },
+      {
+        "txn_id": "3b7b6f48-a7a0-45a3-912d-6c7b378b81ad",
+        "timestamp": "2026-04-03T00:19:44.171985+00:00",
+        "sku": "BW-SL-CLR-100Mx100CMx1ROLL-RED",
+        "loc_id": "OPM Lama",
+        "change_qty": 1,
+        "balance_after": null,
+        "event_type": "Production",
+        "ref_doc": "d41c79cf-1ae5-4848-9e8a-ce347c6698ef",
+        "notes": "API-Log: T1.3-M02",
+        "created_by": null,
+        "created_by_name": null
+      }
+    ],
+    "count": null,
+    "status": 200,
+    "statusText": "OK"
+  }
+}

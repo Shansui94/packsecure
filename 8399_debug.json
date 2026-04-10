@@ -1,0 +1,19 @@
+{
+  "pubData": null,
+  "badUsers": [
+    {
+      "employee_id": "1311",
+      "name": "Winnie Ong",
+      "email": "emp_1311@packsecure.local",
+      "status": "active",
+      "role": "SuperAdmin"
+    },
+    {
+      "employee_id": "9822",
+      "name": "AMY ONG",
+      "email": "emp_9822@packsecure.local",
+      "status": "active",
+      "role": "HR"
+    }
+  ]
+}

@@ -1,0 +1,103 @@
+=== RECENT LEDGER ENTRIES FOR MERAH ===
+[2026-03-31T14:08:31.680436+00:00] Event: Production | Ref: undefined | Qty: 1 | Location: undefined
+[2026-03-31T14:08:31.680436+00:00] Event: Production | Ref: undefined | Qty: 1 | Location: undefined
+[2026-03-31T14:03:09.470171+00:00] Event: Production | Ref: undefined | Qty: 1 | Location: undefined
+[2026-03-31T14:03:09.470171+00:00] Event: Production | Ref: undefined | Qty: 1 | Location: undefined
+[2026-03-31T13:57:47.930819+00:00] Event: Production | Ref: undefined | Qty: 1 | Location: undefined
+[2026-03-31T13:57:47.930819+00:00] Event: Production | Ref: undefined | Qty: 1 | Location: undefined
+[2026-03-31T13:56:56.6447+00:00] Event: Transfer Out | Ref: undefined | Qty: -45 | Location: undefined
+[2026-03-31T13:52:27.070403+00:00] Event: Production | Ref: undefined | Qty: 1 | Location: undefined
+[2026-03-31T13:52:27.070403+00:00] Event: Production | Ref: undefined | Qty: 1 | Location: undefined
+[2026-03-31T13:48:30.541427+00:00] Event: Transfer Out | Ref: undefined | Qty: -82 | Location: undefined
+[2026-03-31T13:47:02.56528+00:00] Event: Production | Ref: undefined | Qty: 1 | Location: undefined
+[2026-03-31T13:47:02.56528+00:00] Event: Production | Ref: undefined | Qty: 1 | Location: undefined
+[2026-03-31T13:41:40.629479+00:00] Event: Production | Ref: undefined | Qty: 1 | Location: undefined
+[2026-03-31T13:41:40.629479+00:00] Event: Production | Ref: undefined | Qty: 1 | Location: undefined
+[2026-03-31T13:36:18.064565+00:00] Event: Production | Ref: undefined | Qty: 1 | Location: undefined
+[2026-03-31T13:36:18.064565+00:00] Event: Production | Ref: undefined | Qty: 1 | Location: undefined
+[2026-03-31T13:35:14.169347+00:00] Event: Production | Ref: undefined | Qty: 1 | Location: undefined
+[2026-03-31T13:30:55.360185+00:00] Event: Production | Ref: undefined | Qty: 1 | Location: undefined
+[2026-03-31T13:30:55.360185+00:00] Event: Production | Ref: undefined | Qty: 1 | Location: undefined
+[2026-03-31T13:29:32.431259+00:00] Event: Production | Ref: undefined | Qty: 1 | Location: undefined
+[2026-03-31T13:25:33.02942+00:00] Event: Production | Ref: undefined | Qty: 1 | Location: undefined
+[2026-03-31T13:25:33.02942+00:00] Event: Production | Ref: undefined | Qty: 1 | Location: undefined
+[2026-03-31T13:23:50.706943+00:00] Event: Production | Ref: undefined | Qty: 1 | Location: undefined
+[2026-03-31T13:20:12.333254+00:00] Event: Production | Ref: undefined | Qty: 1 | Location: undefined
+[2026-03-31T13:20:12.333254+00:00] Event: Production | Ref: undefined | Qty: 1 | Location: undefined
+[2026-03-31T13:14:48.590755+00:00] Event: Production | Ref: undefined | Qty: 1 | Location: undefined
+[2026-03-31T13:14:48.590755+00:00] Event: Production | Ref: undefined | Qty: 1 | Location: undefined
+[2026-03-31T12:52:22.027019+00:00] Event: Transfer Out | Ref: undefined | Qty: -64 | Location: undefined
+[2026-03-31T11:54:15.945551+00:00] Event: Production | Ref: undefined | Qty: 1 | Location: undefined
+[2026-03-31T11:54:15.945551+00:00] Event: Production | Ref: undefined | Qty: 1 | Location: undefined
+[2026-03-31T11:48:53.372423+00:00] Event: Production | Ref: undefined | Qty: 1 | Location: undefined
+[2026-03-31T11:48:53.372423+00:00] Event: Production | Ref: undefined | Qty: 1 | Location: undefined
+[2026-03-31T11:43:31.41792+00:00] Event: Production | Ref: undefined | Qty: 1 | Location: undefined
+[2026-03-31T11:43:31.41792+00:00] Event: Production | Ref: undefined | Qty: 1 | Location: undefined
+[2026-03-31T11:42:36.48037+00:00] Event: Stock Out | Ref: undefined | Qty: -75 | Location: undefined
+[2026-03-31T11:38:10.440449+00:00] Event: Production | Ref: undefined | Qty: 1 | Location: undefined
+[2026-03-31T11:38:10.440449+00:00] Event: Production | Ref: undefined | Qty: 1 | Location: undefined
+[2026-03-31T11:32:46.019363+00:00] Event: Production | Ref: undefined | Qty: 1 | Location: undefined
+[2026-03-31T11:32:46.019363+00:00] Event: Production | Ref: undefined | Qty: 1 | Location: undefined
+[2026-03-31T11:30:12.765219+00:00] Event: Stock Out | Ref: undefined | Qty: -85 | Location: undefined
+[2026-03-31T11:27:24.295443+00:00] Event: Production | Ref: undefined | Qty: 1 | Location: undefined
+[2026-03-31T11:27:24.295443+00:00] Event: Production | Ref: undefined | Qty: 1 | Location: undefined
+[2026-03-31T11:22:01.33888+00:00] Event: Production | Ref: undefined | Qty: 1 | Location: undefined
+[2026-03-31T11:22:01.33888+00:00] Event: Production | Ref: undefined | Qty: 1 | Location: undefined
+[2026-03-31T11:16:38.959415+00:00] Event: Production | Ref: undefined | Qty: 1 | Location: undefined
+[2026-03-31T11:16:38.959415+00:00] Event: Production | Ref: undefined | Qty: 1 | Location: undefined
+[2026-03-31T11:11:17.225785+00:00] Event: Production | Ref: undefined | Qty: 1 | Location: undefined
+[2026-03-31T11:11:17.225785+00:00] Event: Production | Ref: undefined | Qty: 1 | Location: undefined
+[2026-03-31T11:05:54.343862+00:00] Event: Production | Ref: undefined | Qty: 1 | Location: undefined
+[2026-03-31T11:05:54.343862+00:00] Event: Production | Ref: undefined | Qty: 1 | Location: undefined
+[2026-03-31T11:00:33.144435+00:00] Event: Production | Ref: undefined | Qty: 1 | Location: undefined
+[2026-03-31T11:00:33.144435+00:00] Event: Production | Ref: undefined | Qty: 1 | Location: undefined
+[2026-03-31T10:55:10.433897+00:00] Event: Production | Ref: undefined | Qty: 1 | Location: undefined
+[2026-03-31T10:55:10.433897+00:00] Event: Production | Ref: undefined | Qty: 1 | Location: undefined
+[2026-03-31T10:49:48.345217+00:00] Event: Production | Ref: undefined | Qty: 1 | Location: undefined
+[2026-03-31T10:49:48.345217+00:00] Event: Production | Ref: undefined | Qty: 1 | Location: undefined
+[2026-03-31T10:44:26.006729+00:00] Event: Production | Ref: undefined | Qty: 1 | Location: undefined
+[2026-03-31T10:44:26.006729+00:00] Event: Production | Ref: undefined | Qty: 1 | Location: undefined
+[2026-03-31T10:39:02.990318+00:00] Event: Production | Ref: undefined | Qty: 1 | Location: undefined
+[2026-03-31T10:39:02.990318+00:00] Event: Production | Ref: undefined | Qty: 1 | Location: undefined
+[2026-03-31T10:33:40.687399+00:00] Event: Production | Ref: undefined | Qty: 1 | Location: undefined
+[2026-03-31T10:33:40.687399+00:00] Event: Production | Ref: undefined | Qty: 1 | Location: undefined
+[2026-03-31T10:28:18.926116+00:00] Event: Production | Ref: undefined | Qty: 1 | Location: undefined
+[2026-03-31T10:28:18.926116+00:00] Event: Production | Ref: undefined | Qty: 1 | Location: undefined
+[2026-03-31T10:22:57.168103+00:00] Event: Production | Ref: undefined | Qty: 1 | Location: undefined
+[2026-03-31T10:22:57.168103+00:00] Event: Production | Ref: undefined | Qty: 1 | Location: undefined
+[2026-03-31T10:17:34.467362+00:00] Event: Production | Ref: undefined | Qty: 1 | Location: undefined
+[2026-03-31T10:17:34.467362+00:00] Event: Production | Ref: undefined | Qty: 1 | Location: undefined
+[2026-03-31T10:12:12.736857+00:00] Event: Production | Ref: undefined | Qty: 1 | Location: undefined
+[2026-03-31T10:12:12.736857+00:00] Event: Production | Ref: undefined | Qty: 1 | Location: undefined
+[2026-03-31T10:06:49.863518+00:00] Event: Production | Ref: undefined | Qty: 1 | Location: undefined
+[2026-03-31T10:06:49.863518+00:00] Event: Production | Ref: undefined | Qty: 1 | Location: undefined
+[2026-03-31T10:01:28.151365+00:00] Event: Production | Ref: undefined | Qty: 1 | Location: undefined
+[2026-03-31T10:01:28.151365+00:00] Event: Production | Ref: undefined | Qty: 1 | Location: undefined
+[2026-03-31T10:00:26.677307+00:00] Event: Transfer Out | Ref: undefined | Qty: -15 | Location: undefined
+[2026-03-31T09:56:04.943846+00:00] Event: Production | Ref: undefined | Qty: 1 | Location: undefined
+[2026-03-31T09:56:04.943846+00:00] Event: Production | Ref: undefined | Qty: 1 | Location: undefined
+[2026-03-31T09:50:42.557963+00:00] Event: Production | Ref: undefined | Qty: 1 | Location: undefined
+[2026-03-31T09:50:42.557963+00:00] Event: Production | Ref: undefined | Qty: 1 | Location: undefined
+[2026-03-31T09:45:21.299702+00:00] Event: Production | Ref: undefined | Qty: 1 | Location: undefined
+[2026-03-31T09:45:21.299702+00:00] Event: Production | Ref: undefined | Qty: 1 | Location: undefined
+[2026-03-31T09:39:57.99295+00:00] Event: Production | Ref: undefined | Qty: 1 | Location: undefined
+[2026-03-31T09:39:57.99295+00:00] Event: Production | Ref: undefined | Qty: 1 | Location: undefined
+[2026-03-31T09:34:35.749694+00:00] Event: Production | Ref: undefined | Qty: 1 | Location: undefined
+[2026-03-31T09:34:35.749694+00:00] Event: Production | Ref: undefined | Qty: 1 | Location: undefined
+[2026-03-31T09:29:13.910266+00:00] Event: Production | Ref: undefined | Qty: 1 | Location: undefined
+[2026-03-31T09:29:13.910266+00:00] Event: Production | Ref: undefined | Qty: 1 | Location: undefined
+[2026-03-31T09:23:51.228559+00:00] Event: Production | Ref: undefined | Qty: 1 | Location: undefined
+[2026-03-31T09:23:51.228559+00:00] Event: Production | Ref: undefined | Qty: 1 | Location: undefined
+[2026-03-31T09:18:29.472181+00:00] Event: Production | Ref: undefined | Qty: 1 | Location: undefined
+[2026-03-31T09:18:29.472181+00:00] Event: Production | Ref: undefined | Qty: 1 | Location: undefined
+[2026-03-31T09:13:06.902698+00:00] Event: Production | Ref: undefined | Qty: 1 | Location: undefined
+[2026-03-31T09:13:06.902698+00:00] Event: Production | Ref: undefined | Qty: 1 | Location: undefined
+[2026-03-31T09:07:45.120587+00:00] Event: Production | Ref: undefined | Qty: 1 | Location: undefined
+[2026-03-31T09:07:45.120587+00:00] Event: Production | Ref: undefined | Qty: 1 | Location: undefined
+[2026-03-31T09:02:22.544672+00:00] Event: Production | Ref: undefined | Qty: 1 | Location: undefined
+[2026-03-31T09:02:22.544672+00:00] Event: Production | Ref: undefined | Qty: 1 | Location: undefined
+[2026-03-31T08:56:59.66503+00:00] Event: Production | Ref: undefined | Qty: 1 | Location: undefined
+[2026-03-31T08:56:59.66503+00:00] Event: Production | Ref: undefined | Qty: 1 | Location: undefined
+[2026-03-31T08:51:37.766235+00:00] Event: Production | Ref: undefined | Qty: 1 | Location: undefined
+
+Negative sum after latest audit: -366

@@ -1,0 +1,527 @@
+[
+  {
+    "sku": "BW-SL-SLR-100Mx100CMx1ROLL-RED",
+    "notes": "Auto-adjusted from Audit at [OPM Lama]. System: -136, Actual: 122 | [Reviewed by Max Tan]",
+    "timestamp": "2026-04-04T20:56:30.589568+00:00"
+  },
+  {
+    "sku": "BW-DL-BLK-100Mx100CMx1ROLL-RED",
+    "notes": "Auto-adjusted from Audit at [OPM Lama]. System: 0, Actual: 46",
+    "timestamp": "2026-02-27T13:10:03.535443+00:00"
+  },
+  {
+    "sku": "BW-DL-BLK-100Mx20CMx5ROLL-RED",
+    "notes": "Auto-adjusted from Audit at [OPM Lama]. System: 0, Actual: 5",
+    "timestamp": "2026-02-27T13:10:03.535443+00:00"
+  },
+  {
+    "sku": "BW-DL-BLK-100Mx33CMx3ROLL-RED",
+    "notes": "Auto-adjusted from Audit at [OPM Lama]. System: 0, Actual: 27",
+    "timestamp": "2026-02-27T13:10:03.535443+00:00"
+  },
+  {
+    "sku": "BW-DL-BLK-100Mx50CMx2ROLL-GRN",
+    "notes": "Auto-adjusted from Audit at [OPM Lama]. System: 0, Actual: 18",
+    "timestamp": "2026-02-27T13:10:03.535443+00:00"
+  },
+  {
+    "sku": "BW-DL-CLR-100Mx100CMx1ROLL-YEL",
+    "notes": "Auto-adjusted from Audit at [OPM Lama]. System: 0, Actual: 11",
+    "timestamp": "2026-02-27T13:10:03.535443+00:00"
+  },
+  {
+    "sku": "BW-DL-CLR-100Mx20CMx5ROLL-BLU",
+    "notes": "Auto-adjusted from Audit at [OPM Lama]. System: 0, Actual: 13",
+    "timestamp": "2026-02-27T13:10:03.535443+00:00"
+  },
+  {
+    "sku": "BW-DL-CLR-100Mx25CMx4ROLL-BLU",
+    "notes": "Auto-adjusted from Audit at [OPM Lama]. System: 0, Actual: 24",
+    "timestamp": "2026-02-27T13:10:03.535443+00:00"
+  },
+  {
+    "sku": "BW-DL-CLR-100Mx33CMx3ROLL-BLU",
+    "notes": "Auto-adjusted from Audit at [OPM Lama]. System: 0, Actual: 84",
+    "timestamp": "2026-02-27T13:10:03.535443+00:00"
+  },
+  {
+    "sku": "BW-DL-CLR-100Mx50CMx2ROLL-BLU",
+    "notes": "Auto-adjusted from Audit at [OPM Lama]. System: 0, Actual: 8",
+    "timestamp": "2026-02-27T13:10:03.535443+00:00"
+  },
+  {
+    "sku": "BW-DL-SLR-100Mx100CMx1ROLL-RED",
+    "notes": "Auto-adjusted from Audit at [OPM Lama]. System: 0, Actual: 1",
+    "timestamp": "2026-02-27T13:10:03.535443+00:00"
+  },
+  {
+    "sku": "BW-SL-BLK-100Mx100CMx1ROLL-GRN",
+    "notes": "Auto-adjusted from Audit at [OPM Lama]. System: 0, Actual: 27",
+    "timestamp": "2026-02-27T13:10:03.535443+00:00"
+  },
+  {
+    "sku": "BW-SL-BLK-100Mx20CMx5ROLL-GRN",
+    "notes": "Auto-adjusted from Audit at [OPM Lama]. System: 0, Actual: 15",
+    "timestamp": "2026-02-27T13:10:03.535443+00:00"
+  },
+  {
+    "sku": "BW-SL-BLK-100Mx33CMx3ROLL-GRN",
+    "notes": "Auto-adjusted from Audit at [OPM Lama]. System: 0, Actual: 186",
+    "timestamp": "2026-02-27T13:10:03.535443+00:00"
+  },
+  {
+    "sku": "BW-SL-BLK-100Mx50CMx2ROLL-RED",
+    "notes": "Auto-adjusted from Audit at [OPM Lama]. System: 0, Actual: 22",
+    "timestamp": "2026-02-27T13:10:03.535443+00:00"
+  },
+  {
+    "sku": "BW-SL-CLR-100Mx33CMx3ROLL-GRN",
+    "notes": "Auto-adjusted from Audit at [OPM Lama]. System: 0, Actual: 14",
+    "timestamp": "2026-02-27T13:10:03.535443+00:00"
+  },
+  {
+    "sku": "BW-SL-CLR-100Mx50CMx2ROLL-ORN",
+    "notes": "Auto-adjusted from Audit at [OPM Lama]. System: 0, Actual: 19",
+    "timestamp": "2026-02-27T13:10:03.535443+00:00"
+  },
+  {
+    "sku": "BW-SL-SLR-100Mx100CMx1ROLL-RED",
+    "notes": "Auto-adjusted from Audit at [OPM Lama]. System: 0, Actual: 135",
+    "timestamp": "2026-02-27T13:56:45.433206+00:00"
+  },
+  {
+    "sku": "BW-SL-CLR-100Mx100CMx1ROLL-RED",
+    "notes": "Auto-adjusted from Audit at [OPM Lama]. System: 80, Actual: 100",
+    "timestamp": "2026-02-27T13:59:03.892627+00:00"
+  },
+  {
+    "sku": "BW-DL-BLK-100Mx100CMx1ROLL-RED",
+    "notes": "Auto-adjusted from Audit at [OPM Lama]. System: -93, Actual: 1",
+    "timestamp": "2026-03-12T07:13:06.513079+00:00"
+  },
+  {
+    "sku": "BW-DL-BLK-100Mx20CMx5ROLL-RED",
+    "notes": "Auto-adjusted from Audit at [OPM Lama]. System: 5, Actual: 50",
+    "timestamp": "2026-03-12T07:13:06.513079+00:00"
+  },
+  {
+    "sku": "BW-DL-BLK-100Mx100CMx1ROLL-RED",
+    "notes": "Auto-adjusted from Audit at [OPM Lama]. System: -64, Actual: 363",
+    "timestamp": "2026-03-24T13:22:44.532113+00:00"
+  },
+  {
+    "sku": "BW-DL-BLK-100Mx20CMx5ROLL-RED",
+    "notes": "Auto-adjusted from Audit at [OPM Lama]. System: 50, Actual: 4",
+    "timestamp": "2026-03-24T13:22:44.532113+00:00"
+  },
+  {
+    "sku": "BW-DL-BLK-100Mx33CMx3ROLL-RED",
+    "notes": "Auto-adjusted from Audit at [OPM Lama]. System: 27, Actual: 0",
+    "timestamp": "2026-03-24T13:22:44.532113+00:00"
+  },
+  {
+    "sku": "BW-DL-BLK-100Mx50CMx2ROLL-GRN",
+    "notes": "Auto-adjusted from Audit at [OPM Lama]. System: 18, Actual: 105",
+    "timestamp": "2026-03-24T13:22:44.532113+00:00"
+  },
+  {
+    "sku": "BW-DL-BLK-100Mx50CMx2ROLL-RED",
+    "notes": "Auto-adjusted from Audit at [OPM Lama]. System: -45, Actual: 0",
+    "timestamp": "2026-03-24T13:22:44.532113+00:00"
+  },
+  {
+    "sku": "BW-DL-CLR-100Mx100CMx1ROLL-YEL",
+    "notes": "Auto-adjusted from Audit at [OPM Lama]. System: -1044, Actual: 186",
+    "timestamp": "2026-03-24T13:22:44.532113+00:00"
+  },
+  {
+    "sku": "BW-DL-CLR-100Mx20CMx5ROLL-BLU",
+    "notes": "Auto-adjusted from Audit at [OPM Lama]. System: -18, Actual: 4",
+    "timestamp": "2026-03-24T13:22:44.532113+00:00"
+  },
+  {
+    "sku": "BW-DL-CLR-100Mx25CMx4ROLL-BLU",
+    "notes": "Auto-adjusted from Audit at [OPM Lama]. System: -67, Actual: 8",
+    "timestamp": "2026-03-24T13:22:44.532113+00:00"
+  },
+  {
+    "sku": "BW-DL-CLR-100Mx33CMx3ROLL-BLU",
+    "notes": "Auto-adjusted from Audit at [OPM Lama]. System: 11, Actual: 42",
+    "timestamp": "2026-03-24T13:22:44.532113+00:00"
+  },
+  {
+    "sku": "BW-DL-CLR-100Mx50CMx2ROLL-BLU",
+    "notes": "Auto-adjusted from Audit at [OPM Lama]. System: -296, Actual: 123",
+    "timestamp": "2026-03-24T13:22:44.532113+00:00"
+  },
+  {
+    "sku": "BW-DL-CLR-100Mx50CMx2ROLL-RED",
+    "notes": "Auto-adjusted from Audit at [OPM Lama]. System: -1, Actual: 0",
+    "timestamp": "2026-03-24T13:22:44.532113+00:00"
+  },
+  {
+    "sku": "BW-DL-SLR-100Mx100CMx1ROLL-RED",
+    "notes": "Auto-adjusted from Audit at [OPM Lama]. System: 1, Actual: 0",
+    "timestamp": "2026-03-24T13:22:44.532113+00:00"
+  },
+  {
+    "sku": "BW-SL-BLK-100Mx100CMx1ROLL-BLU",
+    "notes": "Auto-adjusted from Audit at [OPM Lama]. System: -190, Actual: 0",
+    "timestamp": "2026-03-24T13:22:44.532113+00:00"
+  },
+  {
+    "sku": "BW-SL-BLK-100Mx100CMx1ROLL-GRN",
+    "notes": "Auto-adjusted from Audit at [OPM Lama]. System: -432, Actual: 54",
+    "timestamp": "2026-03-24T13:22:44.532113+00:00"
+  },
+  {
+    "sku": "BW-SL-BLK-100Mx20CMx5ROLL-GRN",
+    "notes": "Auto-adjusted from Audit at [OPM Lama]. System: 15, Actual: 13",
+    "timestamp": "2026-03-24T13:22:44.532113+00:00"
+  },
+  {
+    "sku": "BW-SL-BLK-100Mx25CMx4ROLL-GRN",
+    "notes": "Auto-adjusted from Audit at [OPM Lama]. System: 0, Actual: 18",
+    "timestamp": "2026-03-24T13:22:44.532113+00:00"
+  },
+  {
+    "sku": "BW-SL-BLK-100Mx33CMx3ROLL-GRN",
+    "notes": "Auto-adjusted from Audit at [OPM Lama]. System: 35, Actual: 42",
+    "timestamp": "2026-03-24T13:22:44.532113+00:00"
+  },
+  {
+    "sku": "BW-SL-BLK-100Mx50CMx2ROLL-RED",
+    "notes": "Auto-adjusted from Audit at [OPM Lama]. System: -211, Actual: 18",
+    "timestamp": "2026-03-24T13:22:44.532113+00:00"
+  },
+  {
+    "sku": "BW-SL-CLR-100Mx100CMx1ROLL-RED",
+    "notes": "Auto-adjusted from Audit at [OPM Lama]. System: -4477, Actual: 432",
+    "timestamp": "2026-03-24T13:22:44.532113+00:00"
+  },
+  {
+    "sku": "BW-SL-CLR-100Mx20CMx5ROLL-GRN",
+    "notes": "Auto-adjusted from Audit at [OPM Lama]. System: -187, Actual: 33",
+    "timestamp": "2026-03-24T13:22:44.532113+00:00"
+  },
+  {
+    "sku": "BW-SL-CLR-100Mx25CMx4ROLL-GRN",
+    "notes": "Auto-adjusted from Audit at [OPM Lama]. System: -861, Actual: 141",
+    "timestamp": "2026-03-24T13:22:44.532113+00:00"
+  },
+  {
+    "sku": "BW-SL-CLR-100Mx33CMx3ROLL-GRN",
+    "notes": "Auto-adjusted from Audit at [OPM Lama]. System: -315, Actual: 78",
+    "timestamp": "2026-03-24T13:22:44.532113+00:00"
+  },
+  {
+    "sku": "BW-SL-CLR-100Mx50CMx2ROLL-ORN",
+    "notes": "Auto-adjusted from Audit at [OPM Lama]. System: -1302, Actual: 207",
+    "timestamp": "2026-03-24T13:22:44.532113+00:00"
+  },
+  {
+    "sku": "BW-SL-SLR-100Mx100CMx1ROLL-RED",
+    "notes": "Auto-adjusted from Audit at [OPM Lama]. System: 64, Actual: 0",
+    "timestamp": "2026-03-24T13:22:44.532113+00:00"
+  },
+  {
+    "sku": "BW-SL-CLR-100Mx50CMx2ROLL-ORN",
+    "notes": "Auto-adjusted from Audit at [OPM Lama]. System: 74, Actual: 258",
+    "timestamp": "2026-03-26T13:17:36.806655+00:00"
+  },
+  {
+    "sku": "BW-SL-CLR-100Mx100CMx1ROLL-RED",
+    "notes": "Auto-adjusted from Audit at [OPM Lama]. System: -6, Actual: 174",
+    "timestamp": "2026-03-26T13:18:09.400147+00:00"
+  },
+  {
+    "sku": "BW-SL-CLR-100Mx25CMx4ROLL-GRN",
+    "notes": "Auto-adjusted from Audit at [OPM Lama]. System: 91, Actual: 153",
+    "timestamp": "2026-03-26T13:19:12.519382+00:00"
+  },
+  {
+    "sku": "BW-SL-CLR-100Mx33CMx3ROLL-GRN",
+    "notes": "Auto-adjusted from Audit at [OPM Lama]. System: -78, Actual: 97",
+    "timestamp": "2026-03-26T13:19:12.519382+00:00"
+  },
+  {
+    "sku": "BW-DL-CLR-100Mx100CMx1ROLL-YEL",
+    "notes": "Auto-adjusted from Audit at [OPM Lama]. System: 34, Actual: 102",
+    "timestamp": "2026-03-26T13:20:18.172446+00:00"
+  },
+  {
+    "sku": "BW-SL-BLK-100Mx100CMx1ROLL-GRN",
+    "notes": "Auto-adjusted from Audit at [OPM Lama]. System: 54, Actual: 45",
+    "timestamp": "2026-03-26T13:20:18.172446+00:00"
+  },
+  {
+    "sku": "BW-SL-BLK-100Mx50CMx2ROLL-RED",
+    "notes": "Auto-adjusted from Audit at [OPM Lama]. System: -2, Actual: 51",
+    "timestamp": "2026-03-26T13:20:18.172446+00:00"
+  },
+  {
+    "sku": "BW-DL-BLK-100Mx100CMx1ROLL-RED",
+    "notes": "Auto-adjusted from Audit at [OPM Lama]. System: 255, Actual: 134",
+    "timestamp": "2026-03-30T23:08:59.092543+00:00"
+  },
+  {
+    "sku": "BW-DL-BLK-100Mx20CMx5ROLL-RED",
+    "notes": "Auto-adjusted from Audit at [OPM Lama]. System: 4, Actual: 0",
+    "timestamp": "2026-03-30T23:08:59.092543+00:00"
+  },
+  {
+    "sku": "BW-DL-BLK-100Mx25CMx4ROLL-RED",
+    "notes": "Auto-adjusted from Audit at [OPM Lama]. System: 0, Actual: 18",
+    "timestamp": "2026-03-30T23:08:59.092543+00:00"
+  },
+  {
+    "sku": "BW-DL-BLK-100Mx33CMx3ROLL-RED",
+    "notes": "Auto-adjusted from Audit at [OPM Lama]. System: 0, Actual: 36",
+    "timestamp": "2026-03-30T23:08:59.092543+00:00"
+  },
+  {
+    "sku": "BW-DL-BLK-100Mx50CMx2ROLL-GRN",
+    "notes": "Auto-adjusted from Audit at [OPM Lama]. System: 105, Actual: 51",
+    "timestamp": "2026-03-30T23:08:59.092543+00:00"
+  },
+  {
+    "sku": "BW-DL-BLK-100Mx50CMx2ROLL-RED",
+    "notes": "Auto-adjusted from Audit at [OPM Lama]. System: -36, Actual: 0",
+    "timestamp": "2026-03-30T23:08:59.092543+00:00"
+  },
+  {
+    "sku": "BW-DL-CLR-100Mx100CMx1ROLL-RED",
+    "notes": "Auto-adjusted from Audit at [OPM Lama]. System: -86, Actual: 0",
+    "timestamp": "2026-03-30T23:08:59.092543+00:00"
+  },
+  {
+    "sku": "BW-DL-CLR-100Mx100CMx1ROLL-YEL",
+    "notes": "Auto-adjusted from Audit at [OPM Lama]. System: 96, Actual: 273",
+    "timestamp": "2026-03-30T23:08:59.092543+00:00"
+  },
+  {
+    "sku": "BW-DL-CLR-100Mx20CMx5ROLL-BLU",
+    "notes": "Auto-adjusted from Audit at [OPM Lama]. System: -27, Actual: 49",
+    "timestamp": "2026-03-30T23:08:59.092543+00:00"
+  },
+  {
+    "sku": "BW-DL-CLR-100Mx25CMx4ROLL-BLU",
+    "notes": "Auto-adjusted from Audit at [OPM Lama]. System: 16, Actual: 91",
+    "timestamp": "2026-03-30T23:08:59.092543+00:00"
+  },
+  {
+    "sku": "BW-DL-CLR-100Mx33CMx3ROLL-BLU",
+    "notes": "Auto-adjusted from Audit at [OPM Lama]. System: 26, Actual: 86",
+    "timestamp": "2026-03-30T23:08:59.092543+00:00"
+  },
+  {
+    "sku": "BW-DL-CLR-100Mx50CMx2ROLL-BLU",
+    "notes": "Auto-adjusted from Audit at [OPM Lama]. System: 95, Actual: 57",
+    "timestamp": "2026-03-30T23:08:59.092543+00:00"
+  },
+  {
+    "sku": "BW-DL-CLR-100Mx50CMx2ROLL-RED",
+    "notes": "Auto-adjusted from Audit at [OPM Lama]. System: -10, Actual: 0",
+    "timestamp": "2026-03-30T23:08:59.092543+00:00"
+  },
+  {
+    "sku": "BW-SL-BLK-100Mx100CMx1ROLL-BLU",
+    "notes": "Auto-adjusted from Audit at [OPM Lama]. System: -40, Actual: 0",
+    "timestamp": "2026-03-30T23:08:59.092543+00:00"
+  },
+  {
+    "sku": "BW-SL-BLK-100Mx100CMx1ROLL-GRN",
+    "notes": "Auto-adjusted from Audit at [OPM Lama]. System: -86, Actual: 126",
+    "timestamp": "2026-03-30T23:08:59.092543+00:00"
+  },
+  {
+    "sku": "BW-SL-BLK-100Mx20CMx5ROLL-GRN",
+    "notes": "Auto-adjusted from Audit at [OPM Lama]. System: 13, Actual: 0",
+    "timestamp": "2026-03-30T23:08:59.092543+00:00"
+  },
+  {
+    "sku": "BW-SL-BLK-100Mx25CMx4ROLL-GRN",
+    "notes": "Auto-adjusted from Audit at [OPM Lama]. System: 17, Actual: 66",
+    "timestamp": "2026-03-30T23:08:59.092543+00:00"
+  },
+  {
+    "sku": "BW-SL-BLK-100Mx33CMx3ROLL-GRN",
+    "notes": "Auto-adjusted from Audit at [OPM Lama]. System: -99, Actual: 77",
+    "timestamp": "2026-03-30T23:08:59.092543+00:00"
+  },
+  {
+    "sku": "BW-SL-BLK-100Mx50CMx2ROLL-BLU",
+    "notes": "Auto-adjusted from Audit at [OPM Lama]. System: -9, Actual: 0",
+    "timestamp": "2026-03-30T23:08:59.092543+00:00"
+  },
+  {
+    "sku": "BW-SL-BLK-100Mx50CMx2ROLL-RED",
+    "notes": "Auto-adjusted from Audit at [OPM Lama]. System: -4, Actual: 54",
+    "timestamp": "2026-03-30T23:08:59.092543+00:00"
+  },
+  {
+    "sku": "BW-SL-CLR-100Mx100CMx1ROLL-GRN",
+    "notes": "Auto-adjusted from Audit at [OPM Lama]. System: 51, Actual: 0",
+    "timestamp": "2026-03-30T23:08:59.092543+00:00"
+  },
+  {
+    "sku": "BW-SL-CLR-100Mx20CMx5ROLL-GRN",
+    "notes": "Auto-adjusted from Audit at [OPM Lama]. System: 39, Actual: 21",
+    "timestamp": "2026-03-30T23:08:59.092543+00:00"
+  },
+  {
+    "sku": "BW-SL-CLR-100Mx25CMx4ROLL-GRN",
+    "notes": "Auto-adjusted from Audit at [OPM Lama]. System: 149, Actual: 66",
+    "timestamp": "2026-03-30T23:08:59.092543+00:00"
+  },
+  {
+    "sku": "BW-SL-CLR-100Mx33CMx3ROLL-GRN",
+    "notes": "Auto-adjusted from Audit at [OPM Lama]. System: 48, Actual: 69",
+    "timestamp": "2026-03-30T23:08:59.092543+00:00"
+  },
+  {
+    "sku": "BW-SL-CLR-100Mx100CMx1ROLL-RED",
+    "notes": "Auto-adjusted from Audit at [OPM Lama]. System: -285, Actual: 135",
+    "timestamp": "2026-03-30T14:21:45.257969+00:00"
+  },
+  {
+    "sku": "BW-SL-CLR-100Mx50CMx2ROLL-ORN",
+    "notes": "Auto-adjusted from Audit at [OPM Lama]. System: 189, Actual: 114",
+    "timestamp": "2026-03-30T14:21:45.257969+00:00"
+  },
+  {
+    "sku": "BW-SL-CLR-100Mx20CMx5ROLL-GRN",
+    "notes": "Auto-adjusted from Audit at [OPM Lama]. System: 21, Actual: 90 | [Reviewed by Max Tan]",
+    "timestamp": "2026-03-31T08:24:34.054914+00:00"
+  },
+  {
+    "sku": "BW-SL-CLR-100Mx50CMx2ROLL-ORN",
+    "notes": "Auto-adjusted from Audit at [OPM Lama]. System: 28, Actual: 100",
+    "timestamp": "2026-04-01T11:28:03.352618+00:00"
+  },
+  {
+    "sku": "BW-SL-CLR-100Mx25CMx4ROLL-GRN",
+    "notes": "Auto-adjusted from Audit at [OPM Lama]. System: 39, Actual: 93",
+    "timestamp": "2026-04-01T12:12:20.134264+00:00"
+  },
+  {
+    "sku": "BW-SL-BLK-100Mx100CMx1ROLL-GRN",
+    "notes": "Auto-adjusted from Audit at [OPM Lama]. System: 383, Actual: 149",
+    "timestamp": "2026-04-03T12:18:56.406522+00:00"
+  },
+  {
+    "sku": "BW-SL-CLR-100Mx50CMx2ROLL-ORN",
+    "notes": "Auto-adjusted from Audit at [OPM Lama]. System: 138, Actual: 32",
+    "timestamp": "2026-04-03T13:11:41.404684+00:00"
+  },
+  {
+    "sku": "BW-SL-BLK-100Mx50CMx2ROLL-RED",
+    "notes": "Auto-adjusted from Audit at [OPM Lama]. System: 29, Actual: 32",
+    "timestamp": "2026-04-03T13:57:16.949279+00:00"
+  },
+  {
+    "sku": "BW-SL-CLR-100Mx33CMx3ROLL-GRN",
+    "notes": "Auto-adjusted from Audit at [OPM Lama]. System: -5, Actual: 7",
+    "timestamp": "2026-04-03T14:46:21.307194+00:00"
+  },
+  {
+    "sku": "BW-SL-CLR-100Mx33CMx3ROLL-GRN",
+    "notes": "Auto-adjusted from Audit at [OPM Lama]. System: 7, Actual: 13",
+    "timestamp": "2026-04-03T14:47:44.55338+00:00"
+  },
+  {
+    "sku": "BW-DL-CLR-100Mx100CMx1ROLL-YEL",
+    "notes": "Auto-adjusted from Audit at [OPM Lama]. System: 349, Actual: 124",
+    "timestamp": "2026-04-03T17:09:23.758548+00:00"
+  },
+  {
+    "sku": "BW-SL-CLR-100Mx20CMx5ROLL-GRN",
+    "notes": "Auto-adjusted from Audit at [OPM Lama]. System: 0, Actual: 13",
+    "timestamp": "2026-04-04T03:59:53.92875+00:00"
+  },
+  {
+    "sku": "BW-DL-BLK-100Mx100CMx1ROLL-RED",
+    "notes": "Auto-adjusted from Audit at [OPM Lama]. System: 123, Actual: 103",
+    "timestamp": "2026-04-04T20:56:30.589568+00:00"
+  },
+  {
+    "sku": "BW-DL-BLK-100Mx25CMx4ROLL-RED",
+    "notes": "Auto-adjusted from Audit at [OPM Lama]. System: 18, Actual: 33",
+    "timestamp": "2026-04-04T20:56:30.589568+00:00"
+  },
+  {
+    "sku": "BW-DL-BLK-100Mx33CMx3ROLL-RED",
+    "notes": "Auto-adjusted from Audit at [OPM Lama]. System: 34, Actual: 27",
+    "timestamp": "2026-04-04T20:56:30.589568+00:00"
+  },
+  {
+    "sku": "BW-DL-BLK-100Mx50CMx2ROLL-GRN",
+    "notes": "Auto-adjusted from Audit at [OPM Lama]. System: 51, Actual: 48",
+    "timestamp": "2026-04-04T20:56:30.589568+00:00"
+  },
+  {
+    "sku": "BW-DL-BLK-100Mx50CMx2ROLL-RED",
+    "notes": "Auto-adjusted from Audit at [OPM Lama]. System: 0, Actual: 48",
+    "timestamp": "2026-04-04T20:56:30.589568+00:00"
+  },
+  {
+    "sku": "BW-DL-CLR-100Mx100CMx1ROLL-YEL",
+    "notes": "Auto-adjusted from Audit at [OPM Lama]. System: 234, Actual: 66",
+    "timestamp": "2026-04-04T20:56:30.589568+00:00"
+  },
+  {
+    "sku": "BW-DL-CLR-100Mx20CMx5ROLL-BLU",
+    "notes": "Auto-adjusted from Audit at [OPM Lama]. System: 37, Actual: 22",
+    "timestamp": "2026-04-04T20:56:30.589568+00:00"
+  },
+  {
+    "sku": "BW-DL-CLR-100Mx25CMx4ROLL-BLU",
+    "notes": "Auto-adjusted from Audit at [OPM Lama]. System: 64, Actual: 63",
+    "timestamp": "2026-04-04T20:56:30.589568+00:00"
+  },
+  {
+    "sku": "BW-DL-CLR-100Mx33CMx3ROLL-BLU",
+    "notes": "Auto-adjusted from Audit at [OPM Lama]. System: 51, Actual: 63",
+    "timestamp": "2026-04-04T20:56:30.589568+00:00"
+  },
+  {
+    "sku": "BW-DL-CLR-100Mx50CMx2ROLL-BLU",
+    "notes": "Auto-adjusted from Audit at [OPM Lama]. System: 111, Actual: 69",
+    "timestamp": "2026-04-04T20:56:30.589568+00:00"
+  },
+  {
+    "sku": "BW-SL-BLK-100Mx100CMx1ROLL-BLU",
+    "notes": "Auto-adjusted from Audit at [OPM Lama]. System: -49, Actual: 97",
+    "timestamp": "2026-04-04T20:56:30.589568+00:00"
+  },
+  {
+    "sku": "BW-SL-BLK-100Mx20CMx5ROLL-GRN",
+    "notes": "Auto-adjusted from Audit at [OPM Lama]. System: 0, Actual: 15",
+    "timestamp": "2026-04-04T20:56:30.589568+00:00"
+  },
+  {
+    "sku": "BW-SL-BLK-100Mx33CMx3ROLL-GRN",
+    "notes": "Auto-adjusted from Audit at [OPM Lama]. System: 11, Actual: 18",
+    "timestamp": "2026-04-04T20:56:30.589568+00:00"
+  },
+  {
+    "sku": "BW-SL-BLK-100Mx50CMx2ROLL-RED",
+    "notes": "Auto-adjusted from Audit at [OPM Lama]. System: 63, Actual: 100",
+    "timestamp": "2026-04-04T20:56:30.589568+00:00"
+  },
+  {
+    "sku": "BW-SL-CLR-100Mx20CMx5ROLL-GRN",
+    "notes": "Auto-adjusted from Audit at [OPM Lama]. System: 50, Actual: 49",
+    "timestamp": "2026-04-04T20:56:30.589568+00:00"
+  },
+  {
+    "sku": "BW-SL-CLR-100Mx25CMx4ROLL-GRN",
+    "notes": "Auto-adjusted from Audit at [OPM Lama]. System: -22, Actual: 36",
+    "timestamp": "2026-04-04T20:56:30.589568+00:00"
+  },
+  {
+    "sku": "BW-SL-CLR-100Mx50CMx2ROLL-ORN",
+    "notes": "Auto-adjusted from Audit at [OPM Lama]. System: 178, Actual: 36",
+    "timestamp": "2026-04-04T20:56:30.589568+00:00"
+  }
+]

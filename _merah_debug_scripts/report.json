@@ -1,0 +1,17 @@
+{
+  "morningAudits": [
+    {
+      "txn_id": "702d58d0-8944-46ee-9fb5-a88f832e38f3",
+      "timestamp": "2026-03-31T08:24:34.054914+00:00",
+      "sku": "BW-SL-CLR-100Mx20CMx5ROLL-GRN",
+      "loc_id": "OPM Lama",
+      "change_qty": 69,
+      "balance_after": null,
+      "event_type": "Audit Adjustment",
+      "ref_doc": "AUDIT-20260331",
+      "notes": "Auto-adjusted from Audit at [OPM Lama]. System: 21, Actual: 90",
+      "created_by": null,
+      "created_by_name": null
+    }
+  ]
+}

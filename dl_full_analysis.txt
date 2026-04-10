@@ -1,0 +1,35 @@
+=== Analysis for DL-FULL (BW-DL-CLR-100Mx100CMx1ROLL-YEL) on 2026-04-08 ===
+
+--- Sales Orders requiring DL-FULL for today ---
+[DO-2026-3862] Status: Delivered | Qty: 50
+[DO-2026-1710] Status: Delivered | Qty: 20
+[DO-2026-2819] Status: New | Qty: 81
+[DO-2026-6156] Status: New | Qty: 78
+[DO-2026-3115] Status: Pending Approval | Qty: 58
+[DO-2026-7966] Status: New | Qty: 18
+[DO-2026-1055] Status: Delivered | Qty: 15
+
+>> Total Requested (Req): 320
+
+--- Ledger Transfer Out for DL-FULL today ---
+[DO-2026-3862] Qty: -50 | Time: 2026-04-08T08:00:00+00:00 | Notes: 补救修复: DO-2026-3862 自动出库
+[DO-2026-1710] Qty: -20 | Time: 2026-04-08T08:00:00+00:00 | Notes: 补救修复: DO-2026-1710 自动出库
+[DO-2026-2819] Qty: -81 | Time: 2026-04-08T08:00:00+00:00 | Notes: 补救修复: DO-2026-2819 自动出库
+[DO-2026-6156] Qty: -78 | Time: 2026-04-08T08:00:00+00:00 | Notes: 补救修复: DO-2026-6156 自动出库
+[DO-2026-3115] Qty: -58 | Time: 2026-04-08T08:00:00+00:00 | Notes: 补救修复: DO-2026-3115 自动出库
+[DO-2026-7966] Qty: -18 | Time: 2026-04-08T08:00:00+00:00 | Notes: 补救修复: DO-2026-7966 自动出库
+[DO-2026-1055] Qty: -15 | Time: 2026-04-08T08:00:00+00:00 | Notes: 补救修复: DO-2026-1055 自动出库
+
+>> Total Transfer Out: 320
+
+--- Recent past Transfer Outs (just checking for overlaps) ---
+[DO-2026-1890] Qty: -30 | Time: 2026-04-07T08:00:00+00:00 | Notes: Recovery: Auto-deduct for DO-2026-1890
+[DO-2026-7385] Qty: -21 | Time: 2026-04-07T08:00:00+00:00 | Notes: Recovery: Auto-deduct for DO-2026-7385
+[DO-2026-5832] Qty: -60 | Time: 2026-04-07T08:00:00+00:00 | Notes: Recovery: Auto-deduct for DO-2026-5832
+[DO-2026-6278] Qty: -60 | Time: 2026-04-07T08:00:00+00:00 | Notes: Recovery: Auto-deduct for DO-2026-6278
+[DO-2026-8274] Qty: -10 | Time: 2026-04-07T08:00:00+00:00 | Notes: Recovery: Auto-deduct for DO-2026-8274
+[DO-2026-2442] Qty: -10 | Time: 2026-04-07T08:00:00+00:00 | Notes: Recovery: Auto-deduct for DO-2026-2442
+[DO-2026-7186] Qty: -10 | Time: 2026-04-07T07:42:53.161784+00:00 | Notes: Approved Amend: trip 2- kedah x 2 , penang x 2  | Amended by Driver: WAN
+[DO-2026-8335] Qty: -3 | Time: 2026-04-06T14:14:21.479983+00:00 | Notes: Approved Amend: kelantan logistic pick up  | Amended by Driver: Neoson Chun
+[DO-2026-6205] Qty: -44 | Time: 2026-04-03T07:45:01.432525+00:00 | Notes: Approved Amend: TRIP 2  | Amended by Driver: Faizal
+[DO-2026-5619] Qty: -5 | Time: 2026-04-03T01:46:49.949772+00:00 | Notes: Loaded by Driver: Taufik 

@@ -1,0 +1,1496 @@
+[
+  {
+    "sku": "CUKUPP-DARKGREEN-17",
+    "name": "CUKUPP-DARKGREEN-17",
+    "nickname": null,
+    "status": "Active"
+  },
+  {
+    "sku": "B17-ROLL",
+    "name": "B17-ROLL",
+    "nickname": null,
+    "status": "Active"
+  },
+  {
+    "sku": "B20-ROLL",
+    "name": "B20-ROLL",
+    "nickname": null,
+    "status": "Active"
+  },
+  {
+    "sku": "B25-ROLL",
+    "name": "B25-ROLL",
+    "nickname": null,
+    "status": "Active"
+  },
+  {
+    "sku": "B28-ROLL",
+    "name": "B28-ROLL",
+    "nickname": null,
+    "status": "Active"
+  },
+  {
+    "sku": "B32-ROLL",
+    "name": "B32-ROLL",
+    "nickname": null,
+    "status": "Active"
+  },
+  {
+    "sku": "B35-ROLL",
+    "name": "B35-ROLL",
+    "nickname": null,
+    "status": "Active"
+  },
+  {
+    "sku": "B38-ROLL",
+    "name": "B38-ROLL",
+    "nickname": null,
+    "status": "Active"
+  },
+  {
+    "sku": "B40-ROLL",
+    "name": "B40-ROLL",
+    "nickname": null,
+    "status": "Active"
+  },
+  {
+    "sku": "B45-ROLL",
+    "name": "B45-ROLL",
+    "nickname": null,
+    "status": "Active"
+  },
+  {
+    "sku": "B50-ROLL",
+    "name": "B50-ROLL",
+    "nickname": null,
+    "status": "Active"
+  },
+  {
+    "sku": "B60-ROLL",
+    "name": "B60-ROLL",
+    "nickname": null,
+    "status": "Active"
+  },
+  {
+    "sku": "W17-ROLL",
+    "name": "W17-ROLL",
+    "nickname": null,
+    "status": "Active"
+  },
+  {
+    "sku": "W20-ROLL",
+    "name": "W20-ROLL",
+    "nickname": null,
+    "status": "Active"
+  },
+  {
+    "sku": "W25-ROLL",
+    "name": "W25-ROLL",
+    "nickname": null,
+    "status": "Active"
+  },
+  {
+    "sku": "W28-ROLL",
+    "name": "W28-ROLL",
+    "nickname": null,
+    "status": "Active"
+  },
+  {
+    "sku": "W32-ROLL",
+    "name": "W32-ROLL",
+    "nickname": null,
+    "status": "Active"
+  },
+  {
+    "sku": "W35-ROLL",
+    "name": "W35-ROLL",
+    "nickname": null,
+    "status": "Active"
+  },
+  {
+    "sku": "W38-ROLL",
+    "name": "W38-ROLL",
+    "nickname": null,
+    "status": "Active"
+  },
+  {
+    "sku": "W40-ROLL",
+    "name": "W40-ROLL",
+    "nickname": null,
+    "status": "Active"
+  },
+  {
+    "sku": "W45-ROLL",
+    "name": "W45-ROLL",
+    "nickname": null,
+    "status": "Active"
+  },
+  {
+    "sku": "W50-ROLL",
+    "name": "W50-ROLL",
+    "nickname": null,
+    "status": "Active"
+  },
+  {
+    "sku": "W60-ROLL",
+    "name": "W60-ROLL",
+    "nickname": null,
+    "status": "Active"
+  },
+  {
+    "sku": "YEL-17-ROLL",
+    "name": "YEL-17-ROLL",
+    "nickname": null,
+    "status": "Active"
+  },
+  {
+    "sku": "YEL-20-ROLL",
+    "name": "YEL-20-ROLL",
+    "nickname": null,
+    "status": "Active"
+  },
+  {
+    "sku": "YEL-25-ROLL",
+    "name": "YEL-25-ROLL",
+    "nickname": null,
+    "status": "Active"
+  },
+  {
+    "sku": "YEL-28-ROLL",
+    "name": "YEL-28-ROLL",
+    "nickname": null,
+    "status": "Active"
+  },
+  {
+    "sku": "YEL-32-ROLL",
+    "name": "YEL-32-ROLL",
+    "nickname": null,
+    "status": "Active"
+  },
+  {
+    "sku": "YEL-35-ROLL",
+    "name": "YEL-35-ROLL",
+    "nickname": null,
+    "status": "Active"
+  },
+  {
+    "sku": "YEL-38-ROLL",
+    "name": "YEL-38-ROLL",
+    "nickname": null,
+    "status": "Active"
+  },
+  {
+    "sku": "YEL-40-ROLL",
+    "name": "YEL-40-ROLL",
+    "nickname": null,
+    "status": "Active"
+  },
+  {
+    "sku": "YEL-45-ROLL",
+    "name": "YEL-45-ROLL",
+    "nickname": null,
+    "status": "Active"
+  },
+  {
+    "sku": "YEL-50-ROLL",
+    "name": "YEL-50-ROLL",
+    "nickname": null,
+    "status": "Active"
+  },
+  {
+    "sku": "YEL-60-ROLL",
+    "name": "YEL-60-ROLL",
+    "nickname": null,
+    "status": "Active"
+  },
+  {
+    "sku": "PUR-17-ROLL",
+    "name": "PUR-17-ROLL",
+    "nickname": null,
+    "status": "Active"
+  },
+  {
+    "sku": "PUR-20-ROLL",
+    "name": "PUR-20-ROLL",
+    "nickname": null,
+    "status": "Active"
+  },
+  {
+    "sku": "PUR-25-ROLL",
+    "name": "PUR-25-ROLL",
+    "nickname": null,
+    "status": "Active"
+  },
+  {
+    "sku": "PUR-28-ROLL",
+    "name": "PUR-28-ROLL",
+    "nickname": null,
+    "status": "Active"
+  },
+  {
+    "sku": "PUR-32-ROLL",
+    "name": "PUR-32-ROLL",
+    "nickname": null,
+    "status": "Active"
+  },
+  {
+    "sku": "PUR-35-ROLL",
+    "name": "PUR-35-ROLL",
+    "nickname": null,
+    "status": "Active"
+  },
+  {
+    "sku": "PUR-38-ROLL",
+    "name": "PUR-38-ROLL",
+    "nickname": null,
+    "status": "Active"
+  },
+  {
+    "sku": "PUR-40-ROLL",
+    "name": "PUR-40-ROLL",
+    "nickname": null,
+    "status": "Active"
+  },
+  {
+    "sku": "PUR-45-ROLL",
+    "name": "PUR-45-ROLL",
+    "nickname": null,
+    "status": "Active"
+  },
+  {
+    "sku": "PUR-50-ROLL",
+    "name": "PUR-50-ROLL",
+    "nickname": null,
+    "status": "Active"
+  },
+  {
+    "sku": "PUR-60-ROLL",
+    "name": "PUR-60-ROLL",
+    "nickname": null,
+    "status": "Active"
+  },
+  {
+    "sku": "PINK-17-ROLL",
+    "name": "PINK-17-ROLL",
+    "nickname": null,
+    "status": "Active"
+  },
+  {
+    "sku": "PINK-20-ROLL",
+    "name": "PINK-20-ROLL",
+    "nickname": null,
+    "status": "Active"
+  },
+  {
+    "sku": "PINK-25-ROLL",
+    "name": "PINK-25-ROLL",
+    "nickname": null,
+    "status": "Active"
+  },
+  {
+    "sku": "PINK-28-ROLL",
+    "name": "PINK-28-ROLL",
+    "nickname": null,
+    "status": "Active"
+  },
+  {
+    "sku": "PINK-32-ROLL",
+    "name": "PINK-32-ROLL",
+    "nickname": null,
+    "status": "Active"
+  },
+  {
+    "sku": "PINK-35-ROLL",
+    "name": "PINK-35-ROLL",
+    "nickname": null,
+    "status": "Active"
+  },
+  {
+    "sku": "PINK-38-ROLL",
+    "name": "PINK-38-ROLL",
+    "nickname": null,
+    "status": "Active"
+  },
+  {
+    "sku": "PINK-40-ROLL",
+    "name": "PINK-40-ROLL",
+    "nickname": null,
+    "status": "Active"
+  },
+  {
+    "sku": "PINK-45-ROLL",
+    "name": "PINK-45-ROLL",
+    "nickname": null,
+    "status": "Active"
+  },
+  {
+    "sku": "PINK-50-ROLL",
+    "name": "PINK-50-ROLL",
+    "nickname": null,
+    "status": "Active"
+  },
+  {
+    "sku": "PINK-60-ROLL",
+    "name": "PINK-60-ROLL",
+    "nickname": null,
+    "status": "Active"
+  },
+  {
+    "sku": "DARKGREEN-17-ROLL",
+    "name": "DARKGREEN-17-ROLL",
+    "nickname": null,
+    "status": "Active"
+  },
+  {
+    "sku": "DARKGREEN-20-ROLL",
+    "name": "DARKGREEN-20-ROLL",
+    "nickname": null,
+    "status": "Active"
+  },
+  {
+    "sku": "DARKGREEN-25-ROLL",
+    "name": "DARKGREEN-25-ROLL",
+    "nickname": null,
+    "status": "Active"
+  },
+  {
+    "sku": "DARKGREEN-28-ROLL",
+    "name": "DARKGREEN-28-ROLL",
+    "nickname": null,
+    "status": "Active"
+  },
+  {
+    "sku": "CUKUPP-DARKGREEN-40",
+    "name": "CUKUPP-DARKGREEN-40",
+    "nickname": null,
+    "status": "Active"
+  },
+  {
+    "sku": "DARKGREEN-32-ROLL",
+    "name": "DARKGREEN-32-ROLL",
+    "nickname": null,
+    "status": "Active"
+  },
+  {
+    "sku": "DARKGREEN-35-ROLL",
+    "name": "DARKGREEN-35-ROLL",
+    "nickname": null,
+    "status": "Active"
+  },
+  {
+    "sku": "DARKGREEN-38-ROLL",
+    "name": "DARKGREEN-38-ROLL",
+    "nickname": null,
+    "status": "Active"
+  },
+  {
+    "sku": "DARKGREEN-40-ROLL",
+    "name": "DARKGREEN-40-ROLL",
+    "nickname": null,
+    "status": "Active"
+  },
+  {
+    "sku": "DARKGREEN-45-ROLL",
+    "name": "DARKGREEN-45-ROLL",
+    "nickname": null,
+    "status": "Active"
+  },
+  {
+    "sku": "DARKGREEN-50-ROLL",
+    "name": "DARKGREEN-50-ROLL",
+    "nickname": null,
+    "status": "Active"
+  },
+  {
+    "sku": "DARKGREEN-60-ROLL",
+    "name": "DARKGREEN-60-ROLL",
+    "nickname": null,
+    "status": "Active"
+  },
+  {
+    "sku": "MINT-17-ROLL",
+    "name": "MINT-17-ROLL",
+    "nickname": null,
+    "status": "Active"
+  },
+  {
+    "sku": "MINT-20-ROLL",
+    "name": "MINT-20-ROLL",
+    "nickname": null,
+    "status": "Active"
+  },
+  {
+    "sku": "MINT-25-ROLL",
+    "name": "MINT-25-ROLL",
+    "nickname": null,
+    "status": "Active"
+  },
+  {
+    "sku": "MINT-28-ROLL",
+    "name": "MINT-28-ROLL",
+    "nickname": null,
+    "status": "Active"
+  },
+  {
+    "sku": "MINT-32-ROLL",
+    "name": "MINT-32-ROLL",
+    "nickname": null,
+    "status": "Active"
+  },
+  {
+    "sku": "MINT-35-ROLL",
+    "name": "MINT-35-ROLL",
+    "nickname": null,
+    "status": "Active"
+  },
+  {
+    "sku": "MINT-38-ROLL",
+    "name": "MINT-38-ROLL",
+    "nickname": null,
+    "status": "Active"
+  },
+  {
+    "sku": "MINT-40-ROLL",
+    "name": "MINT-40-ROLL",
+    "nickname": null,
+    "status": "Active"
+  },
+  {
+    "sku": "MINT-45-ROLL",
+    "name": "MINT-45-ROLL",
+    "nickname": null,
+    "status": "Active"
+  },
+  {
+    "sku": "MINT-50-ROLL",
+    "name": "MINT-50-ROLL",
+    "nickname": null,
+    "status": "Active"
+  },
+  {
+    "sku": "MINT-60-ROLL",
+    "name": "MINT-60-ROLL",
+    "nickname": null,
+    "status": "Active"
+  },
+  {
+    "sku": "TEST-001",
+    "name": "testtt",
+    "nickname": null,
+    "status": "Active"
+  },
+  {
+    "sku": "BW-SL-CLR-100Mx33CMx3ROLL-BLU",
+    "name": "SL-CLR-33CM-BLUE",
+    "nickname": null,
+    "status": "Active"
+  },
+  {
+    "sku": "BW-SL-BLK-100Mx50CMx2ROLL-ORN",
+    "name": "[AUTO-REG] Single Black 50cm 2Rolls Orange",
+    "nickname": null,
+    "status": "Active"
+  },
+  {
+    "sku": "BW-SL-CLR-100Mx25CMx4ROLL-BLU",
+    "name": "SL-25CM-BLUE PLASTIC",
+    "nickname": null,
+    "status": "Active"
+  },
+  {
+    "sku": "CUKUPP-YEL-17",
+    "name": "CUKUPP-YEL-17",
+    "nickname": null,
+    "status": "Active"
+  },
+  {
+    "sku": "BW-SL-CLR-100Mx33CMx3ROLL-GRN",
+    "name": "SL-33CM",
+    "nickname": "SL-33CM",
+    "status": "Active"
+  },
+  {
+    "sku": "BW-DL-SLR-100Mx100CMx1ROLL-RED",
+    "name": "DL SLR FULL - RED",
+    "nickname": null,
+    "status": "Active"
+  },
+  {
+    "sku": "BW-SL-SLR-100Mx100CMx1ROLL-RED",
+    "name": "SL SLR FULL - RED",
+    "nickname": null,
+    "status": "Active"
+  },
+  {
+    "sku": "BW-DL-CLR-100Mx100CMx1ROLL-RED",
+    "name": "DL-FULL-(RED)",
+    "nickname": null,
+    "status": "Active"
+  },
+  {
+    "sku": "FRAGILE TAPE-120M",
+    "name": "FRAGILE TAPE S45 -120M",
+    "nickname": null,
+    "status": "Active"
+  },
+  {
+    "sku": "BW-SL-BLK-100Mx100CMx1ROLL-RED",
+    "name": "[AUTO-REG] Single Black 100cm 1Rolls Pink",
+    "nickname": null,
+    "status": "Active"
+  },
+  {
+    "sku": "BW-DL-CLR-100Mx50CMx2ROLL-RED",
+    "name": "DL-50CM (RED)",
+    "nickname": null,
+    "status": "Active"
+  },
+  {
+    "sku": "UNKNOWN-BUBBLEWRAP",
+    "name": "[Unassigned] Bubble Wrap Production",
+    "nickname": null,
+    "status": "Active"
+  },
+  {
+    "sku": "BW-SL-CLR-100Mx100CMx1ROLL-BLU",
+    "name": "SLC-1M-BLUE",
+    "nickname": null,
+    "status": "Active"
+  },
+  {
+    "sku": "W-BUBBLE-ENVELOPE-11X13",
+    "name": "WHITE BUBBLE ENVELOPE 11 X 13+4 (1950PCS/CTN)",
+    "nickname": null,
+    "status": "Active"
+  },
+  {
+    "sku": "W-BUBBLE-ENVOLOPE-13X15",
+    "name": "WHITE BUBBLE ENVOLOPE 13 X 15+4 (1300PCS/CTN)",
+    "nickname": null,
+    "status": "Active"
+  },
+  {
+    "sku": "W-BUBBLE-ENVOLOPE-14X16",
+    "name": "WHITE BUBBLE ENVOLOPE 14 X 16+4 (1050PCS/CTN)",
+    "nickname": null,
+    "status": "Active"
+  },
+  {
+    "sku": "W-BUBBLE-ENVOLOPE-18X23",
+    "name": "WHITE BUBBLE ENVOLOPE 18 X 23+4 (600PCS/CTN)",
+    "nickname": null,
+    "status": "Active"
+  },
+  {
+    "sku": "W-BUBBLE-ENVOLOPE-20X25",
+    "name": "WHITE BUBBLE ENVOLOPE 20 X 25+4 (480PCS/CTN)",
+    "nickname": null,
+    "status": "Active"
+  },
+  {
+    "sku": "W-BUBBLE-ENVOLOPE-23X28",
+    "name": "WHITE BUBBLE ENVOLOPE 23 X 28+4 (350PCS/CTN)",
+    "nickname": null,
+    "status": "Active"
+  },
+  {
+    "sku": "W-BUBBLE-ENVOLOPE-26X32",
+    "name": "WHITE BUBBLE ENVOLOPE 26 X 32+4 (300PCS/CTN)",
+    "nickname": null,
+    "status": "Active"
+  },
+  {
+    "sku": "W-BUBBLE-ENVOLOPE-29X36",
+    "name": "WHITE BUBBLE ENVOLOPE 29 X 36+4 (250PCS/CTN)",
+    "nickname": null,
+    "status": "Active"
+  },
+  {
+    "sku": "W-BUBBLE-ENVOLOPE-35X45",
+    "name": "WHITE BUBBLE ENVOLOPE 35 X 45+4 (150PCS/CTN)",
+    "nickname": null,
+    "status": "Active"
+  },
+  {
+    "sku": "W-BUBBLE-ENVOLOPE-40X50",
+    "name": "WHITE BUBBLE ENVOLOPE 40 X 50+4 (120PCS/CTN)",
+    "nickname": null,
+    "status": "Active"
+  },
+  {
+    "sku": "BW-SL-CLR-100Mx100CMx1ROLL-GRN",
+    "name": "[AUTO-REG] Single Clear 100cm 1Rolls Green",
+    "nickname": null,
+    "status": "Active"
+  },
+  {
+    "sku": "BW-SL-BLK-100Mx100CMx1ROLL-BLU",
+    "name": "SL Hitam full (B)",
+    "nickname": null,
+    "status": "Active"
+  },
+  {
+    "sku": "BW-DL-BLK-100Mx50CMx2ROLL-RED",
+    "name": "DL HITAM HALF (RED PLASTIC)",
+    "nickname": null,
+    "status": "Active"
+  },
+  {
+    "sku": "BW-SL-CLR-100Mx50CMx2ROLL-BLU",
+    "name": "SL 50cm (B)",
+    "nickname": null,
+    "status": "Active"
+  },
+  {
+    "sku": "BW-DL-CLR-100Mx100CMx1ROLL-BLU",
+    "name": "[AUTO-REG] Double Clear 100cm 1Rolls Blue",
+    "nickname": null,
+    "status": "Active"
+  },
+  {
+    "sku": "CLEAR TAPE T48 120M",
+    "name": "CLEAR TAPE T48 120M ",
+    "nickname": null,
+    "status": "Active"
+  },
+  {
+    "sku": "BW-SL-BLK-100Mx50CMx2ROLL-BLU",
+    "name": "SL-HITAM-HALF BLUE PLASTIC",
+    "nickname": null,
+    "status": "Active"
+  },
+  {
+    "sku": "CUKUPP-B17",
+    "name": "CUKUPP-B17",
+    "nickname": null,
+    "status": "Active"
+  },
+  {
+    "sku": "CUKUPP-B20",
+    "name": "CUKUPP-B20",
+    "nickname": null,
+    "status": "Active"
+  },
+  {
+    "sku": "CUKUPP-B25",
+    "name": "CUKUPP-B25",
+    "nickname": null,
+    "status": "Active"
+  },
+  {
+    "sku": "CUKUPP-B28",
+    "name": "CUKUPP-B28",
+    "nickname": null,
+    "status": "Active"
+  },
+  {
+    "sku": "CUKUPP-B32",
+    "name": "CUKUPP-B32",
+    "nickname": null,
+    "status": "Active"
+  },
+  {
+    "sku": "CUKUPP-B35",
+    "name": "CUKUPP-B35",
+    "nickname": null,
+    "status": "Active"
+  },
+  {
+    "sku": "CUKUPP-B38",
+    "name": "CUKUPP-B38",
+    "nickname": null,
+    "status": "Active"
+  },
+  {
+    "sku": "CUKUPP-B40",
+    "name": "CUKUPP-B40",
+    "nickname": null,
+    "status": "Active"
+  },
+  {
+    "sku": "CUKUPP-B45",
+    "name": "CUKUPP-B45",
+    "nickname": null,
+    "status": "Active"
+  },
+  {
+    "sku": "CUKUPP-B50",
+    "name": "CUKUPP-B50",
+    "nickname": null,
+    "status": "Active"
+  },
+  {
+    "sku": "CUKUPP-B60",
+    "name": "CUKUPP-B60",
+    "nickname": null,
+    "status": "Active"
+  },
+  {
+    "sku": "CUKUPP-W17",
+    "name": "CUKUPP-W17",
+    "nickname": null,
+    "status": "Active"
+  },
+  {
+    "sku": "CUKUPP-W20",
+    "name": "CUKUPP-W20",
+    "nickname": null,
+    "status": "Active"
+  },
+  {
+    "sku": "CUKUPP-W25",
+    "name": "CUKUPP-W25",
+    "nickname": null,
+    "status": "Active"
+  },
+  {
+    "sku": "BW-SL-CLR-100Mx50CMx2ROLL-ORN",
+    "name": "OREN",
+    "nickname": "OREN",
+    "status": "Active"
+  },
+  {
+    "sku": "BW-DL-BLK-100Mx100CMx1ROLL-RED",
+    "name": "DL-HITAM FULL (RED)",
+    "nickname": "DL-HITAM-FULL",
+    "status": "Active"
+  },
+  {
+    "sku": "CUKUPP-CLEAR-TAPE-18MM",
+    "name": "CKP CLEAR TAPE 18MM (36M)",
+    "nickname": null,
+    "status": "Active"
+  },
+  {
+    "sku": "BW-DL-BLK-100Mx100CMx1ROLL-BLU",
+    "name": "[AUTO-REG] Double Black 100cm 1Rolls Blue",
+    "nickname": null,
+    "status": "Active"
+  },
+  {
+    "sku": "BW-SL-CLR-100Mx100CMx1ROLL-RED",
+    "name": "MERAH",
+    "nickname": "1M Single Layer (MERAH)",
+    "status": "Active"
+  },
+  {
+    "sku": "BW-DL-CLR-100Mx20CMx5ROLL-BLU",
+    "name": "DL-20CM",
+    "nickname": "DL-20CM",
+    "status": "Active"
+  },
+  {
+    "sku": "BW-DL-CLR-100Mx25CMx4ROLL-BLU",
+    "name": "DL-25CM",
+    "nickname": "DL-25CM",
+    "status": "Active"
+  },
+  {
+    "sku": "BW-DL-CLR-100Mx33CMx3ROLL-BLU",
+    "name": "DL-33CM",
+    "nickname": "DL-33CM",
+    "status": "Active"
+  },
+  {
+    "sku": "BW-DL-CLR-100Mx100CMx1ROLL-YEL",
+    "name": "DL-FULL",
+    "nickname": "DL-FULL",
+    "status": "Active"
+  },
+  {
+    "sku": "BW-DL-CLR-100Mx50CMx2ROLL-BLU",
+    "name": "DL-HALF",
+    "nickname": "DL-HALF",
+    "status": "Active"
+  },
+  {
+    "sku": "BW-DL-BLK-100Mx20CMx5ROLL-RED",
+    "name": "DL-HITAM-20CM",
+    "nickname": "DL-HITAM-20CM",
+    "status": "Active"
+  },
+  {
+    "sku": "BW-DL-BLK-100Mx25CMx4ROLL-RED",
+    "name": "DL-HITAM-25CM",
+    "nickname": "DL-HITAM-25CM",
+    "status": "Active"
+  },
+  {
+    "sku": "BW-DL-BLK-100Mx33CMx3ROLL-RED",
+    "name": "DL-HITAM-33CM",
+    "nickname": "DL-HITAM-33CM",
+    "status": "Active"
+  },
+  {
+    "sku": "BW-DL-BLK-100Mx50CMx2ROLL-GRN",
+    "name": "DL-HITAM-HALF",
+    "nickname": "DL-HITAM-HALF",
+    "status": "Active"
+  },
+  {
+    "sku": "BW-SL-BLK-100Mx20CMx5ROLL-GRN",
+    "name": "HITAM-20CM",
+    "nickname": "HITAM-20CM",
+    "status": "Active"
+  },
+  {
+    "sku": "BW-SL-BLK-100Mx25CMx4ROLL-GRN",
+    "name": "HITAM-25CM",
+    "nickname": "HITAM-25CM",
+    "status": "Active"
+  },
+  {
+    "sku": "BW-SL-BLK-100Mx33CMx3ROLL-GRN",
+    "name": "HITAM-33CM",
+    "nickname": "HITAM-33CM",
+    "status": "Active"
+  },
+  {
+    "sku": "BW-SL-BLK-100Mx100CMx1ROLL-GRN",
+    "name": "HITAM-FULL",
+    "nickname": "HITAM-FULL",
+    "status": "Active"
+  },
+  {
+    "sku": "BW-SL-BLK-100Mx50CMx2ROLL-RED",
+    "name": "HITAM-HALF",
+    "nickname": "HITAM-HALF",
+    "status": "Active"
+  },
+  {
+    "sku": "BW-SL-CLR-100Mx20CMx5ROLL-GRN",
+    "name": "SL-20CM",
+    "nickname": "SL-20CM",
+    "status": "Active"
+  },
+  {
+    "sku": "BW-SL-CLR-100Mx25CMx4ROLL-GRN",
+    "name": "SL-25CM",
+    "nickname": "SL-25CM",
+    "status": "Active"
+  },
+  {
+    "sku": "CUKUPP-DARKGREEN-20",
+    "name": "CUKUPP-DARKGREEN-20",
+    "nickname": null,
+    "status": "Active"
+  },
+  {
+    "sku": "CUKUPP-DARKGREEN-25",
+    "name": "CUKUPP-DARKGREEN-25",
+    "nickname": null,
+    "status": "Active"
+  },
+  {
+    "sku": "CUKUPP-DARKGREEN-28",
+    "name": "CUKUPP-DARKGREEN-28",
+    "nickname": null,
+    "status": "Active"
+  },
+  {
+    "sku": "CUKUPP-DARKGREEN-32",
+    "name": "CUKUPP-DARKGREEN-32",
+    "nickname": null,
+    "status": "Active"
+  },
+  {
+    "sku": "CUKUPP-DARKGREEN-35",
+    "name": "CUKUPP-DARKGREEN-35",
+    "nickname": null,
+    "status": "Active"
+  },
+  {
+    "sku": "CUKUPP-DARKGREEN-38",
+    "name": "CUKUPP-DARKGREEN-38",
+    "nickname": null,
+    "status": "Active"
+  },
+  {
+    "sku": "CUKUPP-DARKGREEN-45",
+    "name": "CUKUPP-DARKGREEN-45",
+    "nickname": null,
+    "status": "Active"
+  },
+  {
+    "sku": "CUKUPP-DARKGREEN-50",
+    "name": "CUKUPP-DARKGREEN-50",
+    "nickname": null,
+    "status": "Active"
+  },
+  {
+    "sku": "CUKUPP-DARKGREEN-60",
+    "name": "CUKUPP-DARKGREEN-60",
+    "nickname": null,
+    "status": "Active"
+  },
+  {
+    "sku": "CUKUPP-MINT-17",
+    "name": "CUKUPP-MINT-17",
+    "nickname": null,
+    "status": "Active"
+  },
+  {
+    "sku": "CUKUPP-MINT-20",
+    "name": "CUKUPP-MINT-20",
+    "nickname": null,
+    "status": "Active"
+  },
+  {
+    "sku": "CUKUPP-MINT-25",
+    "name": "CUKUPP-MINT-25",
+    "nickname": null,
+    "status": "Active"
+  },
+  {
+    "sku": "CUKUPP-MINT-28",
+    "name": "CUKUPP-MINT-28",
+    "nickname": null,
+    "status": "Active"
+  },
+  {
+    "sku": "CUKUPP-MINT-32",
+    "name": "CUKUPP-MINT-32",
+    "nickname": null,
+    "status": "Active"
+  },
+  {
+    "sku": "CUKUPP-MINT-35",
+    "name": "CUKUPP-MINT-35",
+    "nickname": null,
+    "status": "Active"
+  },
+  {
+    "sku": "CUKUPP-PINK-17",
+    "name": "CUKUPP-PINK-17",
+    "nickname": null,
+    "status": "Active"
+  },
+  {
+    "sku": "CUKUPP-PINK-20",
+    "name": "CUKUPP-PINK-20",
+    "nickname": null,
+    "status": "Active"
+  },
+  {
+    "sku": "CUKUPP-PINK-25",
+    "name": "CUKUPP-PINK-25",
+    "nickname": null,
+    "status": "Active"
+  },
+  {
+    "sku": "CUKUPP-PINK-28",
+    "name": "CUKUPP-PINK-28",
+    "nickname": null,
+    "status": "Active"
+  },
+  {
+    "sku": "CUKUPP-PINK-32",
+    "name": "CUKUPP-PINK-32",
+    "nickname": null,
+    "status": "Active"
+  },
+  {
+    "sku": "CUKUPP-PINK-35",
+    "name": "CUKUPP-PINK-35",
+    "nickname": null,
+    "status": "Active"
+  },
+  {
+    "sku": "CUKUPP-PINK-38",
+    "name": "CUKUPP-PINK-38",
+    "nickname": null,
+    "status": "Active"
+  },
+  {
+    "sku": "CUKUPP-PINK-40",
+    "name": "CUKUPP-PINK-40",
+    "nickname": null,
+    "status": "Active"
+  },
+  {
+    "sku": "CUKUPP-PINK-45",
+    "name": "CUKUPP-PINK-45",
+    "nickname": null,
+    "status": "Active"
+  },
+  {
+    "sku": "CUKUPP-PINK-50",
+    "name": "CUKUPP-PINK-50",
+    "nickname": null,
+    "status": "Active"
+  },
+  {
+    "sku": "CUKUPP-PINK-60",
+    "name": "CUKUPP-PINK-60",
+    "nickname": null,
+    "status": "Active"
+  },
+  {
+    "sku": "CUKUPP-PUR-17",
+    "name": "CUKUPP-PUR-17",
+    "nickname": null,
+    "status": "Active"
+  },
+  {
+    "sku": "CUKUPP-PUR-20",
+    "name": "CUKUPP-PUR-20",
+    "nickname": null,
+    "status": "Active"
+  },
+  {
+    "sku": "CUKUPP-PUR-25",
+    "name": "CUKUPP-PUR-25",
+    "nickname": null,
+    "status": "Active"
+  },
+  {
+    "sku": "CUKUPP-PUR-28",
+    "name": "CUKUPP-PUR-28",
+    "nickname": null,
+    "status": "Active"
+  },
+  {
+    "sku": "CUKUPP-PUR-32",
+    "name": "CUKUPP-PUR-32",
+    "nickname": null,
+    "status": "Active"
+  },
+  {
+    "sku": "CUKUPP-PUR-35",
+    "name": "CUKUPP-PUR-35",
+    "nickname": null,
+    "status": "Active"
+  },
+  {
+    "sku": "CUKUPP-PUR-38",
+    "name": "CUKUPP-PUR-38",
+    "nickname": null,
+    "status": "Active"
+  },
+  {
+    "sku": "CUKUPP-PUR-40",
+    "name": "CUKUPP-PUR-40",
+    "nickname": null,
+    "status": "Active"
+  },
+  {
+    "sku": "CUKUPP-PUR-45",
+    "name": "CUKUPP-PUR-45",
+    "nickname": null,
+    "status": "Active"
+  },
+  {
+    "sku": "CUKUPP-PUR-50",
+    "name": "CUKUPP-PUR-50",
+    "nickname": null,
+    "status": "Active"
+  },
+  {
+    "sku": "CUKUPP-PUR-60",
+    "name": "CUKUPP-PUR-60",
+    "nickname": null,
+    "status": "Active"
+  },
+  {
+    "sku": "CUKUPP-W28",
+    "name": "CUKUPP-W28",
+    "nickname": null,
+    "status": "Active"
+  },
+  {
+    "sku": "CUKUPP-W32",
+    "name": "CUKUPP-W32",
+    "nickname": null,
+    "status": "Active"
+  },
+  {
+    "sku": "CUKUPP-W35",
+    "name": "CUKUPP-W35",
+    "nickname": null,
+    "status": "Active"
+  },
+  {
+    "sku": "CUKUPP-W38",
+    "name": "CUKUPP-W38",
+    "nickname": null,
+    "status": "Active"
+  },
+  {
+    "sku": "CUKUPP-W40",
+    "name": "CUKUPP-W40",
+    "nickname": null,
+    "status": "Active"
+  },
+  {
+    "sku": "CUKUPP-W45",
+    "name": "CUKUPP-W45",
+    "nickname": null,
+    "status": "Active"
+  },
+  {
+    "sku": "CUKUPP-W50",
+    "name": "CUKUPP-W50",
+    "nickname": null,
+    "status": "Active"
+  },
+  {
+    "sku": "CUKUPP-W60",
+    "name": "CUKUPP-W60",
+    "nickname": null,
+    "status": "Active"
+  },
+  {
+    "sku": "CUKUPP-YEL-20",
+    "name": "CUKUPP-YEL-20",
+    "nickname": null,
+    "status": "Active"
+  },
+  {
+    "sku": "CUKUPP-YEL-25",
+    "name": "CUKUPP-YEL-25",
+    "nickname": null,
+    "status": "Active"
+  },
+  {
+    "sku": "CUKUPP-YEL-28",
+    "name": "CUKUPP-YEL-28",
+    "nickname": null,
+    "status": "Active"
+  },
+  {
+    "sku": "CUKUPP-YEL-32",
+    "name": "CUKUPP-YEL-32",
+    "nickname": null,
+    "status": "Active"
+  },
+  {
+    "sku": "CUKUPP-YEL-35",
+    "name": "CUKUPP-YEL-35",
+    "nickname": null,
+    "status": "Active"
+  },
+  {
+    "sku": "CUKUPP-YEL-38",
+    "name": "CUKUPP-YEL-38",
+    "nickname": null,
+    "status": "Active"
+  },
+  {
+    "sku": "CUKUPP-YEL-40",
+    "name": "CUKUPP-YEL-40",
+    "nickname": null,
+    "status": "Active"
+  },
+  {
+    "sku": "CUKUPP-YEL-45",
+    "name": "CUKUPP-YEL-45",
+    "nickname": null,
+    "status": "Active"
+  },
+  {
+    "sku": "CUKUPP-YEL-50",
+    "name": "CUKUPP-YEL-50",
+    "nickname": null,
+    "status": "Active"
+  },
+  {
+    "sku": "CUKUPP-YEL-60",
+    "name": "CUKUPP-YEL-60",
+    "nickname": null,
+    "status": "Active"
+  },
+  {
+    "sku": "CUKUPP-BROWN-TAPE-80M",
+    "name": "CUKUPP-BROWN-TAPE-80M",
+    "nickname": null,
+    "status": "Active"
+  },
+  {
+    "sku": "CUKUPP-CLEAR-TAPE-80M",
+    "name": "CUKUPP-CLEAR-TAPE-80M",
+    "nickname": null,
+    "status": "Active"
+  },
+  {
+    "sku": "CUKUPP-FRAGILE-TAPE-160M",
+    "name": "CUKUPP-FRAGILE-TAPE-160M",
+    "nickname": null,
+    "status": "Active"
+  },
+  {
+    "sku": "CUKUPP-FRAGILE-TAPE-80M",
+    "name": "CUKUPP-FRAGILE-TAPE-80M",
+    "nickname": null,
+    "status": "Active"
+  },
+  {
+    "sku": "CUKUPP-MINT-38",
+    "name": "CUKUPP-MINT-38",
+    "nickname": null,
+    "status": "Active"
+  },
+  {
+    "sku": "CUKUPP-MINT-45",
+    "name": "CUKUPP-MINT-45",
+    "nickname": null,
+    "status": "Active"
+  },
+  {
+    "sku": "AIRTUBE-15CM-300M",
+    "name": "AIRTUBE-15CM-300M",
+    "nickname": null,
+    "status": "Active"
+  },
+  {
+    "sku": "AIRTUBE-15CM-50M",
+    "name": "AIRTUBE-15CM-50M",
+    "nickname": null,
+    "status": "Active"
+  },
+  {
+    "sku": "AIRTUBE-20CM-300M",
+    "name": "AIRTUBE-20CM-300M",
+    "nickname": null,
+    "status": "Active"
+  },
+  {
+    "sku": "AIRTUBE-20CM-50M",
+    "name": "AIRTUBE-20CM-50M",
+    "nickname": null,
+    "status": "Active"
+  },
+  {
+    "sku": "AIRTUBE-25CM-300M",
+    "name": "AIRTUBE-25CM-300M",
+    "nickname": null,
+    "status": "Active"
+  },
+  {
+    "sku": "AIRTUBE-25CM-50M",
+    "name": "AIRTUBE-25CM-50M",
+    "nickname": null,
+    "status": "Active"
+  },
+  {
+    "sku": "AIRTUBE-30CM-300M",
+    "name": "AIRTUBE-30CM-300M",
+    "nickname": null,
+    "status": "Active"
+  },
+  {
+    "sku": "AIRTUBE-30CM-50M",
+    "name": "AIRTUBE-30CM-50M",
+    "nickname": null,
+    "status": "Active"
+  },
+  {
+    "sku": "AIRTUBE-35CM-300M",
+    "name": "AIRTUBE-35CM-300M",
+    "nickname": null,
+    "status": "Active"
+  },
+  {
+    "sku": "AIRTUBE-35CM-50M",
+    "name": "AIRTUBE-35CM-50M",
+    "nickname": null,
+    "status": "Active"
+  },
+  {
+    "sku": "AIRTUBE-40CM-300M",
+    "name": "AIRTUBE-40CM-300M",
+    "nickname": null,
+    "status": "Active"
+  },
+  {
+    "sku": "AIRTUBE-40CM-50M",
+    "name": "AIRTUBE-40CM-50M",
+    "nickname": null,
+    "status": "Active"
+  },
+  {
+    "sku": "AIRTUBE-45CM-300M",
+    "name": "AIRTUBE-45CM-300M",
+    "nickname": null,
+    "status": "Active"
+  },
+  {
+    "sku": "AIRTUBE-45CM-50M",
+    "name": "AIRTUBE-45CM-50M",
+    "nickname": null,
+    "status": "Active"
+  },
+  {
+    "sku": "AIRTUBE-50CM-300M",
+    "name": "AIRTUBE-50CM-300M",
+    "nickname": null,
+    "status": "Active"
+  },
+  {
+    "sku": "AIRTUBE-50CM-50M",
+    "name": "AIRTUBE-50CM-50M",
+    "nickname": null,
+    "status": "Active"
+  },
+  {
+    "sku": "AIRTUBE-55CM-300M",
+    "name": "AIRTUBE-55CM-300M",
+    "nickname": null,
+    "status": "Active"
+  },
+  {
+    "sku": "AIRTUBE-55CM-50M",
+    "name": "AIRTUBE-55CM-50M",
+    "nickname": null,
+    "status": "Active"
+  },
+  {
+    "sku": "AIRTUBE-60CM-300M",
+    "name": "AIRTUBE-60CM-300M",
+    "nickname": null,
+    "status": "Active"
+  },
+  {
+    "sku": "AIRTUBE-60CM-50M",
+    "name": "AIRTUBE-60CM-50M",
+    "nickname": null,
+    "status": "Active"
+  },
+  {
+    "sku": "AIRTUBE-65CM-300M",
+    "name": "AIRTUBE-65CM-300M",
+    "nickname": null,
+    "status": "Active"
+  },
+  {
+    "sku": "AIRTUBE-65CM-50M",
+    "name": "AIRTUBE-65CM-50M",
+    "nickname": null,
+    "status": "Active"
+  },
+  {
+    "sku": "AIRTUBE-70CM-300M",
+    "name": "AIRTUBE-70CM-300M",
+    "nickname": null,
+    "status": "Active"
+  },
+  {
+    "sku": "AIRTUBE-70CM-50M",
+    "name": "AIRTUBE-70CM-50M",
+    "nickname": null,
+    "status": "Active"
+  },
+  {
+    "sku": "AIRTUBE-75CM-300M",
+    "name": "AIRTUBE-75CM-300M",
+    "nickname": null,
+    "status": "Active"
+  },
+  {
+    "sku": "AIRTUBE-75CM-50M",
+    "name": "AIRTUBE-75CM-50M",
+    "nickname": null,
+    "status": "Active"
+  },
+  {
+    "sku": "AIRTUBE-80CM-300M",
+    "name": "AIRTUBE-80CM-300M",
+    "nickname": null,
+    "status": "Active"
+  },
+  {
+    "sku": "AIRTUBE-80CM-50M",
+    "name": "AIRTUBE-80CM-50M",
+    "nickname": null,
+    "status": "Active"
+  },
+  {
+    "sku": "AWB-2000STACK-4",
+    "name": "AWB-2000STACK-4",
+    "nickname": null,
+    "status": "Active"
+  },
+  {
+    "sku": "AWB-350ROLL-24",
+    "name": "AWB-350ROLL-24",
+    "nickname": null,
+    "status": "Active"
+  },
+  {
+    "sku": "AWB-5000STACK-2",
+    "name": "AWB-5000STACK-2",
+    "nickname": null,
+    "status": "Active"
+  },
+  {
+    "sku": "AWB-500STACK-20",
+    "name": "AWB-500STACK-20",
+    "nickname": null,
+    "status": "Active"
+  },
+  {
+    "sku": "CUKUPP-BROWN-TAPE-160M",
+    "name": "CUKUPP-BROWN-TAPE-160M",
+    "nickname": null,
+    "status": "Active"
+  },
+  {
+    "sku": "CUKUPP-CLEAR-TAPE-160M",
+    "name": "CUKUPP-CLEAR-TAPE-160M",
+    "nickname": null,
+    "status": "Active"
+  },
+  {
+    "sku": "CUKUPP-MINT-40",
+    "name": "CUKUPP-MINT-40",
+    "nickname": null,
+    "status": "Active"
+  },
+  {
+    "sku": "CUKUPP-MINT-50",
+    "name": "CUKUPP-MINT-50",
+    "nickname": null,
+    "status": "Active"
+  },
+  {
+    "sku": "CUKUPP-MINT-60",
+    "name": "CUKUPP-MINT-60",
+    "nickname": null,
+    "status": "Active"
+  },
+  {
+    "sku": "SF-BABYROLL",
+    "name": "SF-BABYROLL",
+    "nickname": null,
+    "status": "Active"
+  },
+  {
+    "sku": "SF-BLACK",
+    "name": "SF-BLACK",
+    "nickname": null,
+    "status": "Active"
+  },
+  {
+    "sku": "SF-CLEAR",
+    "name": "SF-CLEAR",
+    "nickname": null,
+    "status": "Active"
+  },
+  {
+    "sku": "SF-GREYSILVER",
+    "name": "SF-GREYSILVER",
+    "nickname": null,
+    "status": "Active"
+  },
+  {
+    "sku": "CUKUPP-CLEAR-TAPE-24MM",
+    "name": "CKP CLEAR TAPE 24MM (36M)",
+    "nickname": null,
+    "status": "Active"
+  },
+  {
+    "sku": "BW-DL-CLR-100Mx33CMx3ROLL-RED",
+    "name": "DL-33CM-(RED)",
+    "nickname": null,
+    "status": "Active"
+  }
+]

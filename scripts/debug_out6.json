@@ -1,0 +1,94 @@
+{
+  "skus": [
+    {
+      "sku": "BW-SL-CLR-100Mx33CMx3ROLL-BLU",
+      "name": "SL-CLR-33CM-BLUE",
+      "nickname": null
+    },
+    {
+      "sku": "BW-SL-CLR-100Mx33CMx3ROLL-GRN",
+      "name": "SL-33CM",
+      "nickname": "SL-33CM"
+    },
+    {
+      "sku": "BW-SL-SLR-100Mx100CMx1ROLL-RED",
+      "name": "SL SLR FULL - RED",
+      "nickname": null
+    },
+    {
+      "sku": "BW-SL-BLK-100Mx100CMx1ROLL-RED",
+      "name": "[AUTO-REG] Single Black 100cm 1Rolls Pink",
+      "nickname": null
+    },
+    {
+      "sku": "BW-SL-CLR-100Mx100CMx1ROLL-BLU",
+      "name": "SLC-1M-BLUE",
+      "nickname": null
+    },
+    {
+      "sku": "BW-SL-CLR-100Mx100CMx1ROLL-GRN",
+      "name": "[AUTO-REG] Single Clear 100cm 1Rolls Green",
+      "nickname": null
+    },
+    {
+      "sku": "BW-SL-BLK-100Mx100CMx1ROLL-BLU",
+      "name": "SL Hitam full (B)",
+      "nickname": null
+    },
+    {
+      "sku": "BW-SL-CLR-100Mx50CMx2ROLL-BLU",
+      "name": "SL 50cm (B)",
+      "nickname": null
+    },
+    {
+      "sku": "BW-SL-BLK-100Mx50CMx2ROLL-BLU",
+      "name": "SL-HITAM-HALF BLUE PLASTIC",
+      "nickname": null
+    },
+    {
+      "sku": "BW-SL-CLR-100Mx50CMx2ROLL-ORN",
+      "name": "OREN",
+      "nickname": "OREN"
+    },
+    {
+      "sku": "BW-SL-BLK-100Mx20CMx5ROLL-GRN",
+      "name": "HITAM-20CM",
+      "nickname": "HITAM-20CM"
+    },
+    {
+      "sku": "BW-SL-BLK-100Mx25CMx4ROLL-GRN",
+      "name": "HITAM-25CM",
+      "nickname": "HITAM-25CM"
+    },
+    {
+      "sku": "BW-SL-BLK-100Mx33CMx3ROLL-GRN",
+      "name": "HITAM-33CM",
+      "nickname": "HITAM-33CM"
+    },
+    {
+      "sku": "BW-SL-BLK-100Mx100CMx1ROLL-GRN",
+      "name": "HITAM-FULL",
+      "nickname": "HITAM-FULL"
+    },
+    {
+      "sku": "BW-SL-BLK-100Mx50CMx2ROLL-RED",
+      "name": "HITAM-HALF",
+      "nickname": "HITAM-HALF"
+    },
+    {
+      "sku": "BW-SL-CLR-100Mx100CMx1ROLL-RED",
+      "name": "MERAH",
+      "nickname": "MERAH"
+    },
+    {
+      "sku": "BW-SL-CLR-100Mx20CMx5ROLL-GRN",
+      "name": "SL-20CM",
+      "nickname": "SL-20CM"
+    },
+    {
+      "sku": "BW-SL-CLR-100Mx25CMx4ROLL-GRN",
+      "name": "SL-25CM",
+      "nickname": "SL-25CM"
+    }
+  ]
+}

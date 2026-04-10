@@ -1,0 +1,25 @@
+=== ALL MERAH DOS ===
+[DO: DO-2026-7977] Status: New | Driver: ameer | Merah Qty: 30
+[DO: DO-2026-6456] Status: New | Driver: dean | Merah Qty: 26
+[DO: DO-2026-7194] Status: Delivered | Driver: wan | Merah Qty: 45
+[DO: DO-2026-3867] Status: Delivered | Driver: sam | Merah Qty: 21
+[DO: DO-2026-4013] Status: Delivered | Driver: mahadi | Merah Qty: 32
+[DO: DO-2026-9677] Status: Delivered | Driver: khairol | Merah Qty: 82
+[DO: DO-2026-5619] Status: Delivered | Driver: khairol | Merah Qty: 82
+[DO: DO-2026-0414] Status: Delivered | Driver: ameer | Merah Qty: 13
+[DO: DO-2026-0742] Status: Delivered | Driver: yashin | Merah Qty: 82
+[DO: DO-2026-6000] Status: Delivered | Driver: yashin | Merah Qty: 82
+[DO: DO-2026-4624] Status: Delivered | Driver: dean | Merah Qty: 82
+[DO: DO-2026-6711] Status: Delivered | Driver: wan | Merah Qty: 81
+[DO: DO-2026-0445] Status: Delivered | Driver: taufik | Merah Qty: 64
+[DO: DO-2026-9686] Status: Delivered | Driver: faizal | Merah Qty: 55
+[DO: DO-2026-9678] Status: Delivered | Driver: neoson chun | Merah Qty: 15
+[DO: DO-2026-3070] Status: New | Driver: khairol | Merah Qty: 58
+[DO: DO-2026-6684] Status: New | Driver: tahir | Merah Qty: 55
+[DO: DO-2026-7539] Status: New | Driver: mahadi | Merah Qty: 52
+[DO: DO-2026-1091] Status: New | Driver: ayam | Merah Qty: 60
+[DO: DO-2026-8049] Status: New | Driver: yashin | Merah Qty: 56
+[DO: DO-2026-7621] Status: New | Driver: yashin | Merah Qty: 50
+[DO: DO-2026-0265] Status: Delivered | Driver: taufik | Merah Qty: 82
+
+Total Merah in ALL DOs (since March 30): 1205

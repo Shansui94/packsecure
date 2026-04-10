@@ -1,7 +1,8 @@
 import React, { useState, useEffect, useRef } from 'react';
 import { supabase } from '../services/supabase';
-import { Truck, CheckCircle, Package, ChevronRight, X, RefreshCw, Camera, Image as ImageIcon } from 'lucide-react';
+import { Truck, CheckCircle, Package, ChevronRight, X, RefreshCw, Camera, Image as ImageIcon, QrCode, Power } from 'lucide-react';
 import { SalesOrder } from '../types';
+import { Scanner } from '@yudiel/react-qr-scanner';
 
 interface DriverDeliveryProps {
     user: any;
@@ -37,6 +38,13 @@ const compressImage = (file: File, maxWidth = 1200, quality = 0.7): Promise<stri
 
 const DriverDelivery: React.FC<DriverDeliveryProps> = ({ user }) => {
     // State
+    const [activeShift, setActiveShift] = useState<any>(null);
+    const [shiftLoading, setShiftLoading] = useState(true);
+    const [clockInStep, setClockInStep] = useState<'qr' | 'photo'>('qr');
+    const [scannedLorryId, setScannedLorryId] = useState<string | null>(null);
+    const [scannedPlate, setScannedPlate] = useState<string | null>(null);
+    const [shiftProcessing, setShiftProcessing] = useState(false);
+
     const [tasks, setTasks] = useState<SalesOrder[]>([]);
     const [loading, setLoading] = useState(true);
     const [activeTab, setActiveTab] = useState<'todo' | 'done'>('todo');
@@ -113,9 +121,107 @@ const DriverDelivery: React.FC<DriverDeliveryProps> = ({ user }) => {
         }
     };
 
+    const fetchActiveShift = async () => {
+        setShiftLoading(true);
+        if (!user?.uid) return;
+        try {
+            const { data, error } = await supabase
+                .from('driver_shifts')
+                .select('*, lorries(plate_number)')
+                .eq('driver_id', user.uid)
+                .eq('status', 'Active')
+                .maybeSingle();
+            
+            if (data) setActiveShift(data);
+            else setActiveShift(null);
+        } catch (e) {
+            console.error('Fetch shift error:', e);
+        } finally {
+            setShiftLoading(false);
+        }
+    };
+
     useEffect(() => {
+        fetchActiveShift();
         fetchTasks();
     }, [user]);
+
+    const handleScanLorry = async (texts: any[]) => {
+        if (texts && texts.length > 0) {
+            const code = texts[0].rawValue.trim();
+            const { data, error } = await supabase.from('lorries').select('id, plate_number, status').eq('plate_number', code).maybeSingle();
+            
+            if (data) {
+                if (data.status === 'Available') {
+                    setScannedLorryId(data.id);
+                    setScannedPlate(data.plate_number);
+                    setClockInStep('photo');
+                } else {
+                    alert(`Lorry ${data.plate_number} is currently marked as ${data.status}. Cannot use.`);
+                }
+            } else {
+                alert(`Unrecognized QR Code: ${code}. Please try again.`);
+            }
+        }
+    };
+
+    const handleShiftPhoto = async (e: React.ChangeEvent<HTMLInputElement>, isClockIn: boolean) => {
+        const file = e.target.files?.[0];
+        if (!file) return;
+
+        setShiftProcessing(true);
+        try {
+            const dataUrl = await compressImage(file, 1200, 0.6); // slight compression for dashboard
+            const base64 = dataUrl.split(',')[1];
+            
+            const fileName = `shift_${isClockIn ? 'in' : 'out'}_${user?.uid}_${Date.now()}.jpg`;
+            const blob = await fetch(`data:image/jpeg;base64,${base64}`).then(r => r.blob());
+
+            const { error: uploadError } = await supabase.storage.from('work-photos').upload(fileName, blob, { contentType: 'image/jpeg' });
+            if (uploadError) throw uploadError;
+
+            const { data: urlData } = supabase.storage.from('work-photos').getPublicUrl(fileName);
+            const photoUrl = urlData.publicUrl;
+
+            if (isClockIn) {
+                // 1. Insert Shift
+                const { data: shiftData, error: shiftError } = await supabase.from('driver_shifts').insert({
+                    driver_id: user.uid,
+                    lorry_id: scannedLorryId,
+                    clock_in_photo_url: photoUrl,
+                    status: 'Active'
+                }).select().single();
+                
+                if (shiftError) throw shiftError;
+
+                // 2. Update Lorry
+                await supabase.from('lorries').update({ status: 'On-Route', driver_id: user.uid }).eq('id', scannedLorryId);
+                
+                // Reload Shift
+                fetchActiveShift();
+            } else {
+                // Clock Out
+                if (!activeShift) return;
+                
+                await supabase.from('driver_shifts').update({
+                    status: 'Completed',
+                    clock_out_time: new Date().toISOString(),
+                    clock_out_photo_url: photoUrl
+                }).eq('id', activeShift.id);
+
+                await supabase.from('lorries').update({ status: 'Available', driver_id: null }).eq('id', activeShift.lorry_id);
+                
+                setActiveShift(null);
+                setClockInStep('qr');
+                setScannedLorryId(null);
+                setScannedPlate(null);
+            }
+        } catch (err: any) {
+            alert('Clock procedure failed: ' + err.message);
+        } finally {
+            setShiftProcessing(false);
+        }
+    };
 
     // 2. Open Load Modal
     const handleOpenLoadModal = (order: SalesOrder) => {
@@ -355,8 +461,94 @@ const DriverDelivery: React.FC<DriverDeliveryProps> = ({ user }) => {
     const doneList = tasks.filter(t => t.status === 'Delivered' || t.status === 'Pending Approval');
     const displayList = activeTab === 'todo' ? todoList : doneList;
 
+    if (shiftLoading) {
+        return <div className="min-h-screen bg-black flex items-center justify-center text-slate-500 animate-pulse font-bold tracking-widest text-sm">LOADING SHIFT...</div>;
+    }
+
+    if (!activeShift) {
+        return (
+            <div className="min-h-screen bg-black text-slate-200 flex flex-col p-6 items-center justify-center">
+                <div className="max-w-sm w-full space-y-8">
+                    <div className="text-center">
+                        <Truck size={48} className="mx-auto mb-4 text-cyan-500 shadow-xl rounded-full" />
+                        <h1 className="text-2xl font-black text-white tracking-widest uppercase">Start Shift</h1>
+                        <p className="text-slate-500 text-sm mt-2">Scan Lorry QR to Clock In</p>
+                    </div>
+
+                    {clockInStep === 'qr' ? (
+                        <div className="rounded-2xl overflow-hidden border-4 border-slate-800 bg-slate-900 aspect-square shadow-2xl shadow-cyan-500/10 relative">
+                            <Scanner 
+                               onScan={handleScanLorry} 
+                               components={{ audio: false, finder: true }}
+                            />
+                        </div>
+                    ) : (
+                        <div className="bg-slate-900 border border-slate-800 rounded-2xl p-6 text-center shadow-2xl">
+                            <h3 className="text-cyan-400 font-bold uppercase tracking-widest mb-1 text-xs">Lorry Paired</h3>
+                            <div className="text-4xl font-black text-white font-mono mb-8">{scannedPlate}</div>
+                            
+                            <label className="w-full relative py-6 bg-blue-600 hover:bg-blue-500 text-white rounded-xl font-black text-lg uppercase tracking-widest shadow-lg shadow-blue-900/40 cursor-pointer transition-all active:scale-95 flex flex-col items-center justify-center gap-3">
+                                {shiftProcessing ? (
+                                    <div className="w-6 h-6 border-4 border-white/20 border-t-white rounded-full animate-spin"></div>
+                                ) : (
+                                    <>
+                                        <Camera size={32} />
+                                        <span>Snap Odometer To Start</span>
+                                    </>
+                                )}
+                                <input
+                                    type="file"
+                                    accept="image/*"
+                                    capture="environment"
+                                    className="hidden"
+                                    disabled={shiftProcessing}
+                                    onChange={(e) => handleShiftPhoto(e, true)}
+                                />
+                            </label>
+                            
+                            <button 
+                                onClick={() => { setClockInStep('qr'); setScannedLorryId(null); setScannedPlate(null); }}
+                                disabled={shiftProcessing}
+                                className="mt-6 text-sm text-slate-500 font-bold uppercase hover:text-slate-300 transition-colors bg-slate-800 px-4 py-2 rounded-lg"
+                            >
+                                Cancel & Rescan Different Lorry
+                            </button>
+                        </div>
+                    )}
+                </div>
+            </div>
+        );
+    }
+
     return (
         <div className="min-h-screen bg-black text-slate-200 pb-20 font-sans">
+            {/* ACTIVE SHIFT BANNER */}
+            <div className="bg-emerald-950/40 border-b border-emerald-500/20 p-3 flex justify-between items-center px-4 sticky top-0 z-50 backdrop-blur-md">
+                <div className="flex items-center gap-3">
+                    <div className="w-2 h-2 bg-emerald-500 rounded-full animate-pulse shadow-[0_0_8px_rgba(16,185,129,0.8)]" />
+                    <div>
+                        <span className="text-[10px] font-black uppercase tracking-widest text-emerald-400/80 block leading-none mb-1">Active Lorry</span>
+                        <span className="text-sm font-mono font-bold text-white leading-none">{activeShift.lorries?.plate_number || 'UNKNOWN'}</span>
+                    </div>
+                </div>
+                <label className="px-4 py-2.5 bg-red-500/10 hover:bg-red-500/20 border border-red-500/30 text-red-500 font-bold text-xs uppercase tracking-wider rounded-lg cursor-pointer flex items-center gap-2 transition-colors active:scale-95">
+                    {shiftProcessing ? (
+                        <div className="w-4 h-4 border-2 border-red-500/30 border-t-red-500 rounded-full animate-spin"></div>
+                    ) : (
+                        <Power size={14} />
+                    )}
+                    {shiftProcessing ? 'WAIT...' : 'END SHIFT'}
+                    <input
+                        type="file"
+                        accept="image/*"
+                        capture="environment"
+                        className="hidden"
+                        onChange={(e) => handleShiftPhoto(e, false)}
+                        disabled={shiftProcessing}
+                    />
+                </label>
+            </div>
+
             <div className="p-4 flex items-center justify-between border-b border-white/5 bg-slate-900/50">
                 <p className="text-[10px] font-bold text-slate-500 uppercase">{user?.name || 'Unknown Driver'} • {tasks.length} Orders</p>
                 <div className="flex items-center gap-2">

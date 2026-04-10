@@ -1,0 +1,62 @@
+[
+  {
+    "machine_id": "T1.1-M03",
+    "name": "Stretch Film (T1.1)",
+    "type": "Extruder",
+    "status": "Running",
+    "factory_id": "T1",
+    "current_operator_id": null,
+    "base_width": 50,
+    "current_sku": null,
+    "current_job_id": null,
+    "rolls_per_alarm": 1
+  },
+  {
+    "machine_id": "T1.2-M01",
+    "name": "2M Double Layer (T1.2)",
+    "type": "Extruder",
+    "status": "Running",
+    "factory_id": "T1",
+    "current_operator_id": null,
+    "base_width": 200,
+    "current_sku": null,
+    "current_job_id": null,
+    "rolls_per_alarm": 2
+  },
+  {
+    "machine_id": "T1.3-M02",
+    "name": "1M Single Layer (T1.3)",
+    "type": "Extruder",
+    "status": "Idle",
+    "factory_id": "T1",
+    "current_operator_id": null,
+    "base_width": 100,
+    "current_sku": null,
+    "current_job_id": null,
+    "rolls_per_alarm": 1
+  },
+  {
+    "machine_id": "N1-M01",
+    "name": "1M Double Layer (N1)",
+    "type": "FAC-01",
+    "status": "Running",
+    "factory_id": "N1",
+    "current_operator_id": null,
+    "base_width": 100,
+    "current_sku": null,
+    "current_job_id": null,
+    "rolls_per_alarm": 1
+  },
+  {
+    "machine_id": "N2-M02",
+    "name": "1M Single Layer (N2)",
+    "type": "FAC-01",
+    "status": "Idle",
+    "factory_id": "N2",
+    "current_operator_id": null,
+    "base_width": 100,
+    "current_sku": null,
+    "current_job_id": null,
+    "rolls_per_alarm": 1
+  }
+]

@@ -1,0 +1,46 @@
+{
+  "autoreg": [
+    {
+      "sku": "BW-SL-BLK-100Mx50CMx2ROLL-ORN",
+      "name": "[AUTO-REG] Single Black 50cm 2Rolls Orange",
+      "created_at": "2026-04-03T18:46:12.491224+00:00"
+    },
+    {
+      "sku": "BW-SL-BLK-100Mx100CMx1ROLL-RED",
+      "name": "[AUTO-REG] Single Black 100cm 1Rolls Pink",
+      "created_at": "2026-03-07T01:03:23.81513+00:00"
+    },
+    {
+      "sku": "BW-SL-CLR-100Mx100CMx1ROLL-GRN",
+      "name": "[AUTO-REG] Single Clear 100cm 1Rolls Green",
+      "created_at": "2026-03-14T04:34:44.678888+00:00"
+    },
+    {
+      "sku": "BW-DL-CLR-100Mx100CMx1ROLL-BLU",
+      "name": "[AUTO-REG] Double Clear 100cm 1Rolls Blue",
+      "created_at": "2026-03-18T00:02:06.790619+00:00"
+    },
+    {
+      "sku": "BW-DL-BLK-100Mx100CMx1ROLL-BLU",
+      "name": "[AUTO-REG] Double Black 100cm 1Rolls Blue",
+      "created_at": "2026-03-23T17:13:21.005421+00:00"
+    }
+  ],
+  "specific": [
+    {
+      "sku": "BW-SL-BLK-100Mx100CMx1ROLL-RED",
+      "name": "[AUTO-REG] Single Black 100cm 1Rolls Pink",
+      "created_at": "2026-03-07T01:03:23.81513+00:00"
+    },
+    {
+      "sku": "BW-SL-CLR-100Mx100CMx1ROLL-GRN",
+      "name": "[AUTO-REG] Single Clear 100cm 1Rolls Green",
+      "created_at": "2026-03-14T04:34:44.678888+00:00"
+    },
+    {
+      "sku": "BW-SL-CLR-100Mx100CMx1ROLL-RED",
+      "name": "MERAH",
+      "created_at": "2026-01-28T08:52:57.466891+00:00"
+    }
+  ]
+}
