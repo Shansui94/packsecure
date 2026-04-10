@@ -5,7 +5,8 @@ import { getV2Items } from '../services/apiV2';
 import { determineState, findBestFactory } from '../utils/logistics';
 import {
     Plus, Search, Calendar, FileText, X, Truck,
-    User as UserIcon, Box, Zap, Trash2, Scissors, AlertTriangle, MapPin, Wrench, LayoutGrid, List, ArrowUp, ArrowDown
+    User as UserIcon, Box, Zap, Trash2, Scissors, AlertTriangle, MapPin, Wrench, LayoutGrid, List, ArrowUp, ArrowDown,
+    CheckCircle, XCircle, Camera
 } from 'lucide-react';
 import { WAREHOUSES } from '../data/factoryData';
 import {
@@ -94,11 +95,13 @@ const SearchableSelect: React.FC<SearchableSelectProps> = ({ label, icon, option
                     />
                     <div className="absolute top-full left-0 right-0 mt-2 bg-[#1a1a1e] border border-slate-800 rounded-xl shadow-2xl max-h-60 overflow-y-auto z-50 divide-y divide-slate-800/50">
                         {options
-                            .filter(opt =>
-                                !search ||
-                                opt.label.toLowerCase().includes(search.toLowerCase()) ||
-                                (opt.subLabel && opt.subLabel.toLowerCase().includes(search.toLowerCase()))
-                            )
+                            .filter(opt => {
+                                if (!search) return true;
+                                const searchTerms = search.toLowerCase().trim().split(/[\s-]+/).filter(Boolean);
+                                const l = opt.label.toLowerCase();
+                                const sub = opt.subLabel ? opt.subLabel.toLowerCase() : '';
+                                return searchTerms.every(term => l.includes(term) || sub.includes(term));
+                            })
                             .map(opt => (
                                 <div
                                     key={opt.value}
@@ -120,11 +123,13 @@ const SearchableSelect: React.FC<SearchableSelectProps> = ({ label, icon, option
                                     )}
                                 </div>
                             ))}
-                        {options.filter(opt =>
-                            !search ||
-                            opt.label.toLowerCase().includes(search.toLowerCase()) ||
-                            (opt.subLabel && opt.subLabel.toLowerCase().includes(search.toLowerCase()))
-                        ).length === 0 && (
+                        {options.filter(opt => {
+                            if (!search) return true;
+                            const searchTerms = search.toLowerCase().trim().split(/[\s-]+/).filter(Boolean);
+                            const l = opt.label.toLowerCase();
+                            const sub = opt.subLabel ? opt.subLabel.toLowerCase() : '';
+                            return searchTerms.every(term => l.includes(term) || sub.includes(term));
+                        }).length === 0 && (
                                 <div className="p-4 text-center text-gray-500 text-sm">
                                     No results found.
                                 </div>
@@ -158,6 +163,7 @@ const DeliveryOrderManagement: React.FC = () => {
 
     // Editing State
     const [editingOrderId, setEditingOrderId] = useState<string | null>(null);
+    const [editingOrderPhoto, setEditingOrderPhoto] = useState<string | null>(null);
 
     // New Order Form State
     const [selectedDriverId, setSelectedDriverId] = useState('');
@@ -233,7 +239,7 @@ const DeliveryOrderManagement: React.FC = () => {
                 supabase.from('users_public').select('*'),
                 supabase.from('sales_orders').select('*').order('trip_sequence', { ascending: true }).order('created_at', { ascending: false }),
                 getV2Items(),
-                supabase.from('driver_leave').select('*'),
+                supabase.from('employee_leave').select('*'),
                 supabase.from('lorries').select('*'),
                 supabase.from('lorry_service_requests').select('*').eq('status', 'Scheduled'),
                 supabase.from('delivery_rates').select('*').order('location_name')
@@ -298,12 +304,24 @@ const DeliveryOrderManagement: React.FC = () => {
                     notes: o.notes,
                     zone: o.zone,
                     deliveryAddress: o.delivery_address,
-                    tripSequence: o.trip_sequence || 0
+                    tripSequence: o.trip_sequence || 0,
+                    trip_origin: o.trip_origin,
+                    trip_drop_count: o.trip_drop_count
                 }));
                 setOrders(mappedOrders);
             }
         } catch (err) {
             console.error("System Error:", err);
+        }
+    };
+
+    const handleLeaveAction = async (leaveId: string, newStatus: 'Approved' | 'Rejected') => {
+        if (!window.confirm(`Are you sure you want to ${newStatus} this leave?`)) return;
+        try {
+            await supabase.from('employee_leave').update({ status: newStatus }).eq('id', leaveId);
+            fetchData();
+        } catch (err) {
+            console.error("Failed to approve/reject leave", err);
         }
     };
 
@@ -340,8 +358,8 @@ const DeliveryOrderManagement: React.FC = () => {
 
         // 1. BLOCK: Check for exact Leave date match
         // 1. BLOCK: Check for exact Leave date match (String Comparison)
-        const strictConflict = driverLeaves.filter(l => l.status !== 'Rejected').find(l => {
-            if (l.driver_id !== driverId) return false;
+        const strictConflict = driverLeaves.filter(l => l.status === 'Approved').find(l => {
+            if (l.employee_id !== driverId) return false;
             // Robust comparison:
             const startStr = toDateString(l.start_date);
             const endStr = toDateString(l.end_date);
@@ -356,8 +374,8 @@ const DeliveryOrderManagement: React.FC = () => {
         // 2. WARN: Near-future Warning (3 days before leave starts)
         // 2. WARN: Near-future Warning (3 days before leave starts)
         const targetDateObj = new Date(targetDateStr);
-        const nearConflict = driverLeaves.filter(l => l.status !== 'Rejected').find(l => {
-            if (l.driver_id !== driverId) return false;
+        const nearConflict = driverLeaves.filter(l => l.status === 'Approved').find(l => {
+            if (l.employee_id !== driverId) return false;
 
             const startStr = toDateString(l.start_date);
             const start = new Date(startStr);
@@ -582,21 +600,29 @@ const DeliveryOrderManagement: React.FC = () => {
 
     // APPROVE AMENDMENT
     const handleApproveAmendment = async (order: SalesOrder) => {
-        if (!window.confirm(`Approve changes for Order ${order.orderNumber}? \nThis will deduct stock and mark as Delivered.`)) return;
+        if (!window.confirm(`Approve changes for Order ${order.orderNumber}? \nThis will adjust stock for amendments and mark as Delivered.`)) return;
 
         try {
-            // 1. Deduct Stock for approved amended quantities
+            // 1. Adjust Stock for amended quantities (stock already deducted at order creation)
+            //    Only need to ADD BACK the difference if driver took LESS than ordered
             for (const item of order.items || []) {
-                const qtyToDeduct = item.quantity || 0;
-                if (qtyToDeduct > 0) {
-                    const { error } = await supabase.rpc('record_stock_movement', {
-                        p_sku: item.sku,
-                        p_qty: -qtyToDeduct, // Negative OUT
-                        p_event_type: 'Transfer Out',
-                        p_ref_doc: order.orderNumber,
-                        p_notes: `Approved Amend: ${order.notes || ''}`
+                const amendedQty = item.quantity || 0;
+                const originalQty = (item as any).original_quantity || amendedQty;
+                const diff = originalQty - amendedQty; // positive = driver took less → add back
+
+                if (diff !== 0) {
+                    let loc = (item as any).sourceLocation || 'OPM Lama';
+                    if (!loc || loc === 'Unassigned') loc = 'OPM Lama';
+
+                    const { error } = await supabase.from('stock_ledger_v2').insert({
+                        sku: item.sku,
+                        change_qty: diff, // positive = return to stock, negative = extra deduction
+                        event_type: 'Amendment Adjustment',
+                        loc_id: loc,
+                        ref_doc: order.orderNumber,
+                        notes: `Amend Approved: ${originalQty} → ${amendedQty}`
                     });
-                    if (error) console.error("Stock error for " + item.sku, error);
+                    if (error) console.error("Stock adjust error for " + item.sku, error);
                 }
             }
 
@@ -608,9 +634,7 @@ const DeliveryOrderManagement: React.FC = () => {
 
             if (error) throw error;
 
-            if (error) throw error;
-
-            alert("✅ Approved & Stock Deducted!");
+            alert("✅ Approved & Stock Adjusted!");
 
             // Optimistic Update
             setOrders(prev => prev.map(o => {
@@ -834,7 +858,7 @@ const DeliveryOrderManagement: React.FC = () => {
                 factory_id: bestFactory.id,
                 driver_id: selectedDriverId || null,
                 items: newOrderItems,
-                status: 'New',
+                status: editingOrderId ? (orders.find(o => o.id === editingOrderId)?.status || 'New') : 'New',
                 order_date: newOrderDate || new Date().toISOString().split("T")[0],
                 deadline: newOrderDeliveryDate || null,
                 notes: newOrderNotes // Include Batch Notes
@@ -1018,16 +1042,23 @@ const DeliveryOrderManagement: React.FC = () => {
     const within14DaysStr = getLocalDateStr(within14Days);
 
     const driversOnLeaveToday = drivers.filter(d =>
-        driverLeaves.some(l => l.driver_id === d.uid && l.status !== 'Rejected' && todayStr >= l.start_date && todayStr <= l.end_date)
+        driverLeaves.some(l => l.employee_id === d.uid && l.status === 'Approved' && todayStr >= l.start_date && todayStr <= l.end_date)
     );
 
     const upcomingLeaves = driverLeaves
-        .filter(l => l.status !== 'Rejected' && l.start_date > todayStr && l.start_date <= within14DaysStr)
+        .filter(l => l.status === 'Approved' && l.start_date > todayStr && l.start_date <= within14DaysStr)
         .map(l => ({
             ...l,
-            driverName: drivers.find(d => d.uid === l.driver_id)?.name || 'Unknown Driver'
+            driverName: drivers.find(d => d.uid === l.employee_id)?.name || 'Unknown Driver'
         }))
         .sort((a, b) => a.start_date.localeCompare(b.start_date));
+
+    const pendingLeaves = driverLeaves
+        .filter(l => l.status === 'Pending')
+        .map(l => ({
+            ...l,
+            driverName: drivers.find(d => d.uid === l.employee_id)?.name || 'Unknown Driver'
+        }));
 
     return (
         <div className="min-h-screen bg-slate-950 text-slate-100 p-6 font-sans selection:bg-blue-500/30">
@@ -1053,6 +1084,35 @@ const DeliveryOrderManagement: React.FC = () => {
             <div className="grid grid-cols-1 md:grid-cols-2 gap-4 mb-8">
                 {/* 1. Driver Leaves Section */}
                 <div className="flex flex-col gap-3">
+                    {pendingLeaves.length > 0 && (
+                        <div className="p-4 bg-purple-500/10 border border-purple-500/20 rounded-2xl flex flex-col gap-3 animate-in slide-in-from-top flex-1">
+                            <div className="text-sm font-black text-purple-400 uppercase tracking-widest flex items-center gap-2">
+                                <AlertTriangle size={16} /> Pending Leave Approvals
+                            </div>
+                            <div className="space-y-2">
+                                {pendingLeaves.map(l => (
+                                    <div key={l.id} className="bg-slate-900 border border-slate-800 rounded-xl p-3 flex justify-between items-center">
+                                        <div>
+                                            <div className="text-xs font-bold text-white">{l.driverName}</div>
+                                            <div className="text-[10px] text-slate-400 font-mono">
+                                                {l.start_date} {l.start_date !== l.end_date ? `➔ ${l.end_date}` : ''} ({l.count_days} Days)
+                                            </div>
+                                            <div className="text-[9px] text-purple-400 mt-1 uppercase font-bold tracking-widest break-all">"{l.reason || 'No Reason provided'}"</div>
+                                        </div>
+                                        <div className="flex gap-2 shrink-0 ml-4">
+                                            <button onClick={() => handleLeaveAction(l.id, 'Rejected')} className="text-red-400 hover:text-red-300 p-1 bg-red-400/10 rounded-lg transition-colors">
+                                                <XCircle size={18} />
+                                            </button>
+                                            <button onClick={() => handleLeaveAction(l.id, 'Approved')} className="text-emerald-400 hover:text-emerald-300 p-1 bg-emerald-400/10 rounded-lg transition-colors">
+                                                <CheckCircle size={18} />
+                                            </button>
+                                        </div>
+                                    </div>
+                                ))}
+                            </div>
+                        </div>
+                    )}
+
                     {driversOnLeaveToday.length > 0 && (
                         <div className="p-4 bg-red-500/10 border border-red-500/20 rounded-2xl flex items-center justify-between animate-pulse">
                             <div className="flex items-center gap-3">
@@ -1085,10 +1145,10 @@ const DeliveryOrderManagement: React.FC = () => {
                         </div>
                     )}
 
-                    {driversOnLeaveToday.length === 0 && upcomingLeaves.length === 0 && (
+                    {driversOnLeaveToday.length === 0 && upcomingLeaves.length === 0 && pendingLeaves.length === 0 && (
                         <div className="p-4 bg-slate-900 border border-slate-800 rounded-2xl flex items-center gap-3 text-slate-500 h-full">
                             <Calendar size={18} />
-                            <span className="text-xs font-bold uppercase tracking-widest">No Recent or Upcoming Driver Holidays</span>
+                            <span className="text-xs font-bold uppercase tracking-widest">No Driver Holidays to review</span>
                         </div>
                     )}
                 </div>
@@ -1300,6 +1360,7 @@ const DeliveryOrderManagement: React.FC = () => {
                                                                     return item;
                                                                 });
                                                                 setNewOrderItems(itemsWithExtractedLoc);
+                                                                setEditingOrderPhoto(order.proof_of_load_url || null);
 
                                                                 setIsCreateModalOpen(true);
                                                             }}
@@ -1504,6 +1565,7 @@ const DeliveryOrderManagement: React.FC = () => {
                                                     return item;
                                                 });
                                                 setNewOrderItems(itemsWithExtractedLoc);
+                                                setEditingOrderPhoto(order.proof_of_load_url || null);
                                                 setIsCreateModalOpen(true);
                                             }}>
                                                 <td className="p-4">
@@ -1740,16 +1802,34 @@ const DeliveryOrderManagement: React.FC = () => {
                                     </div>
                                 </div>
 
-                                {/* TRIP NOTE */}
-                                <div>
-                                    <label className="block text-xs font-bold text-slate-500 uppercase mb-2">Trip Notes</label>
-                                    <textarea
-                                        rows={2}
-                                        placeholder="Enter notes for this trip..."
-                                        className="w-full bg-slate-900 border border-slate-800 rounded-xl px-4 py-3 text-sm text-slate-300 focus:border-blue-500/50 outline-none placeholder:text-slate-600 resize-none"
-                                        value={newOrderNotes}
-                                        onChange={e => setNewOrderNotes(e.target.value)}
-                                    />
+                                {/* TRIP NOTE & PHOTO */}
+                                <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                                    <div>
+                                        <label className="block text-xs font-bold text-slate-500 uppercase mb-2">Trip Notes</label>
+                                        <textarea
+                                            rows={editingOrderPhoto ? 4 : 2}
+                                            placeholder="Enter notes for this trip..."
+                                            className="w-full bg-slate-900 border border-slate-800 rounded-xl px-4 py-3 text-sm text-slate-300 focus:border-blue-500/50 outline-none placeholder:text-slate-600 resize-none"
+                                            value={newOrderNotes}
+                                            onChange={e => setNewOrderNotes(e.target.value)}
+                                        />
+                                    </div>
+                                    <div>
+                                        <label className="block text-xs font-bold text-slate-500 uppercase mb-2">Driver Proof of Load</label>
+                                        {editingOrderPhoto ? (
+                                            <a href={editingOrderPhoto} target="_blank" rel="noopener noreferrer" className="block relative group overflow-hidden rounded-xl border border-slate-700 h-28 bg-black">
+                                                <img src={editingOrderPhoto} alt="Proof of Load" className="w-full h-full object-cover opacity-80 group-hover:opacity-100 transition-opacity" />
+                                                <div className="absolute inset-0 flex items-center justify-center bg-black/40 opacity-0 group-hover:opacity-100 transition-opacity pointer-events-none">
+                                                    <span className="bg-blue-500 text-white font-bold text-xs px-3 py-1.5 rounded-lg shadow-lg uppercase tracking-wider backdrop-blur-sm">Click to Enlarge</span>
+                                                </div>
+                                            </a>
+                                        ) : (
+                                            <div className="flex flex-col items-center justify-center bg-slate-900 border border-dashed border-slate-800 rounded-xl h-28 opacity-50">
+                                                <Camera size={24} className="text-slate-600 mb-2" />
+                                                <span className="text-xs font-bold text-slate-600 uppercase tracking-widest">No Photo Uploaded</span>
+                                            </div>
+                                        )}
+                                    </div>
                                 </div>
 
                                 <hr className="border-slate-800" />

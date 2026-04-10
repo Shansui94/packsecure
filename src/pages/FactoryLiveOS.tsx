@@ -22,6 +22,7 @@ interface MachineCard {
     isProducing: boolean;        // has an active SKU loaded in machine_active_products
     today_count: number;
     current_sku: string | null;
+    current_sku_name: string | null;
     total_count: number;
     reboot_count: number;
     gaps: { start: string, end: string, duration_min: number }[];
@@ -52,7 +53,7 @@ interface OrderSummaryData {
 interface MachineProductionBreakdown {
     machine_id: string;
     machine_name: string;
-    skus: { sku: string; qty: number }[];
+    skus: { sku: string; name: string; qty: number }[];
     total: number;
 }
 
@@ -105,20 +106,67 @@ const resolveStatus = (heartbeatIso: string | null, hasActiveSku: boolean): { st
 
 const DetailPanel = ({ machine, onClose }: { machine: MachineCard; onClose: () => void }) => {
     const [logs, setLogs] = useState<ProductionLogRow[]>([]);
+    const [viewMode, setViewMode] = useState<'today' | 'history'>('today');
+    const [dailyLogs, setDailyLogs] = useState<{ date: string; sku: string; qty: number; timeStr: string }[]>([]);
     const [loading, setLoading] = useState(true);
     const c = getStatusColor(machine.status, machine.isProducing);
 
     useEffect(() => {
         setLoading(true);
-        const today = new Date(); today.setHours(0, 0, 0, 0);
-        supabase.from('production_logs_v2')
-            .select('log_id, created_at, machine_id, sku, output_qty')
-            .eq('machine_id', machine.machine_id)
-            .gte('created_at', today.toISOString())
-            .order('created_at', { ascending: false })
-            .limit(30)
-            .then(({ data }) => { setLogs((data as any) || []); setLoading(false); });
-    }, [machine.machine_id]);
+        if (viewMode === 'today') {
+            const today = new Date(); today.setHours(0, 0, 0, 0);
+            supabase.from('production_logs_v2')
+                .select('log_id, created_at, machine_id, sku, output_qty')
+                .eq('machine_id', machine.machine_id)
+                .gte('created_at', today.toISOString())
+                .order('created_at', { ascending: false })
+                .limit(50)
+                .then(({ data }) => { setLogs((data as any) || []); setLoading(false); });
+        } else {
+            const pastDate = new Date(); 
+            pastDate.setDate(pastDate.getDate() - 14); 
+            pastDate.setHours(0, 0, 0, 0);
+            
+            supabase.from('production_logs_v2')
+                .select('created_at, sku, output_qty')
+                .eq('machine_id', machine.machine_id)
+                .gte('created_at', pastDate.toISOString())
+                .order('created_at', { ascending: false })
+                .limit(30000) // Overcome default 1000 row limit for full 14-days history
+                .then(({ data }) => {
+                    const daysMap: Record<string, Record<string, { qty: number; start: Date; end: Date }>> = {};
+                    (data || []).forEach((row: any) => {
+                        const dateObj = new Date(row.created_at);
+                        const dateKey = dateObj.toLocaleDateString('en-CA');
+                        const s = row.sku && row.sku.trim().toUpperCase() !== 'UNKNOWN' ? row.sku : (machine.current_sku || 'Unknown');
+                        
+                        if (!daysMap[dateKey]) daysMap[dateKey] = {};
+                        if (!daysMap[dateKey][s]) {
+                            daysMap[dateKey][s] = { qty: 0, start: dateObj, end: dateObj };
+                        }
+                        
+                        const qty = Number(row.output_qty) || 0;
+                        if (qty > 0) {
+                            daysMap[dateKey][s].qty += qty;
+                            if (dateObj.getTime() < daysMap[dateKey][s].start.getTime()) daysMap[dateKey][s].start = dateObj;
+                            if (dateObj.getTime() > daysMap[dateKey][s].end.getTime()) daysMap[dateKey][s].end = dateObj;
+                        }
+                    });
+                    const res: { date: string; sku: string; qty: number; timeStr: string }[] = [];
+                    Object.entries(daysMap).forEach(([date, skus]) => {
+                        Object.entries(skus).forEach(([sku, info]) => {
+                            const st = info.start.toLocaleTimeString('en-MY', { hour: '2-digit', minute: '2-digit', hour12: true });
+                            const et = info.end.toLocaleTimeString('en-MY', { hour: '2-digit', minute: '2-digit', hour12: true });
+                            const timeStr = st === et ? st : `${st} ${et !== st ? `to ${et}` : ''}`;
+                            res.push({ date, sku, qty: info.qty, timeStr });
+                        });
+                    });
+                    res.sort((a, b) => b.date.localeCompare(a.date));
+                    setDailyLogs(res);
+                    setLoading(false);
+                });
+        }
+    }, [machine.machine_id, viewMode]);
 
     return (
         <div className="fixed inset-0 z-50 flex items-center justify-end">
@@ -209,37 +257,78 @@ const DetailPanel = ({ machine, onClose }: { machine: MachineCard; onClose: () =
                 )}
 
                 {/* Logs */}
-                <div className="flex-1 overflow-y-auto custom-scrollbar">
-                    <div className="px-6 py-3 border-b border-white/5">
-                        <span className="text-[10px] text-gray-500 uppercase tracking-widest">Today's Production Logs</span>
+                <div className="flex-1 flex flex-col overflow-hidden">
+                    <div className="px-6 py-3 border-b border-white/5 bg-black/20 flex gap-2">
+                        <button 
+                            onClick={() => setViewMode('today')}
+                            className={`px-3 py-1.5 rounded-lg text-[10px] font-bold uppercase tracking-widest transition-colors ${viewMode === 'today' ? 'bg-white/10 text-white' : 'text-gray-500 hover:text-gray-300'}`}
+                        >
+                            Today's Pulses
+                        </button>
+                        <button 
+                            onClick={() => setViewMode('history')}
+                            className={`px-3 py-1.5 rounded-lg text-[10px] font-bold uppercase tracking-widest transition-colors ${viewMode === 'history' ? 'bg-white/10 text-white' : 'text-gray-500 hover:text-gray-300'}`}
+                        >
+                            14-Day History
+                        </button>
                     </div>
-                    {loading ? (
-                        <div className="flex items-center justify-center p-10">
-                            <div className="w-6 h-6 border-2 border-cyan-500/30 border-t-cyan-500 rounded-full animate-spin" />
-                        </div>
-                    ) : logs.length === 0 ? (
-                        <div className="p-8 text-center text-gray-600 text-sm">No production logs today</div>
-                    ) : (
-                        <div className="divide-y divide-white/5">
-                            {logs.map(log => (
-                                <div key={log.log_id} className="px-6 py-3 flex items-center justify-between hover:bg-white/2">
-                                    <div>
-                                        <div className="text-xs text-gray-400 font-mono">
-                                            {new Date(log.created_at).toLocaleTimeString('en-MY', { hour: '2-digit', minute: '2-digit', second: '2-digit' })}
+                    
+                    <div className="flex-1 overflow-y-auto custom-scrollbar">
+                        {loading ? (
+                            <div className="flex items-center justify-center p-10">
+                                <div className="w-6 h-6 border-2 border-cyan-500/30 border-t-cyan-500 rounded-full animate-spin" />
+                            </div>
+                        ) : viewMode === 'today' ? (
+                            logs.length === 0 ? (
+                                <div className="p-8 text-center text-gray-600 text-sm">No production logs today</div>
+                            ) : (
+                                <div className="divide-y divide-white/5">
+                                    {logs.map(log => (
+                                        <div key={log.log_id} className="px-6 py-3 flex items-center justify-between hover:bg-white/2">
+                                            <div>
+                                                <div className="text-xs text-gray-400 font-mono">
+                                                    {new Date(log.created_at).toLocaleTimeString('en-MY', { hour: '2-digit', minute: '2-digit', second: '2-digit' })}
+                                                </div>
+                                                {log.sku && log.sku.trim().toUpperCase() !== 'UNKNOWN' ? (
+                                                    <div className="text-[10px] text-gray-600 font-mono mt-0.5">{log.sku}</div>
+                                                ) : machine.current_sku ? (
+                                                    <div className="text-[10px] text-gray-600 font-mono mt-0.5">{machine.current_sku}</div>
+                                                ) : null}
+                                            </div>
+                                            <div className="text-sm font-black text-white">
+                                                +{log.output_qty || 0}
+                                            </div>
                                         </div>
-                                        {log.sku && log.sku.trim().toUpperCase() !== 'UNKNOWN' ? (
-                                            <div className="text-[10px] text-gray-600 font-mono mt-0.5">{log.sku}</div>
-                                        ) : machine.current_sku ? (
-                                            <div className="text-[10px] text-gray-600 font-mono mt-0.5">{machine.current_sku}</div>
-                                        ) : null}
-                                    </div>
-                                    <div className="text-sm font-black text-white">
-                                        +{log.output_qty || 0}
-                                    </div>
+                                    ))}
                                 </div>
-                            ))}
-                        </div>
-                    )}
+                            )
+                        ) : (
+                            dailyLogs.length === 0 ? (
+                                <div className="p-8 text-center text-gray-600 text-sm">No historical logs found</div>
+                            ) : (
+                                <div className="divide-y divide-white/5">
+                                    {dailyLogs.map((log, idx) => (
+                                        <div key={idx} className="px-6 py-4 flex items-center justify-between hover:bg-white/2">
+                                            <div>
+                                                <div className="flex items-center gap-2 mb-0.5">
+                                                    <div className="text-xs font-bold text-gray-300">
+                                                        {new Date(log.date).toLocaleDateString('en-MY', { weekday: 'short', month: 'short', day: 'numeric' })}
+                                                    </div>
+                                                    <div className="text-[9px] text-gray-500 font-mono bg-white/5 border border-white/10 px-1.5 py-0.5 rounded tracking-widest uppercase">
+                                                        {log.timeStr}
+                                                    </div>
+                                                </div>
+                                                <div className="text-[10px] text-gray-400 font-mono">{log.sku}</div>
+                                            </div>
+                                            <div className="text-base font-black text-cyan-400">
+                                                {log.qty.toLocaleString()}
+                                            </div>
+                                        </div>
+                                    ))}
+                                </div>
+                            )
+                        )}
+                    </div>
                 </div>
             </div>
         </div>
@@ -251,15 +340,28 @@ const DetailPanel = ({ machine, onClose }: { machine: MachineCard; onClose: () =
 const MachineCardView = ({ machine, onClick }: { machine: MachineCard; onClick: () => void }) => {
     const c = getStatusColor(machine.status, machine.isProducing);
     const isDL = machine.name.includes('Double Layer');
+    const [pulse, setPulse] = useState(false);
+    
+    // Trigger ripple glow when pulse increases
+    useEffect(() => {
+        if (machine.today_count > 0) {
+            setPulse(true);
+            const t = setTimeout(() => setPulse(false), 1000);
+            return () => clearTimeout(t);
+        }
+    }, [machine.today_count]);
 
     return (
         <button
             onClick={onClick}
             className={`group relative bg-[#0d0d14] border ${c.ring} rounded-2xl p-5 text-left transition-all duration-300
-                        hover:scale-[1.02] hover:shadow-xl ${c.glow} flex flex-col gap-4 overflow-hidden`}
+                        hover:scale-[1.02] hover:shadow-xl ${c.glow} flex flex-col gap-4 overflow-hidden transform-gpu`}
         >
+            {/* Pulse Ripple Overlay */}
+            <div className={`absolute inset-0 rounded-2xl border-2 transition-all pointer-events-none transform-gpu ${pulse ? 'border-cyan-400 scale-105 opacity-0 duration-[1500ms] ease-out' : 'border-transparent scale-100 opacity-100 duration-0'}`} />
+
             {/* Background glow */}
-            <div className={`absolute top-0 right-0 w-32 h-32 rounded-full blur-3xl opacity-10 ${machine.isProducing ? 'bg-emerald-500' :
+            <div className={`absolute top-0 right-0 w-32 h-32 rounded-full blur-3xl opacity-10 transition-colors duration-1000 ${machine.isProducing ? 'bg-emerald-500' :
                 machine.status === 'Online' ? 'bg-cyan-500' : 'bg-transparent'
                 }`} />
 
@@ -298,7 +400,7 @@ const MachineCardView = ({ machine, onClick }: { machine: MachineCard; onClick: 
             {machine.current_sku ? (
                 <div className="relative z-10 bg-cyan-500/10 border border-cyan-500/20 rounded-lg px-3 py-1.5">
                     <div className="text-[9px] text-cyan-500 uppercase tracking-widest mb-0.5">Running</div>
-                    <div className="font-mono text-cyan-300 text-xs font-bold truncate">{machine.current_sku}</div>
+                    <div className="font-mono text-cyan-300 text-xs font-bold truncate">{machine.current_sku_name || machine.current_sku}</div>
                 </div>
             ) : (
                 <div className="relative z-10 bg-white/3 border border-white/5 rounded-lg px-3 py-1.5">
@@ -368,7 +470,7 @@ const FactoryLiveOS: React.FC<FactoryLiveOSProps> = ({ onNavigate }) => {
         const todayISO = today.toISOString();
         const todayStr = new Date().toLocaleDateString('en-CA'); // YYYY-MM-DD
 
-        const [machinesRes, iotRes, logsRes, activeRes, ordersRes, stockRes, driversRes] = await Promise.all([
+        const [machinesRes, iotRes, logsRes, activeRes, ordersRes, stockRes, driversRes, itemsRes] = await Promise.all([
             supabase.from('sys_machines_v2').select('machine_id, name, factory_id, base_width, type').order('factory_id'),
             supabase.from('iot_device_configs').select('mac_address, machine_id, last_heartbeat'),
             supabase.from('production_logs_v2').select('machine_id, output_qty, created_at, sku, log_id').gte('created_at', todayISO),
@@ -381,9 +483,14 @@ const FactoryLiveOS: React.FC<FactoryLiveOSProps> = ({ onNavigate }) => {
             supabase.rpc('get_live_stock_viewer'),
             // Manager: Driver names
             supabase.from('users_public').select('id, name, email, role').eq('role', 'Driver'),
+            // Product Master
+            supabase.from('master_items_v2').select('sku, name'),
         ]);
 
         // ─── Machine Processing (existing) ────────────────────────────────
+        const itemNameMap: Record<string, string> = {};
+        (itemsRes.data || []).forEach((item: any) => { itemNameMap[item.sku] = item.name || item.sku; });
+
         const iotMap: Record<string, { last_heartbeat: string; mac: string }> = {};
         (iotRes.data || []).forEach((d: any) => {
             iotMap[d.machine_id] = { last_heartbeat: d.last_heartbeat, mac: d.mac_address };
@@ -433,6 +540,7 @@ const FactoryLiveOS: React.FC<FactoryLiveOSProps> = ({ onNavigate }) => {
                 ...(() => { const r = resolveStatus(iotMap[m.machine_id]?.last_heartbeat || null, !!activeMap[m.machine_id]); return { status: r.status, isProducing: r.isProducing }; })(),
                 today_count: countMap[m.machine_id] || 0,
                 current_sku: activeMap[m.machine_id] || null,
+                current_sku_name: itemNameMap[activeMap[m.machine_id]] || null,
                 reboot_count: rebootMap[m.machine_id] || 0,
                 gaps: gapMap[m.machine_id] || [],
                 total_count: 0,
@@ -458,7 +566,7 @@ const FactoryLiveOS: React.FC<FactoryLiveOSProps> = ({ onNavigate }) => {
             .map(([mid, skuMap]) => ({
                 machine_id: mid,
                 machine_name: machineNameMap[mid] || mid,
-                skus: Object.entries(skuMap).map(([sku, qty]) => ({ sku, qty })).sort((a, b) => b.qty - a.qty),
+                skus: Object.entries(skuMap).map(([sku, qty]) => ({ sku, name: itemNameMap[sku] || sku, qty })).sort((a, b) => b.qty - a.qty),
                 total: Object.values(skuMap).reduce((s, v) => s + v, 0)
             }))
             .sort((a, b) => b.total - a.total);
@@ -512,10 +620,10 @@ const FactoryLiveOS: React.FC<FactoryLiveOSProps> = ({ onNavigate }) => {
         // SKU list for form
         if (skuList.length === 0) {
             const { data: items } = await supabase.from('master_items_v2')
-                .select('sku, name')
+                .select('sku, name, nickname')
                 .eq('status', 'Active')
                 .order('name');
-            if (items) setSkuList(items.map((i: any) => ({ sku: i.sku, name: i.name })));
+            if (items) setSkuList(items.map((i: any) => ({ sku: i.sku, name: i.name, nickname: i.nickname })));
         }
 
         setLastUpdate(new Date());
@@ -591,9 +699,16 @@ const FactoryLiveOS: React.FC<FactoryLiveOSProps> = ({ onNavigate }) => {
 
     const getMachineName = (mid: string) => machines.find(m => m.machine_id === mid)?.name || mid;
 
+    const searchTerms = skuSearch.toLowerCase().trim().split(/[\s-]+/).filter(Boolean);
     const filteredSkus = skuSearch
-        ? skuList.filter(s => s.sku.toLowerCase().includes(skuSearch.toLowerCase()) || s.name.toLowerCase().includes(skuSearch.toLowerCase())).slice(0, 8)
-        : skuList.slice(0, 8);
+        ? skuList.filter(s => {
+              if (searchTerms.length === 0) return true;
+              const sku = s.sku.toLowerCase();
+              const name = s.name.toLowerCase();
+              const nick = (s as any).nickname ? (s as any).nickname.toLowerCase() : '';
+              return searchTerms.every(term => sku.includes(term) || name.includes(term) || nick.includes(term));
+          }).slice(0, 20)
+        : skuList.slice(0, 20);
 
     return (
         <div className="min-h-screen bg-[#070710] text-white flex flex-col">
@@ -624,24 +739,54 @@ const FactoryLiveOS: React.FC<FactoryLiveOSProps> = ({ onNavigate }) => {
                 </button>
             </header>
 
-            {/* ── SUMMARY BAR (6-col) ── */}
-            <div className="border-b border-white/5 bg-black/20 px-6 py-3 grid grid-cols-3 md:grid-cols-6 gap-3">
-                {[
-                    { label: 'Online', value: onlineCount, icon: Zap, color: 'text-cyan-400', bg: 'bg-cyan-500/10' },
-                    { label: 'Producing', value: producingCount, icon: Cpu, color: 'text-emerald-400', bg: 'bg-emerald-500/10' },
-                    { label: 'Rolls Today', value: totalRolls.toLocaleString(), icon: Box, color: 'text-cyan-400', bg: 'bg-cyan-500/10' },
-                    { label: 'Orders', value: orderSummary.total, icon: ClipboardList, color: 'text-blue-400', bg: 'bg-blue-500/10' },
-                    { label: 'Low Stock', value: lowStockItems.length, icon: TrendingDown, color: lowStockItems.length > 0 ? 'text-orange-400' : 'text-gray-600', bg: lowStockItems.length > 0 ? 'bg-orange-500/10' : 'bg-white/5' },
-                    { label: 'Alerts', value: alertCount, icon: AlertTriangle, color: alertCount > 0 ? 'text-orange-400' : 'text-gray-600', bg: alertCount > 0 ? 'bg-orange-500/10' : 'bg-white/5' },
-                ].map(s => (
-                    <div key={s.label} className={`${s.bg} rounded-xl px-4 py-2.5 flex items-center gap-3`}>
-                        <s.icon size={18} className={s.color} />
-                        <div>
-                            <div className={`text-xl font-black ${s.color} leading-none`}>{s.value}</div>
-                            <div className="text-[10px] text-gray-500 uppercase tracking-widest">{s.label}</div>
+            {/* ── GLOBAL HEAT DASHBOARD ── */}
+            <div className="relative z-10 m-6 mt-4 mb-2 rounded-2xl overflow-hidden border border-white/5 shadow-2xl">
+                {/* Background FX */}
+                <div className="absolute inset-0 bg-gradient-to-r from-cyan-900/20 via-purple-900/10 to-emerald-900/20" />
+                <div className="absolute inset-0 bg-black/40 backdrop-blur-3xl" />
+                
+                <div className="relative p-6 md:p-8 flex flex-col md:flex-row items-center justify-between gap-8">
+                    {/* Hero Stat */}
+                    <div className="flex-1 text-center md:text-left">
+                        <div className="flex items-center justify-center md:justify-start gap-2 mb-2 opacity-80">
+                            <span className="w-2 h-2 rounded-full bg-emerald-400 animate-ping" />
+                            <span className="text-xs font-black uppercase tracking-[0.2em] text-cyan-400">Total Yield Today</span>
+                        </div>
+                        <div className="text-5xl md:text-6xl font-black text-transparent bg-clip-text bg-gradient-to-b from-white to-gray-400 tracking-tighter">
+                            {totalRolls.toLocaleString()} <span className="text-xl text-gray-600 font-bold tracking-widest ml-1">ROLLS</span>
                         </div>
                     </div>
-                ))}
+
+                    {/* Health Radars */}
+                    <div className="flex flex-1 flex-col sm:flex-row items-stretch justify-end gap-3 w-full">
+                        {/* Machine Health */}
+                        <div className="bg-white/5 border border-white/10 rounded-xl p-4 flex items-center gap-4 flex-1 max-w-xs transition-colors hover:bg-white/10" onClick={() => onNavigate && onNavigate('dashboard')}>
+                            <div className="p-3 bg-emerald-500/20 rounded-xl">
+                                <Activity size={24} className="text-emerald-400" />
+                            </div>
+                            <div>
+                                <div className="text-[10px] uppercase tracking-widest text-gray-500 mb-1">Health Status</div>
+                                <div className="flex items-center gap-2.5 text-xs font-bold font-mono">
+                                    <span className="text-emerald-400 flex items-center gap-1"><Check size={12}/>{producingCount}</span>
+                                    <span className="text-yellow-500 flex items-center gap-1"><Clock size={12}/>{onlineCount - producingCount}</span>
+                                    <span className="text-red-500 flex items-center gap-1"><WifiOff size={12}/>{machines.length - onlineCount}</span>
+                                </div>
+                            </div>
+                        </div>
+
+                        {/* Order Operations */}
+                        <div className="flex flex-col gap-3 min-w-[160px]">
+                            <div className="bg-white/5 border border-white/10 rounded-xl px-4 py-2.5 flex items-center justify-between group transition-colors hover:bg-white/10 cursor-pointer" onClick={() => onNavigate && onNavigate('lorry_service')}>
+                                <span className="text-[10px] text-gray-500 uppercase tracking-widest flex items-center gap-1"><Truck size={12}/> Pending DO</span>
+                                <span className="text-blue-400 font-black text-sm">{orderSummary.pending}</span>
+                            </div>
+                            <div className="bg-white/5 border border-white/10 rounded-xl px-4 py-2.5 flex items-center justify-between group transition-colors hover:bg-white/10">
+                                <span className="text-[10px] text-gray-500 uppercase tracking-widest flex items-center gap-1"><AlertTriangle size={12}/> Anomalies</span>
+                                <span className={`${alertCount > 0 ? 'text-orange-400' : 'text-gray-600'} font-black text-sm`}>{alertCount}</span>
+                            </div>
+                        </div>
+                    </div>
+                </div>
             </div>
 
             {/* ── MAIN CONTENT ── */}
@@ -699,17 +844,18 @@ const FactoryLiveOS: React.FC<FactoryLiveOSProps> = ({ onNavigate }) => {
                                             </div>
                                             {/* SKU Rows */}
                                             <div className="divide-y divide-white/5">
-                                                {machine.skus.map(({ sku, qty }) => {
+                                                {machine.skus.map(({ sku, name, qty }) => {
                                                     const pct = machine.total > 0 ? (qty / machine.total) * 100 : 0;
                                                     return (
                                                         <div key={sku} className="px-4 py-2.5 flex items-center gap-3 relative overflow-hidden">
                                                             {/* Progress bar background */}
                                                             <div
-                                                                className="absolute inset-y-0 left-0 bg-cyan-500/5"
+                                                                className="absolute inset-y-0 left-0 bg-cyan-500/5 transition-all duration-1000 ease-out"
                                                                 style={{ width: `${pct}%` }}
                                                             />
-                                                            <div className="relative z-10 flex-1 min-w-0">
-                                                                <div className="text-xs font-mono text-gray-300 truncate" title={sku}>{sku}</div>
+                                                            <div className="relative z-10 flex-1 min-w-0 flex flex-col justify-center">
+                                                                <div className="text-xs font-bold text-white truncate drop-shadow-md" title={name}>{name}</div>
+                                                                <div className="text-[9px] font-mono text-gray-500 truncate" title={sku}>{sku}</div>
                                                             </div>
                                                             <div className="relative z-10 flex items-center gap-2">
                                                                 <div className="text-xs text-gray-500 font-mono w-10 text-right">{pct.toFixed(0)}%</div>

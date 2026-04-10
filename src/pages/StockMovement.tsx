@@ -83,11 +83,14 @@ const StockMovement: React.FC<{ user?: any }> = ({ user }) => {
     };
 
     // SKU autocomplete filter
-    const filteredItems = items.filter(i =>
-        !skuSearch ||
-        i.sku.toLowerCase().includes(skuSearch.toLowerCase()) ||
-        i.name.toLowerCase().includes(skuSearch.toLowerCase())
-    ).slice(0, 10);
+    const searchTerms = skuSearch.toLowerCase().trim().split(/[\s-]+/).filter(Boolean);
+    const filteredItems = items.filter(i => {
+        if (searchTerms.length === 0) return true;
+        const s = i.sku.toLowerCase();
+        const n = i.name.toLowerCase();
+        const nick = (i as any).nickname ? (i as any).nickname.toLowerCase() : '';
+        return searchTerms.every(term => s.includes(term) || n.includes(term) || nick.includes(term));
+    }).slice(0, 50);
 
     const addToCart = (item: V2Item) => {
         const existing = cart.find(c => c.sku === item.sku);
