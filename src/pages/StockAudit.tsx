@@ -157,10 +157,10 @@ const StockAudit: React.FC<StockAuditProps> = ({ user }) => {
     };
 
     // Filter audit list by search during counting
+    const searchTerms = search.toLowerCase().trim().split(/[\s-]+/).filter(Boolean);
     const visibleAuditList = auditList.filter(item =>
-        search === '' ||
-        item.name.toLowerCase().includes(search.toLowerCase()) ||
-        item.sku.toLowerCase().includes(search.toLowerCase())
+        searchTerms.length === 0 || 
+        searchTerms.every(term => item.name.toLowerCase().includes(term) || item.sku.toLowerCase().includes(term))
     );
 
     const countedItemsCount = auditList.filter(a => a.physicalQty.trim() !== '').length;

@@ -454,7 +454,6 @@ const LiveStock: React.FC = () => {
             const { data, error } = await supabase
                 .from('v2_inventory_view')
                 .select('sku, name, type, uom, loc_id, current_stock, last_updated')
-                .ilike('sku', 'BW-%')
                 .order('sku', { ascending: true });
 
             if (error) throw error;
@@ -479,11 +478,12 @@ const LiveStock: React.FC = () => {
     }, [rows]);
 
     const filtered = useMemo(() => {
+        const searchTerms = search.toLowerCase().trim().split(/[\s-]+/).filter(Boolean);
         const preFiltered = rows.filter(r => {
             const matchType = typeFilter === 'All' || r.type === typeFilter;
-            const matchSearch = !search ||
-                r.sku.toLowerCase().includes(search.toLowerCase()) ||
-                r.name.toLowerCase().includes(search.toLowerCase());
+            const matchSearch = searchTerms.length === 0 || searchTerms.every(term => 
+                r.sku.toLowerCase().includes(term) || r.name.toLowerCase().includes(term)
+            );
             return matchType && matchSearch;
         });
 
@@ -646,45 +646,85 @@ const LiveStock: React.FC = () => {
                         <p className="font-medium">No items found.</p>
                     </div>
                 ) : viewMode === 'card' ? (
-                    /* CARD GRID VIEW */
-                    <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 gap-4">
-                        {filtered.map(item => {
-                            const badge = getStockBadge(item.current_stock);
-                            const styleConfig = TYPE_STYLE[item.type] || DEFAULT_STYLE;
+                    /* CATEGORISED HORIZONTAL ROW VIEW */
+                    <div className="space-y-6">
+                        {(() => {
+                            const renderMiniCard = (item: StockItem) => {
+                                const badge = getStockBadge(item.current_stock);
+                                const styleConfig = TYPE_STYLE[item.type] || DEFAULT_STYLE;
+                                return (
+                                    <button
+                                        key={item.sku}
+                                        onClick={() => setSelectedItem(item)}
+                                        className={`shrink-0 w-36 sm:w-44 relative border rounded-2xl p-3 sm:p-4 text-left cursor-pointer shadow-sm flex flex-col justify-between h-28 sm:h-32 snap-start hover:scale-[1.02] transition-transform ${styleConfig.bgCard}`}
+                                    >
+                                        <div>
+                                            <div className="font-black text-slate-800 dark:text-white text-xs sm:text-sm tracking-tight leading-tight mb-1 line-clamp-2" title={item.name}>{item.name}</div>
+                                            <div className="text-[9px] text-slate-500 dark:text-gray-400 truncate font-mono" title={item.sku}>{item.sku}</div>
+                                        </div>
+                                        <div className="flex items-end justify-between mt-2">
+                                            <span className={`text-[8px] font-bold uppercase px-1.5 py-0.5 rounded border ${badge.cls}`}>
+                                                {badge.label}
+                                            </span>
+                                            <div className={`text-xl sm:text-2xl font-black tracking-tighter leading-none ${getStockColor(item.current_stock)}`}>
+                                                {Number(item.current_stock).toLocaleString()}
+                                            </div>
+                                        </div>
+                                    </button>
+                                );
+                            };
+
+                            const renderCategorisedRow = (title: string, items: StockItem[]) => {
+                                if (items.length === 0) return null;
+                                return (
+                                    <div className="mb-6">
+                                        <h3 className="text-[10px] sm:text-xs font-black uppercase tracking-widest text-slate-500 dark:text-gray-500 mb-2 ml-1">{title}</h3>
+                                        <div className="flex overflow-x-auto gap-3 pb-4 custom-scrollbar snap-x px-1">
+                                            {items.map(renderMiniCard)}
+                                        </div>
+                                    </div>
+                                );
+                            };
+
+                            const isBW = (i: StockItem) => i.type === 'Bubble Wrap' || i.sku.startsWith('BW-');
+
+                            const slClear = filtered.filter(i => isBW(i) && i.sku.includes('-SL-CLR'));
+                            const dlClear = filtered.filter(i => isBW(i) && i.sku.includes('-DL-CLR'));
+                            const slHitam = filtered.filter(i => isBW(i) && i.sku.includes('-SL-BLK'));
+                            const dlHitam = filtered.filter(i => isBW(i) && i.sku.includes('-DL-BLK'));
+                            
+                            const bwRest = filtered.filter(i => isBW(i) && !i.sku.includes('-SL-CLR') && !i.sku.includes('-DL-CLR') && !i.sku.includes('-SL-BLK') && !i.sku.includes('-DL-BLK'));
+                            
+                            const stretchFilms = filtered.filter(i => !isBW(i) && (i.type === 'Stretch Film' || i.sku.startsWith('SF-')));
+                            const tapes = filtered.filter(i => !isBW(i) && i.type?.includes('Tape'));
+                            const others = filtered.filter(i => !isBW(i) && i.type !== 'Stretch Film' && !i.sku.startsWith('SF-') && !i.type?.includes('Tape'));
+
                             return (
-                                <button
-                                    key={item.sku}
-                                    onClick={() => setSelectedItem(item)}
-                                    className={`relative border rounded-2xl p-5 text-left cursor-pointer w-full shadow-sm ${styleConfig.bgCard}`}
-                                >
-                                    {/* Type tag */}
-                                    <div className="flex justify-between items-start mb-4">
-                                        <span className={`text-[10px] font-black uppercase px-2 py-1 rounded-full border ${styleConfig.badge}`}>
-                                            {item.type}
-                                        </span>
-                                        <span className={`text-[10px] font-bold uppercase px-2 py-1 rounded-full border ${badge.cls}`}>
-                                            {badge.label}
-                                        </span>
-                                    </div>
-
-                                    {/* SKU + Name */}
-                                    <div className="mb-5">
-                                        <div className="font-black text-slate-800 dark:text-white text-base tracking-tight leading-tight mb-0.5 truncate" title={item.name}>{item.name}</div>
-                                        <div className="text-[11px] text-slate-500 dark:text-gray-400 truncate font-mono" title={item.sku}>{item.sku}</div>
-                                    </div>
-
-                                    {/* Stock Number */}
-                                    <div className="border-t border-slate-200 dark:border-white/5 pt-3 flex items-end justify-between">
-                                        <div className="text-[10px] text-slate-400 dark:text-gray-500 font-mono uppercase">
-                                            {item.uom || 'unit'}
+                                <>
+                                    {/* BUBBLE WRAP SECTION */}
+                                    {(slClear.length > 0 || dlClear.length > 0 || slHitam.length > 0 || dlHitam.length > 0 || bwRest.length > 0) && (
+                                        <div className="mb-8 bg-slate-50/50 dark:bg-[#12121a]/30 p-3 sm:p-5 rounded-2xl border border-slate-200/50 dark:border-white/5">
+                                            <h2 className="text-xs sm:text-sm font-black uppercase tracking-[0.2em] text-cyan-600 dark:text-cyan-400 mb-4 border-b border-cyan-500/20 pb-2 flex items-center gap-2">📦 Bubblewrap 分类</h2>
+                                            {renderCategorisedRow('SL (Single Layer Clear)', slClear)}
+                                            {renderCategorisedRow('DL (Double Layer Clear)', dlClear)}
+                                            {renderCategorisedRow('SL Hitam (Single Layer Black)', slHitam)}
+                                            {renderCategorisedRow('DL Hitam (Double Layer Black)', dlHitam)}
+                                            {renderCategorisedRow('Other Bubble Wraps', bwRest)}
                                         </div>
-                                        <div className={`text-3xl font-black tracking-tighter ${getStockColor(item.current_stock)}`}>
-                                            {Number(item.current_stock).toLocaleString()}
+                                    )}
+                                    
+                                    {/* OTHER SECTIONS */}
+                                    {(stretchFilms.length > 0 || tapes.length > 0 || others.length > 0) && (
+                                        <div className="p-3 sm:p-5">
+                                            <h2 className="text-xs sm:text-sm font-black uppercase tracking-[0.2em] text-slate-600 dark:text-slate-400 mb-4 border-b border-slate-500/20 pb-2 flex items-center gap-2">📦 其它分类 (Others)</h2>
+                                            {renderCategorisedRow('Stretch Films', stretchFilms)}
+                                            {renderCategorisedRow('Tapes', tapes)}
+                                            {renderCategorisedRow('Other Items', others)}
                                         </div>
-                                    </div>
-                                </button>
+                                    )}
+                                </>
                             );
-                        })}
+                        })()}
                     </div>
                 ) : (
                     /* DENSE LIST VIEW (Mobile Optimized) */

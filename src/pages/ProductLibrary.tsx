@@ -565,10 +565,11 @@ const ProductLibrary: React.FC = () => {
     };
 
     // Data Filtering
+    const searchTerms = searchTerm.toLowerCase().trim().split(/[\s-]+/).filter(Boolean);
     const filteredItems = items.filter(item => {
         const name = (item.name || '').toLowerCase();
         const sku = (item.sku || '').toLowerCase();
-        const matchesSearch = name.includes(searchTerm.toLowerCase()) || sku.includes(searchTerm.toLowerCase());
+        const matchesSearch = searchTerms.length === 0 || searchTerms.every(term => name.includes(term) || sku.includes(term));
         const matchesType = filterType === 'All' || item.type === filterType;
         return matchesSearch && matchesType;
     });
