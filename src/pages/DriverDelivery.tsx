@@ -1,11 +1,39 @@
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useRef } from 'react';
 import { supabase } from '../services/supabase';
-import { Truck, CheckCircle, Package, ChevronRight, X, RefreshCw } from 'lucide-react';
+import { Truck, CheckCircle, Package, ChevronRight, X, RefreshCw, Camera, Image as ImageIcon } from 'lucide-react';
 import { SalesOrder } from '../types';
 
 interface DriverDeliveryProps {
     user: any;
 }
+
+const compressImage = (file: File, maxWidth = 1200, quality = 0.7): Promise<string> => {
+    return new Promise((resolve, reject) => {
+        const reader = new FileReader();
+        reader.onload = (e) => {
+            const img = new window.Image();
+            img.onload = () => {
+                const canvas = document.createElement('canvas');
+                let w = img.width, h = img.height;
+                if (w > maxWidth) { h = (maxWidth / w) * h; w = maxWidth; }
+                canvas.width = w;
+                canvas.height = h;
+                const ctx = canvas.getContext('2d')!;
+                ctx.drawImage(img, 0, 0, w, h);
+                const dataUrl = canvas.toDataURL('image/jpeg', quality);
+                resolve(dataUrl);
+            };
+            img.onerror = reject;
+            if (e.target?.result) {
+                img.src = e.target.result as string;
+            } else {
+                reject(new Error("File processing failed"));
+            }
+        };
+        reader.onerror = reject;
+        reader.readAsDataURL(file);
+    });
+};
 
 const DriverDelivery: React.FC<DriverDeliveryProps> = ({ user }) => {
     // State
@@ -18,6 +46,15 @@ const DriverDelivery: React.FC<DriverDeliveryProps> = ({ user }) => {
     const [isLoadModalOpen, setIsLoadModalOpen] = useState(false);
     const [loadItems, setLoadItems] = useState<any[]>([]); // Items to verify
     const [submitting, setSubmitting] = useState(false);
+    const [loadPhotoBase64, setLoadPhotoBase64] = useState<string | null>(null);
+    const [uploadingPhoto, setUploadingPhoto] = useState(false);
+    const fileInputRef = useRef<HTMLInputElement>(null);
+
+    // PICK UP State
+    const [isPickUpModalOpen, setIsPickUpModalOpen] = useState(false);
+    const [pickUpNote, setPickUpNote] = useState('');
+    const [pickupLocation, setPickupLocation] = useState<string>('Searching GPS...');
+    const pickUpFileInputRef = useRef<HTMLInputElement>(null);
 
     // 1. Fetch Data
     const fetchTasks = async () => {
@@ -89,11 +126,35 @@ const DriverDelivery: React.FC<DriverDeliveryProps> = ({ user }) => {
     };
 
     // 3. Submit Loading (Deduct Stock)
-    const handleConfirmLoad = async () => {
+    const handleConfirmLoad = async (photoBase64Str?: string) => {
         if (!selectedOrder) return;
+        const finalPhoto = photoBase64Str || loadPhotoBase64;
+        if (!finalPhoto) {
+            alert("⚠️ Please take a photo of the loaded goods first!");
+            return;
+        }
+
         setSubmitting(true);
+        let photoUrl = '';
 
         try {
+            // Upload Photo First
+            try {
+                const fileName = `load_${selectedOrder.orderNumber}_${Date.now()}.jpg`;
+                const blob = await fetch(`data:image/jpeg;base64,${finalPhoto}`).then(r => r.blob());
+
+                const { error: uploadError } = await supabase.storage
+                    .from('work-photos')
+                    .upload(fileName, blob, { contentType: 'image/jpeg' });
+
+                if (uploadError) throw uploadError;
+
+                const { data: urlData } = supabase.storage.from('work-photos').getPublicUrl(fileName);
+                photoUrl = urlData.publicUrl;
+            } catch (err: any) {
+                console.error("Photo Upload Error:", err);
+                throw new Error("Failed to upload photo. Please try again.");
+            }
             // Check for Amendments
             const hasAmendments = loadItems.some(item => item.confirmedQty !== undefined && item.confirmedQty !== item.quantity);
 
@@ -112,39 +173,20 @@ const DriverDelivery: React.FC<DriverDeliveryProps> = ({ user }) => {
                 await supabase.from('sales_orders').update({
                     status: 'Pending Approval',
                     items: updatedItems,
-                    notes: (selectedOrder.notes || '') + ` | Amended by Driver: ${user?.name}`
+                    notes: (selectedOrder.notes || '') + ` | Amended by Driver: ${user?.name}`,
+                    proof_of_load_url: photoUrl
                 }).eq('id', selectedOrder.id);
 
                 alert("⚠️ Order quantity changed. Sent to Vivian for Approval.");
 
             } else {
-                // 2. NO AMENDMENTS - Proceed to Deduct & Deliver
-                for (const item of loadItems) {
-                    const qtyToDeduct = item.confirmedQty || item.quantity;
-                    const loc = item.sourceLocation || 'Unassigned'; // NEW: Multi-location Source
-                    if (qtyToDeduct > 0) {
-                        // Direct Insert to bypass RPC "change_type" phantom error
-                        const { error } = await supabase.from('stock_ledger_v2').insert({
-                            sku: item.sku,
-                            change_qty: -qtyToDeduct, // Negative for OUT
-                            event_type: 'Transfer Out',
-                            loc_id: loc,              // Explicit Warehouse Deduct
-                            ref_doc: selectedOrder.orderNumber,
-                            notes: `Loaded by Driver: ${user?.name || 'Unknown'} `
-                        });
-
-                        if (error) {
-                            console.error("Stock Ledger Error:", error);
-                            // If V2 table doesn't exist, try V1 as fallback (optional)
-                            // or just ignore if it's not critical for blocking delivery
-                            // throw error; // Strict: Block if stock fails
-                        }
-                    }
-                }
+                // 2. NO AMENDMENTS - Stock already deducted at order creation via DB trigger
+                //    Just update status to Delivered
 
                 const { data: updatedData, error: updateError } = await supabase.from('sales_orders').update({
                     status: 'Delivered',
-                    pod_timestamp: new Date().toISOString()
+                    pod_timestamp: new Date().toISOString(),
+                    proof_of_load_url: photoUrl
                 }).eq('id', selectedOrder.id).select();
 
                 if (updateError) throw updateError;
@@ -163,10 +205,123 @@ const DriverDelivery: React.FC<DriverDeliveryProps> = ({ user }) => {
             }
 
             setIsLoadModalOpen(false);
+            setLoadPhotoBase64(null); // Reset Photo
             // fetchTasks(); // Removed to prevent race condition. Optimistic update handles UI.
 
         } catch (e: any) {
             alert("Error: " + e.message);
+        } finally {
+            setSubmitting(false);
+        }
+    };
+
+    // 4. Handle Photo Capture
+    const handleFileSelect = async (e: React.ChangeEvent<HTMLInputElement>, isPickUp: boolean = false) => {
+        const file = e.target.files?.[0];
+        if (!file) return;
+
+        try {
+            setUploadingPhoto(true);
+
+            // Immediately attempt to fetch GPS if it is a Pick Up
+            if (isPickUp) {
+                setPickupLocation('Fetching GPS...');
+                if ('geolocation' in navigator) {
+                    navigator.geolocation.getCurrentPosition(
+                        (position) => {
+                            setPickupLocation(`Lat: ${position.coords.latitude.toFixed(4)}, Lng: ${position.coords.longitude.toFixed(4)}`);
+                        },
+                        (error) => {
+                            console.warn("GPS Error:", error);
+                            setPickupLocation('GPS Unavailable');
+                        },
+                        { enableHighAccuracy: true, timeout: 5000 }
+                    );
+                } else {
+                    setPickupLocation('GPS Not Supported');
+                }
+            }
+
+            const dataUrl = await compressImage(file);
+            const base64 = dataUrl.split(',')[1];
+            setLoadPhotoBase64(base64);
+
+            if (isPickUp) {
+                setIsPickUpModalOpen(true);
+                setUploadingPhoto(false); // Only end loading state for pickup here
+            } else {
+                // Auto-confirm the load!
+                await handleConfirmLoad(base64);
+                setUploadingPhoto(false);
+            }
+        } catch (err: any) {
+            alert('Failed to process photo: ' + err.message);
+            setUploadingPhoto(false);
+        }
+    };
+
+    // 5. Submit Ad-Hoc Pick Up
+    const handleConfirmPickUp = async () => {
+        if (!loadPhotoBase64) {
+            alert("⚠️ Please take a photo of the collected goods first!");
+            return;
+        }
+        
+        setSubmitting(true);
+        try {
+            // Upload Photo
+            const fileName = `pickup_${user?.employeeId}_${Date.now()}.jpg`;
+            const blob = await fetch(`data:image/jpeg;base64,${loadPhotoBase64}`).then(r => r.blob());
+
+            const { error: uploadError } = await supabase.storage
+                .from('work-photos')
+                .upload(fileName, blob, { contentType: 'image/jpeg' });
+
+            if (uploadError) {
+                console.error('Storage Upload Error:', uploadError);
+                throw new Error("Storage Upload failed: " + uploadError.message);
+            }
+
+            const { data: urlData } = supabase.storage.from('work-photos').getPublicUrl(fileName);
+            const photoUrl = urlData.publicUrl;
+
+            // Generate an order number for this ad-hoc pick up
+            const pickupOrderNo = `TRIP-PU-${Date.now().toString().slice(-6)}`;
+
+            // Insert via SECURITY DEFINER RPC to bypass Row-Level Security
+            const { data, error } = await supabase.rpc('create_driver_pickup_safe', {
+                p_order_number: pickupOrderNo,
+                p_driver_id: user?.uid,
+                p_notes: pickUpNote,
+                p_photo_url: photoUrl,
+                p_location: pickupLocation
+            });
+
+            if (error) {
+                console.error('RPC Error:', error);
+                throw new Error("RPC Insert failed: " + error.message);
+            }
+
+            // Optimistic update
+            if (data) {
+                const newOrderRecord = data as any;
+                const mapped = {
+                    ...newOrderRecord,
+                    orderNumber: newOrderRecord.order_number,
+                    deliveryAddress: newOrderRecord.delivery_address,
+                    zone: newOrderRecord.zone,
+                    deliveryDate: newOrderRecord.deadline,
+                };
+                setTasks(prev => [mapped, ...prev]);
+            }
+
+            // Reset and close
+            setIsPickUpModalOpen(false);
+            setLoadPhotoBase64(null);
+            setPickUpNote('');
+            alert("✅ Pick Up task recorded successfully!");
+        } catch (e: any) {
+            alert("Error saving pickup: " + e.message);
         } finally {
             setSubmitting(false);
         }
@@ -204,28 +359,45 @@ const DriverDelivery: React.FC<DriverDeliveryProps> = ({ user }) => {
         <div className="min-h-screen bg-black text-slate-200 pb-20 font-sans">
             <div className="p-4 flex items-center justify-between border-b border-white/5 bg-slate-900/50">
                 <p className="text-[10px] font-bold text-slate-500 uppercase">{user?.name || 'Unknown Driver'} • {tasks.length} Orders</p>
-                <button
-                    onClick={() => fetchTasks()}
-                    disabled={loading}
-                    className="p-1.5 bg-slate-800 rounded-lg text-blue-400 border border-slate-700 active:scale-95 transition-all"
-                >
-                    <RefreshCw size={14} className={loading ? 'animate-spin' : ''} />
-                </button>
+                <div className="flex items-center gap-2">
+                    <input
+                        ref={pickUpFileInputRef}
+                        type="file"
+                        accept="image/*"
+                        capture="environment"
+                        className="hidden"
+                        onChange={(e) => handleFileSelect(e, true)}
+                    />
+                    <button
+                        onClick={() => pickUpFileInputRef.current?.click()}
+                        disabled={uploadingPhoto}
+                        className="px-3 py-1.5 bg-emerald-600/20 hover:bg-emerald-600/30 border border-emerald-500/30 text-emerald-400 rounded-lg text-[10px] font-bold uppercase tracking-wider flex items-center gap-1.5 transition-all disabled:opacity-50"
+                    >
+                        {uploadingPhoto ? 'PROCESSING...' : '🚛 RECORD PICK UP'}
+                    </button>
+                    <button
+                        onClick={() => fetchTasks()}
+                        disabled={loading}
+                        className="p-1.5 bg-slate-800 rounded-lg text-blue-400 border border-slate-700 active:scale-95 transition-all"
+                    >
+                        <RefreshCw size={14} className={loading ? 'animate-spin' : ''} />
+                    </button>
+                </div>
             </div>
 
             {/* TABS */}
             <div className="p-4 flex gap-2">
                 <button
                     onClick={() => setActiveTab('todo')}
-                    className={`flex - 1 py - 3 rounded - xl font - black uppercase text - sm tracking - wider transition - all ${activeTab === 'todo' ? 'bg-blue-600 text-white shadow-lg shadow-blue-900/40' : 'bg-slate-900 text-slate-500'
-                        } `}
+                    className={`flex-1 py-3 rounded-xl font-black uppercase text-sm tracking-wider transition-all ${activeTab === 'todo' ? 'bg-blue-600 text-white shadow-lg shadow-blue-900/40' : 'bg-slate-900 text-slate-500'
+                        }`}
                 >
                     Pending ({todoList.length})
                 </button>
                 <button
                     onClick={() => setActiveTab('done')}
-                    className={`flex - 1 py - 3 rounded - xl font - black uppercase text - sm tracking - wider transition - all ${activeTab === 'done' ? 'bg-green-600/20 text-green-500 border border-green-500/30' : 'bg-slate-900 text-slate-500'
-                        } `}
+                    className={`flex-1 py-3 rounded-xl font-black uppercase text-sm tracking-wider transition-all ${activeTab === 'done' ? 'bg-green-600/20 text-green-500 border border-green-500/30' : 'bg-slate-900 text-slate-500'
+                        }`}
                 >
                     Done ({doneList.length})
                 </button>
@@ -451,23 +623,104 @@ const DriverDelivery: React.FC<DriverDeliveryProps> = ({ user }) => {
                             })()}
                         </div>
 
-                        {/* Footer */}
+                        {/* Footer Camera Auto-Submit */}
                         <div className="p-4 border-t border-slate-800 bg-slate-900 space-y-3 safe-bottom-padding">
                             <div className="flex justify-between text-xs font-bold text-slate-400 uppercase">
                                 <span>Total Items</span>
                                 <span className="text-white">{(loadItems || []).reduce((acc, i) => acc + (i.confirmedQty ?? i.quantity ?? 0), 0)} Units</span>
                             </div>
                             <button
-                                onClick={handleConfirmLoad}
-                                disabled={submitting}
+                                onClick={() => fileInputRef.current?.click()}
+                                disabled={submitting || uploadingPhoto}
                                 className="w-full py-4 bg-green-600 hover:bg-green-500 text-white rounded-xl font-black text-lg uppercase tracking-widest shadow-lg shadow-green-900/40 disabled:opacity-50 disabled:grayscale transition-all active:scale-95 flex items-center justify-center gap-2"
                             >
-                                {submitting ? 'PROCESSING...' : 'CONFIRM & DEDUCT STOCK'}
+                                {submitting || uploadingPhoto ? (
+                                    <>
+                                        <div className="w-5 h-5 border-2 border-white/20 border-t-white rounded-full animate-spin"></div>
+                                        <span>PROCESSING...</span>
+                                    </>
+                                ) : (
+                                    <>
+                                        <Camera size={20} />
+                                        <span>TAKE PHOTO & CONFIRM</span>
+                                    </>
+                                )}
                             </button>
+                            <input
+                                ref={fileInputRef}
+                                type="file"
+                                accept="image/*"
+                                capture="environment"
+                                className="hidden"
+                                onChange={(e) => handleFileSelect(e, false)}
+                            />
                         </div>
                     </div>
                 )
             }
+
+            {/* PICK UP MODAL AD-HOC */}
+            {isPickUpModalOpen && (
+                <div className="fixed inset-0 z-[200] bg-black flex flex-col animate-in slide-in-from-bottom-10">
+                    <div className="p-4 border-b border-slate-800 flex justify-between items-center bg-slate-900 safe-top-padding">
+                        <div>
+                            <h2 className="font-black text-emerald-400 text-lg flex items-center gap-2"><Truck size={20} /> LOG PICK UP</h2>
+                            <p className="text-[10px] text-slate-500 uppercase font-bold">Ad-Hoc Collection</p>
+                        </div>
+                        <button onClick={() => { setIsPickUpModalOpen(false); setLoadPhotoBase64(null); }} className="p-2 bg-slate-800 rounded-full text-white"><X size={20} /></button>
+                    </div>
+
+                    <div className="flex-1 overflow-y-auto p-5 space-y-6 bg-black">
+                        {/* PHOTO MANDATORY */}
+                        <div>
+                            <label className="text-xs font-bold text-slate-400 uppercase tracking-widest mb-2 block">1. PHOTO PROOF</label>
+                            {!loadPhotoBase64 ? (
+                                <button
+                                    onClick={() => pickUpFileInputRef.current?.click()}
+                                    className="w-full py-10 rounded-xl border-2 border-dashed border-emerald-500/30 bg-emerald-500/5 hover:bg-emerald-500/10 flex flex-col items-center gap-3"
+                                >
+                                    <ImageIcon size={32} className="text-emerald-500" />
+                                    <span className="text-xs font-bold text-emerald-400">
+                                        {uploadingPhoto ? 'PROCESSING...' : 'TAKE PHOTO AGAIN'}
+                                    </span>
+                                </button>
+                            ) : (
+                                <div className="w-full relative rounded-xl overflow-hidden border border-slate-700">
+                                    <img src={`data:image/jpeg;base64,${loadPhotoBase64}`} alt="Pick Up" className="w-full h-48 object-cover" />
+                                    <button 
+                                        onClick={() => setLoadPhotoBase64(null)}
+                                        className="absolute top-3 right-3 p-2 bg-red-500 rounded-full text-white shadow-lg"
+                                    >
+                                        <X size={16} />
+                                    </button>
+                                </div>
+                            )}
+                                {/* Input already defined at header level, no need to duplicate here since it's triggered via ref */}
+                        </div>
+
+                        {/* NOTE */}
+                        <div>
+                            <label className="text-xs font-bold text-slate-400 uppercase tracking-widest mb-2 block">2. REMARKS / DETAILS</label>
+                            <textarea
+                                value={pickUpNote}
+                                onChange={e => setPickUpNote(e.target.value)}
+                                placeholder="e.g. Returned Cartons from Supplier ABC"
+                                className="w-full bg-slate-900 border border-slate-700 rounded-xl p-4 text-white placeholder:text-slate-600 focus:border-emerald-500 outline-none resize-none h-32"
+                            />
+                        </div>
+                    </div>
+
+                    <div className="p-4 border-t border-slate-800 bg-slate-900 safe-bottom-padding">
+                        <button
+                            onClick={handleConfirmPickUp}
+                            disabled={submitting || !loadPhotoBase64}
+                            className="w-full py-4 bg-emerald-600 hover:bg-emerald-500 text-white rounded-xl font-black text-lg uppercase tracking-widest shadow-lg shadow-emerald-900/40 disabled:opacity-50 disabled:grayscale transition-all active:scale-95 flex items-center justify-center gap-2"
+                        >
+                            {submitting ? 'PROCESSING...' : 'CONFIRM PICK UP'}
+                        </button>
+                    </div>
+                </div>
+            )}
         </div >
     );
 };
