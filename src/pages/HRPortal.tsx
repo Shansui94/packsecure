@@ -390,15 +390,32 @@ const HRPortal: React.FC<{ user?: any }> = ({ user }) => {
     const savePermissions = async () => {
         setSavingPerms(true);
         const rows: any[] = [];
+        const targetedRoles = Object.keys(permissions);
+
         Object.entries(permissions).forEach(([role, pages]) => {
             Object.entries(pages).forEach(([pageId, allowed]) => {
                 rows.push({ role_name: role, page_id: pageId, allowed });
             });
         });
-        await supabase.from('role_permissions').delete().in('role_name', ALL_ROLES);
-        if (rows.length > 0) await supabase.from('role_permissions').insert(rows);
-        setSavingPerms(false);
-        alert('✅ Permissions saved! Changes take effect on next login.');
+        
+        try {
+            // Only wipe the roles we are about to re-insert
+            if (targetedRoles.length > 0) {
+                await supabase.from('role_permissions').delete().in('role_name', targetedRoles);
+            }
+            
+            if (rows.length > 0) {
+                const { error } = await supabase.from('role_permissions').insert(rows);
+                if (error) throw error;
+            }
+            
+            alert('✅ Permissions saved! Changes take effect on next login.');
+        } catch (err: any) {
+            console.error("Save failed:", err);
+            alert("❌ Failed to save permissions! Error: " + err.message);
+        } finally {
+            setSavingPerms(false);
+        }
     };
 
     // ── Zone Rates ───────────────────────────────────────────
