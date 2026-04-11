@@ -316,9 +316,15 @@ const UserManagement: React.FC<UserManagementProps> = ({ currentUser }) => {
                                         {[
                                             { id: 'stock-audit', label: 'Stock Audit (盘点)' },
                                             { id: 'stock-movement', label: 'Stock Move (移库)' },
+                                            { id: 'inventory', label: 'Inventory (原材库存)' },
+                                            { id: 'livestock', label: 'Live Stock (成品仓)' },
+                                            { id: 'scanner', label: 'Scanner (生产打码)' },
+                                            { id: 'machine-schedule', label: 'Machine Schedule (排产)' },
                                             { id: 'data-v2', label: 'Data Base (底层库)' },
                                             { id: 'order-summary', label: 'Daily Prep (生产预备)' },
+                                            { id: 'delivery', label: 'Trip Management (派车系统)' },
                                             { id: 'reports', label: 'Exec Reports (总报表)' },
+                                            { id: 'maintenance', label: 'Maintenance (机器维修)' },
                                             { id: 'hr', label: 'HR Portal (行政人事)' }
                                         ].map(mod => {
                                             const isEnabled = formData.roleModules.includes(mod.id);
