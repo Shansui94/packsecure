@@ -290,6 +290,7 @@ const Layout: React.FC<LayoutProps> = ({ children, activePage, setActivePage, us
 
                                 <NavGroup title="Organization">
                                     <NavItem id="leave-calendar" icon={Calendar} label="Leave Center" roles={['SuperAdmin', 'Admin', 'Manager', 'HR', 'Driver', 'Operator']} />
+                                    <NavItem id="users" icon={Users} label="User Management" roles={['SuperAdmin', 'Admin']} />
                                     <NavItem id="hr" icon={Users} label="HR Portal" roles={['SuperAdmin', 'Admin', 'Manager']} />
                                     <NavItem id="driver-management" icon={Users} label="Driver Management" roles={['SuperAdmin', 'Admin', 'Manager']} />
                                     <NavItem id="operators" icon={Users} label="操作员管理" roles={['SuperAdmin', 'Admin', 'Manager']} />
