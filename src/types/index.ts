@@ -16,6 +16,8 @@ export interface User {
     loginTime?: string;
     phone?: string;
     salary?: number; // Monthly salary (Admin only)
+    roleModules?: string[]; // Custom module unlocks 
+
     // Onboarding Fields
     status?: 'Pending' | 'Active' | 'Rejected'; // Default Pending
     employeeId?: string; // Numeric ID e.g., "001"
