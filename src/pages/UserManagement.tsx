@@ -110,7 +110,8 @@ const UserManagement: React.FC<UserManagementProps> = ({ currentUser }) => {
             // Sync role_modules back to sys_users_v2
             const { data: existV2 } = await supabase.from('sys_users_v2').select('id').eq('auth_user_id', editingUser.uid).maybeSingle();
             if (existV2) {
-                await supabase.from('sys_users_v2').update({ role_modules: formData.roleModules }).eq('auth_user_id', editingUser.uid);
+                const { error: v2Error } = await supabase.from('sys_users_v2').update({ role_modules: formData.roleModules }).eq('auth_user_id', editingUser.uid);
+                if (v2Error) throw v2Error;
             }
 
             console.log(`Updated profile for ${editingUser.uid}`);
