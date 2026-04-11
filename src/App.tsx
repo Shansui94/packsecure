@@ -256,6 +256,11 @@ function App() {
             allowed = [...allowed, 'stock-audit'];
         }
 
+        // --- DYNAMIC CUSTOM MODULE UNLOCKS (From sys_users_v2.role_modules) ---
+        if (user.roleModules && user.roleModules.length > 0) {
+            allowed = [...allowed, ...user.roleModules];
+        }
+
         const isAllowed = allowed.includes('*') || allowed.includes(activePage);
 
         if (!isAllowed) {
@@ -347,6 +352,17 @@ function App() {
                 return;
             }
 
+            // Fetch dynamic module unlocks
+            let roleModules: string[] = [];
+            try {
+                const { data: v2Data } = await supabase.from('sys_users_v2').select('role_modules').eq('auth_user_id', currentUser.id).maybeSingle();
+                if (v2Data && v2Data.role_modules) {
+                    roleModules = v2Data.role_modules;
+                }
+            } catch (e) {
+                console.warn("Failed to fetch custom modules", e);
+            }
+
             setUser({
                 email: currentUser.email || '',
                 name: name,
@@ -355,7 +371,8 @@ function App() {
                 employeeId: employeeId,
                 gps: 'Unknown',
                 status: status as any,
-                loginTime: new Date().toLocaleTimeString()
+                loginTime: new Date().toLocaleTimeString(),
+                roleModules: roleModules
             });
             setIsLoggedIn(true);
 

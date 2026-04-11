@@ -99,6 +99,11 @@ const Layout: React.FC<LayoutProps> = ({ children, activePage, setActivePage, us
                         ['order-summary', 'driver-management'].forEach(p => allowedSet.add(p));
                     }
 
+                    // --- COMBINE CUSTOM MODULE UNLOCKS ---
+                    if (user?.roleModules && user.roleModules.length > 0) {
+                        user.roleModules.forEach((p: string) => allowedSet.add(p));
+                    }
+
                     setDbAllowedPages(allowedSet);
                 }
                 // If no DB records for this role, keep null → fall back to hardcoded
@@ -139,8 +144,10 @@ const Layout: React.FC<LayoutProps> = ({ children, activePage, setActivePage, us
             const hasHardcodedAccess = roles && userRole && roles.includes(userRole);
             // Check DB granted permissions
             const hasDbAccess = dbAllowedPages !== null && dbAllowedPages.has(id);
+            // Check Custom Module Unlocks
+            const hasCustomUnlock = user?.roleModules?.includes(id);
             
-            hasAccess = hasHardcodedAccess || hasDbAccess;
+            hasAccess = hasHardcodedAccess || hasDbAccess || hasCustomUnlock;
         }
 
         if (!hasAccess) return null;

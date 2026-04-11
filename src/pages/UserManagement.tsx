@@ -21,8 +21,10 @@ const UserManagement: React.FC<UserManagementProps> = ({ currentUser }) => {
         name: '',
         role: 'Operator' as UserRole,
         phone: '',
-        salary: 0
+        salary: 0,
+        roleModules: [] as string[]
     });
+    const [isFetchingModules, setIsFetchingModules] = useState(false);
 
     // Subscribe to Users
     useEffect(() => {
@@ -63,15 +65,24 @@ const UserManagement: React.FC<UserManagementProps> = ({ currentUser }) => {
         return () => { supabase.removeChannel(channel); };
     }, []);
 
-    const openEditModal = (user: User) => {
+    const openEditModal = async (user: User) => {
         setEditingUser(user);
         setFormData({
             name: user.name || '',
             role: user.role || 'Operator',
             phone: user.phone || '',
-            salary: user.salary || 0
+            salary: user.salary || 0,
+            roleModules: []
         });
         setIsModalOpen(true);
+        setIsFetchingModules(true);
+        
+        // Fetch specific role_modules from sys_users_v2
+        const { data } = await supabase.from('sys_users_v2').select('role_modules').eq('auth_user_id', user.uid).maybeSingle();
+        if (data && data.role_modules) {
+            setFormData(prev => ({ ...prev, roleModules: data.role_modules }));
+        }
+        setIsFetchingModules(false);
     };
 
     const closeEditModal = () => {
@@ -83,6 +94,7 @@ const UserManagement: React.FC<UserManagementProps> = ({ currentUser }) => {
         if (!editingUser) return;
 
         try {
+            // Update Public profile
             const { error } = await supabase
                 .from('users_public')
                 .update({
@@ -94,6 +106,12 @@ const UserManagement: React.FC<UserManagementProps> = ({ currentUser }) => {
                 .eq('id', editingUser.uid);
 
             if (error) throw error;
+
+            // Sync role_modules back to sys_users_v2
+            const { data: existV2 } = await supabase.from('sys_users_v2').select('id').eq('auth_user_id', editingUser.uid).maybeSingle();
+            if (existV2) {
+                await supabase.from('sys_users_v2').update({ role_modules: formData.roleModules }).eq('auth_user_id', editingUser.uid);
+            }
 
             console.log(`Updated profile for ${editingUser.uid}`);
             closeEditModal();
@@ -280,6 +298,52 @@ const UserManagement: React.FC<UserManagementProps> = ({ currentUser }) => {
                                     />
                                 </div>
                                 <p className="text-xs text-gray-500 mt-1">Visible only to Admins. Protected by Firestore Rules.</p>
+                            </div>
+
+                            {/* Custom Module Unlocks */}
+                            <div className="pt-2 border-t border-gray-700/50">
+                                <label className="block text-emerald-400 text-sm mb-2 font-bold flex items-center gap-1">
+                                    🛡️ Custom Module Unlocks (特权开通)
+                                </label>
+                                <p className="text-[10px] text-gray-400 mb-3 leading-tight">
+                                    Assign specific page access regardless of the user's primary Role. Great for giving Operators temporary audit powers.
+                                </p>
+                                
+                                {isFetchingModules ? (
+                                    <div className="text-xs text-blue-400 animate-pulse">Scanning core system permissions...</div>
+                                ) : (
+                                    <div className="grid grid-cols-2 gap-2">
+                                        {[
+                                            { id: 'stock-audit', label: 'Stock Audit (盘点)' },
+                                            { id: 'stock-movement', label: 'Stock Move (移库)' },
+                                            { id: 'data-v2', label: 'Data Base (底层库)' },
+                                            { id: 'order-summary', label: 'Daily Prep (生产预备)' },
+                                            { id: 'reports', label: 'Exec Reports (总报表)' },
+                                            { id: 'hr', label: 'HR Portal (行政人事)' }
+                                        ].map(mod => {
+                                            const isEnabled = formData.roleModules.includes(mod.id);
+                                            return (
+                                                <button
+                                                    key={mod.id}
+                                                    onClick={() => {
+                                                        const newMods = isEnabled 
+                                                            ? formData.roleModules.filter(m => m !== mod.id)
+                                                            : [...formData.roleModules, mod.id];
+                                                        setFormData({ ...formData, roleModules: newMods });
+                                                    }}
+                                                    className={`px-2 py-2 rounded text-left text-xs font-bold transition-all border flex items-center justify-between ${
+                                                        isEnabled 
+                                                            ? 'bg-emerald-500/10 border-emerald-500/50 text-emerald-400 shadow-[0_0_10px_rgba(16,185,129,0.2)]'
+                                                            : 'bg-gray-900 border-gray-700 text-gray-500 hover:border-gray-500 hover:text-gray-300'
+                                                    }`}
+                                                >
+                                                    <span className="truncate">{mod.label}</span>
+                                                    {isEnabled && <div className="w-1.5 h-1.5 rounded-full bg-emerald-400 shadow-[0_0_5px_rgba(16,185,129,0.8)]" />}
+                                                </button>
+                                            );
+                                        })}
+                                    </div>
+                                )}
                             </div>
 
                         </div>
