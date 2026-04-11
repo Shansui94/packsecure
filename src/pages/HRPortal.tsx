@@ -351,6 +351,7 @@ const HRPortal: React.FC<{ user?: any }> = ({ user }) => {
     const [newRateExtra, setNewRateExtra] = useState('');
     const [newZoneNotes, setNewZoneNotes] = useState('');
     const [savingZone, setSavingZone] = useState(false);
+    const [editingZoneId, setEditingZoneId] = useState<string | null>(null);
 
     // ── Personnel ────────────────────────────────────────────
     const fetchEmployees = useCallback(async () => {
@@ -409,19 +410,37 @@ const HRPortal: React.FC<{ user?: any }> = ({ user }) => {
     const handleAddZone = async () => {
         if (!newRateLocation.trim() || !newRateBase || !newRateOrigin) return;
         setSavingZone(true);
-        await supabase.from('delivery_rates').upsert(
-            { 
-                origin: newRateOrigin.trim(), 
-                location_name: newRateLocation.trim(), 
-                base_rate: Number(newRateBase), 
-                max_places: Number(newRateMaxPlaces),
-                extra_rate_per_place: Number(newRateExtra),
-                notes: newZoneNotes 
-            },
-            { onConflict: 'origin, location_name' }
-        );
-        setNewRateLocation(''); setNewRateBase(''); setNewRateExtra(''); setNewZoneNotes('');
-        await fetchDeliveryRates();
+        const payload = { 
+            origin: newRateOrigin.trim(), 
+            location_name: newRateLocation.trim(), 
+            base_rate: Number(newRateBase), 
+            max_places: Number(newRateMaxPlaces),
+            extra_rate_per_place: Number(newRateExtra),
+            notes: newZoneNotes 
+        };
+
+        let err;
+        let resultData;
+        if (editingZoneId) {
+            const { data, error } = await supabase.from('delivery_rates').update(payload).eq('id', editingZoneId).select();
+            err = error;
+            resultData = data;
+        } else {
+            const { data, error } = await supabase.from('delivery_rates').insert(payload).select();
+            err = error;
+            resultData = data;
+        }
+
+        if (err) {
+            alert('Failed to save rate: ' + err.message);
+        } else if (!resultData || resultData.length === 0) {
+            alert('Database did not return inserted data. RLS or constraint issue might be silently blocking it.');
+        } else {
+            alert('Record successfully added/updated!');
+            setNewRateLocation(''); setNewRateBase(''); setNewRateExtra(''); setNewZoneNotes('');
+            setEditingZoneId(null);
+            await fetchDeliveryRates();
+        }
         setSavingZone(false);
     };
 
@@ -432,6 +451,7 @@ const HRPortal: React.FC<{ user?: any }> = ({ user }) => {
     };
 
     const handleEditZone = (z: any) => {
+        setEditingZoneId(z.id);
         setNewRateOrigin(z.origin || 'TAIPING');
         setNewRateLocation(z.location_name || '');
         setNewRateBase(z.base_rate?.toString() || '');
@@ -440,6 +460,15 @@ const HRPortal: React.FC<{ user?: any }> = ({ user }) => {
         setNewZoneNotes(z.notes || '');
         setShowZoneForm(true);
         setShowZoneEditor(true);
+    };
+
+    const handleCloseZoneForm = () => {
+        setShowZoneForm(false);
+        setEditingZoneId(null);
+        setNewRateLocation('');
+        setNewRateBase('');
+        setNewRateExtra('');
+        setNewZoneNotes('');
     };
 
     // ── Payroll ──────────────────────────────────────────────
@@ -796,9 +825,9 @@ const HRPortal: React.FC<{ user?: any }> = ({ user }) => {
                                 <span className="text-[10px] text-zinc-500 lowercase ml-2 font-normal hidden sm:inline">({deliveryRates.length} configured)</span>
                             </div>
                             <div className="flex items-center gap-2">
-                                <button onClick={() => { setShowZoneForm(v => !v); setShowZoneEditor(true); }} className="px-3 py-1.5 bg-amber-500/10 hover:bg-amber-500/20 text-amber-400 font-bold text-[10px] uppercase tracking-widest rounded-lg transition-colors border border-amber-500/20 flex items-center gap-1.5">
+                                <button onClick={() => { if (showZoneForm) { handleCloseZoneForm(); } else { setShowZoneForm(true); setShowZoneEditor(true); } }} className="px-3 py-1.5 bg-amber-500/10 hover:bg-amber-500/20 text-amber-400 font-bold text-[10px] uppercase tracking-widest rounded-lg transition-colors border border-amber-500/20 flex items-center gap-1.5">
                                     {showZoneForm ? <X size={12} /> : <Plus size={12} />}
-                                    {showZoneForm ? 'Close Form' : 'Add / Update'}
+                                    {showZoneForm ? 'Close Form' : 'Add New Rate'}
                                 </button>
                                 <button onClick={() => setShowZoneEditor(v => !v)} className="p-1 hover:bg-white/5 rounded-lg text-zinc-500 hover:text-white transition-colors">
                                     {showZoneEditor ? <ChevronUp size={18} /> : <ChevronDown size={18} />}
@@ -947,7 +976,7 @@ const HRPortal: React.FC<{ user?: any }> = ({ user }) => {
                 <div className="fixed inset-0 z-[60] bg-black/80 backdrop-blur-sm flex items-center justify-center p-4 animate-in fade-in duration-200">
                     <div className="bg-[#0d0d12] border border-amber-500/30 rounded-3xl w-full max-w-lg overflow-hidden shadow-2xl relative">
                         <div className="bg-amber-500/5 p-6 flex flex-col gap-4">
-                            <button onClick={() => setShowZoneForm(false)} className="absolute top-4 right-4 p-2 hover:bg-white/10 text-zinc-400 hover:text-white rounded-xl transition-colors">
+                            <button onClick={handleCloseZoneForm} className="absolute top-4 right-4 p-2 hover:bg-white/10 text-zinc-400 hover:text-white rounded-xl transition-colors">
                                 <X size={16} />
                             </button>
                             <div className="text-sm font-black text-amber-500 uppercase tracking-widest flex items-center gap-2 pr-8 mb-2">
@@ -985,7 +1014,7 @@ const HRPortal: React.FC<{ user?: any }> = ({ user }) => {
                             </div>
                             
                             <div className="flex gap-3 justify-end mt-4 pt-4 border-t border-white/5">
-                                <button onClick={() => setShowZoneForm(false)} className="px-5 py-3 rounded-xl text-sm font-bold text-zinc-400 hover:text-white hover:bg-white/5 transition-colors">Cancel</button>
+                                <button onClick={handleCloseZoneForm} className="px-5 py-3 rounded-xl text-sm font-bold text-zinc-400 hover:text-white hover:bg-white/5 transition-colors">Cancel</button>
                                 <button onClick={() => { handleAddZone(); setShowZoneForm(false); }} disabled={savingZone || !newRateLocation || !newRateBase} className="px-8 py-3 bg-amber-500 hover:bg-amber-400 text-black disabled:opacity-50 disabled:bg-zinc-700 disabled:text-zinc-500 rounded-xl text-sm font-black flex items-center justify-center gap-2 transition-colors shadow-lg shadow-amber-500/20">
                                     {savingZone ? <Loader size={16} className="animate-spin" /> : <Save size={16} />}
                                     Save Rate
