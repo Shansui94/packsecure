@@ -320,7 +320,7 @@ const Layout: React.FC<LayoutProps> = ({ children, activePage, setActivePage, us
                         )}
 
                         {/* DRIVER VIEW */}
-                        {(userRole === 'Driver' || isNeoson) && (
+                        {(userRole === 'Driver' || isNeoson || user?.roleModules?.includes('delivery-driver') || user?.roleModules?.includes('delivery-history')) && (
                             <>
                                 <NavGroup title="Driver Workspace">
                                     <NavItem id="delivery-driver" icon={Package} label="My Delivery" roles={['Driver', 'Manager']} />

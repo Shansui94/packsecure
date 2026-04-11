@@ -322,7 +322,8 @@ const UserManagement: React.FC<UserManagementProps> = ({ currentUser }) => {
                                             { id: 'machine-schedule', label: 'Machine Schedule (排产)' },
                                             { id: 'data-v2', label: 'Data Base (底层库)' },
                                             { id: 'order-summary', label: 'Daily Prep (生产预备)' },
-                                            { id: 'delivery', label: 'Trip Management (派车系统)' },
+                                            { id: 'delivery', label: 'Trip Admin (行政派车)' },
+                                            { id: 'delivery-driver', label: 'My Delivery (司机手机端)' },
                                             { id: 'reports', label: 'Exec Reports (总报表)' },
                                             { id: 'maintenance', label: 'Maintenance (机器维修)' },
                                             { id: 'hr', label: 'HR Portal (行政人事)' }
