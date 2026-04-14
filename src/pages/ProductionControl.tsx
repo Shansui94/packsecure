@@ -186,11 +186,18 @@ const ProductionLane: React.FC<ProductionLaneProps> = ({ laneId, machineMetadata
                     const logQty = newLog.output_qty || newLog.alarm_count || 1;
                     const logLane = newLog.lane_id || newLog.source_lane;
 
-                    // For old T1.2 firmware (v1.0.0) which sends 'UNKNOWN' sku and 'Unknown' lane_id, we still want to count it
                     const isOldFirmwareSkipped = logSku === 'UNKNOWN' && logLane === 'Unknown';
 
-                    if (!isOldFirmwareSkipped && (newLog.machine_id !== machineId || logSku !== activeSku)) return;
+                    const matchMachine = newLog.machine_id?.trim() === machineId?.trim();
+                    const matchSku = logSku?.trim() === activeSku?.trim();
+
+                    if (!isOldFirmwareSkipped && (!matchMachine || !matchSku)) {
+                        console.log(`[Lane: ${laneId}] ❌ IGNORED: MatchMachine=${matchMachine}, MatchSku=${matchSku} (newMachine=${newLog.machine_id}, machineId=${machineId}, logSku=${logSku}, activeSku=${activeSku})`);
+                        return;
+                    }
+                    
                     // Filter to only count logs from this lane (ignore if it's the old firmware 'Unknown' lane)
+                    // Note: If lane_id is undefined (like on Extruders), logLane is falsy, which bypasses this check correctly.
                     if (!isOldFirmwareSkipped && logLane && logLane !== laneId) return;
 
                     console.log(`[Lane: ${laneId}] ⚡ MATCHED SIGNAL:`, newLog);
@@ -376,13 +383,7 @@ const ProductionLane: React.FC<ProductionLaneProps> = ({ laneId, machineMetadata
                                         style={{ color: '#FFF', textShadow: `0 0 10px ${theme.hex}` }}
                                     >
                                         {derivedPackaging === 'Pink' ? 'RED' : derivedPackaging.toUpperCase()}
-                                        <button
-                                            onClick={() => setIsEditingColor(!isEditingColor)}
-                                            className="w-8 h-8 rounded-full bg-gradient-to-r from-red-500 via-green-500 to-blue-500 hover:scale-110 transition-transform shadow-lg border-2 border-white/20 flex items-center justify-center group"
-                                            title="Change Color"
-                                        >
-                                            <div className={`w-2 h-2 rounded-full bg-white transition-opacity ${isEditingColor ? 'opacity-100' : 'opacity-0'} group-hover:opacity-100`}></div>
-                                        </button>
+
                                     </div>
                                     <div className="flex gap-2 mt-1">
                                         <span className="text-[10px] bg-black/40 px-2 py-0.5 rounded text-white">{selectedLayer}</span>
@@ -392,37 +393,7 @@ const ProductionLane: React.FC<ProductionLaneProps> = ({ laneId, machineMetadata
                                 <button onClick={() => setStep(2)} className="relative z-10 px-3 py-1 bg-white/10 hover:bg-white/20 rounded-lg text-xs text-white">Change</button>
                             </div>
 
-                            {isEditingColor && (
-                                <div className="grid grid-cols-3 gap-4 p-4 bg-black/80 backdrop-blur-xl rounded-2xl border border-white/10 animate-fade-in-up absolute top-0 left-0 w-full h-full z-50 flex items-center justify-center content-center">
-                                    <button
-                                        onClick={() => setIsEditingColor(false)}
-                                        className="absolute top-2 right-2 text-gray-500 hover:text-white"
-                                    >
-                                        <div className="bg-white/10 p-1 rounded-full"><span className="text-xs">✕</span></div>
-                                    </button>
-                                    {PACKAGING_COLORS.map((colorObj: any) => (
-                                        <button
-                                            key={colorObj.value}
-                                            onClick={() => { setDerivedPackaging(colorObj.value as any); setIsEditingColor(false); }}
-                                            className={`
-                                                relative p-2 rounded-2xl transition-all flex flex-col items-center gap-2
-                                                ${derivedPackaging === colorObj.value
-                                                    ? 'border-2 border-white bg-white/5 shadow-[0_0_20px_rgba(255,255,255,0.2)]'
-                                                    : 'border-2 border-transparent hover:bg-white/5'}
-                                            `}
-                                        >
-                                            <div
-                                                className={`w-12 h-12 rounded-full shadow-lg border-2 border-white/10`}
-                                                style={{ backgroundColor: colorObj.hex }}
-                                            ></div>
-                                            <span
-                                                className="text-[10px] font-black uppercase tracking-widest"
-                                                style={{ color: colorObj.value === 'Transparent' ? '#999' : '#DDD' }}
-                                            >{colorObj.value === 'Pink' ? 'RED' : colorObj.value}</span>
-                                        </button>
-                                    ))}
-                                </div>
-                            )}
+
 
                             {/* Note Input */}
                             <div className="flex gap-2">
@@ -705,7 +676,7 @@ const ProductionControl: React.FC<ProductionControlProps> = ({ user, jobs = [] }
 
     // Fetch Logs — query V2 table directly which contains strictly normalized SKUs and Output Quantities
     const fetchUserLogs = async () => {
-        const targetMachine = machineMetadata?.id || selectedMachine;
+        const targetMachine = (machineMetadata?.id || selectedMachine)?.trim();
         if (!targetMachine) return;
 
         const { data } = await supabase.from('production_logs_v2')
@@ -733,10 +704,12 @@ const ProductionControl: React.FC<ProductionControlProps> = ({ user, jobs = [] }
     useEffect(() => {
         if (selectedMachine) {
             fetchUserLogs();
-            const sub = supabase.channel('machine-logs-broad')
+            const sub = supabase.channel(`recent-logs-${selectedMachine}`)
                 .on('postgres_changes', { event: 'INSERT', schema: 'public', table: 'production_logs_v2' },
                     (payload) => {
-                        if (payload.new.machine_id === (machineMetadata?.id || selectedMachine)) {
+                        const targetMatch = (machineMetadata?.id || selectedMachine)?.trim();
+                        if (payload.new.machine_id?.trim() === targetMatch) {
+                            console.log(`[Recent Activity] Reloading logs for ${targetMatch}`, payload.new);
                             fetchUserLogs();
                         }
                     })
