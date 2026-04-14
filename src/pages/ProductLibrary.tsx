@@ -569,7 +569,8 @@ const ProductLibrary: React.FC = () => {
     const filteredItems = items.filter(item => {
         const name = (item.name || '').toLowerCase();
         const sku = (item.sku || '').toLowerCase();
-        const matchesSearch = searchTerms.length === 0 || searchTerms.every(term => name.includes(term) || sku.includes(term));
+        const status = (item.status || '').toLowerCase();
+        const matchesSearch = searchTerms.length === 0 || searchTerms.every(term => name.includes(term) || sku.includes(term) || status.includes(term));
         const matchesType = filterType === 'All' || item.type === filterType;
         return matchesSearch && matchesType;
     });
