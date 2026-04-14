@@ -451,13 +451,24 @@ const LiveStock: React.FC = () => {
     const fetchStock = async () => {
         setLoading(true);
         try {
-            const { data, error } = await supabase
-                .from('v2_inventory_view')
-                .select('sku, name, type, uom, loc_id, current_stock, last_updated')
-                .order('sku', { ascending: true });
+            const [invRes, masterRes] = await Promise.all([
+                supabase
+                    .from('v2_inventory_view')
+                    .select('sku, name, type, uom, loc_id, current_stock, last_updated')
+                    .order('sku', { ascending: true }),
+                supabase
+                    .from('master_items_v2')
+                    .select('sku')
+                    .eq('status', 'Active')
+            ]);
 
-            if (error) throw error;
-            setRows(data || []);
+            if (invRes.error) throw invRes.error;
+            if (masterRes.error) throw masterRes.error;
+
+            const activeSkus = new Set((masterRes.data || []).map(i => i.sku));
+            const activeInventory = (invRes.data || []).filter(r => activeSkus.has(r.sku));
+
+            setRows(activeInventory);
             setLastUpdated(new Date().toLocaleTimeString('en-GB'));
         } catch (err) {
             console.error('LiveStock fetch error:', err);
