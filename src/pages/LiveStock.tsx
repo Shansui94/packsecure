@@ -490,29 +490,36 @@ const LiveStock: React.FC = () => {
 
     const filtered = useMemo(() => {
         const searchTerms = search.toLowerCase().trim().split(/[\s-]+/).filter(Boolean);
-        const preFiltered = rows.filter(r => {
+        
+        // 1. Build a map of all unique active SKUs with baseline 0 stock
+        const skuMap = new Map<string, StockRow>();
+        rows.forEach(r => {
+            if (!skuMap.has(r.sku)) {
+                skuMap.set(r.sku, { ...r, loc_id: locationFilter === 'All' ? undefined : locationFilter, current_stock: 0, last_updated: '' });
+            }
+        });
+
+        // 2. Aggregate stock dependent on locationFilter
+        rows.forEach(r => {
+            if (locationFilter === 'All' || r.loc_id === locationFilter) {
+                const item = skuMap.get(r.sku)!;
+                item.current_stock += (r.current_stock || 0);
+                if (r.last_updated && (!item.last_updated || new Date(r.last_updated) > new Date(item.last_updated))) {
+                    item.last_updated = r.last_updated;
+                }
+            }
+        });
+        
+        // 3. Convert to array and apply text/type filters
+        const mergedArray = Array.from(skuMap.values());
+        return mergedArray.filter(r => {
             const matchType = typeFilter === 'All' || r.type === typeFilter;
             const matchSearch = searchTerms.length === 0 || searchTerms.every(term => 
                 r.sku.toLowerCase().includes(term) || r.name.toLowerCase().includes(term)
             );
             return matchType && matchSearch;
-        });
+        }).sort((a, b) => a.sku.localeCompare(b.sku));
 
-        if (locationFilter === 'All') {
-            const map = new Map<string, StockRow>();
-            preFiltered.forEach(r => {
-                if (map.has(r.sku)) {
-                    const existing = map.get(r.sku)!;
-                    existing.current_stock += (r.current_stock || 0);
-                    if (new Date(r.last_updated) > new Date(existing.last_updated)) existing.last_updated = r.last_updated;
-                } else {
-                    map.set(r.sku, { ...r });
-                }
-            });
-            return Array.from(map.values()).sort((a, b) => a.sku.localeCompare(b.sku));
-        } else {
-            return preFiltered.filter(r => r.loc_id === locationFilter).sort((a, b) => a.sku.localeCompare(b.sku));
-        }
     }, [rows, typeFilter, search, locationFilter]);
 
     const totalItems = filtered.length;
