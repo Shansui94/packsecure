@@ -711,10 +711,10 @@ const LiveStock: React.FC = () => {
                                     const getRank = (sku: string, name: string) => {
                                         const str = (sku + name).toUpperCase();
                                         if (str.includes('FULL') || str.includes('100CM')) return 1;
-                                        if (str.includes('20CM') || str.includes('20 CM')) return 2;
-                                        if (str.includes('25CM') || str.includes('25 CM')) return 3;
-                                        if (str.includes('33CM') || str.includes('33 CM')) return 4;
-                                        if (str.includes('HALF') || str.includes('50CM') || str.includes('50 CM')) return 5;
+                                        if (str.includes('HALF') || str.includes('50CM') || str.includes('50 CM')) return 2;
+                                        if (str.includes('33CM') || str.includes('33 CM')) return 3;
+                                        if (str.includes('25CM') || str.includes('25 CM')) return 4;
+                                        if (str.includes('20CM') || str.includes('20 CM')) return 5;
                                         return 99;
                                     };
                                     const rankA = getRank(a.sku, a.name);
