@@ -45,11 +45,14 @@ export const executeProductionV3 = async (
 };
 
 // --- Items ---
-export const getV2Items = async (): Promise<V2Item[]> => {
-    const { data, error } = await supabase
-        .from('master_items_v2')
-        .select('*')
-        .eq('status', 'Active');
+export const getV2Items = async (includeObsolete: boolean = false): Promise<V2Item[]> => {
+    let query = supabase.from('master_items_v2').select('*');
+    
+    if (!includeObsolete) {
+        query = query.eq('status', 'Active');
+    }
+
+    const { data, error } = await query;
 
     if (error) {
         console.error('Error fetching V2 items:', error);

@@ -548,7 +548,7 @@ const ProductLibrary: React.FC = () => {
         setLoading(true);
         // Parallel Fetch: Items Detail + Inventory Snapshot
         const [itemsData, stockData] = await Promise.all([
-            getV2Items(),
+            getV2Items(true), // Fetch ALL items including Obsolete
             getInventoryStatus()
         ]);
 
