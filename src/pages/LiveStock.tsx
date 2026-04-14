@@ -706,12 +706,30 @@ const LiveStock: React.FC = () => {
 
                             const isBW = (i: StockRow) => i.type === 'Bubble Wrap' || i.sku.startsWith('BW-') || /^(SL|DL)-/.test(i.sku) || i.sku.includes('HITAM');
 
-                            const slClear = filtered.filter(i => isBW(i) && (i.sku.includes('-SL-CLR') || (i.sku.startsWith('SL-') && !i.sku.includes('HITAM') && !i.sku.includes('BLK'))));
-                            const dlClear = filtered.filter(i => isBW(i) && (i.sku.includes('-DL-CLR') || (i.sku.startsWith('DL-') && !i.sku.includes('HITAM') && !i.sku.includes('BLK') && !i.sku.includes('HITAM-FULL')) || i.sku === 'DL-FULL' || i.sku === 'DL-HALF'));
-                            const slHitam = filtered.filter(i => isBW(i) && (i.sku.includes('-SL-BLK') || (i.sku.startsWith('SL-') && i.sku.includes('HITAM'))));
-                            const dlHitam = filtered.filter(i => isBW(i) && (i.sku.includes('-DL-BLK') || (i.sku.startsWith('DL-') && i.sku.includes('HITAM')) || i.sku.startsWith('HITAM-') || i.sku === 'DL-HITAM-FULL'));
+                            const sortBW = (list: StockRow[]) => {
+                                return list.sort((a, b) => {
+                                    const getRank = (sku: string, name: string) => {
+                                        const str = (sku + name).toUpperCase();
+                                        if (str.includes('FULL') || str.includes('100CM')) return 1;
+                                        if (str.includes('20CM') || str.includes('20 CM')) return 2;
+                                        if (str.includes('25CM') || str.includes('25 CM')) return 3;
+                                        if (str.includes('33CM') || str.includes('33 CM')) return 4;
+                                        if (str.includes('HALF') || str.includes('50CM') || str.includes('50 CM')) return 5;
+                                        return 99;
+                                    };
+                                    const rankA = getRank(a.sku, a.name);
+                                    const rankB = getRank(b.sku, b.name);
+                                    if (rankA !== rankB) return rankA - rankB;
+                                    return a.sku.localeCompare(b.sku);
+                                });
+                            };
+
+                            const slClear = sortBW(filtered.filter(i => isBW(i) && (i.sku.includes('-SL-CLR') || (i.sku.startsWith('SL-') && !i.sku.includes('HITAM') && !i.sku.includes('BLK')))));
+                            const dlClear = sortBW(filtered.filter(i => isBW(i) && (i.sku.includes('-DL-CLR') || (i.sku.startsWith('DL-') && !i.sku.includes('HITAM') && !i.sku.includes('BLK') && !i.sku.includes('HITAM-FULL')) || i.sku === 'DL-FULL' || i.sku === 'DL-HALF')));
+                            const slHitam = sortBW(filtered.filter(i => isBW(i) && (i.sku.includes('-SL-BLK') || (i.sku.startsWith('SL-') && i.sku.includes('HITAM')))));
+                            const dlHitam = sortBW(filtered.filter(i => isBW(i) && (i.sku.includes('-DL-BLK') || (i.sku.startsWith('DL-') && i.sku.includes('HITAM')) || i.sku.startsWith('HITAM-') || i.sku === 'DL-HITAM-FULL')));
                             
-                            const bwRest = filtered.filter(i => isBW(i) && !slClear.includes(i) && !dlClear.includes(i) && !slHitam.includes(i) && !dlHitam.includes(i));
+                            const bwRest = sortBW(filtered.filter(i => isBW(i) && !slClear.includes(i) && !dlClear.includes(i) && !slHitam.includes(i) && !dlHitam.includes(i)));
                             
                             const stretchFilms = filtered.filter(i => !isBW(i) && (i.type === 'Stretch Film' || i.sku.startsWith('SF-')));
                             const tapes = filtered.filter(i => !isBW(i) && i.type?.includes('Tape'));
