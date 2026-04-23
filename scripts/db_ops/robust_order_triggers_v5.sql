@@ -1,17 +1,28 @@
--- =========================================================================
--- ROBUST INVENTORY TRIGGERS V5 (Deduct ONLY on Delivered / Naik Barang)
--- =========================================================================
+-- ==========================================
+-- V5: PHYSICAL REALITY INVENTORY SYSTEM
+-- ==========================================
+-- This trigger strictly manages the physical ledger (stock_ledger_v2).
+-- Stock is ONLY deducted when an order is marked as 'Delivered' (Loaded).
+-- Pending orders (New, Production, Ready) are IGNORED by this trigger.
+-- They will be handled virtually by the frontend to prevent overselling.
 
--- 1. Obliterate all known old triggers to prevent double-deductions
+-- 1. Obliterate all known old triggers to prevent double-deductions 
 DROP TRIGGER IF EXISTS "auto_deduct_stock_on_order" ON public.sales_orders;
+DROP TRIGGER IF EXISTS auto_deduct_stock_on_order ON public.sales_orders;
 DROP TRIGGER IF EXISTS "auto_refund_stock_on_cancel" ON public.sales_orders;
+DROP TRIGGER IF EXISTS auto_refund_stock_on_cancel ON public.sales_orders;
 DROP TRIGGER IF EXISTS "update_delivery_trigger" ON public.sales_orders;
+DROP TRIGGER IF EXISTS update_delivery_trigger ON public.sales_orders;
 DROP TRIGGER IF EXISTS "update_delivery_trigger_v2" ON public.sales_orders;
+DROP TRIGGER IF EXISTS update_delivery_trigger_v2 ON public.sales_orders;
+-- Drop V4 triggers if they exist with custom names
+DROP TRIGGER IF EXISTS "sync_order_inventory_trigger" ON public.sales_orders;
+DROP TRIGGER IF EXISTS sync_order_inventory_trigger ON public.sales_orders;
 
 -- 2. Drop the old function so we can replace it cleanly
 DROP FUNCTION IF EXISTS public.sync_order_inventory() CASCADE;
 
--- 3. Create the Strict function without aggressive SKU mutation
+-- 3. Create the Physical-Only function
 CREATE OR REPLACE FUNCTION public.sync_order_inventory()
 RETURNS TRIGGER AS $$
 DECLARE
@@ -21,29 +32,23 @@ DECLARE
     item_loc TEXT;
     status_changed BOOLEAN;
 BEGIN
-    -- Only act on specific statuses
-    IF TG_OP = 'INSERT' THEN
-        -- Only deduct if inserted directly as Delivered (e.g. ad-hoc pick up)
-        IF NEW.status != 'Delivered' THEN
-            RETURN NEW;
-        END IF;
-    ELSIF TG_OP = 'UPDATE' THEN
+    -- Determine if status actually changed during an update
+    IF TG_OP = 'UPDATE' THEN
         status_changed := (OLD.status IS DISTINCT FROM NEW.status);
     END IF;
 
     -- ==========================================
-    -- LOGIC: DEDUCT STOCK (Only when Delivered)
+    -- LOGIC 1: PHYSICAL DEDUCTION (Loaded / Delivered)
     -- ==========================================
+    -- Only deduct when the goods physically leave the warehouse
     IF (TG_OP = 'INSERT' AND NEW.status = 'Delivered') OR 
-       (TG_OP = 'UPDATE' AND status_changed AND NEW.status = 'Delivered' AND OLD.status != 'Delivered') 
+       (TG_OP = 'UPDATE' AND status_changed AND NEW.status = 'Delivered') 
     THEN
         IF NEW.items IS NOT NULL AND jsonb_typeof(NEW.items) = 'array' THEN
             FOR item IN SELECT * FROM jsonb_array_elements(NEW.items) LOOP
-                -- EXACT SKU CAPTURE
                 item_sku := TRIM(item.value->>'sku');
                 item_qty := (item.value->>'quantity')::NUMERIC;
                 
-                -- STRICT LOCATION DETECTION
                 item_loc := NULLIF(TRIM(item.value->>'sourceLocation'), '');
                 IF item_loc IS NULL OR item_loc = '' THEN
                     item_loc := 'no location';
@@ -58,26 +63,24 @@ BEGIN
                         item_sku, 
                         -item_qty, 
                         item_loc, 
-                        'Auto-deduct: Order Delivered/Naik Barang', 
+                        'Auto-deduct: Order Delivered', 
                         NEW.order_number
                     );
                 END IF;
             END LOOP;
         END IF;
+    END IF;
 
     -- ==========================================
-    -- LOGIC: REFUND STOCK (When Delivered is reverted to anything else)
+    -- LOGIC 2: REFUND CANCELLATION (If it was already Delivered)
     -- ==========================================
-    ELSIF (TG_OP = 'DELETE' AND OLD.status = 'Delivered') OR 
-          (TG_OP = 'UPDATE' AND status_changed AND NEW.status != 'Delivered' AND OLD.status = 'Delivered')
-    THEN
+    -- If goods were already Delivered (deducted) but then cancelled/unfulfilled, we must refund them physically
+    IF (TG_OP = 'UPDATE' AND status_changed AND NEW.status IN ('Cancelled', 'Unfulfilled') AND OLD.status = 'Delivered') THEN
         IF OLD.items IS NOT NULL AND jsonb_typeof(OLD.items) = 'array' THEN
             FOR item IN SELECT * FROM jsonb_array_elements(OLD.items) LOOP
-                -- EXACT SKU CAPTURE
                 item_sku := TRIM(item.value->>'sku');
                 item_qty := (item.value->>'quantity')::NUMERIC;
                 
-                -- STRICT LOCATION DETECTION
                 item_loc := NULLIF(TRIM(item.value->>'sourceLocation'), '');
                 IF item_loc IS NULL OR item_loc = '' THEN
                     item_loc := 'no location';
@@ -92,21 +95,22 @@ BEGIN
                         item_sku, 
                         item_qty, 
                         item_loc, 
-                        'Auto-refund: Delivery Cancelled/Reverted', 
+                        'Auto-refund: Order Cancelled', 
                         OLD.order_number
                     );
                 END IF;
             END LOOP;
         END IF;
-
     END IF;
 
-    RETURN COALESCE(NEW, OLD);
+    -- Return NEW for normal operations
+    RETURN NEW;
 END;
 $$ LANGUAGE plpgsql;
 
--- 4. Re-attach the trigger
-CREATE TRIGGER on_sales_order_sync
-AFTER INSERT OR UPDATE OR DELETE ON public.sales_orders
+-- 4. Create the final clean trigger
+CREATE TRIGGER sync_order_inventory_trigger
+AFTER INSERT OR UPDATE OF status, items
+ON public.sales_orders
 FOR EACH ROW
 EXECUTE FUNCTION public.sync_order_inventory();

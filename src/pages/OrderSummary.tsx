@@ -356,7 +356,7 @@ const OrderSummary: React.FC<OrderSummaryProps> = ({ user: _user }) => {
                                                             </div>
                                                             <div className="w-px h-6 bg-white/10 mx-2"></div>
                                                             <div className="flex flex-col items-end">
-                                                                <span className="text-[9px] text-gray-500 uppercase tracking-widest">Stock</span>
+                                                                <span className="text-[9px] text-gray-500 uppercase tracking-widest">Phy Stock</span>
                                                                 <span className={`text-md font-bold leading-none ${stock >= qty ? 'text-green-500' : 'text-amber-400'}`}>{stock}</span>
                                                             </div>
                                                         </div>

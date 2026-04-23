@@ -10,7 +10,9 @@ interface StockRow {
     type: string;
     uom: string;
     loc_id?: string;
-    current_stock: number;
+    current_stock: number; // Physical Stock
+    reserved_stock?: number; // Pending orders
+    available_stock?: number; // Physical - Reserved
     last_updated: string;
 }
 
@@ -287,20 +289,26 @@ const DetailPanel: React.FC<{ item: StockRow; locFilter: string; onClose: () => 
                 </div>
 
                 {/* Summary Strip */}
-                <div className="grid grid-cols-3 border-b border-slate-200 dark:border-white/5 shrink-0 bg-slate-50 dark:bg-[#0a0a0f]">
-                    <div className="px-6 py-4 border-r border-slate-200 dark:border-white/5 text-center flex flex-col items-center justify-center">
-                        <div className="text-xs text-slate-500 dark:text-gray-500 font-black uppercase tracking-widest mb-1">Live Balance</div>
-                        <div className={`text-3xl font-black ${item.current_stock < 0 ? 'text-red-500 dark:text-red-400' : item.current_stock < LOW_STOCK_THRESHOLD ? 'text-amber-500 dark:text-amber-400' : 'text-slate-800 dark:text-white'}`}>
+                <div className="grid grid-cols-4 border-b border-slate-200 dark:border-white/5 shrink-0 bg-slate-50 dark:bg-[#0a0a0f]">
+                    <div className="px-4 py-4 border-r border-slate-200 dark:border-white/5 text-center flex flex-col items-center justify-center">
+                        <div className="text-[10px] text-slate-500 dark:text-gray-500 font-black uppercase tracking-widest mb-1 flex items-center gap-1">Available <span className="hidden sm:inline">Stock</span></div>
+                        <div className={`text-3xl font-black ${(item.available_stock || 0) < 0 ? 'text-red-500 dark:text-red-400' : (item.available_stock || 0) < LOW_STOCK_THRESHOLD ? 'text-amber-500 dark:text-amber-400' : 'text-slate-800 dark:text-white'}`}>
+                            {Number(item.available_stock || item.current_stock).toLocaleString()}
+                        </div>
+                    </div>
+                    <div className="px-4 py-4 border-r border-slate-200 dark:border-white/5 text-center flex flex-col items-center justify-center bg-slate-100/50 dark:bg-white/[0.02]">
+                        <div className="text-[10px] text-slate-400 dark:text-gray-500 font-black uppercase tracking-widest mb-1 flex items-center gap-1">Physical <span className="hidden sm:inline">Stock</span></div>
+                        <div className="text-xl font-black text-slate-600 dark:text-gray-400">
                             {Number(item.current_stock).toLocaleString()}
                         </div>
                     </div>
-                    <div className="px-6 py-4 border-r border-slate-200 dark:border-white/5 text-center flex flex-col items-center justify-center">
-                        <div className="text-xs text-green-600 dark:text-green-500/70 font-black uppercase tracking-widest mb-1">Total IN</div>
-                        <div className="text-2xl font-black text-green-600 dark:text-green-400">+{totalIn.toLocaleString()}</div>
+                    <div className="px-4 py-4 border-r border-slate-200 dark:border-white/5 text-center flex flex-col items-center justify-center bg-amber-50/50 dark:bg-amber-500/5">
+                        <div className="text-[10px] text-amber-600 dark:text-amber-500/70 font-black uppercase tracking-widest mb-1">Reserved</div>
+                        <div className="text-xl font-black text-amber-600 dark:text-amber-400">-{Number(item.reserved_stock || 0).toLocaleString()}</div>
                     </div>
-                    <div className="px-6 py-4 text-center flex flex-col items-center justify-center">
-                        <div className="text-xs text-red-600 dark:text-red-500/70 font-black uppercase tracking-widest mb-1">Total OUT</div>
-                        <div className="text-2xl font-black text-red-600 dark:text-red-400">{totalOut.toLocaleString()}</div>
+                    <div className="px-4 py-4 text-center flex flex-col items-center justify-center">
+                        <div className="text-[10px] text-green-600 dark:text-green-500/70 font-black uppercase tracking-widest mb-1">Total IN</div>
+                        <div className="text-xl font-black text-green-600 dark:text-green-400">+{totalIn.toLocaleString()}</div>
                     </div>
                 </div>
 
@@ -462,7 +470,7 @@ const LiveStock: React.FC = () => {
     const fetchStock = async () => {
         setLoading(true);
         try {
-            const [invRes, masterRes] = await Promise.all([
+            const [invRes, masterRes, ordersRes] = await Promise.all([
                 supabase
                     .from('v2_inventory_view')
                     .select('sku, name, type, uom, loc_id, current_stock, last_updated')
@@ -470,14 +478,43 @@ const LiveStock: React.FC = () => {
                 supabase
                     .from('master_items_v2')
                     .select('sku')
-                    .eq('status', 'Active')
+                    .eq('status', 'Active'),
+                supabase
+                    .from('sales_orders')
+                    .select('items')
+                    .in('status', ['New', 'Production', 'Ready'])
             ]);
 
             if (invRes.error) throw invRes.error;
             if (masterRes.error) throw masterRes.error;
+            if (ordersRes.error) throw ordersRes.error;
+
+            // Calculate Reserved Stock from pending orders
+            const reservedMap = new Map<string, number>(); // format: "SKU|LOC" -> qty
+            const pendingOrders = ordersRes.data || [];
+            pendingOrders.forEach(order => {
+                if (order.items && Array.isArray(order.items)) {
+                    order.items.forEach(item => {
+                        const sku = item.sku?.trim();
+                        const qty = Number(item.quantity) || 0;
+                        const loc = (item.sourceLocation?.trim() || 'no location');
+                        if (sku && qty > 0) {
+                            const key = `${sku}|${loc}`;
+                            reservedMap.set(key, (reservedMap.get(key) || 0) + qty);
+                        }
+                    });
+                }
+            });
 
             const activeSkus = new Set((masterRes.data || []).map(i => i.sku));
-            const activeInventory = (invRes.data || []).filter(r => activeSkus.has(r.sku));
+            const activeInventory = (invRes.data || []).filter(r => activeSkus.has(r.sku)).map(r => {
+                const resQty = reservedMap.get(`${r.sku}|${r.loc_id || 'no location'}`) || 0;
+                return {
+                    ...r,
+                    reserved_stock: resQty,
+                    available_stock: (r.current_stock || 0) - resQty
+                };
+            });
 
             setRows(activeInventory);
             setLastUpdated(new Date().toLocaleTimeString('en-GB'));
@@ -506,7 +543,7 @@ const LiveStock: React.FC = () => {
         const skuMap = new Map<string, StockRow>();
         rows.forEach(r => {
             if (!skuMap.has(r.sku)) {
-                skuMap.set(r.sku, { ...r, loc_id: locationFilter === 'All' ? undefined : locationFilter, current_stock: 0, last_updated: '' });
+                skuMap.set(r.sku, { ...r, loc_id: locationFilter === 'All' ? undefined : locationFilter, current_stock: 0, reserved_stock: 0, available_stock: 0, last_updated: '' });
             }
         });
 
@@ -515,6 +552,8 @@ const LiveStock: React.FC = () => {
             if (locationFilter === 'All' || r.loc_id === locationFilter) {
                 const item = skuMap.get(r.sku)!;
                 item.current_stock += (r.current_stock || 0);
+                item.reserved_stock = (item.reserved_stock || 0) + (r.reserved_stock || 0);
+                item.available_stock = (item.available_stock || 0) + (r.available_stock || 0);
                 if (r.last_updated && (!item.last_updated || new Date(r.last_updated) > new Date(item.last_updated))) {
                     item.last_updated = r.last_updated;
                 }
@@ -534,9 +573,9 @@ const LiveStock: React.FC = () => {
     }, [rows, typeFilter, search, locationFilter]);
 
     const totalItems = filtered.length;
-    const totalQty = filtered.reduce((sum, r) => sum + (r.current_stock || 0), 0);
-    const lowStockCount = filtered.filter(r => r.current_stock < LOW_STOCK_THRESHOLD).length;
-    const negativeCount = filtered.filter(r => r.current_stock < 0).length;
+    const totalQty = filtered.reduce((sum, r) => sum + (r.available_stock || 0), 0);
+    const lowStockCount = filtered.filter(r => (r.available_stock || 0) < LOW_STOCK_THRESHOLD).length;
+    const negativeCount = filtered.filter(r => (r.available_stock || 0) < 0).length;
 
     const getStockColor = (qty: number) => {
         if (qty < 0) return 'text-red-600 dark:text-red-500';
@@ -547,7 +586,7 @@ const LiveStock: React.FC = () => {
     const getStockBadge = (qty: number) => {
         if (qty < 0) return { label: 'NEGATIVE', cls: 'bg-red-100 text-red-700 border-red-200 dark:bg-red-500/15 dark:text-red-400 dark:border-red-500/30' };
         if (qty < LOW_STOCK_THRESHOLD) return { label: 'LOW STOCK', cls: 'bg-amber-100 text-amber-700 border-amber-200 dark:bg-amber-500/15 dark:text-amber-400 dark:border-amber-500/30' };
-        return { label: 'IN STOCK', cls: 'bg-green-100 text-green-700 border-green-200 dark:bg-green-500/15 dark:text-green-400 dark:border-green-500/30' };
+        return { label: 'AVAILABLE', cls: 'bg-green-100 text-green-700 border-green-200 dark:bg-green-500/15 dark:text-green-400 dark:border-green-500/30' };
     };
 
     return (
@@ -695,8 +734,13 @@ const LiveStock: React.FC = () => {
                                             <span className={`text-[8px] font-bold uppercase px-1.5 py-0.5 rounded border ${badge.cls}`}>
                                                 {badge.label}
                                             </span>
-                                            <div className={`text-xl sm:text-2xl font-black tracking-tighter leading-none ${getStockColor(item.current_stock)}`}>
-                                                {Number(item.current_stock).toLocaleString()}
+                                            <div className="flex flex-col items-end">
+                                                <div className={`text-xl sm:text-2xl font-black tracking-tighter leading-none ${getStockColor(item.available_stock || 0)}`}>
+                                                    {Number(item.available_stock || 0).toLocaleString()}
+                                                </div>
+                                                <div className="text-[9px] text-slate-400 dark:text-gray-500 mt-1 font-mono tracking-tight">
+                                                    Phy: {item.current_stock} | Res: {item.reserved_stock}
+                                                </div>
                                             </div>
                                         </div>
                                     </button>
@@ -799,8 +843,11 @@ const LiveStock: React.FC = () => {
                                         </div>
                                     </div>
                                     <div className="flex flex-col items-end shrink-0 pl-3 border-l border-slate-200 dark:border-white/10">
-                                        <div className={`text-lg sm:text-xl font-black tracking-tighter ${getStockColor(item.current_stock)}`}>
-                                            {Number(item.current_stock).toLocaleString()}
+                                        <div className={`text-lg sm:text-xl font-black tracking-tighter ${getStockColor(item.available_stock || 0)}`}>
+                                            {Number(item.available_stock || 0).toLocaleString()}
+                                        </div>
+                                        <div className="text-[10px] text-slate-400 dark:text-gray-500 font-mono mt-0.5">
+                                            P:{item.current_stock} R:{item.reserved_stock}
                                         </div>
                                     </div>
                                 </button>
