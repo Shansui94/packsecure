@@ -1,7 +1,8 @@
 import React, { useState, useEffect, useRef } from 'react';
 import { supabase } from '../services/supabase';
-import { Truck, CheckCircle, Package, ChevronRight, X, RefreshCw, Camera, Image as ImageIcon } from 'lucide-react';
+import { Truck, CheckCircle, Package, ChevronRight, X, RefreshCw, Camera, Image as ImageIcon, QrCode } from 'lucide-react';
 import { SalesOrder } from '../types';
+import { Scanner } from '@yudiel/react-qr-scanner';
 
 interface DriverDeliveryProps {
     user: any;
@@ -40,6 +41,10 @@ const DriverDelivery: React.FC<DriverDeliveryProps> = ({ user }) => {
     const [tasks, setTasks] = useState<SalesOrder[]>([]);
     const [loading, setLoading] = useState(true);
     const [activeTab, setActiveTab] = useState<'todo' | 'done'>('todo');
+    
+    // Lorry Binding State
+    const [currentLorry, setCurrentLorry] = useState<any>(null);
+    const [isScannerOpen, setIsScannerOpen] = useState(false);
 
     // NAIK BARANG (Load Items) State
     const [selectedOrder, setSelectedOrder] = useState<SalesOrder | null>(null);
@@ -62,6 +67,15 @@ const DriverDelivery: React.FC<DriverDeliveryProps> = ({ user }) => {
         if (!user?.uid) return;
 
         try {
+            // Fetch Driver's tied lorry
+            const { data: lorryData } = await supabase
+                .from('lorries')
+                .select('*')
+                .eq('driver_id', user.uid)
+                .single();
+                
+            setCurrentLorry(lorryData || null);
+
             // Fetch assigned orders with items
             const { data } = await supabase
                 .from('sales_orders')
@@ -327,6 +341,62 @@ const DriverDelivery: React.FC<DriverDeliveryProps> = ({ user }) => {
         }
     };
 
+    // 6. Bind Lorry (Scan QR)
+    const handleScanComplete = async (text: string) => {
+        try {
+            setSubmitting(true);
+            const data = JSON.parse(text);
+            
+            if (data.type !== 'LorryBind' || !data.lorryId) {
+                throw new Error("Invalid QR Code. Not a Lorry QR.");
+            }
+
+            // 1. Unbind driver from any current lorry
+            await supabase.from('lorries').update({ driver_id: null, driver_name: null, status: 'Available' }).eq('driver_id', user.uid);
+            
+            // 2. Bind driver to new lorry
+            const { error: bindError } = await supabase.from('lorries')
+                .update({ 
+                    driver_id: user.uid, 
+                    driver_name: user.name || user.email, 
+                    status: 'On-Route' 
+                })
+                .eq('id', data.lorryId);
+
+            if (bindError) throw bindError;
+
+            alert("✅ Lorry Bound Successfully!");
+            setIsScannerOpen(false);
+            fetchTasks(); // Refresh lorry status
+            
+        } catch (err: any) {
+            alert(`Scan Error: ${err.message || 'Invalid format'}`);
+        } finally {
+            setSubmitting(false);
+        }
+    };
+
+    // 7. Unbind Lorry (End Trip)
+    const handleUnbindLorry = async () => {
+        if (!currentLorry) return;
+        if (!window.confirm("End Shift and Unbind Lorry?")) return;
+        
+        try {
+            setSubmitting(true);
+            const { error } = await supabase.from('lorries')
+                .update({ driver_id: null, driver_name: null, status: 'Available' })
+                .eq('id', currentLorry.id);
+                
+            if (error) throw error;
+            setCurrentLorry(null);
+            alert("Lorry unbound successfully.");
+        } catch (err: any) {
+            alert(err.message);
+        } finally {
+            setSubmitting(false);
+        }
+    };
+
     // Real-time Subscription
     useEffect(() => {
         if (!user?.uid) return;
@@ -383,6 +453,41 @@ const DriverDelivery: React.FC<DriverDeliveryProps> = ({ user }) => {
                         <RefreshCw size={14} className={loading ? 'animate-spin' : ''} />
                     </button>
                 </div>
+            </div>
+
+            {/* Current Lorry Banner */}
+            <div className="px-4 pt-4">
+                {currentLorry ? (
+                    <div className="bg-blue-600/20 border border-blue-500/50 rounded-2xl p-4 flex items-center justify-between">
+                        <div className="flex items-center gap-3">
+                            <div className="w-10 h-10 bg-blue-600/30 rounded-xl flex items-center justify-center text-blue-400">
+                                <Truck size={20} />
+                            </div>
+                            <div>
+                                <p className="text-[10px] font-black text-blue-400 uppercase tracking-widest">Current Lorry</p>
+                                <p className="text-white font-bold">{currentLorry.plate_number}</p>
+                            </div>
+                        </div>
+                        <button 
+                            onClick={handleUnbindLorry}
+                            disabled={submitting}
+                            className="px-4 py-2 bg-slate-900/50 hover:bg-slate-800 border border-slate-700 rounded-xl text-[10px] font-black uppercase text-slate-300 tracking-wider transition-all disabled:opacity-50"
+                        >
+                            END SHIFT
+                        </button>
+                    </div>
+                ) : (
+                    <button 
+                        onClick={() => setIsScannerOpen(true)}
+                        className="w-full bg-slate-800/80 hover:bg-slate-700/80 border-2 border-dashed border-slate-600 rounded-2xl p-4 flex items-center justify-center gap-3 transition-all"
+                    >
+                        <QrCode className="text-blue-400" size={24} />
+                        <div className="text-left">
+                            <p className="text-sm font-black text-white uppercase tracking-wider">Tap to Scan Lorry QR</p>
+                            <p className="text-[10px] text-slate-400 font-bold uppercase tracking-widest">Bind lorry to start route</p>
+                        </div>
+                    </button>
+                )}
             </div>
 
             {/* TABS */}
@@ -718,6 +823,38 @@ const DriverDelivery: React.FC<DriverDeliveryProps> = ({ user }) => {
                         >
                             {submitting ? 'PROCESSING...' : 'CONFIRM PICK UP'}
                         </button>
+                    </div>
+                </div>
+            )}
+
+            {/* SCANNER MODAL */}
+            {isScannerOpen && (
+                <div className="fixed inset-0 z-[300] bg-black flex flex-col animate-in slide-in-from-bottom-10">
+                    <div className="p-4 border-b border-slate-800 flex justify-between items-center bg-slate-900 safe-top-padding">
+                        <h2 className="font-black text-white text-lg flex items-center gap-2"><QrCode size={20} className="text-blue-500" /> SCAN LORRY QR</h2>
+                        <button onClick={() => setIsScannerOpen(false)} className="p-2 bg-slate-800 rounded-full text-white"><X size={20} /></button>
+                    </div>
+                    
+                    <div className="flex-1 bg-black flex flex-col items-center justify-center p-8">
+                        <div className="w-full max-w-sm aspect-square bg-slate-900 rounded-[40px] overflow-hidden border-4 border-slate-800 relative shadow-2xl">
+                            {submitting ? (
+                                <div className="absolute inset-0 flex flex-col items-center justify-center bg-black/80 z-10 text-blue-400 gap-4">
+                                    <div className="w-8 h-8 border-4 border-blue-500/30 border-t-blue-500 rounded-full animate-spin" />
+                                    <span className="font-black tracking-widest text-xs uppercase">Binding...</span>
+                                </div>
+                            ) : null}
+                            <Scanner 
+                               onScan={(detectedCodes) => {
+                                   if (detectedCodes && detectedCodes.length > 0) {
+                                       handleScanComplete(detectedCodes[0].rawValue);
+                                   }
+                               }}
+                               formats={['qr_code']}
+                            />
+                        </div>
+                        <p className="text-slate-500 text-xs font-bold uppercase tracking-widest mt-8 text-center max-w-xs">
+                            Point your camera at the QR code on the lorry dashboard to bind your shift.
+                        </p>
                     </div>
                 </div>
             )}

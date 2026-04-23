@@ -33,14 +33,15 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
 
         const { data: activeProducts } = await supabase
             .from('machine_active_products')
-            .select('product_sku, lane_id, yield')
+            .select('product_sku, lane_id, yield, operator_id')
             .eq('machine_id', machine_id);
 
-        const activeLaneMap: Record<string, { sku: string | null; yield: number }> = {};
+        const activeLaneMap: Record<string, { sku: string | null; yield: number; operator_id: string | null }> = {};
         (activeProducts || []).forEach((p: any) => {
             activeLaneMap[p.lane_id] = {
                 sku: p.product_sku || null,
                 yield: p.yield || 1,
+                operator_id: p.operator_id || null,
             };
         });
 
@@ -54,6 +55,7 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
                 machine_id,
                 output_qty: isReboot ? 0 : (laneData?.yield ?? 1),
                 sku: resolvedSku,
+                operator_id: laneData?.operator_id || null,
             };
         });
 

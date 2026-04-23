@@ -395,10 +395,9 @@ const ItemFormModal = ({
                                     <label className="text-xs uppercase font-bold text-gray-500 mb-1 block">SKU Identity</label>
                                     <input
                                         required
-                                        disabled={isEdit}
                                         value={formData.sku || ''}
                                         onChange={e => handleChange('sku', e.target.value.toUpperCase())}
-                                        className={`w-full bg-gray-950 border border-gray-800 rounded-lg p-2.5 text-white font-mono focus:border-cyan-500 outline-none ${isEdit ? 'opacity-50 cursor-not-allowed' : ''}`}
+                                        className={`w-full bg-gray-950 border border-gray-800 rounded-lg p-2.5 text-white font-mono focus:border-cyan-500 outline-none`}
                                         placeholder="e.g. R-ABS-001"
                                     />
                                 </div>
@@ -625,11 +624,11 @@ const ProductLibrary: React.FC = () => {
     const handleSaveItem = async (data: V2Item) => {
         if (editingItem) {
             // Update
-            await updateItemV2(data.sku, data);
+            await updateItemV2(editingItem.sku, data);
 
             // Update local state
-            setItems(prev => prev.map(i => i.sku === data.sku ? { ...i, ...data } : i));
-            if (selectedItem?.sku === data.sku) setSelectedItem({ ...selectedItem, ...data });
+            setItems(prev => prev.map(i => i.sku === editingItem.sku ? { ...i, ...data } : i));
+            if (selectedItem?.sku === editingItem.sku) setSelectedItem({ ...selectedItem, ...data });
         } else {
             // Create
             if (items.some(i => i.sku === data.sku)) {

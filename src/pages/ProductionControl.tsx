@@ -33,7 +33,7 @@ interface ProductionLaneProps {
     className?: string;
 }
 
-const ProductionLane: React.FC<ProductionLaneProps> = ({ laneId, machineMetadata, jobs, onProductionComplete, onBeforeProduce, className }) => {
+const ProductionLane: React.FC<ProductionLaneProps> = ({ laneId, machineMetadata, operatorId, jobs, onProductionComplete, onBeforeProduce, className }) => {
 
     // ... (Keep existing state)
     const [step, setStep] = useState<1 | 2 | 3>(1);
@@ -156,6 +156,7 @@ const ProductionLane: React.FC<ProductionLaneProps> = ({ laneId, machineMetadata
                     product_sku: v3Sku,
                     cutting_size: numericSize,
                     yield: calculatedYield,
+                    operator_id: operatorId, // Included operator_id
                     updated_at: new Date()
                 }, { onConflict: 'machine_id,lane_id' });
                 if (error) throw error;

@@ -157,7 +157,7 @@ const DetailPanel: React.FC<{ item: StockRow; locFilter: string; onClose: () => 
     const totalIn = ledger.filter(r => r.change_qty > 0).reduce((s, r) => s + r.change_qty, 0);
     const totalOut = ledger.filter(r => r.change_qty < 0).reduce((s, r) => s + Math.abs(r.change_qty), 0);
 
-    const groupLedger = (records: LedgerRow[]) => {
+    const groupLedgerAndSplit = (records: LedgerRow[]) => {
         const grouped: LedgerRow[] = [];
         records.forEach(r => {
             const dateStr = new Date(r.timestamp).toLocaleDateString('en-MY');
@@ -165,7 +165,6 @@ const DetailPanel: React.FC<{ item: StockRow; locFilter: string; onClose: () => 
             const refStr = isProduction ? '' : (r.ref_doc || '');
             
             const existing = grouped.find(g => 
-                g.event_type === r.event_type && 
                 new Date(g.timestamp).toLocaleDateString('en-MY') === dateStr &&
                 (isProduction ? true : (g.ref_doc || '') === refStr) &&
                 (g.created_by_name || '') === (r.created_by_name || '') &&
@@ -177,15 +176,27 @@ const DetailPanel: React.FC<{ item: StockRow; locFilter: string; onClose: () => 
                 if (!existing.notes?.includes('(Aggregated Daily Total)')) {
                     existing.notes = `(Aggregated Daily Total) ` + (existing.notes || '');
                 }
+                
+                // Keep event_type sensible based on net direction
+                if (existing.change_qty < 0 && !existing.event_type.includes('Out')) {
+                    existing.event_type = 'Transfer Out';
+                } else if (existing.change_qty > 0 && !existing.event_type.includes('In')) {
+                    existing.event_type = 'Transfer In';
+                }
             } else {
                 grouped.push({ ...r, change_qty: Number(r.change_qty) });
             }
         });
-        return grouped;
+        
+        return {
+            in: grouped.filter(r => r.change_qty > 0),
+            out: grouped.filter(r => r.change_qty < 0)
+        };
     };
 
-    const ledgerIn = groupLedger(ledger.filter(r => r.change_qty > 0));
-    const ledgerOut = groupLedger(ledger.filter(r => r.change_qty < 0));
+    const groupedData = groupLedgerAndSplit(ledger);
+    const ledgerIn = groupedData.in;
+    const ledgerOut = groupedData.out;
 
     const renderRow = (row: LedgerRow) => {
         const style = getEventStyle(row.event_type, row.change_qty);

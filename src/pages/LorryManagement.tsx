@@ -1,7 +1,8 @@
 
 import React, { useState, useEffect } from 'react';
 import { supabase } from '../services/supabase';
-import { Truck, Plus, Trash2, Edit2, Search, User, MapPin } from 'lucide-react';
+import { Truck, Plus, Trash2, Edit2, Search, User, MapPin, QrCode as QrIcon, Printer, X } from 'lucide-react';
+import QRCode from 'react-qr-code';
 
 const LorryManagement: React.FC = () => {
     const [lorries, setLorries] = useState<any[]>([]);
@@ -11,6 +12,7 @@ const LorryManagement: React.FC = () => {
 
     // Modal State
     const [isModalOpen, setIsModalOpen] = useState(false);
+    const [isQrModalOpen, setIsQrModalOpen] = useState(false);
     const [editingLorry, setEditingLorry] = useState<any>(null);
     const [formData, setFormData] = useState({
         plate_number: '',
@@ -18,6 +20,11 @@ const LorryManagement: React.FC = () => {
         preferred_zone: 'Not Specified',
         status: 'Available'
     });
+
+    const handlePrintQR = (lorry: any) => {
+        setEditingLorry(lorry);
+        setIsQrModalOpen(true);
+    };
 
     useEffect(() => {
         fetchData();
@@ -187,6 +194,13 @@ const LorryManagement: React.FC = () => {
                                     <Edit2 size={14} /> Edit
                                 </button>
                                 <button
+                                    onClick={() => handlePrintQR(lorry)}
+                                    className="p-3 bg-blue-500/10 hover:bg-blue-500/20 text-blue-500 rounded-xl transition-all font-bold text-xs uppercase tracking-widest flex items-center gap-2"
+                                    title="Print QR"
+                                >
+                                    <QrIcon size={16} /> QR
+                                </button>
+                                <button
                                     onClick={() => handleDelete(lorry.id, lorry.plate_number)}
                                     className="p-3 bg-red-500/10 hover:bg-red-500/20 text-red-500 rounded-xl transition-all"
                                 >
@@ -272,6 +286,57 @@ const LorryManagement: React.FC = () => {
                                 </button>
                             </div>
                         </form>
+                    </div>
+                </div>
+            )}
+
+            {/* Print QR Modal */}
+            {isQrModalOpen && editingLorry && (
+                <div className="fixed inset-0 z-[100] flex items-center justify-center p-4">
+                    <div className="absolute inset-0 bg-black/80 backdrop-blur-sm" onClick={() => setIsQrModalOpen(false)} />
+                    <div className="relative bg-white w-full max-w-sm rounded-[40px] p-8 shadow-2xl flex flex-col items-center animate-in zoom-in-95 duration-200">
+                        {/* Printable Area */}
+                        <div id="print-qr-area" className="flex flex-col items-center bg-white p-6 rounded-3xl w-full text-center print-exact">
+                            <Truck size={48} className="text-blue-600 mb-2" />
+                            <h2 className="text-3xl font-black text-slate-900 uppercase tracking-tighter mb-1">
+                                {editingLorry.plate_number}
+                            </h2>
+                            <p className="text-[10px] text-slate-500 font-bold uppercase tracking-[0.2em] mb-8">Scan to Bind Lorry</p>
+                            
+                            <div className="bg-white p-4 rounded-3xl border-4 border-slate-900 shadow-xl inline-block mb-8 object-contain">
+                                <QRCode 
+                                    value={JSON.stringify({ type: 'LorryBind', lorryId: editingLorry.id, plate: editingLorry.plate_number })} 
+                                    size={200}
+                                    level="H"
+                                    fgColor="#0f172a"
+                                />
+                            </div>
+                        </div>
+
+                        {/* Actions (Not Printed) */}
+                        <div className="flex gap-4 w-full mt-2 print:hidden">
+                            <button
+                                onClick={() => setIsQrModalOpen(false)}
+                                className="p-4 bg-slate-100 hover:bg-slate-200 text-slate-500 rounded-2xl transition-all shrink-0"
+                            >
+                                <X size={20} />
+                            </button>
+                            <button
+                                onClick={() => {
+                                    const printContent = document.getElementById('print-qr-area');
+                                    const originalContents = document.body.innerHTML;
+                                    if(printContent) {
+                                        document.body.innerHTML = printContent.innerHTML;
+                                        window.print();
+                                        document.body.innerHTML = originalContents;
+                                        window.location.reload(); // Reload to restore React bindings after brutal DOM manipulation
+                                    }
+                                }}
+                                className="flex-1 bg-blue-600 hover:bg-blue-500 text-white p-4 rounded-2xl font-black uppercase text-xs tracking-widest transition-all flex items-center justify-center gap-2 shadow-lg shadow-blue-900/20"
+                            >
+                                <Printer size={18} /> Print Sticker
+                            </button>
+                        </div>
                     </div>
                 </div>
             )}

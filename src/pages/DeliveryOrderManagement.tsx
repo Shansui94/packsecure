@@ -809,6 +809,12 @@ const DeliveryOrderManagement: React.FC = () => {
         if (isSubmitting) return; // 🛡️ Prevent double submission
         if (newOrderItems.length === 0) return alert("Add at least one item");
 
+        // UI ALERT FOR MISSING LOCATION
+        const missingLocItems = newOrderItems.filter(item => !item.sourceLocation || item.sourceLocation.trim() === '');
+        if (missingLocItems.length > 0) {
+            alert("⚠️ 注意：此订单中有物品没有填写发货地点 (Source Location)！\n系统将默认将其记录为 'no location' 以允许创建订单。\n\n请务必稍后重新检查，或上报处理！");
+        }
+
         setIsSubmitting(true);
         try {
             // Assign default customer if empty (since input is hidden)
