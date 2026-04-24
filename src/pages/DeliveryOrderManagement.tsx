@@ -223,17 +223,22 @@ const DeliveryOrderManagement: React.FC = () => {
             // 1. Fetch Upcoming Services (Next 2 Weeks) independent of the big Promise.all to avoid index errors
             const today = new Date().toISOString().split('T')[0];
             const endDate = new Date();
-            endDate.setDate(endDate.getDate() + 14);
+            endDate.setDate(endDate.getDate() + 30);
             const endDateStr = endDate.toISOString().split('T')[0];
 
             const { data: serviceData } = await supabase
                 .from('lorry_service_requests')
                 .select('*')
-                .gte('scheduled_date', today)
-                .lte('scheduled_date', endDateStr)
-                .neq('status', 'Completed');
+                .neq('status', 'Completed')
+                .or(`scheduled_date.gte.${today},status.eq.Pending`);
 
-            if (serviceData) setLorryServices(serviceData);
+            if (serviceData) {
+                const filteredServices = serviceData.filter(s => {
+                    if (s.status === 'Pending') return true;
+                    return s.scheduled_date && s.scheduled_date <= endDateStr;
+                });
+                setLorryServices(filteredServices);
+            }
 
             const [usersRes, ordersRes, itemsRes, leavesRes, lorriesRes, servicesRes, ratesRes] = await Promise.all([
                 supabase.from('users_public').select('*'),
@@ -323,6 +328,16 @@ const DeliveryOrderManagement: React.FC = () => {
             fetchData();
         } catch (err) {
             console.error("Failed to approve/reject leave", err);
+        }
+    };
+
+    const handleScheduleService = async (serviceId: string, dateStr: string) => {
+        if (!dateStr) return;
+        try {
+            await supabase.from('lorry_service_requests').update({ status: 'Scheduled', scheduled_date: dateStr }).eq('id', serviceId);
+            fetchData();
+        } catch (err) {
+            console.error("Failed to schedule service", err);
         }
     };
 
@@ -1044,16 +1059,16 @@ const DeliveryOrderManagement: React.FC = () => {
     };
 
     const todayStr = getLocalDateStr(new Date());
-    const within14Days = new Date();
-    within14Days.setDate(within14Days.getDate() + 14);
-    const within14DaysStr = getLocalDateStr(within14Days);
+    const within30Days = new Date();
+    within30Days.setDate(within30Days.getDate() + 30);
+    const within30DaysStr = getLocalDateStr(within30Days);
 
     const driversOnLeaveToday = drivers.filter(d =>
         driverLeaves.some(l => l.employee_id === d.uid && l.status === 'Approved' && todayStr >= l.start_date && todayStr <= l.end_date)
     );
 
     const upcomingLeaves = driverLeaves
-        .filter(l => l.status === 'Approved' && l.start_date > todayStr && l.start_date <= within14DaysStr)
+        .filter(l => l.status === 'Approved' && l.start_date > todayStr && l.start_date <= within30DaysStr)
         .map(l => ({
             ...l,
             driverName: drivers.find(d => d.uid === l.employee_id)?.name || 'Unknown Driver'
@@ -1143,7 +1158,7 @@ const DeliveryOrderManagement: React.FC = () => {
                                     <Calendar size={20} />
                                 </div>
                                 <div>
-                                    <div className="text-sm font-black text-amber-400 uppercase tracking-widest leading-none mb-1">Upcoming Holidays (Next 2 Weeks)</div>
+                                    <div className="text-sm font-black text-amber-400 uppercase tracking-widest leading-none mb-1">Upcoming Holidays (Next 30 Days)</div>
                                     <div className="text-xs font-bold text-amber-500/80">
                                         {upcomingLeaves.map(l => `${l.driverName} (${l.start_date}${l.start_date !== l.end_date ? ' ➔ ' + l.end_date : ''})`).join(', ')}
                                     </div>
@@ -1173,7 +1188,7 @@ const DeliveryOrderManagement: React.FC = () => {
                             <div className="flex-1 z-10">
                                 <div className="flex justify-between items-start">
                                     <div>
-                                        <h3 className="text-blue-400 font-black uppercase tracking-widest text-sm mb-1">Upcoming Lorry Services (Next 2 Weeks)</h3>
+                                        <h3 className="text-blue-400 font-black uppercase tracking-widest text-sm mb-1">Upcoming Lorry Services (Next 30 Days)</h3>
                                         <p className="text-slate-400 text-xs font-bold uppercase tracking-wider mb-3">Please arrange schedule accordingly.</p>
                                     </div>
                                 </div>
@@ -1181,14 +1196,28 @@ const DeliveryOrderManagement: React.FC = () => {
                                 <div className="flex flex-wrap gap-2">
                                     {lorryServices.map(s => {
                                         const driver = drivers.find(d => d.uid === s.driver_id);
+                                        const isPending = s.status === 'Pending';
                                         return (
-                                            <div key={s.id} className="bg-slate-950 border border-blue-500/30 px-3 py-1.5 rounded-lg flex items-center gap-2 shadow-sm group hover:border-blue-500/60 transition-colors">
-                                                <div className="flex flex-col">
+                                            <div key={s.id} className={`bg-slate-950 border px-3 py-1.5 rounded-lg flex items-center gap-2 shadow-sm group transition-colors ${isPending ? 'border-amber-500/50 hover:border-amber-500' : 'border-blue-500/30 hover:border-blue-500/60'}`}>
+                                                <div className="flex flex-col flex-1">
                                                     <span className="text-white font-black font-mono text-xs tracking-wider">{s.plate_number}</span>
-                                                    <span className="text-[9px] text-blue-400 font-bold uppercase tracking-widest">{s.scheduled_date}</span>
+                                                    {isPending ? (
+                                                        <span className="text-[9px] text-amber-400 font-bold uppercase tracking-widest">Needs Schedule</span>
+                                                    ) : (
+                                                        <span className="text-[9px] text-blue-400 font-bold uppercase tracking-widest">{s.scheduled_date}</span>
+                                                    )}
                                                 </div>
+                                                {isPending && (
+                                                    <input 
+                                                        type="date" 
+                                                        className="text-[10px] bg-slate-900 text-white border border-slate-700 rounded px-1 py-0.5 outline-none focus:border-amber-500 [color-scheme:dark]"
+                                                        onChange={(e) => {
+                                                            if(e.target.value) handleScheduleService(s.id, e.target.value);
+                                                        }}
+                                                    />
+                                                )}
                                                 {driver && (
-                                                    <div className="pl-2 border-l border-slate-800 text-[10px] font-bold text-slate-500 flex items-center gap-1">
+                                                    <div className="pl-2 border-l border-slate-800 text-[10px] font-bold text-slate-500 flex items-center gap-1 shrink-0">
                                                         <UserIcon size={10} /> {driver.name}
                                                     </div>
                                                 )}
