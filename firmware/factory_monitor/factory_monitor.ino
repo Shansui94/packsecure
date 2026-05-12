@@ -19,7 +19,7 @@ const String CURRENT_VERSION =
 #define WDT_TIMEOUT 30 // Restart if stuck for 30 seconds
 
 // --- WIFI CONFIGURATION ---
-const char *ssid = "opm9821_2.4Ghz@MaxisFibre";
+const char *ssid = "ESBL_326";
 const char *password = "88888888";
 
 // 2. Vercel API (Dynamic Config)
@@ -172,7 +172,8 @@ void loop() {
         // ✅ 确认是真实信号 (警报还在响)
         unsigned long now = millis();
 
-        if ((now - lastDebounceTime) > debounceDelay) {
+        // 修复开机 4.5 分钟冷却期的 Bug：如果是开机后第一次触发 (lastDebounceTime == 0)，直接放行
+        if (lastDebounceTime == 0 || (now - lastDebounceTime) > debounceDelay) {
           // ✅ 冷却时间已过
           float elapsed = (float)(now - lastDebounceTime) / 1000.0;
           lastDebounceTime = now;
@@ -318,17 +319,32 @@ void loadQueue() {
 void connectWiFi() {
   if (WiFi.status() == WL_CONNECTED)
     return;
-  WiFi.disconnect(true);
+    
+  // 最底层的强制初始化，解决 Core 3.0+ 版本的 WiFi 死锁 Bug
+  WiFi.disconnect(true, true); 
+  delay(500);
+  WiFi.mode(WIFI_STA);
+  WiFi.setSleep(false);
   delay(100);
-  Serial.printf("正在连接 WiFi: %s ", ssid);
+
+  Serial.printf("\n正在连接 WiFi: %s\n", ssid);
   WiFi.begin(ssid, password);
+  
   int attempts = 0;
-  while (WiFi.status() != WL_CONNECTED && attempts < 30) {
+  while (WiFi.status() != WL_CONNECTED && attempts < 40) {
     delay(500);
+    esp_task_wdt_reset(); // 喂狗防止重启
     Serial.print(".");
     attempts++;
   }
+  
   Serial.println();
+  if(WiFi.status() == WL_CONNECTED) {
+      Serial.println("✅ WiFi 连接成功！");
+  } else {
+      Serial.printf("❌ WiFi 连接失败！错误代码 (WiFi Status): %d\n", WiFi.status());
+      Serial.println("代码含义: 1=搜不到信号, 4=密码错误/被拉黑, 6=意外断开");
+  }
 }
 
 void handleNetworkQueue() {

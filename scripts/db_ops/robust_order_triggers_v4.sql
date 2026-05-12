@@ -2,11 +2,15 @@
 -- ROBUST INVENTORY TRIGGERS V4 (Strict Item-Level Location Deduction)
 -- =========================================================================
 
--- 1. Obliterate all known old triggers to prevent double-deductions
+-- 1. Obliterate all known old triggers to prevent double-deductions (both Quoted and Unquoted)
 DROP TRIGGER IF EXISTS "auto_deduct_stock_on_order" ON public.sales_orders;
+DROP TRIGGER IF EXISTS auto_deduct_stock_on_order ON public.sales_orders;
 DROP TRIGGER IF EXISTS "auto_refund_stock_on_cancel" ON public.sales_orders;
+DROP TRIGGER IF EXISTS auto_refund_stock_on_cancel ON public.sales_orders;
 DROP TRIGGER IF EXISTS "update_delivery_trigger" ON public.sales_orders;
+DROP TRIGGER IF EXISTS update_delivery_trigger ON public.sales_orders;
 DROP TRIGGER IF EXISTS "update_delivery_trigger_v2" ON public.sales_orders;
+DROP TRIGGER IF EXISTS update_delivery_trigger_v2 ON public.sales_orders;
 
 -- 2. Drop the old function so we can replace it cleanly
 DROP FUNCTION IF EXISTS public.sync_order_inventory() CASCADE;

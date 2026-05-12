@@ -619,28 +619,8 @@ const DeliveryOrderManagement: React.FC = () => {
         if (!window.confirm(`Approve changes for Order ${order.orderNumber}? \nThis will adjust stock for amendments and mark as Delivered.`)) return;
 
         try {
-            // 1. Adjust Stock for amended quantities (stock already deducted at order creation)
-            //    Only need to ADD BACK the difference if driver took LESS than ordered
-            for (const item of order.items || []) {
-                const amendedQty = item.quantity || 0;
-                const originalQty = (item as any).original_quantity || amendedQty;
-                const diff = originalQty - amendedQty; // positive = driver took less → add back
+            // 1. Let V6 DB Trigger handle the stock deduction/adjustment automatically.
 
-                if (diff !== 0) {
-                    let loc = (item as any).sourceLocation || 'OPM Lama';
-                    if (!loc || loc === 'Unassigned') loc = 'OPM Lama';
-
-                    const { error } = await supabase.from('stock_ledger_v2').insert({
-                        sku: item.sku,
-                        change_qty: diff, // positive = return to stock, negative = extra deduction
-                        event_type: 'Amendment Adjustment',
-                        loc_id: loc,
-                        ref_doc: order.orderNumber,
-                        notes: `Amend Approved: ${originalQty} → ${amendedQty}`
-                    });
-                    if (error) console.error("Stock adjust error for " + item.sku, error);
-                }
-            }
 
             // 2. Update Status
             const { error } = await supabase.from('sales_orders').update({
@@ -841,9 +821,37 @@ const DeliveryOrderManagement: React.FC = () => {
                 const existingOrder = orders.find(o => o.id === editingOrderId);
                 doNumber = existingOrder?.orderNumber;
             } else {
-                // Generate New DO Number (Legacy Format or match new one?)
-                // For now keeping legacy random for this manual form unless specified otherwise
-                doNumber = `DO-${new Date().getFullYear()}-${Math.floor(Math.random() * 10000).toString().padStart(4, '0')}`;
+                // Generate sequential DO Number: DO-{DriverName}-{YYMMDD}-{Seq}
+                const dateObj = new Date(newOrderDate || new Date().toISOString().split("T")[0]);
+                const yy = String(dateObj.getFullYear()).slice(-2);
+                const mm = String(dateObj.getMonth() + 1).padStart(2, '0');
+                const dd = String(dateObj.getDate()).padStart(2, '0');
+                const dateCode = `${yy}${mm}${dd}`;
+
+                const selectedDriverName = drivers.find(d => d.uid === selectedDriverId)?.name || 'HQ';
+                const driverPrefix = selectedDriverName.split(' ')[0].replace(/[^a-zA-Z0-9]/g, '');
+
+                const prefix = `DO-${driverPrefix}-${dateCode}`;
+
+                const { data: latestOrder } = await supabase
+                    .from('sales_orders')
+                    .select('order_number')
+                    .like('order_number', `${prefix}-%`)
+                    .order('created_at', { ascending: false })
+                    .limit(1)
+                    .maybeSingle();
+
+                let nextSeq = 1;
+                if (latestOrder && latestOrder.order_number) {
+                    const parts = latestOrder.order_number.split('-');
+                    const lastPart = parts[parts.length - 1];
+                    const parsed = parseInt(lastPart, 10);
+                    if (!isNaN(parsed)) {
+                        nextSeq = parsed + 1;
+                    }
+                }
+                const seq = String(nextSeq).padStart(3, '0');
+                doNumber = `${prefix}-${seq}`;
             }
 
             const zone = tripCategory || '';

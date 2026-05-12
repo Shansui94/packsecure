@@ -276,6 +276,7 @@ const Layout: React.FC<LayoutProps> = ({ children, activePage, setActivePage, us
                                     <NavItem id="scanner" icon={Scan} label="Production Control" roles={['SuperAdmin', 'Admin']} />
                                     <NavItem id="livestock" icon={BarChart3} label="Live Stock" roles={['SuperAdmin', 'Admin', 'Manager']} />
                                     <NavItem id="machine-schedule" icon={Calendar} label="Machine Schedule" roles={['SuperAdmin', 'Admin', 'Manager']} />
+                                    <NavItem id="floor-plan" icon={LayoutDashboard} label="Floor Plan" roles={['SuperAdmin', 'Admin', 'Manager']} />
                                 </NavGroup>
 
                                 <NavGroup title="Inventory & BOM">

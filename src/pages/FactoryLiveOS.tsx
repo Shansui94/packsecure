@@ -800,21 +800,35 @@ const FactoryLiveOS: React.FC<FactoryLiveOSProps> = ({ onNavigate }) => {
                     </div>
                 ) : (
                     <>
-                        {/* ── MACHINE GRID ── */}
-                        <section>
-                            <div className="flex items-center justify-between mb-4">
+                        {/* ── MACHINE GRID (GROUPED BY REGION) ── */}
+                        <section className="space-y-6">
+                            <div className="flex items-center justify-between">
                                 <h2 className="text-xs font-black uppercase tracking-[0.15em] text-gray-400 flex items-center gap-2">
-                                    <Cpu size={14} /> Machine Status
+                                    <Cpu size={14} /> Machine Status By Region
                                 </h2>
-                                <div className="text-[10px] text-gray-700 font-mono uppercase tracking-widest">
-                                    {machines.filter(m => m.factory_id === 'N1' || m.factory_id === 'N2').length} Nilai · {machines.filter(m => m.factory_id === 'T1').length} Taiping
+                            </div>
+                            
+                            {[
+                                { region: '📍 Nilai Operations (N1 & N2)', list: machines.filter(m => m.factory_id === 'N1' || m.factory_id === 'N2') },
+                                { region: '📍 Taiping Operations (T1)', list: machines.filter(m => m.factory_id === 'T1') },
+                                { region: '📍 Other Locations', list: machines.filter(m => m.factory_id !== 'N1' && m.factory_id !== 'N2' && m.factory_id !== 'T1') }
+                            ].filter(group => group.list.length > 0).map(group => (
+                                <div key={group.region} className="bg-black/20 border border-white/5 rounded-3xl p-5 shadow-inner">
+                                    <div className="flex items-center justify-between mb-5 border-b border-white/5 pb-3">
+                                        <h3 className="text-base font-black text-transparent bg-clip-text bg-gradient-to-r from-white to-gray-400 tracking-wider">
+                                            {group.region}
+                                        </h3>
+                                        <div className="text-[10px] text-gray-500 font-mono bg-white/5 px-2 py-1 rounded-lg">
+                                            {group.list.length} MACHINES
+                                        </div>
+                                    </div>
+                                    <div className="grid grid-cols-2 xl:grid-cols-4 gap-4">
+                                        {group.list.map(m => (
+                                            <MachineCardView key={m.machine_id} machine={m} onClick={() => setSelectedMachine(m)} />
+                                        ))}
+                                    </div>
                                 </div>
-                            </div>
-                            <div className="grid grid-cols-2 xl:grid-cols-4 gap-4">
-                                {machines.map(m => (
-                                    <MachineCardView key={m.machine_id} machine={m} onClick={() => setSelectedMachine(m)} />
-                                ))}
-                            </div>
+                            ))}
                         </section>
 
                         {/* ── PRODUCTION BREAKDOWN ── */}

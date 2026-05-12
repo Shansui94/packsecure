@@ -1,0 +1,27 @@
+﻿[dotenv@17.3.1] injecting env (6) from .env -- tip: ΓÜÖ∩╕Å  specify custom .env file path with { path: '/custom/path/.env' }
+Searching for Amendment Adjustments in May 2026...
+Found 6 amendment entries. Analyzing...
+
+--- Order: DO-2026-5020 ---
+[2026-05-05T10:28:00.898956+00:00] Amendment Adjustment | Amend Approved: 24 ΓåÆ 22 | BW-SL-CLR-100Mx100CMx1ROLL-RED | qty: 2
+   -> WARNING: This order was ALSO Delivered. If the amendment happened BEFORE Delivery, it likely created ghost stock!
+
+--- Order: DO-2026-5890 ---
+[2026-05-07T22:25:38.422667+00:00] Amendment Adjustment | Amend Approved: 70 ΓåÆ 78 | BW-SL-CLR-100Mx100CMx1ROLL-RED | qty: -8
+   -> WARNING: This order was ALSO Delivered. If the amendment happened BEFORE Delivery, it likely created ghost stock!
+
+--- Order: DO-2026-8614 ---
+[2026-05-06T03:42:47.338824+00:00] Amendment Adjustment | Amend Approved: 58 ΓåÆ 52 | BW-DL-CLR-100Mx100CMx1ROLL-YEL | qty: 6
+   -> WARNING: This order was ALSO Delivered. If the amendment happened BEFORE Delivery, it likely created ghost stock!
+
+--- Order: DO-2026-2224 ---
+[2026-05-06T03:42:50.464045+00:00] Amendment Adjustment | Amend Approved: 62 ΓåÆ 61 | BW-DL-CLR-100Mx100CMx1ROLL-YEL | qty: 1
+   -> WARNING: This order was ALSO Delivered. If the amendment happened BEFORE Delivery, it likely created ghost stock!
+
+--- Order: DO-2026-0350 ---
+[2026-05-07T09:03:38.171737+00:00] Amendment Adjustment | Amend Approved: 65 ΓåÆ 64 | BW-SL-CLR-100Mx100CMx1ROLL-RED | qty: 1
+   -> WARNING: This order was ALSO Delivered. If the amendment happened BEFORE Delivery, it likely created ghost stock!
+
+--- Order: DO-2026-8037 ---
+[2026-05-06T07:20:56.08646+00:00] Amendment Adjustment | Amend Approved: 10 ΓåÆ 0 | BW-SL-CLR-100Mx50CMx2ROLL-ORN | qty: 10
+   -> WARNING: This order was ALSO Delivered. If the amendment happened BEFORE Delivery, it likely created ghost stock!

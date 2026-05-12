@@ -48,6 +48,7 @@ import WorkPhotoLog from './pages/WorkPhotoLog';
 import PersonalMonthlyReport from './pages/PersonalMonthlyReport';
 import MachineSchedule from './pages/MachineSchedule';
 import ActivityLogs from './pages/ActivityLogs';
+import FloorPlan from './pages/FloorPlan';
 
 import { User, UserRole, InventoryItem, ProductionLog as ProductionLogType, JobOrder } from './types';
 import AIAgentWidget from './components/AIAgentWidget';
@@ -222,8 +223,8 @@ function App() {
         // Define allowable pages per role
         const allowedPages: Record<string, string[]> = {
             'SuperAdmin': ['*'], // The Only One with Full Access
-            'Admin': ['profile', 'construction', 'factory-live-os', 'dashboard', 'data-v2', 'customer-import', 'universal-intake', 'scanner', 'jobs', 'livestock', 'inventory', 'recipes', 'products', 'delivery', 'order-summary', 'dispatch', 'production', 'report-history', 'users', 'hr', 'simple-stock', 'maintenance', 'lorry-management', 'iot', 'driver-management', 'operators', 'dev-log', 'leave-calendar', 'personal-report', 'machine-schedule', 'activity-logs'],
-            'Manager': ['profile', 'construction', 'factory-live-os', 'dashboard', 'data-v2', 'customer-import', 'universal-intake', 'jobs', 'livestock', 'inventory', 'recipes', 'products', 'delivery', 'order-summary', 'dispatch', 'production', 'report-history', 'hr', 'simple-stock', 'maintenance', 'lorry-management', 'iot', 'driver-management', 'operators', 'leave-calendar', 'personal-report', 'machine-schedule', 'activity-logs'],
+            'Admin': ['profile', 'construction', 'factory-live-os', 'dashboard', 'data-v2', 'customer-import', 'universal-intake', 'scanner', 'jobs', 'livestock', 'inventory', 'recipes', 'products', 'delivery', 'order-summary', 'dispatch', 'production', 'report-history', 'users', 'hr', 'simple-stock', 'maintenance', 'lorry-management', 'iot', 'driver-management', 'operators', 'dev-log', 'leave-calendar', 'personal-report', 'machine-schedule', 'activity-logs', 'floor-plan'],
+            'Manager': ['profile', 'construction', 'factory-live-os', 'dashboard', 'data-v2', 'customer-import', 'universal-intake', 'jobs', 'livestock', 'inventory', 'recipes', 'products', 'delivery', 'order-summary', 'dispatch', 'production', 'report-history', 'hr', 'simple-stock', 'maintenance', 'lorry-management', 'iot', 'driver-management', 'operators', 'leave-calendar', 'personal-report', 'machine-schedule', 'activity-logs', 'floor-plan'],
             'Driver': ['delivery-driver', 'delivery-history', 'leave-calendar', 'lorry-service', 'profile', 'personal-report', 'activity-logs'],
             'Operator': ['scanner', 'leave-calendar', 'profile', 'personal-report', 'activity-logs'],
             'Device': ['scanner'],
@@ -739,6 +740,8 @@ function App() {
                 return <UpdatePassword />;
             case 'factory-live-os':
                 return <FactoryLiveOS onNavigate={setActivePage} />;
+            case 'floor-plan':
+                return <FloorPlan />;
             case 'operators':
                 return <OperatorManagement />;
             case 'dev-log':

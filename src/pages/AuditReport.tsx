@@ -57,6 +57,7 @@ const AuditReport: React.FC<Props> = ({ user }) => {
     const [dateTo, setDateTo] = useState('');
     const [locations, setLocations] = useState<string[]>([]);
     const [verifying, setVerifying] = useState<string | null>(null);
+    const [skuNames, setSkuNames] = useState<Record<string, string>>({});
 
     const isManager = user?.role === 'Manager' || user?.role === 'Admin' || user?.role === 'SuperAdmin' || user?.role === 'HR';
 
@@ -69,7 +70,11 @@ const AuditReport: React.FC<Props> = ({ user }) => {
             .order('timestamp', { ascending: false })
             .limit(1000);
 
-        if (dateFrom) query = query.gte('timestamp', new Date(dateFrom).toISOString());
+        if (dateFrom) {
+            const start = new Date(dateFrom);
+            start.setHours(0, 0, 0, 0);
+            query = query.gte('timestamp', start.toISOString());
+        }
         if (dateTo) {
             const end = new Date(dateTo);
             end.setHours(23, 59, 59, 999);
@@ -79,6 +84,14 @@ const AuditReport: React.FC<Props> = ({ user }) => {
 
         const { data, error } = await query;
         if (error) { console.error(error); setLoading(false); return; }
+        
+        // Fetch SKU Names
+        const { data: skuData } = await supabase.from('master_items_v2').select('sku, name');
+        const skuMap: Record<string, string> = {};
+        (skuData || []).forEach(item => {
+            skuMap[item.sku] = item.name || item.sku;
+        });
+        setSkuNames(skuMap);
 
         // Group by ref_doc (each audit session)
         const sessionMap: Record<string, AuditEntry[]> = {};
@@ -160,10 +173,10 @@ const AuditReport: React.FC<Props> = ({ user }) => {
     };
 
     const filteredSessions = sessions.filter(s =>
-        !search || s.ref_doc.toLowerCase().includes(search.toLowerCase()) ||
-        s.location.toLowerCase().includes(search.toLowerCase()) ||
-        s.auditor.toLowerCase().includes(search.toLowerCase()) ||
-        s.items.some(i => i.sku.toLowerCase().includes(search.toLowerCase()))
+        !search || (s.ref_doc || '').toLowerCase().includes(search.toLowerCase()) ||
+        (s.location || '').toLowerCase().includes(search.toLowerCase()) ||
+        (s.auditor || '').toLowerCase().includes(search.toLowerCase()) ||
+        s.items.some(i => (i.sku || '').toLowerCase().includes(search.toLowerCase()))
     );
 
     // Dynamic Chart Data Generation (Daily Aggregation)
@@ -171,8 +184,11 @@ const AuditReport: React.FC<Props> = ({ user }) => {
         const daily: Record<string, { sortKey: string, date: string, positive: number, negative: number, totalSkus: number, perfectSkus: number }> = {};
         
         filteredSessions.forEach(session => {
-            const dt = new Date(session.date);
-            const key = dt.toISOString().split('T')[0];
+            const dt = session.date ? new Date(session.date) : new Date();
+            const year = dt.getFullYear();
+            const month = String(dt.getMonth() + 1).padStart(2, '0');
+            const day = String(dt.getDate()).padStart(2, '0');
+            const key = `${year}-${month}-${day}`; // Group by local date instead of UTC
             const displayLabel = dt.toLocaleDateString('en-MY', { month: 'short', day: 'numeric' });
             
             if (!daily[key]) daily[key] = { sortKey: key, date: displayLabel, positive: 0, negative: 0, totalSkus: 0, perfectSkus: 0 };
@@ -214,8 +230,7 @@ const AuditReport: React.FC<Props> = ({ user }) => {
         URL.revokeObjectURL(url);
     };
 
-    const totalPositive = filteredSessions.reduce((s, x) => s + x.positive_count, 0);
-    const totalNegative = filteredSessions.reduce((s, x) => s + x.negative_count, 0);
+
     const totalNetVariance = filteredSessions.reduce((s, x) => s + x.net_variance, 0);
 
     return (
@@ -353,12 +368,12 @@ const AuditReport: React.FC<Props> = ({ user }) => {
                         {filteredSessions.map(session => {
                             const isOpen = expandedSession === session.ref_doc;
                             const isReviewed = !!session.reviewed_by;
-                            const dateStr = new Date(session.date).toLocaleDateString('en-MY', { day: '2-digit', month: 'short', year: 'numeric' });
-                            const timeStr = new Date(session.date).toLocaleTimeString('en-MY', { hour: '2-digit', minute: '2-digit' });
+                            const dateStr = session.date ? new Date(session.date).toLocaleDateString('en-MY', { day: '2-digit', month: 'short', year: 'numeric' }) : 'Unknown';
+                            const timeStr = session.date ? new Date(session.date).toLocaleTimeString('en-MY', { hour: '2-digit', minute: '2-digit' }) : '';
                             
                             // Visual Identifiers
                             const isMajorLoss = session.net_variance < 0; 
-                            const isMajorGain = session.net_variance > 0;
+
 
                             return (
                                 <div key={session.ref_doc} className={`bg-[#0d0d12]/80 backdrop-blur-xl border rounded-3xl overflow-hidden transition-all duration-300 ${
@@ -513,7 +528,10 @@ const AuditReport: React.FC<Props> = ({ user }) => {
                                                                 
                                                                 return (
                                                                     <tr key={item.txn_id} className={`transition-colors ${idx % 2 === 0 ? 'bg-transparent' : 'bg-white/[0.01]'} hover:bg-white/[0.03]`}>
-                                                                        <td className="px-4 py-3 font-mono text-white font-bold text-xs">{item.sku}</td>
+                                                                        <td className="px-4 py-3 text-white font-bold text-xs truncate max-w-[250px]" title={item.sku}>
+                                                                            {skuNames[item.sku] || item.sku}
+                                                                            <div className="text-[9px] text-gray-500 font-normal mt-0.5">{item.sku}</div>
+                                                                        </td>
                                                                         <td className="px-4 py-3 text-right text-gray-500 font-mono text-xs">{system}</td>
                                                                         <td className="px-4 py-3 text-right text-white font-mono text-xs font-bold">{actual}</td>
                                                                         <td className="px-4 py-3 text-right">
@@ -523,7 +541,7 @@ const AuditReport: React.FC<Props> = ({ user }) => {
                                                                             </span>
                                                                         </td>
                                                                         <td className="px-4 py-3 text-left text-gray-500 text-[10px] font-medium hidden md:table-cell truncate max-w-[200px]">
-                                                                            {item.notes.replace(/System:\s*[\d.]+\s*\|\s*Actual:\s*[\d.]+/g, '').replace(/\[Reviewed by .*?\]/g, '').replace(/^\|\s*/, '')}
+                                                                            {(item.notes || '').replace(/System:\s*[\d.]+\s*\|\s*Actual:\s*[\d.]+/g, '').replace(/\[Reviewed by .*?\]/g, '').replace(/^\|\s*/, '')}
                                                                         </td>
                                                                     </tr>
                                                                 );
