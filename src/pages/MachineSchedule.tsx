@@ -69,19 +69,46 @@ const MachineSchedule: React.FC<{ user?: any }> = () => {
 
         const fetchStartIso = new Date(new Date(startIso).getTime() - 14 * 3600000).toISOString();
 
-        const [{ data: aData }, { data: lData }] = await Promise.all([
-            supabase.from('operator_attendance')
+        // Fetch Attendance with pagination
+        let allAttData: any[] = [];
+        let attHasMore = true;
+        let attOffset = 0;
+        while (attHasMore) {
+            const { data } = await supabase.from('operator_attendance')
                 .select('*')
                 .gte('clock_in', fetchStartIso)
-                .lt('clock_in', endIso),
-            supabase.from('production_logs_v2')
+                .lt('clock_in', endIso)
+                .range(attOffset, attOffset + 999);
+            if (data && data.length > 0) {
+                allAttData.push(...data);
+                attOffset += 1000;
+                if (data.length < 1000) attHasMore = false;
+            } else {
+                attHasMore = false;
+            }
+        }
+
+        // Fetch Logs with pagination
+        let allLogsData: any[] = [];
+        let logsHasMore = true;
+        let logsOffset = 0;
+        while (logsHasMore) {
+            const { data } = await supabase.from('production_logs_v2')
                 .select('machine_id, operator_id, output_qty, job_id, created_at')
                 .gte('created_at', startIso)
                 .lt('created_at', endIso)
-        ]);
+                .range(logsOffset, logsOffset + 999);
+            if (data && data.length > 0) {
+                allLogsData.push(...data);
+                logsOffset += 1000;
+                if (data.length < 1000) logsHasMore = false;
+            } else {
+                logsHasMore = false;
+            }
+        }
         
-        setAttendance(aData || []);
-        setLogs(lData || []);
+        setAttendance(allAttData);
+        setLogs(allLogsData);
         setLoading(false);
     };
 
