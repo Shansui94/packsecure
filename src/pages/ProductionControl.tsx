@@ -546,26 +546,37 @@ const ProductionControl: React.FC<ProductionControlProps> = ({ user, jobs = [] }
 
             if (data && data.length > 0) {
                 const user = data[0];
+                
+                const now = new Date();
+                const localY = now.getFullYear();
+                const localM = String(now.getMonth() + 1).padStart(2, '0');
+                const localD = String(now.getDate()).padStart(2, '0');
+                const today = `${localY}-${localM}-${localD}`;
+                const clockEventTime = now.toISOString();
+
                 if (isLogoutMode) {
-                    // VERIFY LOGOUT
+                    // EXPLICIT LOGOUT
                     if (user.id === operatorId) {
-                        // Record clock-out in operator_attendance
-                        const today = new Date().toISOString().split('T')[0];
-                        const clockOutTime = new Date().toISOString();
-                        // Find today's row and update it
-                        const { data: existingRow } = await supabase
+                        const { data: existingRows } = await supabase
                             .from('operator_attendance')
                             .select('id, clock_in')
                             .eq('operator_id', user.employee_id)
-                            .eq('date', today)
-                            .limit(1);
-                        if (existingRow && existingRow.length > 0) {
-                            const clockIn = new Date(existingRow[0].clock_in);
-                            const clockOut = new Date(clockOutTime);
-                            const hoursWorked = (clockOut.getTime() - clockIn.getTime()) / 3600000;
-                            await supabase.from('operator_attendance')
-                                .update({ clock_out: clockOutTime, hours_worked: Math.round(hoursWorked * 100) / 100 })
-                                .eq('id', existingRow[0].id);
+                            .is('clock_out', null);
+
+                        if (existingRows && existingRows.length > 0) {
+                            for (const row of existingRows) {
+                                const clockIn = new Date(row.clock_in);
+                                const clockOut = new Date(clockEventTime);
+                                const actualClockOut = clockOut.getTime();
+                                const hoursWorked = Math.max(0, (actualClockOut - clockIn.getTime()) / 3600000);
+                                
+                                await supabase.from('operator_attendance')
+                                    .update({ 
+                                        clock_out: new Date(actualClockOut).toISOString(), 
+                                        hours_worked: Math.round(hoursWorked * 100) / 100 
+                                    })
+                                    .eq('id', row.id);
+                            }
                         }
                         setOperatorId(null);
                         setOperatorName(null);
@@ -577,21 +588,64 @@ const ProductionControl: React.FC<ProductionControlProps> = ({ user, jobs = [] }
                         setTimeout(() => setPinCode(""), 500);
                     }
                 } else {
-                    // LOGIN — record clock-in in operator_attendance
-                    const today = new Date().toISOString().split('T')[0];
-                    const clockInTime = new Date().toISOString();
+                    // LOGIN OR SWITCH OPERATOR
+                    // If someone is currently logged in, auto-logout them
+                    if (operatorId && operatorId !== user.id) {
+                        const { data: prevUser } = await supabase
+                            .from('sys_users_v2')
+                            .select('employee_id')
+                            .eq('id', operatorId)
+                            .single();
+                            
+                        if (prevUser) {
+                            const { data: openShifts } = await supabase
+                                .from('operator_attendance')
+                                .select('id, clock_in')
+                                .eq('operator_id', prevUser.employee_id)
+                                .is('clock_out', null);
+
+                            if (openShifts && openShifts.length > 0) {
+                                for (const openShift of openShifts) {
+                                    const clockInTime = new Date(openShift.clock_in).getTime();
+                                    const actualClockOut = now.getTime();
+                                    
+                                    const hoursWorked = (actualClockOut - clockInTime) / 3600000;
+                                    await supabase.from('operator_attendance')
+                                        .update({ 
+                                            clock_out: new Date(actualClockOut).toISOString(), 
+                                            hours_worked: Math.max(0, Math.round(hoursWorked * 100) / 100),
+                                            notes: 'System Auto-Logout'
+                                        })
+                                        .eq('id', openShift.id);
+                                }
+                            }
+                        }
+                    }
+
+                    // RECORD CLOCK-IN FOR THE NEW OPERATOR
+                    // But first, make sure they don't ALREADY have an open shift to prevent duplicate clock-ins
                     const currentMachine = machineMetadata?.id || selectedMachine || null;
-                    await supabase.from('operator_attendance')
-                        .upsert({ 
-                            operator_id: user.employee_id, 
-                            date: today, 
-                            clock_in: clockInTime,
-                            machine_id: currentMachine
-                        },
-                            { onConflict: 'operator_id,date', ignoreDuplicates: true });
+                    const { data: userOpenShifts } = await supabase
+                        .from('operator_attendance')
+                        .select('id')
+                        .eq('operator_id', user.employee_id)
+                        .eq('machine_id', currentMachine)
+                        .is('clock_out', null);
+
+                    if (!userOpenShifts || userOpenShifts.length === 0) {
+                        await supabase.from('operator_attendance')
+                            .insert({ 
+                                operator_id: user.employee_id, 
+                                date: today, 
+                                clock_in: clockEventTime,
+                                machine_id: currentMachine
+                            });
+                    }
+                        
                     setOperatorId(user.id);
                     setOperatorName(user.name);
                     setIsLoginModalOpen(false);
+                    setIsLogoutMode(false);
                     setPinCode("");
                 }
             } else {
@@ -863,7 +917,16 @@ const ProductionControl: React.FC<ProductionControlProps> = ({ user, jobs = [] }
                                         <p className="text-white font-bold text-lg leading-none">{operatorName}</p>
                                     </div>
                                 </div>
-                                {/* Clock Out button moved to header */}
+                                <button
+                                    onClick={() => {
+                                        setIsLogoutMode(false);
+                                        setIsLoginModalOpen(true);
+                                        setPinCode("");
+                                    }}
+                                    className="bg-blue-600/20 text-blue-400 hover:bg-blue-500/30 px-4 py-2 rounded-lg font-bold text-sm border border-blue-500/30 transition-colors"
+                                >
+                                    SWITCH OPERATOR
+                                </button>
                             </div>
                         ) : (
                             <div className="bg-yellow-500/10 border border-yellow-500/20 p-4 rounded-xl flex items-center justify-between animate-pulse">

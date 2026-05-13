@@ -114,7 +114,8 @@ const PersonalMonthlyReport: React.FC<Props> = ({ user }) => {
         setLoading(true);
 
         const firstDay = `${selectedYear}-${String(selectedMonth).padStart(2, '0')}-01`;
-        const lastDayStr = new Date(selectedYear, selectedMonth, 0).toISOString().split('T')[0];
+        const lastDayObj = new Date(selectedYear, selectedMonth, 0);
+        const lastDayStr = `${lastDayObj.getFullYear()}-${String(lastDayObj.getMonth() + 1).padStart(2, '0')}-${String(lastDayObj.getDate()).padStart(2, '0')}`;
         const startDateTs = `${firstDay}T00:00:00.000Z`;
         const endDateTs = `${lastDayStr}T23:59:59.999Z`;
 
@@ -143,20 +144,12 @@ const PersonalMonthlyReport: React.FC<Props> = ({ user }) => {
             
             const activeEmpId = profileData ? profileData.employee_id : (selectedEmployeeId === (user.uid || user.id) ? user.employeeId : undefined);
 
-            const { data: prodData } = await supabase
-                .from('production_logs_v2')
-                .select('created_at, output_qty, reject_qty, alarm_count, machine_id, job_id')
-                .eq('operator_id', selectedEmployeeId)
-                .gte('created_at', startDateTs)
-                .lte('created_at', endDateTs);
-            setProductionLogs(prodData || []);
-
-            // C. Attendance (Using operator_attendance)
+            // C. Fetch Attendance First
             let attendanceData: any[] = [];
             if (activeEmpId) {
                 const { data } = await supabase
                     .from('operator_attendance')
-                    .select('date, clock_in, clock_out, hours_worked, machine_id')
+                    .select('date, clock_in, clock_out, hours_worked, machine_id, notes')
                     .eq('operator_id', activeEmpId)
                     .gte('date', firstDay)
                     .lte('date', lastDayStr);
@@ -164,6 +157,94 @@ const PersonalMonthlyReport: React.FC<Props> = ({ user }) => {
             }
             setAttendanceShifts(attendanceData);
             setPlannedMachines([]);
+
+            // B. Fetch Production Logs based on Time-matching & Explicit ID
+            let prodData: any[] = [];
+            if (activeEmpId || selectedEmployeeId) {
+                const machinesTouched = Array.from(new Set(attendanceData.map(a => a.machine_id).filter(Boolean)));
+                let rawLogs: any[] = [];
+                
+                if (machinesTouched.length > 0) {
+                    let allRawLogs: any[] = [];
+                    let hasMore = true;
+                    let offset = 0;
+                    
+                    while (hasMore) {
+                        const { data } = await supabase
+                            .from('production_logs_v2')
+                            .select('log_id, created_at, output_qty, reject_qty, machine_id, job_id, operator_id')
+                            .in('machine_id', machinesTouched)
+                            .gte('created_at', startDateTs)
+                            .lte('created_at', endDateTs)
+                            .range(offset, offset + 999);
+                            
+                        if (data && data.length > 0) {
+                            allRawLogs.push(...data);
+                            offset += 1000;
+                            if (data.length < 1000) hasMore = false;
+                        } else {
+                            hasMore = false;
+                        }
+                    }
+                    rawLogs = allRawLogs;
+                }
+                
+                const uuidRegex = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
+                const validIds = [selectedEmployeeId, activeEmpId].filter(id => id && uuidRegex.test(id));
+                let explicitLogs: any[] = [];
+                if (validIds.length > 0) {
+                    const orStr = validIds.map(id => `operator_id.eq.${id}`).join(',');
+                    let hasMoreExplicit = true;
+                    let offsetExplicit = 0;
+                    
+                    while (hasMoreExplicit) {
+                        const { data } = await supabase
+                            .from('production_logs_v2')
+                            .select('log_id, created_at, output_qty, reject_qty, machine_id, job_id, operator_id')
+                            .or(orStr)
+                            .gte('created_at', startDateTs)
+                            .lte('created_at', endDateTs)
+                            .range(offsetExplicit, offsetExplicit + 999);
+                            
+                        if (data && data.length > 0) {
+                            explicitLogs.push(...data);
+                            offsetExplicit += 1000;
+                            if (data.length < 1000) hasMoreExplicit = false;
+                        } else {
+                            hasMoreExplicit = false;
+                        }
+                    }
+                }
+                    
+                const allLogs = [...rawLogs, ...explicitLogs];
+                
+                const logMap = new Map();
+                allLogs.forEach(log => {
+                    const uniqueId = log.log_id || (log.created_at + log.machine_id);
+                    if (logMap.has(uniqueId)) return;
+                    
+                    if (log.operator_id === selectedEmployeeId || log.operator_id === activeEmpId) {
+                        logMap.set(uniqueId, log);
+                        return;
+                    }
+                    
+                    const logTime = new Date(log.created_at).getTime();
+                    const belongsToMe = attendanceData.some(shift => {
+                        if (shift.machine_id !== log.machine_id) return false;
+                        const inTime = new Date(shift.clock_in).getTime();
+                        const maxOutTime = inTime + (14 * 60 * 60 * 1000); // 14 hours max duration
+                        const outTime = shift.clock_out ? new Date(shift.clock_out).getTime() : Math.min(new Date().getTime() + 86400000, maxOutTime);
+                        return logTime >= (inTime - 300000) && logTime <= (outTime + 300000);
+                    });
+                    
+                    if (belongsToMe) {
+                        logMap.set(uniqueId, log);
+                    }
+                });
+                
+                prodData = Array.from(logMap.values());
+            }
+            setProductionLogs(prodData);
 
             // D. Photos
             if (activeEmpId) {
@@ -244,13 +325,38 @@ const PersonalMonthlyReport: React.FC<Props> = ({ user }) => {
             const dateObj = new Date(selectedYear, selectedMonth - 1, i);
             const isWeekend = dateObj.getDay() === 0 || dateObj.getDay() === 6;
 
+            const matchDate = (utcIsoString: string | null | undefined, targetDateStr: string) => {
+                if (!utcIsoString) return false;
+                // Convert UTC timestamp to local Date object, then format as YYYY-MM-DD
+                const d = new Date(utcIsoString);
+                const localY = d.getFullYear();
+                const localM = String(d.getMonth() + 1).padStart(2, '0');
+                const localD = String(d.getDate()).padStart(2, '0');
+                return `${localY}-${localM}-${localD}` === targetDateStr;
+            };
+
             // Prod
-            const dayProd = productionLogs.filter(p => p.created_at.startsWith(dateStr));
+            const dayProd = productionLogs.filter(p => {
+                const logTime = new Date(p.created_at).getTime();
+                // Check if this log belongs to a known shift
+                const matchingShift = attendanceShifts.find(shift => {
+                    if (p.machine_id && shift.machine_id && p.machine_id !== shift.machine_id) return false;
+                    const inTime = new Date(shift.clock_in).getTime();
+                    const outTime = shift.clock_out ? new Date(shift.clock_out).getTime() : inTime + (14 * 3600000);
+                    return logTime >= (inTime - 300000) && logTime <= (outTime + 300000);
+                });
+
+                if (matchingShift) {
+                    return matchingShift.date === dateStr;
+                }
+                
+                return matchDate(p.created_at, dateStr);
+            });
             const outputQty = dayProd.reduce((sum, p) => sum + (Number(p.output_qty) || 0), 0);
             const alarmCount = dayProd.reduce((sum, p) => sum + (Number(p.alarm_count) || Number(p.reject_qty) || 0), 0);
 
             // Photos
-            const dayPhotos = photoLogs.filter(p => p.created_at.startsWith(dateStr));
+            const dayPhotos = photoLogs.filter(p => matchDate(p.created_at, dateStr));
 
             // Shift
             const dayShift = attendanceShifts.find(s => s.date === dateStr);
@@ -270,7 +376,9 @@ const PersonalMonthlyReport: React.FC<Props> = ({ user }) => {
 
             const dayDeliveries = deliveries.filter(d => {
                 const ts = d.deadline || d.created_at;
-                return ts && ts.startsWith(dateStr);
+                if (!ts) return false;
+                if (d.deadline) return ts.startsWith(dateStr); // deadline is usually purely 'YYYY-MM-DD'
+                return matchDate(ts, dateStr);
             });
             const tripCount = dayDeliveries.length;
             const tripDetails: any[] = [];
@@ -316,6 +424,7 @@ const PersonalMonthlyReport: React.FC<Props> = ({ user }) => {
                 hasAttendance: !!dayShift,
                 shiftStart: (dayShift && dayShift.clock_in) ? new Date(dayShift.clock_in).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' }) : null,
                 shiftEnd: (dayShift && dayShift.clock_out) ? new Date(dayShift.clock_out).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' }) : null,
+                notes: dayShift?.notes || null,
                 outputQty,
                 alarmCount,
                 tripCount,
@@ -557,10 +666,17 @@ const PersonalMonthlyReport: React.FC<Props> = ({ user }) => {
                                             </td>
                                             <td className="px-5 py-4 whitespace-nowrap">
                                                 {day.hasAttendance ? (
-                                                    <div className="flex items-center gap-2 font-mono text-xs">
-                                                        <span className="text-green-400">{day.shiftStart || '-'}</span>
-                                                        <span className="text-gray-600">→</span>
-                                                        <span className="text-orange-400">{day.shiftEnd || 'Active'}</span>
+                                                    <div className="flex flex-col gap-1">
+                                                        <div className="flex items-center gap-2 font-mono text-xs">
+                                                            <span className="text-green-400">{day.shiftStart || '-'}</span>
+                                                            <span className="text-gray-600">→</span>
+                                                            <span className="text-orange-400">{day.shiftEnd || 'Active'}</span>
+                                                        </div>
+                                                        {day.notes === 'System Auto-Logout' && (
+                                                            <span className="text-[9px] uppercase font-bold text-red-500/80 bg-red-500/10 px-1.5 py-0.5 rounded w-fit border border-red-500/20">
+                                                                Auto-Logout
+                                                            </span>
+                                                        )}
                                                     </div>
                                                 ) : (
                                                     <span className="text-gray-700 text-xs">—</span>

@@ -22,6 +22,7 @@ const UserManagement: React.FC<UserManagementProps> = ({ currentUser }) => {
         role: 'Operator' as UserRole,
         phone: '',
         salary: 0,
+        base_location: 'Taiping', // Default
         roleModules: [] as string[]
     });
     const [isFetchingModules, setIsFetchingModules] = useState(false);
@@ -47,6 +48,7 @@ const UserManagement: React.FC<UserManagementProps> = ({ currentUser }) => {
                     name: u.name || undefined,
                     phone: u.phone || undefined,
                     salary: u.salary || 0,
+                    base_location: u.base_location || undefined,
                     status: u.status as any, // 'Active' | 'Pending' etc
                     employeeId: u.employee_id || undefined
                 }));
@@ -72,6 +74,7 @@ const UserManagement: React.FC<UserManagementProps> = ({ currentUser }) => {
             role: user.role || 'Operator',
             phone: user.phone || '',
             salary: user.salary || 0,
+            base_location: user.base_location || 'Taiping',
             roleModules: []
         });
         setIsModalOpen(true);
@@ -101,7 +104,8 @@ const UserManagement: React.FC<UserManagementProps> = ({ currentUser }) => {
                     name: formData.name,
                     role: formData.role,
                     phone: formData.phone,
-                    salary: Number(formData.salary)
+                    salary: Number(formData.salary),
+                    base_location: formData.base_location
                 })
                 .eq('id', editingUser.uid);
 
@@ -201,6 +205,11 @@ const UserManagement: React.FC<UserManagementProps> = ({ currentUser }) => {
                                                 {user.role}
                                             </div>
                                         </span>
+                                        {user.base_location && (
+                                            <div className="mt-1 text-[10px] text-gray-500 font-bold uppercase tracking-wider">
+                                                📍 {user.base_location}
+                                            </div>
+                                        )}
                                     </td>
                                     <td className="p-4 border-b border-gray-800 font-mono text-green-400">
                                         {user.salary ? `$${user.salary.toLocaleString()}` : '-'}
@@ -279,6 +288,25 @@ const UserManagement: React.FC<UserManagementProps> = ({ currentUser }) => {
                                                 }`}
                                         >
                                             {r}
+                                        </button>
+                                    ))}
+                                </div>
+                            </div>
+
+                            {/* Base Location */}
+                            <div>
+                                <label className="block text-gray-400 text-sm mb-2">Base Location (Trip Origin)</label>
+                                <div className="grid grid-cols-2 gap-2">
+                                    {['Taiping', 'Nilai'].map(loc => (
+                                        <button
+                                            key={loc}
+                                            onClick={() => setFormData({ ...formData, base_location: loc })}
+                                            className={`px-3 py-2 rounded text-sm text-center border transition-all ${formData.base_location === loc
+                                                ? 'bg-emerald-600 border-emerald-500 text-white shadow-lg'
+                                                : 'bg-gray-800 border-gray-700 text-gray-400 hover:bg-gray-700'
+                                                }`}
+                                        >
+                                            {loc}
                                         </button>
                                     ))}
                                 </div>

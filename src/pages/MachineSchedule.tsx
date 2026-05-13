@@ -1,499 +1,627 @@
-import React, { useState, useEffect } from "react";
-import { supabase } from "../services/supabase";
-import { Calendar as CalendarIcon, Wrench, Plus, GripVertical, Users } from "lucide-react";
-import { MACHINES } from "../data/factoryData";
+import React, { useState, useEffect, useMemo } from 'react';
+import { supabase } from '../services/supabase';
+import { Clock, Package, BarChart3, ShieldCheck, User, CalendarDays, Settings2, Calendar as CalendarIcon } from 'lucide-react';
+import { MACHINES } from '../data/factoryData';
 
-interface Operator {
+interface MachineRate {
+    id: string;
+    machine_id: string;
+    operator_hourly_rate: number;
+    manager_piece_rate: number;
+}
+
+interface UserData {
+    id: string;
+    auth_user_id: string;
     employee_id: string;
     name: string;
     role: string;
 }
 
-interface PlannedSchedule {
-    id: string;
-    machine_id: string;
-    operator_id: string;
-    operator_name: string;
-    shift_date: string;
-    shift_type: "Morning" | "Evening" | "Night";
-}
-
-interface ActualAttendance {
-    id: string;
-    employee_id: string;
-    employee_name: string;
-    machine_id: string;
-    clock_in: string;
-    clock_out: string | null;
-}
-
-const MachineSchedule: React.FC<{ user?: any }> = ({ user: _user }) => {
-    const [selectedDate, setSelectedDate] = useState<string>(new Date().toISOString().split("T")[0]);
-    const [selectedShift, setSelectedShift] = useState<"Morning" | "Evening" | "Night" | "All">("All");
-
-    const [machines] = useState<any[]>(MACHINES);
-    const [operators, setOperators] = useState<Operator[]>([]);
-
-    const [plannedSchedules, setPlannedSchedules] = useState<PlannedSchedule[]>([]);
-    const [actualAttendance, setActualAttendance] = useState<ActualAttendance[]>([]);
-    const [loading, setLoading] = useState<boolean>(true);
-
-    const [isAssignModalOpen, setIsAssignModalOpen] = useState(false);
-    const [targetMachine, setTargetMachine] = useState<string | null>(null);
-    const [targetShift, setTargetShift] = useState<"Morning" | "Evening" | "Night">("Morning");
-    const [selectedOperatorId, setSelectedOperatorId] = useState<string>("");
-    const [isSubmitting, setIsSubmitting] = useState(false);
-
-    // DND State
-    const [draggedOperator, setDraggedOperator] = useState<Operator | null>(null);
-    const [draggedPlan, setDraggedPlan] = useState<PlannedSchedule | null>(null);
-    const [dragOverMachine, setDragOverMachine] = useState<string | null>(null);
-    const [dragOverShift, setDragOverShift] = useState<"Morning" | "Evening" | "Night" | null>(null);
+const MachineSchedule: React.FC<{ user?: any }> = () => {
+    const [viewMode, setViewMode] = useState<'daily' | 'monthly'>('daily');
+    const [selectedDate, setSelectedDate] = useState<string>(new Date().toISOString().split('T')[0]);
+    const [selectedMonth, setSelectedMonth] = useState<string>(new Date().toISOString().slice(0, 7)); // YYYY-MM
+    
+    const [showRates, setShowRates] = useState(false);
+    const [expandedCalendars, setExpandedCalendars] = useState<Record<string, boolean>>({});
+    
+    const [rates, setRates] = useState<MachineRate[]>([]);
+    const [attendance, setAttendance] = useState<any[]>([]);
+    const [logs, setLogs] = useState<any[]>([]);
+    const [users, setUsers] = useState<UserData[]>([]);
+    const [loading, setLoading] = useState(false);
 
     useEffect(() => {
-        fetchOperators();
+        fetchBaseData();
     }, []);
 
     useEffect(() => {
-        if (selectedDate) loadScheduleData(selectedDate);
-    }, [selectedDate]);
+        fetchData();
+    }, [viewMode, selectedDate, selectedMonth]);
 
-    const fetchOperators = async () => {
-        const { data, error } = await supabase
-            .from("sys_users_v2")
-            .select("employee_id, name, role")
-            .in("role", ["Operator"])
-            .order("name");
-        if (!error && data) setOperators(data);
+    const fetchBaseData = async () => {
+        const [{ data: rData }, { data: uData }] = await Promise.all([
+            supabase.from('machine_rates').select('*'),
+            supabase.from('sys_users_v2').select('*')
+        ]);
+        if (rData) setRates(rData);
+        if (uData) {
+            console.log("FETCHED USERS V2:", uData);
+            setUsers(uData);
+        }
     };
 
-    const loadScheduleData = async (dateStr: string) => {
+    const fetchData = async () => {
         setLoading(true);
-        try {
-            const { data: planned } = await supabase.from("machine_schedules").select("*").eq("shift_date", dateStr);
-            setPlannedSchedules(planned || []);
+        let startIso = '';
+        let endIso = '';
 
-            const { data: actual } = await supabase
-                .from("operator_attendance")
-                .select("*")
-                .gte("clock_in", `${dateStr}T00:00:00Z`)
-                .lt("clock_in", `${dateStr}T23:59:59Z`);
-            setActualAttendance(actual || []);
-        } catch (error) {
-            console.error("Error loading schedule:", error);
-        } finally {
-            setLoading(false);
-        }
-    };
-
-    const handleOpenAssignModal = (machine: string) => {
-        setTargetMachine(machine);
-        setTargetShift(selectedShift === "All" ? "Morning" : selectedShift);
-        setSelectedOperatorId("");
-        setIsAssignModalOpen(true);
-    };
-
-    const handleAssignSubmit = async () => {
-        if (!targetMachine || !selectedOperatorId) return;
-        setIsSubmitting(true);
-        const op = operators.find((o) => o.employee_id === selectedOperatorId);
-        try {
-            const newSchedule = {
-                machine_id: targetMachine,
-                operator_id: op!.employee_id,
-                operator_name: op!.name,
-                shift_date: selectedDate,
-                shift_type: targetShift,
-            };
-            const { data, error } = await supabase.from("machine_schedules").insert([newSchedule]).select().single();
-            if (error) throw error;
-            if (data) {
-                setPlannedSchedules([...plannedSchedules, data]);
-                setIsAssignModalOpen(false);
-            }
-        } catch (err: any) {
-            alert("Failed to save schedule: " + err.message);
-        } finally {
-            setIsSubmitting(false);
-        }
-    };
-
-    const handleDeleteSchedule = async (id: string) => {
-        if (!confirm("Remove this operator from the schedule?")) return;
-        try {
-            const { error } = await supabase.from("machine_schedules").delete().eq("id", id);
-            if (!error) setPlannedSchedules(plannedSchedules.filter((s) => s.id !== id));
-        } catch (err) {
-            console.error("Error deleting:", err);
-        }
-    };
-
-    const getPlannedForMachine = (machine: string) => {
-        let list = plannedSchedules.filter((s) => s.machine_id === machine);
-        if (selectedShift !== "All") list = list.filter((s) => s.shift_type === selectedShift);
-        return list;
-    };
-
-    const getActualForMachine = (machine: string) => {
-        return actualAttendance.filter((a) => a.machine_id === machine);
-    };
-
-    // DND Handlers
-    const handleDragStart = (e: React.DragEvent, op: Operator) => {
-        setDraggedOperator(op);
-        setDraggedPlan(null);
-        e.dataTransfer.effectAllowed = "copy";
-    };
-
-    const handlePlanDragStart = (e: React.DragEvent, p: PlannedSchedule) => {
-        setDraggedPlan(p);
-        setDraggedOperator(null);
-        e.dataTransfer.effectAllowed = "move";
-    };
-
-    const handleDragOver = (e: React.DragEvent, machineId: string, shift: "Morning" | "Evening" | "Night") => {
-        e.preventDefault();
-        e.dataTransfer.dropEffect = "copy";
-        if (dragOverMachine !== machineId || dragOverShift !== shift) {
-            setDragOverMachine(machineId);
-            setDragOverShift(shift);
-        }
-    };
-
-    const handleDragLeave = (e: React.DragEvent) => {
-        e.preventDefault();
-        setDragOverMachine(null);
-        setDragOverShift(null);
-    };
-
-    const handleDrop = async (e: React.DragEvent, machineId: string, shift: "Morning" | "Evening" | "Night") => {
-        e.preventDefault();
-        setDragOverMachine(null);
-        setDragOverShift(null);
-
-        if (draggedPlan) {
-            if (draggedPlan.machine_id === machineId && draggedPlan.shift_type === shift) {
-                setDraggedPlan(null);
-                return;
-            }
-            setIsSubmitting(true);
-            try {
-                const { data, error } = await supabase.from("machine_schedules").update({ machine_id: machineId, shift_type: shift }).eq("id", draggedPlan.id).select().single();
-                if (error) throw error;
-                if (data) setPlannedSchedules((prev) => prev.map((p) => (p.id === draggedPlan.id ? data : p)));
-            } catch (err: any) {
-                alert("Failed to move schedule: " + err.message);
-            } finally {
-                setIsSubmitting(false);
-                setDraggedPlan(null);
-            }
-            return;
+        if (viewMode === 'daily') {
+            startIso = `${selectedDate}T00:00:00Z`;
+            endIso = `${selectedDate}T23:59:59Z`;
+        } else {
+            const startDate = `${selectedMonth}-01`;
+            const nextMonth = new Date(new Date(startDate).setMonth(new Date(startDate).getMonth() + 1)).toISOString().slice(0, 7);
+            startIso = `${startDate}T00:00:00Z`;
+            endIso = `${nextMonth}-01T00:00:00Z`;
         }
 
-        if (!draggedOperator) return;
+        const fetchStartIso = new Date(new Date(startIso).getTime() - 14 * 3600000).toISOString();
 
-        setIsSubmitting(true);
-        try {
-            const newSchedule = {
-                machine_id: machineId,
-                operator_id: draggedOperator.employee_id,
-                operator_name: draggedOperator.name,
-                shift_date: selectedDate,
-                shift_type: shift,
-            };
-
-            const { data, error } = await supabase.from("machine_schedules").insert([newSchedule]).select().single();
-            if (error) throw error;
-            if (data) setPlannedSchedules((prev) => [...prev, data]);
-        } catch (err: any) {
-            alert("Failed to assign operator: " + err.message);
-        } finally {
-            setIsSubmitting(false);
-            setDraggedOperator(null);
-        }
+        const [{ data: aData }, { data: lData }] = await Promise.all([
+            supabase.from('operator_attendance')
+                .select('*')
+                .gte('clock_in', fetchStartIso)
+                .lt('clock_in', endIso),
+            supabase.from('production_logs_v2')
+                .select('machine_id, operator_id, output_qty, job_id, created_at')
+                .gte('created_at', startIso)
+                .lt('created_at', endIso)
+        ]);
+        
+        setAttendance(aData || []);
+        setLogs(lData || []);
+        setLoading(false);
     };
+
+    const updateRate = async (id: string, field: string, val: number) => {
+        setRates(prev => prev.map(r => r.id === id ? { ...r, [field]: val } : r));
+        await supabase.from('machine_rates').update({ [field]: val }).eq('id', id);
+    };
+
+    const toggleCalendar = (machineId: string) => {
+        setExpandedCalendars(prev => ({ ...prev, [machineId]: !prev[machineId] }));
+    };
+
+    // ── CORE REPORT GENERATION ──
+    const reportData = useMemo(() => {
+        const report: any[] = [];
+        
+        let windowStart = 0;
+        let windowEnd = 0;
+        if (viewMode === 'daily') {
+            windowStart = new Date(`${selectedDate}T00:00:00Z`).getTime();
+            windowEnd = new Date(`${selectedDate}T23:59:59Z`).getTime();
+        } else {
+            const startDate = `${selectedMonth}-01`;
+            const nextMonth = new Date(new Date(startDate).setMonth(new Date(startDate).getMonth() + 1)).toISOString().slice(0, 7);
+            windowStart = new Date(`${startDate}T00:00:00Z`).getTime();
+            windowEnd = new Date(`${nextMonth}-01T00:00:00Z`).getTime();
+        }
+
+        MACHINES.forEach(machine => {
+            const mRates = rates.find(r => r.machine_id === machine.id);
+            
+            const opsOnMachine = new Set<string>();
+            
+            attendance.filter(a => a.machine_id === machine.id).forEach(a => opsOnMachine.add(a.operator_id));
+            
+            logs.filter(l => l.machine_id === machine.id && l.operator_id).forEach(l => {
+                const logOpStr = String(l.operator_id).trim().toLowerCase();
+                const u = users.find(user => 
+                    String(user.id).trim().toLowerCase() === logOpStr || 
+                    (user.auth_user_id && String(user.auth_user_id).trim().toLowerCase() === logOpStr) || 
+                    String(user.employee_id).trim().toLowerCase() === logOpStr
+                );
+                if (u) {
+                    opsOnMachine.add(String(u.employee_id).trim());
+                } else {
+                    opsOnMachine.add(String(l.operator_id).trim());
+                }
+            });
+
+            if (opsOnMachine.size === 0) return;
+
+            const opDataList = Array.from(opsOnMachine).map(opId => {
+                const opIdStr = String(opId).trim().toLowerCase();
+                const userObj = users.find(u => 
+                    String(u.employee_id).trim().toLowerCase() === opIdStr || 
+                    String(u.id).trim().toLowerCase() === opIdStr || 
+                    (u.auth_user_id && String(u.auth_user_id).trim().toLowerCase() === opIdStr)
+                );
+                const role = userObj?.role || 'Operator';
+                const name = userObj?.name || `Unknown (${opId})`;
+                
+                const myAtts = attendance.filter(a => a.machine_id === machine.id && a.operator_id === opId);
+                const timeSlots: string[] = [];
+                const totalHours = myAtts.reduce((sum, a) => {
+                    if (!a.clock_in) return sum;
+                    const shiftStart = new Date(a.clock_in).getTime();
+                    const shiftEnd = a.clock_out ? new Date(a.clock_out).getTime() : Math.min(new Date().getTime(), shiftStart + 14 * 3600000);
+                    
+                    const overlapStart = Math.max(windowStart, shiftStart);
+                    const overlapEnd = Math.min(windowEnd, shiftEnd);
+                    
+                    if (overlapEnd > overlapStart) {
+                        const formatTime = (ts: number) => {
+                            return new Date(ts).toLocaleTimeString('en-US', { hour: '2-digit', minute: '2-digit', hour12: true });
+                        };
+                        timeSlots.push(`${formatTime(overlapStart)} - ${formatTime(overlapEnd)}`);
+                        return sum + (overlapEnd - overlapStart) / 3600000;
+                    }
+                    return sum;
+                }, 0);
+                
+                let nightShifts = 0;
+                let otHours = 0;
+
+                const attByDate: Record<string, { hours: number, rawHours: number, isNight: boolean, logs: any[], intervals: [number, number][] }> = {};
+                myAtts.forEach(a => {
+                    if (!a.clock_in) return;
+                    const shiftStart = new Date(a.clock_in).getTime();
+                    // If no clock_out, shift continues until exactly now
+                    const shiftEnd = a.clock_out ? new Date(a.clock_out).getTime() : new Date().getTime();
+                    
+                    const overlapStart = Math.max(windowStart, shiftStart);
+                    const overlapEnd = Math.min(windowEnd, shiftEnd);
+                    
+                    if (overlapEnd <= overlapStart) return; // Ignore shifts that don't overlap the view window
+                    
+                    let currentStart = overlapStart;
+                    while (currentStart < overlapEnd) {
+                        const d = new Date(currentStart);
+                        const nextMidnight = new Date(d.getFullYear(), d.getMonth(), d.getDate() + 1).getTime();
+                        const chunkEnd = Math.min(overlapEnd, nextMidnight);
+                        
+                        const localY = d.getFullYear();
+                        const localM = String(d.getMonth() + 1).padStart(2, '0');
+                        const localD = String(d.getDate()).padStart(2, '0');
+                        const dateKey = `${localY}-${localM}-${localD}`;
+                        
+                        const hour = d.getHours();
+                        const isNight = hour >= 18 || hour < 6;
+                        
+                        if (!attByDate[dateKey]) {
+                            attByDate[dateKey] = { hours: 0, rawHours: 0, isNight: false, logs: [], intervals: [] };
+                        }
+                        
+                        attByDate[dateKey].intervals.push([currentStart, chunkEnd]);
+                        attByDate[dateKey].rawHours += (chunkEnd - currentStart) / 3600000;
+                        
+                        if (!attByDate[dateKey].logs.find(l => l.id === a.id)) {
+                            attByDate[dateKey].logs.push(a);
+                        }
+                        if (isNight) attByDate[dateKey].isNight = true;
+                        
+                        currentStart = chunkEnd;
+                    }
+                });
+
+                Object.values(attByDate).forEach(day => {
+                    if (day.intervals && day.intervals.length > 0) {
+                        day.intervals.sort((a, b) => a[0] - b[0]);
+                        let merged = [];
+                        for (let int of day.intervals) {
+                            if (merged.length === 0 || merged[merged.length - 1][1] < int[0]) {
+                                merged.push([...int]);
+                            } else {
+                                merged[merged.length - 1][1] = Math.max(merged[merged.length - 1][1], int[1]);
+                            }
+                        }
+                        let realHours = 0;
+                        for (let m of merged) {
+                            realHours += (m[1] - m[0]) / 3600000;
+                        }
+                        day.hours = realHours;
+                    }
+                });
+
+                Object.values(attByDate).forEach(day => {
+                    if (day.hours > 8) otHours += (day.hours - 8);
+                    if (day.isNight) nightShifts++;
+                });
+
+                const myLogs = logs.filter(l => {
+                    if (l.machine_id !== machine.id) return false;
+                    
+                    const logOpStr = String(l.operator_id).trim().toLowerCase();
+                    const logUser = users.find(u => 
+                        String(u.id).trim().toLowerCase() === logOpStr || 
+                        (u.auth_user_id && String(u.auth_user_id).trim().toLowerCase() === logOpStr) || 
+                        String(u.employee_id).trim().toLowerCase() === logOpStr
+                    );
+                    const normalizedLogId = logUser ? String(logUser.employee_id).trim() : String(l.operator_id).trim();
+                    
+                    // Exact match by normalized ID
+                    if (normalizedLogId.toLowerCase() === String(opId).trim().toLowerCase()) return true;
+                    
+                    // Time-based matching for hardware-inserted logs (operator_id is null)
+                    const logTime = new Date(l.created_at).getTime();
+                    return myAtts.some(shift => {
+                        const inTime = new Date(shift.clock_in).getTime();
+                        const outTime = shift.clock_out ? new Date(shift.clock_out).getTime() : new Date().getTime() + 86400000;
+                        return logTime >= (inTime - 300000) && logTime <= (outTime + 300000);
+                    });
+                });
+                const totalRolls = myLogs.reduce((sum, l) => sum + (Number(l.output_qty) || 0), 0);
+                
+                const jobsSet = new Set<string>();
+                myLogs.forEach(l => { if (l.job_id) jobsSet.add(l.job_id); });
+
+                const calcMode = role === 'Manager' ? 'piece' : 'hourly';
+                let baseWage = 0;
+                
+                if (calcMode === 'hourly') {
+                    baseWage = totalHours * (mRates?.operator_hourly_rate || 0);
+                } else {
+                    baseWage = totalRolls * (mRates?.manager_piece_rate || 0);
+                }
+
+                let premiumBonus = 0;
+                if (calcMode === 'hourly') {
+                    premiumBonus += otHours * (mRates?.operator_hourly_rate || 0) * 0.5;
+                    premiumBonus += (nightShifts * 8) * (mRates?.operator_hourly_rate || 0) * 0.5;
+                } else {
+                    const otRatio = totalHours > 0 ? (otHours / totalHours) : 0;
+                    const nightRatio = totalHours > 0 ? ((nightShifts * 8) / totalHours) : 0;
+                    premiumBonus += baseWage * (otRatio * 0.5);
+                    premiumBonus += baseWage * (Math.min(1, nightRatio) * 0.5);
+                }
+                
+                const finalWage = baseWage + premiumBonus;
+
+                return {
+                    opId, name, role, totalHours, timeSlots, totalRolls, jobs: Array.from(jobsSet),
+                    calcMode, baseWage, premiumBonus, finalWage, nightShifts, otHours, rateInfo: mRates,
+                    daysWorked: Object.keys(attByDate).length,
+                    attMap: attByDate
+                };
+            });
+
+            // Sort operators so the "main" operator (highest hours) is at the top
+            opDataList.sort((a, b) => b.totalHours - a.totalHours);
+
+            report.push({
+                machine_id: machine.id,
+                machine_name: machine.name,
+                operators: opDataList
+            });
+        });
+
+        return report;
+    }, [attendance, logs, rates, users, viewMode]);
+
+    const totalPayout = reportData.reduce((sum, m) => sum + m.operators.reduce((opSum: number, op: any) => opSum + op.finalWage, 0), 0);
+    const totalRolls = reportData.reduce((sum, m) => sum + m.operators.reduce((opSum: number, op: any) => opSum + op.totalRolls, 0), 0);
+
+    // Get days in selected month for calendar
+    const daysInMonth = useMemo(() => {
+        if (viewMode !== 'monthly') return [];
+        const [year, month] = selectedMonth.split('-');
+        const days = new Date(parseInt(year), parseInt(month), 0).getDate();
+        return Array.from({ length: days }, (_, i) => i + 1);
+    }, [selectedMonth, viewMode]);
 
     return (
-        <div className="min-h-screen bg-[#07070a] text-white p-4 md:p-8 pb-32 font-sans selection:bg-blue-500/30">
-            <div className="max-w-[1600px] mx-auto flex flex-col md:flex-row gap-6">
-                
-                {/* Sidebar: Available Operators */}
-                <div className="w-full md:w-64 shrink-0 flex flex-col gap-4">
-                    <div className="bg-[#0f0f13] border border-white/5 auto-rows-max rounded-3xl p-4 shadow-xl flex flex-col gap-3 sticky top-6 max-h-[calc(100vh-120px)] overflow-hidden">
-                        <div className="flex items-center gap-2 text-blue-400 mb-1">
-                            <Users size={18} />
-                            <h2 className="font-black text-white">Operators</h2>
+        <div className="min-h-screen bg-[#07070a] text-white p-4 md:p-8 font-sans bg-[url('/grid-pattern.svg')] bg-fixed">
+            <div className="max-w-[1200px] mx-auto">
+                {/* Header */}
+                <div className="flex flex-col md:flex-row items-start md:items-center justify-between mb-8 gap-6 relative z-10">
+                    <div>
+                        <h1 className="text-3xl font-black text-transparent bg-clip-text bg-gradient-to-r from-blue-400 to-indigo-400 flex items-center gap-3 tracking-tight">
+                            <BarChart3 className="text-blue-500" size={28} />
+                            {viewMode === 'daily' ? 'Daily' : 'Monthly'} Production & Wage Report
+                        </h1>
+                        <p className="text-gray-500 text-sm mt-1 font-bold tracking-wide">
+                            Clear view of who was on duty, what was produced, and relative salary.
+                        </p>
+                    </div>
+
+                    <div className="flex items-center gap-3">
+                        {/* View Mode Toggle */}
+                        <div className="flex bg-black/40 border border-white/10 rounded-xl p-1 relative">
+                            <div className={`absolute top-1 bottom-1 w-[calc(50%-4px)] bg-blue-600 rounded-lg transition-transform duration-300 ${viewMode === 'monthly' ? 'translate-x-full' : 'translate-x-0'}`}/>
+                            <button onClick={() => setViewMode('daily')} className={`w-20 relative z-10 py-1.5 text-xs font-black transition-colors ${viewMode === 'daily' ? 'text-white' : 'text-gray-500'}`}>Daily</button>
+                            <button onClick={() => setViewMode('monthly')} className={`w-20 relative z-10 py-1.5 text-xs font-black transition-colors ${viewMode === 'monthly' ? 'text-white' : 'text-gray-500'}`}>Monthly</button>
                         </div>
-                        <div className="text-[10px] text-gray-500 font-bold uppercase tracking-widest leading-relaxed mb-1">
-                            Drag names to timeline to assign shifts.
+
+                        {/* Date/Month Picker */}
+                        <div className="flex items-center gap-2 bg-[#0f0f13] border border-white/10 p-1.5 rounded-xl">
+                            {viewMode === 'daily' ? (
+                                <input type="date" value={selectedDate} onChange={e => setSelectedDate(e.target.value)}
+                                    className="bg-transparent border-none px-3 py-1 text-sm font-bold text-white focus:outline-none cursor-pointer tracking-wider" />
+                            ) : (
+                                <input type="month" value={selectedMonth} onChange={e => setSelectedMonth(e.target.value)}
+                                    className="bg-transparent border-none px-3 py-1 text-sm font-bold text-white focus:outline-none cursor-pointer tracking-wider" />
+                            )}
                         </div>
-                        <div className="overflow-y-auto pr-2 flex flex-col gap-2 relative better-scrollbar pb-8">
-                            {operators.map((op) => {
-                                const isAssigned = plannedSchedules.some((p) => p.operator_id === op.employee_id);
-                                return (
-                                    <div
-                                        key={op.employee_id}
-                                        draggable
-                                        onDragStart={(e) => handleDragStart(e, op)}
-                                        onDragEnd={() => setDraggedOperator(null)}
-                                        className={`flex items-center gap-2 p-2 rounded-xl border transition-all cursor-grab active:cursor-grabbing hover:-translate-y-0.5 ${
-                                            isAssigned
-                                                ? "bg-white/5 border-white/10 opacity-60"
-                                                : "bg-blue-900/20 border-blue-500/30 hover:bg-blue-800/30 hover:shadow-[0_4px_12px_rgba(59,130,246,0.2)]"
-                                        }`}
-                                    >
-                                        <GripVertical size={14} className="text-gray-500" />
-                                        <div className="flex flex-col min-w-0">
-                                            <span className="text-xs font-bold text-gray-200 truncate">{op.name}</span>
-                                            <span className="text-[9px] text-gray-500 font-mono uppercase truncate">{op.role}</span>
-                                        </div>
-                                        {isAssigned && <div className="ml-auto w-1.5 h-1.5 rounded-full bg-blue-500" title="Assigned Today" />}
-                                    </div>
-                                );
-                            })}
-                        </div>
+
+                        <button onClick={() => setShowRates(!showRates)} className={`flex items-center gap-2 px-4 py-2 rounded-xl font-bold text-sm transition-all duration-300 border ${showRates ? 'bg-purple-600/20 text-purple-400 border-purple-500/30' : 'bg-white/5 text-gray-400 border-white/10 hover:text-white'}`}>
+                            <Settings2 size={16} /> Machine Rates
+                        </button>
                     </div>
                 </div>
 
-                {/* Main Content Area */}
-                <div className="flex-1 min-w-0 flex flex-col gap-8">
-                    {/* Header */}
-                    <div className="flex flex-col md:flex-row md:items-end justify-between gap-4">
-                        <div>
-                            <div className="flex items-center gap-3 text-blue-500 mb-2">
-                                <CalendarIcon size={28} className="drop-shadow-[0_0_10px_rgba(59,130,246,0.5)]" />
-                                <h1 className="text-3xl font-black tracking-tighter text-white">Machine Schedule</h1>
-                            </div>
-                            <p className="text-gray-500 text-sm">Plan operator allocations via dragging and track actual attendance over 3 shifts.</p>
-                        </div>
-                        <div className="flex items-center gap-3 bg-[#0d0d12] border border-white/5 p-2 rounded-2xl shadow-xl">
-                            <input
-                                type="date"
-                                value={selectedDate}
-                                onChange={(e) => setSelectedDate(e.target.value)}
-                                className="bg-black/40 border border-white/10 rounded-xl px-4 py-2.5 text-sm focus:outline-none focus:border-blue-500/50 text-white font-bold"
-                            />
-                            <select
-                                value={selectedShift}
-                                onChange={(e) => setSelectedShift(e.target.value as any)}
-                                className="bg-black/40 border border-white/10 rounded-xl px-4 py-2.5 text-sm focus:outline-none focus:border-blue-500/50 text-white font-bold appearance-none cursor-pointer"
-                            >
-                                <option value="All">All Shifts</option>
-                                <option value="Morning">Morning</option>
-                                <option value="Evening">Evening</option>
-                                <option value="Night">Night</option>
-                            </select>
+                {/* Rate Matrix Panel */}
+                {showRates && (
+                    <div className="mb-8 bg-[#0f0f13]/80 backdrop-blur-md border border-white/10 rounded-2xl p-6 shadow-xl animate-in fade-in slide-in-from-top-4">
+                        <h2 className="text-sm font-black mb-4 flex items-center gap-2 text-purple-400 uppercase tracking-widest">
+                            <ShieldCheck size={16} /> Base Pricing Configuration
+                        </h2>
+                        <div className="overflow-x-auto">
+                            <table className="w-full text-left">
+                                <thead>
+                                    <tr className="text-[10px] text-gray-500 uppercase tracking-widest border-b border-white/5">
+                                        <th className="pb-3 px-2">Machine Unit</th>
+                                        <th className="pb-3 px-2">Operator (RM/hr)</th>
+                                        <th className="pb-3 px-2">Manager (RM/roll)</th>
+                                    </tr>
+                                </thead>
+                                <tbody className="divide-y divide-white/5">
+                                    {MACHINES.map(m => {
+                                        const r = rates.find(x => x.machine_id === m.id);
+                                        return (
+                                            <tr key={m.id} className="hover:bg-white/[0.02]">
+                                                <td className="py-2 px-2 font-bold text-sm text-gray-300">{m.name}</td>
+                                                <td className="py-2 px-2">
+                                                    <input type="number" value={r?.operator_hourly_rate || 0} onChange={e => updateRate(r!.id, 'operator_hourly_rate', Number(e.target.value))}
+                                                        className="w-20 bg-black/40 border border-white/10 rounded-lg px-2 py-1 text-sm text-white focus:border-purple-500 outline-none" />
+                                                </td>
+                                                <td className="py-2 px-2">
+                                                    <input type="number" value={r?.manager_piece_rate || 0} onChange={e => updateRate(r!.id, 'manager_piece_rate', Number(e.target.value))}
+                                                        className="w-20 bg-black/40 border border-white/10 rounded-lg px-2 py-1 text-sm text-white focus:border-purple-500 outline-none" />
+                                                </td>
+                                            </tr>
+                                        )
+                                    })}
+                                </tbody>
+                            </table>
                         </div>
                     </div>
+                )}
 
-                    {/* Gantt Area */}
-                    <div className="bg-[#0f0f13] border border-white/5 rounded-3xl overflow-hidden shadow-2xl relative overflow-x-auto">
-                        {loading ? (
-                            <div className="p-20 text-center flex flex-col items-center gap-4">
-                                <div className="w-8 h-8 rounded-full border-t-2 border-r-2 border-blue-500 border-solid animate-spin" />
-                                <span className="text-xs font-bold uppercase tracking-widest text-gray-500">Loading Timeline...</span>
-                            </div>
-                        ) : (
-                            <div className="min-w-[900px]">
-                                {/* Gantt Header */}
-                                <div className="flex bg-black/40 border-b border-white/5 text-[10px] font-black uppercase tracking-widest text-gray-500 sticky top-0 z-20">
-                                    <div className="w-56 shrink-0 p-4 border-r border-white/5 flex items-center justify-between">
-                                        <span>Machine Unit</span>
-                                        <div className="flex flex-col items-end gap-1">
-                                            <div className="flex items-center gap-1"><div className="w-2 h-2 rounded bg-blue-500/30 border border-blue-500/50"/> <span>Plan</span></div>
-                                            <div className="flex items-center gap-1"><div className="w-2 h-2 rounded-full bg-green-500"/> <span>Actual</span></div>
-                                        </div>
-                                    </div>
-                                    <div className="flex-1 relative h-12 flex items-end">
-                                        {Array.from({ length: 25 }).map((_, i) => (
-                                            <div key={i} className="absolute bottom-0 border-l border-white/10 h-3 flex items-end" style={{ left: `${(i / 24) * 100}%` }}>
-                                                <span className="text-[9px] -translate-x-1/2 -translate-y-4 tabular-nums absolute">
-                                                    {i.toString().padStart(2, "0")}:00
-                                                </span>
+                {/* Dashboard Summary */}
+                <div className="grid grid-cols-2 md:grid-cols-4 gap-4 mb-6">
+                    <div className="bg-[#12121a] border border-white/5 p-5 rounded-2xl">
+                        <div className="text-[10px] text-gray-500 uppercase tracking-widest font-bold mb-1">Total Payout (Est)</div>
+                        <div className="text-2xl font-black text-green-400">RM {totalPayout.toFixed(2)}</div>
+                    </div>
+                    <div className="bg-[#12121a] border border-white/5 p-5 rounded-2xl">
+                        <div className="text-[10px] text-gray-500 uppercase tracking-widest font-bold mb-1">Total Output</div>
+                        <div className="text-2xl font-black text-blue-400">{totalRolls} Rolls</div>
+                    </div>
+                    <div className="bg-[#12121a] border border-white/5 p-5 rounded-2xl">
+                        <div className="text-[10px] text-gray-500 uppercase tracking-widest font-bold mb-1">Machines Active</div>
+                        <div className="text-2xl font-black text-white">{reportData.length}</div>
+                    </div>
+                    <div className="bg-[#12121a] border border-white/5 p-5 rounded-2xl">
+                        <div className="text-[10px] text-gray-500 uppercase tracking-widest font-bold mb-1">Staff Involved</div>
+                        <div className="text-2xl font-black text-purple-400">{reportData.reduce((sum, m) => sum + m.operators.length, 0)}</div>
+                    </div>
+                </div>
+
+                {/* Main Report List */}
+                {loading ? (
+                    <div className="p-20 flex justify-center"><div className="w-8 h-8 border-4 border-blue-500/30 border-t-blue-500 rounded-full animate-spin"/></div>
+                ) : reportData.length === 0 ? (
+                    <div className="p-20 text-center border border-white/5 border-dashed rounded-3xl bg-[#0f0f13]/50 mt-8">
+                        <CalendarDays size={32} className="text-gray-600 mx-auto mb-4" />
+                        <div className="text-lg text-white font-bold mb-1">No Activity Detected</div>
+                        <div className="text-sm text-gray-500">No logs found for this {viewMode === 'daily' ? 'day' : 'month'}.</div>
+                    </div>
+                ) : (
+                    <div className="space-y-6">
+                        {reportData.map(machine => {
+                            const isCalendarOpen = expandedCalendars[machine.machine_id];
+                            
+                            return (
+                                <div key={machine.machine_id} className="bg-[#0f0f13] border border-white/10 rounded-3xl overflow-hidden shadow-lg">
+                                    {/* Machine Header */}
+                                    <div className="bg-gradient-to-r from-blue-900/20 to-transparent border-b border-white/5 p-4 flex items-center justify-between">
+                                        <div className="flex items-center gap-3">
+                                            <div className="bg-blue-500/10 text-blue-400 p-2 rounded-lg"><Settings2 size={20} /></div>
+                                            <div>
+                                                <h2 className="text-lg font-black text-white">{machine.machine_name}</h2>
+                                                <div className="text-[10px] text-gray-500 font-mono">{machine.machine_id}</div>
                                             </div>
-                                        ))}
+                                        </div>
+                                        
+                                        {/* View Calendar Button (Only in Monthly Mode) */}
+                                        {viewMode === 'monthly' && (
+                                            <button 
+                                                onClick={() => toggleCalendar(machine.machine_id)}
+                                                className={`flex items-center gap-2 px-4 py-2 rounded-xl text-xs font-bold transition-all ${isCalendarOpen ? 'bg-indigo-500 text-white' : 'bg-white/5 text-gray-400 hover:text-white hover:bg-white/10'}`}
+                                            >
+                                                <CalendarIcon size={14} /> Presence Calendar
+                                            </button>
+                                        )}
                                     </div>
-                                </div>
-
-                                {/* Gantt Rows */}
-                                <div className="divide-y divide-white/5">
-                                    {machines.map((machineItem) => {
-                                        const machine = machineItem.id;
-                                        const machineName = machineItem.name;
-                                        const planned = getPlannedForMachine(machine);
-                                        const actuals = getActualForMachine(machine);
-                                        const rowMinHeight = Math.max(80, actuals.length > 0 ? actuals.length * 30 + 20 : 80);
-
-                                        return (
-                                            <div key={machine} className="flex hover:bg-white/[0.02] transition-colors border-l-2 border-transparent hover:border-blue-500 group relative">
-                                                <div className="w-56 shrink-0 p-4 border-r border-white/5 flex flex-col justify-center bg-[#0f0f13] z-10">
-                                                    <div className="flex justify-between items-start mb-2">
-                                                        <div className="flex items-center gap-3">
-                                                            <div className="w-10 h-10 rounded-xl bg-white/5 flex items-center justify-center border border-white/10 group-hover:bg-blue-500/10 transition-all">
-                                                                <Wrench size={18} className="text-gray-400 group-hover:text-blue-400" />
+                                    
+                                    {/* Operators List */}
+                                    <div className="divide-y divide-white/5">
+                                        {machine.operators.map((op: any) => (
+                                            <div key={op.opId} className="p-5 flex flex-col md:flex-row md:items-center justify-between gap-6 hover:bg-white/[0.02] transition-colors">
+                                                
+                                                {/* Who */}
+                                                <div className="flex items-center gap-4 w-full md:w-1/4">
+                                                    <div className="w-10 h-10 rounded-full bg-gray-800 flex items-center justify-center border border-gray-700 relative">
+                                                        <User size={18} className="text-gray-400" />
+                                                        {viewMode === 'monthly' && (
+                                                            <div className="absolute -bottom-2 -right-2 bg-blue-600 text-white text-[9px] font-black w-5 h-5 rounded-full flex items-center justify-center border border-[#0f0f13]" title={`${op.daysWorked} days worked`}>
+                                                                {op.daysWorked}d
                                                             </div>
-                                                            <div>
-                                                                <div className="font-black text-lg text-white tracking-tight leading-none mb-1">{machineName}</div>
-                                                                <div className="text-[9px] text-gray-500 font-mono uppercase">Production Unit</div>
-                                                            </div>
-                                                        </div>
-                                                        <button onClick={() => handleOpenAssignModal(machine)} className="w-7 h-7 rounded bg-white/5 hover:bg-blue-500/20 text-gray-400 hover:text-blue-400 flex items-center justify-center transition-colors opacity-0 group-hover:opacity-100" title="Assign Operator">
-                                                            <Plus size={14} />
-                                                        </button>
+                                                        )}
+                                                    </div>
+                                                    <div>
+                                                        <div className="font-bold text-white">{op.name}</div>
+                                                        <div className="text-[10px] text-gray-500 uppercase tracking-wider font-bold">{op.role}</div>
                                                     </div>
                                                 </div>
 
-                                                {/* Timeline Area */}
-                                                <div className="flex-1 relative py-2 flex" style={{ minHeight: `${rowMinHeight}px` }}>
-                                                    {(["Night", "Morning", "Evening"] as const).map((shift) => {
-                                                        const isActiveDrop = dragOverMachine === machine && dragOverShift === shift;
-                                                        return (
-                                                            <div
-                                                                key={shift}
-                                                                onDragOver={(e) => handleDragOver(e, machine, shift)}
-                                                                onDragLeave={handleDragLeave}
-                                                                onDrop={(e) => handleDrop(e, machine, shift)}
-                                                                className={`flex-1 h-full border-r border-white/5 relative transition-colors ${ isActiveDrop ? "bg-blue-500/20" : "hover:bg-white/[0.03]" }`}
-                                                            >
-                                                                {Array.from({ length: 8 }).map((_, i) => (
-                                                                    <div key={i} className="absolute top-0 bottom-0 border-l border-white/[0.03] pointer-events-none" style={{ left: `${(i / 8) * 100}%` }} />
+                                                {/* What Produced & Time */}
+                                                <div className="flex gap-6 w-full md:w-1/3">
+                                                    <div className="flex flex-col items-start min-w-[80px]">
+                                                        <div className="text-[10px] text-gray-500 uppercase tracking-widest font-bold mb-1 flex items-center gap-1"><Clock size={12}/> {viewMode === 'monthly' ? 'Total Time' : 'Time'}</div>
+                                                        <div className="text-sm font-bold text-white mb-1">{op.totalHours.toFixed(1)} h</div>
+                                                        {viewMode === 'daily' && op.timeSlots && op.timeSlots.length > 0 && (
+                                                            <div className="flex flex-col gap-0.5">
+                                                                {op.timeSlots.map((ts: string, i: number) => (
+                                                                    <span key={i} className="text-[9px] text-cyan-400 font-mono tracking-tighter bg-cyan-500/10 px-1 py-0.5 rounded border border-cyan-500/20 whitespace-nowrap">{ts}</span>
                                                                 ))}
                                                             </div>
-                                                        );
-                                                    })}
-
-                                                    {planned.map((p) => {
-                                                        let left = 0; let width = (8 / 24) * 100;
-                                                        if (p.shift_type === "Morning") { left = (8 / 24) * 100; } 
-                                                        else if (p.shift_type === "Evening") { left = (16 / 24) * 100; }
-                                                        else if (p.shift_type === "Night") { left = 0; }
-
-                                                        return (
-                                                            <div
-                                                                key={p.id}
-                                                                draggable
-                                                                onDragStart={(e) => handlePlanDragStart(e, p)}
-                                                                onDragEnd={() => setDraggedPlan(null)}
-                                                                className="absolute rounded-lg bg-blue-500/10 border border-blue-500/20 hover:bg-blue-500/20 cursor-grab active:cursor-grabbing transition-colors flex flex-col justify-center px-3 overflow-hidden group/plan z-20 shadow-lg backdrop-blur-sm"
-                                                                style={{ left: `${left}%`, width: `${width}%`, top: "8px", bottom: "8px" }}
-                                                            >
-                                                                <div className="flex items-center justify-between gap-2 pointer-events-auto">
-                                                                    <span className="text-[11px] font-bold text-blue-200 truncate">{p.operator_name}</span>
-                                                                    <button onClick={() => handleDeleteSchedule(p.id)} className="w-5 h-5 rounded hover:bg-red-500/20 text-red-400/50 hover:text-red-400 flex items-center justify-center opacity-0 group-hover/plan:opacity-100 transition-opacity bg-black/40">
-                                                                        <div className="w-2 h-0.5 bg-current rotate-45 absolute" />
-                                                                        <div className="w-2 h-0.5 bg-current -rotate-45 absolute" />
-                                                                    </button>
-                                                                </div>
-                                                                <span className="text-[9px] text-blue-400/50 uppercase tracking-widest font-mono truncate">{p.shift_type}</span>
+                                                        )}
+                                                    </div>
+                                                    <div>
+                                                        <div className="text-[10px] text-gray-500 uppercase tracking-widest font-bold mb-1 flex items-center gap-1"><Package size={12}/> Produced</div>
+                                                        <div className="text-sm font-bold text-white">{op.totalRolls} rolls</div>
+                                                    </div>
+                                                    {viewMode === 'daily' && (
+                                                        <div className="flex-1">
+                                                            <div className="text-[10px] text-gray-500 uppercase tracking-widest font-bold mb-1">Jobs</div>
+                                                            <div className="text-xs text-blue-400 font-mono truncate max-w-[120px]">
+                                                                {op.jobs.length > 0 ? op.jobs.join(', ') : '-'}
                                                             </div>
-                                                        );
-                                                    })}
+                                                        </div>
+                                                    )}
+                                                </div>
 
-                                                    {actuals.map((a, idx) => {
-                                                        const inDate = new Date(a.clock_in);
-                                                        const startHour = inDate.getHours() + inDate.getMinutes() / 60;
-                                                        let endHour = 24;
-                                                        let isPulsing = false;
+                                                {/* Pay Rate & Badges */}
+                                                <div className="flex flex-col items-start md:items-center w-full md:w-1/4 gap-2">
+                                                    <div className="flex flex-wrap gap-2">
+                                                        <span className={`text-[10px] px-2 py-0.5 rounded font-bold border ${op.calcMode === 'hourly' ? 'bg-indigo-500/10 text-indigo-400 border-indigo-500/20' : 'bg-emerald-500/10 text-emerald-400 border-emerald-500/20'}`}>
+                                                            {op.calcMode === 'hourly' ? `RM ${(op.rateInfo?.operator_hourly_rate || 0).toFixed(2)}/h` : `RM ${(op.rateInfo?.manager_piece_rate || 0).toFixed(2)}/roll`}
+                                                        </span>
+                                                        {op.nightShifts > 0 && <span className="text-[10px] px-2 py-0.5 rounded font-bold border bg-purple-500/10 text-purple-400 border-purple-500/20">{op.nightShifts}x Night</span>}
+                                                        {op.otHours > 0 && <span className="text-[10px] px-2 py-0.5 rounded font-bold border bg-orange-500/10 text-orange-400 border-orange-500/20">{op.otHours.toFixed(1)}h OT</span>}
+                                                    </div>
+                                                </div>
 
-                                                        if (a.clock_out) {
-                                                            const outDate = new Date(a.clock_out);
-                                                            endHour = outDate.getHours() + outDate.getMinutes() / 60;
-                                                        } else {
-                                                            const now = new Date();
-                                                            if (selectedDate === now.toISOString().split("T")[0]) {
-                                                                endHour = now.getHours() + now.getMinutes() / 60;
-                                                                isPulsing = true;
-                                                            }
-                                                        }
+                                                {/* Final Salary */}
+                                                <div className="text-left md:text-right w-full md:w-32 shrink-0">
+                                                    <div className="text-[10px] text-gray-500 uppercase tracking-widest font-bold mb-1">Earned</div>
+                                                    <div className="text-xl font-black text-green-400">
+                                                        RM {op.finalWage.toFixed(2)}
+                                                    </div>
+                                                </div>
 
-                                                        if (endHour <= startHour) endHour = startHour + 0.1;
+                                            </div>
+                                        ))}
+                                    </div>
 
-                                                        const left = (startHour / 24) * 100;
-                                                        const width = ((endHour - startHour) / 24) * 100;
-                                                        const isScheduled = planned.some((p) => p.operator_id === a.employee_id);
-                                                        const colorClass = isScheduled
-                                                            ? "bg-gradient-to-r from-green-500 to-green-400 border-green-500/50 shadow-[0_2px_10px_rgba(34,197,94,0.4)] text-green-950"
-                                                            : "bg-gradient-to-r from-orange-500 to-orange-400 border-orange-500/50 shadow-[0_2px_10px_rgba(249,115,22,0.4)] text-orange-950";
+                                    {/* Monthly Presence Matrix (Expanded Calendar) */}
+                                    {viewMode === 'monthly' && isCalendarOpen && (
+                                        <div className="bg-black/60 border-t border-white/5 p-6 animate-in slide-in-from-top-2">
+                                            <h3 className="text-xs font-black uppercase tracking-widest text-indigo-400 mb-4 flex items-center gap-2">
+                                                <CalendarIcon size={14} /> Operator Presence Heatmap ({selectedMonth})
+                                            </h3>
+                                            
+                                            <div className="overflow-x-auto pt-20 pb-4 better-scrollbar">
+                                                <div className="min-w-max">
+                                                    {/* Calendar Header (Days) */}
+                                                    <div className="flex ml-40 gap-1.5">
+                                                        {daysInMonth.map(day => (
+                                                            <div key={day} className="w-6 flex-shrink-0 text-center text-[10px] font-bold text-gray-500 pb-2">
+                                                                {day}
+                                                            </div>
+                                                        ))}
+                                                    </div>
 
-                                                        return (
-                                                            <div
-                                                                key={a.id}
-                                                                className={`absolute h-6 rounded-full border overflow-hidden flex items-center px-2 z-30 transition-transform hover:scale-[1.02] opacity-90 hover:opacity-100 pointer-events-none ${colorClass}`}
-                                                                style={{ left: `${left}%`, width: `${width}%`, top: `${idx * 28 + 16}px` }}
-                                                                title={`${a.employee_name} | IN: ${inDate.toLocaleTimeString()} | OUT: ${a.clock_out ? new Date(a.clock_out).toLocaleTimeString() : "Active"}`}
-                                                            >
-                                                                <div className="flex items-center gap-1.5 min-w-0">
-                                                                    {isPulsing && <div className="w-1.5 h-1.5 rounded-full bg-black/60 animate-pulse shrink-0" />}
-                                                                    <span className="text-[10px] font-black truncate">{a.employee_name}</span>
+                                                    {/* Calendar Rows (Operators) */}
+                                                    <div className="space-y-2">
+                                                        {machine.operators.map((op: any) => (
+                                                            <div key={op.opId} className="flex items-center hover:bg-white/5 rounded-lg transition-colors p-1 pr-4">
+                                                                <div className="w-40 flex-shrink-0 pr-4 flex items-center justify-end gap-2 text-right">
+                                                                    <div className="text-[10px] text-gray-500 font-mono">{op.role === 'Manager' ? 'MGR' : 'OP'}</div>
+                                                                    <div className="text-xs font-bold text-gray-300 truncate max-w-[100px]">{op.name}</div>
+                                                                </div>
+                                                                
+                                                                <div className="flex gap-1.5 items-center">
+                                                                    {daysInMonth.map(day => {
+                                                                        const dateStr = `${selectedMonth}-${day.toString().padStart(2, '0')}`;
+                                                                        const dayData = op.attMap[dateStr];
+                                                                        const isPresent = !!dayData;
+                                                                        const isNight = dayData?.isNight;
+                                                                        
+                                                                        // Round to 1 decimal place to avoid floating point > 8 false positives
+                                                                        const roundedHours = isPresent ? Math.round(dayData.hours * 10) / 10 : 0;
+                                                                        const isOT = roundedHours > 8;
+                                                                        const hasOverlap = isPresent && dayData.rawHours > dayData.hours + 0.05;
+
+                                                                        // Color logic based on what they worked
+                                                                        let bgClass = "bg-white/5 border border-white/5"; // Empty
+                                                                        if (isPresent) {
+                                                                            if (isNight) bgClass = "bg-purple-500 border border-purple-400 shadow-[0_0_10px_rgba(168,85,247,0.4)]";
+                                                                            else if (isOT) bgClass = "bg-orange-500 border border-orange-400 shadow-[0_0_10px_rgba(249,115,22,0.4)]";
+                                                                            else bgClass = "bg-cyan-500 border border-cyan-400 shadow-[0_0_10px_rgba(6,182,212,0.4)]";
+                                                                        }
+
+                                                                        return (
+                                                                            <div key={day} className="relative group z-10 hover:z-50">
+                                                                                <div 
+                                                                                    className={`w-6 h-6 rounded flex items-center justify-center text-[8px] font-black cursor-pointer transition-transform hover:scale-125 ${bgClass}`}
+                                                                                >
+                                                                                    {isPresent && (roundedHours % 1 === 0 ? roundedHours : roundedHours.toFixed(1))}
+                                                                                </div>
+                                                                                {isPresent && (
+                                                                                    <div className="absolute bottom-full mb-2 left-1/2 -translate-x-1/2 hidden group-hover:block w-max bg-gray-900 border border-white/10 text-white text-[10px] p-2 rounded shadow-2xl pointer-events-none">
+                                                                                        <div className="font-bold text-blue-400 mb-1 border-b border-white/10 pb-1 flex items-center gap-2">
+                                                                                            <span>{dateStr}</span>
+                                                                                            <span className="text-gray-400">|</span>
+                                                                                            <span>{roundedHours.toFixed(1)}h</span>
+                                                                                            {isNight && <span className="text-purple-400" title="Night Shift">🌙</span>}
+                                                                                            {isOT && <span className="text-orange-400" title="Overtime">⚠️</span>}
+                                                                                            {hasOverlap && <span className="text-red-400" title="Overlapping logs">🔗</span>}
+                                                                                        </div>
+                                                                                        {dayData.logs.map((l: any, i: number) => {
+                                                                                            const tIn = l.clock_in ? new Date(l.clock_in).toLocaleTimeString('en-MY', { hour: '2-digit', minute: '2-digit', hour12: false }) : '?';
+                                                                                            const tOut = l.clock_out ? new Date(l.clock_out).toLocaleTimeString('en-MY', { hour: '2-digit', minute: '2-digit', hour12: false }) : 'Active';
+                                                                                            return <div key={i} className="font-mono text-gray-300 flex justify-between gap-4">
+                                                                                                <span className="text-gray-500">Log {i+1}:</span> 
+                                                                                                <span><span className="text-green-400">{tIn}</span> → <span className={l.clock_out ? "text-red-400" : "text-cyan-400 animate-pulse"}>{tOut}</span></span>
+                                                                                            </div>
+                                                                                        })}
+                                                                                        {hasOverlap && (
+                                                                                            <div className="text-red-400 font-bold text-[9px] mt-1 pt-1 border-t border-red-500/20">
+                                                                                                ⚠️ Duplicate/Overlapping logs merged (Raw: {dayData.rawHours.toFixed(1)}h)
+                                                                                            </div>
+                                                                                        )}
+                                                                                    </div>
+                                                                                )}
+                                                                            </div>
+                                                                        );
+                                                                    })}
                                                                 </div>
                                                             </div>
-                                                        );
-                                                    })}
+                                                        ))}
+                                                    </div>
                                                 </div>
                                             </div>
-                                        );
-                                    })}
-                                </div>
-                            </div>
-                        )}
-                    </div>
-                </div>
-            </div>
 
-            {/* Modal */}
-            {isAssignModalOpen && (
-                <div className="fixed inset-0 bg-black/80 backdrop-blur-sm z-50 flex items-center justify-center p-4">
-                    <div className="bg-[#0f0f13] border border-white/10 rounded-2xl p-6 w-full max-w-sm shadow-2xl">
-                        <div className="flex justify-between items-center mb-6">
-                            <h2 className="text-lg font-black text-white">Assign Operator</h2>
-                            <button onClick={() => setIsAssignModalOpen(false)} className="text-gray-500 hover:text-white">
-                                <div className="w-4 h-0.5 bg-current rotate-45 absolute" />
-                                <div className="w-4 h-0.5 bg-current -rotate-45 absolute" />
-                            </button>
-                        </div>
-                        <div className="space-y-4">
-                            <div>
-                                <label className="block text-[10px] font-bold uppercase tracking-widest text-gray-500 mb-1">Target Machine</label>
-                                <div className="bg-white/5 border border-white/10 rounded-xl px-4 py-3 text-white font-bold">{machines.find(m => m.id === targetMachine)?.name || targetMachine}</div>
-                            </div>
-                            <div>
-                                <label className="block text-[10px] font-bold uppercase tracking-widest text-gray-500 mb-1">Shift Type</label>
-                                <select 
-                                    value={targetShift} 
-                                    onChange={e => setTargetShift(e.target.value as any)}
-                                    className="w-full bg-black/40 border border-white/10 rounded-xl px-4 py-3 text-white font-bold focus:outline-none focus:border-blue-500"
-                                >
-                                    <option value="Morning">Morning Shift</option>
-                                    <option value="Evening">Evening Shift</option>
-                                    <option value="Night">Night Shift</option>
-                                </select>
-                            </div>
-                            <div>
-                                <label className="block text-[10px] font-bold uppercase tracking-widest text-gray-500 mb-1">Select Operator</label>
-                                <select 
-                                    value={selectedOperatorId} 
-                                    onChange={e => setSelectedOperatorId(e.target.value)}
-                                    className="w-full bg-black/40 border border-white/10 rounded-xl px-4 py-3 text-white font-bold focus:outline-none focus:border-blue-500"
-                                >
-                                    <option value="" disabled>-- Choose Operator --</option>
-                                    {operators.map(op => (
-                                        <option key={op.employee_id} value={op.employee_id}>{op.name} ({op.role})</option>
-                                    ))}
-                                </select>
-                            </div>
-                            <div className="pt-4">
-                                <button 
-                                    onClick={handleAssignSubmit}
-                                    disabled={!selectedOperatorId || isSubmitting}
-                                    className="w-full bg-blue-600 hover:bg-blue-500 disabled:opacity-50 disabled:cursor-not-allowed text-white font-bold py-3 rounded-xl transition-colors shadow-[0_0_15px_rgba(37,99,235,0.4)]"
-                                >
-                                    {isSubmitting ? "Saving..." : "Confirm Assignment"}
-                                </button>
-                            </div>
-                        </div>
+                                            {/* Legend */}
+                                            <div className="mt-4 flex items-center gap-6 justify-center bg-white/5 w-fit mx-auto px-4 py-2 rounded-full border border-white/10">
+                                                <div className="flex items-center gap-2"><div className="w-3 h-3 rounded bg-cyan-500"></div><span className="text-[10px] text-gray-400 font-bold uppercase tracking-widest">Normal Shift</span></div>
+                                                <div className="flex items-center gap-2"><div className="w-3 h-3 rounded bg-orange-500"></div><span className="text-[10px] text-gray-400 font-bold uppercase tracking-widest">Overtime (&gt;8h)</span></div>
+                                                <div className="flex items-center gap-2"><div className="w-3 h-3 rounded bg-purple-500"></div><span className="text-[10px] text-gray-400 font-bold uppercase tracking-widest">Night Shift</span></div>
+                                            </div>
+                                        </div>
+                                    )}
+                                </div>
+                            );
+                        })}
                     </div>
-                </div>
-            )}
+                )}
+            </div>
         </div>
     );
 };

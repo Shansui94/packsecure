@@ -41,6 +41,7 @@ export interface User {
     bankName?: string;
     bankAccountNo?: string;
     factoryId?: string; // NEW: Assigned Factory (T1, N1, etc.)
+    base_location?: string; // NEW: Assigned Location for Trip Management (Taiping/Nilai)
 }
 
 // 3. Job Order (Production Task)

@@ -156,6 +156,14 @@ const DeliveryOrderManagement: React.FC = () => {
     const [viewMode, setViewMode] = useState<'kanban' | 'table'>('kanban');
     const [sortConfig, setSortConfig] = useState<{ key: string, dir: 'asc'|'desc' } | null>(null);
 
+    // Location Split State
+    const [activeLocation, setActiveLocation] = useState<string>(() => localStorage.getItem('tripActiveLocation') || 'Taiping');
+
+    useEffect(() => {
+        localStorage.setItem('tripActiveLocation', activeLocation);
+        setTripOrigin(activeLocation.toUpperCase());
+    }, [activeLocation]);
+
 
 
     // AI / Smart Import State
@@ -182,7 +190,7 @@ const DeliveryOrderManagement: React.FC = () => {
 
     // --- Driver Payroll Rate State ---
     const [deliveryRates, setDeliveryRates] = useState<any[]>([]);
-    const [tripOrigin, setTripOrigin] = useState('TAIPING');
+    const [tripOrigin, setTripOrigin] = useState(activeLocation.toUpperCase());
     const [tripCategory, setTripCategory] = useState('');
     const [tripDropCount, setTripDropCount] = useState<number>(1);
 
@@ -291,7 +299,8 @@ const DeliveryOrderManagement: React.FC = () => {
                     uid: u.id,
                     email: u.email,
                     name: (u.name && u.name.trim() !== '') ? u.name : (u.email?.split('@')[0] || 'Unknown Driver'),
-                    role: 'Driver'
+                    role: 'Driver',
+                    base_location: u.base_location
                 } as any));
                 setDrivers(mappedDrivers);
             }
@@ -450,12 +459,24 @@ const DeliveryOrderManagement: React.FC = () => {
     }, []);
 
     // Filter Logic
-    const filteredOrders = orders.filter(o =>
-        (statusFilter === 'All' ? !['Delivered', 'Cancelled'].includes(o.status) : o.status === statusFilter) &&
-        (getDriverName(o.driverId)?.toLowerCase().includes(searchTerm.toLowerCase()) ||
+    const filteredOrders = orders.filter(o => {
+        const matchesStatus = statusFilter === 'All' ? !['Delivered', 'Cancelled'].includes(o.status) : o.status === statusFilter;
+        const matchesSearch = getDriverName(o.driverId)?.toLowerCase().includes(searchTerm.toLowerCase()) ||
             o.orderNumber?.toLowerCase().includes(searchTerm.toLowerCase()) ||
-            o.customer.toLowerCase().includes(searchTerm.toLowerCase()))
-    );
+            o.customer.toLowerCase().includes(searchTerm.toLowerCase());
+
+        let matchesLocation = false;
+        if (o.driverId) {
+            const driver = drivers.find(d => d.uid === o.driverId);
+            const driverLoc = driver?.base_location || 'Taiping';
+            matchesLocation = driverLoc.toLowerCase() === activeLocation.toLowerCase();
+        } else {
+            const originLoc = o.trip_origin || 'TAIPING';
+            matchesLocation = originLoc.toUpperCase() === activeLocation.toUpperCase();
+        }
+
+        return matchesStatus && matchesSearch && matchesLocation;
+    });
 
     const handleSort = (key: string) => {
         let dir: 'asc' | 'desc' = 'asc';
@@ -888,11 +909,15 @@ const DeliveryOrderManagement: React.FC = () => {
                 factory_id: bestFactory.id,
                 driver_id: selectedDriverId || null,
                 items: newOrderItems,
-                status: editingOrderId ? (orders.find(o => o.id === editingOrderId)?.status || 'New') : 'New',
                 order_date: newOrderDate || new Date().toISOString().split("T")[0],
                 deadline: newOrderDeliveryDate || null,
                 notes: newOrderNotes // Include Batch Notes
             };
+
+            // Only set status for NEW orders. Editing should not overwrite background status changes.
+            if (!editingOrderId) {
+                payload.status = 'New';
+            }
 
             // LEAVE CONFLICT CHECK BEFORE SUBMISSION
             // Fallback to order_date if deadline is not set
@@ -984,7 +1009,7 @@ const DeliveryOrderManagement: React.FC = () => {
         setNewOrderDeliveryDate(getTomorrowStr());
         setNewOrderItems([]);
         setNewOrderNotes(''); // Reset Notes
-        setTripOrigin('TAIPING');
+        setTripOrigin(activeLocation.toUpperCase());
         setTripCategory('');
         setTripDropCount(1);
         setToast(null); // Clear toast on close
@@ -1261,8 +1286,25 @@ const DeliveryOrderManagement: React.FC = () => {
                     />
                 </div>
 
+                {/* Location Split Toggle */}
+                <div className="flex bg-slate-900 p-1 rounded-xl border border-slate-800 self-center max-w-fit">
+                    {['Taiping', 'Nilai'].map(loc => (
+                        <button
+                            key={loc}
+                            onClick={() => setActiveLocation(loc)}
+                            className={`px-4 py-2 rounded-lg text-xs font-bold uppercase tracking-wider transition-all flex items-center gap-1
+                                ${activeLocation === loc
+                                    ? 'bg-emerald-600 text-white shadow-lg shadow-emerald-900/50'
+                                    : 'text-slate-400 hover:bg-slate-800 hover:text-white'
+                                }`}
+                        >
+                            <MapPin size={14} /> {loc}
+                        </button>
+                    ))}
+                </div>
+
                 {/* Status Tabs & View Toggle */}
-                <div className="flex bg-slate-900 p-1 rounded-xl border border-slate-800 justify-between">
+                <div className="flex bg-slate-900 p-1 rounded-xl border border-slate-800 justify-between lg:col-span-1">
                     <div className="flex">
                         {/* Filter Tabs */}
                         {['All', 'Pending Approval', 'Delivered', 'Cancelled'].map(status => (
@@ -1316,11 +1358,13 @@ const DeliveryOrderManagement: React.FC = () => {
                     {/* Add Unassigned Pseudo-Driver if not in list */}
                     {[
                         { uid: 'unassigned', name: '📦 Unassigned / New', email: '', role: 'Driver' } as User,
-                        ...drivers
+                        ...drivers.filter(d => (d.base_location || 'Taiping').toLowerCase() === activeLocation.toLowerCase())
                     ].map(driver => {
                         const driverOrders = filteredOrders
                             .filter(o => {
-                                if (driver.uid === 'unassigned') return !o.driverId; // Match null/undefined
+                                if (driver.uid === 'unassigned') {
+                                    return !o.driverId && (o.trip_origin || 'TAIPING').toUpperCase() === activeLocation.toUpperCase();
+                                }
                                 return o.driverId === driver.uid;
                             })
                             .sort((a, b) => (a.tripSequence || 0) - (b.tripSequence || 0)); // Ensure visual order matches logical order for DnD
@@ -1389,7 +1433,9 @@ const DeliveryOrderManagement: React.FC = () => {
                                                                 setNewOrderAddress(order.deliveryAddress || '');
                                                                 setNewOrderDeliveryDate(order.deadline || '');
                                                                 setNewOrderNotes(order.notes || '');
-                                                                setTripOrigin(order.trip_origin || 'TAIPING');
+                                                                const orderOrigin = order.trip_origin || 'TAIPING';
+                                                                setTripOrigin(orderOrigin);
+                                                                setCurrentItemLoc(orderOrigin === 'NILAI' ? 'Nilai' : 'SPD');
                                                                 setTripCategory(order.zone || '');
                                                                 setTripDropCount(order.trip_drop_count || 1);
 
@@ -1597,7 +1643,9 @@ const DeliveryOrderManagement: React.FC = () => {
                                                 setNewOrderAddress(order.deliveryAddress || '');
                                                 setNewOrderDeliveryDate(order.deadline || '');
                                                 setNewOrderNotes(order.notes || '');
-                                                setTripOrigin(order.trip_origin || 'TAIPING');
+                                                const orderOrigin = order.trip_origin || 'TAIPING';
+                                                setTripOrigin(orderOrigin);
+                                                setCurrentItemLoc(orderOrigin === 'NILAI' ? 'Nilai' : 'SPD');
                                                 setTripCategory(order.zone || '');
                                                 setTripDropCount(order.trip_drop_count || 1);
 
@@ -1736,7 +1784,7 @@ const DeliveryOrderManagement: React.FC = () => {
                                                 }}
                                             />
                                             <datalist id="drivers-list">
-                                                {drivers.map(d => <option key={d.uid} value={d.name || d.email || ''} />)}
+                                                {drivers.filter(d => (d.base_location || 'Taiping').toUpperCase() === tripOrigin).map(d => <option key={d.uid} value={d.name || d.email || ''} />)}
                                             </datalist>
                                         </div>
                                     </div>
@@ -1792,8 +1840,15 @@ const DeliveryOrderManagement: React.FC = () => {
                                         value={newOrderAddress}
                                         onChange={e => {
                                             setNewOrderAddress(e.target.value);
-                                            // Auto-calc drops based on commas
-                                            const drops = e.target.value.split(',').filter(s => s.trim().length > 0).length || 1;
+                                            // Auto-calc drops supporting multipliers (e.g. "Penang x 3, KL")
+                                            const drops = e.target.value.split(',').reduce((total, s) => {
+                                                if (s.trim().length === 0) return total;
+                                                const match = s.match(/[x*]\s*(\d+)/i);
+                                                if (match && match[1]) {
+                                                    return total + parseInt(match[1], 10);
+                                                }
+                                                return total + 1;
+                                            }, 0) || 1;
                                             setTripDropCount(drops);
                                         }}
                                     />
@@ -1805,7 +1860,11 @@ const DeliveryOrderManagement: React.FC = () => {
                                             <select
                                                 className="w-full bg-slate-950 border border-slate-800 rounded-lg px-3 py-2 text-xs text-white focus:border-blue-500/50 outline-none"
                                                 value={tripOrigin}
-                                                onChange={e => setTripOrigin(e.target.value)}
+                                                onChange={e => {
+                                                    const newOrigin = e.target.value;
+                                                    setTripOrigin(newOrigin);
+                                                    setCurrentItemLoc(newOrigin === 'NILAI' ? 'Nilai' : 'SPD');
+                                                }}
                                             >
                                                 <option value="TAIPING">Taiping</option>
                                                 <option value="NILAI">Nilai</option>
@@ -1948,7 +2007,7 @@ const DeliveryOrderManagement: React.FC = () => {
                                                                     }}
                                                                 >
                                                                     <option value="">-- No Location --</option>
-                                                                    {WAREHOUSES.map(loc => <option key={loc} value={loc}>{loc}</option>)}
+                                                                    {WAREHOUSES.filter(w => tripOrigin === 'NILAI' ? w === 'Nilai' : w !== 'Nilai').map(loc => <option key={loc} value={loc}>{loc}</option>)}
                                                                 </select>
                                                             </div>
                                                             <div className="flex items-center gap-2">
@@ -1999,7 +2058,7 @@ const DeliveryOrderManagement: React.FC = () => {
                                                         value={currentItemLoc}
                                                         onChange={e => setCurrentItemLoc(e.target.value)}
                                                     >
-                                                        {WAREHOUSES.map(loc => (
+                                                        {WAREHOUSES.filter(w => tripOrigin === 'NILAI' ? w === 'Nilai' : w !== 'Nilai').map(loc => (
                                                             <option key={loc} value={loc}>{loc}</option>
                                                         ))}
                                                         <option value="">No Loc</option>
