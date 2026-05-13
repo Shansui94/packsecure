@@ -232,8 +232,7 @@ const PersonalMonthlyReport: React.FC<Props> = ({ user }) => {
                     const belongsToMe = attendanceData.some(shift => {
                         if (shift.machine_id !== log.machine_id) return false;
                         const inTime = new Date(shift.clock_in).getTime();
-                        const maxOutTime = inTime + (14 * 60 * 60 * 1000); // 14 hours max duration
-                        const outTime = shift.clock_out ? new Date(shift.clock_out).getTime() : Math.min(new Date().getTime() + 86400000, maxOutTime);
+                        const outTime = shift.clock_out ? new Date(shift.clock_out).getTime() : new Date().getTime();
                         return logTime >= (inTime - 300000) && logTime <= (outTime + 300000);
                     });
                     
