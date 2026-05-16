@@ -6,13 +6,6 @@ import {
     ToggleRight, Star, Award, MapPin, DollarSign, ChevronLeft, ChevronRight, ChevronDown, ChevronUp, Loader, Shield
 } from 'lucide-react';
 
-// ── SUPABASE ADMIN (FOR AUTH MANAGEMENT) ──────────────────────
-import { createClient } from '@supabase/supabase-js';
-const supabaseAdmin = createClient(
-    import.meta.env.VITE_SUPABASE_URL,
-    import.meta.env.VITE_SUPABASE_SERVICE_ROLE_KEY || import.meta.env.VITE_SUPABASE_ANON_KEY
-);
-
 // ── TYPES ────────────────────────────────────────────────────
 interface Employee {
     id: string;
@@ -94,6 +87,15 @@ const EmployeeModal: React.FC<{
 
     const set = (k: keyof Employee, v: any) => setForm(f => ({ ...f, [k]: v }));
 
+    const staffAuthHeaders = async (): Promise<Record<string, string>> => {
+        const { data: { session } } = await supabase.auth.getSession();
+        const headers: Record<string, string> = { 'Content-Type': 'application/json' };
+        if (session?.access_token) {
+            headers.Authorization = `Bearer ${session.access_token}`;
+        }
+        return headers;
+    };
+
     // Auto-generate next PIN for new employees
     useEffect(() => {
         if (!isNew) return;
@@ -124,51 +126,80 @@ const EmployeeModal: React.FC<{
         // 1. SUPABASE AUTH SYNC
         if (isNew && authPassword) {
             try {
-                // Try to use the secure Vercel API first
+                const headers = await staffAuthHeaders();
                 const res = await fetch('/api/manage-employee', {
                     method: 'POST',
-                    headers: { 'Content-Type': 'application/json' },
-                    body: JSON.stringify({ action: 'create', email: validEmail, password: authPassword, name: form.name, role: form.role })
+                    headers,
+                    body: JSON.stringify({
+                        action: 'create',
+                        email: validEmail,
+                        password: authPassword,
+                        name: form.name,
+                        role: form.role,
+                    }),
                 });
-                
+
+                const data = await res.json().catch(() => ({}));
                 if (!res.ok) {
-                    // Fallback to direct supabaseAdmin for local development (npm run dev)
-                    const { data: authData, error: authErr } = await supabaseAdmin.auth.admin.createUser({
-                        email: validEmail, password: authPassword, email_confirm: true, user_metadata: { name: form.name, role: form.role }
-                    });
-                    if (authErr) {
-                        setError('Auth Error: ' + authErr.message + ' (Please check Vercel Env Vars)');
-                        setSaving(false); return;
-                    }
-                    targetAuthId = authData.user.id;
-                } else {
-                    const data = await res.json();
-                    targetAuthId = data.user.id;
+                    setError(data.error || 'Auth API failed. Run npm run dev:all locally or deploy API to Vercel.');
+                    setSaving(false);
+                    return;
+                }
+                targetAuthId = data.user?.id;
+                if (!targetAuthId) {
+                    setError('Auth API did not return a user id.');
+                    setSaving(false);
+                    return;
                 }
             } catch (err: any) {
                 setError('API Error: ' + err.message);
-                setSaving(false); return;
+                setSaving(false);
+                return;
             }
         } else if (authPassword && targetAuthId) {
-            // Update password if PIN is supplied
             try {
-                await fetch('/api/manage-employee', {
-                    method: 'POST', headers: { 'Content-Type': 'application/json' },
-                    body: JSON.stringify({ action: 'update_password', targetAuthId, password: authPassword })
+                const headers = await staffAuthHeaders();
+                const res = await fetch('/api/manage-employee', {
+                    method: 'POST',
+                    headers,
+                    body: JSON.stringify({ action: 'update_password', targetAuthId, password: authPassword }),
                 });
-                await supabaseAdmin.auth.admin.updateUserById(targetAuthId, { password: authPassword });
-            } catch (e) { console.error(e); }
+                if (!res.ok) {
+                    const data = await res.json().catch(() => ({}));
+                    setError(data.error || 'Failed to update login password from PIN.');
+                    setSaving(false);
+                    return;
+                }
+            } catch (e: any) {
+                setError(e.message || 'Password update failed');
+                setSaving(false);
+                return;
+            }
         }
 
-        // Separately: if admin explicitly typed a new login password, update Auth password directly
         if (!isNew && newPassword.trim().length >= 6 && targetAuthId) {
             try {
-                await fetch('/api/manage-employee', {
-                    method: 'POST', headers: { 'Content-Type': 'application/json' },
-                    body: JSON.stringify({ action: 'update_password', targetAuthId, password: newPassword.trim() })
+                const headers = await staffAuthHeaders();
+                const res = await fetch('/api/manage-employee', {
+                    method: 'POST',
+                    headers,
+                    body: JSON.stringify({
+                        action: 'update_password',
+                        targetAuthId,
+                        password: newPassword.trim(),
+                    }),
                 });
-                await supabaseAdmin.auth.admin.updateUserById(targetAuthId, { password: newPassword.trim() });
-            } catch (e) { console.error(e); }
+                if (!res.ok) {
+                    const data = await res.json().catch(() => ({}));
+                    setError(data.error || 'Failed to reset login password.');
+                    setSaving(false);
+                    return;
+                }
+            } catch (e: any) {
+                setError(e.message || 'Password reset failed');
+                setSaving(false);
+                return;
+            }
         }
 
         const payload: any = {

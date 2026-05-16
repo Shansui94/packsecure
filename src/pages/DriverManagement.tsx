@@ -1,7 +1,7 @@
 import { useState, useEffect } from 'react';
 import { supabase } from '../services/supabase';
 import { User } from '../types';
-import { UserPlus, Users, Copy, Check, X, Eye, EyeOff, Truck, BadgeCheck, Trash2, AlertTriangle } from 'lucide-react';
+import { UserPlus, Users, Copy, Check, X, Truck, BadgeCheck, Trash2, AlertTriangle } from 'lucide-react';
 
 interface DriverManagementProps {
     currentUser: User | null;
@@ -36,8 +36,6 @@ const DriverManagement: React.FC<DriverManagementProps> = (_props) => {
     // Form
     const [formName, setFormName] = useState('');
     const [formId, setFormId] = useState('');
-    const [formPassword, setFormPassword] = useState('');
-    const [showPassword, setShowPassword] = useState(false);
     const [copied, setCopied] = useState<string | null>(null);
     const [deleteTarget, setDeleteTarget] = useState<DriverProfile | null>(null);
     const [isDeleting, setIsDeleting] = useState(false);
@@ -69,7 +67,6 @@ const DriverManagement: React.FC<DriverManagementProps> = (_props) => {
     const openModal = () => {
         setFormName('');
         setFormId('');
-        setFormPassword('');
         setError('');
         setNewDriver(null);
         setIsModalOpen(true);
@@ -83,7 +80,12 @@ const DriverManagement: React.FC<DriverManagementProps> = (_props) => {
 
     const handleSubmit = async () => {
         if (!formName.trim() || !formId.trim()) {
-            setError('请填写司机姓名和员工编号。');
+            setError('请填写司机姓名和 4 位员工编号。');
+            return;
+        }
+        const pin = formId.replace(/\D/g, '');
+        if (pin.length !== 4) {
+            setError('员工编号必须为 4 位数字（即登录 PIN）。');
             return;
         }
         setIsSubmitting(true);
@@ -101,15 +103,20 @@ const DriverManagement: React.FC<DriverManagementProps> = (_props) => {
                 },
                 body: JSON.stringify({
                     name: formName.trim(),
-                    employeeId: formId.trim(),
-                    password: formPassword.trim() || undefined
+                    employeeId: pin,
                 })
             });
 
             const json = await res.json();
             if (!res.ok) throw new Error(json.error || 'Failed to create driver');
 
-            setNewDriver(json.driver);
+            setNewDriver({
+                uid: json.driver.uid,
+                name: json.driver.name,
+                email: json.driver.email,
+                employeeId: json.driver.employeeId,
+                password: json.driver.pin || pin,
+            });
             fetchDrivers(); // Refresh list
 
         } catch (e: any) {
@@ -271,35 +278,19 @@ const DriverManagement: React.FC<DriverManagementProps> = (_props) => {
 
                                     {/* Employee ID */}
                                     <div>
-                                        <label className="block text-gray-400 text-sm mb-1">Employee ID <span className="text-red-400">*</span></label>
+                                        <label className="block text-gray-400 text-sm mb-1">4-Digit Employee ID / PIN <span className="text-red-400">*</span></label>
                                         <input
                                             type="text"
+                                            inputMode="numeric"
+                                            maxLength={4}
                                             value={formId}
-                                            onChange={e => setFormId(e.target.value)}
+                                            onChange={e => setFormId(e.target.value.replace(/\D/g, '').slice(0, 4))}
                                             placeholder="e.g. 5563"
                                             className="w-full bg-gray-800 border border-gray-700 rounded-lg p-3 text-white font-mono focus:border-yellow-500 focus:outline-none transition-colors"
                                         />
-                                    </div>
-
-                                    {/* Password */}
-                                    <div>
-                                        <label className="block text-gray-400 text-sm mb-1">Password <span className="text-gray-500 text-xs">(leave blank to auto-generate)</span></label>
-                                        <div className="relative">
-                                            <input
-                                                type={showPassword ? 'text' : 'password'}
-                                                value={formPassword}
-                                                onChange={e => setFormPassword(e.target.value)}
-                                                placeholder="Auto-generate if empty"
-                                                className="w-full bg-gray-800 border border-gray-700 rounded-lg p-3 pr-10 text-white font-mono focus:border-yellow-500 focus:outline-none transition-colors"
-                                            />
-                                            <button
-                                                type="button"
-                                                onClick={() => setShowPassword(!showPassword)}
-                                                className="absolute right-3 top-1/2 -translate-y-1/2 text-gray-400 hover:text-white"
-                                            >
-                                                {showPassword ? <EyeOff className="w-4 h-4" /> : <Eye className="w-4 h-4" />}
-                                            </button>
-                                        </div>
+                                        <p className="text-xs text-gray-500 mt-1.5">
+                                            Staff portal login: 4-digit ID + same 4-digit PIN (company policy).
+                                        </p>
                                     </div>
 
                                     {/* Email Preview */}
@@ -360,7 +351,7 @@ const DriverManagement: React.FC<DriverManagementProps> = (_props) => {
                                     {/* Password */}
                                     <div className="bg-gray-800 border border-gray-700 rounded-lg p-3 flex justify-between items-center">
                                         <div>
-                                            <p className="text-xs text-gray-500 mb-0.5">Password</p>
+                                            <p className="text-xs text-gray-500 mb-0.5">4-Digit Login PIN</p>
                                             <p className="text-white font-mono text-lg font-bold tracking-widest">{newDriver.password}</p>
                                         </div>
                                         <button onClick={() => copyToClipboard(newDriver.password, 'pw')} className="text-gray-400 hover:text-white transition-colors p-1">

@@ -2,6 +2,7 @@
 import React, { useState } from 'react';
 import { Mail, Lock } from 'lucide-react'; // Added Mail, Lock
 import { supabase } from '../services/supabase';
+import { loginPasswordFromInput } from '../utils/pinAuth';
 
 interface LoginProps {
     onLogin: (email: string | null, gps: string, role: string) => void;
@@ -73,29 +74,41 @@ const Login: React.FC<LoginProps> = ({ onLogin, onNavigate }) => {
         try {
             let loginEmail = email.trim();
 
-            // 1. Resolve Employee ID to Email
-            // If input does NOT contain '@', assume it is an Employee ID
-            // Use sys_users_v2 as the single source of truth
+            // 1. Resolve Employee ID to Email (4-digit ID — staff + drivers)
             if (!loginEmail.includes('@')) {
-                const { data, error: fetchError } = await supabase
+                const empId = loginEmail.replace(/\D/g, '');
+                if (empId.length !== 4) {
+                    throw new Error('Employee ID must be 4 digits.');
+                }
+                let resolvedEmail: string | null = null;
+
+                const { data: v2User } = await supabase
                     .from('sys_users_v2')
                     .select('email')
-                    .eq('employee_id', loginEmail)
-                    .single();
+                    .eq('employee_id', empId)
+                    .maybeSingle();
 
-                if (fetchError || !data || !data.email) {
-                    throw new Error("Invalid Employee ID or User not found.");
+                if (v2User?.email) {
+                    resolvedEmail = v2User.email;
+                } else {
+                    const { data: pubUser } = await supabase
+                        .from('users_public')
+                        .select('email')
+                        .eq('employee_id', empId)
+                        .maybeSingle();
+                    resolvedEmail = pubUser?.email ?? null;
                 }
 
-                console.log(`Resolved ID ${loginEmail} to ${data.email}`);
-                loginEmail = data.email;
+                if (!resolvedEmail) {
+                    throw new Error('Invalid Employee ID or User not found.');
+                }
+
+                console.log(`Resolved ID ${empId} to ${resolvedEmail}`);
+                loginEmail = resolvedEmail;
             }
 
-            // 2. Perform Standard Auth
-            // Accounts created via HR Portal have passwords stored as PIN + '00' (6 chars)
-            // to meet Supabase minimum length. Auto-complete transparently here.
-            const is4Digit = /^\d{4}$/.test(staffPassword);
-            const finalPassword = is4Digit ? `${staffPassword}00` : staffPassword;
+            // 2. Auth: company policy — 4-digit PIN → stored as PIN + "00"
+            const finalPassword = loginPasswordFromInput(staffPassword);
 
             const { data, error } = await supabase.auth.signInWithPassword({
                 email: loginEmail,
