@@ -239,17 +239,17 @@ const ProductionLane: React.FC<ProductionLaneProps> = ({ laneId, machineMetadata
     const canProduceDL = !machineMetadata || machineMetadata.name?.includes('Double Layer');
 
     return (
-        <div className={`flex-1 bg-black/20 backdrop-blur-md border border-white/5 rounded-3xl p-1 relative overflow-hidden flex flex-col min-h-[500px] ${className}`}>
+        <div className={`flex-1 apple-glass rounded-3xl p-1 relative overflow-hidden flex flex-col min-h-[500px] shadow-lg border border-black/5 dark:border-white/10 ${className}`}>
             {/* Lane Badge */}
             {laneId !== 'Single' && (
-                <div className={`absolute top-0 right-0 px-3 py-1 text-xs font-bold uppercase rounded-bl-xl border-l border-b border-white/10 z-20 ${laneId === 'Left' || laneId === 'Lane1' ? 'bg-cyan-500/20 text-cyan-400' : 'bg-purple-500/20 text-purple-400'
+                <div className={`absolute top-0 right-0 px-3 py-1 text-xs font-bold uppercase rounded-bl-xl border-l border-b border-black/5 dark:border-white/10 z-20 ${laneId === 'Left' || laneId === 'Lane1' ? 'bg-apple-blue/10 text-apple-blue' : 'bg-purple-500/10 text-purple-500'
                     }`}>
                     {laneId === 'Left' || laneId === 'Right' ? `${laneId} Lane` : laneId}
                 </div>
             )}
 
             {/* PROGRESS BAR */}
-            <div className="flex border-b border-white/5 bg-black/20">
+            <div className="flex border-b border-black/5 dark:border-white/10 bg-black/[0.02] dark:bg-white/[0.02]">
                 {[
                     { id: 1, label: "01. TYPE", icon: Layers },
                     { id: 2, label: "02. SIZE", icon: Box },
@@ -262,14 +262,14 @@ const ProductionLane: React.FC<ProductionLaneProps> = ({ laneId, machineMetadata
                         <div
                             key={s.id}
                             className={`flex-1 py-4 text-center relative transition-all duration-500 flex items-center justify-center gap-2
-                                ${isActive ? (laneId === 'Left' || laneId === 'Single' ? 'text-cyan-400 bg-cyan-500/5' : 'text-purple-400 bg-purple-500/5') : ''}
-                                ${isPast ? 'text-blue-500' : 'text-gray-600'}
+                                ${isActive ? (laneId === 'Left' || laneId === 'Single' ? 'text-apple-blue bg-apple-blue/5' : 'text-purple-500 bg-purple-500/5') : ''}
+                                ${isPast ? 'text-apple-textMain dark:text-white' : 'text-apple-textMuted'}
                             `}
                         >
                             <Icon size={16} className={isActive ? 'animate-bounce' : ''} />
                             <span className={`hidden md:inline text-xs font-bold tracking-widest ${isActive ? 'opacity-100' : 'opacity-60'}`}>{s.label}</span>
                             {isActive && (
-                                <div className={`absolute bottom-0 left-0 w-full h-0.5 shadow-[0_0_10px_rgba(6,182,212,0.8)] ${laneId === 'Left' || laneId === 'Single' ? 'bg-cyan-500' : 'bg-purple-500'
+                                <div className={`absolute bottom-0 left-0 w-full h-0.5 shadow-sm ${laneId === 'Left' || laneId === 'Single' ? 'bg-apple-blue' : 'bg-purple-500'
                                     }`}></div>
                             )}
                         </div>
@@ -303,18 +303,18 @@ const ProductionLane: React.FC<ProductionLaneProps> = ({ laneId, machineMetadata
                                         key={idx}
                                         onClick={() => handleTypeSelect(item.layer as any, item.mat as any)}
                                         className={`
-                                            relative group rounded-3xl border-2 ${item.border} ${item.bg} overflow-hidden
+                                            relative group rounded-3xl border ${item.bg === 'bg-white/10' ? 'border-apple-blue' : 'border-black/5 dark:border-white/10'} bg-black/5 dark:bg-white/5 overflow-hidden
                                             hover:scale-[1.02] active:scale-95 transition-all duration-300 flex flex-col justify-between
-                                            hover:shadow-xl hover:border-white/80
+                                            hover:shadow-xl hover:border-apple-blue
                                             ${item.isSmall ? 'min-h-[80px] p-2' : 'min-h-[140px] p-0'}
-                                            ${item.glow ? 'shadow-[0_0_20px_rgba(59,130,246,0.2)]' : ''}
+                                            ${item.glow ? 'shadow-apple-card' : ''}
                                         `}
                                     >
-                                        <div className={`${item.isSmall ? 'h-1/2' : 'h-2/3'} w-full relative bg-black/20 ${item.isSmall ? 'p-1' : 'p-2'}`}>
+                                        <div className={`${item.isSmall ? 'h-1/2' : 'h-2/3'} w-full relative bg-black/5 dark:bg-black/20 ${item.isSmall ? 'p-1' : 'p-2'}`}>
                                             <img src={item.img} alt={item.label} className="w-full h-full object-contain drop-shadow-xl" />
                                         </div>
-                                        <div className={`${item.isSmall ? 'h-1/2' : 'h-1/3'} w-full flex items-center justify-center bg-white/5 border-t border-white/5`}>
-                                            <span className={`${item.isSmall ? 'text-[10px]' : 'text-xs md:text-sm'} font-black text-white uppercase`}>{item.label}</span>
+                                        <div className={`${item.isSmall ? 'h-1/2' : 'h-1/3'} w-full flex items-center justify-center bg-white/50 dark:bg-white/5 border-t border-black/5 dark:border-white/5`}>
+                                            <span className={`${item.isSmall ? 'text-[10px]' : 'text-xs md:text-sm'} font-black text-apple-textMain dark:text-white uppercase`}>{item.label}</span>
                                         </div>
                                     </button>
                                 ))}
@@ -326,8 +326,8 @@ const ProductionLane: React.FC<ProductionLaneProps> = ({ laneId, machineMetadata
                 {step === 2 && (
                     <div className="flex flex-col h-full animate-slide-up">
                         <div className="flex items-center justify-between mb-4">
-                            <span className="text-gray-400 text-xs font-mono uppercase">Select Size</span>
-                            <button onClick={() => setStep(1)} className="text-xs font-bold text-gray-500 hover:text-white px-2 py-1 rounded hover:bg-white/10">BACK</button>
+                            <span className="text-apple-textMuted text-xs font-mono uppercase">Select Size</span>
+                            <button onClick={() => setStep(1)} className="text-xs font-bold text-apple-textMuted hover:text-apple-textMain dark:hover:text-white px-2 py-1 rounded hover:bg-black/5 dark:hover:bg-white/10">BACK</button>
                         </div>
                         <div className="grid grid-cols-2 gap-3">
                             {PRODUCT_SIZES.map(size => {
@@ -339,14 +339,14 @@ const ProductionLane: React.FC<ProductionLaneProps> = ({ laneId, machineMetadata
                                         disabled={isDisabled}
                                         className={`relative group rounded-2xl py-6 flex flex-col items-center gap-1 transition-all
                                             ${isDisabled
-                                                ? 'bg-gray-900/40 border-2 border-red-500/10 opacity-40 cursor-not-allowed'
-                                                : 'bg-gray-800/60 hover:bg-cyan-900/40 border-2 border-white/10 hover:border-cyan-400 active:scale-95'}
+                                                ? 'bg-black/5 dark:bg-white/5 border border-apple-red/20 opacity-40 cursor-not-allowed'
+                                                : 'apple-card hover:bg-apple-blue/5 border border-black/5 dark:border-white/10 hover:border-apple-blue active:scale-95'}
                                         `}
                                     >
-                                        <span className="text-3xl font-black text-white">{size.label.replace(/[^0-9]/g, '')}</span>
-                                        <span className="text-xs text-gray-400">{size.rolls} Rolls</span>
+                                        <span className="text-3xl font-black text-apple-textMain dark:text-white">{size.label.replace(/[^0-9]/g, '')}</span>
+                                        <span className="text-xs text-apple-textMuted">{size.rolls} Rolls</span>
                                         {isDisabled && (
-                                            <div className="absolute top-2 right-2 flex items-center gap-1 bg-red-500/10 text-red-500 text-[9px] px-1.5 py-0.5 rounded font-bold uppercase">
+                                            <div className="absolute top-2 right-2 flex items-center gap-1 bg-apple-red/10 text-apple-red text-[9px] px-1.5 py-0.5 rounded font-bold uppercase">
                                                 <span>✕ N/A</span>
                                             </div>
                                         )}
@@ -373,25 +373,25 @@ const ProductionLane: React.FC<ProductionLaneProps> = ({ laneId, machineMetadata
                         <div className="h-full flex flex-col gap-4 animate-slide-up">
                             {/* Visualizer Compact */}
                             <div
-                                className={`p-4 rounded-2xl border-2 bg-black/40 relative overflow-hidden flex items-center justify-between transition-colors duration-300`}
+                                className={`p-4 rounded-2xl border bg-black/5 dark:bg-white/5 relative overflow-hidden flex items-center justify-between transition-colors duration-300`}
                                 style={{ borderColor: theme.hex }}
                             >
-                                <div className="absolute inset-0 opacity-50 transition-colors duration-300" style={{ backgroundColor: theme.hex }}></div>
+                                <div className="absolute inset-0 opacity-10 transition-colors duration-300" style={{ backgroundColor: theme.hex }}></div>
                                 <div className="relative z-10">
-                                    <div className="text-[10px] text-white/80 uppercase font-bold tracking-wider">Pack Color</div>
+                                    <div className="text-[10px] text-apple-textMuted uppercase font-bold tracking-wider">Pack Color</div>
                                     <div
                                         className="text-3xl font-black flex items-center gap-2 drop-shadow-md"
-                                        style={{ color: '#FFF', textShadow: `0 0 10px ${theme.hex}` }}
+                                        style={{ color: theme.hex }}
                                     >
                                         {derivedPackaging === 'Pink' ? 'RED' : derivedPackaging.toUpperCase()}
 
                                     </div>
                                     <div className="flex gap-2 mt-1">
-                                        <span className="text-[10px] bg-black/40 px-2 py-0.5 rounded text-white">{selectedLayer}</span>
-                                        <span className="text-[10px] bg-black/40 px-2 py-0.5 rounded text-white">{selectedSize}</span>
+                                        <span className="text-[10px] bg-black/5 dark:bg-white/10 px-2 py-0.5 rounded text-apple-textMain dark:text-white">{selectedLayer}</span>
+                                        <span className="text-[10px] bg-black/5 dark:bg-white/10 px-2 py-0.5 rounded text-apple-textMain dark:text-white">{selectedSize}</span>
                                     </div>
                                 </div>
-                                <button onClick={() => setStep(2)} className="relative z-10 px-3 py-1 bg-white/10 hover:bg-white/20 rounded-lg text-xs text-white">Change</button>
+                                <button onClick={() => setStep(2)} className="relative z-10 px-3 py-1 bg-black/5 dark:bg-white/10 hover:bg-black/10 dark:hover:bg-white/20 rounded-lg text-xs text-apple-textMain dark:text-white">Change</button>
                             </div>
 
 
@@ -437,28 +437,28 @@ const ProductionLane: React.FC<ProductionLaneProps> = ({ laneId, machineMetadata
                                 {isLiveRun ? (
                                     <div className="w-full flex flex-col items-center animate-fade-in-up">
                                         <div className="text-center mb-4">
-                                            <div className="text-green-400 font-bold text-xs uppercase tracking-[0.2em] mb-1 animate-pulse">Live Production Active</div>
-                                            <div className="text-[80px] font-black text-white leading-none tabular-nums drop-shadow-[0_0_30px_rgba(74,222,128,0.5)]">
+                                            <div className="text-apple-green font-bold text-xs uppercase tracking-[0.2em] mb-1 animate-pulse">Live Production Active</div>
+                                            <div className="text-[80px] font-black text-apple-textMain dark:text-white leading-none tabular-nums drop-shadow-md">
                                                 {liveCount}
                                             </div>
-                                            <div className="text-gray-400 text-xs font-mono">Units Produced This Session</div>
+                                            <div className="text-apple-textMuted text-xs font-mono">Units Produced This Session</div>
                                         </div>
 
                                         <button
                                             onClick={toggleProductionRun}
-                                            className="w-full py-4 bg-red-600 hover:bg-red-500 rounded-xl font-black text-white shadow-lg border-2 border-red-400/50 active:scale-95 transition-all text-lg flex items-center justify-center gap-2"
+                                            className="w-full py-4 bg-apple-red/10 hover:bg-apple-red/20 rounded-2xl font-black text-apple-red border border-apple-red/20 active:scale-95 transition-all text-lg flex items-center justify-center gap-2"
                                         >
-                                            <div className="w-3 h-3 bg-white rounded-sm"></div>
+                                            <div className="w-3 h-3 bg-apple-red rounded-sm"></div>
                                             STOP RUN
                                         </button>
                                     </div>
                                 ) : (
                                     <button
                                         onClick={toggleProductionRun}
-                                        className="w-full h-32 bg-green-600 hover:bg-green-500 rounded-2xl font-black text-white shadow-[0_0_40px_rgba(22,163,74,0.3)] border-b-8 border-green-800 active:border-b-0 active:translate-y-2 transition-all text-2xl flex flex-col items-center justify-center gap-2 group"
+                                        className="w-full h-32 bg-apple-green/10 hover:bg-apple-green/20 rounded-2xl font-black text-apple-green border border-apple-green/20 active:scale-95 transition-all text-2xl flex flex-col items-center justify-center gap-2 group"
                                     >
-                                        <div className="w-12 h-12 rounded-full border-4 border-white flex items-center justify-center group-hover:scale-110 transition-transform">
-                                            <div className="w-0 h-0 border-t-[8px] border-t-transparent border-l-[14px] border-l-white border-b-[8px] border-b-transparent ml-1"></div>
+                                        <div className="w-12 h-12 rounded-full border-[3px] border-apple-green flex items-center justify-center group-hover:scale-110 transition-transform">
+                                            <div className="w-0 h-0 border-t-[8px] border-t-transparent border-l-[14px] border-l-apple-green border-b-[8px] border-b-transparent ml-1"></div>
                                         </div>
                                         START RUN
                                         <span className="text-xs font-normal opacity-80">Set Machine to This Product</span>
@@ -794,26 +794,22 @@ const ProductionControl: React.FC<ProductionControlProps> = ({ user, jobs = [] }
     // Let's modify ProductionLane to accept an `onBeforeProduce` prop.
 
     return (
-        <div className="min-h-screen bg-slate-900 text-white font-sans selection:bg-cyan-500/30 overflow-x-hidden relative">
-            <div className="fixed inset-0 z-0 pointer-events-none">
-                <div className="absolute top-[-10%] left-[-10%] w-[50%] h-[50%] bg-purple-900/20 rounded-full blur-[120px] animate-pulse"></div>
-            </div>
-
+        <div className="min-h-screen text-apple-textMain dark:text-white font-sans selection:bg-apple-blue/30 overflow-x-hidden relative animate-fade-in">
             <div className="relative z-10 max-w-6xl mx-auto p-4 md:p-6 flex flex-col min-h-screen">
 
                 {/* HEADER */}
-                <header className="flex justify-between items-center mb-6 bg-black/40 backdrop-blur-xl border border-white/10 p-4 rounded-2xl shadow-xl sticky top-4 z-50">
+                <header className="flex justify-between items-center mb-6 apple-glass px-6 py-4 rounded-3xl shadow-xl sticky top-4 z-50 border border-black/5 dark:border-white/10">
                     <div>
-                        <h2 className="text-xl md:text-2xl font-black text-transparent bg-clip-text bg-gradient-to-r from-cyan-400 to-blue-500 flex items-center gap-2">
-                            <Settings className="text-cyan-400" size={24} />
-                            PRODUCTION CONTROL <span className="text-xs text-gray-500 ml-2 font-mono">v4.7</span>                        </h2>
+                        <h2 className="text-xl md:text-2xl font-black text-apple-textMain dark:text-white flex items-center gap-2">
+                            <Settings className="text-apple-blue" size={24} />
+                            PRODUCTION CONTROL <span className="text-xs text-apple-textMuted ml-2 font-mono">v4.7</span>                        </h2>
                         {selectedMachine && (
                             <div className="flex items-center gap-2 mt-1">
-                                <span className="text-green-400 font-mono text-xs uppercase tracking-widest flex items-center gap-1">
-                                    <div className="h-2 w-2 rounded-full bg-green-500 animate-pulse"></div>
+                                <span className="text-apple-green font-mono text-xs uppercase tracking-widest flex items-center gap-1">
+                                    <div className="h-2 w-2 rounded-full bg-apple-green animate-pulse"></div>
                                     Standard Mode
                                 </span>
-                                <span className="text-gray-500 text-xs">| {currentMachineName}</span>
+                                <span className="text-apple-textMuted text-xs">| {currentMachineName}</span>
                             </div>
                         )}
                     </div>
@@ -880,8 +876,8 @@ const ProductionControl: React.FC<ProductionControlProps> = ({ user, jobs = [] }
                         <div className="w-full max-w-2xl">
                             <div className="text-center mb-8">
                                 <div className="text-5xl mb-3">🏭</div>
-                                <h2 className="text-2xl font-black text-white mb-1">Select Machine</h2>
-                                <p className="text-gray-400 text-sm">Choose the machine for this production session</p>
+                                <h2 className="text-2xl font-black text-apple-textMain dark:text-white mb-1">Select Machine</h2>
+                                <p className="text-apple-textMuted text-sm">Choose the machine for this production session</p>
                             </div>
                             <div className="grid grid-cols-2 md:grid-cols-3 gap-3">
                                 {machines.filter(m => m.type !== 'Extruder' || m.base_width !== 50).map(m => (
@@ -892,11 +888,11 @@ const ProductionControl: React.FC<ProductionControlProps> = ({ user, jobs = [] }
                                             localStorage.setItem('device_machine_id', m.machine_id);
                                             setSelectedMachine(m.machine_id);
                                         }}
-                                        className="bg-black/40 border-2 border-white/10 hover:border-cyan-500/60 hover:bg-cyan-500/5 rounded-2xl p-5 text-left transition-all group"
+                                        className="apple-card p-5 text-left transition-all hover:scale-105 group border border-black/5 dark:border-white/10"
                                     >
-                                        <div className="text-[10px] text-gray-500 font-mono uppercase tracking-widest mb-1">{m.factory_id}</div>
-                                        <div className="text-white font-black text-sm leading-tight mb-2">{m.name}</div>
-                                        <div className="text-cyan-400 font-mono text-xs bg-cyan-500/10 px-2 py-0.5 rounded-full inline-block">{m.machine_id}</div>
+                                        <div className="text-[10px] text-apple-textMuted font-mono uppercase tracking-widest mb-1">{m.factory_id}</div>
+                                        <div className="text-apple-textMain dark:text-white font-black text-sm leading-tight mb-2 group-hover:text-apple-blue transition-colors">{m.name}</div>
+                                        <div className="text-apple-blue font-mono text-xs bg-apple-blue/10 px-2 py-0.5 rounded-full inline-block">{m.machine_id}</div>
                                     </button>
                                 ))}
                             </div>
@@ -1038,24 +1034,24 @@ const ProductionControl: React.FC<ProductionControlProps> = ({ user, jobs = [] }
                         )}
 
                         {/* LOGS */}
-                        <div className="bg-black/40 backdrop-blur-xl border border-white/10 rounded-2xl overflow-hidden">
-                            <div className="px-4 py-3 border-b border-white/5 bg-black/20 flex justify-between items-center">
-                                <h4 className="text-xs font-bold text-gray-400 uppercase tracking-widest">
+                        <div className="apple-card p-0 rounded-2xl overflow-hidden border border-black/5 dark:border-white/10">
+                            <div className="px-4 py-3 border-b border-black/5 dark:border-white/10 bg-black/[0.02] dark:bg-white/[0.02] flex justify-between items-center">
+                                <h4 className="text-xs font-bold text-apple-textMuted uppercase tracking-widest">
                                     Recent Activity
-                                    {operatorId && <span className="ml-2 text-[9px] text-gray-600 font-mono">({operatorId.slice(0, 4)})</span>}
+                                    {operatorId && <span className="ml-2 text-[9px] font-mono">({operatorId.slice(0, 4)})</span>}
                                 </h4>
-                                <span className="text-[10px] text-cyan-500 font-mono">{recentLogs.length} Records</span>
+                                <span className="text-[10px] text-apple-blue font-mono">{recentLogs.length} Records</span>
                             </div>
                             <div className="max-h-48 overflow-y-auto custom-scrollbar">
                                 {recentLogs.map((log) => (
-                                    <div key={log.Log_ID} className="px-4 py-2 border-b border-white/5 hover:bg-white/5 flex justify-between items-center">
+                                    <div key={log.Log_ID} className="px-4 py-2 border-b border-black/5 dark:border-white/5 hover:bg-black/5 dark:hover:bg-white/5 flex justify-between items-center transition-colors">
                                         <div>
-                                            <div className="text-xs font-bold text-gray-200">
+                                            <div className="text-xs font-bold text-apple-textMain dark:text-gray-200">
                                                 {log.Note?.includes('V2 Production:') ? log.Note.replace('V2 Production: ', '') : log.Note}
                                             </div>
-                                            <div className="text-[10px] text-gray-500">{new Date(log.Timestamp).toLocaleTimeString()}</div>
+                                            <div className="text-[10px] text-apple-textMuted">{new Date(log.Timestamp).toLocaleTimeString()}</div>
                                         </div>
-                                        <div className="text-sm font-black text-cyan-500">+{log.Output_Qty}</div>
+                                        <div className="text-sm font-black text-apple-blue">+{log.Output_Qty}</div>
                                     </div>
                                 ))}
                             </div>
@@ -1065,18 +1061,18 @@ const ProductionControl: React.FC<ProductionControlProps> = ({ user, jobs = [] }
 
                 {/* PIN MODAL */}
                 {isLoginModalOpen && (
-                    <div className="fixed inset-0 z-[200] bg-black/90 backdrop-blur-xl flex items-center justify-center p-4">
-                        <div className="bg-gray-900 border border-white/10 rounded-3xl p-8 w-full max-w-sm shadow-2xl relative">
+                    <div className="fixed inset-0 z-[200] bg-black/40 dark:bg-black/80 backdrop-blur-md flex items-center justify-center p-4">
+                        <div className="apple-card p-8 w-full max-w-sm shadow-2xl relative animate-scale-in">
                             <button
                                 onClick={() => setIsLoginModalOpen(false)}
-                                className="absolute top-4 right-4 text-gray-500 hover:text-white"
+                                className="absolute top-4 right-4 text-apple-textMuted hover:text-apple-textMain dark:hover:text-white transition-colors"
                             >
-                                <div className="bg-white/10 p-2 rounded-full"><span className="text-xl">✕</span></div>
+                                <div className="bg-black/5 dark:bg-white/10 p-2 rounded-full"><span className="text-xl">✕</span></div>
                             </button>
 
                             <div className="text-center mb-8">
-                                <h2 className="text-2xl font-black text-white mb-2">{isLogoutMode ? 'CLOCK OUT' : 'OPERATOR LOGIN'}</h2>
-                                <p className="text-gray-400 text-sm">输入 4 位工号 (Enter 4-digit Operator ID)</p>
+                                <h2 className="text-2xl font-black text-apple-textMain dark:text-white mb-2">{isLogoutMode ? 'CLOCK OUT' : 'OPERATOR LOGIN'}</h2>
+                                <p className="text-apple-textMuted text-sm">输入 4 位工号 (Enter 4-digit Operator ID)</p>
                             </div>
 
                             {/* PIN DOTS */}
@@ -1087,14 +1083,14 @@ const ProductionControl: React.FC<ProductionControlProps> = ({ user, jobs = [] }
                                         className={`w-4 h-4 rounded-full transition-all duration-200 ${
                                             // Show filled valid dots
                                             i < pinCode.length
-                                                ? (loginError ? 'bg-red-500' : 'bg-green-400')
-                                                : 'bg-gray-700'
+                                                ? (loginError ? 'bg-apple-red' : 'bg-apple-green')
+                                                : 'bg-black/10 dark:bg-white/10'
                                             }`}
                                     ></div>
                                 ))}
                             </div>
 
-                            {loginError && <div className="text-red-400 text-center font-bold mb-4 animate-shake">{loginError}</div>}
+                            {loginError && <div className="text-apple-red text-center font-bold mb-4 animate-shake">{loginError}</div>}
 
                             {/* KEYPAD */}
                             <div className="grid grid-cols-3 gap-4">
@@ -1102,7 +1098,7 @@ const ProductionControl: React.FC<ProductionControlProps> = ({ user, jobs = [] }
                                     <button
                                         key={num}
                                         onClick={() => handlePinPress(num)}
-                                        className="h-16 rounded-2xl bg-gray-800 text-2xl font-bold text-white hover:bg-gray-700 active:bg-gray-600 transition-colors border border-white/5"
+                                        className="h-16 rounded-2xl bg-black/5 dark:bg-white/5 text-2xl font-bold text-apple-textMain dark:text-white hover:bg-black/10 dark:hover:bg-white/10 active:bg-black/20 dark:active:bg-white/20 transition-colors border border-black/5 dark:border-white/10"
                                     >
                                         {num}
                                     </button>
@@ -1110,13 +1106,13 @@ const ProductionControl: React.FC<ProductionControlProps> = ({ user, jobs = [] }
                                 <div className="col-span-1"></div>
                                 <button
                                     onClick={() => handlePinPress(0)}
-                                    className="h-16 rounded-2xl bg-gray-800 text-2xl font-bold text-white hover:bg-gray-700 active:bg-gray-600 transition-colors border border-white/5"
+                                    className="h-16 rounded-2xl bg-black/5 dark:bg-white/5 text-2xl font-bold text-apple-textMain dark:text-white hover:bg-black/10 dark:hover:bg-white/10 active:bg-black/20 dark:active:bg-white/20 transition-colors border border-black/5 dark:border-white/10"
                                 >
                                     0
                                 </button>
                                 <button
                                     onClick={handleClearPin}
-                                    className="h-16 rounded-2xl bg-red-900/40 text-red-400 font-bold hover:bg-red-900/60 active:bg-red-900 transition-colors border border-red-500/20 flex items-center justify-center"
+                                    className="h-16 rounded-2xl bg-apple-red/10 text-apple-red font-bold hover:bg-apple-red/20 active:bg-apple-red/30 transition-colors border border-apple-red/20 flex items-center justify-center"
                                 >
                                     CLR
                                 </button>

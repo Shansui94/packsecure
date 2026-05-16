@@ -82,9 +82,11 @@ const PersonalMonthlyReport: React.FC<Props> = ({ user }) => {
             // If Manager/HR/Admin/SuperAdmin, fetch all employees
             const role = data?.role || user.role;
             if (['SuperAdmin', 'Admin', 'Manager', 'HR'].includes(role)) {
+                // HR Portal persists status as lowercase 'active'; Driver API / others may use 'Active'
+                const activeStatuses = ['Active', 'active'];
                 const [v2Res, pubRes] = await Promise.all([
-                    supabase.from('sys_users_v2').select('auth_user_id, name, employee_id, role, status').eq('status', 'Active'),
-                    supabase.from('users_public').select('id, name, employee_id, role, status').eq('status', 'Active')
+                    supabase.from('sys_users_v2').select('auth_user_id, name, employee_id, role, status').in('status', activeStatuses),
+                    supabase.from('users_public').select('id, name, employee_id, role, status').in('status', activeStatuses)
                 ]);
                 
                 let merged: any[] = [];
@@ -471,11 +473,14 @@ const PersonalMonthlyReport: React.FC<Props> = ({ user }) => {
                                     onChange={(e) => setSelectedEmployeeId(e.target.value)}
                                     className="pl-9 pr-8 py-1.5 bg-[#0d0d12] border border-white/10 hover:border-blue-500/50 rounded-lg text-sm font-bold text-white focus:outline-none focus:ring-2 focus:ring-blue-500/50 appearance-none cursor-pointer transition-colors"
                                 >
-                                    {employeesList.map(emp => (
-                                        <option key={emp.auth_user_id} value={emp.auth_user_id}>
+                                    {employeesList.map(emp => {
+                                        const rowKey = emp.uid || emp.auth_user_id || emp.id;
+                                        return (
+                                        <option key={rowKey} value={rowKey}>
                                             {emp.name || emp.employee_id} ({emp.role})
                                         </option>
-                                    ))}
+                                        );
+                                    })}
                                 </select>
                             </div>
                         ) : (

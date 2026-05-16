@@ -23,13 +23,12 @@ if (!GEMINI_API_KEY || !SUPABASE_URL || !SUPABASE_KEY) {
 // ─── 1. Collect Git Info ─────────────────────────────────────
 function getGitCommits() {
     try {
-        const since = new Date();
-        since.setHours(since.getHours() - 24);
-        const sinceISO = since.toISOString();
+        const sinceISO = `${REPORT_DATE}T00:00:00+08:00`;
+        const untilISO = `${REPORT_DATE}T23:59:59+08:00`;
 
         // Step 1: get commit lines
         const commitLines = execSync(
-            `git log --since="${sinceISO}" --format="%H|%an|%s"`,
+            `git log --since="${sinceISO}" --until="${untilISO}" --format="%H|%an|%s"`,
             { encoding: 'utf8', cwd: process.cwd() }
         ).trim().split('\n').filter(Boolean);
 

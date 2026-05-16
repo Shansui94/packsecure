@@ -25,8 +25,10 @@ interface LedgerRow {
     ref_doc: string;
     notes: string;
     timestamp: string;
+    timestamp_end?: string;
     created_by_name?: string;
     do_driver_name?: string;
+    production_operator?: string;
 }
 
 const TYPE_STYLE: Record<string, { bgCard: string, badge: string }> = {
@@ -80,6 +82,7 @@ const DetailPanel: React.FC<{ item: StockRow; locFilter: string; onClose: () => 
     const [loading, setLoading] = useState(true);
     const [timeFilter, setTimeFilter] = useState<'Day' | 'All'>('Day');
     const [selectedDate, setSelectedDate] = useState<Date>(new Date());
+    const [mobileTab, setMobileTab] = useState<'in' | 'out'>('in');
 
     const [selectedTxn, setSelectedTxn] = useState<LedgerRow | null>(null);
     const [doDetails, setDoDetails] = useState<any | null>(null);
@@ -150,6 +153,57 @@ const DetailPanel: React.FC<{ item: StockRow; locFilter: string; onClose: () => 
                     }
                 }
             }
+
+            // Enrich production rows with operator names
+            const productionRows = rows.filter(r => r.event_type === 'Production' && r.notes?.includes('API-Log:'));
+            if (productionRows.length > 0) {
+                const machineIds = [...new Set(productionRows.map(r => {
+                    const m = r.notes?.match(/API-Log:\s*(.+)/);
+                    return m ? m[1].trim() : null;
+                }).filter(Boolean))] as string[];
+
+                const timestamps = productionRows.map(r => new Date(r.timestamp));
+                const minDate = new Date(Math.min(...timestamps.map(t => t.getTime())));
+                const maxDate = new Date(Math.max(...timestamps.map(t => t.getTime())));
+                minDate.setHours(0, 0, 0, 0);
+                maxDate.setHours(23, 59, 59, 999);
+
+                const { data: attendanceData } = await supabase
+                    .from('operator_attendance')
+                    .select('operator_id, machine_id, clock_in, clock_out, date')
+                    .in('machine_id', machineIds)
+                    .gte('date', minDate.toISOString().slice(0, 10))
+                    .lte('date', maxDate.toISOString().slice(0, 10));
+
+                if (attendanceData && attendanceData.length > 0) {
+                    const opIds = [...new Set(attendanceData.map(a => a.operator_id))];
+                    const { data: opNames } = await supabase
+                        .from('sys_users_v2')
+                        .select('employee_id, name')
+                        .in('employee_id', opIds);
+
+                    const nameMap = new Map<string, string>();
+                    opNames?.forEach(o => nameMap.set(o.employee_id, o.name));
+
+                    productionRows.forEach(r => {
+                        const machineMatch = r.notes?.match(/API-Log:\s*(.+)/);
+                        const machineId = machineMatch ? machineMatch[1].trim() : null;
+                        if (!machineId) return;
+
+                        const rTime = new Date(r.timestamp).getTime();
+                        const TOLERANCE = 5 * 60 * 1000; // 5 min buffer for clock-in edge cases
+                        const att = attendanceData.find(a => {
+                            if (a.machine_id !== machineId) return false;
+                            const clockIn = new Date(a.clock_in).getTime() - TOLERANCE;
+                            const clockOut = a.clock_out ? new Date(a.clock_out).getTime() : Date.now();
+                            return rTime >= clockIn && rTime <= clockOut;
+                        });
+                        if (att) {
+                            (r as any).production_operator = nameMap.get(att.operator_id) || att.operator_id;
+                        }
+                    });
+                }
+            }
             
             setLedger(rows);
             setLoading(false);
@@ -170,7 +224,8 @@ const DetailPanel: React.FC<{ item: StockRow; locFilter: string; onClose: () => 
                 new Date(g.timestamp).toLocaleDateString('en-MY') === dateStr &&
                 (isProduction ? true : (g.ref_doc || '') === refStr) &&
                 (g.created_by_name || '') === (r.created_by_name || '') &&
-                (g.do_driver_name || '') === (r.do_driver_name || '')
+                (g.do_driver_name || '') === (r.do_driver_name || '') &&
+                (g.production_operator || '') === (r.production_operator || '')
             );
             
             if (existing) {
@@ -178,6 +233,15 @@ const DetailPanel: React.FC<{ item: StockRow; locFilter: string; onClose: () => 
                 if (!existing.notes?.includes('(Aggregated Daily Total)')) {
                     existing.notes = `(Aggregated Daily Total) ` + (existing.notes || '');
                 }
+                
+                // Track time range for aggregated production records
+                const rTime = new Date(r.timestamp).getTime();
+                const existingStart = new Date(existing.timestamp).getTime();
+                const existingEnd = existing.timestamp_end ? new Date(existing.timestamp_end).getTime() : existingStart;
+                const earliest = Math.min(existingStart, rTime);
+                const latest = Math.max(existingEnd, rTime);
+                existing.timestamp = new Date(earliest).toISOString();
+                existing.timestamp_end = new Date(latest).toISOString();
                 
                 // Keep event_type sensible based on net direction
                 if (existing.change_qty < 0 && !existing.event_type.includes('Out')) {
@@ -222,8 +286,13 @@ const DetailPanel: React.FC<{ item: StockRow; locFilter: string; onClose: () => 
                         </div>
                     )}
                     <div className="flex items-center justify-between mt-1.5">
-                        <div className="text-[10px] text-slate-400 dark:text-gray-600 font-mono flex items-center gap-2">
-                            <span>{new Date(row.timestamp).toLocaleString('en-MY', { day: '2-digit', month: 'short', hour: '2-digit', minute: '2-digit' })}</span>
+                        <div className="text-[10px] text-slate-400 dark:text-gray-600 font-mono flex items-center gap-2 flex-wrap">
+                            <span>
+                                {new Date(row.timestamp).toLocaleString('en-MY', { day: '2-digit', month: 'short', hour: '2-digit', minute: '2-digit' })}
+                                {row.timestamp_end && row.timestamp_end !== row.timestamp && (
+                                    <> → {new Date(row.timestamp_end).toLocaleString('en-MY', { hour: '2-digit', minute: '2-digit' })}</>
+                                )}
+                            </span>
                             
                             {row.do_driver_name ? (
                                 <span className="text-violet-600 dark:text-violet-400 font-bold tracking-widest uppercase bg-violet-100 dark:bg-violet-500/10 px-1.5 py-0.5 rounded border border-violet-200 dark:border-violet-500/20">
@@ -234,6 +303,19 @@ const DetailPanel: React.FC<{ item: StockRow; locFilter: string; onClose: () => 
                                     👤 {row.created_by_name}
                                 </span>
                             ) : null}
+                            {row.notes?.includes('API-Log:') && (() => {
+                                const match = row.notes.match(/API-Log:\s*(.+)/);
+                                return match ? (
+                                    <span className="text-cyan-600 dark:text-cyan-400 font-bold tracking-widest uppercase bg-cyan-100 dark:bg-cyan-500/10 px-1.5 py-0.5 rounded border border-cyan-200 dark:border-cyan-500/20">
+                                        ⚙️ {match[1].trim()}
+                                    </span>
+                                ) : null;
+                            })()}
+                            {row.production_operator && (
+                                <span className="text-amber-600 dark:text-amber-400 font-bold tracking-widest uppercase bg-amber-100 dark:bg-amber-500/10 px-1.5 py-0.5 rounded border border-amber-200 dark:border-amber-500/20">
+                                    👷 {row.production_operator}
+                                </span>
+                            )}
                         </div>
                         {row.loc_id && locFilter === 'All' && (
                             <div className="text-[10px] text-violet-500 dark:text-violet-400/80 uppercase font-black">
@@ -289,7 +371,7 @@ const DetailPanel: React.FC<{ item: StockRow; locFilter: string; onClose: () => 
                 </div>
 
                 {/* Summary Strip */}
-                <div className="grid grid-cols-4 border-b border-slate-200 dark:border-white/5 shrink-0 bg-slate-50 dark:bg-[#0a0a0f]">
+                <div className="grid grid-cols-2 sm:grid-cols-4 border-b border-slate-200 dark:border-white/5 shrink-0 bg-slate-50 dark:bg-[#0a0a0f]">
                     <div className="px-4 py-4 border-r border-slate-200 dark:border-white/5 text-center flex flex-col items-center justify-center">
                         <div className="text-[10px] text-slate-500 dark:text-gray-500 font-black uppercase tracking-widest mb-1 flex items-center gap-1">Available <span className="hidden sm:inline">Stock</span></div>
                         <div className={`text-3xl font-black ${(item.available_stock || 0) < 0 ? 'text-red-500 dark:text-red-400' : (item.available_stock || 0) < LOW_STOCK_THRESHOLD ? 'text-amber-500 dark:text-amber-400' : 'text-slate-800 dark:text-white'}`}>
@@ -302,9 +384,9 @@ const DetailPanel: React.FC<{ item: StockRow; locFilter: string; onClose: () => 
                             {Number(item.current_stock).toLocaleString()}
                         </div>
                     </div>
-                    <div className="px-4 py-4 border-r border-slate-200 dark:border-white/5 text-center flex flex-col items-center justify-center bg-amber-50/50 dark:bg-amber-500/5">
-                        <div className="text-[10px] text-amber-600 dark:text-amber-500/70 font-black uppercase tracking-widest mb-1">Reserved</div>
-                        <div className="text-xl font-black text-amber-600 dark:text-amber-400">-{Number(item.reserved_stock || 0).toLocaleString()}</div>
+                    <div className="px-4 py-4 sm:border-r border-slate-200 dark:border-white/5 text-center flex flex-col items-center justify-center bg-red-50/50 dark:bg-red-500/5">
+                        <div className="text-[10px] text-red-600 dark:text-red-500/70 font-black uppercase tracking-widest mb-1">Total OUT</div>
+                        <div className="text-xl font-black text-red-600 dark:text-red-400">-{totalOut.toLocaleString()}</div>
                     </div>
                     <div className="px-4 py-4 text-center flex flex-col items-center justify-center">
                         <div className="text-[10px] text-green-600 dark:text-green-500/70 font-black uppercase tracking-widest mb-1">Total IN</div>
@@ -312,11 +394,21 @@ const DetailPanel: React.FC<{ item: StockRow; locFilter: string; onClose: () => 
                     </div>
                 </div>
 
+                {/* Mobile Tabs */}
+                <div className="flex md:hidden border-b border-slate-200 dark:border-white/5 bg-slate-50 dark:bg-[#0a0a0f] shrink-0">
+                    <button onClick={() => setMobileTab('in')} className={`flex-1 py-3 text-[10px] font-black uppercase tracking-widest flex items-center justify-center gap-2 transition-colors ${mobileTab === 'in' ? 'text-green-600 border-b-2 border-green-500 bg-green-50/50 dark:bg-green-500/10' : 'text-slate-500 dark:text-gray-500 hover:bg-slate-100 dark:hover:bg-white/5'}`}>
+                        <TrendingUp size={14} /> Stock In
+                    </button>
+                    <button onClick={() => setMobileTab('out')} className={`flex-1 py-3 text-[10px] font-black uppercase tracking-widest flex items-center justify-center gap-2 transition-colors ${mobileTab === 'out' ? 'text-red-600 border-b-2 border-red-500 bg-red-50/50 dark:bg-red-500/10' : 'text-slate-500 dark:text-gray-500 hover:bg-slate-100 dark:hover:bg-white/5'}`}>
+                        <TrendingDown size={14} /> Stock Out
+                    </button>
+                </div>
+
                 {/* Ledger Columns */}
                 <div className="flex-1 overflow-hidden flex flex-col md:flex-row bg-white dark:bg-[#050508]">
                     {/* LEFT COLUMN: IN */}
-                    <div className="flex-1 flex flex-col border-b md:border-b-0 md:border-r border-slate-200 dark:border-white/5 md:w-1/2">
-                        <div className="px-6 py-3 border-b border-slate-200 dark:border-white/5 bg-green-50 dark:bg-green-500/5 flex items-center gap-2">
+                    <div className={`flex-1 min-h-0 flex-col border-b md:border-b-0 md:border-r border-slate-200 dark:border-white/5 md:w-1/2 ${mobileTab === 'in' ? 'flex' : 'hidden md:flex'}`}>
+                        <div className="hidden md:flex px-6 py-3 border-b border-slate-200 dark:border-white/5 bg-green-50 dark:bg-green-500/5 items-center gap-2">
                             <TrendingUp size={16} className="text-green-600 dark:text-green-500" />
                             <span className="text-xs text-green-700 dark:text-green-400 font-black uppercase tracking-widest">Stock In</span>
                         </div>
@@ -332,8 +424,8 @@ const DetailPanel: React.FC<{ item: StockRow; locFilter: string; onClose: () => 
                     </div>
 
                     {/* RIGHT COLUMN: OUT */}
-                    <div className="flex-1 flex flex-col md:w-1/2">
-                        <div className="px-6 py-3 border-b border-slate-200 dark:border-white/5 bg-red-50 dark:bg-red-500/5 flex items-center gap-2">
+                    <div className={`flex-1 min-h-0 flex-col md:w-1/2 ${mobileTab === 'out' ? 'flex' : 'hidden md:flex'}`}>
+                        <div className="hidden md:flex px-6 py-3 border-b border-slate-200 dark:border-white/5 bg-red-50 dark:bg-red-500/5 items-center gap-2">
                             <TrendingDown size={16} className="text-red-600 dark:text-red-500" />
                             <span className="text-xs text-red-700 dark:text-red-400 font-black uppercase tracking-widest">Stock Out</span>
                         </div>
@@ -375,7 +467,7 @@ const DetailPanel: React.FC<{ item: StockRow; locFilter: string; onClose: () => 
                         <div className="p-6 space-y-5 flex-1 overflow-y-auto bg-slate-50 dark:bg-black/20">
                             
                             {/* Qty & Ref Banner */}
-                            <div className="grid grid-cols-2 gap-3">
+                            <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
                                 <div className="bg-white dark:bg-[#15151a] p-4 rounded-2xl border border-slate-200 dark:border-white/5 shadow-sm">
                                     <div className="text-[10px] text-slate-500 dark:text-gray-500 font-bold uppercase tracking-widest mb-1 flex items-center gap-1.5"><Hash size={12}/> Net Quantity</div>
                                     <div className={`text-2xl font-black tracking-tight ${selectedTxn.change_qty > 0 ? 'text-green-600 dark:text-green-400' : 'text-red-600 dark:text-red-400'}`}>

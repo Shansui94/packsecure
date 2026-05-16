@@ -46,17 +46,17 @@ interface Risk {
 }
 
 const CHANGE_COLORS: Record<string, string> = {
-    '新功能': 'bg-blue-500/20 text-blue-300 border-blue-500/30',
-    '修复': 'bg-green-500/20 text-green-300 border-green-500/30',
-    '优化': 'bg-purple-500/20 text-purple-300 border-purple-500/30',
-    '重构': 'bg-amber-500/20 text-amber-300 border-amber-500/30',
-    '配置': 'bg-slate-500/20 text-slate-300 border-slate-500/30',
+    '新功能': 'bg-apple-blue/10 text-apple-blue border-apple-blue/20',
+    '修复': 'bg-apple-green/10 text-apple-green border-apple-green/20',
+    '优化': 'bg-purple-500/10 text-purple-600 dark:text-purple-400 border-purple-500/20',
+    '重构': 'bg-apple-orange/10 text-apple-orange border-apple-orange/20',
+    '配置': 'bg-gray-500/10 text-gray-600 dark:text-gray-400 border-gray-500/20',
 };
 
 const RISK_COLORS: Record<string, string> = {
-    '高': 'bg-red-500/10 border-red-500/30 text-red-400',
-    '中': 'bg-amber-500/10 border-amber-500/30 text-amber-400',
-    '低': 'bg-blue-500/10 border-blue-500/30 text-blue-400',
+    '高': 'bg-apple-red/10 border-apple-red/20 text-apple-red',
+    '中': 'bg-apple-orange/10 border-apple-orange/20 text-apple-orange',
+    '低': 'bg-apple-blue/10 border-apple-blue/20 text-apple-blue',
 };
 
 
@@ -70,67 +70,67 @@ const LogCard: React.FC<{ log: DevLog }> = ({ log }) => {
     const [expanded, setExpanded] = useState(false);
 
     return (
-        <div className="bg-[#111113] border border-white/5 rounded-2xl overflow-hidden hover:border-white/10 transition-all">
+        <div className="apple-card p-0 overflow-hidden group">
             {/* Card Header */}
             <button
                 onClick={() => setExpanded(!expanded)}
-                className="w-full p-5 flex items-start justify-between gap-4 text-left hover:bg-white/[0.02] transition-colors"
+                className="w-full p-5 flex items-start justify-between gap-4 text-left hover:bg-black/5 dark:hover:bg-white/5 transition-colors"
             >
                 <div className="flex items-start gap-4">
                     {/* Date Badge */}
-                    <div className="shrink-0 bg-blue-500/10 border border-blue-500/20 rounded-xl p-2.5 flex flex-col items-center min-w-[52px]">
-                        <span className="text-[10px] text-blue-400 font-bold uppercase tracking-widest">
+                    <div className="shrink-0 bg-apple-blue/10 border border-apple-blue/20 rounded-2xl p-2.5 flex flex-col items-center min-w-[56px] shadow-sm">
+                        <span className="text-[10px] text-apple-blue font-bold uppercase tracking-widest mb-0.5">
                             {new Date(log.report_date + 'T00:00:00').toLocaleDateString('en', { month: 'short' })}
                         </span>
-                        <span className="text-xl font-black text-white leading-none">
+                        <span className="text-2xl font-black text-apple-blue leading-none">
                             {new Date(log.report_date + 'T00:00:00').getDate()}
                         </span>
                     </div>
 
-                    <div className="min-w-0">
-                        <div className="text-[10px] text-slate-500 font-bold uppercase tracking-widest mb-1">
+                    <div className="min-w-0 flex-1">
+                        <div className="text-[10px] text-apple-textMuted font-bold uppercase tracking-widest mb-1.5">
                             {formatDate(log.report_date)}
                         </div>
-                        <p className="text-slate-300 text-sm leading-relaxed line-clamp-2">{log.summary || '无摘要'}</p>
+                        <p className="text-apple-textMain dark:text-white text-[15px] font-medium leading-relaxed line-clamp-2 pr-4">{log.summary || '无摘要'}</p>
 
                         {/* Quick stats */}
-                        <div className="flex flex-wrap gap-2 mt-2">
+                        <div className="flex flex-wrap gap-2 mt-3">
                             {log.commits_json?.length > 0 && (
-                                <span className="flex items-center gap-1 text-[10px] text-slate-500 bg-white/5 px-2 py-0.5 rounded-full">
-                                    <GitCommit size={10} /> {log.commits_json.length} commits
+                                <span className="flex items-center gap-1 text-[10px] text-apple-textMuted bg-black/5 dark:bg-white/10 px-2.5 py-1 rounded-full font-medium">
+                                    <GitCommit size={12} /> {log.commits_json.length} commits
                                 </span>
                             )}
                             {log.changes_json?.length > 0 && (
-                                <span className="flex items-center gap-1 text-[10px] text-green-500/70 bg-green-500/5 px-2 py-0.5 rounded-full">
-                                    <CheckCircle size={10} /> {log.changes_json.length} 项改动
+                                <span className="flex items-center gap-1 text-[10px] text-apple-green bg-apple-green/10 px-2.5 py-1 rounded-full font-medium">
+                                    <CheckCircle size={12} /> {log.changes_json.length} 项改动
                                 </span>
                             )}
                             {log.risks_json?.length > 0 && (
-                                <span className="flex items-center gap-1 text-[10px] text-amber-500/70 bg-amber-500/5 px-2 py-0.5 rounded-full">
-                                    <AlertTriangle size={10} /> {log.risks_json.length} 风险
+                                <span className="flex items-center gap-1 text-[10px] text-apple-orange bg-apple-orange/10 px-2.5 py-1 rounded-full font-medium">
+                                    <AlertTriangle size={12} /> {log.risks_json.length} 风险
                                 </span>
                             )}
                             {log.metrics_json?.trips_created_today !== undefined && (
-                                <span className="flex items-center gap-1 text-[10px] text-blue-500/70 bg-blue-500/5 px-2 py-0.5 rounded-full">
-                                    <BarChart2 size={10} /> {log.metrics_json.trips_created_today} trips 今日
+                                <span className="flex items-center gap-1 text-[10px] text-apple-blue bg-apple-blue/10 px-2.5 py-1 rounded-full font-medium">
+                                    <BarChart2 size={12} /> {log.metrics_json.trips_created_today} trips 今日
                                 </span>
                             )}
                         </div>
                     </div>
                 </div>
-                <div className="shrink-0 text-slate-600 mt-1">
-                    {expanded ? <ChevronUp size={18} /> : <ChevronDown size={18} />}
+                <div className="shrink-0 text-apple-textMuted mt-1 group-hover:text-apple-blue transition-colors bg-black/5 dark:bg-white/10 p-1.5 rounded-full">
+                    {expanded ? <ChevronUp size={16} /> : <ChevronDown size={16} />}
                 </div>
             </button>
 
             {/* Expanded Detail */}
             {expanded && (
-                <div className="border-t border-white/5 p-5 space-y-5">
+                <div className="border-t border-black/5 dark:border-white/10 p-6 space-y-6 bg-black/[0.02] dark:bg-black/20">
                     {/* App Metrics */}
                     {log.metrics_json && (
                         <div>
-                            <div className="text-[10px] text-slate-500 font-bold uppercase tracking-widest mb-3 flex items-center gap-2">
-                                <BarChart2 size={12} /> 今日应用数据
+                            <div className="text-[10px] text-apple-textMuted font-bold uppercase tracking-widest mb-3 flex items-center gap-2">
+                                <BarChart2 size={14} className="text-apple-blue" /> 今日应用数据
                             </div>
                             <div className="grid grid-cols-3 gap-3">
                                 {[
@@ -138,9 +138,9 @@ const LogCard: React.FC<{ log: DevLog }> = ({ log }) => {
                                     { label: '未分配 Trip', value: log.metrics_json.trips_unassigned ?? '-' },
                                     { label: '系统用户', value: log.metrics_json.total_users ?? '-' },
                                 ].map(m => (
-                                    <div key={m.label} className="bg-[#0a0a0c] border border-white/5 rounded-xl p-3">
-                                        <div className="text-[10px] text-slate-600 mb-0.5">{m.label}</div>
-                                        <div className="text-xl font-black text-white">{m.value}</div>
+                                    <div key={m.label} className="bg-white dark:bg-[#1C1C1E] border border-black/5 dark:border-white/10 rounded-2xl p-4 shadow-sm">
+                                        <div className="text-xs text-apple-textMuted font-medium mb-1">{m.label}</div>
+                                        <div className="text-2xl font-black text-apple-textMain dark:text-white">{m.value}</div>
                                     </div>
                                 ))}
                             </div>
@@ -150,18 +150,18 @@ const LogCard: React.FC<{ log: DevLog }> = ({ log }) => {
                     {/* Changes */}
                     {log.changes_json?.length > 0 && (
                         <div>
-                            <div className="text-[10px] text-slate-500 font-bold uppercase tracking-widest mb-3 flex items-center gap-2">
-                                <Activity size={12} /> 今日改动
+                            <div className="text-[10px] text-apple-textMuted font-bold uppercase tracking-widest mb-3 flex items-center gap-2">
+                                <Activity size={14} className="text-apple-green" /> 今日改动
                             </div>
                             <div className="space-y-2">
                                 {log.changes_json.map((c, i) => (
-                                    <div key={i} className="flex items-start gap-3 bg-white/[0.02] rounded-xl p-3">
-                                        <span className={`shrink-0 text-[10px] font-bold px-2 py-0.5 rounded-full border ${CHANGE_COLORS[c.type] || CHANGE_COLORS['配置']}`}>
+                                    <div key={i} className="flex items-start gap-3 bg-white dark:bg-[#1C1C1E] border border-black/5 dark:border-white/10 rounded-2xl p-4 shadow-sm">
+                                        <span className={`shrink-0 text-[10px] font-bold px-2.5 py-1 rounded-full border ${CHANGE_COLORS[c.type] || CHANGE_COLORS['配置']}`}>
                                             {c.type}
                                         </span>
                                         <div className="min-w-0">
-                                            <div className="text-sm text-slate-200">{c.description}</div>
-                                            <div className="text-[11px] text-slate-500 mt-0.5">影响：{c.impact}</div>
+                                            <div className="text-[15px] font-medium text-apple-textMain dark:text-white">{c.description}</div>
+                                            <div className="text-xs text-apple-textMuted mt-1">影响：{c.impact}</div>
                                         </div>
                                     </div>
                                 ))}
@@ -172,18 +172,20 @@ const LogCard: React.FC<{ log: DevLog }> = ({ log }) => {
                     {/* Risks */}
                     {log.risks_json?.length > 0 && (
                         <div>
-                            <div className="text-[10px] text-slate-500 font-bold uppercase tracking-widest mb-3 flex items-center gap-2">
-                                <Shield size={12} /> 风险评估
+                            <div className="text-[10px] text-apple-textMuted font-bold uppercase tracking-widest mb-3 flex items-center gap-2">
+                                <Shield size={14} className="text-apple-red" /> 风险评估
                             </div>
                             <div className="space-y-2">
                                 {log.risks_json.map((r, i) => (
-                                    <div key={i} className={`border rounded-xl p-3 ${RISK_COLORS[r.level] || RISK_COLORS['低']}`}>
-                                        <div className="flex items-center gap-2 mb-1">
-                                            <AlertTriangle size={12} />
-                                            <span className="text-[10px] font-black uppercase tracking-wider">{r.level}风险</span>
+                                    <div key={i} className={`border rounded-2xl p-4 bg-white dark:bg-[#1C1C1E] shadow-sm flex flex-col`}>
+                                        <div className="flex items-center gap-2 mb-2">
+                                            <div className={`p-1.5 rounded-lg ${RISK_COLORS[r.level] || RISK_COLORS['低']}`}>
+                                                <AlertTriangle size={14} />
+                                            </div>
+                                            <span className="text-xs font-bold uppercase tracking-wider text-apple-textMain dark:text-white">{r.level}风险</span>
                                         </div>
-                                        <div className="text-sm font-medium">{r.description}</div>
-                                        <div className="text-[11px] opacity-70 mt-1">建议：{r.suggestion}</div>
+                                        <div className="text-[14px] font-medium text-apple-textMain dark:text-white mb-1">{r.description}</div>
+                                        <div className="text-xs text-apple-textMuted">建议：{r.suggestion}</div>
                                     </div>
                                 ))}
                             </div>
@@ -193,15 +195,15 @@ const LogCard: React.FC<{ log: DevLog }> = ({ log }) => {
                     {/* Git Commits */}
                     {log.commits_json?.length > 0 && (
                         <div>
-                            <div className="text-[10px] text-slate-500 font-bold uppercase tracking-widest mb-3 flex items-center gap-2">
-                                <GitCommit size={12} /> Commits ({log.commits_json.length})
+                            <div className="text-[10px] text-apple-textMuted font-bold uppercase tracking-widest mb-3 flex items-center gap-2">
+                                <GitCommit size={14} className="text-gray-400" /> Commits ({log.commits_json.length})
                             </div>
-                            <div className="space-y-1.5 font-mono">
+                            <div className="space-y-2 font-mono bg-white dark:bg-[#1C1C1E] border border-black/5 dark:border-white/10 rounded-2xl p-4 shadow-sm">
                                 {log.commits_json.map((c, i) => (
-                                    <div key={i} className="flex items-start gap-2 text-xs">
-                                        <span className="text-blue-500/60 shrink-0">{c.hash}</span>
-                                        <span className="text-slate-300 flex-1">{c.message}</span>
-                                        <span className="text-slate-600 shrink-0">{c.author}</span>
+                                    <div key={i} className="flex items-start gap-3 text-xs py-1 border-b border-black/5 dark:border-white/5 last:border-0 last:pb-0">
+                                        <span className="text-apple-blue shrink-0 font-bold">{c.hash}</span>
+                                        <span className="text-apple-textMain dark:text-slate-300 flex-1">{c.message}</span>
+                                        <span className="text-apple-textMuted shrink-0 font-medium">{c.author}</span>
                                     </div>
                                 ))}
                             </div>
@@ -211,14 +213,16 @@ const LogCard: React.FC<{ log: DevLog }> = ({ log }) => {
                     {/* Recommendations */}
                     {log.recommendations?.length > 0 && (
                         <div>
-                            <div className="text-[10px] text-slate-500 font-bold uppercase tracking-widest mb-3 flex items-center gap-2">
-                                <Lightbulb size={12} /> AI 建议
+                            <div className="text-[10px] text-apple-textMuted font-bold uppercase tracking-widest mb-3 flex items-center gap-2">
+                                <Lightbulb size={14} className="text-apple-orange" /> AI 建议
                             </div>
-                            <ul className="space-y-1.5">
+                            <ul className="space-y-2 bg-white dark:bg-[#1C1C1E] border border-black/5 dark:border-white/10 rounded-2xl p-5 shadow-sm">
                                 {log.recommendations.map((r, i) => (
-                                    <li key={i} className="flex items-start gap-2 text-sm text-slate-300">
-                                        <span className="text-blue-400 shrink-0 mt-0.5">→</span>
-                                        {r}
+                                    <li key={i} className="flex items-start gap-3 text-[14px] text-apple-textMain dark:text-white font-medium">
+                                        <div className="shrink-0 mt-0.5 bg-apple-orange/10 text-apple-orange p-1 rounded-full">
+                                            <Lightbulb size={12} />
+                                        </div>
+                                        <span className="leading-relaxed">{r}</span>
                                     </li>
                                 ))}
                             </ul>
@@ -254,54 +258,58 @@ const DevLog: React.FC = () => {
     const totalChanges = logs.reduce((s, l) => s + (l.changes_json?.length || 0), 0);
 
     return (
-        <div className="p-6 max-w-4xl mx-auto pb-20">
+        <div className="p-6 max-w-4xl mx-auto pb-20 animate-fade-in">
             {/* Header */}
             <div className="flex justify-between items-start mb-8">
                 <div>
-                    <h1 className="text-2xl font-bold text-white mb-1 flex items-center gap-2">
-                        <Activity size={22} className="text-blue-400" />
+                    <h1 className="text-3xl font-black text-apple-textMain dark:text-white mb-2 flex items-center gap-3">
+                        <Activity size={28} className="text-apple-blue" />
                         Dev Log
                     </h1>
-                    <p className="text-slate-400 text-sm">AI 自动生成的每日开发活动报告</p>
+                    <p className="text-apple-textMuted text-[15px] font-medium">AI 自动生成的每日开发活动报告</p>
                 </div>
                 <button
                     onClick={fetchLogs}
-                    className="flex items-center gap-2 text-xs text-slate-500 hover:text-slate-300 bg-white/5 hover:bg-white/10 px-3 py-2 rounded-lg transition-all"
+                    className="apple-btn-secondary"
                 >
-                    <RefreshCw size={13} /> 刷新
+                    <RefreshCw size={16} /> 刷新
                 </button>
             </div>
 
             {/* Summary Stats */}
-            <div className="grid grid-cols-3 gap-4 mb-8">
+            <div className="grid grid-cols-4 gap-4 mb-8">
                 {[
-                    { label: '记录天数', value: logs.length, icon: <Calendar size={16} />, color: 'text-blue-400' },
-                    { label: '总 Commits', value: totalCommits, icon: <GitCommit size={16} />, color: 'text-green-400' },
-                    { label: '总改动项', value: totalChanges, icon: <Activity size={16} />, color: 'text-purple-400' },
-                    { label: '累计风险项', value: totalRisks, icon: <AlertTriangle size={16} />, color: 'text-amber-400' },
+                    { label: '记录天数', value: logs.length, icon: <Calendar size={18} />, color: 'text-apple-blue', bg: 'bg-apple-blue/10' },
+                    { label: '总 Commits', value: totalCommits, icon: <GitCommit size={18} />, color: 'text-apple-green', bg: 'bg-apple-green/10' },
+                    { label: '总改动项', value: totalChanges, icon: <Activity size={18} />, color: 'text-purple-500', bg: 'bg-purple-500/10' },
+                    { label: '累计风险项', value: totalRisks, icon: <AlertTriangle size={18} />, color: 'text-apple-orange', bg: 'bg-apple-orange/10' },
                 ].map(s => (
-                    <div key={s.label} className="bg-[#111113] border border-white/5 rounded-2xl p-4">
-                        <div className={`flex items-center gap-2 mb-2 ${s.color}`}>{s.icon}</div>
-                        <div className="text-2xl font-black text-white">{s.value}</div>
-                        <div className="text-[10px] text-slate-500 uppercase tracking-widest">{s.label}</div>
+                    <div key={s.label} className="apple-card flex flex-col items-center justify-center text-center p-5">
+                        <div className={`p-2.5 rounded-xl mb-3 ${s.bg} ${s.color}`}>{s.icon}</div>
+                        <div className="text-3xl font-black text-apple-textMain dark:text-white leading-none mb-2">{s.value}</div>
+                        <div className="text-[10px] text-apple-textMuted font-bold uppercase tracking-widest">{s.label}</div>
                     </div>
                 ))}
             </div>
 
             {/* Log Timeline */}
             {loading ? (
-                <div className="text-center py-20 text-slate-600 animate-pulse">Loading dev logs...</div>
+                <div className="text-center py-20 text-apple-textMuted font-medium animate-pulse">Loading dev logs...</div>
             ) : logs.length === 0 ? (
-                <div className="text-center py-20 border border-dashed border-white/5 rounded-2xl">
-                    <Activity size={40} className="mx-auto text-slate-700 mb-4" />
-                    <div className="text-slate-500 font-medium">还没有日志</div>
-                    <div className="text-slate-600 text-sm mt-1">
+                <div className="text-center py-24 apple-card border-dashed">
+                    <Activity size={48} className="mx-auto text-black/20 dark:text-white/20 mb-5" />
+                    <div className="text-apple-textMain dark:text-white font-bold text-lg">还没有日志</div>
+                    <div className="text-apple-textMuted text-[15px] mt-2 max-w-sm mx-auto">
                         先在 Supabase 执行 SQL migration，再在 GitHub 设置 Secrets，然后手动触发 Actions 工作流
                     </div>
                 </div>
             ) : (
-                <div className="space-y-4">
-                    {logs.map(log => <LogCard key={log.id} log={log} />)}
+                <div className="space-y-5 relative before:absolute before:inset-y-0 before:left-[42px] before:w-0.5 before:bg-black/5 dark:before:bg-white/10">
+                    {logs.map(log => (
+                        <div key={log.id} className="relative z-10">
+                            <LogCard log={log} />
+                        </div>
+                    ))}
                 </div>
             )}
         </div>
