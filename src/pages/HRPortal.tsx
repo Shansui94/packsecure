@@ -55,7 +55,7 @@ const ALL_PAGES = [
     { id: 'report-history', label: 'Reports', group: 'Other' },
 ];
 
-const ALL_ROLES = ['SuperAdmin', 'Admin', 'Manager', 'HR', 'Operator', 'Driver'];
+const ALL_ROLES = ['SuperAdmin', 'Admin', 'Manager', 'LogisticsCoordinator', 'HR', 'Operator', 'Driver'];
 
 const MONTH_NAMES = ['January', 'February', 'March', 'April', 'May', 'June',
     'July', 'August', 'September', 'October', 'November', 'December'];

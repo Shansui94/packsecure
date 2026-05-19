@@ -1,4 +1,4 @@
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useRef } from 'react';
 import { DragDropContext, Droppable, Draggable, DropResult } from '@hello-pangea/dnd';
 import { supabase } from '../services/supabase';
 import { getV2Items } from '../services/apiV2';
@@ -6,7 +6,7 @@ import { determineState, findBestFactory } from '../utils/logistics';
 import {
     Plus, Search, Calendar, FileText, X, Truck,
     User as UserIcon, Box, Zap, Trash2, Scissors, AlertTriangle, MapPin, Wrench, LayoutGrid, List, ArrowUp, ArrowDown,
-    CheckCircle, XCircle, Camera
+    CheckCircle, XCircle, Camera, Sparkles, ImagePlus
 } from 'lucide-react';
 import { WAREHOUSES } from '../data/factoryData';
 import {
@@ -15,26 +15,104 @@ import {
     Lorry
 } from '../types';
 import { V2Item } from '../types/v2';
+import { compressImage, dataUrlToBase64Payload } from '../utils/imageCompress';
 
+type ScannedTripDraft = {
+    label: string;
+    destinations: string;
+    tripCategory: string;
+    tripDropCount: number;
+    notes: string;
+    items: SalesOrder['items'];
+};
 
+type ScanSheetReview = {
+    tripDate: string;
+    deliveryDate: string;
+    driverId: string;
+    sheetNotes: string;
+    trips: ScannedTripDraft[];
+};
 
 // Reusable Searchable Select Component (Ported from SimpleStock for consistency)
 interface SearchableSelectProps {
     label?: string;
     icon?: React.ReactNode;
-    options: { value: string; label: string; subLabel?: string; statusLabel?: string; statusColor?: string }[];
+    options: {
+        value: string;
+        label: string;
+        subLabel?: string;
+        searchText?: string;
+        statusLabel?: string;
+        statusColor?: string;
+    }[];
     value: string;
     onChange: (val: string) => void;
     placeholder?: string;
-    minimal?: boolean; // For cleaner look
+    minimal?: boolean;
+    dropdownMaxHeight?: string;
 }
 
-const SearchableSelect: React.FC<SearchableSelectProps> = ({ label, icon, options, value, onChange, placeholder = "Search...", minimal = false }) => {
+function filterSelectOptions(
+    options: SearchableSelectProps['options'],
+    search: string
+) {
+    const sortedByName = [...options].sort((a, b) => a.label.localeCompare(b.label, undefined, { sensitivity: 'base' }));
+    if (!search.trim()) return sortedByName.slice(0, 200);
+
+    const q = search.toLowerCase().trim();
+    const searchTerms = q.split(/[\s-]+/).filter(Boolean);
+
+    return sortedByName
+        .map(opt => {
+            const label = opt.label.toLowerCase();
+            const sub = (opt.subLabel || '').toLowerCase();
+            const extra = (opt.searchText || '').toLowerCase();
+            const haystack = `${label} ${sub} ${extra}`;
+
+            if (!searchTerms.every(term => haystack.includes(term))) {
+                return { opt, score: -1 };
+            }
+
+            let score = 0;
+            if (label === q) score += 100;
+            else if (label.startsWith(q)) score += 80;
+            else if (label.includes(q)) score += 65;
+            else if (searchTerms.every(term => label.includes(term))) score += 55;
+            else if (sub.includes(q)) score += 25;
+            else score += 10;
+
+            return { opt, score };
+        })
+        .filter(x => x.score >= 0)
+        .sort((a, b) => b.score - a.score || a.opt.label.localeCompare(b.opt.label, undefined, { sensitivity: 'base' }))
+        .slice(0, 150)
+        .map(x => x.opt);
+}
+
+const SearchableSelect: React.FC<SearchableSelectProps> = ({
+    label,
+    icon,
+    options,
+    value,
+    onChange,
+    placeholder = "Search by product name...",
+    minimal = false,
+    dropdownMaxHeight = 'max-h-[min(50vh,28rem)]',
+}) => {
     const [isOpen, setIsOpen] = useState(false);
     const [search, setSearch] = useState('');
+    const searchInputRef = useRef<HTMLInputElement>(null);
 
-    // Derived state for display
     const selectedOption = options.find(o => o.value === value);
+    const filtered = filterSelectOptions(options, search);
+
+    useEffect(() => {
+        if (isOpen) {
+            const t = window.setTimeout(() => searchInputRef.current?.focus(), 50);
+            return () => window.clearTimeout(t);
+        }
+    }, [isOpen]);
 
     return (
         <div className="relative w-full">
@@ -90,19 +168,27 @@ const SearchableSelect: React.FC<SearchableSelectProps> = ({ label, icon, option
             {isOpen && (
                 <>
                     <div
-                        className="fixed inset-0 z-40"
+                        className="fixed inset-0 z-[80]"
                         onClick={() => setIsOpen(false)}
                     />
-                    <div className="absolute top-full left-0 right-0 mt-2 bg-[#1a1a1e] border border-slate-800 rounded-xl shadow-2xl max-h-60 overflow-y-auto z-50 divide-y divide-slate-800/50">
-                        {options
-                            .filter(opt => {
-                                if (!search) return true;
-                                const searchTerms = search.toLowerCase().trim().split(/[\s-]+/).filter(Boolean);
-                                const l = opt.label.toLowerCase();
-                                const sub = opt.subLabel ? opt.subLabel.toLowerCase() : '';
-                                return searchTerms.every(term => l.includes(term) || sub.includes(term));
-                            })
-                            .map(opt => (
+                    <div className="absolute top-full left-0 right-0 mt-2 z-[90] bg-[#141418] border border-slate-700 rounded-xl shadow-2xl overflow-hidden flex flex-col">
+                        <div className="p-3 border-b border-slate-800 bg-slate-900/80">
+                            <input
+                                ref={searchInputRef}
+                                type="text"
+                                placeholder={placeholder}
+                                className="w-full bg-slate-950 border border-slate-700 rounded-lg px-4 py-3 text-sm text-white placeholder:text-slate-500 outline-none focus:border-blue-500"
+                                value={search}
+                                onChange={(e) => setSearch(e.target.value)}
+                                onClick={(e) => e.stopPropagation()}
+                            />
+                            <p className="text-[10px] text-slate-500 mt-2 font-medium">
+                                {filtered.length} match{filtered.length === 1 ? '' : 'es'}
+                                {search.trim() ? ` for "${search.trim()}"` : ' — type to filter'}
+                            </p>
+                        </div>
+                        <div className={`overflow-y-auto custom-scrollbar divide-y divide-slate-800/50 ${dropdownMaxHeight}`}>
+                        {filtered.map(opt => (
                                 <div
                                     key={opt.value}
                                     onClick={() => {
@@ -123,17 +209,10 @@ const SearchableSelect: React.FC<SearchableSelectProps> = ({ label, icon, option
                                     )}
                                 </div>
                             ))}
-                        {options.filter(opt => {
-                            if (!search) return true;
-                            const searchTerms = search.toLowerCase().trim().split(/[\s-]+/).filter(Boolean);
-                            const l = opt.label.toLowerCase();
-                            const sub = opt.subLabel ? opt.subLabel.toLowerCase() : '';
-                            return searchTerms.every(term => l.includes(term) || sub.includes(term));
-                        }).length === 0 && (
-                                <div className="p-4 text-center text-gray-500 text-sm">
-                                    No results found.
-                                </div>
+                            {filtered.length === 0 && (
+                                <div className="p-6 text-center text-gray-500 text-sm">No products found.</div>
                             )}
+                        </div>
                     </div>
                 </>
             )}
@@ -166,8 +245,11 @@ const DeliveryOrderManagement: React.FC = () => {
 
 
 
-    // AI / Smart Import State
-    // const [isAnalyzing, setIsAnalyzing] = useState(false);
+    const [isTripPhotoScanning, setIsTripPhotoScanning] = useState(false);
+    const tripPhotoInputRef = useRef<HTMLInputElement>(null);
+    const [isScanReviewOpen, setIsScanReviewOpen] = useState(false);
+    const [scanReview, setScanReview] = useState<ScanSheetReview | null>(null);
+    const [isBatchCreating, setIsBatchCreating] = useState(false);
 
     // Editing State
     const [editingOrderId, setEditingOrderId] = useState<string | null>(null);
@@ -524,6 +606,12 @@ const DeliveryOrderManagement: React.FC = () => {
         if (isCreateModalOpen) fetchStock();
     }, [isCreateModalOpen]);
 
+    useEffect(() => {
+        if (isCreateModalOpen) {
+            window.dispatchEvent(new CustomEvent('packsecure:overlay-open'));
+        }
+    }, [isCreateModalOpen]);
+
     // --- HANDLERS ---
 
     const onDragEnd = async (result: DropResult) => {
@@ -691,6 +779,329 @@ const DeliveryOrderManagement: React.FC = () => {
         const updated = [...newOrderItems];
         updated.splice(index, 1);
         setNewOrderItems(updated);
+    };
+
+    const matchV2ItemByName = (product?: string): V2Item | null => {
+        const p = (product || '').trim().toLowerCase();
+        if (!p) return null;
+
+        const exact = v2Items.find(i => i.name.toLowerCase() === p);
+        if (exact) return exact;
+
+        const terms = p.split(/[\s-]+/).filter(Boolean);
+        const tokenMatch = v2Items.find(i => {
+            const n = i.name.toLowerCase();
+            return terms.every(term => n.includes(term));
+        });
+        if (tokenMatch) return tokenMatch;
+
+        return v2Items.find(i => i.name.toLowerCase().includes(p) || p.includes(i.name.toLowerCase())) || null;
+    };
+
+    const matchV2ItemBySku = (sku?: string): V2Item | null => {
+        const s = (sku || '').trim().toLowerCase();
+        if (!s) return null;
+
+        const exact = v2Items.find(i => i.sku.toLowerCase() === s);
+        if (exact) return exact;
+
+        return v2Items.find(i => i.sku.toLowerCase().includes(s) || s.includes(i.sku.toLowerCase())) || null;
+    };
+
+    const matchV2ItemFromScan = (sku?: string, product?: string): V2Item | null => {
+        return matchV2ItemByName(product) || matchV2ItemByName(sku) || matchV2ItemBySku(sku);
+    };
+
+    const mergeTripLineItems = (existing: SalesOrder['items'], incoming: SalesOrder['items']) => {
+        const merged = [...existing];
+        for (const item of incoming) {
+            const idx = merged.findIndex(
+                m => m.sku === item.sku && (m.sourceLocation || '') === (item.sourceLocation || '')
+            );
+            if (idx >= 0) {
+                merged[idx] = { ...merged[idx], quantity: merged[idx].quantity + item.quantity };
+            } else {
+                merged.push(item);
+            }
+        }
+        return merged;
+    };
+
+    const mapVisionRowsToItems = (rawItems: unknown[], defaultLoc: string): SalesOrder['items'] => {
+        if (!Array.isArray(rawItems)) return [];
+        const parsed: SalesOrder['items'] = [];
+        for (const row of rawItems) {
+            if (!row || typeof row !== 'object') continue;
+            const r = row as Record<string, unknown>;
+            const qty = Number(r.quantity) || 1;
+            const v2 = matchV2ItemFromScan(
+                r.sku != null ? String(r.sku) : undefined,
+                r.product != null ? String(r.product) : undefined
+            );
+            parsed.push({
+                product: v2?.name || String(r.product || r.sku || 'Unknown'),
+                sku: v2?.sku || String(r.sku || 'UNKNOWN'),
+                quantity: qty,
+                remark: r.remark ? String(r.remark) : '',
+                sourceLocation: r.sourceLocation ? String(r.sourceLocation) : defaultLoc,
+                packaging: (v2?.uom || 'Unit') as SalesOrder['items'][0]['packaging'],
+            });
+        }
+        return parsed;
+    };
+
+    const resolveDriverIdByName = (name?: string): string => {
+        if (!name?.trim()) return selectedDriverId;
+        const n = name.trim().toLowerCase();
+        const matched = drivers.find(d =>
+            (d.name || '').toLowerCase() === n ||
+            (d.name || '').toLowerCase().includes(n) ||
+            n.includes((d.name || '').toLowerCase())
+        );
+        return matched?.uid || selectedDriverId;
+    };
+
+    const visionErrorMessage = (response: Response, body: { error?: string }): string => {
+        if (response.status === 413) return 'Image too large. Try a closer photo or retake.';
+        if (response.status === 500 && body.error === 'Server AI Key not configured') {
+            return 'AI not configured on server. Contact admin.';
+        }
+        return body.error || `Scan failed (${response.status})`;
+    };
+
+    const handleTripPhotoScan = async (e: React.ChangeEvent<HTMLInputElement>) => {
+        const file = e.target.files?.[0];
+        e.target.value = '';
+        if (!file) return;
+
+        setIsTripPhotoScanning(true);
+        setToast(null);
+        try {
+            const dataUrl = await compressImage(file, 1200, 0.72);
+            const { base64, mimeType } = dataUrlToBase64Payload(dataUrl);
+
+            const response = await fetch('/api/agent/vision', {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({ imageBase64: base64, mimeType, type: 'trip' }),
+            });
+
+            if (!response.ok) {
+                const errBody = await response.json().catch(() => ({} as { error?: string }));
+                throw new Error(visionErrorMessage(response, errBody));
+            }
+
+            const data = (await response.json()) as Record<string, unknown>;
+            const defaultLoc = tripOrigin === 'NILAI' ? 'Nilai' : 'SPD';
+            const rawTrips = Array.isArray(data.trips) ? data.trips : [];
+
+            const trips: ScannedTripDraft[] = rawTrips.map((t, i) => {
+                const trip = (t && typeof t === 'object' ? t : {}) as Record<string, unknown>;
+                return {
+                    label: String(trip.label || `Trip ${i + 1}`),
+                    destinations: String(trip.destinations || ''),
+                    tripCategory: String(trip.tripCategory || '').toUpperCase(),
+                    tripDropCount: typeof trip.tripDropCount === 'number' ? trip.tripDropCount : 1,
+                    notes: String(trip.notes || ''),
+                    items: mapVisionRowsToItems(
+                        Array.isArray(trip.items) ? trip.items : [],
+                        defaultLoc
+                    ),
+                };
+            }).filter(t => t.destinations || t.items.length > 0);
+
+            if (trips.length === 0) {
+                throw new Error('No trips detected on this sheet. Try a clearer photo.');
+            }
+
+            const tripDate = data.tripDate ? String(data.tripDate).slice(0, 10) : newOrderDate;
+            const deliveryDate = data.deliveryDate ? String(data.deliveryDate).slice(0, 10) : newOrderDeliveryDate;
+
+            setScanReview({
+                tripDate,
+                deliveryDate,
+                driverId: resolveDriverIdByName(data.driverName ? String(data.driverName) : undefined),
+                sheetNotes: data.notes ? String(data.notes) : '',
+                trips,
+            });
+            setIsScanReviewOpen(true);
+            setToast({
+                type: 'success',
+                message: `Found ${trips.length} trip(s) on sheet. Review and confirm.`,
+            });
+        } catch (err: unknown) {
+            const msg = err instanceof Error ? err.message : 'Photo scan failed';
+            console.error(err);
+            setToast({ type: 'error', message: msg });
+        } finally {
+            setIsTripPhotoScanning(false);
+        }
+    };
+
+    const closeScanReview = () => {
+        setIsScanReviewOpen(false);
+        setScanReview(null);
+    };
+
+    const removeScannedTrip = (index: number) => {
+        setScanReview(prev => {
+            if (!prev) return prev;
+            const trips = prev.trips.filter((_, i) => i !== index);
+            if (trips.length === 0) {
+                closeScanReview();
+                return null;
+            }
+            return { ...prev, trips };
+        });
+    };
+
+    const applyFirstScannedTripToForm = () => {
+        if (!scanReview || scanReview.trips.length === 0) return;
+        const t = scanReview.trips[0];
+        setNewOrderDate(scanReview.tripDate);
+        setNewOrderDeliveryDate(scanReview.deliveryDate);
+        if (scanReview.driverId) setSelectedDriverId(scanReview.driverId);
+        setNewOrderAddress(t.destinations);
+        setTripCategory(t.tripCategory);
+        setTripDropCount(t.tripDropCount);
+        const notes = [scanReview.sheetNotes, t.notes].filter(Boolean).join(' | ');
+        setNewOrderNotes(notes);
+        setNewOrderItems(t.items);
+        closeScanReview();
+        setToast({ type: 'success', message: 'First trip loaded into form.' });
+    };
+
+    const generateDoNumber = async (driverId: string, orderDate: string): Promise<string> => {
+        const dateObj = new Date(orderDate || new Date().toISOString().split('T')[0]);
+        const yy = String(dateObj.getFullYear()).slice(-2);
+        const mm = String(dateObj.getMonth() + 1).padStart(2, '0');
+        const dd = String(dateObj.getDate()).padStart(2, '0');
+        const dateCode = `${yy}${mm}${dd}`;
+        const selectedDriverName = drivers.find(d => d.uid === driverId)?.name || 'HQ';
+        const driverPrefix = selectedDriverName.split(' ')[0].replace(/[^a-zA-Z0-9]/g, '');
+        const prefix = `DO-${driverPrefix}-${dateCode}`;
+
+        const { data: latestOrder } = await supabase
+            .from('sales_orders')
+            .select('order_number')
+            .like('order_number', `${prefix}-%`)
+            .order('created_at', { ascending: false })
+            .limit(1)
+            .maybeSingle();
+
+        let nextSeq = 1;
+        if (latestOrder?.order_number) {
+            const parts = latestOrder.order_number.split('-');
+            const parsed = parseInt(parts[parts.length - 1], 10);
+            if (!isNaN(parsed)) nextSeq = parsed + 1;
+        }
+        return `${prefix}-${String(nextSeq).padStart(3, '0')}`;
+    };
+
+    const insertNewTripFromDraft = async (draft: {
+        destinations: string;
+        tripCategory: string;
+        tripDropCount: number;
+        notes: string;
+        items: SalesOrder['items'];
+        orderDate: string;
+        deliveryDate: string;
+        driverId: string;
+    }) => {
+        const finalCustomer = orderCustomer.trim() || 'General Customer';
+        const doNumber = await generateDoNumber(draft.driverId, draft.orderDate);
+        const zone = draft.tripCategory || '';
+        const bestFactory = findBestFactory(zone, draft.items, stockMap);
+
+        if (draft.tripCategory) {
+            const categoryExists = deliveryRates.some(
+                r => getSafeOrigin(r.origin) === getSafeOrigin(tripOrigin) && r.location_name === draft.tripCategory
+            );
+            if (!categoryExists) {
+                try {
+                    await supabase.from('delivery_rates').insert({
+                        origin: tripOrigin,
+                        location_name: draft.tripCategory,
+                        base_rate: 0,
+                        max_places: 1,
+                        extra_rate_per_place: 0,
+                        notes: 'Auto-imported from Trip photo scan.',
+                    });
+                } catch (e) {
+                    console.error('Failed to auto-push category', e);
+                }
+            }
+        }
+
+        const payload: Record<string, unknown> = {
+            order_number: doNumber,
+            customer: finalCustomer,
+            delivery_address: draft.destinations,
+            zone: draft.tripCategory,
+            trip_origin: tripOrigin,
+            trip_drop_count: draft.tripDropCount,
+            factory_id: bestFactory.id,
+            driver_id: draft.driverId || null,
+            items: draft.items,
+            order_date: draft.orderDate,
+            deadline: draft.deliveryDate || null,
+            notes: draft.notes,
+            status: 'New',
+        };
+
+        const effectiveDate = draft.deliveryDate || draft.orderDate;
+        if (draft.driverId && effectiveDate) {
+            const isUUID = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i.test(draft.driverId);
+            if (!isUUID) {
+                throw new Error('Select a valid driver from the list before creating trips.');
+            }
+            const ok = checkDriverAvailability(draft.driverId, effectiveDate);
+            if (!ok) throw new Error('Driver availability check cancelled.');
+        }
+
+        const { error } = await supabase.from('sales_orders').insert(payload);
+        if (error) throw error;
+    };
+
+    const handleBatchCreateFromScan = async () => {
+        if (!scanReview || scanReview.trips.length === 0) return;
+        const empty = scanReview.trips.find(t => t.items.length === 0);
+        if (empty) {
+            alert(`"${empty.label}" has no items. Remove it or add items manually after create.`);
+            return;
+        }
+
+        setIsBatchCreating(true);
+        setToast(null);
+        try {
+            let created = 0;
+            for (const t of scanReview.trips) {
+                const notes = [scanReview.sheetNotes, t.notes].filter(Boolean).join(' | ');
+                await insertNewTripFromDraft({
+                    destinations: t.destinations,
+                    tripCategory: t.tripCategory,
+                    tripDropCount: t.tripDropCount,
+                    notes,
+                    items: t.items,
+                    orderDate: scanReview.tripDate,
+                    deliveryDate: scanReview.deliveryDate,
+                    driverId: scanReview.driverId,
+                });
+                created++;
+            }
+            closeScanReview();
+            handleCloseModal();
+            await fetchData();
+            setToast({
+                type: 'success',
+                message: `Created ${created} trip(s) from photo.`,
+            });
+        } catch (err: unknown) {
+            const msg = err instanceof Error ? err.message : 'Batch create failed';
+            setToast({ type: 'error', message: msg });
+        } finally {
+            setIsBatchCreating(false);
+        }
     };
 
     // REASSIGN DRIVER HANDLER
@@ -1002,6 +1413,7 @@ const DeliveryOrderManagement: React.FC = () => {
 
     const handleCloseModal = () => {
         setIsCreateModalOpen(false);
+        closeScanReview();
         setEditingOrderId(null); setNewOrderDate(getTodayStr());
         setSelectedDriverId('');
         setOrderCustomer('');
@@ -1037,53 +1449,6 @@ const DeliveryOrderManagement: React.FC = () => {
 
     // --- RENDER ---
     // (See return statement below for UI changes)
-
-    /* Unused AI Stub
-    const handleAIFileUpload = async (e: React.ChangeEvent<HTMLInputElement>) => {
-        const file = e.target.files?.[0];
-        if (!file) return;
-    
-        setIsAnalyzing(true);
-        try {
-            const reader = new FileReader();
-            reader.readAsDataURL(file);
-            reader.onload = async () => {
-                const base64Data = reader.result as string;
-                const base64Clean = base64Data.split(',')[1]; // Server expects raw base64
-    
-                // Call Server Vision API
-                const response = await fetch('/api/agent/vision', {
-                    method: 'POST',
-                    headers: { 'Content-Type': 'application/json' },
-                    body: JSON.stringify({ imageBase64: base64Clean })
-                });
-    
-                if (!response.ok) {
-                    const err = await response.json();
-                    throw new Error(err.error || 'Server error');
-                }
-    
-                const data = await response.json(); // Array of extracted objects
-    
-                if (Array.isArray(data) && data.length > 0) {
-                    const first = data[0]; // Take first contact found
-                    if (first.name) setOrderCustomer(first.name);
-                    if (first.address) setNewOrderAddress(first.address);
-                    // You could also extract items if the prompt was updated, but for now just Contact Info
-                    alert(`✨ AI Extracted:\nName: ${first.name}\nAddress: ${first.address}`);
-                } else {
-                    alert("AI couldn't find contact info in this image.");
-                }
-                setIsAnalyzing(false);
-            };
-        } catch (err: any) {
-            console.error(err);
-            alert("AI Error: " + err.message);
-            setIsAnalyzing(false);
-        }
-    };
-    */
-
 
     // Render Helpers
     // Render Helpers
@@ -1565,7 +1930,7 @@ const DeliveryOrderManagement: React.FC = () => {
                                                                 )}
                                                             </div>
 
-                                                            {/* APPROVE BUTTON FOR VIVIAN */}
+                                                            {/* Approve driver quantity amendments */}
                                                             {order.status === 'Pending Approval' && (
                                                                 <div className="mt-4">
                                                                     <button
@@ -1726,12 +2091,12 @@ const DeliveryOrderManagement: React.FC = () => {
             {/* --- CREATE / EDIT MODAL --- */}
             {
                 isCreateModalOpen && (
-                    <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/60 backdrop-blur-sm animate-in fade-in duration-200">
-                        <div className="bg-slate-950 border border-slate-800 rounded-2xl w-full max-w-2xl max-h-[90vh] overflow-hidden flex flex-col shadow-2xl shadow-black">
+                    <div className="fixed inset-0 z-[100] flex items-center justify-center p-0 sm:p-3 lg:p-6 bg-black/70 backdrop-blur-sm animate-in fade-in duration-200">
+                        <div className="bg-slate-950 border-0 sm:border border-slate-800 rounded-none sm:rounded-2xl w-full max-w-6xl h-full sm:h-[min(96vh,920px)] overflow-hidden flex flex-col shadow-2xl shadow-black">
                             {/* Modal Header */}
-                            <div className="p-6 border-b border-slate-800 flex justify-between items-center bg-slate-900/50">
-                                <div>
-                                    <h2 className="text-xl font-bold text-slate-100 flex items-center gap-2">
+                            <div className="p-4 sm:p-6 border-b border-slate-800 flex justify-between items-start sm:items-center gap-3 bg-slate-900/50">
+                                <div className="min-w-0 flex-1">
+                                    <h2 className="text-lg sm:text-xl font-bold text-slate-100 flex items-center gap-2">
                                         {editingOrderId ? <FileText className="text-blue-400" /> : <Plus className="text-blue-400" />}
                                         {editingOrderId ? 'Edit Trip' : 'Create New Trip'}
                                     </h2>
@@ -1745,6 +2110,28 @@ const DeliveryOrderManagement: React.FC = () => {
                                     )}
                                 </div>
                                 <div className="flex items-center gap-2 self-start">
+                                    <input
+                                        ref={tripPhotoInputRef}
+                                        type="file"
+                                        accept="image/*"
+                                        capture="environment"
+                                        className="hidden"
+                                        onChange={handleTripPhotoScan}
+                                    />
+                                    <button
+                                        type="button"
+                                        disabled={isTripPhotoScanning}
+                                        onClick={() => tripPhotoInputRef.current?.click()}
+                                        className="flex items-center gap-1.5 sm:gap-2 px-2.5 sm:px-4 py-2 rounded-xl bg-violet-600/20 border border-violet-500/40 text-violet-200 hover:bg-violet-600/30 disabled:opacity-50 text-xs font-bold uppercase tracking-wide transition-all shrink-0"
+                                    >
+                                        {isTripPhotoScanning ? (
+                                            <span className="w-4 h-4 border-2 border-violet-300/30 border-t-violet-200 rounded-full animate-spin" />
+                                        ) : (
+                                            <Sparkles size={16} />
+                                        )}
+                                        <span className="hidden sm:inline">{isTripPhotoScanning ? 'Scanning…' : 'Scan Photo'}</span>
+                                        <span className="sm:hidden sr-only">{isTripPhotoScanning ? 'Scanning' : 'Scan photo'}</span>
+                                    </button>
                                     <button onClick={handleCloseModal} className="p-2 hover:bg-slate-800 rounded-lg text-slate-500 hover:text-white transition-all">
                                         <X size={20} />
                                     </button>
@@ -1752,10 +2139,12 @@ const DeliveryOrderManagement: React.FC = () => {
                             </div>
 
                             {/* Modal Body */}
-                            <div className="flex-1 overflow-y-auto p-6 space-y-6 custom-scrollbar bg-slate-950">
+                            <div className="flex-1 overflow-y-auto p-4 sm:p-6 lg:p-8 custom-scrollbar bg-slate-950 min-h-0">
+                                <div className="grid grid-cols-1 lg:grid-cols-2 gap-6 lg:gap-8">
+                                <div className="space-y-6">
 
                                 {/* Section 1: Basic Info (Simpler) */}
-                                <div className="grid grid-cols-2 gap-4">
+                                <div className="grid grid-cols-1 lg:grid-cols-2 gap-4">
                                     <div>
                                         <label className="block text-xs font-bold text-slate-500 uppercase mb-2">Assigned Driver</label>
                                         <div className="relative">
@@ -1789,7 +2178,7 @@ const DeliveryOrderManagement: React.FC = () => {
                                         </div>
                                     </div>
                                     <div>
-                                        <div className="grid grid-cols-2 gap-4">
+                                        <div className="grid grid-cols-1 sm:grid-cols-2 gap-3 sm:gap-4">
                                             <div>
                                                 <label className="block text-[10px] font-black text-slate-600 uppercase mb-2 tracking-widest flex items-center gap-2">
                                                     <Calendar size={12} /> Trip Date
@@ -1817,15 +2206,9 @@ const DeliveryOrderManagement: React.FC = () => {
                                                 </div>
                                             </div>
                                         </div>
-                                        <div className="mt-1 flex justify-between px-1">
+                                        <div className="hidden lg:flex mt-1 justify-between px-1">
                                             <div className="text-[9px] text-slate-700 font-bold uppercase">Ord: {formatDateDMY(newOrderDate) || "Today"}</div>
                                             <div className="text-[9px] text-blue-500/60 font-black uppercase">Del: {formatDateDMY(newOrderDeliveryDate) || "Not Set"}</div>
-                                        </div>
-                                        <div className="mt-1 text-[10px] text-slate-600 font-bold px-1 flex justify-between">
-                                            <span>Format: DD/MM/YYYY</span>
-                                            {newOrderDeliveryDate && (
-                                                <span className="text-blue-500/80">Selected: {formatDateDMY(newOrderDeliveryDate)}</span>
-                                            )}
                                         </div>
                                     </div>
                                 </div>
@@ -1854,7 +2237,7 @@ const DeliveryOrderManagement: React.FC = () => {
                                     />
 
                                     {/* DRIVER PAYROLL RATES: Origin, Category, Drops */}
-                                    <div className="grid grid-cols-3 gap-4 bg-slate-900/50 p-4 border border-slate-800 rounded-xl">
+                                    <div className="grid grid-cols-1 max-lg:gap-3 lg:grid-cols-3 gap-4 bg-slate-900/50 p-4 border border-slate-800 rounded-xl">
                                         <div>
                                             <label className="block text-[10px] font-bold text-blue-500/80 uppercase tracking-widest mb-2">Origin</label>
                                             <select
@@ -1935,30 +2318,83 @@ const DeliveryOrderManagement: React.FC = () => {
                                     </div>
                                 </div>
 
-                                <hr className="border-slate-800" />
+                                </div>
 
-                                {/* Section 2: Items */}
-                                <div>
+                                <div className="flex flex-col min-h-0 lg:min-h-[min(72vh,680px)]">
                                     <h3 className="text-sm font-bold text-slate-400 uppercase tracking-wider mb-4 flex items-center gap-2">
                                         <Box size={16} /> Trip Items
                                     </h3>
 
                                     {/* Item List Layout */}
-                                    <div className="bg-slate-900/80 rounded-2xl border border-slate-800 shadow-lg flex flex-col min-h-[400px]">
-                                        <div className="p-4 border-b border-slate-800 flex items-center justify-between">
-                                            <div className="flex items-center gap-2 text-xs font-bold text-slate-500 uppercase">
-                                                <Box size={14} /> Items List
+                                    <div className="bg-slate-900/80 rounded-2xl border border-slate-800 shadow-lg flex flex-col flex-1 min-h-0 overflow-hidden">
+                                        <div className="p-4 border-b border-slate-800 bg-slate-800/40 flex flex-col gap-3 shrink-0 z-10">
+                                            <div className="flex items-center justify-between gap-2">
+                                            <div className="flex items-center gap-2 text-xs font-bold text-slate-400 uppercase tracking-wider">
+                                                <ImagePlus size={14} className="text-blue-400" /> Quick Add (search by name)
                                             </div>
-                                            <div className="text-xs font-bold text-slate-600 bg-slate-900 px-2 py-1 rounded">
-                                                {newOrderItems.length} Items
+                                            <div className="text-xs font-bold text-slate-500 bg-slate-950 px-2 py-1 rounded border border-slate-800">
+                                                {newOrderItems.length} in list
+                                            </div>
+                                            </div>
+                                            <SearchableSelect
+                                                placeholder="Type product name (e.g. stretch film)..."
+                                                dropdownMaxHeight="max-h-[min(55vh,32rem)]"
+                                                options={v2Items.map(item => ({
+                                                    value: item.sku,
+                                                    label: item.name,
+                                                    subLabel: `${item.sku} • Stock: ${stockMap[item.sku] || 0}`,
+                                                    searchText: [item.brand, item.description, item.legacy_code].filter(Boolean).join(' '),
+                                                    statusColor: (stockMap[item.sku] || 0) < 100 ? 'text-red-400' : 'text-green-400',
+                                                    statusLabel: (stockMap[item.sku] || 0) < 100 ? 'LOW' : 'OK'
+                                                }))}
+                                                value={selectedV2Item?.sku || ''}
+                                                onChange={(val) => {
+                                                    const i = v2Items.find(x => x.sku === val);
+                                                    setSelectedV2Item(i || null);
+                                                }}
+                                            />
+                                            <div className="flex flex-wrap gap-2">
+                                                <select
+                                                    className="min-w-[5rem] bg-slate-950 border border-slate-700 rounded-xl px-3 py-3 text-slate-300 outline-none focus:border-blue-500 text-xs font-bold uppercase"
+                                                    value={currentItemLoc}
+                                                    onChange={e => setCurrentItemLoc(e.target.value)}
+                                                >
+                                                    {WAREHOUSES.filter(w => tripOrigin === 'NILAI' ? w === 'Nilai' : w !== 'Nilai').map(loc => (
+                                                        <option key={loc} value={loc}>{loc}</option>
+                                                    ))}
+                                                    <option value="">No Loc</option>
+                                                </select>
+                                                <input
+                                                    type="text"
+                                                    placeholder="Item remark..."
+                                                    className="flex-1 min-w-[8rem] bg-slate-950 border border-slate-700 rounded-xl px-4 py-3 text-slate-300 outline-none focus:border-blue-500 text-sm placeholder:text-slate-600"
+                                                    value={currentItemRemark}
+                                                    onChange={e => setCurrentItemRemark(e.target.value)}
+                                                />
+                                                <input
+                                                    type="number"
+                                                    placeholder="Qty"
+                                                    className="w-20 bg-slate-950 border border-slate-700 rounded-xl px-2 py-3 text-white text-right font-bold outline-none focus:border-orange-500 text-sm"
+                                                    value={currentItemQty || ''}
+                                                    onChange={e => setCurrentItemQty(Number(e.target.value))}
+                                                />
+                                                <button
+                                                    type="button"
+                                                    onClick={handleAddItem}
+                                                    disabled={!selectedV2Item || !currentItemQty}
+                                                    className="bg-blue-600 hover:bg-blue-500 disabled:opacity-50 text-white px-5 py-3 rounded-xl font-bold text-sm transition-all flex items-center gap-2 shrink-0"
+                                                >
+                                                    <Plus size={16} /> Add
+                                                </button>
                                             </div>
                                         </div>
-
-                                        {/* Items List (Inline Edit) */}
-                                        <div className="flex-1 p-4 space-y-2 overflow-y-auto max-h-[400px]">
+                                        <div className="px-4 py-2 border-b border-slate-800/80 text-[10px] font-bold text-slate-600 uppercase shrink-0 flex items-center gap-2">
+                                            <Box size={12} /> Line items
+                                        </div>
+                                        <div className="flex-1 min-h-0 p-4 space-y-2 overflow-y-auto custom-scrollbar max-h-[min(42vh,380px)] xl:max-h-none">
                                             {newOrderItems.length === 0 ? (
                                                 <div className="text-center py-12 text-slate-700 text-sm italic border-2 border-dashed border-slate-800/50 rounded-xl">
-                                                    List empty. Add items below.
+                                                    No items yet. Use Quick Add above or Scan Photo.
                                                 </div>
                                             ) : (
                                                 newOrderItems.map((item, idx) => (
@@ -2031,63 +2467,8 @@ const DeliveryOrderManagement: React.FC = () => {
                                             )}
                                         </div>
 
-                                        {/* Add Row (Footer) - Search Only */}
-                                        <div className="bg-slate-800/50 p-4 border-t border-slate-700/50 flex flex-col gap-3 rounded-b-2xl">
-                                            <div className="text-[10px] text-slate-400 font-bold uppercase tracking-wider">Quick Add (Search SKU)</div>
-
-                                            <div className="flex flex-col gap-3">
-                                                <SearchableSelect
-                                                    placeholder="Select Product..."
-                                                    options={v2Items.map(item => ({
-                                                        value: item.sku,
-                                                        label: item.name,
-                                                        subLabel: `${item.sku} • Stock: ${stockMap[item.sku] || 0}`,
-                                                        statusColor: (stockMap[item.sku] || 0) < 100 ? 'text-red-400' : 'text-green-400',
-                                                        statusLabel: (stockMap[item.sku] || 0) < 100 ? 'LOW' : 'OK'
-                                                    }))}
-                                                    value={selectedV2Item?.sku || ''}
-                                                    onChange={(val) => {
-                                                        const i = v2Items.find(x => x.sku === val);
-                                                        setSelectedV2Item(i || null);
-                                                    }}
-                                                    minimal
-                                                />
-                                                <div className="flex gap-2">
-                                                    <select
-                                                        className="w-1/4 bg-slate-950 border border-slate-700 rounded-xl px-3 py-3 text-slate-300 outline-none focus:border-blue-500 text-xs font-bold uppercase transition-all"
-                                                        value={currentItemLoc}
-                                                        onChange={e => setCurrentItemLoc(e.target.value)}
-                                                    >
-                                                        {WAREHOUSES.filter(w => tripOrigin === 'NILAI' ? w === 'Nilai' : w !== 'Nilai').map(loc => (
-                                                            <option key={loc} value={loc}>{loc}</option>
-                                                        ))}
-                                                        <option value="">No Loc</option>
-                                                    </select>
-                                                    <input
-                                                        type="text"
-                                                        placeholder="Item Remark..."
-                                                        className="flex-1 bg-slate-950 border border-slate-700 rounded-xl px-4 py-3 text-slate-300 outline-none focus:border-blue-500 text-sm placeholder:text-slate-600"
-                                                        value={currentItemRemark}
-                                                        onChange={e => setCurrentItemRemark(e.target.value)}
-                                                    />
-                                                    <input
-                                                        type="number"
-                                                        placeholder="Qty"
-                                                        className="w-20 bg-slate-950 border border-slate-700 rounded-xl px-2 py-3 text-white text-right font-bold outline-none focus:border-orange-500 text-sm"
-                                                        value={currentItemQty || ''}
-                                                        onChange={e => setCurrentItemQty(Number(e.target.value))}
-                                                    />
-                                                    <button
-                                                        onClick={handleAddItem}
-                                                        disabled={!selectedV2Item || !currentItemQty}
-                                                        className="bg-slate-700 hover:bg-slate-600 disabled:opacity-50 text-white px-4 rounded-xl font-bold text-sm transition-all flex items-center justify-center gap-2"
-                                                    >
-                                                        <Plus size={16} /> Add
-                                                    </button>
-                                                </div>
-                                            </div>
-                                        </div>
                                     </div>
+                                </div>
                                 </div>
                             </div>
 
@@ -2110,6 +2491,128 @@ const DeliveryOrderManagement: React.FC = () => {
                     </div>
                 )
             }
+
+            {/* --- TRIP SCAN REVIEW (batch create from photo) --- */}
+            {isScanReviewOpen && scanReview && (
+                <div className="fixed inset-0 z-[110] flex items-center justify-center p-3 sm:p-4 bg-black/80 backdrop-blur-sm">
+                    <div className="bg-slate-950 border border-slate-800 rounded-2xl w-full max-w-2xl max-h-[min(92vh,720px)] overflow-hidden flex flex-col shadow-2xl">
+                        <div className="p-4 sm:p-5 border-b border-slate-800 flex justify-between items-start gap-3">
+                            <div>
+                                <h3 className="text-lg font-bold text-white flex items-center gap-2">
+                                    <Sparkles className="text-violet-400" size={20} />
+                                    Photo Scan Review
+                                </h3>
+                                <p className="text-xs text-slate-500 mt-1">
+                                    {scanReview.trips.length} trip(s) detected — confirm to create all, or load the first into the form only.
+                                </p>
+                            </div>
+                            <button type="button" onClick={closeScanReview} className="p-2 hover:bg-slate-800 rounded-lg text-slate-500">
+                                <X size={20} />
+                            </button>
+                        </div>
+
+                        <div className="flex-1 overflow-y-auto p-4 sm:p-5 space-y-4 custom-scrollbar">
+                            <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
+                                <div>
+                                    <label className="block text-[10px] font-bold text-slate-500 uppercase mb-1">Trip Date</label>
+                                    <input
+                                        type="date"
+                                        className="w-full bg-slate-900 border border-slate-800 rounded-xl px-3 py-2.5 text-sm text-slate-200 [color-scheme:dark]"
+                                        value={scanReview.tripDate}
+                                        onChange={e => setScanReview({ ...scanReview, tripDate: e.target.value })}
+                                    />
+                                </div>
+                                <div>
+                                    <label className="block text-[10px] font-bold text-slate-500 uppercase mb-1">Delivery Date</label>
+                                    <input
+                                        type="date"
+                                        className="w-full bg-slate-900 border border-slate-800 rounded-xl px-3 py-2.5 text-sm text-slate-200 [color-scheme:dark]"
+                                        value={scanReview.deliveryDate}
+                                        onChange={e => setScanReview({ ...scanReview, deliveryDate: e.target.value })}
+                                    />
+                                </div>
+                            </div>
+                            <div>
+                                <label className="block text-[10px] font-bold text-slate-500 uppercase mb-1">Assigned Driver</label>
+                                <input
+                                    list="drivers-list-scan"
+                                    className="w-full bg-slate-900 border border-slate-800 rounded-xl px-3 py-2.5 text-sm text-slate-200"
+                                    placeholder="Select driver..."
+                                    value={drivers.find(d => d.uid === scanReview.driverId)?.name || ''}
+                                    onChange={e => {
+                                        const val = e.target.value;
+                                        const matched = drivers.find(d =>
+                                            (d.name || '').toLowerCase() === val.toLowerCase()
+                                        );
+                                        setScanReview({
+                                            ...scanReview,
+                                            driverId: matched?.uid || scanReview.driverId,
+                                        });
+                                    }}
+                                />
+                                <datalist id="drivers-list-scan">
+                                    {drivers.filter(d => (d.base_location || 'Taiping').toUpperCase() === tripOrigin).map(d => (
+                                        <option key={d.uid} value={d.name || ''} />
+                                    ))}
+                                </datalist>
+                            </div>
+
+                            {scanReview.trips.map((trip, idx) => (
+                                <div key={idx} className="bg-slate-900/80 border border-slate-800 rounded-xl p-4">
+                                    <div className="flex justify-between items-start gap-2 mb-2">
+                                        <div className="min-w-0">
+                                            <div className="font-bold text-white text-sm">{trip.label}</div>
+                                            <div className="text-xs text-slate-400 mt-1 truncate">{trip.destinations || '—'}</div>
+                                            <div className="text-[10px] text-slate-500 mt-1">
+                                                {trip.tripCategory || 'No category'} · {trip.tripDropCount} drop(s) · {trip.items.length} item(s)
+                                            </div>
+                                        </div>
+                                        <button
+                                            type="button"
+                                            onClick={() => removeScannedTrip(idx)}
+                                            className="text-slate-500 hover:text-red-400 p-1 shrink-0"
+                                            title="Remove this trip"
+                                        >
+                                            <Trash2 size={16} />
+                                        </button>
+                                    </div>
+                                    {trip.items.length > 0 && (
+                                        <ul className="text-xs text-slate-400 space-y-1 max-h-28 overflow-y-auto custom-scrollbar border-t border-slate-800 pt-2 mt-2">
+                                            {trip.items.map((item, i) => (
+                                                <li key={i} className="flex justify-between gap-2">
+                                                    <span className="truncate">{item.product}</span>
+                                                    <span className="font-mono text-orange-400 shrink-0">×{item.quantity}</span>
+                                                </li>
+                                            ))}
+                                        </ul>
+                                    )}
+                                </div>
+                            ))}
+                        </div>
+
+                        <div className="p-4 border-t border-slate-800 flex flex-col sm:flex-row gap-2 sm:justify-end">
+                            <button
+                                type="button"
+                                onClick={applyFirstScannedTripToForm}
+                                className="px-4 py-2.5 rounded-xl border border-slate-700 text-slate-300 text-sm font-bold hover:bg-slate-800"
+                            >
+                                Use first trip only
+                            </button>
+                            <button
+                                type="button"
+                                onClick={handleBatchCreateFromScan}
+                                disabled={isBatchCreating}
+                                className="px-6 py-2.5 rounded-xl bg-blue-600 hover:bg-blue-500 disabled:opacity-50 text-white text-sm font-bold flex items-center justify-center gap-2"
+                            >
+                                {isBatchCreating ? (
+                                    <span className="w-4 h-4 border-2 border-white/30 border-t-white rounded-full animate-spin" />
+                                ) : null}
+                                Confirm & Create {scanReview.trips.length} Trip{scanReview.trips.length > 1 ? 's' : ''}
+                            </button>
+                        </div>
+                    </div>
+                </div>
+            )}
 
             {/* --- SPLIT ORDER MODAL --- */}
             {isSplitModalOpen && splitOrder && (

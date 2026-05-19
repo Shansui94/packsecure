@@ -191,7 +191,7 @@ const DriverDelivery: React.FC<DriverDeliveryProps> = ({ user }) => {
                     proof_of_load_url: photoUrl
                 }).eq('id', selectedOrder.id);
 
-                alert("⚠️ Order quantity changed. Sent to Vivian for Approval.");
+                alert("⚠️ Order quantity changed. Pending logistics approval.");
 
             } else {
                 // 2. NO AMENDMENTS - Stock already deducted at order creation via DB trigger
@@ -621,7 +621,7 @@ const DriverDelivery: React.FC<DriverDeliveryProps> = ({ user }) => {
                                     }`}>
                                     {order.status === 'Pending Approval' ? (
                                         <>
-                                            <Truck size={14} /> Sent to Vivian
+                                            <Truck size={14} /> Pending logistics approval
                                         </>
                                     ) : (
                                         <>

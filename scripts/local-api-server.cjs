@@ -97,10 +97,9 @@ const server = http.createServer(async (req, res) => {
                 .eq('id', caller.id)
                 .single();
 
-            const allowedRoles = ['Admin', 'SuperAdmin', 'Manager'];
-            const isVivian = caller.email === 'diyadmin1111@gmail.com';
+            const allowedRoles = ['Admin', 'SuperAdmin', 'Manager', 'LogisticsCoordinator'];
 
-            if (!callerProfile || (!allowedRoles.includes(callerProfile.role) && !isVivian)) {
+            if (!callerProfile || !allowedRoles.includes(callerProfile.role)) {
                 res.writeHead(403);
                 return res.end(JSON.stringify({ error: 'Forbidden: No permission' }));
             }
@@ -166,9 +165,8 @@ const server = http.createServer(async (req, res) => {
             const { data: callerProfile } = await supabaseAdmin
                 .from('users_public').select('role').eq('id', caller.id).single();
 
-            const allowedRoles = ['Admin', 'SuperAdmin', 'Manager'];
-            const isVivian = caller.email === 'diyadmin1111@gmail.com';
-            if (!callerProfile || (!allowedRoles.includes(callerProfile.role) && !isVivian)) {
+            const allowedRoles = ['Admin', 'SuperAdmin', 'Manager', 'LogisticsCoordinator'];
+            if (!callerProfile || !allowedRoles.includes(callerProfile.role)) {
                 res.writeHead(403); return res.end(JSON.stringify({ error: 'Forbidden' }));
             }
 

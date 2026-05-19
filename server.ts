@@ -6,6 +6,7 @@ import chatHandler from './api/agent/chat';
 import manageEmployeeHandler from './api/manage-employee';
 import createDriverHandler from './api/create-driver';
 import deleteDriverHandler from './api/delete-driver';
+import visionHandler from './api/agent/vision';
 
 const app = express();
 const PORT = 8080;
@@ -29,6 +30,7 @@ const mountVercelHandler = (path: string, handler: (req: any, res: any) => Promi
 mountVercelHandler('/api/manage-employee', manageEmployeeHandler);
 mountVercelHandler('/api/create-driver', createDriverHandler);
 mountVercelHandler('/api/delete-driver', deleteDriverHandler);
+mountVercelHandler('/api/agent/vision', visionHandler);
 
 // Mimic Vercel Request/Response for the handler
 app.post('/api/agent/chat', async (req, res) => {
@@ -47,6 +49,7 @@ app.post('/api/agent/chat', async (req, res) => {
 app.listen(PORT, () => {
     console.log(`\n✅ Local API Server running at http://localhost:${PORT}`);
     console.log(`   - Chat:           http://localhost:${PORT}/api/agent/chat`);
+    console.log(`   - Vision:         http://localhost:${PORT}/api/agent/vision`);
     console.log(`   - HR / Drivers:   /api/manage-employee, /api/create-driver, /api/delete-driver`);
     console.log(`   - AI Model: Gemini 2.0 Flash (Validated)\n`);
 });

@@ -1,7 +1,15 @@
-import { useState, useEffect, useRef } from 'react';
+import { useState, useEffect, useRef, useCallback } from 'react';
 import { Stage, Layer, Rect, Text, Group, Line, Circle, Image as KonvaImage } from 'react-konva';
-import { Settings, ZoomIn, ZoomOut, Maximize, Plus, Save, Camera, MousePointer2, List, Map, Grid3X3, Loader2 } from 'lucide-react';
+import { Settings, ZoomIn, ZoomOut, Maximize, Plus, Save, Camera, MousePointer2, List, Map, Grid3X3, Loader2, Copy, ClipboardPaste, History, Lock, Upload } from 'lucide-react';
 import { supabase } from '../services/supabase';
+import type { User } from '../types';
+
+function canEditFloorPlan(user?: User | null): boolean {
+    if (!user) return false;
+    if (user.role === 'SuperAdmin' || user.role === 'Admin') return true;
+    if (user.roleModules?.includes('floor-plan-edit')) return true;
+    return false;
+}
 
 // ----------------------------------------------------------------------------
 // Type Definitions
@@ -31,6 +39,16 @@ interface FloorItem {
     rotation: number;
 }
 
+function cloneFloorItem(item: FloorItem, offsetCm = 50): FloorItem {
+    return {
+        ...item,
+        id: `m${Date.now()}_${Math.random().toString(36).slice(2, 7)}`,
+        points: item.points ? [...item.points] : undefined,
+        x_cm: item.x_cm + offsetCm,
+        y_cm: item.y_cm + offsetCm,
+    };
+}
+
 // ----------------------------------------------------------------------------
 const BLACK_CROSSHAIR = `url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='24' height='24' viewBox='0 0 24 24'%3E%3Cpath d='M12 2v20M2 12h20' stroke='black' stroke-width='2'/%3E%3C/svg%3E") 12 12, crosshair`;
 
@@ -41,14 +59,38 @@ const COLORS: Record<string, string> = {
     Alarm: '#ef4444',   // red-500
 };
 
-export default function FloorPlan() {
+interface FloorPlanProps {
+    user?: User | null;
+}
+
+interface LayoutRevisionRow {
+    id: string;
+    zone_id: string;
+    revision_number: number;
+    snapshot: { floor: FloorPlanArea; items: FloorItem[] };
+    created_at: string;
+}
+
+export default function FloorPlan({ user }: FloorPlanProps) {
+    const canEditLayout = canEditFloorPlan(user);
+
     // State
     const [floors, setFloors] = useState<FloorPlanArea[]>([]);
     const [activeFloorId, setActiveFloorId] = useState<string>('');
     const [machinesData, setMachinesData] = useState<Record<string, FloorItem[]>>({});
+    const [persistedZoneIds, setPersistedZoneIds] = useState<Set<string>>(new Set());
+    const [persistedItemIds, setPersistedItemIds] = useState<Set<string>>(new Set());
     const [isLoading, setIsLoading] = useState(true);
     const [isSaving, setIsSaving] = useState(false);
+    const [isPublishing, setIsPublishing] = useState(false);
     const [isEditMode, setIsEditMode] = useState(false);
+    const [isDirty, setIsDirty] = useState(false);
+    const [revisionPanelOpen, setRevisionPanelOpen] = useState(false);
+    const [revisions, setRevisions] = useState<LayoutRevisionRow[]>([]);
+    const [revisionsLoading, setRevisionsLoading] = useState(false);
+    const clipboardRef = useRef<FloorItem | null>(null);
+    const pasteCountRef = useRef(0);
+    const [hasClipboard, setHasClipboard] = useState(false);
     const [selectedId, setSelectedId] = useState<string | null>(null);
     const [bgImageObj, setBgImageObj] = useState<HTMLImageElement | null>(null);
     const [hoveredData, setHoveredData] = useState<{item: FloorItem, x: number, y: number} | null>(null);
@@ -61,11 +103,41 @@ export default function FloorPlan() {
     // Canvas Stage State
     const [stageScale, setStageScale] = useState(0.4); // 0.4 means 40% zoom
     const [stagePosition, setStagePosition] = useState({ x: 50, y: 50 });
+    const [stageSize, setStageSize] = useState({ width: 800, height: 500 });
     const stageRef = useRef<any>(null);
+    const canvasContainerRef = useRef<HTMLDivElement>(null);
 
     const activeFloor = floors.find(f => f.id === activeFloorId) || floors[0] || { id: 'dummy', name: 'Loading...', width_cm: 2000, height_cm: 1500 };
     const activeMachines = machinesData[activeFloorId] || [];
     const selectedMachine = activeMachines.find(m => m.id === selectedId);
+
+    const markDirty = useCallback(() => setIsDirty(true), []);
+
+    // Size Konva stage to the canvas container (not full window — avoids layout overflow)
+    useEffect(() => {
+        const el = canvasContainerRef.current;
+        if (!el) return;
+        const update = () => {
+            const w = el.clientWidth;
+            const h = el.clientHeight;
+            if (w > 0 && h > 0) setStageSize({ width: w, height: h });
+        };
+        update();
+        const ro = new ResizeObserver(update);
+        ro.observe(el);
+        window.addEventListener('resize', update);
+        return () => {
+            ro.disconnect();
+            window.removeEventListener('resize', update);
+        };
+    }, [viewMode, isEditMode, activeFloorId]);
+
+    useEffect(() => {
+        if (!canEditLayout && isEditMode) {
+            setIsEditMode(false);
+            setSelectedId(null);
+        }
+    }, [canEditLayout, isEditMode]);
 
     // Fetch from Supabase
     useEffect(() => {
@@ -81,6 +153,7 @@ export default function FloorPlan() {
                 if (zones && zones.length > 0) {
                     setFloors(zones);
                     setActiveFloorId(zones[0].id);
+                    setPersistedZoneIds(new Set(zones.map(z => z.id)));
                     
                     const grouped: Record<string, FloorItem[]> = {};
                     zones.forEach(z => grouped[z.id] = []);
@@ -89,6 +162,9 @@ export default function FloorPlan() {
                             if (!grouped[i.zone_id]) grouped[i.zone_id] = [];
                             grouped[i.zone_id].push(i as FloorItem);
                         });
+                        setPersistedItemIds(new Set(items.map(i => i.id)));
+                    } else {
+                        setPersistedItemIds(new Set());
                     }
                     setMachinesData(grouped);
                 } else {
@@ -98,7 +174,13 @@ export default function FloorPlan() {
                     setFloors([fallbackFloor]);
                     setActiveFloorId(fId);
                     setMachinesData({ [fId]: [] });
+                    setPersistedZoneIds(new Set());
+                    setPersistedItemIds(new Set());
                 }
+                setIsDirty(false);
+                clipboardRef.current = null;
+                pasteCountRef.current = 0;
+                setHasClipboard(false);
             } catch (e) {
                 console.error("Error loading floor plan:", e);
             }
@@ -152,10 +234,31 @@ export default function FloorPlan() {
         };
     }, []);
 
+    const itemToRow = (m: FloorItem, floorId: string) => ({
+        id: m.id,
+        zone_id: floorId,
+        machine_id: m.machine_id,
+        type: m.type,
+        shape: m.shape,
+        points: m.points,
+        name: m.name,
+        status: m.status,
+        x_cm: m.x_cm,
+        y_cm: m.y_cm,
+        width_cm: m.width_cm,
+        height_cm: m.height_cm,
+        rotation: m.rotation,
+    });
+
     const handleSaveToDb = async () => {
+        if (!canEditLayout) return;
         setIsSaving(true);
         try {
+            const currentZoneIds = new Set(floors.map(f => f.id));
+            const currentItemIds = new Set<string>();
+
             for (const f of floors) {
+                const nextRevision = ((f as FloorPlanArea & { layout_revision?: number }).layout_revision ?? 0) + 1;
                 const { error } = await supabase.from('factory_zones').upsert({
                     id: f.id,
                     name: f.name,
@@ -163,40 +266,137 @@ export default function FloorPlan() {
                     height_cm: f.height_cm,
                     bg_image_url: f.bg_image_url,
                     shape: f.shape,
-                    points: f.points
+                    points: f.points,
+                    layout_revision: nextRevision,
                 });
-                if (error) throw error;
+                if (error) {
+                    const { error: fallbackErr } = await supabase.from('factory_zones').upsert({
+                        id: f.id,
+                        name: f.name,
+                        width_cm: f.width_cm,
+                        height_cm: f.height_cm,
+                        bg_image_url: f.bg_image_url,
+                        shape: f.shape,
+                        points: f.points,
+                    });
+                    if (fallbackErr) throw fallbackErr;
+                } else {
+                    (f as FloorPlanArea & { layout_revision?: number }).layout_revision = nextRevision;
+                }
+
+                const zoneItems = machinesData[f.id] || [];
+                if (zoneItems.length > 0) {
+                    const { error: itemsErr } = await supabase
+                        .from('factory_zone_items')
+                        .upsert(zoneItems.map(m => itemToRow(m, f.id)));
+                    if (itemsErr) throw itemsErr;
+                }
+                zoneItems.forEach(m => currentItemIds.add(m.id));
+
+                const snapshot = { floor: f, items: zoneItems };
+                const revNum = (f as FloorPlanArea & { layout_revision?: number }).layout_revision ?? 1;
+                const { error: revErr } = await supabase.from('factory_zone_layout_revisions').insert({
+                    zone_id: f.id,
+                    revision_number: revNum,
+                    snapshot,
+                    created_by: user?.uid ?? null,
+                });
+                if (revErr) {
+                    console.warn('[FloorPlan] Revision history skipped (run scripts/db_ops/factory_zone_layout_revisions.sql):', revErr.message);
+                }
             }
 
-            for (const floorId of Object.keys(machinesData)) {
-                 await supabase.from('factory_zone_items').delete().eq('zone_id', floorId);
-                 if (machinesData[floorId] && machinesData[floorId].length > 0) {
-                     const inserts = machinesData[floorId].map(m => ({
-                         id: m.id,
-                         zone_id: floorId,
-                         machine_id: m.machine_id,
-                         type: m.type,
-                         shape: m.shape,
-                         points: m.points,
-                         name: m.name,
-                         status: m.status,
-                         x_cm: m.x_cm,
-                         y_cm: m.y_cm,
-                         width_cm: m.width_cm,
-                         height_cm: m.height_cm,
-                         rotation: m.rotation
-                     }));
-                     const { error } = await supabase.from('factory_zone_items').insert(inserts);
-                     if (error) throw error;
-                 }
+            for (const oldZoneId of persistedZoneIds) {
+                if (!currentZoneIds.has(oldZoneId)) {
+                    await supabase.from('factory_zone_items').delete().eq('zone_id', oldZoneId);
+                    const { error: delZoneErr } = await supabase.from('factory_zones').delete().eq('id', oldZoneId);
+                    if (delZoneErr) throw delZoneErr;
+                }
             }
-            alert('Floor Plan Saved to Database successfully!');
+
+            for (const oldItemId of persistedItemIds) {
+                if (!currentItemIds.has(oldItemId)) {
+                    const { error: delItemErr } = await supabase.from('factory_zone_items').delete().eq('id', oldItemId);
+                    if (delItemErr) throw delItemErr;
+                }
+            }
+
+            setPersistedZoneIds(currentZoneIds);
+            setPersistedItemIds(currentItemIds);
+            setIsDirty(false);
+            alert('Floor plan saved (incremental sync).');
         } catch (e) {
             console.error("Error saving floor plan:", e);
-            alert('Failed to save to database. Check console for details.');
+            alert('Failed to save. Check the browser console for details.');
         }
         setIsSaving(false);
     };
+
+    const handlePublishLayout = async () => {
+        if (!canEditLayout) return;
+        if (isDirty) {
+            alert('Save your changes before publishing the layout.');
+            return;
+        }
+        setIsPublishing(true);
+        try {
+            for (const f of floors) {
+                const rev = (f as FloorPlanArea & { layout_revision?: number }).layout_revision ?? 1;
+                const { error } = await supabase
+                    .from('factory_zones')
+                    .update({ published_revision: rev })
+                    .eq('id', f.id);
+                if (error) {
+                    console.warn('[FloorPlan] Publish skipped for zone', f.id, error.message);
+                }
+            }
+            alert('Layout published. Read-only users will see the saved production version.');
+        } catch (e) {
+            console.error('Publish layout error:', e);
+            alert('Publish failed. Run scripts/db_ops/factory_zone_layout_revisions.sql in Supabase if needed.');
+        }
+        setIsPublishing(false);
+    };
+
+    const loadRevisionsForActiveZone = async () => {
+        if (!activeFloorId) return;
+        setRevisionsLoading(true);
+        const { data, error } = await supabase
+            .from('factory_zone_layout_revisions')
+            .select('id, zone_id, revision_number, snapshot, created_at')
+            .eq('zone_id', activeFloorId)
+            .order('revision_number', { ascending: false })
+            .limit(20);
+        if (error) {
+            console.warn('[FloorPlan] Could not load revisions:', error.message);
+            setRevisions([]);
+        } else {
+            setRevisions((data || []) as LayoutRevisionRow[]);
+        }
+        setRevisionsLoading(false);
+    };
+
+    const restoreRevision = (row: LayoutRevisionRow) => {
+        if (!canEditLayout) return;
+        if (!confirm(`Restore revision v${row.revision_number}? Unsaved edits will be lost.`)) return;
+        const { floor, items } = row.snapshot;
+        setFloors(prev => prev.map(f => (f.id === floor.id ? { ...f, ...floor } : f)));
+        setMachinesData(prev => ({ ...prev, [floor.id]: items.map(i => ({ ...i, points: i.points ? [...i.points] : undefined })) }));
+        if (activeFloorId === floor.id) setSelectedId(null);
+        markDirty();
+        setRevisionPanelOpen(false);
+    };
+
+    const pasteClipboard = useCallback(() => {
+        const source = clipboardRef.current;
+        if (!source || !isEditMode) return;
+        pasteCountRef.current += 1;
+        const offset = 50 * pasteCountRef.current;
+        const pasted = cloneFloorItem(source, offset);
+        setMachinesData(p => ({ ...p, [activeFloorId]: [...(p[activeFloorId] || []), pasted] }));
+        setSelectedId(pasted.id);
+        markDirty();
+    }, [activeFloorId, isEditMode, markDirty]);
 
     // Load Background Image
     useEffect(() => {
@@ -286,26 +486,45 @@ export default function FloorPlan() {
                 return;
             }
 
-            if (!isEditMode || !selectedId) return;
+            if (!isEditMode) return;
 
-            if (e.key === 'Delete' || e.key === 'Backspace') {
+            const selectedMachine = selectedId ? machinesData[activeFloorId]?.find(m => m.id === selectedId) : undefined;
+
+            if (selectedId && (e.key === 'Delete' || e.key === 'Backspace')) {
                 removeMachine(selectedId);
+                return;
             }
-            
-            const selectedMachine = machinesData[activeFloorId]?.find(m => m.id === selectedId);
+
+            if (selectedMachine && (e.ctrlKey || e.metaKey) && e.key === 'c') {
+                e.preventDefault();
+                clipboardRef.current = {
+                    ...selectedMachine,
+                    points: selectedMachine.points ? [...selectedMachine.points] : undefined,
+                };
+                pasteCountRef.current = 0;
+                setHasClipboard(true);
+                return;
+            }
+
+            if ((e.ctrlKey || e.metaKey) && e.key === 'v') {
+                e.preventDefault();
+                if (clipboardRef.current) pasteClipboard();
+                return;
+            }
+
             if (!selectedMachine) return;
 
-            if (e.key === 'ArrowUp') { e.preventDefault(); updateMachine(selectedId, { y_cm: selectedMachine.y_cm - (gridSnapEnabled ? 10 : 1) }); }
-            if (e.key === 'ArrowDown') { e.preventDefault(); updateMachine(selectedId, { y_cm: selectedMachine.y_cm + (gridSnapEnabled ? 10 : 1) }); }
-            if (e.key === 'ArrowLeft') { e.preventDefault(); updateMachine(selectedId, { x_cm: selectedMachine.x_cm - (gridSnapEnabled ? 10 : 1) }); }
-            if (e.key === 'ArrowRight') { e.preventDefault(); updateMachine(selectedId, { x_cm: selectedMachine.x_cm + (gridSnapEnabled ? 10 : 1) }); }
+            if (e.key === 'ArrowUp') { e.preventDefault(); updateMachine(selectedId!, { y_cm: selectedMachine.y_cm - (gridSnapEnabled ? 10 : 1) }); }
+            if (e.key === 'ArrowDown') { e.preventDefault(); updateMachine(selectedId!, { y_cm: selectedMachine.y_cm + (gridSnapEnabled ? 10 : 1) }); }
+            if (e.key === 'ArrowLeft') { e.preventDefault(); updateMachine(selectedId!, { x_cm: selectedMachine.x_cm - (gridSnapEnabled ? 10 : 1) }); }
+            if (e.key === 'ArrowRight') { e.preventDefault(); updateMachine(selectedId!, { x_cm: selectedMachine.x_cm + (gridSnapEnabled ? 10 : 1) }); }
 
             if ((e.ctrlKey || e.metaKey) && e.key === 'd') {
                 e.preventDefault();
-                const newId = 'm' + Date.now();
-                const clone: FloorItem = { ...selectedMachine, id: newId, x_cm: selectedMachine.x_cm + 50, y_cm: selectedMachine.y_cm + 50 };
+                const clone = cloneFloorItem(selectedMachine, 50);
                 setMachinesData(p => ({ ...p, [activeFloorId]: [...(p[activeFloorId] || []), clone] }));
-                setSelectedId(newId);
+                setSelectedId(clone.id);
+                markDirty();
             }
 
             // Z-Index Adjustments ([ and ])
@@ -335,7 +554,7 @@ export default function FloorPlan() {
             window.removeEventListener('keydown', handleKeyDown); 
             window.removeEventListener('keyup', handleKeyUp); 
         };
-    }, [isEditMode, selectedId, activeFloorId, machinesData, gridSnapEnabled]);
+    }, [isEditMode, selectedId, activeFloorId, machinesData, gridSnapEnabled, pasteClipboard, markDirty]);
 
     const handleExport = () => {
         if (!stageRef.current) return;
@@ -405,9 +624,11 @@ export default function FloorPlan() {
         const snappedY = Math.round(rawY / snap) * snap;
 
         updateMachine(id, { x_cm: snappedX, y_cm: snappedY });
+        markDirty();
     };
 
     const updateMachine = (id: string, updates: Partial<FloorItem>) => {
+        markDirty();
         setMachinesData(prev => ({
             ...prev,
             [activeFloorId]: prev[activeFloorId].map(mac => {
@@ -424,6 +645,7 @@ export default function FloorPlan() {
     };
 
     const handlePointDrag = (id: string, index: number, newX: number, newY: number) => {
+        markDirty();
         setMachinesData(prev => ({
             ...prev,
             [activeFloorId]: prev[activeFloorId].map(mac => {
@@ -439,6 +661,7 @@ export default function FloorPlan() {
     };
 
     const addPolygonNode = (id: string) => {
+        markDirty();
         setMachinesData(prev => ({
             ...prev,
             [activeFloorId]: prev[activeFloorId].map(mac => {
@@ -454,6 +677,7 @@ export default function FloorPlan() {
     };
 
     const removePolygonNode = (id: string) => {
+        markDirty();
         setMachinesData(prev => ({
             ...prev,
             [activeFloorId]: prev[activeFloorId].map(mac => {
@@ -478,6 +702,7 @@ export default function FloorPlan() {
         setActiveFloorId(newId);
         setSelectedId(null);
         resetZoom();
+        markDirty();
     };
 
     const handleAddMachine = () => {
@@ -500,13 +725,16 @@ export default function FloorPlan() {
             [activeFloorId]: [...(prev[activeFloorId] || []), newMachine]
         }));
         setSelectedId(newId);
+        markDirty();
     };
 
     const updateFloor = (updates: Partial<FloorPlanArea>) => {
+        markDirty();
         setFloors(prev => prev.map(f => f.id === activeFloorId ? { ...f, ...updates } : f));
     };
 
     const updateFloorShape = (shape: 'rect' | 'polygon') => {
+        markDirty();
         setFloors(prev => prev.map(f => {
             if (f.id === activeFloorId) {
                 const newF = { ...f, shape };
@@ -520,6 +748,7 @@ export default function FloorPlan() {
     };
 
     const handleFloorPointDrag = (index: number, newX: number, newY: number) => {
+        markDirty();
         setFloors(prev => prev.map(f => {
             if (f.id === activeFloorId && f.points) {
                 const newPts = [...f.points];
@@ -532,6 +761,7 @@ export default function FloorPlan() {
     };
 
     const addFloorPolygonNode = () => {
+        markDirty();
         setFloors(prev => prev.map(f => {
             if (f.id === activeFloorId && f.points && f.points.length >= 2) {
                 const pts = f.points;
@@ -542,6 +772,7 @@ export default function FloorPlan() {
     };
 
     const removeFloorPolygonNode = () => {
+        markDirty();
         setFloors(prev => prev.map(f => {
             if (f.id === activeFloorId && f.points && f.points.length > 6) {
                 return { ...f, points: f.points.slice(0, -2) };
@@ -551,11 +782,21 @@ export default function FloorPlan() {
     };
 
     const removeMachine = (id: string) => {
+        markDirty();
         setMachinesData(prev => ({
             ...prev,
             [activeFloorId]: prev[activeFloorId].filter(m => m.id !== id)
         }));
         setSelectedId(null);
+    };
+
+    const toggleEditMode = () => {
+        if (isEditMode && isDirty) {
+            if (!confirm('You have unsaved changes. Exit edit mode anyway?')) return;
+        }
+        setIsEditMode(!isEditMode);
+        setSelectedId(null);
+        setHoveredData(null);
     };
 
     // ------------------------------------------------------------------------
@@ -587,10 +828,11 @@ export default function FloorPlan() {
     };
 
     return (
-        <div className="p-6 h-[calc(100vh-4rem)] flex flex-col bg-slate-50">
+        <div className="p-4 md:p-6 h-[calc(100dvh-4rem)] max-h-[calc(100dvh-4rem)] flex flex-col bg-slate-50 overflow-hidden">
             {/* Top Bar: Floor Selection & Global Actions */}
-            <div className="flex justify-between items-center mb-4 bg-white p-4 rounded-xl shadow-sm border border-slate-200">
-                <div className="flex items-center gap-4">
+            <div className="shrink-0 flex flex-col gap-3 mb-3 bg-white p-4 rounded-xl shadow-sm border border-slate-200">
+                <div className="flex flex-wrap items-center justify-between gap-4">
+                <div className="flex flex-wrap items-center gap-3 min-w-0">
                     <div>
                         <h1 className="text-2xl font-bold text-slate-800">Space Management</h1>
                         <p className="text-sm text-slate-500">Precise floor layout & live monitoring</p>
@@ -611,7 +853,7 @@ export default function FloorPlan() {
                                 {floor.name}
                             </button>
                         ))}
-                        {isEditMode && (
+                        {isEditMode && canEditLayout && (
                             <button 
                                 onClick={handleAddFloor}
                                 className="ml-2 p-1.5 text-slate-400 hover:text-blue-600 hover:bg-white rounded-md transition-colors"
@@ -623,7 +865,7 @@ export default function FloorPlan() {
                     </div>
                 </div>
                 
-                <div className="flex gap-3">
+                <div className="flex flex-wrap gap-2 justify-end">
                     <button 
                         onClick={() => setViewMode(v => v === 'map' ? 'table' : 'map')}
                         className="px-4 py-2 bg-indigo-50 hover:bg-indigo-100 text-indigo-700 rounded-lg font-medium shadow-sm flex items-center gap-2 transition-colors border border-indigo-200"
@@ -638,33 +880,91 @@ export default function FloorPlan() {
                     >
                         <Camera size={18} /> Export
                     </button>
-                    <button 
-                        onClick={() => {
-                            setIsEditMode(!isEditMode);
-                            setSelectedId(null);
-                            setHoveredData(null);
-                        }}
-                        className={`px-4 py-2 rounded-lg font-medium transition-colors flex items-center gap-2 ${
-                            isEditMode ? 'bg-amber-100 text-amber-700 hover:bg-amber-200' : 'bg-slate-100 text-slate-700 hover:bg-slate-200'
-                        }`}
-                    >
-                        <Settings size={18} />
-                        {isEditMode ? 'Exit Setup' : 'Setup Floor'}
-                    </button>
-                    {isEditMode && (
-                        <button 
-                            onClick={handleSaveToDb}
-                            disabled={isSaving}
-                            className={`px-4 py-2 text-white rounded-lg font-medium shadow-sm flex items-center gap-2 ${isSaving ? 'bg-blue-400 cursor-not-allowed' : 'bg-blue-600 hover:bg-blue-700'}`}
-                        >
-                            {isSaving ? <Loader2 size={18} className="animate-spin" /> : <Save size={18} />}
-                            {isSaving ? 'Saving...' : 'Save to DB'}
-                        </button>
+                    {canEditLayout ? (
+                        <>
+                            <button 
+                                onClick={toggleEditMode}
+                                className={`px-4 py-2 rounded-lg font-medium transition-colors flex items-center gap-2 ${
+                                    isEditMode ? 'bg-amber-100 text-amber-700 hover:bg-amber-200' : 'bg-slate-100 text-slate-700 hover:bg-slate-200'
+                                }`}
+                            >
+                                <Settings size={18} />
+                                {isEditMode ? 'Exit Setup' : 'Setup Floor'}
+                            </button>
+                            {isEditMode && (
+                                <>
+                                    <button
+                                        onClick={() => {
+                                            if (!selectedMachine) return;
+                                            clipboardRef.current = {
+                                                ...selectedMachine,
+                                                points: selectedMachine.points ? [...selectedMachine.points] : undefined,
+                                            };
+                                            pasteCountRef.current = 0;
+                                            setHasClipboard(true);
+                                        }}
+                                        disabled={!selectedMachine}
+                                        className="px-3 py-2 bg-slate-100 hover:bg-slate-200 text-slate-700 rounded-lg font-medium flex items-center gap-2 disabled:opacity-40"
+                                        title="Ctrl+C"
+                                    >
+                                        <Copy size={18} /> Copy
+                                    </button>
+                                    <button
+                                        onClick={pasteClipboard}
+                                        disabled={!hasClipboard}
+                                        className="px-3 py-2 bg-slate-100 hover:bg-slate-200 text-slate-700 rounded-lg font-medium flex items-center gap-2 disabled:opacity-40"
+                                        title="Ctrl+V"
+                                    >
+                                        <ClipboardPaste size={18} /> Paste
+                                    </button>
+                                    <button
+                                        onClick={() => { setRevisionPanelOpen(true); loadRevisionsForActiveZone(); }}
+                                        className="px-3 py-2 bg-violet-50 hover:bg-violet-100 text-violet-700 border border-violet-200 rounded-lg font-medium flex items-center gap-2"
+                                    >
+                                        <History size={18} /> History
+                                    </button>
+                                    <button 
+                                        onClick={handleSaveToDb}
+                                        disabled={isSaving || !isDirty}
+                                        className={`px-4 py-2 text-white rounded-lg font-medium shadow-sm flex items-center gap-2 ${isSaving || !isDirty ? 'bg-blue-400 cursor-not-allowed' : 'bg-blue-600 hover:bg-blue-700'}`}
+                                    >
+                                        {isSaving ? <Loader2 size={18} className="animate-spin" /> : <Save size={18} />}
+                                        {isSaving ? 'Saving...' : 'Save'}
+                                    </button>
+                                    <button
+                                        onClick={handlePublishLayout}
+                                        disabled={isPublishing || isDirty}
+                                        className={`px-4 py-2 rounded-lg font-medium shadow-sm flex items-center gap-2 text-white ${isPublishing || isDirty ? 'bg-emerald-400 cursor-not-allowed' : 'bg-emerald-600 hover:bg-emerald-700'}`}
+                                        title="Mark the current saved layout as the published version"
+                                    >
+                                        {isPublishing ? <Loader2 size={18} className="animate-spin" /> : <Upload size={18} />}
+                                        Publish
+                                    </button>
+                                </>
+                            )}
+                        </>
+                    ) : (
+                        <span className="px-3 py-2 bg-slate-100 text-slate-600 rounded-lg text-sm font-medium flex items-center gap-2 border border-slate-200">
+                            <Lock size={16} /> Read-only
+                        </span>
                     )}
+                </div>
                 </div>
             </div>
 
-            <div className="flex flex-1 gap-4 overflow-hidden relative">
+            {!canEditLayout && (
+                <div className="shrink-0 mb-3 px-4 py-2 bg-amber-50 border border-amber-200 rounded-lg text-sm text-amber-900 flex items-center gap-2">
+                    <Lock size={16} />
+                    Read-only mode. Admins can edit; grant module permission floor-plan-edit for others.
+                </div>
+            )}
+            {canEditLayout && isDirty && (
+                <div className="shrink-0 mb-3 px-4 py-2 bg-blue-50 border border-blue-200 rounded-lg text-sm text-blue-800">
+                    Unsaved changes — Save first, then Publish.
+                </div>
+            )}
+
+            <div className="flex flex-1 min-h-0 gap-4 overflow-hidden relative">
                 {isLoading && (
                     <div className="absolute inset-0 z-50 bg-slate-50/80 backdrop-blur-sm flex flex-col items-center justify-center">
                         <Loader2 size={40} className="animate-spin text-blue-600 mb-4" />
@@ -720,7 +1020,7 @@ export default function FloorPlan() {
                 )}
 
                 {/* Main Canvas Area */}
-                <div className="flex-1 bg-slate-100 rounded-xl shadow-inner border border-slate-300 overflow-hidden relative flex flex-col">
+                <div className="flex-1 min-h-0 min-w-0 bg-slate-100 rounded-xl shadow-inner border border-slate-300 overflow-hidden relative flex flex-col">
                     {viewMode === 'table' ? (
                         <div className="flex-1 overflow-auto p-6 bg-white">
                             <h2 className="text-xl font-bold text-slate-800 mb-4">{activeFloor.name} - Asset Inventory</h2>
@@ -775,11 +1075,16 @@ export default function FloorPlan() {
                             </div>
 
                             {/* Canvas */}
-                            <div className="flex-1 w-full" id="canvas-container" style={{ cursor: isSpacePressed ? 'grab' : (isEditMode ? BLACK_CROSSHAIR : 'grab') }}>
+                            <div
+                                ref={canvasContainerRef}
+                                className="flex-1 min-h-0 w-full relative"
+                                id="canvas-container"
+                                style={{ cursor: isSpacePressed ? 'grab' : (isEditMode ? BLACK_CROSSHAIR : 'grab') }}
+                            >
                                 <Stage 
                                     ref={stageRef}
-                                    width={window.innerWidth - (isEditMode ? 600 : 350)} // Dynamic width based on sidebar
-                                    height={window.innerHeight - 200}
+                                    width={stageSize.width}
+                                    height={stageSize.height}
                                     scaleX={stageScale}
                                     scaleY={stageScale}
                                     x={stagePosition.x}
@@ -934,7 +1239,7 @@ export default function FloorPlan() {
                                             x={item.x_cm}
                                             y={item.y_cm}
                                             rotation={item.rotation}
-                                            draggable={isEditMode && !isSpacePressed}
+                                            draggable={isEditMode && canEditLayout && !isSpacePressed}
                                             onDragEnd={(e) => handleDragEnd(e, item.id)}
                                             onClick={(e) => {
                                                 if (e.evt.button === 2) e.evt.preventDefault(); // Ignore right click logic for MVP
@@ -1081,12 +1386,12 @@ export default function FloorPlan() {
                 </div>
 
                 {/* Right Sidebar: Properties Panel (Only in Edit Mode) */}
-                {isEditMode && (
-                    <div className="w-80 bg-white rounded-xl shadow-sm border border-slate-200 flex flex-col overflow-hidden">
+                {isEditMode && canEditLayout && (
+                    <div className="w-80 shrink-0 min-h-0 bg-white rounded-xl shadow-sm border border-slate-200 flex flex-col overflow-hidden">
                         <div className="p-4 bg-slate-50 border-b border-slate-200">
                             <h2 className="font-bold text-slate-800 flex items-center gap-2"><Settings size={18} /> Properties Panel</h2>
                             <p className="text-xs text-slate-500 mt-1">Select an item to edit precise dimensions.</p>
-                            <p className="text-[10px] text-blue-600 mt-2 font-medium bg-blue-50 p-1.5 rounded flex items-center gap-1"><MousePointer2 size={12}/> Shortcuts: Space (pan), [, ] (layer), Ctrl+D.</p>
+                            <p className="text-[10px] text-blue-600 mt-2 font-medium bg-blue-50 p-1.5 rounded flex items-center gap-1"><MousePointer2 size={12}/> Shortcuts: Space (pan), Ctrl+C/V (copy/paste), Ctrl+D (duplicate), [ ] (layer).</p>
                         </div>
                         
                         <div className="p-4 flex-1 overflow-y-auto">
@@ -1352,6 +1657,36 @@ export default function FloorPlan() {
                     </div>
                 )}
             </div>
+
+            {revisionPanelOpen && (
+                <div className="fixed inset-0 z-[100] flex items-center justify-center bg-black/40 p-4" onClick={() => setRevisionPanelOpen(false)}>
+                    <div className="bg-white rounded-xl shadow-2xl w-full max-w-md max-h-[70vh] flex flex-col" onClick={e => e.stopPropagation()}>
+                        <div className="p-4 border-b border-slate-200 flex justify-between items-center">
+                            <h3 className="font-bold text-slate-800 flex items-center gap-2"><History size={18} /> {activeFloor.name} — Revision History</h3>
+                            <button type="button" onClick={() => setRevisionPanelOpen(false)} className="text-slate-400 hover:text-slate-600 text-xl leading-none">&times;</button>
+                        </div>
+                        <div className="p-4 overflow-y-auto flex-1">
+                            {revisionsLoading ? (
+                                <p className="text-sm text-slate-500 flex items-center gap-2"><Loader2 size={16} className="animate-spin" /> Loading...</p>
+                            ) : revisions.length === 0 ? (
+                                <p className="text-sm text-slate-500">No revisions yet. Saving creates snapshots (run factory_zone_layout_revisions.sql in Supabase).</p>
+                            ) : (
+                                <ul className="space-y-2">
+                                    {revisions.map(row => (
+                                        <li key={row.id} className="flex items-center justify-between gap-2 p-3 bg-slate-50 rounded-lg border border-slate-200">
+                                            <div>
+                                                <p className="text-sm font-semibold text-slate-800">Revision v{row.revision_number}</p>
+                                                <p className="text-xs text-slate-500">{new Date(row.created_at).toLocaleString()}</p>
+                                            </div>
+                                            <button type="button" onClick={() => restoreRevision(row)} className="px-3 py-1.5 text-xs font-bold bg-violet-600 text-white rounded-lg hover:bg-violet-700">Restore</button>
+                                        </li>
+                                    ))}
+                                </ul>
+                            )}
+                        </div>
+                    </div>
+                </div>
+            )}
         </div>
     );
 }

@@ -10,6 +10,8 @@ import {
     Users,
     Menu,
     X,
+    ChevronLeft,
+    ChevronRight,
     Scan,
     Truck,
     Package,
@@ -28,6 +30,7 @@ import {
     Moon
 } from 'lucide-react';
 import { supabase } from '../services/supabase';
+import { canAccessPage } from '../utils/pageAccess';
 
 interface LayoutProps {
     children: React.ReactNode;
@@ -40,6 +43,9 @@ interface LayoutProps {
 
 const Layout: React.FC<LayoutProps> = ({ children, activePage, setActivePage, userRole, user, onLogout }) => {
     const [isMobileMenuOpen, setIsMobileMenuOpen] = useState(false);
+    const [isSidebarCollapsed, setIsSidebarCollapsed] = useState(
+        () => localStorage.getItem('sidebarCollapsed') === 'true'
+    );
     const [taskCount, setTaskCount] = useState(0);
     const [theme, setTheme] = useState(localStorage.getItem('theme') || 'dark');
     // DB-driven page permissions: Set<page_id> of allowed pages for this role
@@ -58,8 +64,18 @@ const Layout: React.FC<LayoutProps> = ({ children, activePage, setActivePage, us
 
     const toggleMobileMenu = () => setIsMobileMenuOpen(!isMobileMenuOpen);
 
-    // Special User Checks
-    const isVivian = user?.email === 'diyadmin1111@gmail.com';
+    const toggleSidebarCollapsed = () => setIsSidebarCollapsed(prev => !prev);
+
+    useEffect(() => {
+        localStorage.setItem('sidebarCollapsed', String(isSidebarCollapsed));
+    }, [isSidebarCollapsed]);
+
+    useEffect(() => {
+        const collapseForOverlay = () => setIsSidebarCollapsed(true);
+        window.addEventListener('packsecure:overlay-open', collapseForOverlay);
+        return () => window.removeEventListener('packsecure:overlay-open', collapseForOverlay);
+    }, []);
+
     const isNeoson = user?.email === 'neosonchun@gmail.com';
 
     useEffect(() => {
@@ -95,10 +111,6 @@ const Layout: React.FC<LayoutProps> = ({ children, activePage, setActivePage, us
                     if (user?.email === 'neosonchun@gmail.com') {
                         ['delivery-driver', 'delivery-history', 'leave-calendar', 'lorry-service'].forEach(p => allowedSet.add(p));
                     }
-                    if (user?.email === 'diyadmin1111@gmail.com') {
-                        ['order-summary', 'driver-management'].forEach(p => allowedSet.add(p));
-                    }
-
                     // --- COMBINE CUSTOM MODULE UNLOCKS ---
                     if (user?.roleModules && user.roleModules.length > 0) {
                         user.roleModules.forEach((p: string) => allowedSet.add(p));
@@ -124,8 +136,10 @@ const Layout: React.FC<LayoutProps> = ({ children, activePage, setActivePage, us
     };
 
     const NavGroup = ({ title, children }: { title: string, children: React.ReactNode }) => (
-        <div className="mb-6">
-            <h3 className="px-4 text-[11px] font-black text-gray-500 uppercase tracking-[0.2em] mb-3 opacity-90">{title}</h3>
+        <div className={isSidebarCollapsed ? 'mb-3' : 'mb-6'}>
+            {!isSidebarCollapsed && (
+                <h3 className="px-4 text-[11px] font-black text-gray-500 uppercase tracking-[0.2em] mb-3 opacity-90">{title}</h3>
+            )}
             <div className="space-y-1">
                 {children}
             </div>
@@ -134,21 +148,14 @@ const Layout: React.FC<LayoutProps> = ({ children, activePage, setActivePage, us
 
     const NavItem = ({ id, icon: Icon, label, roles, badge }: { id: string, icon: any, label: string, roles?: string[], badge?: number }) => {
         const isSuperAdmin = userRole === 'SuperAdmin' || user?.employeeId === '001';
-        
-        let hasAccess = false;
 
-        if (isSuperAdmin) {
-            hasAccess = true;
-        } else {
-            // Check hardcoded roles
-            const hasHardcodedAccess = roles && userRole && roles.includes(userRole);
-            // Check DB granted permissions
-            const hasDbAccess = dbAllowedPages !== null && dbAllowedPages.has(id);
-            // Check Custom Module Unlocks
-            const hasCustomUnlock = user?.roleModules?.includes(id);
-            
-            hasAccess = hasHardcodedAccess || hasDbAccess || hasCustomUnlock;
-        }
+        const hasAccess = canAccessPage(id, {
+            isSuperAdmin,
+            userRole,
+            navRoles: roles,
+            dbAllowedPages,
+            roleModules: user?.roleModules,
+        });
 
         if (!hasAccess) return null;
 
@@ -156,11 +163,13 @@ const Layout: React.FC<LayoutProps> = ({ children, activePage, setActivePage, us
 
         return (
             <button
+                type="button"
+                title={isSidebarCollapsed ? label : undefined}
                 onClick={() => {
                     setActivePage(id);
                     setIsMobileMenuOpen(false);
                 }}
-                className={`relative w-full flex items-center gap-3 px-4 py-3.5 rounded-xl transition-all duration-300 group overflow-hidden ${isActive
+                className={`relative w-full flex items-center rounded-xl transition-all duration-300 group overflow-hidden ${isSidebarCollapsed ? 'justify-center px-2 py-3' : 'gap-3 px-4 py-3.5'} ${isActive
                     ? 'text-white'
                     : 'text-gray-400 hover:text-white hover:bg-white/5'
                     }`}
@@ -176,19 +185,21 @@ const Layout: React.FC<LayoutProps> = ({ children, activePage, setActivePage, us
                 </div>
 
                 {/* Label */}
-                <span className={`relative z-10 font-bold tracking-wide text-[15px] flex-1 text-left ${isActive ? 'text-white' : ''}`}>
-                    {label}
-                </span>
+                {!isSidebarCollapsed && (
+                    <span className={`relative z-10 font-bold tracking-wide text-[15px] flex-1 text-left ${isActive ? 'text-white' : ''}`}>
+                        {label}
+                    </span>
+                )}
 
                 {/* Badge */}
                 {badge && badge > 0 && (
-                    <span className="relative z-10 bg-red-500 text-white text-[10px] font-bold px-2 py-0.5 rounded-full shadow-lg shadow-red-500/30">
+                    <span className={`relative z-10 bg-red-500 text-white font-bold rounded-full shadow-lg shadow-red-500/30 ${isSidebarCollapsed ? 'absolute -top-0.5 -right-0.5 text-[9px] min-w-[16px] h-4 flex items-center justify-center px-1' : 'text-[10px] px-2 py-0.5'}`}>
                         {badge > 99 ? '99+' : badge}
                     </span>
                 )}
 
                 {/* Active Indicator Dot */}
-                {isActive && (
+                {isActive && !isSidebarCollapsed && (
                     <div className="absolute right-4 w-1.5 h-1.5 rounded-full bg-blue-500 shadow-[0_0_8px_rgba(59,130,246,0.8)]" />
                 )}
             </button>
@@ -223,49 +234,58 @@ const Layout: React.FC<LayoutProps> = ({ children, activePage, setActivePage, us
             <div className="flex h-screen overflow-hidden pt-16 lg:pt-0">
                 {/* Sidebar Navigation */}
                 <aside className={`
-                    fixed inset-y-0 left-0 z-[60] w-[280px] shrink-0 bg-[#1a1a1e] border-r border-white/5 flex flex-col
-                    transform transition-transform duration-300 lg:transform-none lg:relative lg:translate-x-0
-                    ${isMobileMenuOpen ? 'translate-x-0 shadow-2xl shadow-black' : '-translate-x-full'}
+                    fixed inset-y-0 left-0 z-[60] shrink-0 bg-[#1a1a1e] border-r border-white/5 flex flex-col
+                    transform transition-all duration-300 lg:transform-none lg:relative lg:translate-x-0
+                    ${isMobileMenuOpen ? 'translate-x-0 shadow-2xl shadow-black w-[280px]' : '-translate-x-full w-[280px]'}
+                    ${isSidebarCollapsed ? 'lg:w-[72px]' : 'lg:w-[280px]'}
                 `}>
                     {/* Brand Area */}
-                    <div className="relative flex flex-col px-6 pt-8 pb-8">
-                        {/* Mobile Close Button */}
+                    <div className={`relative flex flex-col pt-8 pb-6 ${isSidebarCollapsed ? 'px-2 items-center' : 'px-6'}`}>
                         <button
+                            type="button"
                             onClick={() => setIsMobileMenuOpen(false)}
                             className="lg:hidden absolute top-4 right-4 p-2 text-slate-500 hover:text-white bg-white/5 rounded-lg"
                         >
                             <X size={20} />
                         </button>
-
-                        <div className="flex items-center gap-3 mb-1">
-                            <img src="/packsecure-logo.jpg" alt="PackSecure" className="h-10 rounded-lg" />
-                            <div>
-                                <div className="flex items-center gap-1.5 mt-1">
-                                    <span className="w-1.5 h-1.5 rounded-full bg-green-500 animate-pulse shadow-[0_0_8px_rgba(34,197,94,0.6)]"></span>
-                                    <p className="text-[10px] font-bold text-gray-400 uppercase tracking-widest">System v6.7 • Data Center Active</p>
+                        <button
+                            type="button"
+                            onClick={toggleSidebarCollapsed}
+                            title={isSidebarCollapsed ? 'Expand sidebar' : 'Collapse sidebar'}
+                            className="hidden lg:flex absolute top-4 right-2 p-2 text-slate-500 hover:text-white bg-white/5 hover:bg-white/10 rounded-lg transition-colors"
+                        >
+                            {isSidebarCollapsed ? <ChevronRight size={18} /> : <ChevronLeft size={18} />}
+                        </button>
+                        <div className={`flex items-center mb-1 ${isSidebarCollapsed ? 'justify-center' : 'gap-3'}`}>
+                            <img src="/packsecure-logo.jpg" alt="PackSecure" className={`rounded-lg ${isSidebarCollapsed ? 'h-9 w-9 object-cover' : 'h-10'}`} />
+                            {!isSidebarCollapsed && (
+                                <div>
+                                    <div className="flex items-center gap-1.5 mt-1">
+                                        <span className="w-1.5 h-1.5 rounded-full bg-green-500 animate-pulse shadow-[0_0_8px_rgba(34,197,94,0.6)]"></span>
+                                        <p className="text-[10px] font-bold text-gray-400 uppercase tracking-widest">System v6.7 • Data Center Active</p>
+                                    </div>
                                 </div>
-                            </div>
+                            )}
                         </div>
                     </div>
 
-                    {/* Navigation Links */}
-                    <nav className="flex-1 overflow-y-auto px-4 custom-scrollbar space-y-2 pb-6">
+                    <nav className={`flex-1 overflow-y-auto custom-scrollbar space-y-2 pb-6 ${isSidebarCollapsed ? 'px-2' : 'px-4'}`}>
 
                         {/* EXECUTIVE SUITE (SuperAdmin, Admin, Manager) */}
-                        {/* VIVIAN'S EXCLUSIVE WORKSPACE */}
-                        {isVivian && (
-                            <NavGroup title="Vivian Workspace">
-                                <NavItem id="livestock" icon={BarChart3} label="Live Stock" roles={['SuperAdmin', 'Admin', 'Manager']} />
-                                <NavItem id="delivery" icon={Truck} label="Trip Management" roles={['SuperAdmin', 'Admin', 'Manager']} />
-                                <NavItem id="order-summary" icon={FileBarChart} label="Daily Prep" roles={['SuperAdmin', 'Admin', 'Manager']} />
-                                <NavItem id="products" icon={Package} label="Product Library" roles={['SuperAdmin', 'Admin', 'Manager']} />
-                                <NavItem id="maintenance" icon={Wrench} label="Maintenance Control" roles={['SuperAdmin', 'Admin', 'Manager']} />
-                                <NavItem id="driver-management" icon={Users} label="Driver Management" roles={['SuperAdmin', 'Admin', 'Manager']} />
+                        {/* Logistics coordinator workspace (menu via role_permissions in DB) */}
+                        {userRole === 'LogisticsCoordinator' && (
+                            <NavGroup title="Logistics Workspace">
+                                <NavItem id="livestock" icon={BarChart3} label="Live Stock" roles={['LogisticsCoordinator']} />
+                                <NavItem id="delivery" icon={Truck} label="Trip Management" roles={['LogisticsCoordinator']} />
+                                <NavItem id="order-summary" icon={FileBarChart} label="Daily Prep" roles={['LogisticsCoordinator']} />
+                                <NavItem id="products" icon={Package} label="Product Library" roles={['LogisticsCoordinator']} />
+                                <NavItem id="maintenance" icon={Wrench} label="Maintenance Control" roles={['LogisticsCoordinator']} />
+                                <NavItem id="driver-management" icon={Users} label="Driver Management" roles={['LogisticsCoordinator']} />
                             </NavGroup>
                         )}
 
-                        {/* EXECUTIVE SUITE (SuperAdmin, Admin, Manager) - HIDDEN FROM VIVIAN */}
-                        {!isVivian && (userRole === 'SuperAdmin' || userRole === 'Admin' || userRole === 'Manager' || user?.employeeId === '001' || user?.employeeId === '6965') && (
+                        {/* EXECUTIVE SUITE (SuperAdmin, Admin, Manager) */}
+                        {userRole !== 'LogisticsCoordinator' && (userRole === 'SuperAdmin' || userRole === 'Admin' || userRole === 'Manager' || user?.employeeId === '001' || user?.employeeId === '6965') && (
                             <>
                                 <NavGroup title="Executive Suite">
                                     <NavItem id="factory-live-os" icon={LayoutDashboard} label="Factory Live OS" roles={['SuperAdmin', 'Admin', 'Manager']} />
@@ -387,10 +407,12 @@ const Layout: React.FC<LayoutProps> = ({ children, activePage, setActivePage, us
                     </nav>
 
                     {/* User Profile (Bottom) */}
-                    <div className="p-4 border-t border-white/5 bg-[#0a0a0c]">
+                    <div className={`border-t border-white/5 bg-[#0a0a0c] ${isSidebarCollapsed ? 'p-2' : 'p-4'}`}>
                         <button
+                            type="button"
+                            title={isSidebarCollapsed ? (user?.name || 'Profile') : undefined}
                             onClick={() => setActivePage('profile')}
-                            className={`w-full flex items-center gap-3 p-3 rounded-xl transition-all duration-300 group ${activePage === 'profile' ? 'bg-white/5 border border-white/5' : 'hover:bg-white/5 border border-transparent'
+                            className={`w-full flex items-center rounded-xl transition-all duration-300 group ${isSidebarCollapsed ? 'justify-center p-2' : 'gap-3 p-3'} ${activePage === 'profile' ? 'bg-white/5 border border-white/5' : 'hover:bg-white/5 border border-transparent'
                                 } `}
                         >
                             <div className="relative">
@@ -404,33 +426,39 @@ const Layout: React.FC<LayoutProps> = ({ children, activePage, setActivePage, us
                                 <div className="absolute bottom-0 right-0 w-3 h-3 bg-green-500 border-2 border-[#0a0a0c] rounded-full"></div>
                             </div>
 
-                            <div className="text-left flex-1 min-w-0">
-                                <p className="font-bold text-sm text-gray-200 truncate group-hover:text-white transition-colors">{user?.name || 'User'}</p>
-                                <p className="text-[10px] text-blue-400 font-bold uppercase tracking-wider">
-                                    {userRole || 'Guest'}
-                                </p>
-                                {user?.employeeId && (
-                                    <p className="text-[10px] text-gray-600 font-mono tracking-widest mt-0.5">
-                                        PIN: {user.employeeId}
+                            {!isSidebarCollapsed && (
+                                <div className="text-left flex-1 min-w-0">
+                                    <p className="font-bold text-sm text-gray-200 truncate group-hover:text-white transition-colors">{user?.name || 'User'}</p>
+                                    <p className="text-[10px] text-blue-400 font-bold uppercase tracking-wider">
+                                        {userRole || 'Guest'}
                                     </p>
-                                )}
-                            </div>
+                                    {user?.employeeId && (
+                                        <p className="text-[10px] text-gray-600 font-mono tracking-widest mt-0.5">
+                                            PIN: {user.employeeId}
+                                        </p>
+                                    )}
+                                </div>
+                            )}
                         </button>
 
-                        <div className="flex items-center gap-2 mt-3">
+                        <div className={`flex items-center mt-3 ${isSidebarCollapsed ? 'flex-col gap-2' : 'gap-2'}`}>
                             <button
+                                type="button"
+                                title={isSidebarCollapsed ? (theme === 'dark' ? 'Dark mode' : 'Light mode') : undefined}
                                 onClick={toggleTheme}
-                                className="flex-1 flex items-center justify-center gap-2 p-2.5 text-gray-400 hover:text-amber-400 hover:bg-white/5 rounded-lg transition-all text-xs font-bold uppercase tracking-wider"
+                                className={`flex items-center justify-center p-2.5 text-gray-400 hover:text-amber-400 hover:bg-white/5 rounded-lg transition-all text-xs font-bold uppercase tracking-wider ${isSidebarCollapsed ? 'w-full' : 'flex-1 gap-2'}`}
                             >
                                 {theme === 'dark' ? <Moon size={14} /> : <Sun size={14} className="text-amber-500" />}
-                                <span>{theme === 'dark' ? 'Dark' : 'Light'}</span>
+                                {!isSidebarCollapsed && <span>{theme === 'dark' ? 'Dark' : 'Light'}</span>}
                             </button>
                             <button
+                                type="button"
+                                title="Quit"
                                 onClick={onLogout}
-                                className="flex-1 flex items-center justify-center gap-2 p-2.5 text-gray-500 hover:text-red-400 hover:bg-red-500/10 rounded-lg transition-all text-xs font-bold uppercase tracking-wider"
+                                className={`flex items-center justify-center p-2.5 text-gray-500 hover:text-red-400 hover:bg-red-500/10 rounded-lg transition-all text-xs font-bold uppercase tracking-wider ${isSidebarCollapsed ? 'w-full' : 'flex-1 gap-2'}`}
                             >
                                 <LogOut size={14} />
-                                <span>Quit</span>
+                                {!isSidebarCollapsed && <span>Quit</span>}
                             </button>
                         </div>
                     </div>

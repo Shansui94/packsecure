@@ -77,7 +77,7 @@ const LorryService: React.FC<LorryServiceProps> = ({ user }) => {
             if (error) throw error;
 
             setPlateNumber(plate); // Remember the selection
-            alert("✅ Service Request Sent to Vivian!");
+            alert("✅ Service request submitted. Pending logistics approval.");
             fetchServiceHistory();
         } catch (err: any) {
             alert("Error: " + err.message);
@@ -163,7 +163,7 @@ const LorryService: React.FC<LorryServiceProps> = ({ user }) => {
                             </>
                         )}
                     </button>
-                    <p className="mt-4 text-[10px] text-slate-500 font-bold uppercase tracking-widest">Vivian will be notified immediately</p>
+                    <p className="mt-4 text-[10px] text-slate-500 font-bold uppercase tracking-widest">Pending logistics approval</p>
                 </div>
             </div>
 

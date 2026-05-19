@@ -1,6 +1,6 @@
 import React, { useState, useEffect } from 'react';
 import { supabase } from '../services/supabase';
-import { Calendar as CalendarIcon, ChevronLeft, ChevronRight, User as UserIcon, CalendarDays, Loader, Send, History, CheckCircle, XCircle, FileText, ClipboardList } from 'lucide-react';
+import { Calendar as CalendarIcon, ChevronLeft, ChevronRight, User as UserIcon, CalendarDays, Loader, Send, History, CheckCircle, XCircle, FileText, ClipboardList, Undo2 } from 'lucide-react';
 
 interface LeaveRecord {
     id: string;
@@ -45,11 +45,12 @@ const LeaveCalendar: React.FC<Props> = ({ user }) => {
     const [endDate, setEndDate] = useState('');
     const [reason, setReason] = useState('');
     const [submitting, setSubmitting] = useState(false);
+    const [revokingId, setRevokingId] = useState<string | null>(null);
 
     // -- Global State --
     const [loading, setLoading] = useState(true);
     const userRole = user?.role || 'Operator';
-    const isManagement = ['SuperAdmin', 'Admin', 'Manager', 'HR'].includes(userRole);
+    const isManagement = ['SuperAdmin', 'Admin', 'Manager', 'HR', 'LogisticsCoordinator'].includes(userRole);
 
     // Fetch all leaves based on needs
     const fetchLeaves = async () => {
@@ -203,18 +204,56 @@ const LeaveCalendar: React.FC<Props> = ({ user }) => {
 
     // ── APPROVALS LOGIC ─────────────────────────────────────────────────────────
     const pendingLeaves = leaves.filter(l => l.status === 'Pending');
+    const approvedForRevoke = leaves
+        .filter(l => l.status === 'Approved')
+        .sort((a, b) => b.start_date.localeCompare(a.start_date));
     const pastApprovals = leaves.filter(l => l.status !== 'Pending');
+
+    const reviewerId = user?.uid || user?.id;
 
     const handleApprovalAction = async (id: string, newStatus: 'Approved' | 'Rejected') => {
         if (!window.confirm(`${newStatus} this leave request?`)) return;
 
-        await supabase.from('employee_leave').update({
+        const { error } = await supabase.from('employee_leave').update({
             status: newStatus,
-            reviewed_by: user?.uid,
-            reviewed_at: new Date().toISOString()
+            reviewed_by: reviewerId,
+            reviewed_at: new Date().toISOString(),
         }).eq('id', id);
 
-        fetchLeaves(); // Refresh
+        if (error) {
+            alert('Failed to update leave: ' + error.message);
+            return;
+        }
+        fetchLeaves();
+    };
+
+    /** Revoke an already-approved leave (sets status to Rejected so trips can be assigned again). */
+    const handleRevokeApproved = async (leave: LeaveRecord) => {
+        const name = leave.users_public?.name || 'Employee';
+        const confirmed = window.confirm(
+            `Revoke approved leave for ${name}?\n\n` +
+            `${leave.start_date} → ${leave.end_date} (${leave.count_days} day(s))\n\n` +
+            `This removes the absence block for trip assignment.`
+        );
+        if (!confirmed) return;
+
+        setRevokingId(leave.id);
+        try {
+            const { error } = await supabase.from('employee_leave').update({
+                status: 'Rejected',
+                reviewed_by: reviewerId,
+                reviewed_at: new Date().toISOString(),
+            }).eq('id', leave.id);
+
+            if (error) throw error;
+            await fetchLeaves();
+            alert(`Leave revoked for ${name}. They can be assigned trips on those dates again.`);
+        } catch (err: unknown) {
+            const msg = err instanceof Error ? err.message : 'Unknown error';
+            alert('Failed to revoke leave: ' + msg);
+        } finally {
+            setRevokingId(null);
+        }
     };
 
 
@@ -356,6 +395,21 @@ const LeaveCalendar: React.FC<Props> = ({ user }) => {
                                         </div>
                                         {leave.reason && <div className="pt-2 border-t border-white/5 text-xs text-slate-400 italic">"{leave.reason}"</div>}
                                     </div>
+                                    {isManagement && (
+                                        <button
+                                            type="button"
+                                            disabled={revokingId === leave.id}
+                                            onClick={() => handleRevokeApproved(leave)}
+                                            className="w-full py-2 rounded-xl border border-rose-500/30 bg-rose-500/10 text-rose-300 hover:bg-rose-500/20 text-[10px] font-black uppercase tracking-widest flex items-center justify-center gap-2 disabled:opacity-50 transition-colors"
+                                        >
+                                            {revokingId === leave.id ? (
+                                                <Loader size={14} className="animate-spin" />
+                                            ) : (
+                                                <Undo2 size={14} />
+                                            )}
+                                            Revoke approval
+                                        </button>
+                                    )}
                                 </div>
                             ))
                         )}
@@ -471,6 +525,60 @@ const LeaveCalendar: React.FC<Props> = ({ user }) => {
                                         <XCircle size={14} /> Reject
                                     </button>
                                 </div>
+                            </div>
+                        ))}
+                    </div>
+                )}
+            </div>
+
+            {/* Revoke approved leave (wrong dates / unblock trips) */}
+            <div>
+                <div className="flex items-center gap-2 mb-4 px-2">
+                    <Undo2 size={16} className="text-rose-400" />
+                    <h2 className="text-xs font-black text-rose-400 uppercase tracking-widest">
+                        Approved leave — revoke ({approvedForRevoke.length})
+                    </h2>
+                </div>
+                <p className="text-[10px] text-slate-500 px-2 mb-3 max-w-2xl">
+                    Use when dates were wrong or leave was approved by mistake. Revoking removes the trip-assignment block for those dates.
+                </p>
+                {approvedForRevoke.length === 0 ? (
+                    <div className="text-center py-8 border border-dashed border-white/10 rounded-3xl bg-white/[0.01]">
+                        <p className="text-slate-500 text-xs font-bold uppercase tracking-widest">No active approved leave</p>
+                    </div>
+                ) : (
+                    <div className="space-y-3 max-h-[420px] overflow-y-auto custom-scrollbar pr-1">
+                        {approvedForRevoke.map(req => (
+                            <div key={req.id} className="bg-[#0d0d12] border border-emerald-500/20 rounded-2xl p-5 flex flex-col md:flex-row justify-between items-start md:items-center gap-4">
+                                <div className="flex items-center gap-4 min-w-0">
+                                    <div className="w-10 h-10 bg-emerald-500/10 rounded-xl flex items-center justify-center text-emerald-400 border border-emerald-500/20 shrink-0">
+                                        <UserIcon size={18} />
+                                    </div>
+                                    <div className="min-w-0">
+                                        <div className="font-bold text-white flex items-center gap-2 flex-wrap">
+                                            {req.users_public?.name || 'Unknown'}
+                                            <span className="text-[9px] bg-emerald-500/10 text-emerald-400 px-1.5 py-0.5 rounded uppercase border border-emerald-500/20">Approved</span>
+                                        </div>
+                                        <div className="text-sm font-bold text-slate-300 mt-1">
+                                            {req.start_date} <span className="text-slate-600 font-normal">→</span> {req.end_date}
+                                            <span className="text-emerald-400/80 text-xs ml-2">({req.count_days} days)</span>
+                                        </div>
+                                        {req.reason && <div className="text-xs text-slate-400 mt-1 italic truncate">"{req.reason}"</div>}
+                                    </div>
+                                </div>
+                                <button
+                                    type="button"
+                                    disabled={revokingId === req.id}
+                                    onClick={() => handleRevokeApproved(req)}
+                                    className="w-full md:w-auto px-4 py-2.5 bg-rose-600/20 hover:bg-rose-600/30 border border-rose-500/40 text-rose-200 rounded-xl text-xs font-bold flex items-center justify-center gap-2 disabled:opacity-50 shrink-0 transition-colors"
+                                >
+                                    {revokingId === req.id ? (
+                                        <Loader size={14} className="animate-spin" />
+                                    ) : (
+                                        <Undo2 size={14} />
+                                    )}
+                                    Revoke approval
+                                </button>
                             </div>
                         ))}
                     </div>

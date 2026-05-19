@@ -51,6 +51,7 @@ import ActivityLogs from './pages/ActivityLogs';
 import FloorPlan from './pages/FloorPlan';
 
 import { User, UserRole, InventoryItem, ProductionLog as ProductionLogType, JobOrder } from './types';
+import { mergeAllowedPages } from './utils/pageAccess';
 import AIAgentWidget from './components/AIAgentWidget';
 
 import { supabase } from './services/supabase';
@@ -225,6 +226,7 @@ function App() {
             'SuperAdmin': ['*'], // The Only One with Full Access
             'Admin': ['profile', 'construction', 'factory-live-os', 'dashboard', 'data-v2', 'customer-import', 'universal-intake', 'scanner', 'jobs', 'livestock', 'inventory', 'recipes', 'products', 'delivery', 'order-summary', 'dispatch', 'production', 'report-history', 'users', 'hr', 'simple-stock', 'maintenance', 'lorry-management', 'iot', 'driver-management', 'operators', 'dev-log', 'leave-calendar', 'personal-report', 'machine-schedule', 'activity-logs', 'floor-plan'],
             'Manager': ['profile', 'construction', 'factory-live-os', 'dashboard', 'data-v2', 'customer-import', 'universal-intake', 'jobs', 'livestock', 'inventory', 'recipes', 'products', 'delivery', 'order-summary', 'dispatch', 'production', 'report-history', 'hr', 'simple-stock', 'maintenance', 'lorry-management', 'iot', 'driver-management', 'operators', 'leave-calendar', 'personal-report', 'machine-schedule', 'activity-logs', 'floor-plan'],
+            'LogisticsCoordinator': ['profile', 'construction', 'dashboard', 'livestock', 'delivery', 'order-summary', 'products', 'maintenance', 'driver-management', 'leave-calendar', 'personal-report', 'activity-logs'],
             'Driver': ['delivery-driver', 'delivery-history', 'leave-calendar', 'lorry-service', 'profile', 'personal-report', 'activity-logs'],
             'Operator': ['scanner', 'leave-calendar', 'profile', 'personal-report', 'activity-logs'],
             'Device': ['scanner'],
@@ -233,33 +235,21 @@ function App() {
             'Finance': ['profile', 'construction', 'personal-report', 'activity-logs']
         };
 
-        let allowed = allowedPages[role] || [];
-
-        // MERGE WITH DB TARGETED ROLE PERMISSIONS
-        if (dbAllowedPages !== null) {
-            allowed = [...new Set([...allowed, ...Array.from(dbAllowedPages)])];
-            // Ensure essential UI pages are always kept
-            allowed.push('profile', 'login', 'construction', 'dashboard');
-        }
-
-        // --- SPECIAL USER OVERRIDE (Vivian) ---
-        if (user.email === 'diyadmin1111@gmail.com') {
-            allowed = [...allowed, 'order-summary', 'driver-management'];
-        }
+        let allowed = mergeAllowedPages(
+            role,
+            allowedPages[role] || [],
+            dbAllowedPages,
+            user.roleModules
+        );
 
         // --- SPECIAL USER OVERRIDE (Neoson - Manager + Driver) ---
         if (user.email === 'neosonchun@gmail.com') {
-            allowed = [...allowed, 'delivery-driver', 'delivery-history', 'leave-calendar'];
+            allowed = [...new Set([...allowed, 'delivery-driver', 'delivery-history', 'leave-calendar'])];
         }
 
         // --- SPECIAL USER OVERRIDE (Baby - Operator / Stock Audit) ---
         if (user.employeeId === '0014' || user.email === 'driver.0014@packsecure.local' || user.name?.toLowerCase() === 'baby') {
-            allowed = [...allowed, 'stock-audit'];
-        }
-
-        // --- DYNAMIC CUSTOM MODULE UNLOCKS (From sys_users_v2.role_modules) ---
-        if (user.roleModules && user.roleModules.length > 0) {
-            allowed = [...allowed, ...user.roleModules];
+            allowed = [...new Set([...allowed, 'stock-audit'])];
         }
 
         const isAllowed = allowed.includes('*') || allowed.includes(activePage);
@@ -741,7 +731,7 @@ function App() {
             case 'factory-live-os':
                 return <FactoryLiveOS onNavigate={setActivePage} />;
             case 'floor-plan':
-                return <FloorPlan />;
+                return <FloorPlan user={user} />;
             case 'operators':
                 return <OperatorManagement />;
             case 'dev-log':

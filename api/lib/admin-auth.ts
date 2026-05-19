@@ -1,7 +1,7 @@
 import { createClient, type SupabaseClient, type User } from '@supabase/supabase-js';
 import type { VercelRequest, VercelResponse } from '@vercel/node';
 
-const DEFAULT_STAFF_ROLES = ['Admin', 'SuperAdmin', 'Manager', 'HR'] as const;
+const DEFAULT_STAFF_ROLES = ['Admin', 'SuperAdmin', 'Manager', 'LogisticsCoordinator', 'HR'] as const;
 
 export function getServiceRoleClient(): SupabaseClient {
     const url = process.env.VITE_SUPABASE_URL;
@@ -44,8 +44,7 @@ export async function requireStaffAuth(
         .eq('id', caller.id)
         .single();
 
-    const isVivian = caller.email === 'diyadmin1111@gmail.com';
-    if (!callerProfile || (!allowedRoles.includes(callerProfile.role) && !isVivian)) {
+    if (!callerProfile || !allowedRoles.includes(callerProfile.role)) {
         return { ok: false, status: 403, message: 'Forbidden' };
     }
 
