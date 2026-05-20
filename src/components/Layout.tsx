@@ -76,6 +76,18 @@ const Layout: React.FC<LayoutProps> = ({ children, activePage, setActivePage, us
         return () => window.removeEventListener('packsecure:overlay-open', collapseForOverlay);
     }, []);
 
+    /** Collapsed icon-only mode applies on desktop (lg+) only; mobile drawer always shows labels */
+    const [isLgUp, setIsLgUp] = useState(
+        () => typeof window !== 'undefined' && window.matchMedia('(min-width: 1024px)').matches
+    );
+    useEffect(() => {
+        const mq = window.matchMedia('(min-width: 1024px)');
+        const onChange = () => setIsLgUp(mq.matches);
+        mq.addEventListener('change', onChange);
+        return () => mq.removeEventListener('change', onChange);
+    }, []);
+    const isCollapsedNav = isSidebarCollapsed && isLgUp;
+
     const isNeoson = user?.email === 'neosonchun@gmail.com';
 
     useEffect(() => {
@@ -136,8 +148,8 @@ const Layout: React.FC<LayoutProps> = ({ children, activePage, setActivePage, us
     };
 
     const NavGroup = ({ title, children }: { title: string, children: React.ReactNode }) => (
-        <div className={isSidebarCollapsed ? 'mb-3' : 'mb-6'}>
-            {!isSidebarCollapsed && (
+        <div className={isCollapsedNav ? 'mb-3' : 'mb-6'}>
+            {!isCollapsedNav && (
                 <h3 className="px-4 text-[11px] font-black text-gray-500 uppercase tracking-[0.2em] mb-3 opacity-90">{title}</h3>
             )}
             <div className="space-y-1">
@@ -164,12 +176,12 @@ const Layout: React.FC<LayoutProps> = ({ children, activePage, setActivePage, us
         return (
             <button
                 type="button"
-                title={isSidebarCollapsed ? label : undefined}
+                title={isCollapsedNav ? label : undefined}
                 onClick={() => {
                     setActivePage(id);
                     setIsMobileMenuOpen(false);
                 }}
-                className={`relative w-full flex items-center rounded-xl transition-all duration-300 group overflow-hidden ${isSidebarCollapsed ? 'justify-center px-2 py-3' : 'gap-3 px-4 py-3.5'} ${isActive
+                className={`relative w-full flex items-center rounded-xl transition-all duration-300 group overflow-hidden ${isCollapsedNav ? 'justify-center px-2 py-3' : 'gap-3 px-4 py-3.5'} ${isActive
                     ? 'text-white'
                     : 'text-gray-400 hover:text-white hover:bg-white/5'
                     }`}
@@ -199,7 +211,7 @@ const Layout: React.FC<LayoutProps> = ({ children, activePage, setActivePage, us
                 )}
 
                 {/* Active Indicator Dot */}
-                {isActive && !isSidebarCollapsed && (
+                {isActive && !isCollapsedNav && (
                     <div className="absolute right-4 w-1.5 h-1.5 rounded-full bg-blue-500 shadow-[0_0_8px_rgba(59,130,246,0.8)]" />
                 )}
             </button>
@@ -234,13 +246,14 @@ const Layout: React.FC<LayoutProps> = ({ children, activePage, setActivePage, us
             <div className="flex h-screen overflow-hidden pt-16 lg:pt-0">
                 {/* Sidebar Navigation */}
                 <aside className={`
-                    fixed inset-y-0 left-0 z-[60] shrink-0 bg-[#1a1a1e] border-r border-white/5 flex flex-col
+                    fixed left-0 z-[60] shrink-0 bg-[#1a1a1e] border-r border-white/5 flex flex-col
+                    top-16 bottom-0 lg:top-0 lg:inset-y-0
                     transform transition-all duration-300 lg:transform-none lg:relative lg:translate-x-0
                     ${isMobileMenuOpen ? 'translate-x-0 shadow-2xl shadow-black w-[280px]' : '-translate-x-full w-[280px]'}
                     ${isSidebarCollapsed ? 'lg:w-[72px]' : 'lg:w-[280px]'}
                 `}>
                     {/* Brand Area */}
-                    <div className={`relative flex flex-col pt-8 pb-6 ${isSidebarCollapsed ? 'px-2 items-center' : 'px-6'}`}>
+                    <div className={`relative flex flex-col pt-8 pb-6 ${isCollapsedNav ? 'px-2 items-center' : 'px-6'}`}>
                         <button
                             type="button"
                             onClick={() => setIsMobileMenuOpen(false)}
@@ -256,9 +269,9 @@ const Layout: React.FC<LayoutProps> = ({ children, activePage, setActivePage, us
                         >
                             {isSidebarCollapsed ? <ChevronRight size={18} /> : <ChevronLeft size={18} />}
                         </button>
-                        <div className={`flex items-center mb-1 ${isSidebarCollapsed ? 'justify-center' : 'gap-3'}`}>
-                            <img src="/packsecure-logo.jpg" alt="PackSecure" className={`rounded-lg ${isSidebarCollapsed ? 'h-9 w-9 object-cover' : 'h-10'}`} />
-                            {!isSidebarCollapsed && (
+                        <div className={`flex items-center mb-1 ${isCollapsedNav ? 'justify-center' : 'gap-3'}`}>
+                            <img src="/packsecure-logo.jpg" alt="PackSecure" className={`rounded-lg ${isCollapsedNav ? 'h-9 w-9 object-cover' : 'h-10'}`} />
+                            {!isCollapsedNav && (
                                 <div>
                                     <div className="flex items-center gap-1.5 mt-1">
                                         <span className="w-1.5 h-1.5 rounded-full bg-green-500 animate-pulse shadow-[0_0_8px_rgba(34,197,94,0.6)]"></span>
@@ -269,7 +282,7 @@ const Layout: React.FC<LayoutProps> = ({ children, activePage, setActivePage, us
                         </div>
                     </div>
 
-                    <nav className={`flex-1 overflow-y-auto custom-scrollbar space-y-2 pb-6 ${isSidebarCollapsed ? 'px-2' : 'px-4'}`}>
+                    <nav className={`flex-1 overflow-y-auto custom-scrollbar space-y-2 pb-6 ${isCollapsedNav ? 'px-2' : 'px-4'}`}>
 
                         {/* EXECUTIVE SUITE (SuperAdmin, Admin, Manager) */}
                         {/* Logistics coordinator workspace (menu via role_permissions in DB) */}
@@ -426,7 +439,7 @@ const Layout: React.FC<LayoutProps> = ({ children, activePage, setActivePage, us
                                 <div className="absolute bottom-0 right-0 w-3 h-3 bg-green-500 border-2 border-[#0a0a0c] rounded-full"></div>
                             </div>
 
-                            {!isSidebarCollapsed && (
+                            {!isCollapsedNav && (
                                 <div className="text-left flex-1 min-w-0">
                                     <p className="font-bold text-sm text-gray-200 truncate group-hover:text-white transition-colors">{user?.name || 'User'}</p>
                                     <p className="text-[10px] text-blue-400 font-bold uppercase tracking-wider">
@@ -441,24 +454,24 @@ const Layout: React.FC<LayoutProps> = ({ children, activePage, setActivePage, us
                             )}
                         </button>
 
-                        <div className={`flex items-center mt-3 ${isSidebarCollapsed ? 'flex-col gap-2' : 'gap-2'}`}>
+                        <div className={`flex items-center mt-3 ${isCollapsedNav ? 'flex-col gap-2' : 'gap-2'}`}>
                             <button
                                 type="button"
-                                title={isSidebarCollapsed ? (theme === 'dark' ? 'Dark mode' : 'Light mode') : undefined}
+                                title={isCollapsedNav ? (theme === 'dark' ? 'Dark mode' : 'Light mode') : undefined}
                                 onClick={toggleTheme}
-                                className={`flex items-center justify-center p-2.5 text-gray-400 hover:text-amber-400 hover:bg-white/5 rounded-lg transition-all text-xs font-bold uppercase tracking-wider ${isSidebarCollapsed ? 'w-full' : 'flex-1 gap-2'}`}
+                                className={`flex items-center justify-center p-2.5 text-gray-400 hover:text-amber-400 hover:bg-white/5 rounded-lg transition-all text-xs font-bold uppercase tracking-wider ${isCollapsedNav ? 'w-full' : 'flex-1 gap-2'}`}
                             >
                                 {theme === 'dark' ? <Moon size={14} /> : <Sun size={14} className="text-amber-500" />}
-                                {!isSidebarCollapsed && <span>{theme === 'dark' ? 'Dark' : 'Light'}</span>}
+                                {!isCollapsedNav && <span>{theme === 'dark' ? 'Dark' : 'Light'}</span>}
                             </button>
                             <button
                                 type="button"
                                 title="Quit"
                                 onClick={onLogout}
-                                className={`flex items-center justify-center p-2.5 text-gray-500 hover:text-red-400 hover:bg-red-500/10 rounded-lg transition-all text-xs font-bold uppercase tracking-wider ${isSidebarCollapsed ? 'w-full' : 'flex-1 gap-2'}`}
+                                className={`flex items-center justify-center p-2.5 text-gray-500 hover:text-red-400 hover:bg-red-500/10 rounded-lg transition-all text-xs font-bold uppercase tracking-wider ${isCollapsedNav ? 'w-full' : 'flex-1 gap-2'}`}
                             >
                                 <LogOut size={14} />
-                                {!isSidebarCollapsed && <span>Quit</span>}
+                                {!isCollapsedNav && <span>Quit</span>}
                             </button>
                         </div>
                     </div>

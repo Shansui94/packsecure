@@ -90,6 +90,206 @@ function filterSelectOptions(
         .map(x => x.opt);
 }
 
+/** Trip list search: driver, DO, customer, trip category (zone), destinations, inferred state, notes */
+function buildTripSearchHaystack(order: SalesOrder, driverName?: string): string {
+    const addr = order.deliveryAddress || '';
+    const inferredRegion = addr ? determineState(addr) : '';
+    return [
+        driverName,
+        order.orderNumber,
+        order.customer,
+        order.zone,
+        order.trip_origin,
+        addr,
+        inferredRegion,
+        order.notes,
+    ]
+        .filter((v): v is string => Boolean(v && String(v).trim()))
+        .join(' ')
+        .toLowerCase();
+}
+
+function ymdToDmy(ymd: string): string {
+    const [y, m, d] = ymd.split('-');
+    if (!y || !m || !d) return ymd;
+    return `${d}/${m}/${y}`;
+}
+
+/** Delivery date only (`deadline`), YYYY-MM-DD in local calendar */
+function getOrderDeliveryYmd(order: SalesOrder): string | null {
+    const raw = order.deadline;
+    if (!raw) return null;
+    if (raw.includes('T')) return new Date(raw).toLocaleDateString('en-CA');
+    return raw.slice(0, 10);
+}
+
+/** Parse one search token as a calendar date → YYYY-MM-DD, or null if not a date */
+function parseFlexibleDateToken(token: string): string | null {
+    const t = token.trim();
+    if (!t) return null;
+
+    if (/^\d{4}-\d{2}-\d{2}$/.test(t)) return t;
+
+    const dmy = t.match(/^(\d{1,2})[/.-](\d{1,2})(?:[/.-](\d{2,4}))?$/);
+    if (dmy) {
+        const day = parseInt(dmy[1], 10);
+        const month = parseInt(dmy[2], 10);
+        let year = dmy[3] ? parseInt(dmy[3], 10) : new Date().getFullYear();
+        if (year < 100) year += 2000;
+        if (month < 1 || month > 12 || day < 1 || day > 31) return null;
+        return `${year}-${String(month).padStart(2, '0')}-${String(day).padStart(2, '0')}`;
+    }
+
+    return null;
+}
+
+const MONTH_NAME_TO_NUM: Record<string, number> = {
+    jan: 1, january: 1,
+    feb: 2, february: 2,
+    mar: 3, march: 3,
+    apr: 4, april: 4,
+    may: 5,
+    jun: 6, june: 6,
+    jul: 7, july: 7,
+    aug: 8, august: 8,
+    sep: 9, sept: 9, september: 9,
+    oct: 10, october: 10,
+    nov: 11, november: 11,
+    dec: 12, december: 12,
+};
+
+/** Parse search token as YYYY-MM (delivery month), or null */
+function parseFlexibleMonthToken(token: string): string | null {
+    const t = token.trim().toLowerCase();
+    if (!t) return null;
+    if (t === 'thismonth' || t === 'this-month') return getLocalCurrentMonthYm();
+
+    if (/^\d{4}-\d{2}$/.test(t)) {
+        const m = parseInt(t.slice(5, 7), 10);
+        if (m >= 1 && m <= 12) return t;
+        return null;
+    }
+
+    const my = t.match(/^(\d{1,2})[/.-](\d{4})$/);
+    if (my) {
+        const month = parseInt(my[1], 10);
+        const year = parseInt(my[2], 10);
+        if (month >= 1 && month <= 12) {
+            return `${year}-${String(month).padStart(2, '0')}`;
+        }
+    }
+
+    const ym = t.match(/^(\d{4})[/.-](\d{1,2})$/);
+    if (ym) {
+        const year = parseInt(ym[1], 10);
+        const month = parseInt(ym[2], 10);
+        if (month >= 1 && month <= 12) {
+            return `${year}-${String(month).padStart(2, '0')}`;
+        }
+    }
+
+    const parts = t.split(/[\s-]+/).filter(Boolean);
+    if (parts.length >= 1) {
+        const monthNum = MONTH_NAME_TO_NUM[parts[0]];
+        if (monthNum) {
+            let year = new Date().getFullYear();
+            if (parts[1] && /^\d{4}$/.test(parts[1])) year = parseInt(parts[1], 10);
+            else if (parts[1] && /^\d{2}$/.test(parts[1])) year = 2000 + parseInt(parts[1], 10);
+            return `${year}-${String(monthNum).padStart(2, '0')}`;
+        }
+    }
+
+    return null;
+}
+
+function getLocalCurrentMonthYm(): string {
+    const d = new Date();
+    return `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}`;
+}
+
+function orderDeliveryInMonth(order: SalesOrder, monthYm: string): boolean {
+    const ymd = getOrderDeliveryYmd(order);
+    if (!ymd) return false;
+    return ymd.startsWith(`${monthYm}-`);
+}
+
+type DeliveryDateFilter = 'all' | 'today' | 'tomorrow' | 'week' | 'month' | 'no_date';
+
+function getLocalTodayYmd(): string {
+    return new Date().toLocaleDateString('en-CA');
+}
+
+function getLocalTomorrowYmd(): string {
+    const d = new Date();
+    d.setDate(d.getDate() + 1);
+    return d.toLocaleDateString('en-CA');
+}
+
+function getLocalWeekRangeYmd(): { start: string; end: string } {
+    const now = new Date();
+    const dow = now.getDay();
+    const mondayOffset = dow === 0 ? -6 : 1 - dow;
+    const mon = new Date(now);
+    mon.setDate(now.getDate() + mondayOffset);
+    const sun = new Date(mon);
+    sun.setDate(mon.getDate() + 6);
+    return {
+        start: mon.toLocaleDateString('en-CA'),
+        end: sun.toLocaleDateString('en-CA'),
+    };
+}
+
+function orderMatchesDeliveryDateFilter(
+    order: SalesOrder,
+    filter: DeliveryDateFilter,
+    monthYmOverride?: string
+): boolean {
+    if (monthYmOverride) return orderDeliveryInMonth(order, monthYmOverride);
+    if (filter === 'all') return true;
+    const ymd = getOrderDeliveryYmd(order);
+    if (!ymd) return filter === 'no_date';
+
+    if (filter === 'no_date') return false;
+    if (filter === 'today') return ymd === getLocalTodayYmd();
+    if (filter === 'tomorrow') return ymd === getLocalTomorrowYmd();
+    if (filter === 'week') {
+        const { start, end } = getLocalWeekRangeYmd();
+        return ymd >= start && ymd <= end;
+    }
+    if (filter === 'month') return orderDeliveryInMonth(order, getLocalCurrentMonthYm());
+    return true;
+}
+
+function tripMatchesSearch(order: SalesOrder, search: string, driverName?: string): boolean {
+    const q = search.trim().toLowerCase();
+    if (!q) return true;
+
+    const delYmd = getOrderDeliveryYmd(order);
+    const delYm = delYmd ? delYmd.slice(0, 7) : '';
+    const haystack = [
+        buildTripSearchHaystack(order, driverName),
+        delYmd || '',
+        delYm,
+        delYmd ? ymdToDmy(delYmd).toLowerCase() : '',
+    ].join(' ');
+
+    const terms = q.split(/[\s,]+/).filter(Boolean);
+    return terms.every(term => {
+        if (term === 'today') return delYmd === getLocalTodayYmd();
+        if (term === 'tomorrow') return delYmd === getLocalTomorrowYmd();
+        if (term === 'thismonth' || term === 'this-month') {
+            return orderDeliveryInMonth(order, getLocalCurrentMonthYm());
+        }
+
+        const asMonth = parseFlexibleMonthToken(term);
+        if (asMonth) return orderDeliveryInMonth(order, asMonth);
+
+        const asDate = parseFlexibleDateToken(term);
+        if (asDate) return delYmd === asDate;
+        return haystack.includes(term);
+    });
+}
+
 const SearchableSelect: React.FC<SearchableSelectProps> = ({
     label,
     icon,
@@ -231,6 +431,8 @@ const DeliveryOrderManagement: React.FC = () => {
 
     const [isCreateModalOpen, setIsCreateModalOpen] = useState(false);
     const [searchTerm, setSearchTerm] = useState('');
+    const [deliveryDateFilter, setDeliveryDateFilter] = useState<DeliveryDateFilter>('all');
+    const [deliveryMonthPick, setDeliveryMonthPick] = useState('');
     const [statusFilter, setStatusFilter] = useState<string>('All');
     const [viewMode, setViewMode] = useState<'kanban' | 'table'>('kanban');
     const [sortConfig, setSortConfig] = useState<{ key: string, dir: 'asc'|'desc' } | null>(null);
@@ -543,9 +745,12 @@ const DeliveryOrderManagement: React.FC = () => {
     // Filter Logic
     const filteredOrders = orders.filter(o => {
         const matchesStatus = statusFilter === 'All' ? !['Delivered', 'Cancelled'].includes(o.status) : o.status === statusFilter;
-        const matchesSearch = getDriverName(o.driverId)?.toLowerCase().includes(searchTerm.toLowerCase()) ||
-            o.orderNumber?.toLowerCase().includes(searchTerm.toLowerCase()) ||
-            o.customer.toLowerCase().includes(searchTerm.toLowerCase());
+        const matchesSearch = tripMatchesSearch(o, searchTerm, getDriverName(o.driverId));
+        const matchesDeliveryDate = orderMatchesDeliveryDateFilter(
+            o,
+            deliveryDateFilter,
+            deliveryMonthPick || undefined
+        );
 
         let matchesLocation = false;
         if (o.driverId) {
@@ -557,8 +762,19 @@ const DeliveryOrderManagement: React.FC = () => {
             matchesLocation = originLoc.toUpperCase() === activeLocation.toUpperCase();
         }
 
-        return matchesStatus && matchesSearch && matchesLocation;
+        return matchesStatus && matchesSearch && matchesDeliveryDate && matchesLocation;
     });
+
+    const hasActiveListFilters =
+        Boolean(searchTerm.trim()) ||
+        deliveryDateFilter !== 'all' ||
+        Boolean(deliveryMonthPick) ||
+        statusFilter !== 'All';
+
+    const selectDeliveryDateChip = (id: DeliveryDateFilter) => {
+        setDeliveryMonthPick('');
+        setDeliveryDateFilter(id);
+    };
 
     const handleSort = (key: string) => {
         let dir: 'asc' | 'desc' = 'asc';
@@ -1644,7 +1860,7 @@ const DeliveryOrderManagement: React.FC = () => {
                     </div>
                     <input
                         type="text"
-                        placeholder="Search Driver, Customer, or DO Number..."
+                        placeholder="Area, date (20/05/2026), or month (2026-05, may)..."
                         value={searchTerm}
                         onChange={(e) => setSearchTerm(e.target.value)}
                         className="w-full bg-slate-900/50 backdrop-blur-sm border border-slate-800 text-slate-200 text-sm rounded-xl pl-10 pr-4 py-3 focus:ring-2 focus:ring-blue-500/50 focus:border-blue-500/50 outline-none transition-all placeholder:text-slate-600"
@@ -1716,6 +1932,58 @@ const DeliveryOrderManagement: React.FC = () => {
                 </div>
             </div>
 
+            <div className="flex flex-wrap items-center gap-2 mb-6">
+                <span className="text-[10px] font-black text-slate-500 uppercase tracking-widest flex items-center gap-1.5 mr-1">
+                    <Calendar size={12} className="text-blue-400/80" />
+                    Delivery date
+                </span>
+                {(
+                    [
+                        { id: 'all' as const, label: 'All' },
+                        { id: 'today' as const, label: 'Today' },
+                        { id: 'tomorrow' as const, label: 'Tomorrow' },
+                        { id: 'week' as const, label: 'This week' },
+                        { id: 'month' as const, label: 'This month' },
+                        { id: 'no_date' as const, label: 'No date' },
+                    ] as const
+                ).map(({ id, label }) => (
+                    <button
+                        key={id}
+                        type="button"
+                        onClick={() => selectDeliveryDateChip(id)}
+                        className={`px-3 py-1.5 rounded-lg text-[10px] font-black uppercase tracking-wider border transition-all
+                            ${!deliveryMonthPick && deliveryDateFilter === id
+                                ? 'bg-blue-600/30 border-blue-500/50 text-blue-200'
+                                : 'bg-slate-900/80 border-slate-800 text-slate-500 hover:text-slate-300 hover:border-slate-600'
+                            }`}
+                    >
+                        {label}
+                    </button>
+                ))}
+                <label className="flex items-center gap-2 ml-1 sm:ml-2">
+                    <span className="text-[10px] font-black text-slate-500 uppercase tracking-widest">Month</span>
+                    <input
+                        type="month"
+                        value={deliveryMonthPick}
+                        onChange={e => {
+                            const v = e.target.value;
+                            setDeliveryMonthPick(v);
+                            if (v) setDeliveryDateFilter('all');
+                        }}
+                        className="bg-slate-900 border border-slate-700 rounded-lg px-2 py-1.5 text-xs text-slate-200 [color-scheme:dark] outline-none focus:border-blue-500/50"
+                    />
+                    {deliveryMonthPick && (
+                        <button
+                            type="button"
+                            onClick={() => setDeliveryMonthPick('')}
+                            className="text-[10px] font-bold text-slate-500 hover:text-white uppercase"
+                        >
+                            Clear
+                        </button>
+                    )}
+                </label>
+            </div>
+
             {/* --- MAIN GRID / TABLE --- */}
             {viewMode === 'kanban' ? (
                 <DragDropContext onDragEnd={onDragEnd}>
@@ -1734,9 +2002,9 @@ const DeliveryOrderManagement: React.FC = () => {
                             })
                             .sort((a, b) => (a.tripSequence || 0) - (b.tripSequence || 0)); // Ensure visual order matches logical order for DnD
 
-                        if (driverOrders.length === 0 && (searchTerm || statusFilter !== 'All') && driver.uid !== 'unassigned') return null;
+                        if (driverOrders.length === 0 && hasActiveListFilters && driver.uid !== 'unassigned') return null;
                         // Always show Unassigned column if there are orders, or if we are in default view
-                        if (driver.uid === 'unassigned' && driverOrders.length === 0 && (searchTerm || statusFilter !== 'All')) return null;
+                        if (driver.uid === 'unassigned' && driverOrders.length === 0 && hasActiveListFilters) return null;
 
                         const isUnassigned = driver.uid === 'unassigned';
 
