@@ -86,7 +86,9 @@ const Layout: React.FC<LayoutProps> = ({ children, activePage, setActivePage, us
         mq.addEventListener('change', onChange);
         return () => mq.removeEventListener('change', onChange);
     }, []);
-    const isCollapsedNav = isSidebarCollapsed && isLgUp;
+    /** Desktop-only icon rail; phones/tablets always show menu text */
+    const useCollapsedNavLayout = isSidebarCollapsed && isLgUp;
+    const showNavLabels = !isLgUp || !isSidebarCollapsed;
 
     const isNeoson = user?.email === 'neosonchun@gmail.com';
 
@@ -148,8 +150,8 @@ const Layout: React.FC<LayoutProps> = ({ children, activePage, setActivePage, us
     };
 
     const NavGroup = ({ title, children }: { title: string, children: React.ReactNode }) => (
-        <div className={isCollapsedNav ? 'mb-3' : 'mb-6'}>
-            {!isCollapsedNav && (
+        <div className={useCollapsedNavLayout ? 'mb-3' : 'mb-6'}>
+            {showNavLabels && (
                 <h3 className="px-4 text-[11px] font-black text-gray-500 uppercase tracking-[0.2em] mb-3 opacity-90">{title}</h3>
             )}
             <div className="space-y-1">
@@ -176,12 +178,12 @@ const Layout: React.FC<LayoutProps> = ({ children, activePage, setActivePage, us
         return (
             <button
                 type="button"
-                title={isCollapsedNav ? label : undefined}
+                title={showNavLabels ? undefined : label}
                 onClick={() => {
                     setActivePage(id);
                     setIsMobileMenuOpen(false);
                 }}
-                className={`relative w-full flex items-center rounded-xl transition-all duration-300 group overflow-hidden ${isCollapsedNav ? 'justify-center px-2 py-3' : 'gap-3 px-4 py-3.5'} ${isActive
+                className={`relative w-full flex items-center rounded-xl transition-all duration-300 group ${useCollapsedNavLayout ? 'justify-center px-2 py-3 overflow-hidden' : 'gap-3 px-4 py-3.5'} ${isActive
                     ? 'text-white'
                     : 'text-gray-400 hover:text-white hover:bg-white/5'
                     }`}
@@ -197,21 +199,21 @@ const Layout: React.FC<LayoutProps> = ({ children, activePage, setActivePage, us
                 </div>
 
                 {/* Label */}
-                {!isSidebarCollapsed && (
-                    <span className={`relative z-10 font-bold tracking-wide text-[15px] flex-1 text-left ${isActive ? 'text-white' : ''}`}>
+                {showNavLabels && (
+                    <span className={`relative z-10 font-bold tracking-wide text-[15px] flex-1 text-left min-w-0 ${isActive ? 'text-white' : ''}`}>
                         {label}
                     </span>
                 )}
 
                 {/* Badge */}
                 {badge && badge > 0 && (
-                    <span className={`relative z-10 bg-red-500 text-white font-bold rounded-full shadow-lg shadow-red-500/30 ${isSidebarCollapsed ? 'absolute -top-0.5 -right-0.5 text-[9px] min-w-[16px] h-4 flex items-center justify-center px-1' : 'text-[10px] px-2 py-0.5'}`}>
+                    <span className={`relative z-10 bg-red-500 text-white font-bold rounded-full shadow-lg shadow-red-500/30 ${useCollapsedNavLayout ? 'absolute -top-0.5 -right-0.5 text-[9px] min-w-[16px] h-4 flex items-center justify-center px-1' : 'text-[10px] px-2 py-0.5'}`}>
                         {badge > 99 ? '99+' : badge}
                     </span>
                 )}
 
                 {/* Active Indicator Dot */}
-                {isActive && !isCollapsedNav && (
+                {isActive && !useCollapsedNavLayout && (
                     <div className="absolute right-4 w-1.5 h-1.5 rounded-full bg-blue-500 shadow-[0_0_8px_rgba(59,130,246,0.8)]" />
                 )}
             </button>
@@ -253,7 +255,7 @@ const Layout: React.FC<LayoutProps> = ({ children, activePage, setActivePage, us
                     ${isSidebarCollapsed ? 'lg:w-[72px]' : 'lg:w-[280px]'}
                 `}>
                     {/* Brand Area */}
-                    <div className={`relative flex flex-col pt-8 pb-6 ${isCollapsedNav ? 'px-2 items-center' : 'px-6'}`}>
+                    <div className={`relative flex flex-col pt-8 pb-6 ${useCollapsedNavLayout ? 'px-2 items-center' : 'px-6'}`}>
                         <button
                             type="button"
                             onClick={() => setIsMobileMenuOpen(false)}
@@ -269,9 +271,9 @@ const Layout: React.FC<LayoutProps> = ({ children, activePage, setActivePage, us
                         >
                             {isSidebarCollapsed ? <ChevronRight size={18} /> : <ChevronLeft size={18} />}
                         </button>
-                        <div className={`flex items-center mb-1 ${isCollapsedNav ? 'justify-center' : 'gap-3'}`}>
-                            <img src="/packsecure-logo.jpg" alt="PackSecure" className={`rounded-lg ${isCollapsedNav ? 'h-9 w-9 object-cover' : 'h-10'}`} />
-                            {!isCollapsedNav && (
+                        <div className={`flex items-center mb-1 ${useCollapsedNavLayout ? 'justify-center' : 'gap-3'}`}>
+                            <img src="/packsecure-logo.jpg" alt="PackSecure" className={`rounded-lg ${useCollapsedNavLayout ? 'h-9 w-9 object-cover' : 'h-10'}`} />
+                            {showNavLabels && (
                                 <div>
                                     <div className="flex items-center gap-1.5 mt-1">
                                         <span className="w-1.5 h-1.5 rounded-full bg-green-500 animate-pulse shadow-[0_0_8px_rgba(34,197,94,0.6)]"></span>
@@ -282,7 +284,7 @@ const Layout: React.FC<LayoutProps> = ({ children, activePage, setActivePage, us
                         </div>
                     </div>
 
-                    <nav className={`flex-1 overflow-y-auto custom-scrollbar space-y-2 pb-6 ${isCollapsedNav ? 'px-2' : 'px-4'}`}>
+                    <nav className={`flex-1 overflow-y-auto custom-scrollbar space-y-2 pb-6 ${useCollapsedNavLayout ? 'px-2' : 'px-4'}`}>
 
                         {/* EXECUTIVE SUITE (SuperAdmin, Admin, Manager) */}
                         {/* Logistics coordinator workspace (menu via role_permissions in DB) */}
@@ -420,12 +422,12 @@ const Layout: React.FC<LayoutProps> = ({ children, activePage, setActivePage, us
                     </nav>
 
                     {/* User Profile (Bottom) */}
-                    <div className={`border-t border-white/5 bg-[#0a0a0c] ${isSidebarCollapsed ? 'p-2' : 'p-4'}`}>
+                    <div className={`border-t border-white/5 bg-[#0a0a0c] ${useCollapsedNavLayout ? 'p-2' : 'p-4'}`}>
                         <button
                             type="button"
-                            title={isSidebarCollapsed ? (user?.name || 'Profile') : undefined}
+                            title={showNavLabels ? undefined : (user?.name || 'Profile')}
                             onClick={() => setActivePage('profile')}
-                            className={`w-full flex items-center rounded-xl transition-all duration-300 group ${isSidebarCollapsed ? 'justify-center p-2' : 'gap-3 p-3'} ${activePage === 'profile' ? 'bg-white/5 border border-white/5' : 'hover:bg-white/5 border border-transparent'
+                            className={`w-full flex items-center rounded-xl transition-all duration-300 group ${useCollapsedNavLayout ? 'justify-center p-2' : 'gap-3 p-3'} ${activePage === 'profile' ? 'bg-white/5 border border-white/5' : 'hover:bg-white/5 border border-transparent'
                                 } `}
                         >
                             <div className="relative">
@@ -439,7 +441,7 @@ const Layout: React.FC<LayoutProps> = ({ children, activePage, setActivePage, us
                                 <div className="absolute bottom-0 right-0 w-3 h-3 bg-green-500 border-2 border-[#0a0a0c] rounded-full"></div>
                             </div>
 
-                            {!isCollapsedNav && (
+                            {showNavLabels && (
                                 <div className="text-left flex-1 min-w-0">
                                     <p className="font-bold text-sm text-gray-200 truncate group-hover:text-white transition-colors">{user?.name || 'User'}</p>
                                     <p className="text-[10px] text-blue-400 font-bold uppercase tracking-wider">
@@ -454,24 +456,24 @@ const Layout: React.FC<LayoutProps> = ({ children, activePage, setActivePage, us
                             )}
                         </button>
 
-                        <div className={`flex items-center mt-3 ${isCollapsedNav ? 'flex-col gap-2' : 'gap-2'}`}>
+                        <div className={`flex items-center mt-3 ${useCollapsedNavLayout ? 'flex-col gap-2' : 'gap-2'}`}>
                             <button
                                 type="button"
-                                title={isCollapsedNav ? (theme === 'dark' ? 'Dark mode' : 'Light mode') : undefined}
+                                title={useCollapsedNavLayout ? (theme === 'dark' ? 'Dark mode' : 'Light mode') : undefined}
                                 onClick={toggleTheme}
-                                className={`flex items-center justify-center p-2.5 text-gray-400 hover:text-amber-400 hover:bg-white/5 rounded-lg transition-all text-xs font-bold uppercase tracking-wider ${isCollapsedNav ? 'w-full' : 'flex-1 gap-2'}`}
+                                className={`flex items-center justify-center p-2.5 text-gray-400 hover:text-amber-400 hover:bg-white/5 rounded-lg transition-all text-xs font-bold uppercase tracking-wider ${useCollapsedNavLayout ? 'w-full' : 'flex-1 gap-2'}`}
                             >
                                 {theme === 'dark' ? <Moon size={14} /> : <Sun size={14} className="text-amber-500" />}
-                                {!isCollapsedNav && <span>{theme === 'dark' ? 'Dark' : 'Light'}</span>}
+                                {showNavLabels && <span>{theme === 'dark' ? 'Dark' : 'Light'}</span>}
                             </button>
                             <button
                                 type="button"
                                 title="Quit"
                                 onClick={onLogout}
-                                className={`flex items-center justify-center p-2.5 text-gray-500 hover:text-red-400 hover:bg-red-500/10 rounded-lg transition-all text-xs font-bold uppercase tracking-wider ${isCollapsedNav ? 'w-full' : 'flex-1 gap-2'}`}
+                                className={`flex items-center justify-center p-2.5 text-gray-500 hover:text-red-400 hover:bg-red-500/10 rounded-lg transition-all text-xs font-bold uppercase tracking-wider ${useCollapsedNavLayout ? 'w-full' : 'flex-1 gap-2'}`}
                             >
                                 <LogOut size={14} />
-                                {!isCollapsedNav && <span>Quit</span>}
+                                {showNavLabels && <span>Quit</span>}
                             </button>
                         </div>
                     </div>
