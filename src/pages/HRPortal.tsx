@@ -134,18 +134,27 @@ const EmployeeModal: React.FC<{
                         action: 'create',
                         email: validEmail,
                         password: authPassword,
+                        pin,
+                        employeeId: pin,
                         name: form.name,
                         role: form.role,
                     }),
                 });
 
-                const data = await res.json().catch(() => ({} as { error?: string }));
+                const raw = await res.text();
+                let data: { error?: string } = {};
+                try {
+                    data = raw ? JSON.parse(raw) : {};
+                } catch {
+                    if (raw) data.error = raw.slice(0, 300);
+                }
                 if (!res.ok) {
                     const hint =
                         res.status === 404
                             ? 'API route missing — run npm run dev:all locally, or redeploy with api/manage-employee on Vercel.'
-                            : res.status === 500 && String(data.error || '').includes('misconfigured')
-                              ? 'Server env missing: add SUPABASE_SERVICE_ROLE_KEY and SUPABASE_URL in Vercel → Settings → Environment Variables, then redeploy.'
+                            : res.status === 500 &&
+                                /misconfigured|SUPABASE_SERVICE_ROLE|SUPABASE_URL/i.test(String(data.error || ''))
+                              ? 'Add SUPABASE_SERVICE_ROLE_KEY and SUPABASE_URL in Vercel → Environment Variables, then Redeploy.'
                               : '';
                     setError(
                         [data.error, hint].filter(Boolean).join(' ') ||

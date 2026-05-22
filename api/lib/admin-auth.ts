@@ -31,8 +31,9 @@ export async function requireStaffAuth(
     let admin: SupabaseClient;
     try {
         admin = getServiceRoleClient();
-    } catch {
-        return { ok: false, status: 500, message: 'Server misconfigured' };
+    } catch (e: unknown) {
+        const message = e instanceof Error ? e.message : 'Server misconfigured';
+        return { ok: false, status: 500, message };
     }
 
     const { data: { user: caller }, error: authError } = await admin.auth.getUser(token);
@@ -40,14 +41,26 @@ export async function requireStaffAuth(
         return { ok: false, status: 401, message: 'Unauthorized: Invalid token' };
     }
 
-    const { data: callerProfile } = await admin
+    let callerRole: string | null = null;
+    const { data: publicProfile } = await admin
         .from('users_public')
         .select('role, email')
         .eq('id', caller.id)
-        .single();
+        .maybeSingle();
 
-    if (!callerProfile || !allowedRoles.includes(callerProfile.role)) {
-        return { ok: false, status: 403, message: 'Forbidden' };
+    if (publicProfile?.role) {
+        callerRole = publicProfile.role;
+    } else {
+        const { data: sysProfile } = await admin
+            .from('sys_users_v2')
+            .select('role, email')
+            .eq('auth_user_id', caller.id)
+            .maybeSingle();
+        if (sysProfile?.role) callerRole = sysProfile.role;
+    }
+
+    if (!callerRole || !allowedRoles.includes(callerRole)) {
+        return { ok: false, status: 403, message: 'Forbidden: HR/Admin access required' };
     }
 
     return { ok: true, caller, admin };
