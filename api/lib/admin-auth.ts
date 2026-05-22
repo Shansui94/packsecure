@@ -4,10 +4,12 @@ import type { VercelRequest, VercelResponse } from '@vercel/node';
 const DEFAULT_STAFF_ROLES = ['Admin', 'SuperAdmin', 'Manager', 'LogisticsCoordinator', 'HR'] as const;
 
 export function getServiceRoleClient(): SupabaseClient {
-    const url = process.env.VITE_SUPABASE_URL;
+    const url = process.env.SUPABASE_URL || process.env.VITE_SUPABASE_URL;
     const key = process.env.SUPABASE_SERVICE_ROLE_KEY;
     if (!url || !key) {
-        throw new Error('SUPABASE_SERVICE_ROLE_KEY or VITE_SUPABASE_URL is not configured');
+        throw new Error(
+            'Server misconfigured: set SUPABASE_SERVICE_ROLE_KEY and SUPABASE_URL (or VITE_SUPABASE_URL) on Vercel / in .env'
+        );
     }
     return createClient(url, key);
 }

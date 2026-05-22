@@ -139,9 +139,18 @@ const EmployeeModal: React.FC<{
                     }),
                 });
 
-                const data = await res.json().catch(() => ({}));
+                const data = await res.json().catch(() => ({} as { error?: string }));
                 if (!res.ok) {
-                    setError(data.error || 'Auth API failed. Run npm run dev:all locally or deploy API to Vercel.');
+                    const hint =
+                        res.status === 404
+                            ? 'API route missing — run npm run dev:all locally, or redeploy with api/manage-employee on Vercel.'
+                            : res.status === 500 && String(data.error || '').includes('misconfigured')
+                              ? 'Server env missing: add SUPABASE_SERVICE_ROLE_KEY and SUPABASE_URL in Vercel → Settings → Environment Variables, then redeploy.'
+                              : '';
+                    setError(
+                        [data.error, hint].filter(Boolean).join(' ') ||
+                            `Auth API failed (HTTP ${res.status}). Run npm run dev:all locally or check Vercel env vars.`
+                    );
                     setSaving(false);
                     return;
                 }
