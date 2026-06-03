@@ -639,7 +639,7 @@ const HRPortal: React.FC<{ user?: any }> = ({ user }) => {
 
         // Driver trips with zone info for zone-based allowance
         const { data: trips } = await supabase.from('sales_orders')
-            .select('driver_id, zone, delivery_zone, trip_origin, trip_drop_count')
+            .select('driver_id, zone, trip_origin, trip_drop_count')
             .eq('status', 'Delivered')
             .gte('deadline', firstDay)
             .lte('deadline', lastDay);

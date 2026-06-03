@@ -54,7 +54,7 @@ export async function fetchKpiSnapshot(
         supabase
             .from('sales_orders')
             .select(
-                'id, status, driver_id, deadline, pod_timestamp, trip_origin, zone, delivery_zone, delivery_address, trip_drop_count'
+                'id, status, driver_id, deadline, pod_timestamp, trip_origin, zone, delivery_address, trip_drop_count'
             )
             .gte('deadline', start)
             .lte('deadline', end),

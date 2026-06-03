@@ -92,7 +92,7 @@ const LeaveCalendar: React.FC<Props> = ({ user }) => {
             // 1. Get deliveries
             const { data: trips, error: tripsErr } = await supabase
                 .from('sales_orders')
-                .select('trip_origin, zone, delivery_zone, trip_drop_count')
+                .select('trip_origin, zone, trip_drop_count')
                 .eq('driver_id', user.uid)
                 .eq('status', 'Delivered')
                 .gte('deadline', firstDayStr)
