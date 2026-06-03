@@ -3,20 +3,68 @@ import { DragDropContext, Droppable, Draggable, DropResult } from '@hello-pangea
 import { supabase } from '../services/supabase';
 import { getV2Items, getInventoryStatus } from '../services/apiV2';
 import { WAREHOUSES } from '../data/factoryData';
-import { SalesOrder, User } from '../types';
+import { SalesOrder, SalesOrderItem, User } from '../types';
 import { Calendar, User as UserIcon, Truck, MapPin, Package } from 'lucide-react';
 
 const LOCATIONS = WAREHOUSES;
 type Location = string;
-
-const TAIPING_KEYWORDS = ['SPD', 'OPM Lama', 'OPM Corner'];
-const NILAI_KEYWORDS = ['NILAI', 'Nilai'];
 
 const LOCATION_COLOR_PALETTES = ['blue', 'emerald', 'purple', 'orange', 'rose'];
 const LOCATION_COLOR: Record<string, string> = {};
 LOCATIONS.forEach((loc, i) => {
     LOCATION_COLOR[loc] = LOCATION_COLOR_PALETTES[i % LOCATION_COLOR_PALETTES.length];
 });
+
+// Normalize inventory loc_id to match WAREHOUSES display names
+const normalizeLoc = (locId: string): string => {
+    const lower = (locId || '').toLowerCase().trim();
+    const LOC_ALIASES: Record<string, string> = {
+        'spd': 'SPD', 'opm lama': 'OPM Lama', 'opm_lama': 'OPM Lama',
+        'opm corner': 'OPM Corner', 'opm_corner': 'OPM Corner',
+        'opm ali': 'OPM Ali', 'opm_ali': 'OPM Ali',
+        'nilai': 'Nilai',
+    };
+    return LOC_ALIASES[lower] || locId;
+};
+
+// Sub-locations without independent inventory data fall back to parent warehouse
+const STOCK_FALLBACK: Record<string, string> = {
+    'OPM Corner': 'SPD',
+    'OPM Lama': 'SPD',
+    'OPM Ali': 'SPD',
+};
+
+// Determine which warehouse tab a single item belongs to
+const getItemLocation = (item: SalesOrderItem, order: SalesOrder): string => {
+    // 1. Explicit sourceLocation on the item
+    if (item.sourceLocation) {
+        const src = item.sourceLocation.toLowerCase();
+        if (src.includes('opm lama')) return 'OPM Lama';
+        if (src.includes('opm corner')) return 'OPM Corner';
+        if (src.includes('opm ali')) return 'OPM Ali';
+        if (src.includes('nilai')) return 'Nilai';
+        if (src.includes('spd')) return 'SPD';
+    }
+    // 2. Legacy: location encoded in remark field
+    if (item.remark) {
+        const r = item.remark.toLowerCase();
+        if (r.includes('opm lama')) return 'OPM Lama';
+        if (r.includes('opm corner')) return 'OPM Corner';
+        if (r.includes('opm ali')) return 'OPM Ali';
+        if (r.includes('nilai')) return 'Nilai';
+        if (r.includes('spd')) return 'SPD';
+    }
+    // 3. Order-level trip_origin
+    if (order.trip_origin) {
+        const origin = order.trip_origin.toUpperCase();
+        if (origin === 'NILAI') return 'Nilai';
+        if (origin === 'TAIPING' || origin === 'SPD') return 'SPD';
+    }
+    // 4. Zone / address text matching
+    const text = `${order.zone || ''} ${order.deliveryAddress || ''}`.toLowerCase();
+    if (text.includes('nilai') || text.includes('seremban')) return 'Nilai';
+    return LOCATIONS[0] || 'SPD';
+};
 
 interface OrderSummaryProps {
     user?: any;
@@ -51,7 +99,7 @@ const OrderSummary: React.FC<OrderSummaryProps> = ({ user: _user }) => {
                         // 1. Group stock by Location -> SKU
                         const locSkuStock: Record<string, Record<string, number>> = {};
                         inventory.forEach(inv => {
-                            const loc = inv.loc_id || 'Unknown';
+                            const loc = normalizeLoc(inv.loc_id || 'Unknown');
                             if (!locSkuStock[loc]) locSkuStock[loc] = {};
                             locSkuStock[loc][inv.sku] = (locSkuStock[loc][inv.sku] || 0) + inv.current_stock;
                         });
@@ -124,8 +172,16 @@ const OrderSummary: React.FC<OrderSummaryProps> = ({ user: _user }) => {
                     deliveryAddress: o.delivery_address,
                     tripSequence: o.trip_sequence || 0,
                     factoryId: o.factory_id,
+                    trip_origin: o.trip_origin,
+                    trip_drop_count: o.trip_drop_count,
                 }));
-                setOrders(mapped.filter(o => (o.deadline || o.orderDate) === selectedDate));
+                
+                const getTenChars = (s?: string) => s ? s.slice(0, 10) : '';
+                const filtered = mapped.filter(o => {
+                    const effective = getTenChars(o.deadline) || getTenChars(o.orderDate);
+                    return effective === selectedDate;
+                });
+                setOrders(filtered);
             }
         } catch (err) {
             console.error('fetchData error:', err);
@@ -136,36 +192,26 @@ const OrderSummary: React.FC<OrderSummaryProps> = ({ user: _user }) => {
 
     useEffect(() => { fetchData(); }, [fetchData]);
 
-    // --- LOCATION CLASSIFICATION ---
-    const getOrderLocation = (o: SalesOrder): Location | null => {
-        // 1. Check direct location assigned via remark, sourceLocation or global notes
-        const itemTexts = o.items.map(i => `${i.remark || ''} ${i.sourceLocation || ''}`).join(' ').toLowerCase();
-        const text = `${itemTexts} ${o.notes || ''}`.toLowerCase();
-
-        // Exact tab matches
-        if (text.includes('opm lama')) return 'OPM Lama';
-        if (text.includes('opm corner')) return 'OPM Corner';
-        if (NILAI_KEYWORDS.some(k => text.includes(k.toLowerCase()))) return 'Nilai';
-        if (TAIPING_KEYWORDS.some(k => text.includes(k.toLowerCase()))) return 'SPD';
-        if (text.includes('spd')) return 'SPD';
-
-        // 2. Based on zone or customer text
-        const orderText = (o.zone + ' ' + o.deliveryAddress).toLowerCase();
-        if (orderText.includes('nilai') || orderText.includes('seremban')) return 'Nilai';
-
-        // Default to SPD
-        return LOCATIONS[0] || 'Unknown';
-    };
-
+    // --- LOCATION CLASSIFICATION (Item-Level) ---
+    // Each order can appear in multiple tabs if its items span different warehouses.
     const locationOrders: Record<Location, SalesOrder[]> = {};
     LOCATIONS.forEach(loc => locationOrders[loc] = []);
 
     orders.forEach(o => {
-        const loc = getOrderLocation(o);
-        if (loc) {
+        const seenLocs = new Set<string>();
+        if (o.items.length === 0) {
+            // No items: use order-level fallback
+            const fallbackLoc = o.trip_origin?.toUpperCase() === 'NILAI' ? 'Nilai' : (LOCATIONS[0] || 'SPD');
+            seenLocs.add(fallbackLoc);
+        } else {
+            o.items.forEach(item => {
+                seenLocs.add(getItemLocation(item, o));
+            });
+        }
+        seenLocs.forEach(loc => {
             if (!locationOrders[loc]) locationOrders[loc] = [];
             locationOrders[loc].push(o);
-        }
+        });
     });
 
     const activeTabOrders = [...(locationOrders[activeTab] || [])].sort(
@@ -237,9 +283,10 @@ const OrderSummary: React.FC<OrderSummaryProps> = ({ user: _user }) => {
         }
     };
 
-    // Production summary
+    // Production summary — only count items belonging to the active tab
     const productSummary = activeTabOrders.reduce((acc, order) => {
         order.items.forEach(item => {
+            if (getItemLocation(item, order) !== activeTab) return;
             const name = resolveItemName(item);
             if (!acc[name]) acc[name] = { qty: 0, sku: item.sku };
             acc[name].qty += (item.quantity || 0);
@@ -339,9 +386,10 @@ const OrderSummary: React.FC<OrderSummaryProps> = ({ user: _user }) => {
                                             <div className="grid grid-cols-2 md:grid-cols-4 lg:grid-cols-6 gap-3">
                                                 {items.map(({ product, qty }) => {
                                                     let lookupLoc = activeTab;
-                                                    // Fallbacks for sub-locations sharing the same warehouse
-                                                    if (activeTab === 'OPM Corner' && !stockMapByLoc['OPM Corner']) lookupLoc = 'SPD';
-                                                    
+                                                    // Generalized fallback for sub-locations sharing a parent warehouse
+                                                    if (!stockMapByLoc[lookupLoc] && STOCK_FALLBACK[lookupLoc]) {
+                                                        lookupLoc = STOCK_FALLBACK[lookupLoc];
+                                                    }
                                                     const stock = stockMapByLoc[lookupLoc]?.[product] || 0;
                                                     const deficit = qty - stock;
                                                     const hasDeficit = deficit > 0;

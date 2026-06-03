@@ -121,6 +121,7 @@ export interface SalesOrder {
     pod_photo_url?: string;
     pod_signed_by?: string;
     pod_timestamp?: string;
+    proof_of_load_url?: string;
 }
 
 export interface DeliveryRate {
@@ -279,7 +280,7 @@ export interface Claim {
 
 // 12. Product Variants (NEW for Production Control)
 export type ProductLayer = 'Single' | 'Double';
-export type ProductMaterial = 'Clear' | 'Black' | 'Silver';
+export type ProductMaterial = 'Clear' | 'Black';
 export type PackagingColor = 'Orange' | 'Pink' | 'Blue' | 'Yellow' | 'Green' | 'Transparent';
 export type ProductSize = '100cm' | '50cm' | '33cm' | '25cm' | '20cm';
 

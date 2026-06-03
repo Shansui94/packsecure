@@ -1,6 +1,7 @@
 import React, { useState, useEffect } from 'react';
 import { supabase } from '../services/supabase';
-import { Calendar as CalendarIcon, ChevronLeft, ChevronRight, User as UserIcon, CalendarDays, Loader, Send, History, CheckCircle, XCircle, FileText, ClipboardList, Undo2 } from 'lucide-react';
+import { Calendar as CalendarIcon, ChevronLeft, ChevronRight, User as UserIcon, CalendarDays, Loader, Send, History, CheckCircle, XCircle, FileText, ClipboardList, Undo2, DollarSign, AlertCircle } from 'lucide-react';
+import { getSalaryAdvancesForDriver, createSalaryAdvance } from '../services/apiV2';
 
 interface LeaveRecord {
     id: string;
@@ -23,7 +24,7 @@ const MONTH_NAMES = [
     'July', 'August', 'September', 'October', 'November', 'December'
 ];
 
-const WEEKDAYS = ['Sun', 'Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat'];
+const WEEKDAYS = ['Ahd/Sun', 'Isn/Mon', 'Sel/Tue', 'Rab/Wed', 'Kha/Thu', 'Jum/Fri', 'Sab/Sat'];
 
 interface Props {
     user?: any;
@@ -31,7 +32,184 @@ interface Props {
 
 const LeaveCalendar: React.FC<Props> = ({ user }) => {
     // Current Active Tab
-    const [activeTab, setActiveTab] = useState<'calendar' | 'my-leave' | 'approvals'>('calendar');
+    const [activeTab, setActiveTab] = useState<'calendar' | 'my-leave' | 'approvals' | 'my-advance'>('calendar');
+
+    // -- My Salary Advance State --
+    const [advanceAmount, setAdvanceAmount] = useState('');
+    const [advances, setAdvances] = useState<any[]>([]);
+    const [loadingAdvances, setLoadingAdvances] = useState(false);
+    const [submittingAdvance, setSubmittingAdvance] = useState(false);
+    const [monthEarnings, setMonthEarnings] = useState(0);
+    const [monthAdvanced, setMonthAdvanced] = useState(0);
+    const [eligibleLimit, setEligibleLimit] = useState(0);
+    const [loadingLimit, setLoadingLimit] = useState(false);
+
+    const getComingMonday = (fromDate: Date = new Date()): string => {
+        const day = fromDate.getDay();
+        const result = new Date(fromDate);
+        if (day === 1) {
+            return result.toISOString().split('T')[0];
+        }
+        const daysToMonday = (1 - day + 7) % 7;
+        result.setDate(fromDate.getDate() + daysToMonday);
+        return result.toISOString().split('T')[0];
+    };
+
+    const getFirstMondayAfter15 = (year: number, month: number): Date => {
+        const date = new Date(year, month, 15);
+        while (date.getDay() !== 1) {
+            date.setDate(date.getDate() + 1);
+        }
+        return date;
+    };
+
+    const getTargetPaymentDate = (): Date => {
+        const now = new Date();
+        const currentCycle = getFirstMondayAfter15(now.getFullYear(), now.getMonth());
+        
+        const todayStart = new Date(now.getFullYear(), now.getMonth(), now.getDate());
+        const cycleStart = new Date(currentCycle.getFullYear(), currentCycle.getMonth(), currentCycle.getDate());
+        
+        if (todayStart <= cycleStart) {
+            return currentCycle;
+        } else {
+            // Calculate next Monday from tomorrow to ensure it rolls over if today is Monday
+            const comingMondayStr = getComingMonday(new Date(now.getTime() + 24 * 60 * 60 * 1000));
+            return new Date(comingMondayStr);
+        }
+    };
+
+    const fetchEarningLimit = async () => {
+        if (!user?.uid) return;
+        setLoadingLimit(true);
+        try {
+            const now = new Date();
+            const year = now.getFullYear();
+            const month = now.getMonth();
+            const firstDayStr = new Date(year, month, 1).toISOString().split('T')[0];
+            const lastDayStr = new Date(year, month + 1, 0).toISOString().split('T')[0];
+
+            // 1. Get deliveries
+            const { data: trips, error: tripsErr } = await supabase
+                .from('sales_orders')
+                .select('trip_origin, zone, delivery_zone, trip_drop_count')
+                .eq('driver_id', user.uid)
+                .eq('status', 'Delivered')
+                .gte('deadline', firstDayStr)
+                .lte('deadline', lastDayStr);
+
+            if (tripsErr) throw tripsErr;
+
+            // 2. Get delivery rates
+            const { data: rates, error: ratesErr } = await supabase
+                .from('delivery_rates')
+                .select('*');
+
+            if (ratesErr) throw ratesErr;
+
+            let totalEarnings = 0;
+            if (trips && rates) {
+                const rateMap: Record<string, any> = {};
+                rates.forEach(r => { rateMap[`${r.origin}-${r.location_name}`.toLowerCase()] = r; });
+                
+                trips.forEach((t: any) => {
+                    const origin = (t.trip_origin || 'TAIPING').toLowerCase();
+                    const zone = (t.zone || t.delivery_zone || '').toLowerCase();
+                    const key = `${origin}-${zone}`;
+                    const rateInfo = rateMap[key];
+                    const drops = Math.max(1, t.trip_drop_count || 1);
+                    
+                    if (rateInfo) {
+                        const base = Number(rateInfo.base_rate) || 0;
+                        const maxPlaces = Number(rateInfo.max_places) || 0;
+                        const extraPlaces = Math.max(0, drops - maxPlaces);
+                        const extraRate = extraPlaces * (Number(rateInfo.extra_rate_per_place) || 0);
+                        totalEarnings += (base + extraRate);
+                    }
+                });
+            }
+
+            // 3. Get advances for the month
+            const { data: monthAdvances, error: advsErr } = await supabase
+                .from('salary_advances')
+                .select('amount')
+                .eq('employee_id', user.uid)
+                .in('status', ['Approved', 'Pending'])
+                .gte('created_at', `${firstDayStr}T00:00:00.000Z`);
+
+            if (advsErr) throw advsErr;
+
+            let totalAdvancedThisMonth = 0;
+            if (monthAdvances) {
+                monthAdvances.forEach((a: any) => {
+                    totalAdvancedThisMonth += Number(a.amount);
+                });
+            }
+
+            setMonthEarnings(totalEarnings);
+            setMonthAdvanced(totalAdvancedThisMonth);
+            
+            let limit = 0;
+            if (totalEarnings > 1700) {
+                limit = Math.max(0, totalEarnings - 1700 - totalAdvancedThisMonth);
+            }
+            setEligibleLimit(limit);
+        } catch (err) {
+            console.error("Failed to fetch earning limit:", err);
+        } finally {
+            setLoadingLimit(false);
+        }
+    };
+
+    const fetchAdvances = async () => {
+        if (!user?.uid) return;
+        setLoadingAdvances(true);
+        try {
+            const data = await getSalaryAdvancesForDriver(user.uid);
+            setAdvances(data || []);
+            await fetchEarningLimit();
+        } catch (err) {
+            console.error("Failed to fetch advances:", err);
+        } finally {
+            setLoadingAdvances(false);
+        }
+    };
+
+    const handleSubmitAdvance = async () => {
+        if (!user?.uid) return;
+        const amount = parseFloat(advanceAmount);
+        if (isNaN(amount) || amount <= 0) {
+            alert("⚠️ Sila masukkan jumlah yang sah! / Please enter a valid amount!");
+            return;
+        }
+
+        if (amount > eligibleLimit) {
+            alert(`⚠️ Had Maksimum Advance: RM ${eligibleLimit.toFixed(2)} sahaja bagi permohonan semasa anda. / Max Advance Limit: RM ${eligibleLimit.toFixed(2)} for your current request.`);
+            return;
+        }
+
+        // Check if there is already a pending advance
+        const hasPending = advances.some(adv => adv.status === 'Pending');
+        if (hasPending) {
+            alert("⚠️ Anda sudah mempunyai permohonan yang sedang diproses. Sila tunggu kelulusan permohonan sedia ada. / You already have a pending request. Please wait for its approval.");
+            return;
+        }
+
+        setSubmittingAdvance(true);
+        try {
+            const targetDateStr = getTargetPaymentDate().toISOString().split('T')[0];
+            const result = await createSalaryAdvance(user.uid, amount, targetDateStr);
+            if (result) {
+                alert("✅ Permohonan advance gaji berjaya dihantar! / Salary advance requested successfully!");
+                setAdvanceAmount('');
+                fetchAdvances();
+            }
+        } catch (err: any) {
+            alert("Error requesting advance: " + err.message);
+        } finally {
+            setSubmittingAdvance(false);
+        }
+    };
 
     // -- Calendar State --
     const today = new Date();
@@ -51,6 +229,7 @@ const LeaveCalendar: React.FC<Props> = ({ user }) => {
     const [loading, setLoading] = useState(true);
     const userRole = user?.role || 'Operator';
     const isManagement = ['SuperAdmin', 'Admin', 'Manager', 'HR', 'LogisticsCoordinator'].includes(userRole);
+    const canRequestAdvance = ['Driver', 'SuperAdmin', 'Admin'].includes(userRole);
 
     // Fetch all leaves based on needs
     const fetchLeaves = async () => {
@@ -92,7 +271,10 @@ const LeaveCalendar: React.FC<Props> = ({ user }) => {
 
     useEffect(() => {
         fetchLeaves();
-    }, []);
+        if (canRequestAdvance) {
+            fetchAdvances();
+        }
+    }, [user]);
 
     // ── CALENDAR LOGIC ──────────────────────────────────────────────────────────
     const changeMonth = (offset: number) => {
@@ -148,11 +330,11 @@ const LeaveCalendar: React.FC<Props> = ({ user }) => {
 
     const handleSubmitApplication = async (e: React.FormEvent) => {
         e.preventDefault();
-        if (!startDate || !endDate) return alert('Please select both dates');
+        if (!startDate || !endDate) return alert('Sila pilih kedua-dua tarikh / Please select both dates');
 
         const start = new Date(startDate);
         const end = new Date(endDate);
-        if (end < start) return alert('End date cannot be before start date');
+        if (end < start) return alert('Tarikh tamat tidak boleh sebelum tarikh mula / End date cannot be before start date');
 
         // Check for overlapping leaves
         const hasOverlap = myLeaves.some(l =>
@@ -162,11 +344,11 @@ const LeaveCalendar: React.FC<Props> = ({ user }) => {
         );
 
         if (hasOverlap) {
-            return alert('Error: You already have a Pending or Approved leave that overlaps with these dates.');
+            return alert('Ralat: Anda sudah mempunyai permohonan Cuti (Proses/Lulus) yang bertindih dengan tarikh ini. / Error: You already have a Pending or Approved leave that overlaps with these dates.');
         }
 
         if (!user || (!user.uid && !user.id)) {
-            alert("Error: User session not found. Please log in again.");
+            alert("Ralat: Sesi pengguna tidak ditemui. Sila log masuk semula. / Error: User session not found. Please log in again.");
             return;
         }
 
@@ -188,7 +370,7 @@ const LeaveCalendar: React.FC<Props> = ({ user }) => {
 
             if (error) throw error;
 
-            alert('✅ Leave application submitted! Pending HR approval.');
+            alert('✅ Permohonan cuti berjaya dihantar! Menunggu kelulusan HR. (Leave application submitted! Pending HR approval.)');
             setStartDate('');
             setEndDate('');
             setReason('');
@@ -256,6 +438,42 @@ const LeaveCalendar: React.FC<Props> = ({ user }) => {
         }
     };
 
+    const getConflictingDriversOnLeave = (req: LeaveRecord) => {
+        if (req.users_public?.role !== 'Driver') return [];
+
+        const start = new Date(req.start_date);
+        const end = new Date(req.end_date);
+        const dates: string[] = [];
+        const curr = new Date(start);
+        while (curr <= end) {
+            dates.push(curr.toISOString().split('T')[0]);
+            curr.setDate(curr.getDate() + 1);
+        }
+
+        const conflicts: { date: string; name: string; status: string }[] = [];
+
+        const otherDriverLeaves = leaves.filter(l =>
+            l.id !== req.id &&
+            l.employee_id !== req.employee_id &&
+            l.users_public?.role === 'Driver' &&
+            (l.status === 'Approved' || l.status === 'Pending')
+        );
+
+        dates.forEach(d => {
+            otherDriverLeaves.forEach(l => {
+                if (l.start_date <= d && l.end_date >= d) {
+                    conflicts.push({
+                        date: d,
+                        name: l.users_public?.name || 'Driver',
+                        status: l.status
+                    });
+                }
+            });
+        });
+
+        return conflicts;
+    };
+
 
     // ── RENDERERS ───────────────────────────────────────────────────────────────
 
@@ -263,36 +481,42 @@ const LeaveCalendar: React.FC<Props> = ({ user }) => {
         <div className="flex flex-col xl:flex-row gap-6 h-full">
             {/* L: Calendar */}
             <div className="flex-1 max-w-5xl flex flex-col gap-6">
-                <div className="bg-black/40 border border-white/5 rounded-3xl p-6 backdrop-blur-xl shadow-2xl flex flex-col md:flex-row justify-between items-start md:items-center gap-4">
-                    <div className="flex items-center gap-4 bg-black/60 p-2 rounded-2xl border border-white/5 shadow-inner">
-                        <button onClick={() => changeMonth(-1)} className="p-2.5 rounded-xl hover:bg-white/10 active:scale-95 transition-all text-slate-400 hover:text-white">
-                            <ChevronLeft size={20} />
+                <div className="bg-black/40 border border-white/5 rounded-2xl sm:rounded-3xl p-4 sm:p-6 backdrop-blur-xl shadow-2xl flex flex-col md:flex-row justify-between items-center gap-4">
+                    <div className="flex items-center gap-4 bg-black/60 p-1.5 sm:p-2 rounded-2xl border border-white/5 shadow-inner w-full md:w-auto justify-between md:justify-start">
+                        <button onClick={() => changeMonth(-1)} className="p-2 rounded-xl hover:bg-white/10 active:scale-95 transition-all text-slate-400 hover:text-white">
+                            <ChevronLeft size={18} />
                         </button>
-                        <div className="w-40 text-center">
-                            <div className="text-lg font-black text-white uppercase tracking-widest">{MONTH_NAMES[currentMonth]}</div>
-                            <div className="text-xs text-blue-400 font-bold">{currentYear}</div>
+                        <div className="w-28 sm:w-40 text-center">
+                            <div className="text-sm sm:text-lg font-black text-white uppercase tracking-widest">{MONTH_NAMES[currentMonth]}</div>
+                            <div className="text-[10px] sm:text-xs text-blue-400 font-bold">{currentYear}</div>
                         </div>
-                        <button onClick={() => changeMonth(1)} className="p-2.5 rounded-xl hover:bg-white/10 active:scale-95 transition-all text-slate-400 hover:text-white">
-                            <ChevronRight size={20} />
+                        <button onClick={() => changeMonth(1)} className="p-2 rounded-xl hover:bg-white/10 active:scale-95 transition-all text-slate-400 hover:text-white">
+                            <ChevronRight size={18} />
                         </button>
                     </div>
                 </div>
 
-                <div className="bg-black/40 border border-white/5 rounded-3xl p-4 sm:p-6 backdrop-blur-xl shadow-2xl flex-1 flex flex-col">
+                <div className="bg-black/40 border border-white/5 rounded-2xl sm:rounded-3xl p-3 sm:p-6 backdrop-blur-xl shadow-2xl flex-1 flex flex-col">
                     <div className="grid grid-cols-7 gap-1 sm:gap-2 mb-2 sm:mb-4">
-                        {WEEKDAYS.map(day => (
-                            <div key={day} className="text-center text-[9px] sm:text-[11px] font-black uppercase tracking-widest text-slate-500">{day}</div>
-                        ))}
+                        {WEEKDAYS.map(day => {
+                            const [my] = day.split('/');
+                            return (
+                                <div key={day} className="text-center text-[8px] sm:text-[11px] font-black uppercase tracking-widest text-slate-500">
+                                    <span className="hidden sm:inline">{day}</span>
+                                    <span className="inline sm:hidden">{my}</span>
+                                </div>
+                            );
+                        })}
                     </div>
 
                     {loading ? (
-                        <div className="flex-1 flex flex-col gap-4 items-center justify-center min-h-[400px]">
+                        <div className="flex-1 flex flex-col gap-4 items-center justify-center min-h-[300px] sm:min-h-[400px]">
                             <Loader size={36} className="animate-spin text-blue-500/50" />
                         </div>
                     ) : (
                         <div className="flex-1 grid grid-cols-7 gap-1 sm:gap-2">
                             {grid.map((dayNum, i) => {
-                                if (dayNum === null) return <div key={`blank-${i}`} className="bg-white/[0.01] rounded-xl sm:rounded-2xl border border-dashed border-white/[0.03]"></div>;
+                                if (dayNum === null) return <div key={`blank-${i}`} className="bg-white/[0.01] rounded-lg sm:rounded-2xl border border-dashed border-white/[0.03]"></div>;
 
                                 const dateStr = `${currentYear}-${String(currentMonth + 1).padStart(2, '0')}-${String(dayNum).padStart(2, '0')}`;
                                 const isToday = dateStr === today.toISOString().split('T')[0];
@@ -305,7 +529,7 @@ const LeaveCalendar: React.FC<Props> = ({ user }) => {
                                         key={`day-${dayNum}`}
                                         onClick={() => setSelectedDateFilter(isSelected ? null : dateStr)}
                                         className={`
-                                            group min-h-[80px] sm:min-h-[120px] rounded-xl sm:rounded-2xl p-1.5 sm:p-2.5 transition-all text-left flex flex-col relative overflow-hidden
+                                            group min-h-[60px] sm:min-h-[120px] rounded-lg sm:rounded-2xl p-1 sm:p-2.5 transition-all text-left flex flex-col relative overflow-hidden
                                             ${isSelected ? 'bg-blue-600/20 border-blue-500/50 ring-2 ring-blue-500/30'
                                                 : isToday ? 'bg-indigo-500/10 border-indigo-500/30 hover:bg-white/10'
                                                     : isWeekend ? 'bg-white/[0.02] border-white/5 hover:bg-white/10'
@@ -313,22 +537,40 @@ const LeaveCalendar: React.FC<Props> = ({ user }) => {
                                             border backdrop-blur-sm
                                         `}
                                     >
-                                        <div className="flex justify-between items-start mb-1 sm:mb-2 z-10 w-full">
-                                            <span className={`text-xs sm:text-base font-black ${isToday ? 'text-indigo-400 drop-shadow-[0_0_8px_rgba(99,102,241,0.8)]' : isWeekend ? 'text-slate-500' : 'text-slate-300'}`}>
+                                        <div className="flex justify-between items-start mb-0.5 sm:mb-2 z-10 w-full">
+                                            <span className={`text-[10px] sm:text-base font-black ${isToday ? 'text-indigo-400 drop-shadow-[0_0_8px_rgba(99,102,241,0.8)]' : isWeekend ? 'text-slate-500' : 'text-slate-300'}`}>
                                                 {String(dayNum).padStart(2, '0')}
                                             </span>
-                                            {dayLeaves.length > 0 && <div className="w-1.5 h-1.5 sm:w-2 sm:h-2 rounded-full bg-emerald-500 shadow-[0_0_8px_rgba(16,185,129,0.8)] animate-pulse"></div>}
+                                            {dayLeaves.length > 0 && <div className="w-1 h-1 sm:w-2 sm:h-2 rounded-full bg-emerald-500 shadow-[0_0_8px_rgba(16,185,129,0.8)] animate-pulse"></div>}
                                         </div>
 
-                                        <div className="flex-1 flex flex-col gap-1 overflow-hidden z-10 w-full pt-1">
-                                            {dayLeaves.slice(0, 3).map((l, idx) => (
-                                                <div key={idx}
-                                                    className={`text-[8px] sm:text-[10px] w-full truncate font-bold px-1.5 py-0.5 sm:py-1 rounded sm:rounded-md border bg-black/50 backdrop-blur-md ${getEmployeeColor(l.users_public?.name || '')} transition-transform group-hover:scale-[1.02]`}
-                                                >
-                                                    {l.users_public?.name?.split(' ')[0]}
-                                                </div>
-                                            ))}
-                                            {dayLeaves.length > 3 && <div className="text-[9px] text-slate-500 font-bold px-1">+ {dayLeaves.length - 3} more</div>}
+                                        <div className="flex-1 flex flex-col gap-1 overflow-hidden z-10 w-full pt-0.5">
+                                            {/* Desktop layout: text tags */}
+                                            <div className="hidden sm:flex flex-col gap-1 w-full">
+                                                {dayLeaves.slice(0, 3).map((l, idx) => (
+                                                    <div key={idx}
+                                                        className={`text-[8px] sm:text-[10px] w-full truncate font-bold px-1.5 py-0.5 sm:py-1 rounded sm:rounded-md border bg-black/50 backdrop-blur-md ${getEmployeeColor(l.users_public?.name || '')} transition-transform group-hover:scale-[1.02]`}
+                                                    >
+                                                        {l.users_public?.name?.split(' ')[0]}
+                                                    </div>
+                                                ))}
+                                                {dayLeaves.length > 3 && <div className="text-[9px] text-slate-500 font-bold px-1">+ {dayLeaves.length - 3} more</div>}
+                                            </div>
+
+                                            {/* Mobile layout: small colored dots */}
+                                            <div className="flex sm:hidden flex-wrap gap-0.5 justify-start items-center w-full mt-auto">
+                                                {dayLeaves.slice(0, 4).map((l, idx) => {
+                                                    const colorParts = getEmployeeColor(l.users_public?.name || '').split(' ');
+                                                    const dotBg = colorParts[0].replace('/20', '');
+                                                    return (
+                                                        <div key={idx}
+                                                            className={`w-1.5 h-1.5 rounded-full ${dotBg} border border-white/10`}
+                                                            title={l.users_public?.name}
+                                                        />
+                                                    );
+                                                })}
+                                                {dayLeaves.length > 4 && <span className="text-[7px] text-slate-500 font-black">+</span>}
+                                            </div>
                                         </div>
                                     </button>
                                 );
@@ -419,38 +661,293 @@ const LeaveCalendar: React.FC<Props> = ({ user }) => {
         </div>
     );
 
+    const getPaymentDateCountdownText = (): string => {
+        const today = new Date();
+        const todayStart = new Date(today.getFullYear(), today.getMonth(), today.getDate());
+        const targetDate = getTargetPaymentDate();
+        const diffTime = targetDate.getTime() - todayStart.getTime();
+        const diffDays = Math.ceil(diffTime / (1000 * 60 * 60 * 24));
+        
+        if (diffDays === 0) {
+            return "Hari ini! / Today!";
+        } else if (diffDays < 0) {
+            return "Selesai / Processed";
+        }
+        return `${diffDays} hari lagi / ${diffDays} days left`;
+    };
+
+    const renderMyAdvance = () => (
+        <div className="max-w-4xl mx-auto space-y-6 animate-in fade-in-50 duration-200">
+            {/* Countdown card */}
+            <div className="bg-gradient-to-r from-amber-600/10 to-blue-600/10 border border-amber-500/20 p-5 rounded-3xl flex flex-col sm:flex-row sm:items-center justify-between gap-4">
+                <div className="flex items-center gap-3.5">
+                    <div className="w-11 h-11 bg-amber-500/10 rounded-2xl flex items-center justify-center text-amber-400 border border-amber-500/20 shrink-0">
+                        <CalendarIcon size={22} />
+                    </div>
+                    <div>
+                        <div className="text-[10px] text-slate-400 uppercase font-black tracking-wider">Jadual Pembayaran Seterusnya / Next Payment Cycle</div>
+                        <div className="text-sm font-bold text-white mt-0.5">
+                            {(() => {
+                                const targetDate = getTargetPaymentDate();
+                                const now = new Date();
+                                const currentCycle = getFirstMondayAfter15(now.getFullYear(), now.getMonth());
+                                const isCurrentCycle = targetDate.getTime() === currentCycle.getTime();
+                                const labelMs = isCurrentCycle ? 'Isnin Selepas 15hb / Monday Post-15th' : 'Isnin Depan / Next Monday';
+                                return `${labelMs}, ${targetDate.toLocaleDateString('en-GB', { day: '2-digit', month: 'short', year: 'numeric' })}`;
+                            })()}
+                        </div>
+                    </div>
+                </div>
+                <div className="sm:text-right border-t sm:border-t-0 border-white/5 pt-3 sm:pt-0">
+                    <div className="text-[10px] text-slate-500 uppercase font-black tracking-wider">Baki Masa / Time Remaining</div>
+                    <div className="text-sm font-black text-amber-400 uppercase mt-0.5 animate-pulse">
+                        {getPaymentDateCountdownText()}
+                    </div>
+                </div>
+            </div>
+
+            {/* Dynamic limit summary cards */}
+            <div className="grid grid-cols-2 md:grid-cols-4 gap-4">
+                <div className="bg-slate-900 border border-white/5 rounded-2xl p-3 sm:p-4">
+                    <div className="text-[9px] font-black text-slate-500 uppercase tracking-widest">Gaji Bulan Ini / Month Earnings</div>
+                    {loadingLimit ? (
+                        <div className="h-6 w-16 bg-slate-800 rounded animate-pulse mt-1"></div>
+                    ) : (
+                        <div className="text-sm sm:text-base font-black text-white mt-1">RM {monthEarnings.toFixed(2)}</div>
+                    )}
+                    <div className="text-[9px] text-slate-500 mt-0.5">Trip Delivered sahaja</div>
+                </div>
+                <div className="bg-slate-900 border border-white/5 rounded-2xl p-3 sm:p-4">
+                    <div className="text-[9px] font-black text-slate-500 uppercase tracking-widest">Had Penyangga / Untouchable Buffer</div>
+                    <div className="text-sm sm:text-base font-black text-slate-400 mt-1">RM 1,700.00</div>
+                    <div className="text-[9px] text-slate-500 mt-0.5">Had potongan minimum</div>
+                </div>
+                <div className="bg-slate-900 border border-white/5 rounded-2xl p-3 sm:p-4">
+                    <div className="text-[9px] font-black text-slate-500 uppercase tracking-widest">Telah Diambil / Already Advanced</div>
+                    {loadingLimit ? (
+                        <div className="h-6 w-16 bg-slate-800 rounded animate-pulse mt-1"></div>
+                    ) : (
+                        <div className="text-sm sm:text-base font-black text-slate-300 mt-1">RM {monthAdvanced.toFixed(2)}</div>
+                    )}
+                    <div className="text-[9px] text-slate-500 mt-0.5">Status Lulus & Proses</div>
+                </div>
+                <div className="bg-slate-900 border border-white/5 rounded-2xl p-3 sm:p-4 col-span-2 md:col-span-1 border-emerald-500/20 bg-emerald-500/[0.02]">
+                    <div className="text-[9px] font-black text-emerald-500 uppercase tracking-widest">Baki Had Layak / Remaining Limit</div>
+                    {loadingLimit ? (
+                        <div className="h-6 w-16 bg-slate-800 rounded animate-pulse mt-1"></div>
+                    ) : (
+                        <div className="text-sm sm:text-base font-black text-emerald-400 mt-1">RM {eligibleLimit.toFixed(2)}</div>
+                    )}
+                    <div className="text-[9px] text-emerald-600/80 mt-0.5">Had maks boleh pinjam</div>
+                </div>
+            </div>
+
+            {/* Form */}
+            <div className="bg-slate-900 border border-white/5 rounded-3xl p-6 shadow-2xl space-y-5">
+                <div className="flex items-center gap-3 mb-2">
+                    <div className="p-2 bg-amber-500/20 text-amber-400 rounded-xl border border-amber-500/30">
+                        <DollarSign size={16} />
+                    </div>
+                    <div>
+                        <h2 className="text-sm font-black text-white uppercase tracking-widest">Mohon Advance Gaji / Apply Salary Advance</h2>
+                        <p className="text-[10px] text-slate-500 uppercase font-bold mt-0.5">Permohonan Gaji Pendahuluan</p>
+                    </div>
+                </div>
+
+                {/* Warning / Informational banner */}
+                <div className="bg-amber-600/10 border border-amber-500/20 p-4 rounded-xl flex items-start gap-3">
+                    <AlertCircle className="text-amber-500 shrink-0 mt-0.5" size={16} />
+                    <div className="text-xs text-amber-200 leading-relaxed font-sans">
+                        <p className="font-bold mb-1">Syarat Kelayakan / Eligibility Rules:</p>
+                        <p>1. Jumlah pinjaman adalah **automatik dihadkan** di bawah baki kelayakan anda (Pendapatan trip bulan ini - Penyangga RM 1,700 - Pinjaman sedia ada). / The advance amount is **automatically capped** under your remaining limit (Current month trip earnings - RM 1,700 buffer - Existing advances).</p>
+                        <p className="mt-0.5">2. Hanya **satu (1) permohonan aktif** dibenarkan pada satu-satu masa. / Only **one (1) active request** is allowed at any time.</p>
+                        <p className="mt-0.5">3. Permohonan sebelum 15hb akan **ditangguhkan (held)** dan diproses pada hari Isnin pertama selepas 15hb. / Requests submitted before the 15th will be **held** and processed on the first Monday after the 15th.</p>
+                    </div>
+                </div>
+
+                <div className="space-y-4">
+                    <div>
+                        <label className="block text-[10px] font-black text-slate-500 uppercase tracking-widest mb-2 px-1">1. MASUKKAN JUMLAH (RM) / ENTER AMOUNT</label>
+                        <div className="relative">
+                            <span className="absolute left-4 top-1/2 -translate-y-1/2 text-lg font-black text-slate-400">RM</span>
+                            <input 
+                                type="number" 
+                                value={advanceAmount} 
+                                onChange={e => setAdvanceAmount(e.target.value)}
+                                placeholder="0.00" 
+                                max={eligibleLimit}
+                                className="w-full bg-black/40 border border-white/10 rounded-xl py-3.5 pl-12 pr-4 text-xl font-black text-white focus:border-amber-500 outline-none transition-all"
+                            />
+                        </div>
+                        {eligibleLimit <= 0 && !loadingLimit && (
+                            <p className="text-red-400 text-[10px] font-bold uppercase tracking-wide mt-1.5 px-1">
+                                {monthEarnings <= 1700 
+                                    ? "⚠️ Pendapatan trip anda belum melebihi had penyangga RM 1,700. Sila selesaikan penghantaran order dahulu. / Earnings must exceed RM 1,700 buffer threshold. Please complete deliveries first."
+                                    : "⚠️ Baki kelayakan anda adalah RM 0.00 (had pinjaman bulan ini telah dipenuhi). / Remaining limit is RM 0.00."}
+                            </p>
+                        )}
+                    </div>
+
+                    <div>
+                        <label className="block text-[10px] font-black text-slate-500 uppercase tracking-widest mb-2 px-1">2. TARIKH MASUK BANK / TARGET BANK-IN DATE</label>
+                        <div className="bg-black/40 p-3.5 rounded-xl border border-white/10 flex items-center gap-3">
+                            <CalendarIcon className="text-blue-400 shrink-0" size={18} />
+                            <div>
+                                <div>
+                                    <div className="text-sm font-bold text-white">
+                                        {(() => {
+                                            const targetDate = getTargetPaymentDate();
+                                            const dayMs = ['Ahad', 'Isnin', 'Selasa', 'Rabu', 'Khamis', 'Jumaat', 'Sabtu'][targetDate.getDay()];
+                                            const dayEn = ['Sunday', 'Monday', 'Tuesday', 'Wednesday', 'Thursday', 'Friday', 'Saturday'][targetDate.getDay()];
+                                            return `${dayMs} (${dayEn}), ${targetDate.toLocaleDateString('en-GB', { day: '2-digit', month: 'short', year: 'numeric' })}`;
+                                        })()}
+                                    </div>
+                                    <div className="text-[10px] text-slate-500 uppercase font-black tracking-widest mt-0.5">Hari pemrosesan akan datang / Upcoming processing day</div>
+                                </div>
+                            </div>
+                        </div>
+                    </div>
+
+                    <button
+                        onClick={handleSubmitAdvance}
+                        disabled={submittingAdvance || !advanceAmount || eligibleLimit <= 0 || loadingLimit}
+                        className="w-full py-4 bg-amber-600 hover:bg-amber-500 disabled:bg-slate-800 disabled:text-slate-600 disabled:cursor-not-allowed text-white rounded-2xl font-black text-sm uppercase tracking-widest transition-all active:scale-95 flex items-center justify-center gap-2 shadow-lg shadow-amber-900/20"
+                    >
+                        {submittingAdvance ? (
+                            <>
+                                <div className="w-4 h-4 border-2 border-white/20 border-t-white rounded-full animate-spin"></div>
+                                <span>HANTAR PERMOHONAN...</span>
+                            </>
+                        ) : (
+                            <span>HANTAR PERMOHONAN / SUBMIT REQUEST</span>
+                        )}
+                    </button>
+                </div>
+            </div>
+
+            {/* History */}
+            <div>
+                <div className="flex items-center gap-2 mb-4 px-2">
+                    <History size={16} className="text-slate-500" />
+                    <h2 className="text-xs font-black text-slate-500 uppercase tracking-widest">SEJARAH PERMOHONAN / REQUEST HISTORY</h2>
+                </div>
+                {loadingAdvances ? (
+                    <div className="text-center py-12 border border-dashed border-white/10 rounded-3xl bg-white/[0.01]">
+                        <p className="text-slate-500 text-sm font-bold uppercase tracking-widest animate-pulse">Sila tunggu / Please wait...</p>
+                    </div>
+                ) : advances.length === 0 ? (
+                    <div className="text-center py-12 border border-dashed border-white/10 rounded-3xl bg-white/[0.01]">
+                        <p className="text-slate-500 text-sm font-bold uppercase tracking-widest">Tiada rekod permohonan / No past requests</p>
+                    </div>
+                ) : (
+                    <div className="space-y-3">
+                        {advances.map(adv => (
+                            <div key={adv.id} className="bg-black/40 border border-white/5 p-4 sm:p-5 rounded-2xl flex flex-col gap-4 hover:bg-white/[0.02] transition-colors">
+                                <div className="flex justify-between items-center w-full">
+                                    <div>
+                                        <div className="text-white font-black text-sm sm:text-base">RM {Number(adv.amount).toFixed(2)}</div>
+                                        <div className="text-[10px] text-blue-400 font-bold uppercase mt-1 flex items-center gap-1.5">
+                                            <CalendarIcon size={10} /> Bank-In: {new Date(adv.bank_in_date).toLocaleDateString('en-GB', { day: '2-digit', month: 'short', year: 'numeric' })}
+                                        </div>
+                                        {adv.rejection_reason && (
+                                            <div className="text-[10px] text-red-400 bg-red-950/20 border border-red-500/10 rounded px-2 py-1 mt-2 font-sans">
+                                                ❌ Sebab Ditolak: {adv.rejection_reason}
+                                            </div>
+                                        )}
+                                    </div>
+                                    <div className="flex flex-col items-end gap-2 shrink-0">
+                                        <span className={`px-3 py-1 rounded-full text-[9px] font-black uppercase border tracking-wider ${
+                                            adv.status === 'Approved' ? 'bg-emerald-500/10 text-emerald-400 border-emerald-500/20' :
+                                            adv.status === 'Rejected' ? 'bg-rose-500/10 text-rose-400 border-rose-500/20' :
+                                            'bg-amber-500/10 text-amber-400 border-amber-500/20'
+                                        }`}>
+                                            {adv.status === 'Approved' ? 'Dibayar / Paid' :
+                                             adv.status === 'Rejected' ? 'Ditolak / Rejected' :
+                                             'Proses / Pending'}
+                                        </span>
+                                    </div>
+                                </div>
+
+                                {/* Timeline Step Bar */}
+                                <div className="pt-4 border-t border-white/5 flex flex-col sm:flex-row sm:items-center sm:justify-between gap-2.5 sm:gap-2 text-[9px] font-bold">
+                                    <div className="flex items-center gap-2 sm:gap-1.5 shrink-0">
+                                        <div className="w-4 h-4 rounded-full bg-blue-500 text-black flex items-center justify-center text-[8px] font-black shrink-0">✓</div>
+                                        <span className="text-blue-400 uppercase">1. Dihantar / Submitted</span>
+                                    </div>
+                                    <div className="hidden sm:block h-0.5 bg-slate-800 flex-1 mx-2 shrink">
+                                        <div className={`h-full ${adv.status !== 'Pending' ? 'bg-blue-500' : 'bg-slate-850'}`} style={{ width: adv.status !== 'Pending' ? '100%' : '50%' }}></div>
+                                    </div>
+                                    <div className="sm:hidden w-0.5 h-2.5 bg-slate-800 ml-2" />
+                                    
+                                    <div className="flex items-center gap-2 sm:gap-1.5 shrink-0">
+                                        <div className={`w-4 h-4 rounded-full flex items-center justify-center text-[8px] font-black shrink-0 ${
+                                            adv.status === 'Pending' ? 'bg-amber-500 text-black animate-pulse shadow-[0_0_8px_rgba(245,158,11,0.5)]' :
+                                            adv.status === 'Approved' || adv.status === 'Rejected' ? 'bg-blue-500 text-black' : 'bg-slate-850 text-slate-500'
+                                        }`}>
+                                            {adv.status !== 'Pending' ? '✓' : '2'}
+                                        </div>
+                                        <span className={adv.status === 'Pending' ? 'text-amber-500 uppercase animate-pulse' : adv.status !== 'Pending' ? 'text-blue-400 uppercase' : 'text-slate-500 uppercase'}>2. Diproses / Reviewing</span>
+                                    </div>
+                                    <div className="hidden sm:block h-0.5 bg-slate-800 flex-1 mx-2 shrink">
+                                        <div className={`h-full ${adv.status === 'Approved' ? 'bg-emerald-500' : adv.status === 'Rejected' ? 'bg-rose-500' : 'bg-slate-850'}`} style={{ width: adv.status !== 'Pending' ? '100%' : '0%' }}></div>
+                                    </div>
+                                    <div className="sm:hidden w-0.5 h-2.5 bg-slate-800 ml-2" />
+                                    
+                                    <div className="flex items-center gap-2 sm:gap-1.5 shrink-0">
+                                        <div className={`w-4 h-4 rounded-full flex items-center justify-center text-[8px] font-black shrink-0 ${
+                                            adv.status === 'Approved' ? 'bg-emerald-500 text-black' :
+                                            adv.status === 'Rejected' ? 'bg-rose-500 text-white' : 'bg-slate-850 text-slate-500'
+                                        }`}>
+                                            {adv.status === 'Approved' ? '✓' : adv.status === 'Rejected' ? '✕' : '3'}
+                                        </div>
+                                        <span className={
+                                            adv.status === 'Approved' ? 'text-emerald-400 uppercase' :
+                                            adv.status === 'Rejected' ? 'text-rose-400 uppercase' : 'text-slate-500 uppercase'
+                                        }>
+                                            {adv.status === 'Rejected' ? '3. Ditolak / Rejected' : '3. Dibayar / Paid'}
+                                        </span>
+                                    </div>
+                                </div>
+                            </div>
+                        ))}
+                    </div>
+                )}
+            </div>
+        </div>
+    );
+
     const renderMyLeave = () => (
         <div className="max-w-4xl mx-auto space-y-8">
             {/* Form */}
             <form onSubmit={handleSubmitApplication} className="bg-slate-900 border border-white/5 rounded-3xl p-6 shadow-2xl space-y-5">
                 <div className="flex items-center gap-3 mb-2">
                     <div className="p-2 bg-blue-500/20 text-blue-400 rounded-xl border border-blue-500/30"><Send size={16} /></div>
-                    <h2 className="text-sm font-black text-white uppercase tracking-widest">Apply for Leave</h2>
+                    <h2 className="text-sm font-black text-white uppercase tracking-widest">Mohon Cuti / Apply for Leave</h2>
                 </div>
 
                 <div className="grid grid-cols-1 md:grid-cols-2 gap-5">
                     <div>
-                        <label className="block text-[10px] font-black text-slate-500 uppercase tracking-widest mb-2 px-1">Start Date</label>
+                        <label className="block text-[10px] font-black text-slate-500 uppercase tracking-widest mb-2 px-1">Tarikh Mula / Start Date</label>
                         <input type="date" value={startDate} onChange={(e) => setStartDate(e.target.value)} required
                             className="w-full bg-black/40 border border-white/10 rounded-xl p-4 text-white font-bold focus:border-blue-500 outline-none transition-all" />
                     </div>
                     <div>
-                        <label className="block text-[10px] font-black text-slate-500 uppercase tracking-widest mb-2 px-1">End Date</label>
+                        <label className="block text-[10px] font-black text-slate-500 uppercase tracking-widest mb-2 px-1">Tarikh Tamat / End Date</label>
                         <input type="date" value={endDate} onChange={(e) => setEndDate(e.target.value)} required
                             className="w-full bg-black/40 border border-white/10 rounded-xl p-4 text-white font-bold focus:border-blue-500 outline-none transition-all" />
                     </div>
                 </div>
                 <div>
                     <label className="block text-[10px] font-black text-slate-500 uppercase tracking-widest mb-2 px-1 flex items-center gap-1">
-                        <FileText size={10} /> Reason (Optional)
+                        <FileText size={10} /> Sebab (Pilihan) / Reason (Optional)
                     </label>
                     <textarea value={reason} onChange={(e) => setReason(e.target.value)} rows={2}
-                        placeholder="e.g. Medical appointment, family event..."
+                        placeholder="Contoh: Temujanji perubatan, urusan keluarga..."
                         className="w-full bg-black/40 border border-white/10 rounded-xl p-4 text-white font-bold focus:border-blue-500 outline-none transition-all resize-none text-sm" />
                 </div>
                 <button type="submit" disabled={submitting}
                     className="w-full py-4 bg-blue-600 hover:bg-blue-500 text-white rounded-2xl font-black uppercase tracking-widest flex items-center justify-center gap-3 shadow-lg shadow-blue-900/40 active:scale-95 transition-all disabled:opacity-50">
-                    {submitting ? 'SENDING...' : 'Submit Leave Application'}
+                    {submitting ? 'SEDANG DIHANTAR / SENDING...' : 'Hantar Permohonan Cuti / Submit Leave Application'}
                 </button>
             </form>
 
@@ -458,27 +955,29 @@ const LeaveCalendar: React.FC<Props> = ({ user }) => {
             <div>
                 <div className="flex items-center gap-2 mb-4 px-2">
                     <History size={16} className="text-slate-500" />
-                    <h2 className="text-xs font-black text-slate-500 uppercase tracking-widest">My Leave History</h2>
+                    <h2 className="text-xs font-black text-slate-500 uppercase tracking-widest">SEJARAH CUTI SAYA / MY LEAVE HISTORY</h2>
                 </div>
                 {myLeaves.length === 0 ? (
                     <div className="text-center py-12 border border-dashed border-white/10 rounded-3xl bg-white/[0.01]">
-                        <p className="text-slate-500 text-sm font-bold uppercase tracking-widest">No leaves recorded</p>
+                        <p className="text-slate-500 text-sm font-bold uppercase tracking-widest">Tiada rekod cuti / No leaves recorded</p>
                     </div>
                 ) : (
                     <div className="space-y-3">
                         {myLeaves.map((leave) => (
                             <div key={leave.id} className="bg-black/40 border border-white/5 p-4 sm:p-5 rounded-2xl flex flex-col sm:flex-row justify-between sm:items-center gap-4 hover:bg-white/[0.02] transition-colors">
                                 <div>
-                                    <div className="text-white font-black text-sm sm:text-base">{leave.start_date} <span className="text-slate-600 font-normal mx-1">to</span> {leave.end_date}</div>
-                                    <div className="text-[10px] text-blue-400 font-bold uppercase mt-1">{leave.count_days} Days Off</div>
+                                    <div className="text-white font-black text-sm sm:text-base">{leave.start_date} <span className="text-slate-600 font-normal mx-1">hingga / to</span> {leave.end_date}</div>
+                                    <div className="text-[10px] text-blue-400 font-bold uppercase mt-1">{leave.count_days} Hari Cuti / Days Off</div>
                                     {leave.reason && <p className="text-xs text-slate-400 italic mt-2">"{leave.reason}"</p>}
                                 </div>
-                                <div className="flex flex-col items-end gap-2">
+                                <div className="flex flex-col sm:items-end items-start gap-2">
                                     <div className={`px-3 py-1.5 rounded-full text-[10px] font-black uppercase border tracking-wider
                                         ${leave.status === 'Approved' ? 'bg-emerald-500/10 text-emerald-400 border-emerald-500/20' :
                                             leave.status === 'Rejected' ? 'bg-rose-500/10 text-rose-400 border-rose-500/20' :
                                                 'bg-amber-500/10 text-amber-400 border-amber-500/20'}`}>
-                                        {leave.status}
+                                        {leave.status === 'Approved' ? 'Lulus / Approved' :
+                                         leave.status === 'Rejected' ? 'Ditolak / Rejected' :
+                                         'Proses / Pending'}
                                     </div>
                                     {leave.reviewed_at && <div className="text-[9px] text-slate-600 font-mono">Reviewed: {new Date(leave.reviewed_at).toLocaleDateString()}</div>}
                                 </div>
@@ -515,6 +1014,45 @@ const LeaveCalendar: React.FC<Props> = ({ user }) => {
                                         </div>
                                         <div className="text-sm font-bold text-slate-300 mt-1">{req.start_date} <span className="text-slate-600 font-normal">→</span> {req.end_date} <span className="text-amber-400 text-xs ml-2">({req.count_days} Days)</span></div>
                                         {req.reason && <div className="text-xs text-slate-400 mt-1 italic">"{req.reason}"</div>}
+                                        {(() => {
+                                            const conflicts = getConflictingDriversOnLeave(req);
+                                            if (conflicts.length === 0) return null;
+
+                                            // Group conflicts by driver name and status to show a clean message
+                                            const driverToDetails: Record<string, { dates: string[]; status: string }> = {};
+                                            conflicts.forEach(c => {
+                                                const key = `${c.name}-${c.status}`;
+                                                if (!driverToDetails[key]) {
+                                                    driverToDetails[key] = { dates: [], status: c.status };
+                                                }
+                                                const formattedDate = new Date(c.date).toLocaleDateString('en-GB', { day: '2-digit', month: 'short' });
+                                                if (!driverToDetails[key].dates.includes(formattedDate)) {
+                                                    driverToDetails[key].dates.push(formattedDate);
+                                                }
+                                            });
+
+                                            return (
+                                                <div className="mt-3 text-[10px] text-amber-400 bg-amber-950/20 border border-amber-500/20 rounded-xl p-3 flex items-start gap-2 max-w-xl font-sans">
+                                                    <AlertCircle size={14} className="shrink-0 mt-0.5 text-amber-500" />
+                                                    <div>
+                                                        <span className="font-black uppercase tracking-wider block mb-1">⚠️ Amaran Perlapisan Cuti / Leave Overlap Warning</span>
+                                                        <span className="opacity-90">Terdapat pemandu lain yang bercuti/memohon cuti pada tarikh yang sama: / Other driver(s) on leave or pending request on the same dates:</span>
+                                                        <ul className="list-disc list-inside mt-1.5 space-y-1 pl-1">
+                                                            {Object.entries(driverToDetails).map(([key, details]) => {
+                                                                const name = key.split('-')[0];
+                                                                const statusText = details.status === 'Approved' ? 'Lulus / Approved' : 'Proses / Pending';
+                                                                const statusColor = details.status === 'Approved' ? 'text-emerald-400' : 'text-amber-500';
+                                                                return (
+                                                                    <li key={key} className="opacity-95">
+                                                                        <span className="font-bold text-white">{name}</span> ({details.dates.join(', ')}) — <span className={`font-bold ${statusColor}`}>{statusText}</span>
+                                                                    </li>
+                                                                );
+                                                            })}
+                                                        </ul>
+                                                    </div>
+                                                </div>
+                                            );
+                                        })()}
                                     </div>
                                 </div>
                                 <div className="flex gap-2 w-full md:w-auto">
@@ -608,45 +1146,59 @@ const LeaveCalendar: React.FC<Props> = ({ user }) => {
         </div>
     );
 
+
+
     return (
         <div className="min-h-screen bg-slate-900 text-white p-4 md:p-6 pb-20 font-sans selection:bg-blue-500/30 flex flex-col gap-6">
 
             {/* PAGE HEADER & TABS */}
             <div className="max-w-7xl w-full mx-auto">
-                <div className="flex items-center gap-4 mb-6">
-                    <div className="p-3 bg-gradient-to-br from-blue-600/20 to-purple-600/20 rounded-2xl border border-blue-500/20 shadow-[0_0_20px_rgba(59,130,246,0.15)] text-blue-400">
-                        <CalendarIcon size={24} />
+                <div className="flex items-center gap-3 sm:gap-4 mb-5 sm:mb-6">
+                    <div className="p-2.5 sm:p-3 bg-gradient-to-br from-blue-600/20 to-purple-600/20 rounded-xl sm:rounded-2xl border border-blue-500/20 shadow-[0_0_20px_rgba(59,130,246,0.15)] text-blue-400 shrink-0">
+                        <CalendarIcon size={20} sm:size={24} />
                     </div>
                     <div>
-                        <h1 className="text-2xl font-black italic uppercase tracking-wider bg-clip-text text-transparent bg-gradient-to-r from-blue-400 to-purple-400 drop-shadow-sm">
-                            Leave Center
+                        <h1 className="text-lg sm:text-2xl font-black italic uppercase tracking-wider bg-clip-text text-transparent bg-gradient-to-r from-blue-400 to-purple-400 drop-shadow-sm leading-tight">
+                            URUSAN STAF / STAFF HUB
                         </h1>
-                        <p className="text-[10px] text-slate-500 font-bold uppercase tracking-widest mt-1">Unified Absence Management System</p>
+                        <p className="text-[9px] sm:text-[10px] text-slate-500 font-bold uppercase tracking-widest mt-0.5">Sistem Urusan Staf Bersepadu / Unified Staff Request Hub</p>
                     </div>
                 </div>
 
                 {/* TABS CONTROLLER */}
-                <div className="flex gap-2 overflow-x-auto custom-scrollbar pb-2">
+                <div className="flex gap-1.5 sm:gap-2 overflow-x-auto max-w-full pb-2">
                     <button onClick={() => setActiveTab('calendar')}
-                        className={`px-5 py-2.5 rounded-xl font-bold text-xs uppercase tracking-wider transition-all border whitespace-nowrap
+                        className={`flex-1 sm:flex-none text-center px-2 sm:px-5 py-2 sm:py-2.5 rounded-xl font-bold text-[10px] sm:text-xs uppercase tracking-wider transition-all border whitespace-nowrap
                         ${activeTab === 'calendar' ? 'bg-blue-600/20 text-blue-400 border-blue-500/30' : 'bg-white/5 text-slate-500 border-white/5 hover:text-white hover:bg-white/10'}`}>
-                        Calendar View
+                        <span className="hidden sm:inline">Pandangan Kalendar / Calendar View</span>
+                        <span className="inline sm:hidden">Kalendar</span>
                     </button>
                     <button onClick={() => setActiveTab('my-leave')}
-                        className={`px-5 py-2.5 rounded-xl font-bold text-xs uppercase tracking-wider transition-all border whitespace-nowrap
+                        className={`flex-1 sm:flex-none text-center px-2 sm:px-5 py-2 sm:py-2.5 rounded-xl font-bold text-[10px] sm:text-xs uppercase tracking-wider transition-all border whitespace-nowrap
                         ${activeTab === 'my-leave' ? 'bg-purple-600/20 text-purple-400 border-purple-500/30' : 'bg-white/5 text-slate-500 border-white/5 hover:text-white hover:bg-white/10'}`}>
-                        My Leave (Apply)
+                        <span className="hidden sm:inline">Cuti Saya (Mohon) / My Leave (Apply)</span>
+                        <span className="inline sm:hidden">Cuti</span>
                     </button>
+
+                    {canRequestAdvance && (
+                        <button onClick={() => setActiveTab('my-advance')}
+                            className={`flex-1 sm:flex-none text-center px-2 sm:px-5 py-2 sm:py-2.5 rounded-xl font-bold text-[10px] sm:text-xs uppercase tracking-wider transition-all border whitespace-nowrap
+                            ${activeTab === 'my-advance' ? 'bg-amber-600/20 text-amber-400 border-amber-500/30' : 'bg-white/5 text-slate-500 border-white/5 hover:text-white hover:bg-white/10'}`}>
+                            <span className="hidden sm:inline">💸 Mohon Advance / Apply Advance</span>
+                            <span className="inline sm:hidden">💸 Advance</span>
+                        </button>
+                    )}
 
                     {/* Management Only Tab */}
                     {isManagement && (
                         <button onClick={() => setActiveTab('approvals')}
-                            className={`px-5 py-2.5 rounded-xl font-bold text-xs uppercase tracking-wider transition-all border whitespace-nowrap flex items-center gap-2
+                            className={`flex-1 sm:flex-none text-center px-2 sm:px-5 py-2 sm:py-2.5 rounded-xl font-bold text-[10px] sm:text-xs uppercase tracking-wider transition-all border whitespace-nowrap flex items-center justify-center gap-1 sm:gap-2
                             ${activeTab === 'approvals' ? 'bg-amber-500/20 text-amber-400 border-amber-500/30' : 'bg-white/5 text-slate-500 border-white/5 hover:text-white hover:bg-white/10'}`}>
-                            Approvals
+                            <span>Approvals</span>
                             {pendingLeaves.length > 0 && <span className="bg-amber-500 text-black px-1.5 py-0.5 rounded-full text-[9px] font-black">{pendingLeaves.length}</span>}
                         </button>
                     )}
+
                 </div>
             </div>
 
@@ -654,6 +1206,7 @@ const LeaveCalendar: React.FC<Props> = ({ user }) => {
             <div className="max-w-7xl w-full mx-auto flex-1">
                 {activeTab === 'calendar' && renderCalendar()}
                 {activeTab === 'my-leave' && renderMyLeave()}
+                {activeTab === 'my-advance' && canRequestAdvance && renderMyAdvance()}
                 {activeTab === 'approvals' && isManagement && renderApprovals()}
             </div>
         </div>

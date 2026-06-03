@@ -122,3 +122,77 @@ export const generateSessionReport = (
     const safeMachine = machineId.replace(/[^a-z0-9]/gi, '_');
     doc.save(`WorkReport_${dateStr}_${safeMachine}.pdf`);
 };
+
+export interface PlantReportMachineRow {
+    machineName: string;
+    totalQty: number;
+    logCount: number;
+    avgSpeed: number;
+    gapCount: number;
+}
+
+export interface PlantReportSkuRow {
+    sku: string;
+    qty: number;
+}
+
+export const generateDailyPlantReport = (opts: {
+    dateLabel: string;
+    totalQty: number;
+    activeMachines: number;
+    logCount: number;
+    machines: PlantReportMachineRow[];
+    topSkus: PlantReportSkuRow[];
+}): void => {
+    const doc = new jsPDF();
+    const pageWidth = doc.internal.pageSize.width;
+
+    doc.setFillColor(41, 128, 185);
+    doc.rect(0, 0, pageWidth, 40, 'F');
+    doc.setTextColor(255, 255, 255);
+    doc.setFontSize(20);
+    doc.text('Plant Production Report', 14, 18);
+    doc.setFontSize(11);
+    doc.text(`Period: ${opts.dateLabel}`, 14, 28);
+    doc.text(`Generated: ${new Date().toLocaleString()}`, 14, 35);
+
+    doc.setTextColor(0, 0, 0);
+    doc.setFontSize(10);
+    let y = 48;
+    doc.setFont('helvetica', 'bold');
+    doc.text(`Total Output: ${opts.totalQty.toLocaleString()} units`, 14, y);
+    doc.setFont('helvetica', 'normal');
+    y += 6;
+    doc.text(`Active Machines: ${opts.activeMachines}  |  Log Entries: ${opts.logCount}`, 14, y);
+    y += 10;
+
+    if (opts.topSkus.length > 0) {
+        doc.setFont('helvetica', 'bold');
+        doc.text('Top Products', 14, y);
+        doc.setFont('helvetica', 'normal');
+        y += 6;
+        opts.topSkus.slice(0, 8).forEach((s) => {
+            doc.text(`• ${s.sku}: ${s.qty}`, 18, y);
+            y += 5;
+        });
+        y += 4;
+    }
+
+    autoTable(doc, {
+        head: [['Machine', 'Output', 'Logs', 'Avg min/unit', 'Gaps >10m']],
+        body: opts.machines.map((m) => [
+            m.machineName,
+            String(m.totalQty),
+            String(m.logCount),
+            m.avgSpeed > 0 ? m.avgSpeed.toFixed(1) : '–',
+            String(m.gapCount),
+        ]),
+        startY: y,
+        theme: 'grid',
+        headStyles: { fillColor: [44, 62, 80] },
+        styles: { fontSize: 9 },
+    });
+
+    const safeLabel = opts.dateLabel.replace(/[^a-z0-9]/gi, '_');
+    doc.save(`PlantReport_${safeLabel}.pdf`);
+};

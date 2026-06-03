@@ -1,7 +1,7 @@
-import { useState, useEffect, useRef } from 'react';
+import { useState, useEffect } from 'react';
 import {
-    BookOpen, Plus, Pencil, Trash2, X, Upload,
-    ChevronLeft, Play, FileText, Search, Save
+    BookOpen, Plus, Pencil, Trash2, X,
+    ChevronLeft, FileText, Search, Save
 } from 'lucide-react';
 import { supabase } from '../services/supabase';
 
@@ -42,8 +42,6 @@ const SOPCenter = ({ userRole, user }: { userRole?: string; user?: any }) => {
     // Admin state
     const [isEditing, setIsEditing] = useState(false);
     const [editArticle, setEditArticle] = useState<Partial<SOPArticle> | null>(null);
-    const fileInputRef = useRef<HTMLInputElement>(null);
-    const [uploading, setUploading] = useState(false);
 
     const isAdmin = userRole === 'SuperAdmin' || userRole === 'Admin' || user?.employeeId === '001';
 
@@ -148,27 +146,6 @@ const SOPCenter = ({ userRole, user }: { userRole?: string; user?: any }) => {
         if (selectedArticle?.id === id) setSelectedArticle(null);
     };
 
-    const handleVideoUpload = async (file: File) => {
-        setUploading(true);
-        const fileName = `${Date.now()}_${file.name}`;
-        const { data, error } = await supabase.storage
-            .from('sop-videos')
-            .upload(fileName, file);
-
-        if (error) {
-            alert('上传失败: ' + error.message);
-            setUploading(false);
-            return;
-        }
-
-        const { data: urlData } = supabase.storage
-            .from('sop-videos')
-            .getPublicUrl(data.path);
-
-        setEditArticle(prev => prev ? { ...prev, video_url: urlData.publicUrl } : prev);
-        setUploading(false);
-    };
-
     // ─── Article Detail View ──────────────────────────────────────────────────
     if (selectedArticle) {
         return (
@@ -184,30 +161,20 @@ const SOPCenter = ({ userRole, user }: { userRole?: string; user?: any }) => {
                     </button>
                     <h1 className="text-2xl font-black text-white">{selectedArticle.title}</h1>
                     <p className="text-gray-400 text-sm mt-1">{selectedArticle.description}</p>
-                    <div className="flex gap-2 mt-3">
-                        {selectedArticle.target_roles.map(r => (
-                            <span key={r} className="px-2 py-0.5 rounded-full text-[10px] font-bold"
-                                style={{ backgroundColor: (ROLE_COLORS[r] || '#666') + '22', color: ROLE_COLORS[r] || '#666' }}>
-                                {r}
-                            </span>
-                        ))}
+                    <div className="flex gap-2 mt-3 items-center justify-between">
+                        <div className="flex gap-2">
+                            {selectedArticle.target_roles.map(r => (
+                                <span key={r} className="px-2 py-0.5 rounded-full text-[10px] font-bold"
+                                    style={{ backgroundColor: (ROLE_COLORS[r] || '#666') + '22', color: ROLE_COLORS[r] || '#666' }}>
+                                    {r}
+                                </span>
+                            ))}
+                        </div>
                     </div>
                 </div>
 
                 {/* Content */}
                 <div className="flex-1 overflow-y-auto p-6 space-y-6">
-                    {/* Video Player */}
-                    {selectedArticle.video_url && (
-                        <div className="relative rounded-2xl overflow-hidden bg-black/50 border border-gray-800/50">
-                            <video
-                                src={selectedArticle.video_url}
-                                controls
-                                className="w-full max-h-[500px] object-contain"
-                                playsInline
-                            />
-                        </div>
-                    )}
-
                     {/* Markdown-like content */}
                     <div className="prose prose-invert max-w-none">
                         {selectedArticle.content.split('\n').map((line, i) => {
@@ -284,29 +251,11 @@ const SOPCenter = ({ userRole, user }: { userRole?: string; user?: any }) => {
                                 className="group relative bg-gray-900/50 border border-gray-800/50 rounded-2xl overflow-hidden hover:border-indigo-500/30 transition-all duration-300 hover:shadow-lg hover:shadow-indigo-500/5 cursor-pointer"
                                 onClick={() => setSelectedArticle(article)}
                             >
-                                {/* Video Thumbnail / Gradient Placeholder */}
+                                {/* Document Gradient Placeholder */}
                                 <div className="relative h-40 overflow-hidden bg-gradient-to-br from-indigo-950/80 to-purple-950/40">
-                                    {article.video_url ? (
-                                        <video
-                                            src={article.video_url}
-                                            className="w-full h-full object-cover opacity-70 group-hover:opacity-100 transition-opacity"
-                                            muted
-                                            preload="metadata"
-                                        />
-                                    ) : (
-                                        <div className="flex items-center justify-center h-full">
-                                            <FileText size={40} className="text-indigo-500/30" />
-                                        </div>
-                                    )}
-
-                                    {/* Play button overlay */}
-                                    {article.video_url && (
-                                        <div className="absolute inset-0 flex items-center justify-center">
-                                            <div className="w-12 h-12 rounded-full bg-white/10 backdrop-blur-sm flex items-center justify-center border border-white/20 group-hover:scale-110 transition-transform">
-                                                <Play size={20} className="text-white ml-1" />
-                                            </div>
-                                        </div>
-                                    )}
+                                    <div className="flex items-center justify-center h-full">
+                                        <FileText size={40} className="text-indigo-500/30 group-hover:scale-110 transition-transform duration-300" />
+                                    </div>
 
                                     {/* Published Badge */}
                                     {isAdmin && !article.is_published && (
@@ -409,50 +358,7 @@ const SOPCenter = ({ userRole, user }: { userRole?: string; user?: any }) => {
                                 />
                             </div>
 
-                            {/* Video Upload */}
-                            <div>
-                                <label className="text-[10px] uppercase font-bold text-gray-500 tracking-wider mb-1 block">视频 Video</label>
-                                {editArticle.video_url ? (
-                                    <div className="relative rounded-xl overflow-hidden bg-black border border-gray-800">
-                                        <video src={editArticle.video_url} controls className="w-full max-h-48 object-contain" />
-                                        <button
-                                            onClick={() => setEditArticle(prev => prev ? { ...prev, video_url: '' } : prev)}
-                                            className="absolute top-2 right-2 bg-red-500/80 text-white p-1.5 rounded-lg hover:bg-red-500"
-                                        >
-                                            <X size={14} />
-                                        </button>
-                                    </div>
-                                ) : (
-                                    <button
-                                        onClick={() => fileInputRef.current?.click()}
-                                        disabled={uploading}
-                                        className="w-full py-8 rounded-xl border-2 border-dashed border-gray-700 hover:border-blue-500 text-gray-500 hover:text-blue-400 transition-all flex flex-col items-center gap-2"
-                                    >
-                                        {uploading ? (
-                                            <>
-                                                <div className="animate-spin w-6 h-6 border-2 border-blue-500 border-t-transparent rounded-full" />
-                                                <span className="text-sm">上传中...</span>
-                                            </>
-                                        ) : (
-                                            <>
-                                                <Upload size={24} />
-                                                <span className="text-sm font-bold">点击上传视频</span>
-                                                <span className="text-xs text-gray-600">MP4, WebM, MOV · 最大 50MB</span>
-                                            </>
-                                        )}
-                                    </button>
-                                )}
-                                <input
-                                    ref={fileInputRef}
-                                    type="file"
-                                    accept="video/*"
-                                    className="hidden"
-                                    onChange={e => {
-                                        const file = e.target.files?.[0];
-                                        if (file) handleVideoUpload(file);
-                                    }}
-                                />
-                            </div>
+
 
                             {/* Content */}
                             <div>

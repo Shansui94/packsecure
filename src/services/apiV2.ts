@@ -293,3 +293,106 @@ export const updateItemV2 = async (sku: string, updates: Partial<V2Item>): Promi
     }
     return data;
 };
+
+// --- Salary Advances ---
+
+export interface SalaryAdvance {
+    id: string;
+    employee_id: string;
+    amount: number;
+    bank_in_date: string;
+    status: 'Pending' | 'Approved' | 'Rejected';
+    rejection_reason?: string;
+    created_at?: string;
+    updated_at?: string;
+    employee?: {
+        name: string;
+        employee_id: string;
+    };
+}
+
+export const getSalaryAdvancesForDriver = async (driverId: string): Promise<SalaryAdvance[]> => {
+    const { data, error } = await supabase
+        .from('salary_advances')
+        .select('*')
+        .eq('employee_id', driverId)
+        .order('created_at', { ascending: false });
+
+    if (error) {
+        console.error("Error fetching salary advances for driver:", error);
+        return [];
+    }
+    return data || [];
+};
+
+export const createSalaryAdvance = async (driverId: string, amount: number, bankInDate: string): Promise<SalaryAdvance | null> => {
+    const { data, error } = await supabase
+        .from('salary_advances')
+        .insert({
+            employee_id: driverId,
+            amount: amount,
+            bank_in_date: bankInDate,
+            status: 'Pending'
+        })
+        .select()
+        .single();
+
+    if (error) {
+        console.error("Error creating salary advance:", error);
+        throw error;
+    }
+    return data;
+};
+
+export const getSalaryAdvances = async (): Promise<any[]> => {
+    const { data: advances, error: advError } = await supabase
+        .from('salary_advances')
+        .select('*')
+        .order('created_at', { ascending: false });
+
+    if (advError) {
+        console.error("Error fetching salary advances:", advError);
+        return [];
+    }
+
+    if (!advances || advances.length === 0) return [];
+
+    const { data: users, error: userError } = await supabase
+        .from('sys_users_v2')
+        .select('auth_user_id, name, employee_id');
+
+    if (userError) {
+        console.error("Error fetching users for salary advances join:", userError);
+        return advances;
+    }
+
+    const userMap = new Map<string, any>();
+    (users || []).forEach(u => {
+        if (u.auth_user_id) {
+            userMap.set(u.auth_user_id, u);
+        }
+    });
+
+    return advances.map(adv => ({
+        ...adv,
+        employee: userMap.get(adv.employee_id) || { name: 'Unknown User', employee_id: 'N/A' }
+    }));
+};
+
+export const updateSalaryAdvanceStatus = async (id: string, status: 'Approved' | 'Rejected', rejectionReason?: string): Promise<boolean> => {
+    const updates: any = { status, updated_at: new Date().toISOString() };
+    if (rejectionReason !== undefined) {
+        updates.rejection_reason = rejectionReason;
+    }
+
+    const { error } = await supabase
+        .from('salary_advances')
+        .update(updates)
+        .eq('id', id);
+
+    if (error) {
+        console.error("Error updating salary advance status:", error);
+        return false;
+    }
+    return true;
+};

@@ -14,7 +14,6 @@ const PACK_CODE: Record<PackagingColor, string> = {
 const MAT_CODE: Record<string, string> = {
     'Clear': 'CLR',
     'Black': 'BLK',
-    'Silver': 'SLR',
     'Yellow': 'YLW',  // Yellow material (distinct from YEL packaging)
 };
 

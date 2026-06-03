@@ -24,6 +24,7 @@ type ScannedTripDraft = {
     tripDropCount: number;
     notes: string;
     items: SalesOrder['items'];
+    driverId?: string;
 };
 
 type ScanSheetReview = {
@@ -32,6 +33,17 @@ type ScanSheetReview = {
     driverId: string;
     sheetNotes: string;
     trips: ScannedTripDraft[];
+};
+
+const normalizeLoc = (locId: string): string => {
+    const lower = (locId || '').toLowerCase().trim();
+    const LOC_ALIASES: Record<string, string> = {
+        'spd': 'SPD', 'opm lama': 'OPM Lama', 'opm_lama': 'OPM Lama',
+        'opm corner': 'OPM Corner', 'opm_corner': 'OPM Corner',
+        'opm ali': 'OPM Ali', 'opm_ali': 'OPM Ali',
+        'nilai': 'Nilai',
+    };
+    return LOC_ALIASES[lower] || locId;
 };
 
 // Reusable Searchable Select Component (Ported from SimpleStock for consistency)
@@ -442,7 +454,9 @@ const DeliveryOrderManagement: React.FC = () => {
 
     useEffect(() => {
         localStorage.setItem('tripActiveLocation', activeLocation);
-        setTripOrigin(activeLocation.toUpperCase());
+        const origin = activeLocation.toUpperCase();
+        setTripOrigin(origin);
+        setCurrentItemLoc(origin === 'NILAI' ? 'Nilai' : 'SPD');
     }, [activeLocation]);
 
 
@@ -470,7 +484,7 @@ const DeliveryOrderManagement: React.FC = () => {
     const [currentItemQty, setCurrentItemQty] = useState<number>(0);
     const [currentItemRemark, setCurrentItemRemark] = useState('');
     const [selectedV2Item, setSelectedV2Item] = useState<V2Item | null>(null);
-    const [currentItemLoc, setCurrentItemLoc] = useState('SPD'); // New Location state
+    const [currentItemLoc, setCurrentItemLoc] = useState(() => activeLocation.toUpperCase() === 'NILAI' ? 'Nilai' : 'SPD'); // New Location state
 
     // --- Driver Payroll Rate State ---
     const [deliveryRates, setDeliveryRates] = useState<any[]>([]);
@@ -808,19 +822,39 @@ const DeliveryOrderManagement: React.FC = () => {
         return sortable;
     }, [filteredOrders, sortConfig, drivers]);
 
-    // Stock Visibility
-    const [stockMap, setStockMap] = useState<Record<string, number>>({});
+    // Stock Visibility: SKU -> Location -> StockQty
+    const [stockMap, setStockMap] = useState<Record<string, Record<string, number>>>({});
     useEffect(() => {
         const fetchStock = async () => {
-            const { data } = await supabase.rpc('get_live_stock_viewer');
+            const { data } = await supabase.from('v2_inventory_view').select('sku, loc_id, current_stock');
             if (data) {
-                const map: Record<string, number> = {};
-                data.forEach((item: any) => map[item.sku] = item.current_stock);
+                const map: Record<string, Record<string, number>> = {};
+                data.forEach((item: any) => {
+                    const sku = item.sku;
+                    const loc = normalizeLoc(item.loc_id || 'Unknown');
+                    const stock = Number(item.current_stock) || 0;
+                    if (!map[sku]) map[sku] = {};
+                    map[sku][loc] = (map[sku][loc] || 0) + stock;
+                });
                 setStockMap(map);
             }
         };
         if (isCreateModalOpen) fetchStock();
     }, [isCreateModalOpen]);
+
+    const getStockForSkuAndLoc = (sku: string, loc: string): number => {
+        let lookupLoc = loc;
+        const STOCK_FALLBACK: Record<string, string> = {
+            'OPM Corner': 'SPD',
+            'OPM Lama': 'SPD',
+            'OPM Ali': 'SPD',
+        };
+        const hasLocStock = Object.values(stockMap).some(skuStocks => lookupLoc in skuStocks);
+        if (!hasLocStock && STOCK_FALLBACK[lookupLoc]) {
+            lookupLoc = STOCK_FALLBACK[lookupLoc];
+        }
+        return stockMap[sku]?.[lookupLoc] || 0;
+    };
 
     useEffect(() => {
         if (isCreateModalOpen) {
@@ -1099,7 +1133,13 @@ const DeliveryOrderManagement: React.FC = () => {
             const response = await fetch('/api/agent/vision', {
                 method: 'POST',
                 headers: { 'Content-Type': 'application/json' },
-                body: JSON.stringify({ imageBase64: base64, mimeType, type: 'trip' }),
+                body: JSON.stringify({
+                    imageBase64: base64,
+                    mimeType,
+                    type: 'trip',
+                    productsList: v2Items.map(i => ({ sku: i.sku, name: i.name })),
+                    driversList: drivers.map(d => ({ uid: d.uid, name: d.name || d.email || '' })),
+                }),
             });
 
             if (!response.ok) {
@@ -1111,10 +1151,29 @@ const DeliveryOrderManagement: React.FC = () => {
             const defaultLoc = tripOrigin === 'NILAI' ? 'Nilai' : 'SPD';
             const rawTrips = Array.isArray(data.trips) ? data.trips : [];
 
+            const findDriverIdByName = (name?: string): string => {
+                if (!name?.trim()) return '';
+                const n = name.trim().toLowerCase();
+                const matched = drivers.find(d =>
+                    (d.name || '').toLowerCase() === n ||
+                    (d.name || '').toLowerCase().includes(n) ||
+                    n.includes((d.name || '').toLowerCase())
+                );
+                return matched?.uid || '';
+            };
+
             const trips: ScannedTripDraft[] = rawTrips.map((t, i) => {
                 const trip = (t && typeof t === 'object' ? t : {}) as Record<string, unknown>;
+                const extDriver = trip.driverName ? String(trip.driverName) : undefined;
+                const tripLabel = String(trip.label || `Trip ${i + 1}`);
+
+                let matchedDriverId = findDriverIdByName(extDriver);
+                if (!matchedDriverId) {
+                    matchedDriverId = findDriverIdByName(tripLabel);
+                }
+
                 return {
-                    label: String(trip.label || `Trip ${i + 1}`),
+                    label: tripLabel,
                     destinations: String(trip.destinations || ''),
                     tripCategory: String(trip.tripCategory || '').toUpperCase(),
                     tripDropCount: typeof trip.tripDropCount === 'number' ? trip.tripDropCount : 1,
@@ -1123,6 +1182,7 @@ const DeliveryOrderManagement: React.FC = () => {
                         Array.isArray(trip.items) ? trip.items : [],
                         defaultLoc
                     ),
+                    driverId: matchedDriverId || undefined,
                 };
             }).filter(t => t.destinations || t.items.length > 0);
 
@@ -1176,13 +1236,22 @@ const DeliveryOrderManagement: React.FC = () => {
         const t = scanReview.trips[0];
         setNewOrderDate(scanReview.tripDate);
         setNewOrderDeliveryDate(scanReview.deliveryDate);
-        if (scanReview.driverId) setSelectedDriverId(scanReview.driverId);
+        if (t.driverId) {
+            setSelectedDriverId(t.driverId);
+        } else if (scanReview.driverId) {
+            setSelectedDriverId(scanReview.driverId);
+        }
         setNewOrderAddress(t.destinations);
         setTripCategory(t.tripCategory);
         setTripDropCount(t.tripDropCount);
         const notes = [scanReview.sheetNotes, t.notes].filter(Boolean).join(' | ');
         setNewOrderNotes(notes);
-        setNewOrderItems(t.items);
+        const defaultLoc = tripOrigin === 'NILAI' ? 'Nilai' : 'SPD';
+        const itemsWithLoc = (t.items || []).map(item => ({
+            ...item,
+            sourceLocation: item.sourceLocation || defaultLoc
+        }));
+        setNewOrderItems(itemsWithLoc);
         closeScanReview();
         setToast({ type: 'success', message: 'First trip loaded into form.' });
     };
@@ -1301,7 +1370,7 @@ const DeliveryOrderManagement: React.FC = () => {
                     items: t.items,
                     orderDate: scanReview.tripDate,
                     deliveryDate: scanReview.deliveryDate,
-                    driverId: scanReview.driverId,
+                    driverId: t.driverId || scanReview.driverId,
                 });
                 created++;
             }
@@ -1450,13 +1519,17 @@ const DeliveryOrderManagement: React.FC = () => {
 
     const handleSubmitOrder = async () => {
         if (isSubmitting) return; // 🛡️ Prevent double submission
-        if (newOrderItems.length === 0) return alert("Add at least one item");
-
-        // UI ALERT FOR MISSING LOCATION
-        const missingLocItems = newOrderItems.filter(item => !item.sourceLocation || item.sourceLocation.trim() === '');
-        if (missingLocItems.length > 0) {
-            alert("⚠️ 注意：此订单中有物品没有填写发货地点 (Source Location)！\n系统将默认将其记录为 'no location' 以允许创建订单。\n\n请务必稍后重新检查，或上报处理！");
+        const hasContent = newOrderItems.length > 0 || newOrderNotes.trim() !== '' || newOrderAddress.trim() !== '' || selectedDriverId;
+        if (!hasContent) {
+            return alert("Cannot create an empty trip. Please add items, a driver, destinations, or notes.");
         }
+
+        // Force assign default location if somehow blank
+        const defaultLoc = tripOrigin === 'NILAI' ? 'Nilai' : 'SPD';
+        const finalizedItems = newOrderItems.map(item => ({
+            ...item,
+            sourceLocation: (item.sourceLocation && item.sourceLocation.trim() !== '') ? item.sourceLocation.trim() : defaultLoc
+        }));
 
         setIsSubmitting(true);
         try {
@@ -1503,7 +1576,7 @@ const DeliveryOrderManagement: React.FC = () => {
             }
 
             const zone = tripCategory || '';
-            const bestFactory = findBestFactory(zone, newOrderItems, stockMap);
+            const bestFactory = findBestFactory(zone, finalizedItems, stockMap);
 
             // Auto-Push Unlisted Trip Category to HR Payroll Rates
             if (tripCategory) {
@@ -1535,7 +1608,7 @@ const DeliveryOrderManagement: React.FC = () => {
                 trip_drop_count: tripDropCount,
                 factory_id: bestFactory.id,
                 driver_id: selectedDriverId || null,
-                items: newOrderItems,
+                items: finalizedItems,
                 order_date: newOrderDate || new Date().toISOString().split("T")[0],
                 deadline: newOrderDeliveryDate || null,
                 notes: newOrderNotes // Include Batch Notes
@@ -1638,6 +1711,7 @@ const DeliveryOrderManagement: React.FC = () => {
         setNewOrderItems([]);
         setNewOrderNotes(''); // Reset Notes
         setTripOrigin(activeLocation.toUpperCase());
+        setCurrentItemLoc(activeLocation.toUpperCase() === 'NILAI' ? 'Nilai' : 'SPD');
         setTripCategory('');
         setTripDropCount(1);
         setToast(null); // Clear toast on close
@@ -1848,44 +1922,43 @@ const DeliveryOrderManagement: React.FC = () => {
                         </div>
                     )}
                 </div>
-            </div>
-
-            {/* --- FILTERS & STATS --- */}
-
-            <div className="grid grid-cols-1 lg:grid-cols-4 gap-6 mb-8">
-                {/* Search Bar */}
-                <div className="lg:col-span-2 relative">
-                    <div className="absolute inset-y-0 left-0 pl-3 flex items-center pointer-events-none text-slate-500">
-                        <Search size={18} />
+            </div>            <div className="flex flex-col xl:flex-row xl:items-center justify-between gap-4 mb-8">
+                {/* Search Bar & Location Split Toggle */}
+                <div className="flex flex-col md:flex-row items-stretch md:items-center gap-4 flex-1">
+                    {/* Search Bar */}
+                    <div className="relative flex-1">
+                        <div className="absolute inset-y-0 left-0 pl-3 flex items-center pointer-events-none text-slate-500">
+                            <Search size={18} />
+                        </div>
+                        <input
+                            type="text"
+                            placeholder="Area, date (20/05/2026), or month (2026-05, may)..."
+                            value={searchTerm}
+                            onChange={(e) => setSearchTerm(e.target.value)}
+                            className="w-full bg-slate-900/50 backdrop-blur-sm border border-slate-800 text-slate-200 text-sm rounded-xl pl-10 pr-4 py-3 focus:ring-2 focus:ring-blue-500/50 focus:border-blue-500/50 outline-none transition-all placeholder:text-slate-600"
+                        />
                     </div>
-                    <input
-                        type="text"
-                        placeholder="Area, date (20/05/2026), or month (2026-05, may)..."
-                        value={searchTerm}
-                        onChange={(e) => setSearchTerm(e.target.value)}
-                        className="w-full bg-slate-900/50 backdrop-blur-sm border border-slate-800 text-slate-200 text-sm rounded-xl pl-10 pr-4 py-3 focus:ring-2 focus:ring-blue-500/50 focus:border-blue-500/50 outline-none transition-all placeholder:text-slate-600"
-                    />
-                </div>
 
-                {/* Location Split Toggle */}
-                <div className="flex bg-slate-900 p-1 rounded-xl border border-slate-800 self-center max-w-fit">
-                    {['Taiping', 'Nilai'].map(loc => (
-                        <button
-                            key={loc}
-                            onClick={() => setActiveLocation(loc)}
-                            className={`px-4 py-2 rounded-lg text-xs font-bold uppercase tracking-wider transition-all flex items-center gap-1
-                                ${activeLocation === loc
-                                    ? 'bg-emerald-600 text-white shadow-lg shadow-emerald-900/50'
-                                    : 'text-slate-400 hover:bg-slate-800 hover:text-white'
-                                }`}
-                        >
-                            <MapPin size={14} /> {loc}
-                        </button>
-                    ))}
+                    {/* Location Split Toggle */}
+                    <div className="flex bg-slate-900 p-1 rounded-xl border border-slate-800 self-start md:self-center max-w-fit shrink-0">
+                        {['Taiping', 'Nilai'].map(loc => (
+                            <button
+                                key={loc}
+                                onClick={() => setActiveLocation(loc)}
+                                className={`px-4 py-2 rounded-lg text-xs font-bold uppercase tracking-wider transition-all flex items-center gap-1
+                                    ${activeLocation === loc
+                                        ? 'bg-emerald-600 text-white shadow-lg shadow-emerald-900/50'
+                                        : 'text-slate-400 hover:bg-slate-800 hover:text-white'
+                                    }`}
+                            >
+                                <MapPin size={14} /> {loc}
+                            </button>
+                        ))}
+                    </div>
                 </div>
 
                 {/* Status Tabs & View Toggle */}
-                <div className="flex bg-slate-900 p-1 rounded-xl border border-slate-800 justify-between lg:col-span-1">
+                <div className="flex bg-slate-900 p-1 rounded-xl border border-slate-800 justify-between shrink-0 self-start xl:self-center">
                     <div className="flex">
                         {/* Filter Tabs */}
                         {['All', 'Pending Approval', 'Delivered', 'Cancelled'].map(status => (
@@ -2072,15 +2145,17 @@ const DeliveryOrderManagement: React.FC = () => {
                                                                 setTripCategory(order.zone || '');
                                                                 setTripDropCount(order.trip_drop_count || 1);
 
-                                                                // Extract legacy location from remark if sourceLocation is missing
+                                                                // Extract legacy location from remark if sourceLocation is missing, fallback to default
+                                                                const defaultLoc = orderOrigin === 'NILAI' ? 'Nilai' : 'SPD';
                                                                 const itemsWithExtractedLoc = (order.items || []).map(item => {
-                                                                    if (!item.sourceLocation && item.remark && item.remark.includes('(Loc:')) {
+                                                                    let loc = item.sourceLocation;
+                                                                    if (!loc && item.remark && item.remark.includes('(Loc:')) {
                                                                         const locMatch = item.remark.match(/\(Loc:\s*(.*?)\)/);
                                                                         if (locMatch && locMatch[1]) {
-                                                                            return { ...item, sourceLocation: locMatch[1] };
+                                                                            loc = locMatch[1];
                                                                         }
                                                                     }
-                                                                    return item;
+                                                                    return { ...item, sourceLocation: loc || defaultLoc };
                                                                 });
                                                                 setNewOrderItems(itemsWithExtractedLoc);
                                                                 setEditingOrderPhoto(order.proof_of_load_url || null);
@@ -2282,12 +2357,16 @@ const DeliveryOrderManagement: React.FC = () => {
                                                 setTripCategory(order.zone || '');
                                                 setTripDropCount(order.trip_drop_count || 1);
 
+                                                const defaultLoc = orderOrigin === 'NILAI' ? 'Nilai' : 'SPD';
                                                 const itemsWithExtractedLoc = (order.items || []).map(item => {
-                                                    if (!item.sourceLocation && item.remark && item.remark.includes('(Loc:')) {
+                                                    let loc = item.sourceLocation;
+                                                    if (!loc && item.remark && item.remark.includes('(Loc:')) {
                                                         const locMatch = item.remark.match(/\(Loc:\s*(.*?)\)/);
-                                                        if (locMatch && locMatch[1]) return { ...item, sourceLocation: locMatch[1] };
+                                                        if (locMatch && locMatch[1]) {
+                                                            loc = locMatch[1];
+                                                        }
                                                     }
-                                                    return item;
+                                                    return { ...item, sourceLocation: loc || defaultLoc };
                                                 });
                                                 setNewOrderItems(itemsWithExtractedLoc);
                                                 setEditingOrderPhoto(order.proof_of_load_url || null);
@@ -2362,22 +2441,20 @@ const DeliveryOrderManagement: React.FC = () => {
                     <div className="fixed inset-0 z-[100] flex items-center justify-center p-0 sm:p-3 lg:p-6 bg-black/70 backdrop-blur-sm animate-in fade-in duration-200">
                         <div className="bg-slate-950 border-0 sm:border border-slate-800 rounded-none sm:rounded-2xl w-full max-w-6xl h-full sm:h-[min(96vh,920px)] overflow-hidden flex flex-col shadow-2xl shadow-black">
                             {/* Modal Header */}
-                            <div className="p-4 sm:p-6 border-b border-slate-800 flex justify-between items-start sm:items-center gap-3 bg-slate-900/50">
-                                <div className="min-w-0 flex-1">
-                                    <h2 className="text-lg sm:text-xl font-bold text-slate-100 flex items-center gap-2">
-                                        {editingOrderId ? <FileText className="text-blue-400" /> : <Plus className="text-blue-400" />}
+                            <div className="py-3 px-4 sm:px-6 border-b border-slate-800 flex justify-between items-center gap-3 bg-slate-900/50">
+                                <div className="min-w-0 flex-1 flex items-center gap-3">
+                                    <h2 className="text-base sm:text-lg font-bold text-slate-100 flex items-center gap-2">
+                                        {editingOrderId ? <FileText className="text-blue-400" size={18} /> : <Plus className="text-blue-400" size={18} />}
                                         {editingOrderId ? 'Edit Trip' : 'Create New Trip'}
                                     </h2>
-                                    {toast ? (
-                                        <div className={`mt-3 px-3 py-2 rounded-lg flex items-center gap-2 text-xs font-bold border-2 ${toast.type === 'error' ? 'bg-red-900/50 text-red-200 border-red-500/50' : 'bg-emerald-900/50 text-emerald-200 border-emerald-500/50'}`}>
-                                            <AlertTriangle size={14} />
+                                    {toast && (
+                                        <div className={`px-2.5 py-1 rounded-lg flex items-center gap-1.5 text-[10px] font-bold border ${toast.type === 'error' ? 'bg-red-900/40 text-red-200 border-red-500/30' : 'bg-emerald-900/40 text-emerald-200 border-emerald-500/30'}`}>
+                                            <AlertTriangle size={12} />
                                             {toast.message}
                                         </div>
-                                    ) : (
-                                        <p className="text-xs text-slate-500 mt-1">Manage trip details and items.</p>
                                     )}
                                 </div>
-                                <div className="flex items-center gap-2 self-start">
+                                <div className="flex items-center gap-2">
                                     <input
                                         ref={tripPhotoInputRef}
                                         type="file"
@@ -2607,14 +2684,17 @@ const DeliveryOrderManagement: React.FC = () => {
                                             <SearchableSelect
                                                 placeholder="Type product name (e.g. stretch film)..."
                                                 dropdownMaxHeight="max-h-[min(55vh,32rem)]"
-                                                options={v2Items.map(item => ({
-                                                    value: item.sku,
-                                                    label: item.name,
-                                                    subLabel: `${item.sku} • Stock: ${stockMap[item.sku] || 0}`,
-                                                    searchText: [item.brand, item.description, item.legacy_code].filter(Boolean).join(' '),
-                                                    statusColor: (stockMap[item.sku] || 0) < 100 ? 'text-red-400' : 'text-green-400',
-                                                    statusLabel: (stockMap[item.sku] || 0) < 100 ? 'LOW' : 'OK'
-                                                }))}
+                                                options={v2Items.map(item => {
+                                                    const stock = getStockForSkuAndLoc(item.sku, currentItemLoc);
+                                                    return {
+                                                        value: item.sku,
+                                                        label: item.name,
+                                                        subLabel: `${item.sku} • Stock: ${stock}`,
+                                                        searchText: [item.brand, item.description, item.legacy_code].filter(Boolean).join(' '),
+                                                        statusColor: stock < 100 ? 'text-red-400' : 'text-green-400',
+                                                        statusLabel: stock < 100 ? 'LOW' : 'OK'
+                                                    };
+                                                })}
                                                 value={selectedV2Item?.sku || ''}
                                                 onChange={(val) => {
                                                     const i = v2Items.find(x => x.sku === val);
@@ -2630,7 +2710,6 @@ const DeliveryOrderManagement: React.FC = () => {
                                                     {WAREHOUSES.filter(w => tripOrigin === 'NILAI' ? w === 'Nilai' : w !== 'Nilai').map(loc => (
                                                         <option key={loc} value={loc}>{loc}</option>
                                                     ))}
-                                                    <option value="">No Loc</option>
                                                 </select>
                                                 <input
                                                     type="text"
@@ -2702,7 +2781,7 @@ const DeliveryOrderManagement: React.FC = () => {
                                                                 <div className="text-[10px] font-bold text-slate-600 uppercase w-16">Pickup:</div>
                                                                 <select
                                                                     className="flex-1 bg-slate-900 border border-slate-800 rounded px-2 py-1 text-xs text-blue-400 font-bold focus:border-blue-500 outline-none"
-                                                                    value={item.sourceLocation || ''}
+                                                                    value={item.sourceLocation || (tripOrigin === 'NILAI' ? 'Nilai' : 'SPD')}
                                                                     onChange={(e) => {
                                                                         const val = e.target.value;
                                                                         const updated = [...newOrderItems];
@@ -2710,7 +2789,6 @@ const DeliveryOrderManagement: React.FC = () => {
                                                                         setNewOrderItems(updated);
                                                                     }}
                                                                 >
-                                                                    <option value="">-- No Location --</option>
                                                                     {WAREHOUSES.filter(w => tripOrigin === 'NILAI' ? w === 'Nilai' : w !== 'Nilai').map(loc => <option key={loc} value={loc}>{loc}</option>)}
                                                                 </select>
                                                             </div>
@@ -2833,6 +2911,27 @@ const DeliveryOrderManagement: React.FC = () => {
                                             <div className="text-xs text-slate-400 mt-1 truncate">{trip.destinations || '—'}</div>
                                             <div className="text-[10px] text-slate-500 mt-1">
                                                 {trip.tripCategory || 'No category'} · {trip.tripDropCount} drop(s) · {trip.items.length} item(s)
+                                            </div>
+                                            <div className="mt-2 flex items-center gap-2">
+                                                <span className="text-[10px] font-bold text-slate-500 uppercase shrink-0">Driver:</span>
+                                                <select
+                                                    className="bg-slate-950 border border-slate-800 rounded-lg px-2 py-1 text-xs text-slate-200 w-full max-w-[200px] focus:outline-none focus:border-blue-600 transition-colors"
+                                                    value={trip.driverId || ''}
+                                                    onChange={e => {
+                                                        const val = e.target.value;
+                                                        setScanReview(prev => {
+                                                            if (!prev) return null;
+                                                            const updated = [...prev.trips];
+                                                            updated[idx] = { ...updated[idx], driverId: val };
+                                                            return { ...prev, trips: updated };
+                                                        });
+                                                    }}
+                                                >
+                                                    <option value="">-- Fallback to sheet driver --</option>
+                                                    {drivers.filter(d => (d.base_location || 'Taiping').toUpperCase() === tripOrigin).map(d => (
+                                                        <option key={d.uid} value={d.uid}>{d.name || d.email}</option>
+                                                    ))}
+                                                </select>
                                             </div>
                                         </div>
                                         <button

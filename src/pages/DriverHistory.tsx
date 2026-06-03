@@ -56,13 +56,13 @@ const DriverHistory: React.FC<DriverHistoryProps> = ({ user }) => {
         <div className="min-h-screen bg-black text-slate-200 pb-20 font-sans">
             {/* TOP BAR */}
             <div className="sticky top-0 z-30 bg-black/90 backdrop-blur-md border-b border-white/10 p-4">
-                <h1 className="text-xl font-black text-white italic tracking-tighter">MY HISTORY</h1>
-                <p className="text-[10px] font-bold text-slate-500 uppercase">Past Deliveries</p>
+                <h1 className="text-xl font-black text-white italic tracking-tighter">SEJARAH SAYA / MY HISTORY</h1>
+                <p className="text-[10px] font-bold text-slate-500 uppercase">Penghantaran Lampau / Past Deliveries</p>
             </div>
 
             {/* FILTERS */}
             <div className="p-4 bg-slate-900/50 border-b border-white/5">
-                <label className="block text-[10px] font-bold text-slate-500 uppercase mb-2">Filter by Date</label>
+                <label className="block text-[10px] font-bold text-slate-500 uppercase mb-2">Tapis mengikut Tarikh / Filter by Date</label>
                 <div className="flex gap-2">
                     <div className="relative flex-1">
                         <Calendar size={16} className="absolute left-3 top-1/2 -translate-y-1/2 text-slate-500" />
@@ -78,7 +78,7 @@ const DriverHistory: React.FC<DriverHistoryProps> = ({ user }) => {
                             onClick={() => setSelectedDate('')}
                             className="px-4 py-2 bg-slate-800 border border-slate-700 rounded-xl text-slate-400 hover:text-white"
                         >
-                            Reset
+                            Set Semula / Reset
                         </button>
                     )}
                 </div>
@@ -87,11 +87,11 @@ const DriverHistory: React.FC<DriverHistoryProps> = ({ user }) => {
             {/* LIST */}
             <div className="p-4 space-y-4">
                 {loading ? (
-                    <div className="text-center py-10 text-slate-500 animate-pulse">Loading History...</div>
+                    <div className="text-center py-10 text-slate-500 animate-pulse">Memuatkan Sejarah... / Loading History...</div>
                 ) : tasks.length === 0 ? (
                     <div className="text-center py-12 bg-slate-900/50 rounded-2xl border-2 border-dashed border-slate-800">
                         <Package size={40} className="mx-auto mb-3 text-slate-700" />
-                        <h3 className="font-bold text-slate-500">No history found.</h3>
+                        <h3 className="font-bold text-slate-500">Tiada rekod sejarah ditemui. / No history found.</h3>
                     </div>
                 ) : (
                     tasks.map((order) => (
@@ -105,18 +105,18 @@ const DriverHistory: React.FC<DriverHistoryProps> = ({ user }) => {
                                     <p className="text-xs text-slate-500 font-bold">{order.customer}</p>
                                 </div>
                                 <span className="text-[10px] font-mono font-bold bg-green-900/30 text-green-400 px-2 py-1 rounded">
-                                    COMPLETED
+                                    SELESAI / COMPLETED
                                 </span>
                             </div>
 
                             <div className="flex flex-col gap-1 mt-3 pt-3 border-t border-slate-800">
                                 <div className="flex items-center gap-2 text-xs text-blue-400 font-bold uppercase tracking-widest">
                                     <Calendar size={12} className="text-blue-500" />
-                                    Delivery Date: {(order as any).deliveryDate}
+                                    Tarikh Hantar / Delivery Date: {(order as any).deliveryDate}
                                 </div>
                                 {order.pod_timestamp && (
                                     <div className="text-[10px] text-slate-600 font-mono flex items-center gap-2">
-                                        System Logged: {new Date(order.pod_timestamp).toLocaleString()}
+                                        Direkodkan Sistem / System Logged: {new Date(order.pod_timestamp).toLocaleString()}
                                     </div>
                                 )}
                             </div>

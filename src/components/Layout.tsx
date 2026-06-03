@@ -358,12 +358,12 @@ const Layout: React.FC<LayoutProps> = ({ children, activePage, setActivePage, us
                         {/* DRIVER VIEW */}
                         {(userRole === 'Driver' || isNeoson || user?.roleModules?.includes('delivery-driver') || user?.roleModules?.includes('delivery-history')) && (
                             <>
-                                <NavGroup title="Driver Workspace">
-                                    <NavItem id="delivery-driver" icon={Package} label="My Delivery" roles={['Driver', 'Manager']} />
-                                    <NavItem id="delivery-history" icon={ClipboardList} label="My History" roles={['Driver', 'Manager']} />
-                                    <NavItem id="driver-leave" icon={Calendar} label="Apply Cuti" roles={['Driver', 'Manager']} />
-                                    <NavItem id="lorry-service" icon={Truck} label="Lorry Service" roles={['Driver', 'Manager']} />
-                                    <NavItem id="personal-report" icon={FileText} label="My Monthly Report" roles={['Driver', 'Manager']} />
+                                <NavGroup title="Driver Workspace / Ruang Kerja Pemandu">
+                                    <NavItem id="delivery-driver" icon={Package} label="Penghantaran / My Delivery" roles={['Driver', 'Manager']} />
+                                    <NavItem id="delivery-history" icon={ClipboardList} label="Sejarah / My History" roles={['Driver', 'Manager']} />
+                                    <NavItem id="driver-leave" icon={Calendar} label="Urusan Staf / Staff Hub" roles={['Driver', 'Manager']} />
+                                    <NavItem id="lorry-service" icon={Truck} label="Servis Lori / Lorry Service" roles={['Driver', 'Manager']} />
+                                    <NavItem id="personal-report" icon={FileText} label="Laporan Bulanan / Monthly Report" roles={['Driver', 'Manager']} />
                                 </NavGroup>
 
                                 <NavGroup title="Productivity">
@@ -381,7 +381,7 @@ const Layout: React.FC<LayoutProps> = ({ children, activePage, setActivePage, us
                             <>
                                 <NavGroup title="HR Workspace">
                                     <NavItem id="hr" icon={Users} label="HR Portal" roles={['HR']} />
-                                    <NavItem id="driver-leave" icon={Calendar} label="Apply Leave" roles={['HR']} />
+                                    <NavItem id="driver-leave" icon={Calendar} label="Staff Hub" roles={['HR']} />
                                     <NavItem id="personal-report" icon={FileText} label="My Monthly Report" roles={['HR']} />
                                 </NavGroup>
 

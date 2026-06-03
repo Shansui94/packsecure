@@ -6,7 +6,6 @@ import {
     ProductMaterial
 } from '../types';
 import {
-    PACKAGING_COLORS,
     PRODUCT_SIZES,
 } from '../data/constants';
 import { getRecommendedPackaging } from '../utils/packagingRules';
@@ -42,7 +41,7 @@ const ProductionLane: React.FC<ProductionLaneProps> = ({ laneId, machineMetadata
     const [selectedSize, setSelectedSize] = useState<ProductSize | null>(null);
     const [derivedPackaging, setDerivedPackaging] = useState<PackagingColor | null>(null);
     const [productionNote, setProductionNote] = useState<string>('');
-    const [isEditingColor, setIsEditingColor] = useState(false);
+
 
     const [isLiveRun, setIsLiveRun] = useState(false);
     const [liveCount, setLiveCount] = useState(0);
@@ -293,10 +292,8 @@ const ProductionLane: React.FC<ProductionLaneProps> = ({ laneId, machineMetadata
                             {[
                                 { layer: 'Single', mat: 'Clear', label: 'SL Clear', img: '/assets/product-types/single-clear.png', border: 'border-cyan-500/30', bg: 'bg-white/10' },
                                 { layer: 'Single', mat: 'Black', label: 'SL Black', img: '/assets/product-types/double-black.png', border: 'border-gray-600', bg: 'bg-black/60' },
-                                { layer: 'Single', mat: 'Silver', label: 'SL Silver', img: '/assets/product-types/double-black.png', border: 'border-slate-400', bg: 'bg-slate-400/20', isSmall: true },
                                 { layer: 'Double', mat: 'Clear', label: 'DL Clear', img: '/assets/product-types/double-clear.png', border: 'border-blue-400', glow: true, bg: 'bg-white/10' },
                                 { layer: 'Double', mat: 'Black', label: 'DL Black', img: '/assets/product-types/single-black.png', border: 'border-slate-500', bg: 'bg-black/80' },
-                                { layer: 'Double', mat: 'Silver', label: 'DL Silver', img: '/assets/product-types/single-black.png', border: 'border-gray-400', bg: 'bg-slate-500/30', isSmall: true },
                             ].filter(item => canProduceDL || item.layer === 'Single')
                                 .map((item, idx) => (
                                     <button
@@ -306,15 +303,15 @@ const ProductionLane: React.FC<ProductionLaneProps> = ({ laneId, machineMetadata
                                             relative group rounded-3xl border ${item.bg === 'bg-white/10' ? 'border-apple-blue' : 'border-black/5 dark:border-white/10'} bg-black/5 dark:bg-white/5 overflow-hidden
                                             hover:scale-[1.02] active:scale-95 transition-all duration-300 flex flex-col justify-between
                                             hover:shadow-xl hover:border-apple-blue
-                                            ${item.isSmall ? 'min-h-[80px] p-2' : 'min-h-[140px] p-0'}
+                                            min-h-[140px] p-0
                                             ${item.glow ? 'shadow-apple-card' : ''}
                                         `}
                                     >
-                                        <div className={`${item.isSmall ? 'h-1/2' : 'h-2/3'} w-full relative bg-black/5 dark:bg-black/20 ${item.isSmall ? 'p-1' : 'p-2'}`}>
+                                        <div className="h-2/3 w-full relative bg-black/5 dark:bg-black/20 p-2">
                                             <img src={item.img} alt={item.label} className="w-full h-full object-contain drop-shadow-xl" />
                                         </div>
-                                        <div className={`${item.isSmall ? 'h-1/2' : 'h-1/3'} w-full flex items-center justify-center bg-white/50 dark:bg-white/5 border-t border-black/5 dark:border-white/5`}>
-                                            <span className={`${item.isSmall ? 'text-[10px]' : 'text-xs md:text-sm'} font-black text-apple-textMain dark:text-white uppercase`}>{item.label}</span>
+                                        <div className="h-1/3 w-full flex items-center justify-center bg-white/50 dark:bg-white/5 border-t border-black/5 dark:border-white/5">
+                                            <span className="text-xs md:text-sm font-black text-apple-textMain dark:text-white uppercase">{item.label}</span>
                                         </div>
                                     </button>
                                 ))}
@@ -331,25 +328,14 @@ const ProductionLane: React.FC<ProductionLaneProps> = ({ laneId, machineMetadata
                         </div>
                         <div className="grid grid-cols-2 gap-3">
                             {PRODUCT_SIZES.map(size => {
-                                const isDisabled = selectedMaterial === 'Silver' && size.value !== '100cm';
                                 return (
                                     <button
                                         key={size.value}
-                                        onClick={() => !isDisabled && handleSizeSelect(size.value as ProductSize)}
-                                        disabled={isDisabled}
-                                        className={`relative group rounded-2xl py-6 flex flex-col items-center gap-1 transition-all
-                                            ${isDisabled
-                                                ? 'bg-black/5 dark:bg-white/5 border border-apple-red/20 opacity-40 cursor-not-allowed'
-                                                : 'apple-card hover:bg-apple-blue/5 border border-black/5 dark:border-white/10 hover:border-apple-blue active:scale-95'}
-                                        `}
+                                        onClick={() => handleSizeSelect(size.value as ProductSize)}
+                                        className="relative group rounded-2xl py-6 flex flex-col items-center gap-1 transition-all apple-card hover:bg-apple-blue/5 border border-black/5 dark:border-white/10 hover:border-apple-blue active:scale-95"
                                     >
                                         <span className="text-3xl font-black text-apple-textMain dark:text-white">{size.label.replace(/[^0-9]/g, '')}</span>
                                         <span className="text-xs text-apple-textMuted">{size.rolls} Rolls</span>
-                                        {isDisabled && (
-                                            <div className="absolute top-2 right-2 flex items-center gap-1 bg-apple-red/10 text-apple-red text-[9px] px-1.5 py-0.5 rounded font-bold uppercase">
-                                                <span>✕ N/A</span>
-                                            </div>
-                                        )}
                                     </button>
                                 );
                             })}

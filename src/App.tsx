@@ -790,7 +790,7 @@ function App() {
         <ErrorBoundary>
             <Layout activePage={activePage} setActivePage={setActivePage} userRole={user?.role} user={user} onLogout={handleLogout}>
                 {renderContent()}
-                <AIAgentWidget />
+                <AIAgentWidget user={user} onNavigate={setActivePage} />
 
             </Layout >
         </ErrorBoundary>

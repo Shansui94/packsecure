@@ -1,6 +1,6 @@
 import { VercelRequest, VercelResponse } from '@vercel/node';
-import { applyAdminCors } from './lib/cors';
-import { getServiceRoleClient, requireStaffAuth, sendAuthError } from './lib/admin-auth';
+import { applyAdminCors } from './lib/cors.js';
+import { getServiceRoleClient, requireStaffAuth, sendAuthError } from './lib/admin-auth.js';
 
 const DRIVER_MANAGER_ROLES = ['Admin', 'SuperAdmin', 'Manager'] as const;
 
@@ -16,9 +16,8 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
         return;
     }
 
-    const supabaseAdmin = getServiceRoleClient();
-
     try {
+        const supabaseAdmin = getServiceRoleClient();
         const { uid } = req.body;
         if (!uid) return res.status(400).json({ error: 'Missing uid' });
 

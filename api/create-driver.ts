@@ -1,7 +1,7 @@
 import { VercelRequest, VercelResponse } from '@vercel/node';
-import { applyAdminCors } from './lib/cors';
-import { getServiceRoleClient, requireStaffAuth, sendAuthError } from './lib/admin-auth';
-import { normalizeFourDigitPin, pinToAuthPassword } from './lib/pin-auth';
+import { applyAdminCors } from './lib/cors.js';
+import { getServiceRoleClient, requireStaffAuth, sendAuthError } from './lib/admin-auth.js';
+import { normalizeFourDigitPin, pinToAuthPassword } from './lib/pin-auth.js';
 
 const DRIVER_MANAGER_ROLES = ['Admin', 'SuperAdmin', 'Manager'] as const;
 
@@ -17,9 +17,8 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
         return;
     }
 
-    const supabaseAdmin = getServiceRoleClient();
-
     try {
+        const supabaseAdmin = getServiceRoleClient();
         const { name, employeeId } = req.body;
 
         if (!name || !employeeId) {

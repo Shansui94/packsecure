@@ -2,19 +2,31 @@ import { VercelRequest, VercelResponse } from '@vercel/node';
 import { GoogleGenerativeAI } from '@google/generative-ai';
 
 const TRIP_PROMPT = `This image is a handwritten or printed delivery trip sheet (出货单), loading list, or order form.
+The sheet may contain multiple trip sections, often divided by horizontal lines or lists, each assigned to a different driver (e.g. "Sam Trip", "Tahir 1", "Tahir 2", "Mahadi 1", "Mahadi 2", "Ayan").
+
+IMPORTANT IMAGE ORIENTATION NOTE:
+- The image may be rotated (e.g., rotated 90 degrees left or right). Adjust your reading frame to correctly read the text horizontally or vertically as needed.
+
 Return ONE JSON object (not an array at the top level) with:
-- "tripDate": string YYYY-MM-DD if a sheet/order date is visible (e.g. 19/5/26 → 2026-05-19)
-- "deliveryDate": string YYYY-MM-DD if a delivery date is shown
-- "driverName": string if a driver name is written on the sheet
-- "notes": string for sheet-level remarks only
-- "trips": array of trip sections. Split by headings like "Trip Selangor", "Trip 1", "Trip 2", etc. Each trip object has:
-  - "label": string, the trip heading as written
-  - "destinations": string, comma-separated stops (customer codes, areas, addresses e.g. "6747 Old Bee Park, 0857 Profund")
-  - "tripCategory": string zone if inferable (e.g. SELANGOR, CENTRAL, NORTH, SOUTH, JOHOR)
-  - "tripDropCount": number, count of delivery stops in this trip
-  - "notes": string, trip-specific remarks (times, inv sent, etc.)
-  - "items": array of { "sku": string, "product": string, "quantity": number, "remark": string, "sourceLocation": string }
-    For items: "product" = product name as written (keep abbreviations: cbw, dl buff, mush, DL). "quantity" is a number only. Put units like "ctn", prices, times in "remark". "sku" only if a clear product code exists, else "".
+- "tripDate": string YYYY-MM-DD. If only month/day is written (e.g. "22/5" or "May 22"), assume the current year 2026 (so "2026-05-22").
+- "deliveryDate": string YYYY-MM-DD if a delivery date is shown.
+- "driverName": string, sheet-level driver if applicable.
+- "notes": string, sheet-level remarks.
+- "trips": array of trip sections. Each trip object has:
+  - "label": string, the trip heading or driver name section header as written (e.g., "Sam Trip", "Tahir 1").
+  - "driverName": string, the driver name extracted from the section header (e.g., "Sam", "Tahir", "Mahadi", "Ayan") or written nearby.
+  - "destinations": string, customer name(s), stop(s), or destination areas written for this trip (e.g. "Syamel", "Taiping", "KL"). Often written at the end of the item list or next to a slash (e.g., "/ Syamel").
+  - "tripCategory": string zone if inferable (e.g. SELANGOR, CENTRAL, NORTH, SOUTH, JOHOR).
+  - "tripDropCount": number, count of delivery stops in this trip (default to 1 if not specified).
+  - "notes": string, trip-specific remarks.
+  - "items": array of item objects:
+    { "sku": string, "product": string, "quantity": number, "remark": string, "sourceLocation": string }
+
+CRITICAL PARSING RULES FOR ITEMS:
+1. QUANTITY EQUATIONS: If the quantity is written as an equation (e.g., "10+5+2+20 = 37" or "10+5+2+20"), calculate or use the final result (e.g., 37) as the "quantity". Do not keep the equation in the quantity field.
+2. CHECKMARK DELIMITERS: A slash "/" or checkmark after a quantity is a delimiter/tick mark, NOT the digit "1". For example, "3/" means quantity 3, not 31; "1/" means quantity 1, not 11. Pay close attention to avoid appending "1" to quantities.
+3. QUANTITIES IN PRODUCT NAMES: If the line is written like "Hitam Half x 82 (B)" or "DL Full x 81 (Real)", extract the product name (e.g., "Hitam Half") and set "quantity" to the parsed number (e.g., 82 or 81). Do not include the quantity, the "x", or "+81" in the "product" name.
+4. SEMANTIC CORRECTNESS: Hand-written notes might have spelling errors (e.g., "Hitan Hald", "Mevah", "Lleur Tupe"). Clean them up and match them to the closest valid item name or SKU when a reference is provided.
 
 If the sheet has only ONE trip block, still return "trips" with exactly one element.
 Do not include markdown. Return raw JSON only.`;
@@ -47,10 +59,12 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
     }
 
     try {
-        const { imageBase64, type, mimeType: reqMime } = req.body as {
+        const { imageBase64, type, mimeType: reqMime, productsList, driversList } = req.body as {
             imageBase64?: string;
             type?: string;
             mimeType?: string;
+            productsList?: Array<{ sku: string; name: string }>;
+            driversList?: Array<{ uid: string; name: string }>;
         };
 
         if (!imageBase64) {
@@ -70,6 +84,16 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
         let prompt: string;
         if (type === 'trip') {
             prompt = TRIP_PROMPT;
+            if (productsList && Array.isArray(productsList) && productsList.length > 0) {
+                prompt += `\n\nReference Product List (SKU and Name):\n`;
+                prompt += productsList.map(p => `- SKU: ${p.sku} | Name: ${p.name}`).join('\n');
+                prompt += `\n\nPlease match the handwritten items to the closest product from the list above. If a match is found, use the exact "sku" and "product" name from the list.`;
+            }
+            if (driversList && Array.isArray(driversList) && driversList.length > 0) {
+                prompt += `\n\nReference Driver List:\n`;
+                prompt += driversList.map(d => `- Name: ${d.name}`).join('\n');
+                prompt += `\n\nPlease match the driver name for each trip/section to the closest driver name in the list above.`;
+            }
         } else {
             prompt = `Extract customer data from this image (e.g. invoice, delivery order, contact card).
         Return a STRICT JSON ARRAY of objects. 

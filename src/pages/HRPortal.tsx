@@ -3,8 +3,10 @@ import { supabase } from '../services/supabase';
 import {
     Users, Download, AlertCircle,
     Wallet, Plus, Edit2, Save, X, ToggleLeft, Trash2,
-    ToggleRight, Star, Award, MapPin, DollarSign, ChevronLeft, ChevronRight, ChevronDown, ChevronUp, Loader, Shield
+    ToggleRight, Star, Award, MapPin, DollarSign, ChevronLeft, ChevronRight, ChevronDown, ChevronUp, Loader, Shield, Check, RefreshCw
 } from 'lucide-react';
+import { getSalaryAdvances, updateSalaryAdvanceStatus } from '../services/apiV2';
+
 
 // ── TYPES ────────────────────────────────────────────────────
 interface Employee {
@@ -367,7 +369,8 @@ const EmployeeModal: React.FC<{
 
 // ── MAIN COMPONENT ────────────────────────────────────────────
 const HRPortal: React.FC<{ user?: any }> = ({ user }) => {
-    const [activeTab, setActiveTab] = useState<'personnel' | 'permissions' | 'payroll'>('personnel');
+    const [activeTab, setActiveTab] = useState<'personnel' | 'permissions' | 'payroll' | 'advances'>('personnel');
+
 
     // Personnel
     const [employees, setEmployees] = useState<Employee[]>([]);
@@ -537,8 +540,89 @@ const HRPortal: React.FC<{ user?: any }> = ({ user }) => {
         setNewZoneNotes('');
     };
 
+    // ── Salary Advances State & Functions ──────────────────────
+    const [salaryAdvances, setSalaryAdvances] = useState<any[]>([]);
+    const [loadingAdvances, setLoadingAdvances] = useState(false);
+    const [isRejectionModalOpen, setIsRejectionModalOpen] = useState(false);
+    const [selectedAdvanceId, setSelectedAdvanceId] = useState<string | null>(null);
+    const [rejectionReason, setRejectionReason] = useState('');
+
+    const fetchSalaryAdvances = useCallback(async () => {
+        setLoadingAdvances(true);
+        try {
+            const data = await getSalaryAdvances();
+            setSalaryAdvances(data);
+        } catch (err) {
+            console.error("Failed to fetch salary advances:", err);
+        } finally {
+            setLoadingAdvances(false);
+        }
+    }, []);
+
+    useEffect(() => {
+        if (activeTab === 'advances') {
+            fetchSalaryAdvances();
+        }
+    }, [activeTab, fetchSalaryAdvances]);
+
+    const handleApproveAdvance = async (id: string) => {
+        if (!window.confirm("Approve and mark this advance as PAID? (确认批准并打款？)")) return;
+        const success = await updateSalaryAdvanceStatus(id, 'Approved');
+        if (success) {
+            alert("✅ Advance approved and marked as PAID!");
+            fetchSalaryAdvances();
+        } else {
+            alert("❌ Failed to update status.");
+        }
+    };
+
+    const handleRejectAdvance = async () => {
+        if (!selectedAdvanceId || !rejectionReason.trim()) return;
+        const success = await updateSalaryAdvanceStatus(selectedAdvanceId, 'Rejected', rejectionReason.trim());
+        if (success) {
+            alert("❌ Advance request rejected.");
+            setIsRejectionModalOpen(false);
+            setSelectedAdvanceId(null);
+            setRejectionReason('');
+            fetchSalaryAdvances();
+        } else {
+            alert("❌ Failed to reject request.");
+        }
+    };
+
+    const handleExportAdvances = () => {
+        if (salaryAdvances.length === 0) {
+            alert("Tiada rekod untuk dieksport. / No records to export.");
+            return;
+        }
+
+        const headers = ["Driver Name", "Driver PIN", "Request Date", "Target Bank-In Date", "Amount (RM)", "Status", "Notes/Rejection Reason"];
+
+        const rows = salaryAdvances.map(adv => [
+            adv.employee?.name || 'Unknown User',
+            adv.employee?.employee_id || 'N/A',
+            new Date(adv.created_at).toLocaleDateString('en-GB'),
+            new Date(adv.bank_in_date).toLocaleDateString('en-GB'),
+            Number(adv.amount).toFixed(2),
+            adv.status,
+            adv.rejection_reason || adv.notes || ''
+        ]);
+
+        const csvContent = "data:text/csv;charset=utf-8,\uFEFF"
+            + [headers.join(","), ...rows.map(e => e.map(val => `"${val.replace(/"/g, '""')}"`).join(","))].join("\n");
+
+        const encodedUri = encodeURI(csvContent);
+        const link = document.createElement("a");
+        link.setAttribute("href", encodedUri);
+        link.setAttribute("download", `Salary_Advances_Export_${new Date().toISOString().split('T')[0]}.csv`);
+        document.body.appendChild(link);
+        link.click();
+        document.body.removeChild(link);
+    };
+
     // ── Payroll ──────────────────────────────────────────────
     const fetchPayroll = useCallback(async () => {
+
         setLoadingPayroll(true);
         const firstDay = `${payYear}-${String(payMonth).padStart(2, '0')}-01`;
         const lastDay = new Date(payYear, payMonth, 0).toISOString().split('T')[0];
@@ -573,6 +657,23 @@ const HRPortal: React.FC<{ user?: any }> = ({ user }) => {
         // Existing payroll records
         const { data: existing } = await supabase.from('payroll_records')
             .select('*').eq('month', payMonth).eq('year', payYear);
+
+        // Fetch approved advances for the month
+        const { data: approvedAdvances } = await supabase.from('salary_advances')
+            .select('employee_id, amount, bank_in_date')
+            .eq('status', 'Approved')
+            .gte('bank_in_date', firstDay).lte('bank_in_date', lastDay);
+
+        const advancesMap: Record<string, { total: number; details: string[] }> = {};
+        (approvedAdvances || []).forEach((adv: any) => {
+            const empId = adv.employee_id;
+            if (!advancesMap[empId]) {
+                advancesMap[empId] = { total: 0, details: [] };
+            }
+            const dateStr = new Date(adv.bank_in_date).toLocaleDateString('en-GB', { day: '2-digit', month: 'short' });
+            advancesMap[empId].total += Number(adv.amount);
+            advancesMap[empId].details.push(`RM${Number(adv.amount)} (${dateStr})`);
+        });
 
         // Build driver trip earnings map using origin+zone rates
         // tripEarningsMap[auth_user_id] = { totalEarnings, tripCount, tripDetails }
@@ -620,6 +721,8 @@ const HRPortal: React.FC<{ user?: any }> = ({ user }) => {
             const hoursWorked = hoursMap[emp.employee_id] || 0;
             const tripData = tripEarningsMap[emp.auth_user_id] || { total: 0, count: 0, breakdown: [] };
             const absentDays = leaveMap[emp.employee_id] || 0;
+            const advanceData = advancesMap[emp.auth_user_id] || { total: 0, details: [] };
+            const advanceDeduction = advanceData.total;
 
             if (emp.pay_type === 'hourly') {
                 gross = hoursWorked * (Number(emp.hourly_rate) || 0);
@@ -637,13 +740,20 @@ const HRPortal: React.FC<{ user?: any }> = ({ user }) => {
             const threshold = Number(emp.attendance_bonus_threshold) || 0;
             const earnedBonus = (Number(emp.attendance_bonus) > 0 && absentDays <= threshold);
             const bonusAmt = earnedBonus ? Number(emp.attendance_bonus) : 0;
-            const net = gross + bonusAmt;
+            const net = gross + bonusAmt - advanceDeduction;
+
+            let detailsWithDeductions = details;
+            if (advanceDeduction > 0) {
+                detailsWithDeductions += ` | Deduct Advance: -RM${advanceDeduction.toFixed(2)} (${advanceData.details.join(', ')})`;
+            }
 
             return {
-                emp, gross, details, hoursWorked,
+                emp, gross, details: detailsWithDeductions, hoursWorked,
                 tripCount: tripData.count, tripBreakdown: tripData.breakdown, absentDays,
                 bonusAmt, earnedBonus, net,
-                existing: existingMap[emp.employee_id] || null,
+                advanceDeduction,
+                deductionsDetail: advanceDeduction > 0 ? `Advances: ${advanceData.details.join(', ')}` : '',
+                existing: existingMap[emp.auth_user_id] || null,
             };
         });
 
@@ -651,18 +761,21 @@ const HRPortal: React.FC<{ user?: any }> = ({ user }) => {
         setLoadingPayroll(false);
     }, [payMonth, payYear]);
 
+
     useEffect(() => { if (activeTab === 'payroll') { fetchPayroll(); fetchDeliveryRates(); } }, [activeTab, fetchPayroll, fetchDeliveryRates]);
 
     const handleGeneratePayroll = async () => {
         if (!window.confirm(`Generate payroll for ${MONTH_NAMES[payMonth - 1]} ${payYear}?`)) return;
         setGeneratingPayroll(true);
         const records = payrollData.map(r => ({
-            employee_id: r.emp.employee_id,
+            employee_id: r.emp.auth_user_id, // Fix Bug: use auth_user_id (UUID) instead of employee_id (string PIN)
             month: payMonth, year: payYear,
             base_salary: r.gross,
             attendance_bonus: r.bonusAmt,
             net_salary: r.net,
-            leave_days_unpaid: 0, deduction: 0,
+            leave_days_unpaid: 0,
+            deduction: r.advanceDeduction || 0, // Populate deductions from advances
+            notes: r.deductionsDetail || null, // Deductions description
             generated_by: user?.uid || null,
         }));
         const { error } = await supabase.from('payroll_records')
@@ -671,6 +784,7 @@ const HRPortal: React.FC<{ user?: any }> = ({ user }) => {
         else { alert(`✅ Payroll saved for ${MONTH_NAMES[payMonth - 1]} ${payYear}`); fetchPayroll(); }
         setGeneratingPayroll(false);
     };
+
 
     const changeMonth = (d: number) => {
         let m = payMonth + d, y = payYear;
@@ -696,7 +810,9 @@ const HRPortal: React.FC<{ user?: any }> = ({ user }) => {
         { id: 'personnel', label: `👥 Personnel (${employees.length})` },
         { id: 'permissions', label: '🔐 Page Permissions' },
         { id: 'payroll', label: '💰 Payroll' },
+        { id: 'advances', label: '💸 Salary Advances' },
     ] as const;
+
 
     return (
         <div className="p-4 md:p-6 bg-[#07070a] min-h-screen text-white font-sans">
@@ -1029,7 +1145,160 @@ const HRPortal: React.FC<{ user?: any }> = ({ user }) => {
                 </div>
             )}
 
+            {/* ── SALARY ADVANCES ── */}
+            {activeTab === 'advances' && (
+                <div className="space-y-6 animate-in fade-in duration-200">
+                    <div className="bg-[#0d0d12] border border-white/5 rounded-2xl p-4 flex items-center justify-between">
+                        <div>
+                            <h2 className="text-base font-bold text-white uppercase tracking-wider">Driver Salary Advances</h2>
+                            <p className="text-xs text-slate-500 mt-1">Review pending requests and manage historic advance payouts.</p>
+                        </div>
+                        <div className="flex items-center gap-2">
+                            <button 
+                                onClick={handleExportAdvances}
+                                className="px-4 py-2 bg-emerald-600 hover:bg-emerald-500 text-white rounded-xl text-xs font-bold transition-all flex items-center gap-1.5 shadow-lg shadow-emerald-950/20"
+                            >
+                                <Download size={14} /> Export to Excel
+                            </button>
+                            <button 
+                                onClick={fetchSalaryAdvances}
+                                disabled={loadingAdvances}
+                                className="p-2.5 bg-white/5 hover:bg-white/10 rounded-xl text-blue-400 border border-white/5 active:scale-95 transition-all"
+                            >
+                                <RefreshCw size={14} className={loadingAdvances ? 'animate-spin' : ''} />
+                            </button>
+                        </div>
+                    </div>
+
+                    {loadingAdvances ? (
+                        <div className="flex justify-center py-20"><Loader className="animate-spin text-amber-500" size={28} /></div>
+                    ) : salaryAdvances.length === 0 ? (
+                        <div className="text-center py-20 text-gray-600 border border-dashed border-white/5 rounded-2xl">
+                            <DollarSign size={36} className="mx-auto mb-3 opacity-30" />
+                            <p>No salary advance requests found.</p>
+                        </div>
+                    ) : (
+                        <div className="overflow-x-auto rounded-2xl border border-white/5">
+                            <table className="w-full text-sm text-left">
+                                <thead>
+                                    <tr className="bg-white/[0.03] text-gray-500 text-[10px] uppercase tracking-widest border-b border-white/5">
+                                        <th className="px-4 py-3 font-bold">Driver (Name / PIN)</th>
+                                        <th className="px-4 py-3 font-bold">Request Date</th>
+                                        <th className="px-4 py-3 font-bold">Target Bank-In Date</th>
+                                        <th className="px-4 py-3 font-bold">Amount (RM)</th>
+                                        <th className="px-4 py-3 font-bold">Status</th>
+                                        <th className="px-4 py-3 font-bold">Notes / Rejection Reason</th>
+                                        <th className="px-4 py-3"></th>
+                                    </tr>
+                                </thead>
+                                <tbody className="divide-y divide-white/5">
+                                    {salaryAdvances.map(adv => (
+                                        <tr key={adv.id} className="hover:bg-white/[0.01] transition-colors">
+                                            <td className="px-4 py-4">
+                                                <div className="font-bold text-white text-sm">{adv.employee?.name || 'Unknown User'}</div>
+                                                <div className="text-[10px] text-gray-600 font-mono">PIN: {adv.employee?.employee_id || 'N/A'}</div>
+                                            </td>
+                                            <td className="px-4 py-4 text-xs text-gray-400">
+                                                {new Date(adv.created_at).toLocaleDateString('en-GB', { day: '2-digit', month: 'short', year: 'numeric' })}
+                                            </td>
+                                            <td className="px-4 py-4 text-xs font-bold text-zinc-300">
+                                                {new Date(adv.bank_in_date).toLocaleDateString('en-GB', { day: '2-digit', month: 'short', year: 'numeric' })}
+                                            </td>
+                                            <td className="px-4 py-4 font-mono font-bold text-white">
+                                                RM {Number(adv.amount).toFixed(2)}
+                                            </td>
+                                            <td className="px-4 py-4">
+                                                <span className={`text-[10px] font-black uppercase tracking-wider px-2.5 py-1 rounded-full border ${
+                                                    adv.status === 'Approved' ? 'border-green-500/20 bg-green-500/10 text-green-400' :
+                                                    adv.status === 'Rejected' ? 'border-red-500/20 bg-red-500/10 text-red-400' :
+                                                    'border-yellow-500/20 bg-yellow-500/10 text-yellow-500'
+                                                }`}>
+                                                    {adv.status === 'Approved' ? 'Approved / Paid' :
+                                                     adv.status === 'Rejected' ? 'Rejected' :
+                                                     'Pending'}
+                                                </span>
+                                            </td>
+                                            <td className="px-4 py-4 text-xs text-gray-500 max-w-[200px] truncate">
+                                                {adv.status === 'Rejected' && adv.rejection_reason ? (
+                                                    <span className="text-red-400 font-medium">❌ Reason: {adv.rejection_reason}</span>
+                                                ) : (
+                                                    adv.notes || '-'
+                                                )}
+                                            </td>
+                                            <td className="px-4 py-4 text-right">
+                                                {adv.status === 'Pending' && (
+                                                    <div className="flex justify-end gap-2">
+                                                        <button 
+                                                            onClick={() => handleApproveAdvance(adv.id)}
+                                                            className="px-3 py-1.5 bg-green-600/10 hover:bg-green-600/20 text-green-400 border border-green-500/20 rounded-lg text-xs font-bold transition-all flex items-center gap-1"
+                                                            title="Approve / Bank In"
+                                                        >
+                                                            <Check size={14} /> Approve
+                                                        </button>
+                                                        <button 
+                                                            onClick={() => { setSelectedAdvanceId(adv.id); setIsRejectionModalOpen(true); }}
+                                                            className="px-3 py-1.5 bg-red-600/10 hover:bg-red-600/20 text-red-400 border border-red-500/20 rounded-lg text-xs font-bold transition-all flex items-center gap-1"
+                                                            title="Reject"
+                                                        >
+                                                            <X size={14} /> Reject
+                                                        </button>
+                                                    </div>
+                                                )}
+                                            </td>
+                                        </tr>
+                                    ))}
+                                </tbody>
+                            </table>
+                        </div>
+                    )}
+                </div>
+            )}
+
+            {/* Rejection Reason Modal */}
+            {isRejectionModalOpen && (
+                <div className="fixed inset-0 z-[70] bg-black/80 backdrop-blur-sm flex items-center justify-center p-4 animate-in fade-in duration-200">
+                    <div className="bg-[#0d0d12] border border-red-500/30 rounded-3xl w-full max-w-md overflow-hidden shadow-2xl relative">
+                        <div className="p-6 flex flex-col gap-4">
+                            <button 
+                                onClick={() => { setIsRejectionModalOpen(false); setSelectedAdvanceId(null); setRejectionReason(''); }} 
+                                className="absolute top-4 right-4 p-2 hover:bg-white/10 text-zinc-400 hover:text-white rounded-xl transition-colors"
+                            >
+                                <X size={16} />
+                            </button>
+                            <h3 className="text-sm font-black text-red-500 uppercase tracking-widest mb-2 flex items-center gap-2">
+                                ❌ Reject Salary Advance Request
+                            </h3>
+                            <div>
+                                <label className="block text-[10px] text-zinc-500 font-bold uppercase tracking-widest mb-1.5">REJECTION REASON / 拒绝原因</label>
+                                <textarea
+                                    value={rejectionReason}
+                                    onChange={e => setRejectionReason(e.target.value)}
+                                    placeholder="Enter the reason why this advance request is rejected..."
+                                    className="w-full bg-black border border-white/10 rounded-xl px-4 py-3 text-sm text-white focus:outline-none focus:border-red-500 resize-none h-24 transition-colors"
+                                />
+                            </div>
+                            <div className="flex gap-3 justify-end mt-2 pt-4 border-t border-white/5">
+                                <button 
+                                    onClick={() => { setIsRejectionModalOpen(false); setSelectedAdvanceId(null); setRejectionReason(''); }} 
+                                    className="px-4 py-2 rounded-xl text-xs font-bold text-zinc-400 hover:text-white hover:bg-white/5 transition-colors"
+                                >
+                                    Cancel
+                                </button>
+                                <button 
+                                    onClick={handleRejectAdvance} 
+                                    disabled={!rejectionReason.trim()}
+                                    className="px-6 py-2 bg-red-600 hover:bg-red-500 disabled:opacity-50 text-white rounded-xl text-xs font-bold flex items-center justify-center gap-2 transition-colors shadow-lg shadow-red-500/20"
+                                >
+                                    Confirm Reject
+                                </button>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+            )}
+
             {/* Employee Edit Modal */}
+
             {editingEmp !== null && (
                 <EmployeeModal
                     emp={editingEmp === 'new' ? null : editingEmp}

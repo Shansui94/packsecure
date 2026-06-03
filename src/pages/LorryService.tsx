@@ -77,7 +77,7 @@ const LorryService: React.FC<LorryServiceProps> = ({ user }) => {
             if (error) throw error;
 
             setPlateNumber(plate); // Remember the selection
-            alert("✅ Service request submitted. Pending logistics approval.");
+            alert("✅ Permohonan servis berjaya dihantar. Menunggu kelulusan logistik. (Service request submitted. Pending logistics approval.)");
             fetchServiceHistory();
         } catch (err: any) {
             alert("Error: " + err.message);
@@ -94,8 +94,8 @@ const LorryService: React.FC<LorryServiceProps> = ({ user }) => {
                 <div className="fixed inset-0 bg-black/80 backdrop-blur-sm z-50 flex items-center justify-center p-4 animate-in fade-in duration-200">
                     <div className="bg-slate-900 border border-slate-800 rounded-3xl w-full max-w-sm max-h-[80vh] flex flex-col shadow-2xl overflow-hidden animate-in zoom-in-95 duration-300">
                         <div className="p-6 border-b border-slate-800">
-                            <h2 className="text-xl font-black text-white uppercase tracking-wider mb-1">Select Vehicle</h2>
-                            <p className="text-xs text-slate-500 font-bold uppercase tracking-widest">Which lorry needs service?</p>
+                            <h2 className="text-xl font-black text-white uppercase tracking-wider mb-1">Pilih Lori / Select Vehicle</h2>
+                            <p className="text-xs text-slate-500 font-bold uppercase tracking-widest">Lori mana yang perlu diservis? / Which lorry needs service?</p>
                         </div>
                         <div className="flex-1 overflow-y-auto p-4 space-y-2">
                             {availableLorries.map(lorry => (
@@ -110,9 +110,9 @@ const LorryService: React.FC<LorryServiceProps> = ({ user }) => {
                                     </div>
                                 </button>
                             ))}
-                            {availableLorries.length === 0 && (
+                             {availableLorries.length === 0 && (
                                 <div className="text-center py-8 text-slate-600 font-bold text-sm">
-                                    No lorries found.
+                                    Tiada lori ditemui. / No lorries found.
                                 </div>
                             )}
                         </div>
@@ -121,7 +121,7 @@ const LorryService: React.FC<LorryServiceProps> = ({ user }) => {
                                 onClick={() => setIsSelectionOpen(false)}
                                 className="w-full py-4 bg-slate-800 hover:bg-slate-700 text-slate-300 rounded-xl font-black uppercase tracking-widest text-xs transition-colors"
                             >
-                                Cancel
+                                Batal / Cancel
                             </button>
                         </div>
                     </div>
@@ -134,8 +134,8 @@ const LorryService: React.FC<LorryServiceProps> = ({ user }) => {
                     <Truck size={24} />
                 </div>
                 <div>
-                    <h1 className="text-2xl font-black text-white italic uppercase tracking-wider">Lorry Service</h1>
-                    <p className="text-xs text-slate-500 font-bold uppercase tracking-widest">Maintenance Control</p>
+                    <h1 className="text-2xl font-black text-white italic uppercase tracking-wider">SERVIS LORI / LORRY SERVICE</h1>
+                    <p className="text-xs text-slate-500 font-bold uppercase tracking-widest">Kawalan Penyelenggaraan / Maintenance Control</p>
                 </div>
             </div>
 
@@ -146,9 +146,9 @@ const LorryService: React.FC<LorryServiceProps> = ({ user }) => {
                 </div>
 
                 <div className="relative z-10 text-center">
-                    <p className="text-[10px] font-black text-slate-500 uppercase tracking-[0.3em] mb-4">Assigned Vehicle</p>
+                    <p className="text-[10px] font-black text-slate-500 uppercase tracking-[0.3em] mb-4">Lori Ditugaskan / Assigned Vehicle</p>
                     <h2 className="text-4xl font-black text-white mb-8 tracking-tighter">
-                        {plateNumber || 'SELECT VEHICLE'}
+                        {plateNumber || 'PILIH LORI / SELECT VEHICLE'}
                     </h2>
 
                     <button
@@ -156,14 +156,14 @@ const LorryService: React.FC<LorryServiceProps> = ({ user }) => {
                         disabled={submitting}
                         className="w-full py-6 bg-gradient-to-r from-amber-600 to-amber-500 hover:from-amber-500 hover:to-amber-400 text-black rounded-2xl font-black text-lg uppercase tracking-widest flex items-center justify-center gap-4 shadow-xl shadow-amber-900/20 active:scale-95 transition-all disabled:opacity-50"
                     >
-                        {submitting ? 'SENDING...' : (
+                        {submitting ? 'SEDANG DIHANTAR / SENDING...' : (
                             <>
                                 <Wrench size={24} />
-                                {plateNumber ? 'Request Service' : 'Select Vehicle'}
+                                {plateNumber ? 'Mohon Servis / Request Service' : 'Pilih Lori / Select Vehicle'}
                             </>
                         )}
                     </button>
-                    <p className="mt-4 text-[10px] text-slate-500 font-bold uppercase tracking-widest">Pending logistics approval</p>
+                    <p className="mt-4 text-[10px] text-slate-500 font-bold uppercase tracking-widest">Menunggu kelulusan logistik / Pending logistics approval</p>
                 </div>
             </div>
 
@@ -171,13 +171,13 @@ const LorryService: React.FC<LorryServiceProps> = ({ user }) => {
             <div className="space-y-4">
                 <div className="flex items-center gap-2 mb-2">
                     <History size={16} className="text-slate-500" />
-                    <h2 className="text-xs font-black text-slate-500 uppercase tracking-widest">Request History</h2>
+                    <h2 className="text-xs font-black text-slate-500 uppercase tracking-widest">SEJARAH PERMOHONAN / REQUEST HISTORY</h2>
                 </div>
 
                 {serviceHistory.length === 0 ? (
                     <div className="text-center py-12 bg-slate-900/50 rounded-3xl border border-slate-800 border-dashed">
                         <AlertCircle size={32} className="mx-auto mb-2 text-slate-700" />
-                        <p className="text-slate-500 text-sm font-bold">No history available</p>
+                        <p className="text-slate-500 text-sm font-bold">Tiada sejarah permohonan / No history available</p>
                     </div>
                 ) : (
                     serviceHistory.map((req, idx) => (
@@ -189,9 +189,9 @@ const LorryService: React.FC<LorryServiceProps> = ({ user }) => {
                                     {req.status === 'Scheduled' ? <Clock size={20} /> : <AlertCircle size={20} />}
                                 </div>
                                 <div>
-                                    <div className="text-white font-bold text-sm uppercase">Maintenance Request</div>
+                                    <div className="text-white font-bold text-sm uppercase">Permohonan Servis / Maintenance Request</div>
                                     <div className="text-[10px] text-slate-500 font-bold uppercase">
-                                        {req.scheduled_date ? `Scheduled for: ${new Date(req.scheduled_date).toLocaleDateString()}` : 'Date Pending'}
+                                        {req.scheduled_date ? `Dijadualkan pada: / Scheduled for: ${new Date(req.scheduled_date).toLocaleDateString()}` : 'Menunggu Tarikh / Date Pending'}
                                     </div>
                                 </div>
                             </div>
