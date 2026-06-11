@@ -46,6 +46,8 @@ const initRows = [
     { role_name: 'Admin', page_id: 'sop-center', allowed: true },
     { role_name: 'Admin', page_id: 'work-photos', allowed: true },
     { role_name: 'Admin', page_id: 'executive-reports', allowed: true },
+    { role_name: 'Admin', page_id: 'floor-plan', allowed: true },
+    { role_name: 'Admin', page_id: 'driver-leave', allowed: true },
     { role_name: 'Manager', page_id: 'profile', allowed: true },
     { role_name: 'Manager', page_id: 'construction', allowed: true },
     { role_name: 'Manager', page_id: 'factory-live-os', allowed: true },
@@ -83,6 +85,8 @@ const initRows = [
     { role_name: 'Manager', page_id: 'sop-center', allowed: true },
     { role_name: 'Manager', page_id: 'work-photos', allowed: true },
     { role_name: 'Manager', page_id: 'executive-reports', allowed: true },
+    { role_name: 'Manager', page_id: 'floor-plan', allowed: true },
+    { role_name: 'Manager', page_id: 'driver-leave', allowed: true },
     { role_name: 'Driver', page_id: 'delivery-driver', allowed: true },
     { role_name: 'Driver', page_id: 'delivery-history', allowed: true },
     { role_name: 'Driver', page_id: 'leave-calendar', allowed: true },
@@ -90,11 +94,21 @@ const initRows = [
     { role_name: 'Driver', page_id: 'profile', allowed: true },
     { role_name: 'Driver', page_id: 'personal-report', allowed: true },
     { role_name: 'Driver', page_id: 'activity-logs', allowed: true },
+    { role_name: 'Driver', page_id: 'sop-center', allowed: true },
+    { role_name: 'Driver', page_id: 'work-photos', allowed: true },
+    { role_name: 'Driver', page_id: 'notes', allowed: true },
+    { role_name: 'Driver', page_id: 'tasks', allowed: true },
+    { role_name: 'Driver', page_id: 'driver-leave', allowed: true },
     { role_name: 'Operator', page_id: 'scanner', allowed: true },
     { role_name: 'Operator', page_id: 'leave-calendar', allowed: true },
     { role_name: 'Operator', page_id: 'profile', allowed: true },
     { role_name: 'Operator', page_id: 'personal-report', allowed: true },
     { role_name: 'Operator', page_id: 'activity-logs', allowed: true },
+    { role_name: 'Operator', page_id: 'sop-center', allowed: true },
+    { role_name: 'Operator', page_id: 'work-photos', allowed: true },
+    { role_name: 'Operator', page_id: 'notes', allowed: true },
+    { role_name: 'Operator', page_id: 'tasks', allowed: true },
+    { role_name: 'Operator', page_id: 'order-summary', allowed: true },
     { role_name: 'Device', page_id: 'scanner', allowed: true },
     { role_name: 'HR', page_id: 'profile', allowed: true },
     { role_name: 'HR', page_id: 'hr', allowed: true },
@@ -102,12 +116,15 @@ const initRows = [
     { role_name: 'HR', page_id: 'notes', allowed: true },
     { role_name: 'HR', page_id: 'tasks', allowed: true },
     { role_name: 'HR', page_id: 'personal-report', allowed: true },
-    { role_name: 'HR', page_id: 'activity-logs', allowed: true }
+    { role_name: 'HR', page_id: 'activity-logs', allowed: true },
+    { role_name: 'HR', page_id: 'sop-center', allowed: true },
+    { role_name: 'HR', page_id: 'work-photos', allowed: true },
+    { role_name: 'HR', page_id: 'driver-leave', allowed: true }
 ];
 
 async function run() {
     console.log("Emptying old roles");
-    const ALL_ROLES = ['SuperAdmin', 'Admin', 'Manager', 'HR', 'Operator', 'Driver'];
+    const ALL_ROLES = ['SuperAdmin', 'Admin', 'Manager', 'HR', 'Operator', 'Driver', 'Device'];
     await supabase.from('role_permissions').delete().in('role_name', ALL_ROLES);
 
     console.log("Inserting init roles");

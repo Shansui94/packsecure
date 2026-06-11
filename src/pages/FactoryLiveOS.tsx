@@ -1,8 +1,8 @@
 import { useEffect, useState, useCallback } from 'react';
 import { supabase } from '../services/supabase';
 import {
-    Activity, Cpu, Zap, AlertTriangle, X, Box, Wifi, WifiOff, ChevronRight, RefreshCw,
-    Truck, Package, BarChart3, ArrowUpDown, FileBarChart, ClipboardList, TrendingDown,
+    Activity, Cpu, Zap, AlertTriangle, X, Wifi, WifiOff, ChevronRight, RefreshCw,
+    Truck, Package, BarChart3, ArrowUpDown, FileBarChart,
     Plus, Calendar, Check, Clock, Play, Trash2
 } from 'lucide-react';
 

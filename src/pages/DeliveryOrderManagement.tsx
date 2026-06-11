@@ -2,11 +2,12 @@ import React, { useState, useEffect, useRef } from 'react';
 import { DragDropContext, Droppable, Draggable, DropResult } from '@hello-pangea/dnd';
 import { supabase } from '../services/supabase';
 import { getV2Items } from '../services/apiV2';
-import { determineState, findBestFactory } from '../utils/logistics';
+import { determineState, findBestFactory, calculateLoad } from '../utils/logistics';
+import { generateDraftTripsWithDrivers, DraftTrip } from '../utils/autoRouting';
 import {
     Plus, Search, Calendar, FileText, X, Truck,
     User as UserIcon, Box, Zap, Trash2, Scissors, AlertTriangle, MapPin, Wrench, LayoutGrid, List, ArrowUp, ArrowDown,
-    CheckCircle, XCircle, Camera, Sparkles, ImagePlus
+    CheckCircle, XCircle, Camera, Sparkles, ImagePlus, Download
 } from 'lucide-react';
 import { WAREHOUSES } from '../data/factoryData';
 import {
@@ -16,6 +17,7 @@ import {
 } from '../types';
 import { V2Item } from '../types/v2';
 import { compressImage, dataUrlToBase64Payload } from '../utils/imageCompress';
+import * as XLSX from 'xlsx';
 
 type ScannedTripDraft = {
     label: string;
@@ -25,6 +27,7 @@ type ScannedTripDraft = {
     notes: string;
     items: SalesOrder['items'];
     driverId?: string;
+    customer?: string;
 };
 
 type ScanSheetReview = {
@@ -446,8 +449,13 @@ const DeliveryOrderManagement: React.FC = () => {
     const [deliveryDateFilter, setDeliveryDateFilter] = useState<DeliveryDateFilter>('all');
     const [deliveryMonthPick, setDeliveryMonthPick] = useState('');
     const [statusFilter, setStatusFilter] = useState<string>('All');
-    const [viewMode, setViewMode] = useState<'kanban' | 'table'>('kanban');
+    const [viewMode, setViewMode] = useState<'kanban' | 'table' | 'dispatch'>('kanban');
     const [sortConfig, setSortConfig] = useState<{ key: string, dir: 'asc'|'desc' } | null>(null);
+
+    // Dispatch Planner States
+    const [selectedOrderIds, setSelectedOrderIds] = useState<string[]>([]);
+    const [autoDispatchDrafts, setAutoDispatchDrafts] = useState<DraftTrip[] | null>(null);
+    const [isAutoDispatchModalOpen, setIsAutoDispatchModalOpen] = useState(false);
 
     // Location Split State
     const [activeLocation, setActiveLocation] = useState<string>(() => localStorage.getItem('tripActiveLocation') || 'Taiping');
@@ -457,12 +465,15 @@ const DeliveryOrderManagement: React.FC = () => {
         const origin = activeLocation.toUpperCase();
         setTripOrigin(origin);
         setCurrentItemLoc(origin === 'NILAI' ? 'Nilai' : 'SPD');
+        setSelectedOrderIds([]); // Clear selection when location changes
     }, [activeLocation]);
 
 
 
     const [isTripPhotoScanning, setIsTripPhotoScanning] = useState(false);
     const tripPhotoInputRef = useRef<HTMLInputElement>(null);
+    const [isTripExcelImporting, setIsTripExcelImporting] = useState(false);
+    const tripExcelInputRef = useRef<HTMLInputElement>(null);
     const [isScanReviewOpen, setIsScanReviewOpen] = useState(false);
     const [scanReview, setScanReview] = useState<ScanSheetReview | null>(null);
     const [isBatchCreating, setIsBatchCreating] = useState(false);
@@ -511,10 +522,7 @@ const DeliveryOrderManagement: React.FC = () => {
 
 
     // AI Autocomplete State
-    // AI Autocomplete State (Unused)
-    // const [customerDB, setCustomerDB] = useState<any[]>([]);
-    // const [filteredCustomers, setFilteredCustomers] = useState<any[]>([]);
-    // const [showSuggestions, setShowSuggestions] = useState(false);
+    const [customerDB, setCustomerDB] = useState<any[]>([]);
 
     // Hybrid Item Entry State (Unused)
     // const [entryMode, setEntryMode] = useState<'search' | 'manual'>('search');
@@ -546,14 +554,15 @@ const DeliveryOrderManagement: React.FC = () => {
                 setLorryServices(filteredServices);
             }
 
-            const [usersRes, ordersRes, itemsRes, leavesRes, lorriesRes, servicesRes, ratesRes] = await Promise.all([
+            const [usersRes, ordersRes, itemsRes, leavesRes, lorriesRes, servicesRes, ratesRes, customersRes] = await Promise.all([
                 supabase.from('users_public').select('*'),
                 supabase.from('sales_orders').select('*').order('trip_sequence', { ascending: true }).order('created_at', { ascending: false }),
                 getV2Items(),
                 supabase.from('employee_leave').select('*'),
                 supabase.from('lorries').select('*'),
                 supabase.from('lorry_service_requests').select('*').eq('status', 'Scheduled'),
-                supabase.from('delivery_rates').select('*').order('location_name')
+                supabase.from('delivery_rates').select('*').order('location_name'),
+                supabase.from('sys_customers').select('*').order('name')
             ]);
 
             // ... (rest of existing logic)
@@ -572,6 +581,7 @@ const DeliveryOrderManagement: React.FC = () => {
 
             if (servicesRes.data) setScheduledServices(servicesRes.data);
             if (itemsRes) setV2Items(itemsRes);
+            if (customersRes?.data) setCustomerDB(customersRes.data);
             if (lorriesRes.data) {
                 const mappedLorries: Lorry[] = lorriesRes.data.map(l => ({
                     id: l.id,
@@ -619,7 +629,11 @@ const DeliveryOrderManagement: React.FC = () => {
                     tripSequence: o.trip_sequence || 0,
                     trip_origin: o.trip_origin,
                     trip_drop_count: o.trip_drop_count,
-                    proof_of_load_url: o.proof_of_load_url
+                    proof_of_load_url: o.proof_of_load_url,
+                    pod_photo_url: o.pod_photo_url,
+                    pod_signature_url: o.pod_signature_url,
+                    pod_signed_by: o.pod_signed_by,
+                    pod_timestamp: o.pod_timestamp
                 }));
                 setOrders(mappedOrders);
             }
@@ -766,18 +780,44 @@ const DeliveryOrderManagement: React.FC = () => {
             deliveryMonthPick || undefined
         );
 
-        let matchesLocation = false;
-        if (o.driverId) {
-            const driver = drivers.find(d => d.uid === o.driverId);
-            const driverLoc = driver?.base_location || 'Taiping';
-            matchesLocation = driverLoc.toLowerCase() === activeLocation.toLowerCase();
-        } else {
-            const originLoc = o.trip_origin || 'TAIPING';
-            matchesLocation = originLoc.toUpperCase() === activeLocation.toUpperCase();
-        }
+        const originLoc = o.trip_origin || 'TAIPING';
+        const matchesLocation = originLoc.toUpperCase() === activeLocation.toUpperCase();
 
         return matchesStatus && matchesSearch && matchesDeliveryDate && matchesLocation;
     });
+
+    const activeDriversForLanes = React.useMemo(() => {
+        // 1. Base drivers for the current active location
+        const baseDrivers = drivers.filter(
+            d => (d.base_location || 'Taiping').toLowerCase() === activeLocation.toLowerCase()
+        );
+
+        // 2. Identify all driver IDs assigned to currently filtered orders
+        const assignedDriverIds = new Set(
+            filteredOrders
+                .map(o => o.driverId)
+                .filter((id): id is string => Boolean(id))
+        );
+
+        // 3. Find any drivers from other locations who are assigned to filtered orders
+        const additionalDrivers = drivers.filter(
+            d => assignedDriverIds.has(d.uid) && 
+                 (d.base_location || 'Taiping').toLowerCase() !== activeLocation.toLowerCase()
+        );
+
+        // 4. Handle any driver IDs assigned but not present in the driver list (unregistered/missing role)
+        const knownDriverIds = new Set(drivers.map(d => d.uid));
+        const unknownDriverIds = Array.from(assignedDriverIds).filter(id => !knownDriverIds.has(id));
+        const unknownDrivers: User[] = unknownDriverIds.map(id => ({
+            uid: id,
+            name: `Driver (ID: ${id.substring(0, 6)})`,
+            email: '',
+            role: 'Driver',
+            base_location: activeLocation
+        } as any));
+
+        return [...baseDrivers, ...additionalDrivers, ...unknownDrivers];
+    }, [drivers, filteredOrders, activeLocation]);
 
     const hasActiveListFilters =
         Boolean(searchTerm.trim()) ||
@@ -1062,20 +1102,20 @@ const DeliveryOrderManagement: React.FC = () => {
         return matchV2ItemByName(product) || matchV2ItemByName(sku) || matchV2ItemBySku(sku);
     };
 
-    const mergeTripLineItems = (existing: SalesOrder['items'], incoming: SalesOrder['items']) => {
-        const merged = [...existing];
-        for (const item of incoming) {
-            const idx = merged.findIndex(
-                m => m.sku === item.sku && (m.sourceLocation || '') === (item.sourceLocation || '')
-            );
-            if (idx >= 0) {
-                merged[idx] = { ...merged[idx], quantity: merged[idx].quantity + item.quantity };
-            } else {
-                merged.push(item);
-            }
-        }
-        return merged;
-    };
+    // const mergeTripLineItems = (existing: SalesOrder['items'], incoming: SalesOrder['items']) => {
+    //     const merged = [...existing];
+    //     for (const item of incoming) {
+    //         const idx = merged.findIndex(
+    //             m => m.sku === item.sku && (m.sourceLocation || '') === (item.sourceLocation || '')
+    //         );
+    //         if (idx >= 0) {
+    //             merged[idx] = { ...merged[idx], quantity: merged[idx].quantity + item.quantity };
+    //         } else {
+    //             merged.push(item);
+    //         }
+    //     }
+    //     return merged;
+    // };
 
     const mapVisionRowsToItems = (rawItems: unknown[], defaultLoc: string): SalesOrder['items'] => {
         if (!Array.isArray(rawItems)) return [];
@@ -1214,6 +1254,214 @@ const DeliveryOrderManagement: React.FC = () => {
         }
     };
 
+    const handleTripExcelImport = async (e: React.ChangeEvent<HTMLInputElement>) => {
+        const file = e.target.files?.[0];
+        e.target.value = '';
+        if (!file) return;
+
+        setIsTripExcelImporting(true);
+        setToast(null);
+
+        try {
+            const data = await file.arrayBuffer();
+            const workbook = XLSX.read(data, { type: 'array' });
+            const sheetName = workbook.SheetNames[0];
+            const worksheet = workbook.Sheets[sheetName];
+            const rawRows = XLSX.utils.sheet_to_json(worksheet);
+
+            if (!rawRows || rawRows.length === 0) {
+                throw new Error('Excel sheet is empty.');
+            }
+
+            const defaultLoc = tripOrigin === 'NILAI' ? 'Nilai' : 'SPD';
+
+            // Helper to match column headers dynamically (case-insensitive, ignores spaces and punctuation)
+            const findValue = (row: any, keys: string[]) => {
+                for (const key of keys) {
+                    const foundKey = Object.keys(row).find(
+                        k => k.toLowerCase().replace(/[\s\-_\/]/g, '') === key.toLowerCase().replace(/[\s\-_\/]/g, '')
+                    );
+                    if (foundKey !== undefined) return row[foundKey];
+                }
+                return undefined;
+            };
+
+            const findDriverIdByName = (name?: string): string => {
+                if (!name?.trim()) return '';
+                const n = name.trim().toLowerCase();
+                const matched = drivers.find(d =>
+                    (d.name || '').toLowerCase() === n ||
+                    (d.name || '').toLowerCase().includes(n) ||
+                    n.includes((d.name || '').toLowerCase())
+                );
+                return matched?.uid || '';
+            };
+
+            // Group rows by trip key
+            const groups: Record<string, {
+                tripLabel: string;
+                driverName: string;
+                tripDate: string;
+                deliveryDate: string;
+                customerName: string;
+                destinations: string;
+                tripCategory: string;
+                tripDropCount: number;
+                notes: string;
+                items: SalesOrder['items'];
+            }> = {};
+
+            // Parse dates: Handle Excel serial dates or standard strings
+            const parseExcelDate = (val: any): string => {
+                if (!val) return '';
+                if (typeof val === 'number') {
+                    // Excel serial date number
+                    const date = new Date(Math.round((val - 25569) * 86400 * 1000));
+                    return date.toISOString().slice(0, 10);
+                }
+                // String date parsing
+                const str = String(val).trim();
+                if (/^\d{4}-\d{2}-\d{2}/.test(str)) {
+                    return str.slice(0, 10);
+                }
+                const parsed = Date.parse(str);
+                if (!isNaN(parsed)) {
+                    return new Date(parsed).toISOString().slice(0, 10);
+                }
+                return str;
+            };
+
+            for (const row of rawRows) {
+                if (!row || typeof row !== 'object') continue;
+
+                // Extract fields
+                const rawTripDate = findValue(row, ['tripdate', 'date', 'orderdate', 'triporderdate', '行程日期', '日期']);
+                const rawDeliveryDate = findValue(row, ['deliverydate', 'deadline', 'duedate', 'targetdate', '送货日期', '交期', '截止日期']);
+                const driverName = String(findValue(row, ['driver', 'drivername', 'assigneddriver', 'staff', 'driverid', '司机', '司机姓名']) || '').trim();
+                const tripLabel = String(findValue(row, ['triplabel', 'tripname', 'label', 'trip', 'tripno', 'tripnumber', '行程', '行程标签', '趟次', '趟']) || '').trim();
+                const customerName = String(findValue(row, ['customer', 'customername', 'client', 'clientname', 'company', 'companyname', '客户', '客户名称', '公司']) || '').trim();
+                const destinations = String(findValue(row, ['destinations', 'destination', 'address', 'deliveryaddress', 'place', 'places', '目的地', '送货地址', '地址']) || '').trim();
+                const tripCategory = String(findValue(row, ['tripcategory', 'category', 'zone', 'ratezone', 'destinationzone', '区域', '分类']) || '').trim();
+                const tripDropCountVal = findValue(row, ['tripdropcount', 'dropcount', 'drops', 'placescount', 'drop', '落点', '卸货点数', '落点数']);
+                const notes = String(findValue(row, ['notes', 'note', 'remark', 'remarks', 'comment', 'comments', 'sheetnotes', '备注']) || '').trim();
+
+                const sku = findValue(row, ['sku', 'productsku', 'itemsku', 'code', 'itemcode', 'productcode', '产品编码', '商品编码', '编码']);
+                const product = findValue(row, ['product', 'productname', 'item', 'itemname', 'description', 'name', '产品名称', '商品名称', '品名']);
+                const quantity = Number(findValue(row, ['quantity', 'qty', 'amount', 'pcs', 'rolls', 'count', '数量', '件数'])) || 1;
+                const itemLoc = findValue(row, ['sourcelocation', 'location', 'factory', 'hub', 'origin', 'warehouse', '发货仓库', '出货仓库', '仓库']);
+
+                // If this row has no items and no destinations, skip it
+                if (!sku && !product && !destinations) continue;
+
+                const tripDate = parseExcelDate(rawTripDate) || newOrderDate;
+                const deliveryDate = parseExcelDate(rawDeliveryDate) || newOrderDeliveryDate;
+                const tripDropCount = Number(tripDropCountVal) || 1;
+
+                // Generate grouping key
+                const groupKey = [
+                    tripLabel,
+                    driverName,
+                    tripDate,
+                    customerName,
+                    destinations
+                ].filter(Boolean).join('|') || `trip-${Math.random()}`;
+
+                if (!groups[groupKey]) {
+                    groups[groupKey] = {
+                        tripLabel,
+                        driverName,
+                        tripDate,
+                        deliveryDate,
+                        customerName,
+                        destinations,
+                        tripCategory,
+                        tripDropCount,
+                        notes,
+                        items: []
+                    };
+                }
+
+                // If there's an item in this row, parse and add it
+                if (sku || product) {
+                    const v2 = matchV2ItemFromScan(
+                        sku != null ? String(sku) : undefined,
+                        product != null ? String(product) : undefined
+                    );
+
+                    groups[groupKey].items.push({
+                        product: v2?.name || String(product || sku || 'Unknown'),
+                        sku: v2?.sku || String(sku || 'UNKNOWN'),
+                        quantity,
+                        remark: notes,
+                        sourceLocation: itemLoc ? String(itemLoc) : defaultLoc,
+                        packaging: (v2?.uom || 'Unit') as SalesOrder['items'][0]['packaging'],
+                    });
+                }
+            }
+
+            // Map groups to ScannedTripDraft[]
+            const trips: ScannedTripDraft[] = Object.values(groups).map((g, i) => {
+                const matchedDriverId = findDriverIdByName(g.driverName);
+                return {
+                    label: g.tripLabel || `Trip ${i + 1}`,
+                    destinations: g.destinations,
+                    tripCategory: g.tripCategory.toUpperCase(),
+                    tripDropCount: g.tripDropCount,
+                    notes: g.notes,
+                    items: g.items,
+                    driverId: matchedDriverId || undefined,
+                    customer: g.customerName || undefined,
+                };
+            }).filter(t => t.destinations || t.items.length > 0);
+
+            if (trips.length === 0) {
+                throw new Error('No valid trips or items could be parsed from the Excel file.');
+            }
+
+            const firstG = Object.values(groups)[0];
+            const overallTripDate = firstG?.tripDate || newOrderDate;
+            const overallDeliveryDate = firstG?.deliveryDate || newOrderDeliveryDate;
+            const overallDriverId = findDriverIdByName(firstG?.driverName) || selectedDriverId;
+
+            setScanReview({
+                tripDate: overallTripDate,
+                deliveryDate: overallDeliveryDate,
+                driverId: overallDriverId,
+                sheetNotes: 'Excel Import',
+                trips,
+            });
+
+            setIsScanReviewOpen(true);
+            setToast({
+                type: 'success',
+                message: `Imported ${trips.length} trip(s) from Excel. Review and confirm.`,
+            });
+        } catch (err: unknown) {
+            const msg = err instanceof Error ? err.message : 'Excel import failed';
+            console.error(err);
+            setToast({ type: 'error', message: msg });
+        } finally {
+            setIsTripExcelImporting(false);
+        }
+    };
+
+    const handleDownloadTemplate = () => {
+        // Headers with translations/descriptions to guide users
+        const headers = [
+            ['Trip Date / 行程日期', 'Delivery Date / 送货日期', 'Driver Name / 司机姓名', 'Trip Label / 行程标签', 'Customer Name / 客户名称', 'Destinations / 送货目的地', 'Trip Category / 区域分类', 'Trip Drop Count / 卸货点数', 'Notes / 行程备注', 'SKU / 产品编码', 'Product Name / 产品名称', 'Quantity / 数量', 'Source Location / 发货仓库']
+        ];
+        
+        // Sample data row to guide users
+        const sampleData = [
+            ['2026-06-03', '2026-06-04', 'Kha', 'Trip A', 'General Customer', 'Kuala Lumpur', 'KL', '1', 'Example trip note', 'SKU-001', 'Sample roll product', '10', 'SPD']
+        ];
+        
+        const ws = XLSX.utils.aoa_to_sheet([...headers, ...sampleData]);
+        const wb = XLSX.utils.book_new();
+        XLSX.utils.book_append_sheet(wb, ws, 'Trip Template');
+        XLSX.writeFile(wb, 'Trip_Import_Template.xlsx');
+    };
+
     const closeScanReview = () => {
         setIsScanReviewOpen(false);
         setScanReview(null);
@@ -1236,6 +1484,9 @@ const DeliveryOrderManagement: React.FC = () => {
         const t = scanReview.trips[0];
         setNewOrderDate(scanReview.tripDate);
         setNewOrderDeliveryDate(scanReview.deliveryDate);
+        if (t.customer) {
+            setOrderCustomer(t.customer);
+        }
         if (t.driverId) {
             setSelectedDriverId(t.driverId);
         } else if (scanReview.driverId) {
@@ -1292,11 +1543,20 @@ const DeliveryOrderManagement: React.FC = () => {
         orderDate: string;
         deliveryDate: string;
         driverId: string;
+        customer?: string;
     }) => {
-        const finalCustomer = orderCustomer.trim() || 'General Customer';
+        const finalCustomer = draft.customer?.trim() || orderCustomer.trim() || 'General Customer';
         const doNumber = await generateDoNumber(draft.driverId, draft.orderDate);
         const zone = draft.tripCategory || '';
         const bestFactory = findBestFactory(zone, draft.items, stockMap);
+
+        let finalFactoryId = bestFactory.id;
+        if (draft.items && draft.items.length > 0) {
+            const explicitLoc = draft.items.find(item => item.sourceLocation)?.sourceLocation;
+            if (explicitLoc) {
+                finalFactoryId = explicitLoc;
+            }
+        }
 
         if (draft.tripCategory) {
             const categoryExists = deliveryRates.some(
@@ -1325,7 +1585,7 @@ const DeliveryOrderManagement: React.FC = () => {
             zone: draft.tripCategory,
             trip_origin: tripOrigin,
             trip_drop_count: draft.tripDropCount,
-            factory_id: bestFactory.id,
+            factory_id: finalFactoryId,
             driver_id: draft.driverId || null,
             items: draft.items,
             order_date: draft.orderDate,
@@ -1371,6 +1631,7 @@ const DeliveryOrderManagement: React.FC = () => {
                     orderDate: scanReview.tripDate,
                     deliveryDate: scanReview.deliveryDate,
                     driverId: t.driverId || scanReview.driverId,
+                    customer: t.customer,
                 });
                 created++;
             }
@@ -1386,6 +1647,196 @@ const DeliveryOrderManagement: React.FC = () => {
             setToast({ type: 'error', message: msg });
         } finally {
             setIsBatchCreating(false);
+        }
+    };
+
+    // --- DISPATCH PLANNER HANDLERS ---
+    const handleBatchAssign = async (driverId: string) => {
+        if (selectedOrderIds.length === 0) return;
+        if (!driverId) return;
+
+        // Check availability
+        for (const orderId of selectedOrderIds) {
+            const order = orders.find(o => o.id === orderId);
+            if (order && !checkDriverAvailability(driverId, order.deadline)) {
+                return;
+            }
+        }
+
+        try {
+            // Optimistic Update
+            setOrders(prev => prev.map(o => {
+                if (selectedOrderIds.includes(o.id)) {
+                    return { ...o, driverId: driverId, tripSequence: 999 };
+                }
+                return o;
+            }));
+
+            // Clear selection
+            setSelectedOrderIds([]);
+
+            // Server Update
+            const updates = selectedOrderIds.map(orderId =>
+                supabase.from('sales_orders').update({ driver_id: driverId, trip_sequence: 999 }).eq('id', orderId)
+            );
+            await Promise.all(updates);
+            await fetchData();
+            setToast({ type: 'success', message: '批量指派成功 (Batch assign success)' });
+        } catch (err) {
+            console.error("Failed to batch assign:", err);
+            setToast({ type: 'error', message: '批量指派失败 (Batch assign failed)' });
+            fetchData();
+        }
+    };
+
+    const handleMoveOrderSequence = async (orderId: string, direction: 'up' | 'down') => {
+        const orderToMove = orders.find(o => o.id === orderId);
+        if (!orderToMove || !orderToMove.driverId) return;
+
+        const driverId = orderToMove.driverId;
+        const driverOrders = filteredOrders
+            .filter(o => o.driverId === driverId)
+            .sort((a, b) => (a.tripSequence || 0) - (b.tripSequence || 0));
+
+        const idx = driverOrders.findIndex(o => o.id === orderId);
+        if (idx === -1) return;
+
+        if (direction === 'up' && idx === 0) return;
+        if (direction === 'down' && idx === driverOrders.length - 1) return;
+
+        const swapIdx = direction === 'up' ? idx - 1 : idx + 1;
+        const temp = driverOrders[idx];
+        driverOrders[idx] = driverOrders[swapIdx];
+        driverOrders[swapIdx] = temp;
+
+        const sequenceMap = new Map<string, number>();
+        driverOrders.forEach((o, index) => {
+            sequenceMap.set(o.id, index + 1);
+        });
+
+        setOrders(prev => prev.map(o => {
+            if (sequenceMap.has(o.id)) {
+                return { ...o, tripSequence: sequenceMap.get(o.id) };
+            }
+            return o;
+        }));
+
+        try {
+            const updates = driverOrders.map((o, index) =>
+                supabase.from('sales_orders').update({ trip_sequence: index + 1 }).eq('id', o.id)
+            );
+            await Promise.all(updates);
+            await fetchData();
+        } catch (err) {
+            console.error("Resequence failed:", err);
+            fetchData();
+        }
+    };
+
+    const handleUnassignOrder = async (orderId: string) => {
+        const order = orders.find(o => o.id === orderId);
+        if (!order) return;
+        const driverId = order.driverId;
+
+        try {
+            setOrders(prev => prev.map(o => {
+                if (o.id === orderId) {
+                    return { ...o, driverId: undefined, tripSequence: undefined };
+                }
+                return o;
+            }));
+
+            const { error } = await supabase.from('sales_orders').update({ driver_id: null, trip_sequence: null }).eq('id', orderId);
+            if (error) throw error;
+
+            if (driverId) {
+                const remainingOrders = filteredOrders
+                    .filter(o => o.driverId === driverId && o.id !== orderId)
+                    .sort((a, b) => (a.tripSequence || 0) - (b.tripSequence || 0));
+
+                const updates = remainingOrders.map((o, index) =>
+                    supabase.from('sales_orders').update({ trip_sequence: index + 1 }).eq('id', o.id)
+                );
+                await Promise.all(updates);
+            }
+
+            await fetchData();
+            setToast({ type: 'success', message: '已取消分配 (Order unassigned)' });
+        } catch (err) {
+            console.error("Unassign failed:", err);
+            setToast({ type: 'error', message: '取消分配失败 (Unassign failed)' });
+            fetchData();
+        }
+    };
+
+    const handleTriggerAutoDispatch = () => {
+        const unassigned = filteredOrders.filter(o => !o.driverId && (o.trip_origin || 'TAIPING').toUpperCase() === activeLocation.toUpperCase());
+        const activeDrivers = drivers.filter(d => (d.base_location || 'Taiping').toLowerCase() === activeLocation.toLowerCase());
+
+        if (unassigned.length === 0) {
+            alert("没有未分配的订单可以进行智能排单。(No unassigned orders for auto-dispatch.)");
+            return;
+        }
+        if (activeDrivers.length === 0) {
+            alert("当前仓库没有可用的司机。(No available drivers for active warehouse.)");
+            return;
+        }
+
+        const drafts = generateDraftTripsWithDrivers(unassigned, activeDrivers);
+        setAutoDispatchDrafts(drafts);
+        setIsAutoDispatchModalOpen(true);
+    };
+
+    const handleUpdateDraftTripDriver = (tripId: string, driverId: string) => {
+        if (!autoDispatchDrafts) return;
+        const driver = drivers.find(d => d.uid === driverId);
+        setAutoDispatchDrafts(prev => {
+            if (!prev) return null;
+            return prev.map(t => {
+                if (t.id === tripId) {
+                    return {
+                        ...t,
+                        recommendedDriverId: driverId || null,
+                        recommendedDriverName: driver?.name || '未指派'
+                    };
+                }
+                return t;
+            });
+        });
+    };
+
+    const handleApplyAutoDispatch = async () => {
+        if (!autoDispatchDrafts) return;
+        setIsSubmitting(true);
+        try {
+            const updates: any[] = [];
+
+            autoDispatchDrafts.forEach(trip => {
+                const driverId = trip.recommendedDriverId;
+                if (!driverId) return;
+
+                trip.orders.forEach((order, index) => {
+                    updates.push(
+                        supabase.from('sales_orders')
+                            .update({
+                                driver_id: driverId,
+                                trip_sequence: index + 1
+                            })
+                            .eq('id', order.id)
+                    );
+                });
+            });
+
+            await Promise.all(updates);
+            setIsAutoDispatchModalOpen(false);
+            setAutoDispatchDrafts(null);
+            alert("智能排单方案已成功应用！(Auto dispatch applied successfully!)");
+            await fetchData();
+        } catch (err) {
+            console.error("Failed to apply auto dispatch:", err);
+            alert("应用排单方案失败。(Failed to apply auto dispatch.)");
+        } finally {
+            setIsSubmitting(false);
         }
     };
 
@@ -1524,6 +1975,21 @@ const DeliveryOrderManagement: React.FC = () => {
             return alert("Cannot create an empty trip. Please add items, a driver, destinations, or notes.");
         }
 
+        // Remind if Customer or Destinations is not filled
+        const isCustomerMissing = !orderCustomer.trim() || orderCustomer.trim() === 'General Customer';
+        const isAddressMissing = !newOrderAddress.trim();
+
+        if (isCustomerMissing || isAddressMissing) {
+            const missingFields = [];
+            if (isCustomerMissing) missingFields.push("Customer / Client (客户名称)");
+            if (isAddressMissing) missingFields.push("Destinations (目的地/送货地址)");
+            
+            const warningMsg = `⚠️ Reminder: You have not filled in the following fields:\n- ${missingFields.join('\n- ')}\n\nDo you want to continue creating this trip anyway?\n(提醒：您尚未填写上述字段，是否仍要继续创建此行程？)`;
+            if (!window.confirm(warningMsg)) {
+                return; // Cancel submission
+            }
+        }
+
         // Force assign default location if somehow blank
         const defaultLoc = tripOrigin === 'NILAI' ? 'Nilai' : 'SPD';
         const finalizedItems = newOrderItems.map(item => ({
@@ -1578,6 +2044,16 @@ const DeliveryOrderManagement: React.FC = () => {
             const zone = tripCategory || '';
             const bestFactory = findBestFactory(zone, finalizedItems, stockMap);
 
+            let finalFactoryId = bestFactory.id;
+            let finalFactoryName = bestFactory.name;
+            if (finalizedItems.length > 0) {
+                const explicitLoc = finalizedItems.find(item => item.sourceLocation)?.sourceLocation;
+                if (explicitLoc) {
+                    finalFactoryId = explicitLoc;
+                    finalFactoryName = explicitLoc;
+                }
+            }
+
             // Auto-Push Unlisted Trip Category to HR Payroll Rates
             if (tripCategory) {
                 const categoryExists = deliveryRates.some(r => getSafeOrigin(r.origin) === getSafeOrigin(tripOrigin) && r.location_name === tripCategory);
@@ -1606,7 +2082,7 @@ const DeliveryOrderManagement: React.FC = () => {
                 zone: tripCategory || '',
                 trip_origin: tripOrigin,
                 trip_drop_count: tripDropCount,
-                factory_id: bestFactory.id,
+                factory_id: finalFactoryId,
                 driver_id: selectedDriverId || null,
                 items: finalizedItems,
                 order_date: newOrderDate || new Date().toISOString().split("T")[0],
@@ -1645,7 +2121,7 @@ const DeliveryOrderManagement: React.FC = () => {
             if (editingOrderId) {
                 const { error } = await supabase.from('sales_orders').update(payload).eq('id', editingOrderId);
                 if (error) throw error;
-                alert(`Order Updated!\nAssigned to ${bestFactory.name}`);
+                alert(`Order Updated!\nAssigned to ${finalFactoryName}`);
 
                 // Optimistic Update: Edit
                 newOrderObj = { ...orders.find(o => o.id === editingOrderId)!, ...payload, id: editingOrderId, orderNumber: doNumber };
@@ -1655,18 +2131,19 @@ const DeliveryOrderManagement: React.FC = () => {
                 const { data, error } = await supabase.from('sales_orders').insert(payload).select().single();
                 if (error) throw error;
 
-                // Auto-save NEW customer (Unused)
-                /*
-                const existing = customerDB.find(c => c.name.toLowerCase() === orderCustomer.toLowerCase());
-                if (!existing && newOrderAddress) {
-                    supabase.from('sys_customers').insert({
-                        name: orderCustomer, address: newOrderAddress, zone: tripCategory || ''
-                    }).then(() => {
-                        supabase.from('sys_customers').select('*').then(res => res.data && setCustomerDB(res.data));
-                    });
+                // Auto-save NEW customer if it doesn't exist (excluding "General Customer")
+                const cleanCust = orderCustomer.trim();
+                if (cleanCust && cleanCust.toLowerCase() !== 'general customer') {
+                    const existing = customerDB.find(c => c.name.toLowerCase() === cleanCust.toLowerCase());
+                    if (!existing && newOrderAddress) {
+                        supabase.from('sys_customers').insert({
+                            name: cleanCust, address: newOrderAddress, zone: tripCategory || ''
+                        }).then(() => {
+                            supabase.from('sys_customers').select('*').then(res => res.data && setCustomerDB(res.data));
+                        });
+                    }
                 }
-                */
-                // alert(`Order Created!\nAssigned to ${bestFactory.name} (Zone: ${zone})`);
+                // alert(`Order Created!\nAssigned to ${finalFactoryName} (Zone: ${zone})`);
 
                 if (data) {
                     newOrderObj = {
@@ -1961,7 +2438,7 @@ const DeliveryOrderManagement: React.FC = () => {
                 <div className="flex bg-slate-900 p-1 rounded-xl border border-slate-800 justify-between shrink-0 self-start xl:self-center">
                     <div className="flex">
                         {/* Filter Tabs */}
-                        {['All', 'Pending Approval', 'Delivered', 'Cancelled'].map(status => (
+                        {['All', 'Loaded', 'Pending Approval', 'Delivered', 'Cancelled'].map(status => (
                             <button
                                 key={status}
                                 onClick={() => setStatusFilter(status)}
@@ -1971,7 +2448,7 @@ const DeliveryOrderManagement: React.FC = () => {
                                         : 'bg-slate-800 text-slate-400 hover:bg-slate-700'
                                     }`}
                             >
-                                {status === 'Delivered' ? 'Loaded' : (status === 'Pending Approval' ? (
+                                {status === 'Delivered' ? 'Delivered' : (status === 'Loaded' ? 'Loaded' : (status === 'Pending Approval' ? (
                                     <span className="flex items-center gap-2">
                                         Pending
                                         {orders.filter(o => o.status === 'Pending Approval').length > 0 && (
@@ -1980,13 +2457,20 @@ const DeliveryOrderManagement: React.FC = () => {
                                             </span>
                                         )}
                                     </span>
-                                ) : status === 'All' ? 'Active' : status)}
+                                ) : status === 'All' ? 'Active' : status))}
                             </button>
                         ))}
                     </div>
                     
                     {/* View Mode Toggle */}
-                    <div className="flex ml-4 border-l border-slate-700 pl-4 gap-1">
+                    <div className="flex ml-4 border-l border-slate-700 pl-4 gap-1.5 items-center">
+                        <button
+                            onClick={() => setViewMode('dispatch')}
+                            className={`px-3 py-2 rounded-lg text-xs font-bold uppercase transition-all flex items-center gap-1.5 ${viewMode === 'dispatch' ? 'bg-blue-600 text-white shadow-lg shadow-blue-900/50' : 'text-slate-400 hover:bg-slate-800'}`}
+                            title="Dispatch Planner (智能/手动排单)"
+                        >
+                            <Truck size={14} /> Dispatch Planner
+                        </button>
                         <button
                             onClick={() => setViewMode('kanban')}
                             className={`p-2 rounded-lg transition-all ${viewMode === 'kanban' ? 'bg-blue-600 text-white shadow-lg shadow-blue-900/50' : 'text-slate-400 hover:bg-slate-800'}`}
@@ -2058,13 +2542,327 @@ const DeliveryOrderManagement: React.FC = () => {
             </div>
 
             {/* --- MAIN GRID / TABLE --- */}
-            {viewMode === 'kanban' ? (
+            {viewMode === 'dispatch' ? (
+                <div className="grid grid-cols-1 xl:grid-cols-3 gap-6 items-start animate-in fade-in duration-300">
+                    {/* LEFT PANEL: Unassigned Orders Pool */}
+                    <div className="xl:col-span-1 bg-slate-900/40 border border-slate-800 rounded-2xl p-5 flex flex-col gap-4 min-h-[600px]">
+                        <div className="flex items-center justify-between pb-3 border-b border-slate-800/80">
+                            <div>
+                                <h2 className="text-base font-bold text-white flex items-center gap-2">
+                                    <Box size={18} className="text-blue-500" />
+                                    未指派订单池 (Unassigned Pool)
+                                </h2>
+                                <p className="text-[11px] text-slate-500 mt-0.5">当前仓库未指派的有效订单</p>
+                            </div>
+                            <span className="bg-slate-800 border border-slate-700 text-slate-300 text-xs font-mono px-2.5 py-1 rounded-full font-bold">
+                                {filteredOrders.filter(o => !o.driverId).length} 单
+                            </span>
+                        </div>
+
+                        {/* Batch Action Bar */}
+                        <div className="bg-slate-950 p-3 rounded-xl border border-slate-800/80 flex flex-col sm:flex-row gap-3 items-center justify-between">
+                            <div className="flex items-center gap-2 w-full sm:w-auto">
+                                <input
+                                    type="checkbox"
+                                    className="rounded border-slate-800 bg-slate-900 text-blue-600 focus:ring-blue-500 w-4 h-4 cursor-pointer"
+                                    checked={
+                                        filteredOrders.filter(o => !o.driverId).length > 0 &&
+                                        filteredOrders.filter(o => !o.driverId).every(o => selectedOrderIds.includes(o.id))
+                                    }
+                                    onChange={(e) => {
+                                        const unassigned = filteredOrders.filter(o => !o.driverId);
+                                        if (e.target.checked) {
+                                            setSelectedOrderIds(prev => Array.from(new Set([...prev, ...unassigned.map(o => o.id)])));
+                                        } else {
+                                            setSelectedOrderIds(prev => prev.filter(id => !unassigned.some(o => o.id === id)));
+                                        }
+                                    }}
+                                />
+                                <span className="text-xs font-bold text-slate-400">全选 (Select All)</span>
+                            </div>
+
+                            <div className="flex flex-wrap items-center gap-2 w-full sm:w-auto justify-end">
+                                <select
+                                    className="bg-slate-900 border border-slate-800 rounded-lg px-2 py-1.5 text-xs text-white outline-none focus:border-blue-500/50 w-full sm:w-36"
+                                    onChange={(e) => {
+                                        if (e.target.value) {
+                                            handleBatchAssign(e.target.value);
+                                            e.target.value = '';
+                                        }
+                                    }}
+                                    disabled={selectedOrderIds.length === 0}
+                                >
+                                    <option value="">-- 批量指派司机 --</option>
+                                    {drivers
+                                        .filter(d => (d.base_location || 'Taiping').toLowerCase() === activeLocation.toLowerCase())
+                                        .map(d => (
+                                            <option key={d.uid} value={d.uid}>
+                                                {d.name || d.email}
+                                            </option>
+                                        ))
+                                    }
+                                </select>
+
+                                <button
+                                    onClick={handleTriggerAutoDispatch}
+                                    className="bg-gradient-to-r from-violet-600 to-indigo-600 hover:from-violet-500 hover:to-indigo-500 text-white px-3 py-1.5 rounded-lg text-xs font-bold flex items-center gap-1.5 shadow-lg shadow-violet-950/30 transition-all active:scale-95 shrink-0"
+                                >
+                                    <Sparkles size={13} className="animate-pulse" />
+                                    一键智能排单
+                                </button>
+                            </div>
+                        </div>
+
+                        {/* Unassigned List */}
+                        <div className="space-y-3 overflow-y-auto max-h-[700px] pr-1 custom-scrollbar">
+                            {filteredOrders.filter(o => !o.driverId).length === 0 ? (
+                                <div className="text-center py-12 text-slate-600 text-xs italic border border-dashed border-slate-800 rounded-xl bg-slate-950/20">
+                                    没有未分配的订单
+                                </div>
+                            ) : (
+                                filteredOrders.filter(o => !o.driverId).map(order => {
+                                    const isSelected = selectedOrderIds.includes(order.id);
+                                    const orderLoad = calculateLoad(order.items || [], { max_volume_m3: 20, max_weight_kg: 3000 });
+                                    
+                                    return (
+                                        <div
+                                            key={order.id}
+                                            className={`p-4 rounded-xl border transition-all flex gap-3 bg-slate-950/60 hover:bg-slate-900/80 ${
+                                                isSelected ? 'border-blue-500/80 bg-blue-950/10 shadow-lg shadow-blue-950/5' : 'border-slate-800/80'
+                                            }`}
+                                        >
+                                            <div className="pt-1 select-none">
+                                                <input
+                                                    type="checkbox"
+                                                    className="rounded border-slate-800 bg-slate-900 text-blue-600 focus:ring-blue-500 w-4 h-4 cursor-pointer"
+                                                    checked={isSelected}
+                                                    onChange={(e) => {
+                                                        if (e.target.checked) {
+                                                            setSelectedOrderIds(prev => [...prev, order.id]);
+                                                        } else {
+                                                            setSelectedOrderIds(prev => prev.filter(id => id !== order.id));
+                                                        }
+                                                    }}
+                                                />
+                                            </div>
+
+                                            <div className="flex-1 min-w-0">
+                                                <div className="flex items-center justify-between gap-2 mb-2">
+                                                    <div className="flex items-center gap-2">
+                                                        <span className="font-mono text-xs font-black text-blue-400 bg-blue-500/10 px-2 py-0.5 rounded border border-blue-500/20">
+                                                            {order.orderNumber}
+                                                        </span>
+                                                        {order.deliveryAddress && (
+                                                            <span className={`text-[9px] font-bold px-1.5 py-0.5 rounded border uppercase tracking-wider ${getStateColor(determineState(order.deliveryAddress))}`}>
+                                                                {determineState(order.deliveryAddress)}
+                                                            </span>
+                                                        )}
+                                                    </div>
+                                                    
+                                                    <select
+                                                        className="bg-slate-900 border border-slate-800 rounded px-1.5 py-0.5 text-[10px] font-bold text-slate-400 outline-none focus:border-blue-500/50"
+                                                        value=""
+                                                        onChange={(e) => {
+                                                            if (e.target.value) {
+                                                                setSelectedOrderIds([order.id]);
+                                                                handleBatchAssign(e.target.value);
+                                                            }
+                                                        }}
+                                                    >
+                                                        <option value="">指派司机...</option>
+                                                        {drivers
+                                                            .filter(d => (d.base_location || 'Taiping').toLowerCase() === activeLocation.toLowerCase())
+                                                            .map(d => (
+                                                                <option key={d.uid} value={d.uid}>
+                                                                    {d.name}
+                                                                </option>
+                                                            ))
+                                                        }
+                                                    </select>
+                                                </div>
+
+                                                <div className="text-xs text-white font-bold mb-1 truncate">{order.customer}</div>
+                                                <div className="text-[10px] text-slate-500 mb-3 line-clamp-1">{order.deliveryAddress}</div>
+
+                                                <div className="flex gap-3 text-[10px] text-slate-400 font-mono mb-3 bg-slate-900 p-2 rounded-lg border border-slate-800/50">
+                                                    <div>体积: <span className="text-slate-200 font-bold">{orderLoad.totalVol} m³</span></div>
+                                                    <div className="border-l border-slate-800 pl-3">重量: <span className="text-slate-200 font-bold">{orderLoad.totalWeight} kg</span></div>
+                                                </div>
+
+                                                <div className="space-y-1">
+                                                    {order.items?.map((item, i) => (
+                                                        <div key={i} className="text-[10px] flex justify-between text-slate-400">
+                                                            <span className="truncate max-w-[150px]">{item.product}</span>
+                                                            <span className="font-bold font-mono">x{item.quantity}</span>
+                                                        </div>
+                                                    ))}
+                                                </div>
+                                            </div>
+                                        </div>
+                                    );
+                                })
+                            )}
+                        </div>
+                    </div>
+
+                    {/* RIGHT PANEL: Driver Lanes */}
+                    <div className="xl:col-span-2 flex gap-4 overflow-x-auto pb-4 custom-scrollbar items-start">
+                        {activeDriversForLanes
+                            .map(driver => {
+                                const driverOrders = filteredOrders
+                                    .filter(o => o.driverId === driver.uid)
+                                    .sort((a, b) => (a.tripSequence || 0) - (b.tripSequence || 0));
+                                
+                                const allItems = driverOrders.flatMap(o => o.items || []);
+                                const lorry = lorries.find(l => l.driverUserId === driver.uid);
+                                const loadStats = calculateLoad(allItems, { max_volume_m3: 20, max_weight_kg: 3000 });
+                                
+                                return (
+                                    <div
+                                        key={driver.uid}
+                                        className="w-[320px] shrink-0 bg-slate-900/40 border border-slate-800 rounded-2xl p-4 flex flex-col gap-4"
+                                    >
+                                        <div className="border-b border-slate-800/80 pb-3 flex flex-col gap-2">
+                                            <div className="flex justify-between items-start">
+                                                <div>
+                                                    <div className="font-bold text-sm text-white">{driver.name}</div>
+                                                    <div className="text-[10px] text-slate-500 font-mono flex items-center gap-1.5 mt-0.5">
+                                                        <Truck size={12} className="text-blue-400" />
+                                                        {lorry?.plateNumber || 'No Plate'}
+                                                        <span className="text-slate-700">|</span>
+                                                        <MapPin size={10} className="text-slate-500" />
+                                                        {lorry?.preferredZone || '未指派区域'}
+                                                    </div>
+                                                </div>
+                                                
+                                                {loadStats.isOverloaded && (
+                                                    <span className="bg-red-500/10 border border-red-500/20 text-red-400 text-[9px] font-black uppercase px-2 py-0.5 rounded animate-pulse">
+                                                        ⚠️ OVERLOADED
+                                                    </span>
+                                                )}
+                                            </div>
+
+                                            <div className="space-y-1.5 mt-2 bg-slate-950 p-2.5 rounded-xl border border-slate-800/50">
+                                                <div>
+                                                    <div className="flex justify-between text-[9px] font-mono mb-0.5">
+                                                        <span className="text-slate-400">体积 Vol ({loadStats.totalVol}/20 m³)</span>
+                                                        <span className={`font-bold ${Number(loadStats.percentVol) >= 100 ? 'text-red-400 font-black' : Number(loadStats.percentVol) >= 80 ? 'text-amber-400' : 'text-slate-300'}`}>
+                                                            {loadStats.percentVol}%
+                                                        </span>
+                                                    </div>
+                                                    <div className="w-full bg-slate-800 h-1.5 rounded-full overflow-hidden">
+                                                        <div
+                                                            className={`h-full rounded-full transition-all duration-300 ${
+                                                                Number(loadStats.percentVol) >= 100 ? 'bg-red-500 shadow-md shadow-red-500/30' : Number(loadStats.percentVol) >= 80 ? 'bg-amber-500' : 'bg-emerald-500'
+                                                            }`}
+                                                            style={{ width: `${loadStats.percentVol}%` }}
+                                                        />
+                                                    </div>
+                                                </div>
+                                                
+                                                <div>
+                                                    <div className="flex justify-between text-[9px] font-mono mb-0.5">
+                                                        <span className="text-slate-400">重量 Weight ({loadStats.totalWeight}/3000 kg)</span>
+                                                        <span className={`font-bold ${Number(loadStats.percentWeight) >= 100 ? 'text-red-400 font-black' : Number(loadStats.percentWeight) >= 80 ? 'text-amber-400' : 'text-slate-300'}`}>
+                                                            {loadStats.percentWeight}%
+                                                        </span>
+                                                    </div>
+                                                    <div className="w-full bg-slate-800 h-1.5 rounded-full overflow-hidden">
+                                                        <div
+                                                            className={`h-full rounded-full transition-all duration-300 ${
+                                                                Number(loadStats.percentWeight) >= 100 ? 'bg-red-500 shadow-md shadow-red-500/30' : Number(loadStats.percentWeight) >= 80 ? 'bg-amber-500' : 'bg-emerald-500'
+                                                            }`}
+                                                            style={{ width: `${loadStats.percentWeight}%` }}
+                                                        />
+                                                    </div>
+                                                </div>
+                                            </div>
+                                        </div>
+
+                                        <div className="space-y-3 max-h-[600px] overflow-y-auto pr-1 custom-scrollbar">
+                                            {driverOrders.length === 0 ? (
+                                                <div className="h-40 flex flex-col items-center justify-center text-slate-700 opacity-40 border border-dashed border-slate-800 rounded-xl">
+                                                    <Truck size={36} className="mb-2" />
+                                                    <span className="text-xs font-bold uppercase tracking-wider">暂无排单 (Empty)</span>
+                                                </div>
+                                            ) : (
+                                                driverOrders.map((order, idx) => {
+                                                    const orderLoad = calculateLoad(order.items || [], { max_volume_m3: 20, max_weight_kg: 3000 });
+                                                    
+                                                    return (
+                                                        <div
+                                                            key={order.id}
+                                                            className="bg-slate-950 border border-slate-800/80 hover:border-slate-700/80 p-3.5 rounded-xl flex flex-col gap-2 relative group"
+                                                        >
+                                                            <div className="absolute top-3 right-3 bg-slate-900 border border-slate-800 text-slate-400 text-[9px] font-bold uppercase py-0.5 px-2 rounded-full shadow-lg">
+                                                                第 {idx + 1} 趟
+                                                            </div>
+
+                                                            <div className="flex items-center gap-2">
+                                                                <span className="font-mono text-[10px] font-black text-blue-400 bg-blue-500/10 px-1.5 py-0.5 rounded border border-blue-500/20">
+                                                                    {order.orderNumber}
+                                                                </span>
+                                                                {order.deliveryAddress && (
+                                                                    <span className={`text-[9px] font-bold px-1.5 py-0.5 rounded border uppercase tracking-wider ${getStateColor(determineState(order.deliveryAddress))}`}>
+                                                                        {determineState(order.deliveryAddress)}
+                                                                    </span>
+                                                                )}
+                                                            </div>
+
+                                                            <div className="text-xs text-white font-bold leading-tight mt-1 truncate">{order.customer}</div>
+                                                            <div className="text-[10px] text-slate-500 line-clamp-1">{order.deliveryAddress}</div>
+
+                                                            <div className="flex gap-2 text-[9px] text-slate-400 font-mono mt-1">
+                                                                <div>V: {orderLoad.totalVol} m³</div>
+                                                                <div className="text-slate-800">|</div>
+                                                                <div>W: {orderLoad.totalWeight} kg</div>
+                                                            </div>
+
+                                                            <div className="flex justify-between items-center mt-3 pt-2 border-t border-slate-900">
+                                                                <div className="flex gap-1">
+                                                                    <button
+                                                                        onClick={() => handleMoveOrderSequence(order.id, 'up')}
+                                                                        disabled={idx === 0}
+                                                                        className="p-1 text-slate-400 hover:text-white disabled:opacity-20 disabled:hover:text-slate-400 transition-colors"
+                                                                        title="上移顺序 (Move Up)"
+                                                                    >
+                                                                        <ArrowUp size={14} />
+                                                                    </button>
+                                                                    <button
+                                                                        onClick={() => handleMoveOrderSequence(order.id, 'down')}
+                                                                        disabled={idx === driverOrders.length - 1}
+                                                                        className="p-1 text-slate-400 hover:text-white disabled:opacity-20 disabled:hover:text-slate-400 transition-colors"
+                                                                        title="下移顺序 (Move Down)"
+                                                                    >
+                                                                        <ArrowDown size={14} />
+                                                                    </button>
+                                                                </div>
+
+                                                                <button
+                                                                    onClick={() => handleUnassignOrder(order.id)}
+                                                                    className="text-[10px] font-bold text-red-400 hover:text-red-300 bg-red-950/20 border border-red-900/30 px-2 py-0.5 rounded transition-colors"
+                                                                    title="取消分配 (Unassign)"
+                                                                >
+                                                                    取消指派
+                                                                </button>
+                                                            </div>
+                                                        </div>
+                                                    );
+                                                })
+                                            )}
+                                        </div>
+                                    </div>
+                                );
+                            })}
+                    </div>
+                </div>
+            ) : viewMode === 'kanban' ? (
                 <DragDropContext onDragEnd={onDragEnd}>
                     <div className="grid grid-cols-1 md:grid-cols-2 xl:grid-cols-3 gap-6">
                     {/* Add Unassigned Pseudo-Driver if not in list */}
                     {[
                         { uid: 'unassigned', name: '📦 Unassigned / New', email: '', role: 'Driver' } as User,
-                        ...drivers.filter(d => (d.base_location || 'Taiping').toLowerCase() === activeLocation.toLowerCase())
+                        ...activeDriversForLanes
                     ].map(driver => {
                         const driverOrders = filteredOrders
                             .filter(o => {
@@ -2221,15 +3019,35 @@ const DeliveryOrderManagement: React.FC = () => {
                                                                         <Scissors size={14} />
                                                                     </button>
                                                                 </div>
-                                                                <div className={`text-[10px] font-bold px-2 py-1 rounded uppercase tracking-wider border ${order.status === 'New' ? 'text-amber-400 border-amber-500/20 bg-amber-500/10' :
-                                                                    order.status === 'Delivered' ? 'text-emerald-400 border-emerald-500/20 bg-emerald-500/10' :
-                                                                        order.status === 'Pending Approval' ? 'text-red-400 border-red-500/20 bg-red-500/10 animate-pulse' :
-                                                                            'text-slate-400 border-slate-700 bg-slate-800'
-                                                                    }`}>
-                                                                    {order.status}
+                                                                <div className="flex flex-col items-end gap-1.5">
+                                                                    <div className={`text-[10px] font-bold px-2 py-1 rounded uppercase tracking-wider border ${order.status === 'New' ? 'text-amber-400 border-amber-500/20 bg-amber-500/10' :
+                                                                        order.status === 'Delivered' ? 'text-emerald-400 border-emerald-500/20 bg-emerald-500/10' :
+                                                                            order.status === 'Pending Approval' ? 'text-red-400 border-red-500/20 bg-red-500/10 animate-pulse' :
+                                                                                'text-slate-400 border-slate-700 bg-slate-800'
+                                                                        }`}>
+                                                                        {order.status}
+                                                                    </div>
+                                                                    {(order.pod_photo_url || order.pod_signature_url || (order.notes && order.notes.includes(']'))) && (
+                                                                        <div className="flex flex-wrap items-center justify-end gap-1 max-w-[120px]">
+                                                                            {order.pod_photo_url && (
+                                                                                <span className="text-[8px] bg-emerald-500/20 text-emerald-400 border border-emerald-500/30 px-1 py-0.5 rounded font-black tracking-wider flex items-center gap-0.5" title="Has delivery photo">
+                                                                                    📸 POD
+                                                                                </span>
+                                                                            )}
+                                                                            {order.pod_signature_url && (
+                                                                                <span className="text-[8px] bg-teal-500/20 text-teal-400 border border-teal-500/30 px-1 py-0.5 rounded font-black tracking-wider flex items-center gap-0.5" title="Has customer signature">
+                                                                                    ✍️ SIGN
+                                                                                </span>
+                                                                            )}
+                                                                            {order.notes && order.notes.includes(']') && (
+                                                                                <span className="text-[8px] bg-blue-500/20 text-blue-400 border border-blue-500/30 px-1 py-0.5 rounded font-black tracking-wider flex items-center gap-0.5" title="Has driver notes">
+                                                                                    💬 NOTE
+                                                                                </span>
+                                                                            )}
+                                                                        </div>
+                                                                    )}
                                                                 </div>
                                                             </div>
-
                                                             <div className="text-xs text-slate-500 flex items-center gap-2 mb-3">
                                                                 <Calendar size={14} className="text-slate-600 shrink-0" />
                                                                 <div className="flex flex-col gap-0.5 leading-tight">
@@ -2394,7 +3212,7 @@ const DeliveryOrderManagement: React.FC = () => {
                                                         <div><span className="text-[9px] font-black uppercase tracking-tighter">Ord:</span> <span className="text-slate-300 font-medium">{formatDateDMY(order.orderDate)}</span></div>
                                                         <div><span className="text-[9px] font-black uppercase text-blue-500/50 tracking-tighter">Del:</span> <span className="text-blue-400 font-bold">{formatDateDMY(order.deadline) || "No Date"}</span></div>
                                                     </div>
-                                                </td>
+                                                                                                </td>
                                                 <td className="p-4">
                                                     <div className={`text-[10px] font-bold px-2 py-1 rounded uppercase tracking-wider border inline-block ${order.status === 'New' ? 'text-amber-400 border-amber-500/20 bg-amber-500/10' :
                                                         order.status === 'Delivered' ? 'text-emerald-400 border-emerald-500/20 bg-emerald-500/10' :
@@ -2403,6 +3221,25 @@ const DeliveryOrderManagement: React.FC = () => {
                                                     }`}>
                                                         {order.status}
                                                     </div>
+                                                    {(order.pod_photo_url || order.pod_signature_url || (order.notes && order.notes.includes(']'))) && (
+                                                        <div className="flex flex-wrap items-center gap-1 mt-1.5">
+                                                            {order.pod_photo_url && (
+                                                                <span className="text-[8px] bg-emerald-500/20 text-emerald-400 border border-emerald-500/30 px-1 py-0.5 rounded font-black tracking-wider flex items-center gap-0.5" title="Has delivery photo">
+                                                                    📸 POD
+                                                                </span>
+                                                            )}
+                                                            {order.pod_signature_url && (
+                                                                <span className="text-[8px] bg-teal-500/20 text-teal-400 border border-teal-500/30 px-1 py-0.5 rounded font-black tracking-wider flex items-center gap-0.5" title="Has customer signature">
+                                                                    ✍️ SIGN
+                                                                </span>
+                                                            )}
+                                                            {order.notes && order.notes.includes(']') && (
+                                                                <span className="text-[8px] bg-blue-500/20 text-blue-400 border border-blue-500/30 px-1 py-0.5 rounded font-black tracking-wider flex items-center gap-0.5" title="Has driver notes">
+                                                                    💬 NOTE
+                                                                </span>
+                                                            )}
+                                                        </div>
+                                                    )}
                                                 </td>
                                                 <td className="p-4 text-center">
                                                     <span className="text-xs bg-[#18181b] border border-[#27272a] text-slate-300 font-bold px-2 py-1.5 rounded-lg shadow-sm">{(order.items || []).length} items</span>
@@ -2477,6 +3314,39 @@ const DeliveryOrderManagement: React.FC = () => {
                                         <span className="hidden sm:inline">{isTripPhotoScanning ? 'Scanning…' : 'Scan Photo'}</span>
                                         <span className="sm:hidden sr-only">{isTripPhotoScanning ? 'Scanning' : 'Scan photo'}</span>
                                     </button>
+
+                                    <input
+                                        ref={tripExcelInputRef}
+                                        type="file"
+                                        accept=".xlsx,.xls,.csv"
+                                        className="hidden"
+                                        onChange={handleTripExcelImport}
+                                    />
+                                    <button
+                                        type="button"
+                                        disabled={isTripExcelImporting}
+                                        onClick={() => tripExcelInputRef.current?.click()}
+                                        className="flex items-center gap-1.5 sm:gap-2 px-2.5 sm:px-4 py-2 rounded-xl bg-emerald-600/20 border border-emerald-500/40 text-emerald-200 hover:bg-emerald-600/30 disabled:opacity-50 text-xs font-bold uppercase tracking-wide transition-all shrink-0"
+                                    >
+                                        {isTripExcelImporting ? (
+                                            <span className="w-4 h-4 border-2 border-emerald-300/30 border-t-emerald-200 rounded-full animate-spin" />
+                                        ) : (
+                                            <FileText size={16} />
+                                        )}
+                                        <span className="hidden sm:inline">{isTripExcelImporting ? 'Importing…' : 'Import Excel'}</span>
+                                        <span className="sm:hidden sr-only">{isTripExcelImporting ? 'Importing' : 'Import Excel'}</span>
+                                    </button>
+
+                                    <button
+                                        type="button"
+                                        onClick={handleDownloadTemplate}
+                                        className="flex items-center gap-1.5 sm:gap-2 px-2.5 sm:px-4 py-2 rounded-xl bg-blue-600/20 border border-blue-500/40 text-blue-200 hover:bg-blue-600/30 text-xs font-bold uppercase tracking-wide transition-all shrink-0"
+                                        title="Download Excel Import Template"
+                                    >
+                                        <Download size={16} />
+                                        <span className="hidden sm:inline">Template</span>
+                                    </button>
+
                                     <button onClick={handleCloseModal} className="p-2 hover:bg-slate-800 rounded-lg text-slate-500 hover:text-white transition-all">
                                         <X size={20} />
                                     </button>
@@ -2558,6 +3428,38 @@ const DeliveryOrderManagement: React.FC = () => {
                                     </div>
                                 </div>
 
+                                {/* CUSTOMER / CLIENT SELECTION */}
+                                <div>
+                                    <label className="block text-xs font-bold text-slate-500 uppercase mb-2">Customer / Client</label>
+                                    <div className="relative">
+                                        <input
+                                            list="customers-list"
+                                            className="w-full bg-slate-900 border border-slate-800 rounded-xl px-4 py-3 text-sm text-slate-200 focus:border-blue-500/50 outline-none placeholder:text-slate-600"
+                                            placeholder="-- Type or Select Customer (Auto-fills Address & Zone) --"
+                                            value={orderCustomer}
+                                            onChange={e => {
+                                                const val = e.target.value;
+                                                setOrderCustomer(val);
+                                                // Auto-fill address and category if matched
+                                                const matched = customerDB.find(
+                                                    c => c.name.toLowerCase() === val.toLowerCase()
+                                                );
+                                                if (matched) {
+                                                    setNewOrderAddress(matched.address || '');
+                                                    if (matched.zone) {
+                                                        setTripCategory(matched.zone);
+                                                    }
+                                                }
+                                            }}
+                                        />
+                                        <datalist id="customers-list">
+                                            {customerDB.map((c, i) => (
+                                                <option key={c.id || i} value={c.name} />
+                                            ))}
+                                        </datalist>
+                                    </div>
+                                </div>
+
                                 {/* DESTINATIONS (Delivery Address) */}
                                 <div>
                                     <label className="block text-xs font-bold text-slate-500 uppercase mb-2">Destinations (e.g., KL, PJ, Subang)</label>
@@ -2632,7 +3534,6 @@ const DeliveryOrderManagement: React.FC = () => {
                                         </div>
                                     </div>
                                 </div>
-
                                 {/* TRIP NOTE & PHOTO */}
                                 <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
                                     <div>
@@ -2663,6 +3564,71 @@ const DeliveryOrderManagement: React.FC = () => {
                                     </div>
                                 </div>
 
+                                {/* DRIVER DELIVERY / POD INFO SECTION */}
+                                {(() => {
+                                    const currentOrder = orders.find(o => o.id === editingOrderId);
+                                    if (!currentOrder || (!currentOrder.pod_photo_url && !currentOrder.pod_signature_url && !currentOrder.pod_timestamp)) return null;
+                                    
+                                    return (
+                                        <div className="mt-4 p-4 rounded-xl border border-slate-800 bg-slate-900/30 flex flex-col gap-3">
+                                            <h4 className="text-xs font-bold text-emerald-400 uppercase tracking-widest flex items-center gap-1.5 border-b border-slate-800/80 pb-2">
+                                                🚚 Proof of Delivery / POD (Driver Uploads)
+                                            </h4>
+                                            
+                                            <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
+                                                {/* POD Photos */}
+                                                <div>
+                                                    <label className="block text-[10px] font-bold text-slate-500 uppercase tracking-wider mb-2">Delivery Photos (DO / Goods)</label>
+                                                    {currentOrder.pod_photo_url ? (
+                                                        <div className="flex flex-wrap gap-2">
+                                                            {currentOrder.pod_photo_url.split(',').map((url, idx) => (
+                                                                <a key={idx} href={url.trim()} target="_blank" rel="noopener noreferrer" className="relative group overflow-hidden rounded-lg border border-slate-800 hover:border-blue-500 h-20 w-20 bg-black flex-shrink-0 block transition-all">
+                                                                    <img src={url.trim()} alt={`POD Photo ${idx + 1}`} className="w-full h-full object-cover opacity-85 group-hover:opacity-100 transition-opacity" />
+                                                                    <div className="absolute inset-0 flex items-center justify-center bg-black/40 opacity-0 group-hover:opacity-100 transition-opacity pointer-events-none">
+                                                                        <span className="text-[9px] bg-blue-500 text-white font-bold px-1.5 py-0.5 rounded shadow">View</span>
+                                                                    </div>
+                                                                </a>
+                                                            ))}
+                                                        </div>
+                                                    ) : (
+                                                        <div className="text-xs text-slate-600 italic">No delivery photos uploaded</div>
+                                                    )}
+                                                </div>
+
+                                                {/* POD Signature */}
+                                                <div>
+                                                    <label className="block text-[10px] font-bold text-slate-500 uppercase tracking-wider mb-2">Customer Signature</label>
+                                                    {currentOrder.pod_signature_url ? (
+                                                        <a href={currentOrder.pod_signature_url} target="_blank" rel="noopener noreferrer" className="relative group overflow-hidden rounded-lg border border-slate-800 hover:border-blue-500 h-20 w-full max-w-[200px] bg-white flex items-center justify-center block transition-all">
+                                                            <img src={currentOrder.pod_signature_url} alt="POD Signature" className="max-h-full object-contain p-1" />
+                                                            <div className="absolute inset-0 flex items-center justify-center bg-black/10 opacity-0 group-hover:opacity-100 transition-opacity pointer-events-none">
+                                                                <span className="text-[9px] bg-blue-500 text-white font-bold px-1.5 py-0.5 rounded shadow">View</span>
+                                                            </div>
+                                                        </a>
+                                                    ) : (
+                                                        <div className="text-xs text-slate-600 italic">No signature recorded</div>
+                                                    )}
+                                                </div>
+
+                                                {/* POD Details */}
+                                                <div className="text-xs text-slate-400 flex flex-col gap-2.5 justify-center">
+                                                    {currentOrder.pod_timestamp && (
+                                                        <div>
+                                                            <span className="text-[9px] font-bold text-slate-500 uppercase tracking-wider block mb-0.5">Delivered At</span>
+                                                            <span className="text-slate-300 font-medium font-mono">{new Date(currentOrder.pod_timestamp).toLocaleString('en-GB')}</span>
+                                                        </div>
+                                                    )}
+                                                    {currentOrder.pod_signed_by && (
+                                                        <div>
+                                                            <span className="text-[9px] font-bold text-slate-500 uppercase tracking-wider block mb-0.5">Signed By</span>
+                                                            <span className="text-slate-300 font-medium">{currentOrder.pod_signed_by}</span>
+                                                        </div>
+                                                    )}
+                                                </div>
+                                            </div>
+                                        </div>
+                                    );
+                                })()}
                                 </div>
 
                                 <div className="flex flex-col min-h-0 lg:min-h-[min(72vh,680px)]">
@@ -2845,11 +3811,15 @@ const DeliveryOrderManagement: React.FC = () => {
                         <div className="p-4 sm:p-5 border-b border-slate-800 flex justify-between items-start gap-3">
                             <div>
                                 <h3 className="text-lg font-bold text-white flex items-center gap-2">
-                                    <Sparkles className="text-violet-400" size={20} />
-                                    Photo Scan Review
+                                    {scanReview.sheetNotes === 'Excel Import' ? (
+                                        <FileText className="text-emerald-400" size={20} />
+                                    ) : (
+                                        <Sparkles className="text-violet-400" size={20} />
+                                    )}
+                                    {scanReview.sheetNotes === 'Excel Import' ? 'Excel Import Review' : 'Photo Scan Review'}
                                 </h3>
                                 <p className="text-xs text-slate-500 mt-1">
-                                    {scanReview.trips.length} trip(s) detected — confirm to create all, or load the first into the form only.
+                                    {scanReview.trips.length} trip(s) {scanReview.sheetNotes === 'Excel Import' ? 'imported' : 'detected'} — confirm to create all, or load the first into the form only.
                                 </p>
                             </div>
                             <button type="button" onClick={closeScanReview} className="p-2 hover:bg-slate-800 rounded-lg text-slate-500">
@@ -2908,6 +3878,11 @@ const DeliveryOrderManagement: React.FC = () => {
                                     <div className="flex justify-between items-start gap-2 mb-2">
                                         <div className="min-w-0">
                                             <div className="font-bold text-white text-sm">{trip.label}</div>
+                                            {trip.customer && (
+                                                <div className="text-xs text-blue-400 mt-0.5 font-bold">
+                                                    Client: {trip.customer}
+                                                </div>
+                                            )}
                                             <div className="text-xs text-slate-400 mt-1 truncate">{trip.destinations || '—'}</div>
                                             <div className="text-[10px] text-slate-500 mt-1">
                                                 {trip.tripCategory || 'No category'} · {trip.tripDropCount} drop(s) · {trip.items.length} item(s)
@@ -3123,6 +4098,144 @@ const DeliveryOrderManagement: React.FC = () => {
                                     </button>
                                 ))}
                             </div>
+                        </div>
+                    </div>
+                </div>
+            )}
+
+            {/* --- SMART AUTO DISPATCH MODAL --- */}
+            {isAutoDispatchModalOpen && autoDispatchDrafts && (
+                <div className="fixed inset-0 bg-black/85 backdrop-blur-sm flex items-center justify-center z-[100] p-4 animate-in fade-in duration-200">
+                    <div className="bg-[#09090b] w-full max-w-4xl rounded-2xl border border-slate-800 shadow-2xl overflow-hidden flex flex-col max-h-[90vh]">
+                        {/* Header */}
+                        <div className="p-5 border-b border-slate-800 flex justify-between items-center bg-slate-900/50">
+                            <div>
+                                <h3 className="text-lg font-bold text-white flex items-center gap-2">
+                                    <Sparkles size={20} className="text-violet-400" />
+                                    一键智能排单推荐方案 (Smart Auto-Dispatch Recommendation)
+                                </h3>
+                                <p className="text-xs text-slate-500 mt-1">
+                                    系统已根据送货区域（Zone）自动聚合拼车并进行容量装箱。请审查并指派最终司机。
+                                </p>
+                            </div>
+                            <button
+                                onClick={() => {
+                                    setIsAutoDispatchModalOpen(false);
+                                    setAutoDispatchDrafts(null);
+                                }}
+                                className="text-slate-500 hover:text-white p-2 hover:bg-slate-800 rounded-lg transition-colors"
+                            >
+                                <X size={20} />
+                            </button>
+                        </div>
+
+                        {/* Body */}
+                        <div className="p-6 overflow-y-auto custom-scrollbar flex-1 space-y-6">
+                            {autoDispatchDrafts.length === 0 ? (
+                                <div className="text-center py-12 text-slate-500 italic">
+                                    没有生成推荐的拼车行程。
+                                </div>
+                            ) : (
+                                autoDispatchDrafts.map((trip, tIdx) => (
+                                    <div key={trip.id || tIdx} className="bg-slate-900/40 border border-slate-800 rounded-xl p-4 flex flex-col gap-3">
+                                        <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3 pb-3 border-b border-slate-800/80">
+                                            <div>
+                                                <div className="text-sm font-bold text-white flex items-center gap-2">
+                                                    <Truck size={16} className="text-violet-400" />
+                                                    {trip.name}
+                                                </div>
+                                                <div className="text-[10px] text-slate-500 font-mono mt-0.5">
+                                                    区域 Zone: <span className="text-slate-300 font-bold">{trip.zone}</span>
+                                                </div>
+                                            </div>
+
+                                            <div className="flex flex-wrap items-center gap-4 text-xs font-mono">
+                                                <div className="bg-slate-950 px-2.5 py-1 rounded border border-slate-800">
+                                                    体积 Vol: <span className={`font-bold ${trip.totalVol > 20 ? 'text-red-400 font-black' : 'text-emerald-400'}`}>{trip.totalVol.toFixed(2)} m³</span>
+                                                </div>
+                                                <div className="bg-slate-950 px-2.5 py-1 rounded border border-slate-800">
+                                                    重量 Wgt: <span className={`font-bold ${trip.totalWeight > 3000 ? 'text-red-400 font-black' : 'text-emerald-400'}`}>{trip.totalWeight.toFixed(2)} kg</span>
+                                                </div>
+                                                
+                                                <div className="flex items-center gap-2">
+                                                    <span className="text-[10px] font-bold text-slate-400 uppercase">指派司机:</span>
+                                                    <select
+                                                        className="bg-slate-950 border border-slate-800 rounded px-2 py-1 text-xs text-white outline-none focus:border-violet-500"
+                                                        value={trip.recommendedDriverId || ''}
+                                                        onChange={(e) => handleUpdateDraftTripDriver(trip.id, e.target.value)}
+                                                    >
+                                                        <option value="">-- 未指派 (Unassigned) --</option>
+                                                        {drivers
+                                                            .filter(d => (d.base_location || 'Taiping').toLowerCase() === activeLocation.toLowerCase())
+                                                            .map(d => (
+                                                                <option key={d.uid} value={d.uid}>
+                                                                    {d.name}
+                                                                </option>
+                                                            ))
+                                                        }
+                                                    </select>
+                                                </div>
+                                            </div>
+                                        </div>
+
+                                        {/* Orders inside this trip */}
+                                        <div className="space-y-2">
+                                            <div className="text-[10px] font-bold text-slate-500 uppercase tracking-widest">包含送货单 ({trip.orders.length} 单)</div>
+                                            <div className="grid grid-cols-1 md:grid-cols-2 gap-3">
+                                                {trip.orders.map((order, oIdx) => (
+                                                    <div key={order.id || oIdx} className="bg-slate-950 p-3 rounded-lg border border-slate-800/80 text-xs">
+                                                        <div className="flex justify-between items-center gap-2 mb-1.5">
+                                                            <span className="font-mono font-black text-blue-400 bg-blue-500/10 px-1.5 py-0.5 rounded border border-blue-500/20 text-[10px]">
+                                                                {order.orderNumber}
+                                                            </span>
+                                                            {order.deliveryAddress && (
+                                                                <span className={`text-[8px] font-bold px-1 py-0.5 rounded border uppercase tracking-wider ${getStateColor(determineState(order.deliveryAddress))}`}>
+                                                                    {determineState(order.deliveryAddress)}
+                                                                </span>
+                                                            )}
+                                                        </div>
+                                                        <div className="font-bold text-slate-200 mb-0.5 truncate">{order.customer}</div>
+                                                        <div className="text-[10px] text-slate-500 line-clamp-1 mb-2">{order.deliveryAddress}</div>
+                                                        
+                                                        <div className="space-y-0.5 border-t border-slate-900 pt-1.5">
+                                                            {order.items?.map((item: any, itemIdx: number) => (
+                                                                <div key={itemIdx} className="text-[9px] flex justify-between text-slate-400">
+                                                                    <span className="truncate max-w-[150px]">{item.product}</span>
+                                                                    <span className="font-bold font-mono">x{item.quantity}</span>
+                                                                </div>
+                                                            ))}
+                                                        </div>
+                                                    </div>
+                                                ))}
+                                            </div>
+                                        </div>
+                                    </div>
+                                ))
+                            )}
+                        </div>
+
+                        {/* Footer */}
+                        <div className="p-4 border-t border-slate-800 bg-slate-900/50 flex justify-end gap-3 shrink-0">
+                            <button
+                                onClick={() => {
+                                    setIsAutoDispatchModalOpen(false);
+                                    setAutoDispatchDrafts(null);
+                                }}
+                                className="px-6 py-2 rounded-xl text-slate-400 hover:text-white font-bold text-sm transition-colors"
+                            >
+                                取消
+                            </button>
+                            <button
+                                onClick={handleApplyAutoDispatch}
+                                disabled={isSubmitting || autoDispatchDrafts.length === 0}
+                                className="px-8 py-2 bg-gradient-to-r from-violet-600 to-indigo-600 hover:from-violet-500 hover:to-indigo-500 disabled:opacity-50 text-white rounded-xl font-bold text-sm shadow-lg shadow-violet-900/30 transition-all active:scale-95 flex items-center gap-2"
+                            >
+                                {isSubmitting ? (
+                                    <><span className="w-4 h-4 border-2 border-white/30 border-t-white rounded-full animate-spin" />应用中...</>
+                                ) : (
+                                    '应用排单方案 (Apply Scheme)'
+                                )}
+                            </button>
                         </div>
                     </div>
                 </div>

@@ -1,0 +1,14 @@
+---
+description: 本地 Express API 入口 server.ts
+globs: server.ts
+alwaysApply: false
+---
+
+# server.ts
+
+- 本地开发 API 入口，默认端口 **8080**
+- 用 `mountVercelHandler` 挂载 `api/` 下的 handler；新增需本地调试的 API 在此注册
+- 已挂载：`/api/manage-employee`、`/api/create-driver`、`/api/delete-driver`、`/api/agent/chat`
+- 与 `npm run dev:all` 配合；Vite 将 `/api` 代理到本服务
+
+修改后重启 `npm run start` 或 `dev:all`。

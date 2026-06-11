@@ -1,0 +1,38 @@
+---
+description: scripts 运维脚本与数据库操作约定
+globs: scripts/**/*
+alwaysApply: false
+---
+
+# 脚本与数据库规则
+
+## 运行方式
+
+```bash
+npx tsx scripts/你的脚本.ts
+# 或 package.json 已定义的：npm run daily-report
+```
+
+- 脚本使用 `tsx`，可读 `dotenv`（项目根 `.env`）
+- 长驻/批处理放 `scripts/`，一次性诊断可放 `scripts/db_ops/`
+
+## 安全（生产数据）
+
+- 执行前说明：影响的**表**、**行数估计**、是否**可逆**
+- 优先：先 SELECT 确认 → 小批量试跑 → 再全量
+- 迁移类逻辑放 `scripts/db_ops/`，写清前置条件与回滚思路
+- `debug_opm_lama*.ts` 为历史 OPM 调试脚本，默认不要修改或依赖
+
+## 与 Supabase 交互
+
+- 脚本通常用 `pg` 或 `@supabase/supabase-js` + **service role**（勿把 key 写进脚本文件）
+-  schema 以线上 `public` 表为准；改表需同步前端查询与 `src/types`
+
+## 输出
+
+- 控制台输出要有明确阶段（开始/进度/完成/失败行）
+- 失败时 `process.exit(1)`，便于 CI 或人工发现
+
+## 验证
+
+在副本数据或限定 `WHERE id = ...` 的单条上先跑通，再扩大范围。

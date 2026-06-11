@@ -1,0 +1,344 @@
+Connected to PG successfully!
+
+--- Checking target orders in sales_orders ---
+
+Order: DO-Bob-260609-001
+  Status: Delivered
+  Created At: Tue Jun 09 2026 15:59:20 GMT+0800 (Singapore Standard Time)
+  Updated At: Tue Jun 09 2026 15:59:20 GMT+0800 (Singapore Standard Time)
+  Driver ID: de732212-41c2-4334-818d-26c70eb23c10
+  Notes: 1 print
+[09/06 18:48] Trip completed
+  Items: [
+  {
+    "sku": "BW-SL-CLR-100Mx20CMx5ROLL-GRN",
+    "remark": "",
+    "product": "SL-20CM",
+    "quantity": 3,
+    "packaging": "Unit",
+    "sourceLocation": "OPM Lama"
+  },
+  {
+    "sku": "BW-SL-CLR-100Mx25CMx4ROLL-GRN",
+    "remark": "",
+    "product": "SL-25CM",
+    "quantity": 13,
+    "packaging": "Unit",
+    "sourceLocation": "OPM Lama"
+  },
+  {
+    "sku": "BW-DL-CLR-100Mx25CMx4ROLL-BLU",
+    "remark": "",
+    "product": "DL-25CM",
+    "quantity": 4,
+    "packaging": "Unit",
+    "sourceLocation": "OPM Lama"
+  },
+  {
+    "sku": "BW-SL-CLR-100Mx33CMx3ROLL-GRN",
+    "remark": "",
+    "product": "SL-33CM",
+    "quantity": 16,
+    "packaging": "Unit",
+    "sourceLocation": "OPM Lama"
+  },
+  {
+    "sku": "BW-SL-BLK-100Mx100CMx1ROLL-GRN",
+    "remark": "",
+    "product": "HITAM-FULL",
+    "quantity": 7,
+    "packaging": "Unit",
+    "sourceLocation": "OPM Lama"
+  },
+  {
+    "sku": "BW-DL-CLR-100Mx33CMx3ROLL-BLU",
+    "remark": "",
+    "product": "DL-33CM",
+    "quantity": 5,
+    "packaging": "Unit",
+    "sourceLocation": "OPM Lama"
+  },
+  {
+    "sku": "BW-SL-BLK-100Mx50CMx2ROLL-RED",
+    "remark": "",
+    "product": "HITAM-HALF",
+    "quantity": 1,
+    "packaging": "Unit",
+    "sourceLocation": "OPM Lama"
+  },
+  {
+    "sku": "BW-SL-CLR-100Mx100CMx1ROLL-RED",
+    "remark": "",
+    "product": "MERAH",
+    "quantity": 32,
+    "packaging": "Unit",
+    "sourceLocation": "OPM Lama"
+  },
+  {
+    "sku": "BW-DL-CLR-100Mx50CMx2ROLL-BLU",
+    "remark": "",
+    "product": "DL-HALF",
+    "quantity": 2,
+    "packaging": "Unit",
+    "sourceLocation": "OPM Lama"
+  },
+  {
+    "sku": "BW-DL-CLR-100Mx100CMx1ROLL-YEL",
+    "remark": "",
+    "product": "DL-FULL",
+    "quantity": 20,
+    "packaging": "Unit",
+    "sourceLocation": "OPM Lama"
+  },
+  {
+    "sku": "BW-DL-CLR-100Mx20CMx5ROLL-BLU",
+    "remark": "",
+    "product": "DL-20CM",
+    "quantity": 1,
+    "packaging": "Unit",
+    "sourceLocation": "OPM Lama"
+  },
+  {
+    "sku": "BW-SL-BLK-100Mx33CMx3ROLL-GRN",
+    "remark": "",
+    "product": "HITAM-33CM",
+    "quantity": 2,
+    "packaging": "Unit",
+    "sourceLocation": "OPM Lama"
+  },
+  {
+    "sku": "BW-SL-CLR-100Mx50CMx2ROLL-ORN",
+    "remark": "",
+    "product": "OREN",
+    "quantity": 16,
+    "packaging": "Unit",
+    "sourceLocation": "OPM Lama"
+  }
+]
+
+Order: DO-Yashin-260609-001
+  Status: Delivered
+  Created At: Tue Jun 09 2026 15:30:30 GMT+0800 (Singapore Standard Time)
+  Updated At: Tue Jun 09 2026 15:30:30 GMT+0800 (Singapore Standard Time)
+  Driver ID: f1e0b372-4d34-46c2-a3ab-3497688f1899
+  Notes: trip 1 ,ipoh
+[10/06 18:58] Proof uploaded
+  Items: [
+  {
+    "sku": "BW-SL-CLR-100Mx50CMx2ROLL-ORN",
+    "remark": "",
+    "product": "OREN",
+    "quantity": 20,
+    "packaging": "Unit",
+    "sourceLocation": "OPM Lama"
+  },
+  {
+    "sku": "BW-DL-CLR-100Mx100CMx1ROLL-YEL",
+    "remark": "",
+    "product": "DL-FULL",
+    "quantity": 14,
+    "packaging": "Unit",
+    "sourceLocation": "OPM Lama"
+  },
+  {
+    "sku": "CUKUPP-CLEAR-TAPE-80M",
+    "remark": "1 pallet",
+    "product": "CUKUPP-CLEAR-TAPE-80M",
+    "quantity": 54,
+    "packaging": "Unit",
+    "sourceLocation": "OPM Ali"
+  },
+  {
+    "sku": "SF-CLEAR",
+    "remark": "2 pallet",
+    "product": "SF-CLEAR",
+    "quantity": 144,
+    "packaging": "Unit",
+    "sourceLocation": "OPM Ali"
+  }
+]
+
+Order: DO-yan-260610-001
+  Status: Delivered
+  Created At: Wed Jun 10 2026 10:18:28 GMT+0800 (Singapore Standard Time)
+  Updated At: Wed Jun 10 2026 10:18:28 GMT+0800 (Singapore Standard Time)
+  Driver ID: 06198eb2-7902-4f25-999c-ce00ea0ed037
+  Notes: trip 1 
+[10/06 15:22] Proof uploaded
+[10/06 18:02] Proof uploaded
+  Items: [
+  {
+    "sku": "BW-SL-CLR-100Mx50CMx2ROLL-ORN",
+    "remark": "",
+    "product": "OREN",
+    "quantity": 65,
+    "packaging": "Unit",
+    "sourceLocation": "OPM Lama"
+  },
+  {
+    "sku": "SF-BLACK",
+    "remark": "",
+    "product": "SF-BLACK",
+    "quantity": 20,
+    "packaging": "Unit",
+    "sourceLocation": "OPM Ali"
+  },
+  {
+    "sku": "AIRTUBE-25CM-300M",
+    "remark": "",
+    "product": "AIRTUBE-25CM-300M",
+    "quantity": 10,
+    "packaging": "Unit",
+    "sourceLocation": "OPM Corner"
+  },
+  {
+    "sku": "AIRTUBE-35CM-300M",
+    "remark": "",
+    "product": "AIRTUBE-35CM-300M",
+    "quantity": 10,
+    "packaging": "Unit",
+    "sourceLocation": "OPM Corner"
+  }
+]
+
+Order: DO-yan-260608-001
+  Status: Delivered
+  Created At: Mon Jun 08 2026 17:41:51 GMT+0800 (Singapore Standard Time)
+  Updated At: Mon Jun 08 2026 17:41:51 GMT+0800 (Singapore Standard Time)
+  Driver ID: 06198eb2-7902-4f25-999c-ce00ea0ed037
+  Notes: trip 2 ,perak x5
+
+[10/06 15:23] Proof uploaded
+[10/06 15:54] Proof uploaded
+[10/06 16:16] Proof uploaded
+[10/06 16:41] Proof uploaded
+[10/06 18:02] Proof uploaded
+[10/06 18:03] Proof uploaded
+[10/06 18:03] Proof uploaded
+  Items: [
+  {
+    "sku": "AWB-5000STACK-2",
+    "remark": "20set = 40box",
+    "product": "AWB-5000STACK-2",
+    "quantity": 20,
+    "packaging": "Unit",
+    "sourceLocation": "OPM Ali"
+  },
+  {
+    "sku": "AIRTUBE-25CM-300M",
+    "remark": "WRAP PALLET WRITE ANTELOPE",
+    "product": "AIRTUBE-25CM-300M",
+    "quantity": 100,
+    "packaging": "Unit",
+    "sourceLocation": "OPM Corner"
+  },
+  {
+    "sku": "CUKUPP-B17",
+    "remark": "",
+    "product": "CUKUPP-B17",
+    "quantity": 42,
+    "packaging": "Unit",
+    "sourceLocation": "OPM Corner"
+  },
+  {
+    "sku": "BW-SL-CLR-100Mx100CMx1ROLL-RED",
+    "remark": "",
+    "product": "MERAH",
+    "quantity": 10,
+    "packaging": "Unit",
+    "sourceLocation": "OPM Lama"
+  },
+  {
+    "sku": "BW-SL-CLR-100Mx50CMx2ROLL-ORN",
+    "remark": "",
+    "product": "OREN",
+    "quantity": 30,
+    "packaging": "Unit",
+    "sourceLocation": "OPM Lama"
+  },
+  {
+    "sku": "SF-CLEAR",
+    "remark": "",
+    "product": "SF-CLEAR",
+    "quantity": 1,
+    "packaging": "Unit",
+    "sourceLocation": "OPM Ali"
+  },
+  {
+    "sku": "SF-BLACK",
+    "remark": "",
+    "product": "SF-BLACK",
+    "quantity": 1,
+    "packaging": "Unit",
+    "sourceLocation": "OPM Ali"
+  },
+  {
+    "sku": "SF-BABYROLL",
+    "remark": "CLEAR ",
+    "product": "SF-BABYROLL",
+    "quantity": 4,
+    "packaging": "Unit",
+    "sourceLocation": "OPM Ali"
+  }
+]
+
+--- Checking recent activity logs for these orders ---
+- Tue Jun 09 2026 18:48:42 GMT+0800 (Singapore Standard Time): [OPM Lama] [DO-Bob-260609-001] Event: Transfer Out, SKU: SLC-50CM-50M, Qty: -3.0000, Notes: "Auto-deduct: Order Delivered"
+- Tue Jun 09 2026 18:48:42 GMT+0800 (Singapore Standard Time): [OPM Lama] [DO-Bob-260609-001] Event: Transfer Out, SKU: BW-SL-CLR-100Mx20CMx5ROLL-GRN, Qty: -3.0000, Notes: "Auto-deduct: Order Delivered"
+- Tue Jun 09 2026 18:48:42 GMT+0800 (Singapore Standard Time): [OPM Lama] [DO-Bob-260609-001] Event: Transfer Out, SKU: BW-SL-CLR-100Mx25CMx4ROLL-GRN, Qty: -14.0000, Notes: "Auto-deduct: Order Delivered"
+- Tue Jun 09 2026 18:48:42 GMT+0800 (Singapore Standard Time): [OPM Lama] [DO-Bob-260609-001] Event: Transfer Out, SKU: BW-DL-CLR-100Mx25CMx4ROLL-BLU, Qty: -3.0000, Notes: "Auto-deduct: Order Delivered"
+- Tue Jun 09 2026 18:48:42 GMT+0800 (Singapore Standard Time): [OPM Lama] [DO-Bob-260609-001] Event: Transfer Out, SKU: BW-SL-CLR-100Mx33CMx3ROLL-GRN, Qty: -16.0000, Notes: "Auto-deduct: Order Delivered"
+- Tue Jun 09 2026 18:48:42 GMT+0800 (Singapore Standard Time): [OPM Lama] [DO-Bob-260609-001] Event: Transfer Out, SKU: BW-SL-BLK-100Mx100CMx1ROLL-GRN, Qty: -1.0000, Notes: "Auto-deduct: Order Delivered"
+- Tue Jun 09 2026 18:48:42 GMT+0800 (Singapore Standard Time): [OPM Lama] [DO-Bob-260609-001] Event: Transfer Out, SKU: BW-DL-CLR-100Mx33CMx3ROLL-BLU, Qty: -5.0000, Notes: "Auto-deduct: Order Delivered"
+- Tue Jun 09 2026 18:48:42 GMT+0800 (Singapore Standard Time): [OPM Lama] [DO-Bob-260609-001] Event: Transfer Out, SKU: BW-SL-BLK-100Mx50CMx2ROLL-RED, Qty: -1.0000, Notes: "Auto-deduct: Order Delivered"
+- Tue Jun 09 2026 18:48:42 GMT+0800 (Singapore Standard Time): [OPM Lama] [DO-Bob-260609-001] Event: Transfer Out, SKU: BW-SL-CLR-100Mx100CMx1ROLL-RED, Qty: -32.0000, Notes: "Auto-deduct: Order Delivered"
+- Tue Jun 09 2026 18:48:42 GMT+0800 (Singapore Standard Time): [OPM Lama] [DO-Bob-260609-001] Event: Transfer Out, SKU: BW-SL-CLR-100Mx50CMx2ROLL-ORN, Qty: -13.0000, Notes: "Auto-deduct: Order Delivered"
+- Tue Jun 09 2026 18:48:42 GMT+0800 (Singapore Standard Time): [OPM Lama] [DO-Bob-260609-001] Event: Transfer Out, SKU: BW-DL-CLR-100Mx50CMx2ROLL-BLU, Qty: -2.0000, Notes: "Auto-deduct: Order Delivered"
+- Tue Jun 09 2026 18:48:42 GMT+0800 (Singapore Standard Time): [OPM Lama] [DO-Bob-260609-001] Event: Transfer Out, SKU: BW-DL-CLR-100Mx100CMx1ROLL-YEL, Qty: -20.0000, Notes: "Auto-deduct: Order Delivered"
+- Tue Jun 09 2026 18:48:42 GMT+0800 (Singapore Standard Time): [OPM Lama] [DO-Bob-260609-001] Event: Transfer Out, SKU: BW-DL-CLR-100Mx20CMx5ROLL-BLU, Qty: -1.0000, Notes: "Auto-deduct: Order Delivered"
+- Tue Jun 09 2026 18:48:42 GMT+0800 (Singapore Standard Time): [OPM Lama] [DO-Bob-260609-001] Event: Transfer Out, SKU: BW-DL-CLR-100Mx25CMx4ROLL-BLU, Qty: -1.0000, Notes: "Auto-deduct: Order Delivered"
+- Tue Jun 09 2026 18:48:42 GMT+0800 (Singapore Standard Time): [OPM Lama] [DO-Bob-260609-001] Event: Transfer Out, SKU: BW-SL-BLK-100Mx33CMx3ROLL-GRN, Qty: -2.0000, Notes: "Auto-deduct: Order Delivered"
+- Wed Jun 10 2026 18:00:18 GMT+0800 (Singapore Standard Time): [OPM Lama] [DO-Bob-260609-001] Event: Transfer In, SKU: BW-DL-CLR-100Mx25CMx4ROLL-BLU, Qty: 1.0000, Notes: "Correction: Refund Old Items"
+- Wed Jun 10 2026 18:00:18 GMT+0800 (Singapore Standard Time): [OPM Lama] [DO-Bob-260609-001] Event: Transfer In, SKU: BW-DL-CLR-100Mx100CMx1ROLL-YEL, Qty: 20.0000, Notes: "Correction: Refund Old Items"
+- Wed Jun 10 2026 18:00:18 GMT+0800 (Singapore Standard Time): [OPM Lama] [DO-Bob-260609-001] Event: Transfer In, SKU: BW-DL-CLR-100Mx20CMx5ROLL-BLU, Qty: 1.0000, Notes: "Correction: Refund Old Items"
+- Wed Jun 10 2026 18:00:18 GMT+0800 (Singapore Standard Time): [OPM Lama] [DO-Bob-260609-001] Event: Transfer In, SKU: BW-SL-BLK-100Mx33CMx3ROLL-GRN, Qty: 2.0000, Notes: "Correction: Refund Old Items"
+- Wed Jun 10 2026 18:00:18 GMT+0800 (Singapore Standard Time): [OPM Lama] [DO-Bob-260609-001] Event: Transfer Out, SKU: BW-SL-CLR-100Mx20CMx5ROLL-GRN, Qty: -3.0000, Notes: "Correction: Deduct New Items"
+- Wed Jun 10 2026 18:00:18 GMT+0800 (Singapore Standard Time): [OPM Lama] [DO-Bob-260609-001] Event: Transfer Out, SKU: BW-SL-CLR-100Mx25CMx4ROLL-GRN, Qty: -13.0000, Notes: "Correction: Deduct New Items"
+- Wed Jun 10 2026 18:00:18 GMT+0800 (Singapore Standard Time): [OPM Lama] [DO-Bob-260609-001] Event: Transfer Out, SKU: BW-DL-CLR-100Mx25CMx4ROLL-BLU, Qty: -4.0000, Notes: "Correction: Deduct New Items"
+- Wed Jun 10 2026 18:00:18 GMT+0800 (Singapore Standard Time): [OPM Lama] [DO-Bob-260609-001] Event: Transfer Out, SKU: BW-SL-CLR-100Mx33CMx3ROLL-GRN, Qty: -16.0000, Notes: "Correction: Deduct New Items"
+- Wed Jun 10 2026 18:00:18 GMT+0800 (Singapore Standard Time): [OPM Lama] [DO-Bob-260609-001] Event: Transfer Out, SKU: BW-SL-BLK-100Mx100CMx1ROLL-GRN, Qty: -7.0000, Notes: "Correction: Deduct New Items"
+- Wed Jun 10 2026 18:00:18 GMT+0800 (Singapore Standard Time): [OPM Lama] [DO-Bob-260609-001] Event: Transfer Out, SKU: BW-DL-CLR-100Mx33CMx3ROLL-BLU, Qty: -5.0000, Notes: "Correction: Deduct New Items"
+- Wed Jun 10 2026 18:00:18 GMT+0800 (Singapore Standard Time): [OPM Lama] [DO-Bob-260609-001] Event: Transfer Out, SKU: BW-SL-BLK-100Mx50CMx2ROLL-RED, Qty: -1.0000, Notes: "Correction: Deduct New Items"
+- Wed Jun 10 2026 18:00:18 GMT+0800 (Singapore Standard Time): [OPM Lama] [DO-Bob-260609-001] Event: Transfer Out, SKU: BW-SL-CLR-100Mx100CMx1ROLL-RED, Qty: -32.0000, Notes: "Correction: Deduct New Items"
+- Wed Jun 10 2026 18:00:18 GMT+0800 (Singapore Standard Time): [OPM Lama] [DO-Bob-260609-001] Event: Transfer Out, SKU: BW-DL-CLR-100Mx50CMx2ROLL-BLU, Qty: -2.0000, Notes: "Correction: Deduct New Items"
+- Wed Jun 10 2026 18:00:18 GMT+0800 (Singapore Standard Time): [OPM Lama] [DO-Bob-260609-001] Event: Transfer Out, SKU: BW-DL-CLR-100Mx100CMx1ROLL-YEL, Qty: -20.0000, Notes: "Correction: Deduct New Items"
+- Wed Jun 10 2026 18:00:18 GMT+0800 (Singapore Standard Time): [OPM Lama] [DO-Bob-260609-001] Event: Transfer Out, SKU: BW-DL-CLR-100Mx20CMx5ROLL-BLU, Qty: -1.0000, Notes: "Correction: Deduct New Items"
+- Wed Jun 10 2026 18:00:18 GMT+0800 (Singapore Standard Time): [OPM Lama] [DO-Bob-260609-001] Event: Transfer Out, SKU: BW-SL-BLK-100Mx33CMx3ROLL-GRN, Qty: -2.0000, Notes: "Correction: Deduct New Items"
+- Wed Jun 10 2026 18:00:18 GMT+0800 (Singapore Standard Time): [OPM Lama] [DO-Bob-260609-001] Event: Transfer Out, SKU: BW-SL-CLR-100Mx50CMx2ROLL-ORN, Qty: -16.0000, Notes: "Correction: Deduct New Items"
+- Wed Jun 10 2026 18:00:18 GMT+0800 (Singapore Standard Time): [OPM Lama] [DO-Bob-260609-001] Event: Transfer In, SKU: SLC-50CM-50M, Qty: 3.0000, Notes: "Correction: Refund Old Items"
+- Wed Jun 10 2026 18:00:18 GMT+0800 (Singapore Standard Time): [OPM Lama] [DO-Bob-260609-001] Event: Transfer In, SKU: BW-SL-CLR-100Mx20CMx5ROLL-GRN, Qty: 3.0000, Notes: "Correction: Refund Old Items"
+- Wed Jun 10 2026 18:00:18 GMT+0800 (Singapore Standard Time): [OPM Lama] [DO-Bob-260609-001] Event: Transfer In, SKU: BW-SL-CLR-100Mx25CMx4ROLL-GRN, Qty: 14.0000, Notes: "Correction: Refund Old Items"
+- Wed Jun 10 2026 18:00:18 GMT+0800 (Singapore Standard Time): [OPM Lama] [DO-Bob-260609-001] Event: Transfer In, SKU: BW-DL-CLR-100Mx25CMx4ROLL-BLU, Qty: 3.0000, Notes: "Correction: Refund Old Items"
+- Wed Jun 10 2026 18:00:18 GMT+0800 (Singapore Standard Time): [OPM Lama] [DO-Bob-260609-001] Event: Transfer In, SKU: BW-SL-CLR-100Mx33CMx3ROLL-GRN, Qty: 16.0000, Notes: "Correction: Refund Old Items"
+- Wed Jun 10 2026 18:00:18 GMT+0800 (Singapore Standard Time): [OPM Lama] [DO-Bob-260609-001] Event: Transfer In, SKU: BW-SL-BLK-100Mx100CMx1ROLL-GRN, Qty: 1.0000, Notes: "Correction: Refund Old Items"
+- Wed Jun 10 2026 18:00:18 GMT+0800 (Singapore Standard Time): [OPM Lama] [DO-Bob-260609-001] Event: Transfer In, SKU: BW-DL-CLR-100Mx33CMx3ROLL-BLU, Qty: 5.0000, Notes: "Correction: Refund Old Items"
+- Wed Jun 10 2026 18:00:18 GMT+0800 (Singapore Standard Time): [OPM Lama] [DO-Bob-260609-001] Event: Transfer In, SKU: BW-SL-BLK-100Mx50CMx2ROLL-RED, Qty: 1.0000, Notes: "Correction: Refund Old Items"
+- Wed Jun 10 2026 18:00:18 GMT+0800 (Singapore Standard Time): [OPM Lama] [DO-Bob-260609-001] Event: Transfer In, SKU: BW-SL-CLR-100Mx100CMx1ROLL-RED, Qty: 32.0000, Notes: "Correction: Refund Old Items"
+- Wed Jun 10 2026 18:00:18 GMT+0800 (Singapore Standard Time): [OPM Lama] [DO-Bob-260609-001] Event: Transfer In, SKU: BW-SL-CLR-100Mx50CMx2ROLL-ORN, Qty: 13.0000, Notes: "Correction: Refund Old Items"
+- Wed Jun 10 2026 18:00:18 GMT+0800 (Singapore Standard Time): [OPM Lama] [DO-Bob-260609-001] Event: Transfer In, SKU: BW-DL-CLR-100Mx50CMx2ROLL-BLU, Qty: 2.0000, Notes: "Correction: Refund Old Items"
+- Wed Jun 10 2026 18:02:44 GMT+0800 (Singapore Standard Time): [OPM Corner] [DO-yan-260610-001] Event: Transfer Out, SKU: AIRTUBE-35CM-300M, Qty: -10.0000, Notes: "Auto-deduct: Order Delivered"
+- Wed Jun 10 2026 18:02:44 GMT+0800 (Singapore Standard Time): [OPM Lama] [DO-yan-260610-001] Event: Transfer Out, SKU: BW-SL-CLR-100Mx50CMx2ROLL-ORN, Qty: -65.0000, Notes: "Auto-deduct: Order Delivered"
+- Wed Jun 10 2026 18:02:44 GMT+0800 (Singapore Standard Time): [OPM Ali] [DO-yan-260610-001] Event: Transfer Out, SKU: SF-BLACK, Qty: -20.0000, Notes: "Auto-deduct: Order Delivered"
+- Wed Jun 10 2026 18:02:44 GMT+0800 (Singapore Standard Time): [OPM Corner] [DO-yan-260610-001] Event: Transfer Out, SKU: AIRTUBE-25CM-300M, Qty: -10.0000, Notes: "Auto-deduct: Order Delivered"
+- Wed Jun 10 2026 18:03:49 GMT+0800 (Singapore Standard Time): [OPM Ali] [DO-yan-260608-001] Event: Transfer Out, SKU: SF-BLACK, Qty: -1.0000, Notes: "Auto-deduct: Order Delivered"
+- Wed Jun 10 2026 18:03:49 GMT+0800 (Singapore Standard Time): [OPM Ali] [DO-yan-260608-001] Event: Transfer Out, SKU: SF-BABYROLL, Qty: -4.0000, Notes: "Auto-deduct: Order Delivered"
+- Wed Jun 10 2026 18:03:49 GMT+0800 (Singapore Standard Time): [OPM Corner] [DO-yan-260608-001] Event: Transfer Out, SKU: CUKUPP-B17, Qty: -42.0000, Notes: "Auto-deduct: Order Delivered"
+- Wed Jun 10 2026 18:03:49 GMT+0800 (Singapore Standard Time): [OPM Lama] [DO-yan-260608-001] Event: Transfer Out, SKU: BW-SL-CLR-100Mx100CMx1ROLL-RED, Qty: -10.0000, Notes: "Auto-deduct: Order Delivered"
+- Wed Jun 10 2026 18:03:49 GMT+0800 (Singapore Standard Time): [OPM Ali] [DO-yan-260608-001] Event: Transfer Out, SKU: AWB-5000STACK-2, Qty: -20.0000, Notes: "Auto-deduct: Order Delivered"
+- Wed Jun 10 2026 18:03:49 GMT+0800 (Singapore Standard Time): [OPM Lama] [DO-yan-260608-001] Event: Transfer Out, SKU: BW-SL-CLR-100Mx50CMx2ROLL-ORN, Qty: -30.0000, Notes: "Auto-deduct: Order Delivered"
+- Wed Jun 10 2026 18:03:49 GMT+0800 (Singapore Standard Time): [OPM Corner] [DO-yan-260608-001] Event: Transfer Out, SKU: AIRTUBE-25CM-300M, Qty: -100.0000, Notes: "Auto-deduct: Order Delivered"
+- Wed Jun 10 2026 18:03:49 GMT+0800 (Singapore Standard Time): [OPM Ali] [DO-yan-260608-001] Event: Transfer Out, SKU: SF-CLEAR, Qty: -1.0000, Notes: "Auto-deduct: Order Delivered"
+- Wed Jun 10 2026 18:58:18 GMT+0800 (Singapore Standard Time): [OPM Lama] [DO-Yashin-260609-001] Event: Transfer Out, SKU: BW-DL-CLR-100Mx100CMx1ROLL-YEL, Qty: -14.0000, Notes: "Auto-deduct: Order Delivered"
+- Wed Jun 10 2026 18:58:18 GMT+0800 (Singapore Standard Time): [OPM Ali] [DO-Yashin-260609-001] Event: Transfer Out, SKU: CUKUPP-CLEAR-TAPE-80M, Qty: -54.0000, Notes: "Auto-deduct: Order Delivered"
+- Wed Jun 10 2026 18:58:18 GMT+0800 (Singapore Standard Time): [OPM Ali] [DO-Yashin-260609-001] Event: Transfer Out, SKU: SF-CLEAR, Qty: -144.0000, Notes: "Auto-deduct: Order Delivered"
+- Wed Jun 10 2026 18:58:18 GMT+0800 (Singapore Standard Time): [OPM Lama] [DO-Yashin-260609-001] Event: Transfer Out, SKU: BW-SL-CLR-100Mx50CMx2ROLL-ORN, Qty: -20.0000, Notes: "Auto-deduct: Order Delivered"

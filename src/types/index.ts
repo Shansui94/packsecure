@@ -99,7 +99,7 @@ export interface SalesOrder {
     orderNumber: string; // User friendly ID e.g., SO-2025-001
     customer: string;
     items: SalesOrderItem[];
-    status: 'New' | 'Planned' | 'In-Production' | 'Ready-to-Ship' | 'Shipped' | 'Delivered' | 'Cancelled' | 'Pending Approval';
+    status: 'New' | 'Planned' | 'In-Production' | 'Ready-to-Ship' | 'Shipped' | 'Loaded' | 'Delivered' | 'Cancelled' | 'Pending Approval';
     orderDate: string;
     deadline: string;
     notes?: string;
@@ -117,11 +117,14 @@ export interface SalesOrder {
     // Logistics V2
     trip_id?: string;
     stop_sequence?: number;
-    pod_signature_url?: string;
-    pod_photo_url?: string;
-    pod_signed_by?: string;
-    pod_timestamp?: string;
-    proof_of_load_url?: string;
+    pod_signature_url?: string | null;
+    pod_photo_url?: string | null;
+    pod_signed_by?: string | null;
+    pod_timestamp?: string | null;
+    proof_of_load_url?: string | null;
+    preparation_photo_url?: string | null;
+    deliveryDate?: string;
+    driver_id?: string;
 }
 
 export interface DeliveryRate {

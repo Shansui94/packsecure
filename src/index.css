@@ -9,6 +9,7 @@
   /* Slightly lighter surface */
   --accent-glow: 0 0 20px rgba(59, 130, 246, 0.5);
   --font-main: 'Inter', system-ui, -apple-system, sans-serif;
+  color-scheme: dark;
 }
 
 body {
@@ -91,4 +92,27 @@ body {
   textarea {
     font-size: 16px !important;
   }
+}
+
+/* Global Form Input Styles to fix browser-specific overrides in dark mode */
+input,
+select,
+textarea {
+  color: #f8fafc; /* Slate-50 */
+}
+
+/* Fix option and dropdown styling in dark mode */
+select option {
+  background-color: #1e1e24; /* bg-secondary */
+  color: #f8fafc;
+}
+
+/* Chrome autofill style overrides to keep theme consistent */
+input:-webkit-autofill,
+input:-webkit-autofill:hover,
+input:-webkit-autofill:focus,
+input:-webkit-autofill:active {
+  -webkit-text-fill-color: #f8fafc !important;
+  -webkit-box-shadow: 0 0 0px 1000px #0f172a inset !important;
+  transition: background-color 5000s ease-in-out 0s;
 }

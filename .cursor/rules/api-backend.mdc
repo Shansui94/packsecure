@@ -1,0 +1,49 @@
+---
+description: API、server.ts 与 Vercel 函数约定
+globs: api/**/*
+alwaysApply: false
+---
+
+# API 开发规则
+
+## 形态
+
+- 每个 `api/*.ts`（及子目录）导出默认 async handler，签名兼容 `@vercel/node` 的 `VercelRequest` / `VercelResponse`
+- 本地：`server.ts` 用 `mountVercelHandler(path, handler)` 挂到 Express
+- 生产：Vercel 按文件路径自动路由（如 `api/agent/chat.ts` → `/api/agent/chat`）
+
+## 认证
+
+```typescript
+// ✅ 管理端敏感操作
+import { requireStaffAuth, sendAuthError } from './lib/admin-auth';
+
+const auth = await requireStaffAuth(req, ['Admin', 'HR']);
+if (!auth.ok) return sendAuthError(res, auth);
+const { admin, caller } = auth;
+```
+
+- PIN/司机相关：参考 `api/lib/pin-auth.ts` 与前端 `src/utils/pinAuth.ts` 保持一致
+- CORS：使用 `api/lib/cors.ts`，生产可配 `SITE_URL`
+
+## 环境变量
+
+- Service Role：`getServiceRoleClient()`（`admin-auth.ts`），依赖 `VITE_SUPABASE_URL` + `SUPABASE_SERVICE_ROLE_KEY`
+- Gemini：`GOOGLE_API_KEY` 或 `GEMINI_API_KEY`（见 `api/agent/chat.ts`）
+- 请求体：`express.json({ limit: '10mb' })` 已配置，大 payload 注意超时
+
+## 错误处理
+
+- 捕获异常，返回 JSON `{ error: '...' }`，`console.error` 带路径前缀
+- 若 `res.headersSent` 则不再写响应
+
+## 新增 API 步骤
+
+1. 新建 `api/xxx.ts` 并实现 handler
+2. 本地在 `server.ts` 注册（若需本地调试）
+3. 前端通过 `/api/xxx` 调用（dev 时走 Vite 代理）
+4. 勿把 service role key 暴露给前端
+
+## 验证
+
+`npm run dev:all`，对 `http://localhost:8080/api/...` 或经前端触发，查看终端日志。

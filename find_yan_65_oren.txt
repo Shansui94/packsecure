@@ -1,0 +1,213 @@
+=== SEARCH FOR YAN 65 OREN ORDER ===
+
+Searching for orders since 2026-06-08...
+Found 47 recent orders in the database.
+
+Found 23 candidate matching orders:
+
+1. Order: DO-Taufik-260609-003
+   ID: 279f1cfb-5acd-495b-aa52-4425a8edc065
+   Matches: Driver yan? false | Has 65 Qty? false | Has Oren SKU? true (Qty: 70)
+   Status: Pending Approval
+   Origin: TAIPING | Destination: undefined
+   Date: 2026-06-09 | Deadline: 2026-06-10
+   CreatedAt: 2026-06-09T10:06:53.709654+00:00
+   Items: [{"sku":"BW-SL-CLR-100Mx50CMx2ROLL-ORN","remark":"","product":"OREN","quantity":70,"packaging":"Unit","sourceLocation":"OPM Lama","original_quantity":70},{"sku":"BW-SL-CLR-100Mx100CMx1ROLL-RED","remark":"","product":"MERAH","quantity":8,"packaging":"Unit","sourceLocation":"OPM Lama","original_quantity":10},{"sku":"CUKUPP-W28","remark":"","product":"CUKUPP-W28","quantity":10,"packaging":"Unit","sourceLocation":"OPM Lama","original_quantity":10},{"sku":"SF-BLACK","remark":"","product":"SF-BLACK","quantity":20,"packaging":"Unit","sourceLocation":"OPM Lama","original_quantity":20}]
+
+2. Order: DO-Tahir-260609-001
+   ID: 5edab933-d726-42b1-acc3-5cb7c3d9fa9f
+   Matches: Driver yan? false | Has 65 Qty? false | Has Oren SKU? true (Qty: 92)
+   Status: Loaded
+   Origin: NILAI | Destination: undefined
+   Date: 2026-06-09 | Deadline: 2026-06-10
+   CreatedAt: 2026-06-09T09:08:38.197447+00:00
+   Items: [{"sku":"BW-SL-CLR-100Mx50CMx2ROLL-ORN","remark":"","product":"OREN","quantity":92,"packaging":"Unit","sourceLocation":"Nilai"},{"sku":"AIRTUBE-40CM-300M","remark":"","product":"AIRTUBE-40CM-300M","quantity":3,"packaging":"Unit","sourceLocation":"Nilai"}]
+
+3. Order: DO-Khairol-260609-001
+   ID: cfc96e8c-71db-4841-ad62-5c8a5ae9bcd6
+   Matches: Driver yan? false | Has 65 Qty? false | Has Oren SKU? true (Qty: 30)
+   Status: Loaded
+   Origin: NILAI | Destination: undefined
+   Date: 2026-06-09 | Deadline: 2026-06-10
+   CreatedAt: 2026-06-09T09:03:38.789535+00:00
+   Items: [{"sku":"BW-SL-CLR-100Mx100CMx1ROLL-RED","remark":"blue plastic ","product":"MERAH","quantity":27,"packaging":"Unit","sourceLocation":"Nilai"},{"sku":"BW-SL-CLR-100Mx50CMx2ROLL-ORN","remark":"blue plastic ","product":"OREN","quantity":30,"packaging":"Unit","sourceLocation":"Nilai"},{"sku":"BW-SL-CLR-100Mx33CMx3ROLL-GRN","remark":"blue plastc ","product":"SL-33CM","quantity":10,"packaging":"Unit","sourceLocation":"Nilai"},{"sku":"BW-SL-CLR-100Mx25CMx4ROLL-GRN","remark":"blue plastic ","product":"SL-25CM","quantity":15,"packaging":"Unit","sourceLocation":"Nilai"}]
+
+4. Order: DO-Ayam-260609-001
+   ID: 82f68020-d9a0-43ad-b87f-10ec3b397175
+   Matches: Driver yan? false | Has 65 Qty? false | Has Oren SKU? true (Qty: 29)
+   Status: Loaded
+   Origin: NILAI | Destination: undefined
+   Date: 2026-06-09 | Deadline: 2026-06-10
+   CreatedAt: 2026-06-09T09:02:36.063195+00:00
+   Items: [{"sku":"BW-SL-CLR-100Mx100CMx1ROLL-RED","remark":"","product":"MERAH","quantity":20,"packaging":"Unit","sourceLocation":"Nilai"},{"sku":"BW-SL-CLR-100Mx50CMx2ROLL-ORN","remark":"","product":"OREN","quantity":29,"packaging":"Unit","sourceLocation":"Nilai"},{"sku":"BW-DL-CLR-100Mx20CMx5ROLL-BLU","remark":"","product":"DL-20CM","quantity":1,"packaging":"Unit","sourceLocation":"Nilai"},{"sku":"BW-DL-CLR-100Mx100CMx1ROLL-YEL","remark":"","product":"DL-FULL","quantity":30,"packaging":"Unit","sourceLocation":"Nilai"},{"sku":"AWB-350ROLL-24","remark":"","product":"AWB-350ROLL-24","quantity":1,"packaging":"Unit","sourceLocation":"Nilai"},{"sku":"CUKUPP-CLEAR-TAPE-80M","remark":"","product":"CUKUPP-CLEAR-TAPE-80M","quantity":10,"packaging":"Unit","sourceLocation":"Nilai"}]
+
+5. Order: DO-Mahadi-260609-002
+   ID: 6b67f08f-89de-4136-b7cf-ff73452b2b83
+   Matches: Driver yan? false | Has 65 Qty? false | Has Oren SKU? true (Qty: 82)
+   Status: New
+   Origin: NILAI | Destination: undefined
+   Date: 2026-06-09 | Deadline: 2026-06-10
+   CreatedAt: 2026-06-09T09:00:11.759458+00:00
+   Items: [{"sku":"BW-SL-CLR-100Mx50CMx2ROLL-ORN","remark":"","product":"OREN","quantity":82,"packaging":"Unit","sourceLocation":"Nilai"}]
+
+6. Order: DO-Bob-260609-003
+   ID: 2495d88a-6f2e-4aea-a527-a1d553153071
+   Matches: Driver yan? false | Has 65 Qty? false | Has Oren SKU? true (Qty: 5)
+   Status: Delivered
+   Origin: TAIPING | Destination: undefined
+   Date: 2026-06-09 | Deadline: 2026-06-10
+   CreatedAt: 2026-06-09T08:40:25.432961+00:00
+   Items: [{"sku":"BW-SL-CLR-100Mx100CMx1ROLL-RED","remark":"","product":"MERAH","quantity":5,"packaging":"Unit","sourceLocation":"OPM Lama"},{"sku":"BW-SL-CLR-100Mx50CMx2ROLL-ORN","remark":"","product":"OREN","quantity":5,"packaging":"Unit","sourceLocation":"OPM Lama"},{"sku":"BW-DL-CLR-100Mx50CMx2ROLL-BLU","remark":"","product":"DL-HALF","quantity":3,"packaging":"Unit","sourceLocation":"OPM Lama"},{"sku":"BW-DL-BLK-100Mx100CMx1ROLL-RED","remark":"","product":"DL-HITAM-FULL","quantity":1,"packaging":"Unit","sourceLocation":"OPM Lama"},{"sku":"BW-DL-CLR-100Mx100CMx1ROLL-YEL","remark":"","product":"DL-FULL","quantity":7,"packaging":"Unit","sourceLocation":"OPM Lama"},{"sku":"BW-SL-CLR-100Mx20CMx5ROLL-GRN","remark":"","product":"SL-20CM","quantity":3,"packaging":"Unit","sourceLocation":"OPM Lama"},{"sku":"BW-DL-CLR-100Mx20CMx5ROLL-BLU","remark":"","product":"DL-20CM","quantity":1,"packaging":"Unit","sourceLocation":"OPM Lama"},{"sku":"BW-DL-CLR-100Mx33CMx3ROLL-BLU","remark":"","product":"DL-33CM","quantity":1,"packaging":"Unit","sourceLocation":"OPM Lama"}]
+
+7. Order: DO-Bob-260609-002
+   ID: 80631fde-8912-4546-abbb-000e533c00df
+   Matches: Driver yan? false | Has 65 Qty? false | Has Oren SKU? true (Qty: 5)
+   Status: Delivered
+   Origin: TAIPING | Destination: undefined
+   Date: 2026-06-09 | Deadline: 2026-06-10
+   CreatedAt: 2026-06-09T08:05:10.31025+00:00
+   Items: [{"sku":"BW-SL-CLR-100Mx33CMx3ROLL-GRN","remark":"","product":"SL-33CM","quantity":3,"packaging":"Unit","sourceLocation":"OPM Lama"},{"sku":"BW-SL-BLK-100Mx25CMx4ROLL-GRN","remark":"","product":"HITAM-25CM","quantity":1,"packaging":"Unit","sourceLocation":"OPM Lama"},{"sku":"BW-SL-CLR-100Mx25CMx4ROLL-GRN","remark":"","product":"SL-25CM","quantity":7,"packaging":"Unit","sourceLocation":"OPM Lama"},{"sku":"BW-SL-CLR-100Mx100CMx1ROLL-RED","remark":"","product":"MERAH","quantity":22,"packaging":"Unit","sourceLocation":"OPM Lama"},{"sku":"BW-SL-CLR-100Mx50CMx2ROLL-ORN","remark":"","product":"OREN","quantity":5,"packaging":"Unit","sourceLocation":"OPM Lama"},{"sku":"BW-DL-CLR-100Mx50CMx2ROLL-BLU","remark":"","product":"DL-HALF","quantity":2,"packaging":"Unit","sourceLocation":"OPM Lama"},{"sku":"BW-DL-BLK-100Mx100CMx1ROLL-RED","remark":"","product":"DL-HITAM-FULL","quantity":1,"packaging":"Unit","sourceLocation":"OPM Lama"},{"sku":"BW-DL-CLR-100Mx100CMx1ROLL-YEL","remark":"","product":"DL-FULL","quantity":13,"packaging":"Unit","sourceLocation":"OPM Lama"},{"sku":"BW-SL-CLR-100Mx20CMx5ROLL-GRN","remark":"","product":"SL-20CM","quantity":4,"packaging":"Unit","sourceLocation":"OPM Lama"},{"sku":"BW-DL-CLR-100Mx33CMx3ROLL-BLU","remark":"","product":"DL-33CM","quantity":2,"packaging":"Unit","sourceLocation":"OPM Lama"},{"sku":"BW-SL-BLK-100Mx33CMx3ROLL-GRN","remark":"","product":"HITAM-33CM","quantity":1,"packaging":"Unit","sourceLocation":"OPM Lama"},{"sku":"BW-DL-CLR-100Mx20CMx5ROLL-BLU","remark":"","product":"DL-20CM","quantity":1,"packaging":"Unit","sourceLocation":"OPM Lama"}]
+
+8. Order: DO-Bob-260609-001
+   ID: c4b1a8be-ba3a-4a3c-a29d-df58d1686b4b
+   Matches: Driver yan? false | Has 65 Qty? false | Has Oren SKU? true (Qty: 13)
+   Status: Delivered
+   Origin: TAIPING | Destination: undefined
+   Date: 2026-06-09 | Deadline: 2026-06-10
+   CreatedAt: 2026-06-09T07:59:20.630959+00:00
+   Items: [{"sku":"SLC-50CM-50M","remark":"","product":"SL CLEAR 50CM X 50M (2UNIT)","quantity":3,"packaging":"kg","sourceLocation":"OPM Lama"},{"sku":"BW-SL-CLR-100Mx20CMx5ROLL-GRN","remark":"","product":"SL-20CM","quantity":3,"packaging":"Unit","sourceLocation":"OPM Lama"},{"sku":"BW-SL-CLR-100Mx25CMx4ROLL-GRN","remark":"","product":"SL-25CM","quantity":14,"packaging":"Unit","sourceLocation":"OPM Lama"},{"sku":"BW-DL-CLR-100Mx25CMx4ROLL-BLU","remark":"","product":"DL-25CM","quantity":3,"packaging":"Unit","sourceLocation":"OPM Lama"},{"sku":"BW-SL-CLR-100Mx33CMx3ROLL-GRN","remark":"","product":"SL-33CM","quantity":16,"packaging":"Unit","sourceLocation":"OPM Lama"},{"sku":"BW-SL-BLK-100Mx100CMx1ROLL-GRN","remark":"","product":"HITAM-FULL","quantity":1,"packaging":"Unit","sourceLocation":"OPM Lama"},{"sku":"BW-DL-CLR-100Mx33CMx3ROLL-BLU","remark":"","product":"DL-33CM","quantity":5,"packaging":"Unit","sourceLocation":"OPM Lama"},{"sku":"BW-SL-BLK-100Mx50CMx2ROLL-RED","remark":"","product":"HITAM-HALF","quantity":1,"packaging":"Unit","sourceLocation":"OPM Lama"},{"sku":"BW-SL-CLR-100Mx100CMx1ROLL-RED","remark":"","product":"MERAH","quantity":32,"packaging":"Unit","sourceLocation":"OPM Lama"},{"sku":"BW-SL-CLR-100Mx50CMx2ROLL-ORN","remark":"","product":"OREN","quantity":13,"packaging":"Unit","sourceLocation":"OPM Lama"},{"sku":"BW-DL-CLR-100Mx50CMx2ROLL-BLU","remark":"","product":"DL-HALF","quantity":2,"packaging":"Unit","sourceLocation":"OPM Lama"},{"sku":"BW-DL-CLR-100Mx100CMx1ROLL-YEL","remark":"","product":"DL-FULL","quantity":20,"packaging":"Unit","sourceLocation":"OPM Lama"},{"sku":"BW-DL-CLR-100Mx20CMx5ROLL-BLU","remark":"","product":"DL-20CM","quantity":1,"packaging":"Unit","sourceLocation":"OPM Lama"},{"sku":"BW-DL-CLR-100Mx25CMx4ROLL-BLU","remark":"","product":"DL-25CM","quantity":1,"packaging":"Unit","sourceLocation":"OPM Lama"},{"sku":"BW-SL-BLK-100Mx33CMx3ROLL-GRN","remark":"","product":"HITAM-33CM","quantity":2,"packaging":"Unit","sourceLocation":"OPM Lama"}]
+
+9. Order: DO-Taufik-260609-001
+   ID: 7f1fe35b-36a6-4ebb-807a-190b05778f43
+   Matches: Driver yan? false | Has 65 Qty? false | Has Oren SKU? true (Qty: 50)
+   Status: New
+   Origin: TAIPING | Destination: undefined
+   Date: 2026-06-09 | Deadline: 2026-06-10
+   CreatedAt: 2026-06-09T07:33:56.722838+00:00
+   Items: [{"sku":"BW-SL-CLR-100Mx25CMx4ROLL-GRN","remark":"","product":"SL-25CM","quantity":8,"packaging":"Unit","sourceLocation":"OPM Lama"},{"sku":"BW-SL-CLR-100Mx33CMx3ROLL-GRN","remark":"","product":"SL-33CM","quantity":24,"packaging":"Unit","sourceLocation":"OPM Lama"},{"sku":"BW-SL-CLR-100Mx50CMx2ROLL-ORN","remark":"","product":"OREN","quantity":50,"packaging":"Unit","sourceLocation":"OPM Lama"}]
+
+10. Order: DO-Yashin-260609-001
+   ID: 3074dfb6-7d89-4c5a-bdf4-aee78fb896f2
+   Matches: Driver yan? false | Has 65 Qty? false | Has Oren SKU? true (Qty: 20)
+   Status: New
+   Origin: TAIPING | Destination: undefined
+   Date: 2026-06-09 | Deadline: 2026-06-10
+   CreatedAt: 2026-06-09T07:30:30.828815+00:00
+   Items: [{"sku":"BW-SL-CLR-100Mx50CMx2ROLL-ORN","remark":"","product":"OREN","quantity":20,"packaging":"Unit","sourceLocation":"OPM Lama"},{"sku":"BW-DL-CLR-100Mx100CMx1ROLL-YEL","remark":"","product":"DL-FULL","quantity":14,"packaging":"Unit","sourceLocation":"OPM Lama"},{"sku":"CUKUPP-CLEAR-TAPE-80M","remark":"1 pallet","product":"CUKUPP-CLEAR-TAPE-80M","quantity":54,"packaging":"Unit","sourceLocation":"OPM Ali"},{"sku":"SF-CLEAR","remark":"2 pallet","product":"SF-CLEAR","quantity":144,"packaging":"Unit","sourceLocation":"OPM Ali"}]
+
+11. Order: DO-Waldan-260609-001
+   ID: 6ce60c7c-8c01-4058-9183-e9059d5abb78
+   Matches: Driver yan? false | Has 65 Qty? false | Has Oren SKU? true (Qty: 14)
+   Status: Loaded
+   Origin: TAIPING | Destination: undefined
+   Date: 2026-06-09 | Deadline: 2026-06-10
+   CreatedAt: 2026-06-09T07:27:24.061818+00:00
+   Items: [{"sku":"BW-SL-CLR-100Mx100CMx1ROLL-RED","remark":"","product":"MERAH","quantity":50,"packaging":"Unit","sourceLocation":"OPM Lama"},{"sku":"BW-SL-CLR-100Mx50CMx2ROLL-ORN","remark":"","product":"OREN","quantity":14,"packaging":"Unit","sourceLocation":"OPM Lama"},{"sku":"BW-SL-CLR-100Mx33CMx3ROLL-GRN","remark":"","product":"SL-33CM","quantity":18,"packaging":"Unit","sourceLocation":"OPM Lama"}]
+
+12. Order: DO-Ameer-260609-001
+   ID: a193174a-62f3-44f8-b8c6-9ef04e2b6a9a
+   Matches: Driver yan? false | Has 65 Qty? false | Has Oren SKU? true (Qty: 70)
+   Status: Delivered
+   Origin: TAIPING | Destination: undefined
+   Date: 2026-06-09 | Deadline: 2026-06-09
+   CreatedAt: 2026-06-09T03:23:01.462402+00:00
+   Items: [{"sku":"BW-SL-CLR-100Mx50CMx2ROLL-ORN","remark":"","product":"OREN","quantity":70,"packaging":"Unit","sourceLocation":"OPM Lama"},{"sku":"BW-SL-CLR-100Mx100CMx1ROLL-RED","remark":"","product":"MERAH","quantity":15,"packaging":"Unit","sourceLocation":"OPM Lama"},{"sku":"CUKUPP-FRAGILE-TAPE-80M","remark":"","product":"CUKUPP-FRAGILE-TAPE-80M","quantity":1,"packaging":"Unit","sourceLocation":"OPM Ali"},{"sku":"W25-ROLL","remark":"10rolls","product":"W25-ROLL","quantity":10,"packaging":"Roll","sourceLocation":"SPD"},{"sku":"B17-ROLL","remark":"10rolls ","product":"B17-ROLL","quantity":10,"packaging":"Roll","sourceLocation":"SPD"},{"sku":"B25-ROLL","remark":"5rolls ","product":"B25-ROLL","quantity":5,"packaging":"Roll","sourceLocation":"SPD"},{"sku":"B28-ROLL","remark":"5rolls","product":"B28-ROLL","quantity":5,"packaging":"Roll","sourceLocation":"SPD"},{"sku":"B40-ROLL","remark":"5rolls","product":"B40-ROLL","quantity":5,"packaging":"Roll","sourceLocation":"SPD"},{"sku":"CUKUPP-B17","remark":"","product":"CUKUPP-B17","quantity":1,"packaging":"Unit","sourceLocation":"OPM Ali"},{"sku":"CUKUPP-B25","remark":"","product":"CUKUPP-B25","quantity":1,"packaging":"Unit","sourceLocation":"OPM Ali"},{"sku":"CUKUPP-W17","remark":"","product":"CUKUPP-W17","quantity":10,"packaging":"Unit","sourceLocation":"OPM Ali"}]
+
+13. Order: DO-Ameer-260608-002
+   ID: cc30e373-b42b-4dad-8551-6a869519c367
+   Matches: Driver yan? false | Has 65 Qty? false | Has Oren SKU? true (Qty: 70)
+   Status: Cancelled
+   Origin: TAIPING | Destination: undefined
+   Date: 2026-06-08 | Deadline: 2026-06-10
+   CreatedAt: 2026-06-08T10:23:47.002453+00:00
+   Items: [{"sku":"BW-SL-CLR-100Mx50CMx2ROLL-ORN","remark":"","product":"OREN","quantity":70,"packaging":"Unit","sourceLocation":"OPM Lama"},{"sku":"CUKUPP-W28","remark":"","product":"CUKUPP-W28","quantity":10,"packaging":"Unit","sourceLocation":"OPM Ali"},{"sku":"SF-BLACK","remark":"","product":"SF-BLACK","quantity":20,"packaging":"Unit","sourceLocation":"OPM Ali"},{"sku":"BW-SL-CLR-100Mx100CMx1ROLL-RED","remark":"","product":"MERAH","quantity":10,"packaging":"Unit","sourceLocation":"OPM Lama"}]
+
+14. Order: DO-Mahadi-260608-002
+   ID: b8d976eb-bb93-4b43-951c-25145b54049e
+   Matches: Driver yan? false | Has 65 Qty? false | Has Oren SKU? true (Qty: 82)
+   Status: Cancelled
+   Origin: NILAI | Destination: undefined
+   Date: 2026-06-08 | Deadline: 2026-06-09
+   CreatedAt: 2026-06-08T10:16:53.966242+00:00
+   Items: [{"sku":"BW-SL-CLR-100Mx50CMx2ROLL-ORN","remark":"","product":"OREN","quantity":82,"packaging":"Unit","sourceLocation":"Nilai"}]
+
+15. Order: DO-Ayam-260608-001
+   ID: 1db685fd-34e8-476b-a29a-5a933d2852cf
+   Matches: Driver yan? false | Has 65 Qty? false | Has Oren SKU? true (Qty: 10)
+   Status: Delivered
+   Origin: NILAI | Destination: undefined
+   Date: 2026-06-08 | Deadline: 2026-06-09
+   CreatedAt: 2026-06-08T10:14:09.495226+00:00
+   Items: [{"sku":"BW-SL-CLR-100Mx100CMx1ROLL-RED","remark":"","product":"MERAH","quantity":40,"packaging":"Unit","sourceLocation":"Nilai"},{"sku":"BW-SL-CLR-100Mx50CMx2ROLL-ORN","remark":"","product":"OREN","quantity":10,"packaging":"Unit","sourceLocation":"Nilai"},{"sku":"BW-SL-CLR-100Mx20CMx5ROLL-GRN","remark":"","product":"SL-20CM","quantity":5,"packaging":"Unit","sourceLocation":"Nilai"},{"sku":"BW-DL-CLR-100Mx100CMx1ROLL-YEL","remark":"","product":"DL-FULL","quantity":12,"packaging":"Unit","sourceLocation":"Nilai"},{"sku":"BW-DL-CLR-100Mx50CMx2ROLL-BLU","remark":"","product":"DL-HALF","quantity":10,"packaging":"Unit","sourceLocation":"Nilai"},{"sku":"BW-DL-CLR-100Mx33CMx3ROLL-BLU","remark":"","product":"DL-33CM","quantity":5,"packaging":"Unit","sourceLocation":"Nilai"}]
+
+16. Order: DO-Khairol-260608-001
+   ID: 5c10a99a-2295-423b-8789-de485797ea78
+   Matches: Driver yan? false | Has 65 Qty? false | Has Oren SKU? true (Qty: 30)
+   Status: Delivered
+   Origin: NILAI | Destination: undefined
+   Date: 2026-06-08 | Deadline: 2026-06-09
+   CreatedAt: 2026-06-08T10:11:14.905154+00:00
+   Items: [{"sku":"BW-SL-CLR-100Mx100CMx1ROLL-RED","remark":"","product":"MERAH","quantity":10,"packaging":"Unit","sourceLocation":"Nilai"},{"sku":"BW-SL-CLR-100Mx50CMx2ROLL-ORN","remark":"","product":"OREN","quantity":30,"packaging":"Unit","sourceLocation":"Nilai"},{"sku":"BW-DL-CLR-100Mx100CMx1ROLL-YEL","remark":"","product":"DL-FULL","quantity":20,"packaging":"Unit","sourceLocation":"Nilai"},{"sku":"SF-CLEAR","remark":"","product":"SF-CLEAR","quantity":20,"packaging":"Unit","sourceLocation":"Nilai"},{"sku":"SF-BLACK","remark":"","product":"SF-BLACK","quantity":1,"packaging":"Unit","sourceLocation":"Nilai"},{"sku":"CUKUPP-B17","remark":"","product":"CUKUPP-B17","quantity":1,"packaging":"Unit","sourceLocation":"Nilai"},{"sku":"CUKUPP-B20","remark":"","product":"CUKUPP-B20","quantity":1,"packaging":"Unit","sourceLocation":"Nilai"},{"sku":"CUKUPP-B25","remark":"","product":"CUKUPP-B25","quantity":2,"packaging":"Unit","sourceLocation":"Nilai"},{"sku":"CUKUPP-B28","remark":"","product":"CUKUPP-B28","quantity":2,"packaging":"Unit","sourceLocation":"Nilai"},{"sku":"CUKUPP-B32","remark":"","product":"CUKUPP-B32","quantity":1,"packaging":"Unit","sourceLocation":"Nilai"}]
+
+17. Order: DO-yan-260608-002
+   ID: 86a91565-f69b-415f-bf69-5ea206a63157
+   Matches: Driver yan? true | Has 65 Qty? true | Has Oren SKU? true (Qty: 65)
+   Status: Delivered
+   Origin: TAIPING | Destination: undefined
+   Date: 2026-06-08 | Deadline: 2026-06-10
+   CreatedAt: 2026-06-08T10:06:07.52713+00:00
+   Items: [{"sku":"BW-SL-CLR-100Mx50CMx2ROLL-ORN","remark":"","product":"OREN","quantity":65,"packaging":"Unit","sourceLocation":"OPM Lama"},{"sku":"SF-BLACK","remark":"","product":"SF-BLACK","quantity":20,"packaging":"Unit","sourceLocation":"OPM Lama"},{"sku":"AIRTUBE-25CM-300M","remark":"","product":"AIRTUBE-25CM-300M","quantity":10,"packaging":"Unit","sourceLocation":"OPM Lama"},{"sku":"AIRTUBE-35CM-300M","remark":"","product":"AIRTUBE-35CM-300M","quantity":10,"packaging":"Unit","sourceLocation":"OPM Lama"}]
+
+18. Order: DO-Faizal-260608-001
+   ID: 988a8e38-7e27-49a8-ae0e-2576c4084267
+   Matches: Driver yan? false | Has 65 Qty? false | Has Oren SKU? true (Qty: 30)
+   Status: Delivered
+   Origin: TAIPING | Destination: undefined
+   Date: 2026-06-08 | Deadline: 2026-06-09
+   CreatedAt: 2026-06-08T09:56:57.884898+00:00
+   Items: [{"sku":"BW-SL-CLR-100Mx50CMx2ROLL-ORN","remark":"","product":"OREN","quantity":30,"packaging":"Unit","sourceLocation":"OPM Lama","original_quantity":30},{"sku":"BW-SL-CLR-100Mx33CMx3ROLL-GRN","remark":"","product":"SL-33CM","quantity":28,"packaging":"Unit","sourceLocation":"OPM Lama","original_quantity":30},{"sku":"BW-DL-CLR-100Mx50CMx2ROLL-BLU","remark":"","product":"DL-HALF","quantity":10,"packaging":"Unit","sourceLocation":"OPM Lama","original_quantity":10},{"sku":"BW-DL-CLR-100Mx100CMx1ROLL-YEL","remark":"","product":"DL-FULL","quantity":10,"packaging":"Unit","sourceLocation":"OPM Lama","original_quantity":10},{"sku":"CUKUPP-BROWN-TAPE-80M","remark":"","product":"CUKUPP-BROWN-TAPE-80M","quantity":10,"packaging":"Unit","sourceLocation":"OPM Ali","original_quantity":10},{"sku":"CUKUPP-W28","remark":"","product":"CUKUPP-W28","quantity":20,"packaging":"Unit","sourceLocation":"OPM Corner","original_quantity":20}]
+
+19. Order: DO-Taufik-260608-001
+   ID: 4de9a4ff-9d5e-46fd-8a6d-0e892576841f
+   Matches: Driver yan? false | Has 65 Qty? false | Has Oren SKU? true (Qty: 43)
+   Status: Delivered
+   Origin: TAIPING | Destination: undefined
+   Date: 2026-06-08 | Deadline: 2026-06-09
+   CreatedAt: 2026-06-08T09:53:20.078371+00:00
+   Items: [{"sku":"BW-SL-CLR-100Mx100CMx1ROLL-RED","remark":"","product":"MERAH","quantity":23,"packaging":"Unit","sourceLocation":"OPM Lama","original_quantity":30},{"sku":"BW-SL-CLR-100Mx50CMx2ROLL-ORN","remark":"","product":"OREN","quantity":43,"packaging":"Unit","sourceLocation":"OPM Lama","original_quantity":43},{"sku":"AIRTUBE-25CM-300M","remark":"","product":"AIRTUBE-25CM-300M","quantity":5,"packaging":"Unit","sourceLocation":"OPM Corner","original_quantity":5},{"sku":"AIRTUBE-30CM-300M","remark":"","product":"AIRTUBE-30CM-300M","quantity":2,"packaging":"Unit","sourceLocation":"OPM Corner","original_quantity":2},{"sku":"CUKUPP-B25","remark":"","product":"CUKUPP-B25","quantity":25,"packaging":"Unit","sourceLocation":"OPM Corner","original_quantity":25},{"sku":"CUKUPP-B17","remark":"","product":"CUKUPP-B17","quantity":33,"packaging":"Unit","sourceLocation":"OPM Corner","original_quantity":33},{"sku":"AWB-350ROLL-24","remark":"","product":"AWB-350ROLL-24","quantity":6,"packaging":"Unit","sourceLocation":"OPM Ali","original_quantity":6},{"sku":"CUKUPP-CLEAR-TAPE-80M","remark":"","product":"CUKUPP-CLEAR-TAPE-80M","quantity":12,"packaging":"Unit","sourceLocation":"OPM Ali","original_quantity":12},{"sku":"CUKUPP-FRAGILE-TAPE-80M","remark":"","product":"CUKUPP-FRAGILE-TAPE-80M","quantity":2,"packaging":"Unit","sourceLocation":"OPM Ali","original_quantity":2},{"sku":"CUKUPP-W17","remark":"","product":"CUKUPP-W17","quantity":10,"packaging":"Unit","sourceLocation":"OPM Corner","original_quantity":10}]
+
+20. Order: DO-yan-260608-001
+   ID: 3b782930-6ea7-43aa-99ad-2a661ee2c945
+   Matches: Driver yan? true | Has 65 Qty? false | Has Oren SKU? true (Qty: 30)
+   Status: New
+   Origin: TAIPING | Destination: undefined
+   Date: 2026-06-08 | Deadline: 2026-06-10
+   CreatedAt: 2026-06-08T09:41:51.092242+00:00
+   Items: [{"sku":"AWB-5000STACK-2","remark":"20set = 40box","product":"AWB-5000STACK-2","quantity":20,"packaging":"Unit","sourceLocation":"OPM Ali"},{"sku":"AIRTUBE-25CM-300M","remark":"WRAP PALLET WRITE ANTELOPE","product":"AIRTUBE-25CM-300M","quantity":100,"packaging":"Unit","sourceLocation":"OPM Corner"},{"sku":"CUKUPP-B17","remark":"","product":"CUKUPP-B17","quantity":42,"packaging":"Unit","sourceLocation":"OPM Corner"},{"sku":"BW-SL-CLR-100Mx100CMx1ROLL-RED","remark":"","product":"MERAH","quantity":10,"packaging":"Unit","sourceLocation":"OPM Lama"},{"sku":"BW-SL-CLR-100Mx50CMx2ROLL-ORN","remark":"","product":"OREN","quantity":30,"packaging":"Unit","sourceLocation":"OPM Lama"},{"sku":"SF-CLEAR","remark":"","product":"SF-CLEAR","quantity":1,"packaging":"Unit","sourceLocation":"OPM Ali"},{"sku":"SF-BLACK","remark":"","product":"SF-BLACK","quantity":1,"packaging":"Unit","sourceLocation":"OPM Ali"},{"sku":"SF-BABYROLL","remark":"CLEAR ","product":"SF-BABYROLL","quantity":4,"packaging":"Unit","sourceLocation":"OPM Ali"}]
+
+21. Order: DO-Bob-260608-003
+   ID: ea07eb7d-59a5-4245-9047-52701255b8f2
+   Matches: Driver yan? false | Has 65 Qty? false | Has Oren SKU? true (Qty: 4)
+   Status: Delivered
+   Origin: TAIPING | Destination: undefined
+   Date: 2026-06-08 | Deadline: 2026-06-08
+   CreatedAt: 2026-06-08T06:50:58.293614+00:00
+   Items: [{"sku":"BW-SL-CLR-100Mx100CMx1ROLL-RED","remark":"","product":"MERAH","quantity":13,"packaging":"Unit","sourceLocation":"OPM Lama"},{"sku":"BW-SL-CLR-100Mx50CMx2ROLL-ORN","remark":"","product":"OREN","quantity":4,"packaging":"Unit","sourceLocation":"OPM Lama"},{"sku":"BW-DL-CLR-100Mx50CMx2ROLL-BLU","remark":"","product":"DL-HALF","quantity":1,"packaging":"Unit","sourceLocation":"OPM Lama"},{"sku":"BW-DL-CLR-100Mx100CMx1ROLL-YEL","remark":"","product":"DL-FULL","quantity":3,"packaging":"Unit","sourceLocation":"OPM Lama"},{"sku":"BW-SL-CLR-100Mx20CMx5ROLL-GRN","remark":"","product":"SL-20CM","quantity":3,"packaging":"Unit","sourceLocation":"OPM Lama"},{"sku":"BW-DL-CLR-100Mx20CMx5ROLL-BLU","remark":"","product":"DL-20CM","quantity":1,"packaging":"Unit","sourceLocation":"OPM Lama"},{"sku":"BW-SL-CLR-100Mx25CMx4ROLL-GRN","remark":"","product":"SL-25CM","quantity":2,"packaging":"Unit","sourceLocation":"OPM Lama"},{"sku":"BW-DL-CLR-100Mx25CMx4ROLL-BLU","remark":"","product":"DL-25CM","quantity":1,"packaging":"Unit","sourceLocation":"OPM Lama"},{"sku":"BW-SL-CLR-100Mx33CMx3ROLL-GRN","remark":"","product":"SL-33CM","quantity":2,"packaging":"Unit","sourceLocation":"OPM Lama"}]
+
+22. Order: DO-Bob-260608-002
+   ID: 24c3e243-247b-4137-84f0-c37c54da675d
+   Matches: Driver yan? false | Has 65 Qty? false | Has Oren SKU? true (Qty: 2)
+   Status: Delivered
+   Origin: TAIPING | Destination: undefined
+   Date: 2026-06-08 | Deadline: 2026-06-08
+   CreatedAt: 2026-06-08T06:47:10.286678+00:00
+   Items: [{"sku":"BW-SL-CLR-100Mx100CMx1ROLL-RED","remark":"","product":"MERAH","quantity":16,"packaging":"Unit","sourceLocation":"OPM Lama"},{"sku":"BW-SL-CLR-100Mx50CMx2ROLL-ORN","remark":"","product":"OREN","quantity":2,"packaging":"Unit","sourceLocation":"OPM Lama"},{"sku":"BW-DL-CLR-100Mx50CMx2ROLL-BLU","remark":"","product":"DL-HALF","quantity":2,"packaging":"Unit","sourceLocation":"OPM Lama"},{"sku":"BW-DL-BLK-100Mx100CMx1ROLL-RED","remark":"","product":"DL-HITAM-FULL","quantity":2,"packaging":"Unit","sourceLocation":"OPM Lama"},{"sku":"BW-SL-BLK-100Mx100CMx1ROLL-GRN","remark":"","product":"HITAM-FULL","quantity":3,"packaging":"Unit","sourceLocation":"OPM Lama"},{"sku":"BW-DL-CLR-100Mx100CMx1ROLL-YEL","remark":"","product":"DL-FULL","quantity":8,"packaging":"Unit","sourceLocation":"OPM Lama"},{"sku":"BW-SL-CLR-100Mx20CMx5ROLL-GRN","remark":"","product":"SL-20CM","quantity":3,"packaging":"Unit","sourceLocation":"OPM Lama"},{"sku":"BW-DL-CLR-100Mx20CMx5ROLL-BLU","remark":"","product":"DL-20CM","quantity":1,"packaging":"Unit","sourceLocation":"OPM Lama"},{"sku":"BW-SL-CLR-100Mx25CMx4ROLL-GRN","remark":"","product":"SL-25CM","quantity":4,"packaging":"Unit","sourceLocation":"OPM Lama"},{"sku":"BW-DL-CLR-100Mx25CMx4ROLL-BLU","remark":"","product":"DL-25CM","quantity":2,"packaging":"Unit","sourceLocation":"OPM Lama"},{"sku":"BW-SL-CLR-100Mx33CMx3ROLL-GRN","remark":"","product":"SL-33CM","quantity":1,"packaging":"Unit","sourceLocation":"OPM Lama"},{"sku":"BW-DL-BLK-100Mx33CMx3ROLL-RED","remark":"","product":"DL-HITAM-33CM","quantity":1,"packaging":"Unit","sourceLocation":"OPM Lama"}]
+
+23. Order: DO-Bob-260608-001
+   ID: c6956ba8-0741-40b0-9cdf-e571875e2c0b
+   Matches: Driver yan? false | Has 65 Qty? false | Has Oren SKU? true (Qty: 82)
+   Status: Delivered
+   Origin: TAIPING | Destination: undefined
+   Date: 2026-06-08 | Deadline: 2026-06-08
+   CreatedAt: 2026-06-08T04:26:38.033467+00:00
+   Items: [{"sku":"BW-SL-CLR-100Mx50CMx2ROLL-ORN","remark":"","product":"OREN","quantity":82,"packaging":"Unit","sourceLocation":"OPM Lama"},{"sku":"BW-DL-CLR-100Mx50CMx2ROLL-BLU","remark":"","product":"DL-HALF","quantity":7,"packaging":"Unit","sourceLocation":"OPM Lama"},{"sku":"BW-SL-CLR-100Mx20CMx5ROLL-GRN","remark":"","product":"SL-20CM","quantity":6,"packaging":"Unit","sourceLocation":"OPM Lama"},{"sku":"BW-DL-CLR-100Mx20CMx5ROLL-BLU","remark":"","product":"DL-20CM","quantity":13,"packaging":"Unit","sourceLocation":"OPM Lama"},{"sku":"BW-SL-CLR-100Mx25CMx4ROLL-GRN","remark":"","product":"SL-25CM","quantity":28,"packaging":"Unit","sourceLocation":"OPM Lama"},{"sku":"BW-SL-BLK-100Mx25CMx4ROLL-GRN","remark":"","product":"HITAM-25CM","quantity":2,"packaging":"Unit","sourceLocation":"OPM Lama"},{"sku":"BW-DL-CLR-100Mx25CMx4ROLL-BLU","remark":"","product":"DL-25CM","quantity":18,"packaging":"Unit","sourceLocation":"OPM Lama"},{"sku":"BW-SL-CLR-100Mx33CMx3ROLL-GRN","remark":"","product":"SL-33CM","quantity":21,"packaging":"Unit","sourceLocation":"OPM Lama"},{"sku":"BW-DL-CLR-100Mx33CMx3ROLL-BLU","remark":"","product":"DL-33CM","quantity":8,"packaging":"Unit","sourceLocation":"OPM Lama"},{"sku":"BW-SL-BLK-100Mx100CMx1ROLL-GRN","remark":"","product":"HITAM-FULL","quantity":9,"packaging":"Unit","sourceLocation":"OPM Lama"},{"sku":"BW-SL-BLK-100Mx50CMx2ROLL-RED","remark":"","product":"HITAM-HALF","quantity":2,"packaging":"Unit","sourceLocation":"OPM Lama"},{"sku":"BW-SL-CLR-100Mx100CMx1ROLL-RED","remark":"","product":"MERAH","quantity":102,"packaging":"Unit","sourceLocation":"OPM Lama"},{"sku":"BW-DL-BLK-100Mx100CMx1ROLL-RED","remark":"","product":"DL-HITAM-FULL","quantity":3,"packaging":"Unit","sourceLocation":"OPM Lama"},{"sku":"BW-DL-CLR-100Mx100CMx1ROLL-YEL","remark":"","product":"DL-FULL","quantity":56,"packaging":"Unit","sourceLocation":"OPM Lama"},{"sku":"BW-DL-BLK-100Mx25CMx4ROLL-RED","remark":"","product":"DL-HITAM-25CM","quantity":1,"packaging":"Unit","sourceLocation":"OPM Lama"},{"sku":"BW-DL-CLR-100Mx33CMx3ROLL-BLU","remark":"","product":"DL-33CM","quantity":4,"packaging":"Unit","sourceLocation":"OPM Lama"},{"sku":"BW-DL-BLK-100Mx33CMx3ROLL-RED","remark":"","product":"DL-HITAM-33CM","quantity":1,"packaging":"Unit","sourceLocation":"OPM Lama"},{"sku":"BW-SL-BLK-100Mx33CMx3ROLL-GRN","remark":"","product":"HITAM-33CM","quantity":1,"packaging":"Unit","sourceLocation":"OPM Lama"}]

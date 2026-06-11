@@ -1,0 +1,17 @@
+Resolving operator details for UUIDs...
+
+--- UUID: 8f84abd9-e438-4e4c-9b07-d057c8d530bd ---
+sys_users_v2: Not found
+users_public: Not found
+
+--- UUID: ea29ce6f-df32-4596-9794-2a5d2232e895 ---
+sys_users_v2: Not found
+users_public: Not found
+
+--- UUID: 447c45b4-71c6-49a9-9509-9e933257144b ---
+sys_users_v2: Not found
+users_public: Not found
+
+--- UUID: 8ac2b255-5681-4ce9-a892-143c427781de ---
+sys_users_v2: {"name":"Than Soe","employee_id":"0017","role":"Operator"}
+users_public: {"name":"Than Soe","employee_id":"0017","role":"Operator"}

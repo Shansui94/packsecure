@@ -103,6 +103,48 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
             return res.status(200).json({ success: true });
         }
 
+        if (action === 'delete') {
+            const { uid, rowId, isDriver } = req.body ?? {};
+            if (!uid && !rowId) {
+                return res.status(400).json({ error: 'Missing uid or rowId' });
+            }
+
+            if (isDriver && uid) {
+                // Call rpc for driver delete
+                const { error: rpcError } = await admin.rpc('delete_driver_user', { target_uid: uid });
+                if (rpcError) throw rpcError;
+            } else {
+                // Delete operator/staff
+                // 1. Delete from sys_users_v2
+                if (rowId) {
+                    const { error: v2Error } = await admin.from('sys_users_v2').delete().eq('id', rowId);
+                    if (v2Error) console.warn('sys_users_v2 delete by rowId error:', v2Error.message);
+                } else if (uid) {
+                    const { error: v2Error } = await admin.from('sys_users_v2').delete().eq('auth_user_id', uid);
+                    if (v2Error) console.warn('sys_users_v2 delete by uid error:', v2Error.message);
+                }
+
+                // 2. Clean up Auth and public profile
+                if (uid && uid !== rowId) {
+                    await admin.from('employee_leave').delete().eq('employee_id', uid);
+                    await admin.from('salary_advances').delete().eq('employee_id', uid);
+
+                    const { error: publicError } = await admin.from('users_public').delete().eq('id', uid);
+                    if (publicError) console.warn('users_public delete error:', publicError.message);
+
+                    try {
+                        const { error: authError } = await admin.auth.admin.deleteUser(uid);
+                        if (authError && !authError.message.includes('User not found')) {
+                            throw authError;
+                        }
+                    } catch (err: any) {
+                        console.warn('auth.users delete warning:', err.message || err);
+                    }
+                }
+            }
+            return res.status(200).json({ success: true });
+        }
+
         return res.status(400).json({ error: 'Invalid action' });
     } catch (e: unknown) {
         const message = e instanceof Error ? e.message : 'Internal Server Error';

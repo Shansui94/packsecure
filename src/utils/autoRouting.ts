@@ -11,6 +11,8 @@ export interface DraftTrip {
     totalVol: number;
     totalWeight: number;
     isOverloaded: boolean;
+    recommendedDriverId?: string | null;
+    recommendedDriverName?: string | null;
 }
 
 const MAX_VOL_M3 = 20; // Standard 3-tonner limit
@@ -88,4 +90,31 @@ export const generateDraftTrips = (orders: any[]): DraftTrip[] => {
     });
 
     return drafts;
+};
+
+/**
+ * Generates draft trips and automatically assigns recommended drivers based on their zone preferences.
+ */
+export const generateDraftTripsWithDrivers = (orders: any[], drivers: any[]): DraftTrip[] => {
+    const drafts = generateDraftTrips(orders);
+    
+    return drafts.map((trip, idx) => {
+        // Find a driver who prefers this zone
+        let recommendedDriver = drivers.find(d => {
+            const prefZone = (d.preferredZone || d.zone || '').toLowerCase();
+            const tripZone = (trip.zone || '').toLowerCase();
+            return prefZone && tripZone && (prefZone.includes(tripZone) || tripZone.includes(prefZone));
+        });
+        
+        if (!recommendedDriver && drivers.length > 0) {
+            // Fallback: assign to the next driver sequentially
+            recommendedDriver = drivers[idx % drivers.length];
+        }
+        
+        return {
+            ...trip,
+            recommendedDriverId: recommendedDriver?.uid || recommendedDriver?.id || null,
+            recommendedDriverName: recommendedDriver?.name || 'Unassigned'
+        };
+    });
 };

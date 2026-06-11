@@ -1,0 +1,699 @@
+=== STEP 1: All Audits Posted Today (2026-06-10) ===
+Found 7 audit adjustments today.
+
+Location: [OPM Lama], SKU: [BW-SL-CLR-100Mx100CMx1ROLL-RED]
+  - Audit at 2026-06-10T10:09:37.197+00:00 (Change Qty: -44)
+    Ref Doc: AUDIT-20260610
+    Notes: Auto-adjusted from Audit at [OPM Lama]. System: 183, Actual: 139
+    Created by: Neoson Chun
+    --> 118 transactions occurred AFTER this audit:
+      * 2026-06-10T10:10:18.442957+00:00: [Production] Change: 1, Notes: "API-Log: T1.2-M01"
+      * 2026-06-10T10:15:30.411251+00:00: [Production] Change: 1, Notes: "API-Log: T1.2-M01"
+      * 2026-06-10T10:20:41.889918+00:00: [Production] Change: 1, Notes: "API-Log: T1.2-M01"
+      * 2026-06-10T10:25:52.838588+00:00: [Production] Change: 1, Notes: "API-Log: T1.2-M01"
+      * 2026-06-10T10:31:04.279476+00:00: [Production] Change: 1, Notes: "API-Log: T1.2-M01"
+      * 2026-06-10T10:36:15.625765+00:00: [Production] Change: 1, Notes: "API-Log: T1.2-M01"
+      * 2026-06-10T10:41:27.238512+00:00: [Production] Change: 1, Notes: "API-Log: T1.2-M01"
+      * 2026-06-10T10:46:38.751827+00:00: [Production] Change: 1, Notes: "API-Log: T1.2-M01"
+      * 2026-06-10T10:51:49.94822+00:00: [Production] Change: 1, Notes: "API-Log: T1.2-M01"
+      * 2026-06-10T10:57:02.421122+00:00: [Production] Change: 1, Notes: "API-Log: T1.2-M01"
+      * 2026-06-10T11:02:12.974589+00:00: [Production] Change: 1, Notes: "API-Log: T1.2-M01"
+      * 2026-06-10T11:07:24.681953+00:00: [Production] Change: 1, Notes: "API-Log: T1.2-M01"
+      * 2026-06-10T11:12:36.33503+00:00: [Production] Change: 1, Notes: "API-Log: T1.2-M01"
+      * 2026-06-10T11:17:47.184974+00:00: [Production] Change: 1, Notes: "API-Log: T1.2-M01"
+      * 2026-06-10T11:17:47.184974+00:00: [Production] Change: 1, Notes: "API-Log: T1.2-M01"
+      * 2026-06-10T11:22:59.478293+00:00: [Production] Change: 1, Notes: "API-Log: T1.2-M01"
+      * 2026-06-10T11:22:59.478293+00:00: [Production] Change: 1, Notes: "API-Log: T1.2-M01"
+      * 2026-06-10T11:28:10.489737+00:00: [Production] Change: 1, Notes: "API-Log: T1.2-M01"
+      * 2026-06-10T11:28:10.489737+00:00: [Production] Change: 1, Notes: "API-Log: T1.2-M01"
+      * 2026-06-10T11:33:21.4192+00:00: [Production] Change: 1, Notes: "API-Log: T1.2-M01"
+      * 2026-06-10T11:33:21.4192+00:00: [Production] Change: 1, Notes: "API-Log: T1.2-M01"
+      * 2026-06-10T11:38:32.798778+00:00: [Production] Change: 1, Notes: "API-Log: T1.2-M01"
+      * 2026-06-10T11:38:32.798778+00:00: [Production] Change: 1, Notes: "API-Log: T1.2-M01"
+      * 2026-06-10T11:43:44.815856+00:00: [Production] Change: 1, Notes: "API-Log: T1.2-M01"
+      * 2026-06-10T11:43:44.815856+00:00: [Production] Change: 1, Notes: "API-Log: T1.2-M01"
+      * 2026-06-10T11:48:56.226287+00:00: [Production] Change: 1, Notes: "API-Log: T1.2-M01"
+      * 2026-06-10T11:48:56.226287+00:00: [Production] Change: 1, Notes: "API-Log: T1.2-M01"
+      * 2026-06-10T11:54:07.106933+00:00: [Production] Change: 1, Notes: "API-Log: T1.2-M01"
+      * 2026-06-10T11:54:07.106933+00:00: [Production] Change: 1, Notes: "API-Log: T1.2-M01"
+      * 2026-06-10T11:59:18.574417+00:00: [Production] Change: 1, Notes: "API-Log: T1.2-M01"
+      * 2026-06-10T11:59:18.574417+00:00: [Production] Change: 1, Notes: "API-Log: T1.2-M01"
+      * 2026-06-10T12:04:30.076921+00:00: [Production] Change: 1, Notes: "API-Log: T1.2-M01"
+      * 2026-06-10T12:04:30.076921+00:00: [Production] Change: 1, Notes: "API-Log: T1.2-M01"
+      * 2026-06-10T12:09:41.524131+00:00: [Production] Change: 1, Notes: "API-Log: T1.2-M01"
+      * 2026-06-10T12:09:41.524131+00:00: [Production] Change: 1, Notes: "API-Log: T1.2-M01"
+      * 2026-06-10T12:14:53.443114+00:00: [Production] Change: 1, Notes: "API-Log: T1.2-M01"
+      * 2026-06-10T12:14:53.443114+00:00: [Production] Change: 1, Notes: "API-Log: T1.2-M01"
+      * 2026-06-10T12:20:04.381788+00:00: [Production] Change: 1, Notes: "API-Log: T1.2-M01"
+      * 2026-06-10T12:20:04.381788+00:00: [Production] Change: 1, Notes: "API-Log: T1.2-M01"
+      * 2026-06-10T12:25:16.172955+00:00: [Production] Change: 1, Notes: "API-Log: T1.2-M01"
+      * 2026-06-10T12:25:16.172955+00:00: [Production] Change: 1, Notes: "API-Log: T1.2-M01"
+      * 2026-06-10T12:30:27.807996+00:00: [Production] Change: 1, Notes: "API-Log: T1.2-M01"
+      * 2026-06-10T12:30:27.807996+00:00: [Production] Change: 1, Notes: "API-Log: T1.2-M01"
+      * 2026-06-10T12:35:39.145278+00:00: [Production] Change: 1, Notes: "API-Log: T1.2-M01"
+      * 2026-06-10T12:35:39.145278+00:00: [Production] Change: 1, Notes: "API-Log: T1.2-M01"
+      * 2026-06-10T12:37:19.225034+00:00: [Production] Change: 1, Notes: "API-Log: T1.3-M02"
+      * 2026-06-10T12:40:50.211608+00:00: [Production] Change: 1, Notes: "API-Log: T1.2-M01"
+      * 2026-06-10T12:40:50.211608+00:00: [Production] Change: 1, Notes: "API-Log: T1.2-M01"
+      * 2026-06-10T12:46:02.455203+00:00: [Production] Change: 1, Notes: "API-Log: T1.2-M01"
+      * 2026-06-10T12:46:02.455203+00:00: [Production] Change: 1, Notes: "API-Log: T1.2-M01"
+      * 2026-06-10T12:51:13.697503+00:00: [Production] Change: 1, Notes: "API-Log: T1.2-M01"
+      * 2026-06-10T12:51:13.697503+00:00: [Production] Change: 1, Notes: "API-Log: T1.2-M01"
+      * 2026-06-10T12:56:24.455262+00:00: [Production] Change: 1, Notes: "API-Log: T1.2-M01"
+      * 2026-06-10T12:56:24.455262+00:00: [Production] Change: 1, Notes: "API-Log: T1.2-M01"
+      * 2026-06-10T13:01:35.844012+00:00: [Production] Change: 1, Notes: "API-Log: T1.2-M01"
+      * 2026-06-10T13:01:35.844012+00:00: [Production] Change: 1, Notes: "API-Log: T1.2-M01"
+      * 2026-06-10T13:06:47.270884+00:00: [Production] Change: 1, Notes: "API-Log: T1.2-M01"
+      * 2026-06-10T13:06:47.270884+00:00: [Production] Change: 1, Notes: "API-Log: T1.2-M01"
+      * 2026-06-10T13:11:59.87211+00:00: [Production] Change: 1, Notes: "API-Log: T1.2-M01"
+      * 2026-06-10T13:11:59.87211+00:00: [Production] Change: 1, Notes: "API-Log: T1.2-M01"
+      * 2026-06-10T13:17:10.169466+00:00: [Production] Change: 1, Notes: "API-Log: T1.2-M01"
+      * 2026-06-10T13:17:10.169466+00:00: [Production] Change: 1, Notes: "API-Log: T1.2-M01"
+      * 2026-06-10T13:22:21.689112+00:00: [Production] Change: 1, Notes: "API-Log: T1.2-M01"
+      * 2026-06-10T13:22:21.689112+00:00: [Production] Change: 1, Notes: "API-Log: T1.2-M01"
+      * 2026-06-10T13:27:33.253319+00:00: [Production] Change: 1, Notes: "API-Log: T1.2-M01"
+      * 2026-06-10T13:27:33.253319+00:00: [Production] Change: 1, Notes: "API-Log: T1.2-M01"
+      * 2026-06-10T13:32:44.304084+00:00: [Production] Change: 1, Notes: "API-Log: T1.2-M01"
+      * 2026-06-10T13:32:44.304084+00:00: [Production] Change: 1, Notes: "API-Log: T1.2-M01"
+      * 2026-06-10T13:37:55.940828+00:00: [Production] Change: 1, Notes: "API-Log: T1.2-M01"
+      * 2026-06-10T13:37:55.940828+00:00: [Production] Change: 1, Notes: "API-Log: T1.2-M01"
+      * 2026-06-10T13:43:07.391351+00:00: [Production] Change: 1, Notes: "API-Log: T1.2-M01"
+      * 2026-06-10T13:43:07.391351+00:00: [Production] Change: 1, Notes: "API-Log: T1.2-M01"
+      * 2026-06-10T13:48:18.604963+00:00: [Production] Change: 1, Notes: "API-Log: T1.2-M01"
+      * 2026-06-10T13:48:18.604963+00:00: [Production] Change: 1, Notes: "API-Log: T1.2-M01"
+      * 2026-06-10T13:53:30.076852+00:00: [Production] Change: 1, Notes: "API-Log: T1.2-M01"
+      * 2026-06-10T13:53:30.076852+00:00: [Production] Change: 1, Notes: "API-Log: T1.2-M01"
+      * 2026-06-10T13:58:41.441366+00:00: [Production] Change: 1, Notes: "API-Log: T1.2-M01"
+      * 2026-06-10T13:58:41.441366+00:00: [Production] Change: 1, Notes: "API-Log: T1.2-M01"
+      * 2026-06-10T14:03:52.939878+00:00: [Production] Change: 1, Notes: "API-Log: T1.2-M01"
+      * 2026-06-10T14:03:52.939878+00:00: [Production] Change: 1, Notes: "API-Log: T1.2-M01"
+      * 2026-06-10T14:08:36.15778+00:00: [Production] Change: 1, Notes: "API-Log: T1.3-M02"
+      * 2026-06-10T14:09:04.460611+00:00: [Production] Change: 1, Notes: "API-Log: T1.2-M01"
+      * 2026-06-10T14:09:04.460611+00:00: [Production] Change: 1, Notes: "API-Log: T1.2-M01"
+      * 2026-06-10T14:14:15.831198+00:00: [Production] Change: 1, Notes: "API-Log: T1.2-M01"
+      * 2026-06-10T14:14:15.831198+00:00: [Production] Change: 1, Notes: "API-Log: T1.2-M01"
+      * 2026-06-10T14:14:18.343636+00:00: [Production] Change: 1, Notes: "API-Log: T1.3-M02"
+      * 2026-06-10T14:19:27.230786+00:00: [Production] Change: 1, Notes: "API-Log: T1.2-M01"
+      * 2026-06-10T14:19:27.230786+00:00: [Production] Change: 1, Notes: "API-Log: T1.2-M01"
+      * 2026-06-10T14:20:00.780493+00:00: [Production] Change: 1, Notes: "API-Log: T1.3-M02"
+      * 2026-06-10T14:24:42.626063+00:00: [Production] Change: 1, Notes: "API-Log: T1.2-M01"
+      * 2026-06-10T14:24:42.626063+00:00: [Production] Change: 1, Notes: "API-Log: T1.2-M01"
+      * 2026-06-10T14:25:44.470451+00:00: [Production] Change: 1, Notes: "API-Log: T1.3-M02"
+      * 2026-06-10T14:30:03.23585+00:00: [Production] Change: 1, Notes: "API-Log: T1.2-M01"
+      * 2026-06-10T14:30:03.23585+00:00: [Production] Change: 1, Notes: "API-Log: T1.2-M01"
+      * 2026-06-10T14:31:25.66486+00:00: [Production] Change: 1, Notes: "API-Log: T1.3-M02"
+      * 2026-06-10T14:35:18.62975+00:00: [Production] Change: 1, Notes: "API-Log: T1.2-M01"
+      * 2026-06-10T14:35:18.62975+00:00: [Production] Change: 1, Notes: "API-Log: T1.2-M01"
+      * 2026-06-10T14:37:07.80688+00:00: [Production] Change: 1, Notes: "API-Log: T1.3-M02"
+      * 2026-06-10T14:40:33.466049+00:00: [Production] Change: 1, Notes: "API-Log: T1.2-M01"
+      * 2026-06-10T14:40:33.466049+00:00: [Production] Change: 1, Notes: "API-Log: T1.2-M01"
+      * 2026-06-10T14:42:50.266237+00:00: [Production] Change: 1, Notes: "API-Log: T1.3-M02"
+      * 2026-06-10T14:45:48.748386+00:00: [Production] Change: 1, Notes: "API-Log: T1.2-M01"
+      * 2026-06-10T14:45:48.748386+00:00: [Production] Change: 1, Notes: "API-Log: T1.2-M01"
+      * 2026-06-10T14:48:32.962399+00:00: [Production] Change: 1, Notes: "API-Log: T1.3-M02"
+      * 2026-06-10T14:51:04.369771+00:00: [Production] Change: 1, Notes: "API-Log: T1.2-M01"
+      * 2026-06-10T14:51:04.369771+00:00: [Production] Change: 1, Notes: "API-Log: T1.2-M01"
+      * 2026-06-10T14:54:14.955559+00:00: [Production] Change: 1, Notes: "API-Log: T1.3-M02"
+      * 2026-06-10T14:56:19.89024+00:00: [Production] Change: 1, Notes: "API-Log: T1.2-M01"
+      * 2026-06-10T14:56:19.89024+00:00: [Production] Change: 1, Notes: "API-Log: T1.2-M01"
+      * 2026-06-10T14:59:58.233983+00:00: [Production] Change: 1, Notes: "API-Log: T1.3-M02"
+      * 2026-06-10T15:01:40.83905+00:00: [Production] Change: 1, Notes: "API-Log: T1.2-M01"
+      * 2026-06-10T15:01:40.83905+00:00: [Production] Change: 1, Notes: "API-Log: T1.2-M01"
+      * 2026-06-10T15:05:40.213856+00:00: [Production] Change: 1, Notes: "API-Log: T1.3-M02"
+      * 2026-06-10T15:07:04.055472+00:00: [Production] Change: 1, Notes: "API-Log: T1.2-M01"
+      * 2026-06-10T15:07:04.055472+00:00: [Production] Change: 1, Notes: "API-Log: T1.2-M01"
+      * 2026-06-10T15:11:22.105208+00:00: [Production] Change: 1, Notes: "API-Log: T1.3-M02"
+      * 2026-06-10T15:12:27.035021+00:00: [Production] Change: 1, Notes: "API-Log: T1.2-M01"
+      * 2026-06-10T15:12:27.035021+00:00: [Production] Change: 1, Notes: "API-Log: T1.2-M01"
+
+Location: [OPM Lama], SKU: [BW-SL-CLR-100Mx25CMx4ROLL-GRN]
+  - Audit at 2026-06-10T10:03:09.615+00:00 (Change Qty: -3)
+    Ref Doc: AUDIT-20260610
+    Notes: Auto-adjusted from Audit at [OPM Lama]. System: 42, Actual: 39
+    Created by: Neoson Chun
+  - Audit at 2026-06-10T09:56:00.972+00:00 (Change Qty: 23)
+    Ref Doc: AUDIT-20260610
+    Notes: Auto-adjusted from Audit at [OPM Lama]. System: 18, Actual: 41
+    Created by: Neoson Chun
+    --> 18 transactions occurred AFTER this audit:
+      * 2026-06-10T10:00:18.968539+00:00: [Transfer In] Change: 14, Notes: "Correction: Refund Old Items"
+      * 2026-06-10T10:00:18.968539+00:00: [Transfer Out] Change: -13, Notes: "Correction: Deduct New Items"
+      * 2026-06-10T10:03:09.615+00:00: [Audit Adjustment] Change: -3, Notes: "Auto-adjusted from Audit at [OPM Lama]. System: 42, Actual: 39"
+      * 2026-06-10T12:43:00.788134+00:00: [Production] Change: 1, Notes: "API-Log: T1.3-M02"
+      * 2026-06-10T12:48:42.945595+00:00: [Production] Change: 1, Notes: "API-Log: T1.3-M02"
+      * 2026-06-10T12:54:25.23842+00:00: [Production] Change: 1, Notes: "API-Log: T1.3-M02"
+      * 2026-06-10T13:00:08.746256+00:00: [Production] Change: 1, Notes: "API-Log: T1.3-M02"
+      * 2026-06-10T13:05:50.117677+00:00: [Production] Change: 1, Notes: "API-Log: T1.3-M02"
+      * 2026-06-10T13:11:32.399431+00:00: [Production] Change: 1, Notes: "API-Log: T1.3-M02"
+      * 2026-06-10T13:17:14.740797+00:00: [Production] Change: 1, Notes: "API-Log: T1.3-M02"
+      * 2026-06-10T13:22:57.328448+00:00: [Production] Change: 1, Notes: "API-Log: T1.3-M02"
+      * 2026-06-10T13:28:40.063089+00:00: [Production] Change: 1, Notes: "API-Log: T1.3-M02"
+      * 2026-06-10T13:34:21.793296+00:00: [Production] Change: 1, Notes: "API-Log: T1.3-M02"
+      * 2026-06-10T13:40:04.313596+00:00: [Production] Change: 1, Notes: "API-Log: T1.3-M02"
+      * 2026-06-10T13:45:46.664689+00:00: [Production] Change: 1, Notes: "API-Log: T1.3-M02"
+      * 2026-06-10T13:51:28.964124+00:00: [Production] Change: 1, Notes: "API-Log: T1.3-M02"
+      * 2026-06-10T13:57:11.480439+00:00: [Production] Change: 1, Notes: "API-Log: T1.3-M02"
+      * 2026-06-10T14:02:53.701511+00:00: [Production] Change: 1, Notes: "API-Log: T1.3-M02"
+
+Location: [OPM Lama], SKU: [BW-DL-CLR-100Mx100CMx1ROLL-YEL]
+  - Audit at 2026-06-10T10:01:49.848+00:00 (Change Qty: -98)
+    Ref Doc: AUDIT-20260610
+    Notes: Auto-adjusted from Audit at [OPM Lama]. System: 111, Actual: 13
+    Created by: Neoson Chun
+    --> 2 transactions occurred AFTER this audit:
+      * 2026-06-10T10:10:39.489757+00:00: [Stock Out] Change: -9, Notes: "null"
+      * 2026-06-10T10:58:18.340223+00:00: [Transfer Out] Change: -14, Notes: "Auto-deduct: Order Delivered"
+
+Location: [OPM Lama], SKU: [BW-DL-CLR-100Mx33CMx3ROLL-BLU]
+  - Audit at 2026-06-10T10:01:23.222+00:00 (Change Qty: -1)
+    Ref Doc: AUDIT-20260610
+    Notes: Auto-adjusted from Audit at [OPM Lama]. System: 8, Actual: 7
+    Created by: Neoson Chun
+    --> No transactions occurred after this audit.
+
+Location: [OPM Lama], SKU: [BW-SL-CLR-100Mx33CMx3ROLL-GRN]
+  - Audit at 2026-06-10T10:00:57.162+00:00 (Change Qty: -24)
+    Ref Doc: AUDIT-20260610
+    Notes: Auto-adjusted from Audit at [OPM Lama]. System: 54, Actual: 30
+    Created by: Neoson Chun
+    --> 27 transactions occurred AFTER this audit:
+      * 2026-06-10T10:03:15.769239+00:00: [Production] Change: 1, Notes: "API-Log: T1.3-M02"
+      * 2026-06-10T10:08:57.606562+00:00: [Production] Change: 1, Notes: "API-Log: T1.3-M02"
+      * 2026-06-10T10:14:41.087517+00:00: [Production] Change: 1, Notes: "API-Log: T1.3-M02"
+      * 2026-06-10T10:20:22.463955+00:00: [Production] Change: 1, Notes: "API-Log: T1.3-M02"
+      * 2026-06-10T10:26:04.175711+00:00: [Production] Change: 1, Notes: "API-Log: T1.3-M02"
+      * 2026-06-10T10:31:46.858794+00:00: [Production] Change: 1, Notes: "API-Log: T1.3-M02"
+      * 2026-06-10T10:37:29.033571+00:00: [Production] Change: 1, Notes: "API-Log: T1.3-M02"
+      * 2026-06-10T10:43:11.733668+00:00: [Production] Change: 1, Notes: "API-Log: T1.3-M02"
+      * 2026-06-10T10:48:56.084596+00:00: [Production] Change: 1, Notes: "API-Log: T1.3-M02"
+      * 2026-06-10T10:54:35.896556+00:00: [Production] Change: 1, Notes: "API-Log: T1.3-M02"
+      * 2026-06-10T11:00:18.833713+00:00: [Production] Change: 1, Notes: "API-Log: T1.3-M02"
+      * 2026-06-10T11:06:00.551901+00:00: [Production] Change: 1, Notes: "API-Log: T1.3-M02"
+      * 2026-06-10T11:11:43.749189+00:00: [Production] Change: 1, Notes: "API-Log: T1.3-M02"
+      * 2026-06-10T11:17:26.312092+00:00: [Production] Change: 1, Notes: "API-Log: T1.3-M02"
+      * 2026-06-10T11:23:07.609334+00:00: [Production] Change: 1, Notes: "API-Log: T1.3-M02"
+      * 2026-06-10T11:28:50.4833+00:00: [Production] Change: 1, Notes: "API-Log: T1.3-M02"
+      * 2026-06-10T11:34:32.256413+00:00: [Production] Change: 1, Notes: "API-Log: T1.3-M02"
+      * 2026-06-10T11:40:14.729047+00:00: [Production] Change: 1, Notes: "API-Log: T1.3-M02"
+      * 2026-06-10T11:45:57.016444+00:00: [Production] Change: 1, Notes: "API-Log: T1.3-M02"
+      * 2026-06-10T11:51:39.694374+00:00: [Production] Change: 1, Notes: "API-Log: T1.3-M02"
+      * 2026-06-10T11:57:21.697406+00:00: [Production] Change: 1, Notes: "API-Log: T1.3-M02"
+      * 2026-06-10T12:03:04.44115+00:00: [Production] Change: 1, Notes: "API-Log: T1.3-M02"
+      * 2026-06-10T12:08:47.057135+00:00: [Production] Change: 1, Notes: "API-Log: T1.3-M02"
+      * 2026-06-10T12:14:29.287559+00:00: [Production] Change: 1, Notes: "API-Log: T1.3-M02"
+      * 2026-06-10T12:20:11.172354+00:00: [Production] Change: 1, Notes: "API-Log: T1.3-M02"
+      * 2026-06-10T12:25:54.187787+00:00: [Production] Change: 1, Notes: "API-Log: T1.3-M02"
+      * 2026-06-10T12:31:35.985375+00:00: [Production] Change: 1, Notes: "API-Log: T1.3-M02"
+
+Location: [OPM Lama], SKU: [BW-SL-CLR-100Mx50CMx2ROLL-ORN]
+  - Audit at 2026-06-10T09:59:42.993+00:00 (Change Qty: -105)
+    Ref Doc: AUDIT-20260610
+    Notes: Auto-adjusted from Audit at [OPM Lama]. System: 132, Actual: 27
+    Created by: Neoson Chun
+    --> 21 transactions occurred AFTER this audit:
+      * 2026-06-10T09:59:55.45341+00:00: [Production] Change: 1, Notes: "API-Log: T1.2-M01"
+      * 2026-06-10T10:00:18.968539+00:00: [Transfer In] Change: 13, Notes: "Correction: Refund Old Items"
+      * 2026-06-10T10:00:18.968539+00:00: [Transfer Out] Change: -16, Notes: "Correction: Deduct New Items"
+      * 2026-06-10T10:02:44.71986+00:00: [Transfer Out] Change: -65, Notes: "Auto-deduct: Order Delivered"
+      * 2026-06-10T10:03:26.167808+00:00: [Stock In] Change: 1, Notes: "null"
+      * 2026-06-10T10:03:49.449336+00:00: [Transfer Out] Change: -30, Notes: "Auto-deduct: Order Delivered"
+      * 2026-06-10T10:05:07.473721+00:00: [Production] Change: 1, Notes: "API-Log: T1.2-M01"
+      * 2026-06-10T10:10:18.442957+00:00: [Production] Change: 1, Notes: "API-Log: T1.2-M01"
+      * 2026-06-10T10:15:30.411251+00:00: [Production] Change: 1, Notes: "API-Log: T1.2-M01"
+      * 2026-06-10T10:20:41.889918+00:00: [Production] Change: 1, Notes: "API-Log: T1.2-M01"
+      * 2026-06-10T10:25:52.838588+00:00: [Production] Change: 1, Notes: "API-Log: T1.2-M01"
+      * 2026-06-10T10:31:04.279476+00:00: [Production] Change: 1, Notes: "API-Log: T1.2-M01"
+      * 2026-06-10T10:36:15.625765+00:00: [Production] Change: 1, Notes: "API-Log: T1.2-M01"
+      * 2026-06-10T10:41:27.238512+00:00: [Production] Change: 1, Notes: "API-Log: T1.2-M01"
+      * 2026-06-10T10:46:38.751827+00:00: [Production] Change: 1, Notes: "API-Log: T1.2-M01"
+      * 2026-06-10T10:51:49.94822+00:00: [Production] Change: 1, Notes: "API-Log: T1.2-M01"
+      * 2026-06-10T10:57:02.421122+00:00: [Production] Change: 1, Notes: "API-Log: T1.2-M01"
+      * 2026-06-10T10:58:18.340223+00:00: [Transfer Out] Change: -20, Notes: "Auto-deduct: Order Delivered"
+      * 2026-06-10T11:02:12.974589+00:00: [Production] Change: 1, Notes: "API-Log: T1.2-M01"
+      * 2026-06-10T11:07:24.681953+00:00: [Production] Change: 1, Notes: "API-Log: T1.2-M01"
+      * 2026-06-10T11:12:36.33503+00:00: [Production] Change: 1, Notes: "API-Log: T1.2-M01"
+
+=== STEP 2: Checking Negative Live Stock in v2_inventory_view ===
+Found 231 items with negative stock in view:
+- [OPM Corner] SKU: AIRTUBE-20CM-300M, stock: -268, last_updated: 2026-06-03T11:59:09.483937+00:00
+  --> NOTE: This item was NOT audited today at this location.
+- [null] SKU: AIRTUBE-20CM-300M, stock: -10, last_updated: 2026-04-08T06:34:54.19044+00:00
+  --> NOTE: This item was NOT audited today at this location.
+- [OPM Corner] SKU: PUR-20-ROLL, stock: -1, last_updated: 2026-06-06T00:22:48.705078+00:00
+  --> NOTE: This item was NOT audited today at this location.
+- [Nilai] SKU: CUKUPP-B32, stock: -18, last_updated: 2026-06-10T01:47:45.52268+00:00
+  --> NOTE: This item was NOT audited today at this location.
+- [OPM Ali] SKU: CUKUPP-B25, stock: -12, last_updated: 2026-06-09T10:37:11.484621+00:00
+  --> NOTE: This item was NOT audited today at this location.
+- [SPD] SKU: AWB-5000STACK-2, stock: -33, last_updated: 2026-04-25T04:17:15.464188+00:00
+  --> NOTE: This item was NOT audited today at this location.
+- [OPM Ali] SKU: SF-GREYSILVER, stock: -147, last_updated: 2026-06-08T03:51:36.478454+00:00
+  --> NOTE: This item was NOT audited today at this location.
+- [OPM Corner] SKU: CUKUPP-B25, stock: -245, last_updated: 2026-06-10T02:43:45.764303+00:00
+  --> NOTE: This item was NOT audited today at this location.
+- [OPM Corner] SKU: CUKUPP-MINT-28, stock: -1, last_updated: 2026-04-27T08:05:08.025252+00:00
+  --> NOTE: This item was NOT audited today at this location.
+- [Nilai] SKU: BW-DL-CLR-100Mx50CMx2ROLL-BLU, stock: -77, last_updated: 2026-06-10T15:13:53.056564+00:00
+  --> NOTE: This item was NOT audited today at this location.
+- [SPD] SKU: BW-DL-CLR-100Mx50CMx2ROLL-BLU, stock: -20, last_updated: 2026-05-25T07:05:54.775041+00:00
+  --> NOTE: This item was NOT audited today at this location.
+- [null] SKU: CUKUPP-B35, stock: -5, last_updated: 2026-04-08T06:34:54.517829+00:00
+  --> NOTE: This item was NOT audited today at this location.
+- [OPM Corner] SKU: W-BUBBLE-ENVOLOPE-23X28, stock: -1, last_updated: 2026-05-22T14:02:38.176201+00:00
+  --> NOTE: This item was NOT audited today at this location.
+- [OPM Corner] SKU: BW-DL-CLR-100Mx100CMx1ROLL-YEL, stock: -3, last_updated: 2026-05-21T12:17:27.644895+00:00
+  --> NOTE: This item was NOT audited today at this location.
+- [null] SKU: CUKUPP-W35, stock: -10, last_updated: 2026-04-08T06:34:54.297286+00:00
+  --> NOTE: This item was NOT audited today at this location.
+- [SPD] SKU: CUKUPP-FRAGILE-TAPE-80M, stock: -7, last_updated: 2026-05-07T06:44:06.178057+00:00
+  --> NOTE: This item was NOT audited today at this location.
+- [null] SKU: AIRTUBE-35CM-300M, stock: -60, last_updated: 2026-04-08T06:34:54.081127+00:00
+  --> NOTE: This item was NOT audited today at this location.
+- [OPM Corner] SKU: SF-GREYSILVER, stock: -72, last_updated: 2026-04-08T08:00:00+00:00
+  --> NOTE: This item was NOT audited today at this location.
+- [SPD] SKU: CUKUPP-FRAGILE-TAPE-160M, stock: -9, last_updated: 2026-05-08T02:59:41.053574+00:00
+  --> NOTE: This item was NOT audited today at this location.
+- [Nilai] SKU: BW-SL-CLR-100Mx100CMx1ROLL-RED, stock: -2507, last_updated: 2026-06-10T15:15:24.441159+00:00
+  --> NOTE: This item was NOT audited today at this location.
+- [Nilai] SKU: BW-SL-CLR-100Mx100CMx1ROLL-BLU, stock: -88, last_updated: 2026-04-08T08:00:00+00:00
+  --> NOTE: This item was NOT audited today at this location.
+- [Nilai] SKU: CUKUPP-B40, stock: -18, last_updated: 2026-06-04T02:13:59.725467+00:00
+  --> NOTE: This item was NOT audited today at this location.
+- [OPM Corner] SKU: CUKUPP-MINT-25, stock: -1, last_updated: 2026-04-27T12:14:43.890009+00:00
+  --> NOTE: This item was NOT audited today at this location.
+- [OPM Corner] SKU: CUKUPP-GREEN-17, stock: -2, last_updated: 2026-05-26T07:30:24.82034+00:00
+  --> NOTE: This item was NOT audited today at this location.
+- [Nilai] SKU: CUKUPP-W35, stock: -3, last_updated: 2026-05-15T15:54:31.30742+00:00
+  --> NOTE: This item was NOT audited today at this location.
+- [SPD] SKU: BW-DL-CLR-100Mx100CMx1ROLL-YEL, stock: -19, last_updated: 2026-05-25T07:05:54.775041+00:00
+  --> NOTE: This item was NOT audited today at this location.
+- [OPM Corner] SKU: CUKUPP-GREEN-40, stock: -2, last_updated: 2026-04-27T12:14:43.890009+00:00
+  --> NOTE: This item was NOT audited today at this location.
+- [null] SKU: BW-SL-BLK-100Mx100CMx1ROLL-GRN, stock: -17, last_updated: 2026-04-09T15:02:23.498528+00:00
+  --> NOTE: This item was NOT audited today at this location.
+- [Nilai] SKU: BW-DL-BLK-100Mx100CMx1ROLL-RED, stock: -75, last_updated: 2026-06-05T00:07:24.442195+00:00
+  --> NOTE: This item was NOT audited today at this location.
+- [OPM Corner] SKU: CUKUPP-B35, stock: -98, last_updated: 2026-05-25T15:36:27.254723+00:00
+  --> NOTE: This item was NOT audited today at this location.
+- [null] SKU: BW-SL-CLR-100Mx100CMx1ROLL-RED, stock: -36, last_updated: 2026-04-09T15:02:23.140734+00:00
+  --> NOTE: This item was NOT audited today at this location.
+- [OPM Corner] SKU: AIRTUBE-30CM-300M, stock: -228, last_updated: 2026-06-09T09:06:16.938093+00:00
+  --> NOTE: This item was NOT audited today at this location.
+- [Nilai] SKU: SF-BLACK, stock: -348, last_updated: 2026-06-09T07:49:22.409468+00:00
+  --> NOTE: This item was NOT audited today at this location.
+- [Nilai] SKU: AIRTUBE-30CM-300M, stock: -40, last_updated: 2026-06-02T01:22:03.113038+00:00
+  --> NOTE: This item was NOT audited today at this location.
+- [null] SKU: SF-BLACK, stock: -20, last_updated: 2026-04-09T15:02:24.91333+00:00
+  --> NOTE: This item was NOT audited today at this location.
+- [OPM Corner] SKU: AIRTUBE-50CM-300M, stock: -1, last_updated: 2026-04-27T12:14:43.890009+00:00
+  --> NOTE: This item was NOT audited today at this location.
+- [OPM Ali] SKU: BW-SL-CLR-100Mx100CMx1ROLL-RED, stock: -11, last_updated: 2026-05-12T03:17:35.118552+00:00
+  --> NOTE: This item was NOT audited today at this location.
+- [OPM Corner] SKU: CUKUPP-MINT-17, stock: -1, last_updated: 2026-05-18T09:48:28.904569+00:00
+  --> NOTE: This item was NOT audited today at this location.
+- [Nilai] SKU: CUKUPP-BROWN-TAPE-80M, stock: -4, last_updated: 2026-06-08T16:15:20.593765+00:00
+  --> NOTE: This item was NOT audited today at this location.
+- [OPM Corner] SKU: AIRTUBE-80CM-300M, stock: -1, last_updated: 2026-05-11T09:24:54.9155+00:00
+  --> NOTE: This item was NOT audited today at this location.
+- [OPM Ali] SKU: CUKUPP-PINK-17, stock: -1, last_updated: 2026-05-12T15:35:37.644515+00:00
+  --> NOTE: This item was NOT audited today at this location.
+- [OPM Lama] SKU: AIRTUBE-15CM-300M, stock: -10, last_updated: 2026-05-08T07:17:44.701109+00:00
+  --> NOTE: This item was NOT audited today at this location.
+- [SPD] SKU: SF-BABYROLL, stock: -3, last_updated: 2026-05-13T20:06:14.766897+00:00
+  --> NOTE: This item was NOT audited today at this location.
+- [Nilai] SKU: AIRTUBE-20CM-300M, stock: -94, last_updated: 2026-06-07T06:58:03.210355+00:00
+  --> NOTE: This item was NOT audited today at this location.
+- [Nilai] SKU: CUKUPP-W28, stock: -9, last_updated: 2026-05-15T15:54:31.30742+00:00
+  --> NOTE: This item was NOT audited today at this location.
+- [Nilai] SKU: BW-DL-CLR-100Mx20CMx5ROLL-BLU, stock: -29, last_updated: 2026-06-10T07:29:01.723084+00:00
+  --> NOTE: This item was NOT audited today at this location.
+- [OPM Lama] SKU: BW-SL-BLK-100Mx50CMx2ROLL-RED, stock: -3, last_updated: 2026-06-10T10:00:18.968539+00:00
+  --> NOTE: This item was NOT audited today at this location.
+- [OPM Ali] SKU: AWB-2000STACK-4, stock: -88, last_updated: 2026-06-10T02:43:45.764303+00:00
+  --> NOTE: This item was NOT audited today at this location.
+- [OPM Corner] SKU: CUKUPP-PINK-40, stock: -1, last_updated: 2026-06-07T23:42:26.641642+00:00
+  --> NOTE: This item was NOT audited today at this location.
+- [OPM Corner] SKU: CUKUPP-B38, stock: -13, last_updated: 2026-06-06T19:12:01.821063+00:00
+  --> NOTE: This item was NOT audited today at this location.
+- [OPM Corner] SKU: CUKUPP-B32, stock: -41, last_updated: 2026-06-06T19:12:01.821063+00:00
+  --> NOTE: This item was NOT audited today at this location.
+- [OPM Lama] SKU: BW-SL-BLK-100Mx50CMx2ROLL-BLU, stock: -8, last_updated: 2026-04-13T12:10:02.894915+00:00
+  --> NOTE: This item was NOT audited today at this location.
+- [OPM Corner] SKU: CUKUPP-B28, stock: -113, last_updated: 2026-06-10T02:43:45.764303+00:00
+  --> NOTE: This item was NOT audited today at this location.
+- [Nilai] SKU: BW-SL-BLK-100Mx100CMx1ROLL-BLU, stock: -164, last_updated: 2026-04-08T08:00:00+00:00
+  --> NOTE: This item was NOT audited today at this location.
+- [OPM Lama] SKU: SLC-50CM-50M, stock: -56, last_updated: 2026-06-10T10:00:18.968539+00:00
+  --> NOTE: This item was NOT audited today at this location.
+- [OPM Corner] SKU: CUKUPP-YEL-25, stock: -1, last_updated: 2026-05-24T14:33:08.737144+00:00
+  --> NOTE: This item was NOT audited today at this location.
+- [Nilai] SKU: AWB-350ROLL-24, stock: -62, last_updated: 2026-06-10T07:29:01.723084+00:00
+  --> NOTE: This item was NOT audited today at this location.
+- [SPD] SKU: B38-ROLL, stock: -2, last_updated: 2026-05-25T15:36:39.421673+00:00
+  --> NOTE: This item was NOT audited today at this location.
+- [Nilai] SKU: CUKUPP-B17, stock: -2, last_updated: 2026-06-09T07:49:22.409468+00:00
+  --> NOTE: This item was NOT audited today at this location.
+- [SPD] SKU: W45-ROLL, stock: -10, last_updated: 2026-05-19T02:02:31.915602+00:00
+  --> NOTE: This item was NOT audited today at this location.
+- [SPD] SKU: CLEAR TAPE T48 120M, stock: -6, last_updated: 2026-05-05T01:10:01.762284+00:00
+  --> NOTE: This item was NOT audited today at this location.
+- [OPM Corner] SKU: CUKUPP-PUR-32, stock: -2, last_updated: 2026-04-23T14:25:43.12392+00:00
+  --> NOTE: This item was NOT audited today at this location.
+- [SPD] SKU: AWB-2000STACK-4, stock: -40, last_updated: 2026-04-27T12:14:43.890009+00:00
+  --> NOTE: This item was NOT audited today at this location.
+- [OPM Corner] SKU: CUKUPP-W28, stock: -21, last_updated: 2026-06-09T23:53:25.161599+00:00
+  --> NOTE: This item was NOT audited today at this location.
+- [Nilai] SKU: CUKUPP-B28, stock: -16, last_updated: 2026-06-09T07:49:22.409468+00:00
+  --> NOTE: This item was NOT audited today at this location.
+- [SPD] SKU: BW-SL-SLR-100Mx100CMx1ROLL-RED, stock: -82, last_updated: 2026-05-24T01:31:19.624213+00:00
+  --> NOTE: This item was NOT audited today at this location.
+- [SPD] SKU: B25-ROLL, stock: -5, last_updated: 2026-06-09T10:37:11.484621+00:00
+  --> NOTE: This item was NOT audited today at this location.
+- [OPM Corner] SKU: AIRTUBE-35CM-300M, stock: -276, last_updated: 2026-06-10T10:02:44.71986+00:00
+  --> NOTE: This item was NOT audited today at this location.
+- [SPD] SKU: AIRTUBE-25CM-50M, stock: -1, last_updated: 2026-05-17T11:47:10.522899+00:00
+  --> NOTE: This item was NOT audited today at this location.
+- [OPM Lama] SKU: BW-DL-CLR-100Mx50CMx2ROLL-RED, stock: -17, last_updated: 2026-04-10T10:21:26.572041+00:00
+  --> NOTE: This item was NOT audited today at this location.
+- [OPM Corner] SKU: CUKUPP-GREEN-35, stock: -4, last_updated: 2026-05-24T21:08:48.402574+00:00
+  --> NOTE: This item was NOT audited today at this location.
+- [Nilai] SKU: AIRTUBE-15CM-300M, stock: -13, last_updated: 2026-05-15T15:54:31.30742+00:00
+  --> NOTE: This item was NOT audited today at this location.
+- [OPM Corner] SKU: AIRTUBE-70CM-300M, stock: -2, last_updated: 2026-05-19T02:02:31.915602+00:00
+  --> NOTE: This item was NOT audited today at this location.
+- [Nilai] SKU: CUKUPP-B20, stock: -9, last_updated: 2026-06-09T07:49:22.409468+00:00
+  --> NOTE: This item was NOT audited today at this location.
+- [OPM Lama] SKU: BW-DL-CLR-100Mx100CMx1ROLL-RED, stock: -30, last_updated: 2026-04-08T11:33:42.317536+00:00
+  --> NOTE: This item was NOT audited today at this location.
+- [SPD] SKU: TEST-001, stock: -30, last_updated: 2026-06-08T20:03:55.408425+00:00
+  --> NOTE: This item was NOT audited today at this location.
+- [SPD] SKU: AWB-350ROLL-24, stock: -64, last_updated: 2026-05-08T03:10:29.168711+00:00
+  --> NOTE: This item was NOT audited today at this location.
+- [OPM Ali] SKU: CUKUPP-FRAGILE-TAPE-80M, stock: -109, last_updated: 2026-06-09T10:37:11.484621+00:00
+  --> NOTE: This item was NOT audited today at this location.
+- [OPM Corner] SKU: CUKUPP-B50, stock: -10, last_updated: 2026-06-10T02:43:45.764303+00:00
+  --> NOTE: This item was NOT audited today at this location.
+- [OPM Corner] SKU: CUKUPP-GREEN-25, stock: -1, last_updated: 2026-05-13T12:36:30.137784+00:00
+  --> NOTE: This item was NOT audited today at this location.
+- [null] SKU: BW-DL-CLR-100Mx33CMx3ROLL-BLU, stock: -2, last_updated: 2026-04-09T15:02:24.624521+00:00
+  --> NOTE: This item was NOT audited today at this location.
+- [Nilai] SKU: CUKUPP-CLEAR-TAPE-160M, stock: -114, last_updated: 2026-06-08T16:15:20.593765+00:00
+  --> NOTE: This item was NOT audited today at this location.
+- [OPM Corner] SKU: W28-ROLL, stock: -288, last_updated: 2026-05-19T11:44:25.095101+00:00
+  --> NOTE: This item was NOT audited today at this location.
+- [Nilai] SKU: CUKUPP-FRAGILE-TAPE-160M, stock: -25, last_updated: 2026-06-08T16:15:20.593765+00:00
+  --> NOTE: This item was NOT audited today at this location.
+- [null] SKU: AIRTUBE-30CM-50M, stock: -2, last_updated: 2026-04-09T15:02:25.79297+00:00
+  --> NOTE: This item was NOT audited today at this location.
+- [OPM Corner] SKU: SF-CLEAR, stock: -329, last_updated: 2026-05-26T07:30:24.82034+00:00
+  --> NOTE: This item was NOT audited today at this location.
+- [OPM Lama] SKU: CLEAR TAPE T48 120M, stock: -1, last_updated: 2026-05-08T05:49:08.123355+00:00
+  --> NOTE: This item was NOT audited today at this location.
+- [OPM Lama] SKU: AIRTUBE-30CM-300M, stock: -6, last_updated: 2026-05-08T05:49:08.123355+00:00
+  --> NOTE: This item was NOT audited today at this location.
+- [Nilai] SKU: AIRTUBE-35CM-300M, stock: -42, last_updated: 2026-06-07T06:58:03.210355+00:00
+  --> NOTE: This item was NOT audited today at this location.
+- [Nilai] SKU: CUKUPP-CLEAR-TAPE-18MM, stock: -2, last_updated: 2026-05-28T14:33:51.622867+00:00
+  --> NOTE: This item was NOT audited today at this location.
+- [Nilai] SKU: CUKUPP-B35, stock: -27, last_updated: 2026-05-30T11:52:09.045268+00:00
+  --> NOTE: This item was NOT audited today at this location.
+- [Nilai] SKU: BW-DL-CLR-100Mx100CMx1ROLL-RED, stock: -60, last_updated: 2026-04-08T08:00:00+00:00
+  --> NOTE: This item was NOT audited today at this location.
+- [OPM Ali] SKU: B28-ROLL, stock: -190, last_updated: 2026-05-08T03:09:43.848256+00:00
+  --> NOTE: This item was NOT audited today at this location.
+- [OPM Ali] SKU: CUKUPP-CLEAR-TAPE-24MM, stock: -4, last_updated: 2026-06-10T02:43:45.764303+00:00
+  --> NOTE: This item was NOT audited today at this location.
+- [Nilai] SKU: CUKUPP-W40, stock: -2, last_updated: 2026-05-15T15:54:31.30742+00:00
+  --> NOTE: This item was NOT audited today at this location.
+- [OPM Ali] SKU: CLEAR TAPE T48 120M, stock: -415, last_updated: 2026-05-25T15:36:27.254723+00:00
+  --> NOTE: This item was NOT audited today at this location.
+- [SPD] SKU: W25-ROLL, stock: -10, last_updated: 2026-06-09T10:37:11.484621+00:00
+  --> NOTE: This item was NOT audited today at this location.
+- [SPD] SKU: BW-SL-CLR-100Mx50CMx2ROLL-ORN, stock: -164, last_updated: 2026-05-24T07:39:07.179557+00:00
+  --> NOTE: This item was NOT audited today at this location.
+- [OPM Corner] SKU: CUKUPP-W35, stock: -55, last_updated: 2026-06-03T22:40:21.352798+00:00
+  --> NOTE: This item was NOT audited today at this location.
+- [OPM Corner] SKU: B28-ROLL, stock: -665, last_updated: 2026-05-29T12:31:17.355632+00:00
+  --> NOTE: This item was NOT audited today at this location.
+- [OPM Corner] SKU: B17-ROLL, stock: -40, last_updated: 2026-05-30T04:37:21.561313+00:00
+  --> NOTE: This item was NOT audited today at this location.
+- [OPM Ali] SKU: CUKUPP-FRAGILE-TAPE-160M, stock: -76, last_updated: 2026-06-06T01:41:47.007328+00:00
+  --> NOTE: This item was NOT audited today at this location.
+- [OPM Corner] SKU: CUKUPP-FRAGILE-TAPE-80M, stock: -20, last_updated: 2026-04-08T08:00:00+00:00
+  --> NOTE: This item was NOT audited today at this location.
+- [OPM Ali] SKU: CUKUPP-CLEAR-TAPE-160M, stock: -209, last_updated: 2026-06-07T23:42:26.641642+00:00
+  --> NOTE: This item was NOT audited today at this location.
+- [Nilai] SKU: CUKUPP-B25, stock: -39, last_updated: 2026-06-09T07:49:22.409468+00:00
+  --> NOTE: This item was NOT audited today at this location.
+- [OPM Corner] SKU: CUKUPP-MINT-20, stock: -1, last_updated: 2026-04-27T08:05:08.025252+00:00
+  --> NOTE: This item was NOT audited today at this location.
+- [OPM Ali] SKU: SF-BLACK, stock: -1772, last_updated: 2026-06-10T10:03:49.449336+00:00
+  --> NOTE: This item was NOT audited today at this location.
+- [SPD] SKU: W40-ROLL, stock: -15, last_updated: 2026-05-19T02:02:31.915602+00:00
+  --> NOTE: This item was NOT audited today at this location.
+- [OPM Ali] SKU: SF-CLEAR, stock: -4120, last_updated: 2026-06-10T10:58:18.340223+00:00
+  --> NOTE: This item was NOT audited today at this location.
+- [OPM Corner] SKU: CUKUPP-W45, stock: -29, last_updated: 2026-05-30T04:37:21.561313+00:00
+  --> NOTE: This item was NOT audited today at this location.
+- [OPM Ali] SKU: AWB-5000STACK-2, stock: -185, last_updated: 2026-06-10T10:03:49.449336+00:00
+  --> NOTE: This item was NOT audited today at this location.
+- [SPD] SKU: UNKNOWN-BUBBLEWRAP, stock: -20, last_updated: 2026-06-10T02:55:10.135741+00:00
+  --> NOTE: This item was NOT audited today at this location.
+- [Nilai] SKU: CUKUPP-FRAGILE-TAPE-80M, stock: -16, last_updated: 2026-06-10T01:47:45.52268+00:00
+  --> NOTE: This item was NOT audited today at this location.
+- [OPM Corner] SKU: CUKUPP-B60, stock: -1, last_updated: 2026-04-27T12:14:43.890009+00:00
+  --> NOTE: This item was NOT audited today at this location.
+- [OPM Lama] SKU: CUKUPP-GREEN-17, stock: -22, last_updated: 2026-05-12T12:07:13.093321+00:00
+  --> NOTE: This item was NOT audited today at this location.
+- [OPM Corner] SKU: AIRTUBE-25CM-300M, stock: -376, last_updated: 2026-06-10T10:03:49.449336+00:00
+  --> NOTE: This item was NOT audited today at this location.
+- [SPD] SKU: CUKUPP-BROWN-TAPE-80M, stock: -56, last_updated: 2026-05-10T14:06:27.20841+00:00
+  --> NOTE: This item was NOT audited today at this location.
+- [SPD] SKU: B28-ROLL, stock: -10, last_updated: 2026-06-09T10:37:11.484621+00:00
+  --> NOTE: This item was NOT audited today at this location.
+- [Nilai] SKU: CUKUPP-W17, stock: -13, last_updated: 2026-05-24T21:02:50.420973+00:00
+  --> NOTE: This item was NOT audited today at this location.
+- [Nilai] SKU: CUKUPP-W25, stock: -15, last_updated: 2026-05-20T03:14:24.305153+00:00
+  --> NOTE: This item was NOT audited today at this location.
+- [OPM Corner] SKU: W-BUBBLE-ENVOLOPE-35X45, stock: -1, last_updated: 2026-05-24T14:33:08.737144+00:00
+  --> NOTE: This item was NOT audited today at this location.
+- [null] SKU: BW-DL-BLK-100Mx100CMx1ROLL-RED, stock: -16, last_updated: 2026-04-09T15:02:24.063957+00:00
+  --> NOTE: This item was NOT audited today at this location.
+- [OPM Corner] SKU: CUKUPP-W17, stock: -108, last_updated: 2026-06-10T02:43:45.764303+00:00
+  --> NOTE: This item was NOT audited today at this location.
+- [Nilai] SKU: AWB-2000STACK-4, stock: -51, last_updated: 2026-05-31T05:27:17.958392+00:00
+  --> NOTE: This item was NOT audited today at this location.
+- [null] SKU: BW-DL-CLR-100Mx100CMx1ROLL-YEL, stock: -67, last_updated: 2026-04-09T15:02:23.752338+00:00
+  --> NOTE: This item was NOT audited today at this location.
+- [OPM Ali] SKU: AWB-350ROLL-24, stock: -108, last_updated: 2026-06-09T11:01:37.040591+00:00
+  --> NOTE: This item was NOT audited today at this location.
+- [OPM Corner] SKU: UNKNOWN-BUBBLEWRAP, stock: -24, last_updated: 2026-06-10T02:55:10.135741+00:00
+  --> NOTE: This item was NOT audited today at this location.
+- [OPM Corner] SKU: W-BUBBLE-ENVELOPE-11X13, stock: -1, last_updated: 2026-05-22T14:02:38.176201+00:00
+  --> NOTE: This item was NOT audited today at this location.
+- [OPM Ali] SKU: AWB-500STACK-20, stock: -26, last_updated: 2026-06-04T19:47:26.878641+00:00
+  --> NOTE: This item was NOT audited today at this location.
+- [OPM Lama] SKU: BW-SL-BLK-100Mx100CMx1ROLL-BLU, stock: -42, last_updated: 2026-04-13T12:10:02.894915+00:00
+  --> NOTE: This item was NOT audited today at this location.
+- [null] SKU: AWB-2000STACK-4, stock: -3, last_updated: 2026-04-08T06:34:54.853017+00:00
+  --> NOTE: This item was NOT audited today at this location.
+- [null] SKU: BW-DL-CLR-100Mx50CMx2ROLL-BLU, stock: -7, last_updated: 2026-04-09T15:02:24.351362+00:00
+  --> NOTE: This item was NOT audited today at this location.
+- [OPM Corner] SKU: W-BUBBLE-ENVOLOPE-13X15, stock: -1, last_updated: 2026-05-13T23:41:32.544277+00:00
+  --> NOTE: This item was NOT audited today at this location.
+- [SPD] SKU: BW-DL-CLR-100Mx20CMx5ROLL-BLU, stock: -1, last_updated: 2026-06-05T01:47:58.940559+00:00
+  --> NOTE: This item was NOT audited today at this location.
+- [Nilai] SKU: AIRTUBE-25CM-50M, stock: -18, last_updated: 2026-05-15T15:54:31.30742+00:00
+  --> NOTE: This item was NOT audited today at this location.
+- [Nilai] SKU: CUKUPP-W38, stock: -5, last_updated: 2026-05-15T15:54:31.30742+00:00
+  --> NOTE: This item was NOT audited today at this location.
+- [null] SKU: CUKUPP-B17, stock: -10, last_updated: 2026-04-08T06:34:54.412894+00:00
+  --> NOTE: This item was NOT audited today at this location.
+- [OPM Lama] SKU: B20-ROLL, stock: -122, last_updated: 2026-05-12T12:07:13.093321+00:00
+  --> NOTE: This item was NOT audited today at this location.
+- [OPM Corner] SKU: CUKUPP-GREEN-28, stock: -7, last_updated: 2026-05-29T00:48:06.220907+00:00
+  --> NOTE: This item was NOT audited today at this location.
+- [OPM Corner] SKU: BW-SL-CLR-100Mx100CMx1ROLL-RED, stock: -82, last_updated: 2026-06-04T03:07:22.791996+00:00
+  --> NOTE: This item was NOT audited today at this location.
+- [OPM Ali] SKU: W-BUBBLE-ENVOLOPE-14X16, stock: -1, last_updated: 2026-05-12T15:35:37.644515+00:00
+  --> NOTE: This item was NOT audited today at this location.
+- [Nilai] SKU: BW-SL-BLK-100Mx50CMx2ROLL-RED, stock: -83, last_updated: 2026-06-06T01:07:25.213138+00:00
+  --> NOTE: This item was NOT audited today at this location.
+- [OPM Lama] SKU: BW-DL-CLR-100Mx100CMx1ROLL-YEL, stock: -10, last_updated: 2026-06-10T10:58:18.340223+00:00
+  --> NOTE: This item WAS audited today at this location!
+- [Nilai] SKU: CUKUPP-CLEAR-TAPE-80M, stock: -69, last_updated: 2026-06-10T07:29:01.723084+00:00
+  --> NOTE: This item was NOT audited today at this location.
+- [OPM Corner] SKU: CUKUPP-W32, stock: -14, last_updated: 2026-06-03T22:40:21.352798+00:00
+  --> NOTE: This item was NOT audited today at this location.
+- [OPM Corner] SKU: CUKUPP-B45, stock: -46, last_updated: 2026-06-08T04:27:45.742467+00:00
+  --> NOTE: This item was NOT audited today at this location.
+- [Nilai] SKU: AIRTUBE-15CM-50M, stock: -24, last_updated: 2026-05-15T15:54:31.30742+00:00
+  --> NOTE: This item was NOT audited today at this location.
+- [OPM Corner] SKU: AIRTUBE-45CM-300M, stock: -45, last_updated: 2026-06-04T10:01:44.49407+00:00
+  --> NOTE: This item was NOT audited today at this location.
+- [SPD] SKU: BW-SL-CLR-100Mx100CMx1ROLL-RED, stock: -70, last_updated: 2026-05-15T23:10:47.929569+00:00
+  --> NOTE: This item was NOT audited today at this location.
+- [OPM Corner] SKU: CUKUPP-W50, stock: -3, last_updated: 2026-06-09T11:01:37.040591+00:00
+  --> NOTE: This item was NOT audited today at this location.
+- [OPM Corner] SKU: CUKUPP-B20, stock: -32, last_updated: 2026-06-10T02:43:45.764303+00:00
+  --> NOTE: This item was NOT audited today at this location.
+- [OPM Ali] SKU: CUKUPP-W17, stock: -10, last_updated: 2026-06-09T10:37:11.484621+00:00
+  --> NOTE: This item was NOT audited today at this location.
+- [Nilai] SKU: CUKUPP-B50, stock: -2, last_updated: 2026-04-29T20:54:27.00144+00:00
+  --> NOTE: This item was NOT audited today at this location.
+- [SPD] SKU: W28-ROLL, stock: -5, last_updated: 2026-05-19T02:02:31.915602+00:00
+  --> NOTE: This item was NOT audited today at this location.
+- [SPD] SKU: CUKUPP-BROWN-TAPE-160M, stock: -5, last_updated: 2026-05-08T13:53:53.091988+00:00
+  --> NOTE: This item was NOT audited today at this location.
+- [Nilai] SKU: BW-DL-CLR-100Mx25CMx4ROLL-BLU, stock: -39, last_updated: 2026-06-06T08:58:37.250868+00:00
+  --> NOTE: This item was NOT audited today at this location.
+- [OPM Corner] SKU: W17-ROLL, stock: -3, last_updated: 2026-05-11T09:24:54.9155+00:00
+  --> NOTE: This item was NOT audited today at this location.
+- [OPM Corner] SKU: CUKUPP-PINK-32, stock: -4, last_updated: 2026-05-13T20:06:14.766897+00:00
+  --> NOTE: This item was NOT audited today at this location.
+- [null] SKU: AIRTUBE-15CM-50M, stock: -2, last_updated: 2026-04-09T15:02:25.654217+00:00
+  --> NOTE: This item was NOT audited today at this location.
+- [OPM Corner] SKU: CUKUPP-PINK-28, stock: -14, last_updated: 2026-05-17T23:36:17.366496+00:00
+  --> NOTE: This item was NOT audited today at this location.
+- [null] SKU: CUKUPP-CLEAR-TAPE-160M, stock: -1, last_updated: 2026-04-09T15:02:25.325152+00:00
+  --> NOTE: This item was NOT audited today at this location.
+- [OPM Corner] SKU: CUKUPP-PUR-20, stock: -4, last_updated: 2026-05-13T12:36:30.137784+00:00
+  --> NOTE: This item was NOT audited today at this location.
+- [SPD] SKU: B17-ROLL, stock: -25, last_updated: 2026-06-09T10:37:11.484621+00:00
+  --> NOTE: This item was NOT audited today at this location.
+- [OPM Corner] SKU: CUKUPP-B17, stock: -174, last_updated: 2026-06-10T10:03:49.449336+00:00
+  --> NOTE: This item was NOT audited today at this location.
+- [OPM Corner] SKU: AWB-5000STACK-2, stock: -5, last_updated: 2026-06-06T21:15:22.648619+00:00
+  --> NOTE: This item was NOT audited today at this location.
+- [OPM Corner] SKU: W40-ROLL, stock: -40, last_updated: 2026-06-03T22:40:21.352798+00:00
+  --> NOTE: This item was NOT audited today at this location.
+- [Nilai] SKU: AIRTUBE-35CM-50M, stock: -18, last_updated: 2026-05-15T15:54:31.30742+00:00
+  --> NOTE: This item was NOT audited today at this location.
+- [Nilai] SKU: BW-DL-CLR-100Mx100CMx1ROLL-YEL, stock: -523, last_updated: 2026-06-10T12:22:54.008093+00:00
+  --> NOTE: This item was NOT audited today at this location.
+- [null] SKU: AIRTUBE-35CM-50M, stock: -2, last_updated: 2026-04-09T15:02:25.942841+00:00
+  --> NOTE: This item was NOT audited today at this location.
+- [SPD] SKU: CUKUPP-CLEAR-TAPE-80M, stock: -31, last_updated: 2026-05-15T23:10:47.929569+00:00
+  --> NOTE: This item was NOT audited today at this location.
+- [OPM Corner] SKU: CUKUPP-W25, stock: -44, last_updated: 2026-06-07T15:27:56.382862+00:00
+  --> NOTE: This item was NOT audited today at this location.
+- [SPD] SKU: AWB-500STACK-20, stock: -30, last_updated: 2026-05-18T09:48:28.904569+00:00
+  --> NOTE: This item was NOT audited today at this location.
+- [OPM Lama] SKU: BW-SL-BLK-100Mx20CMx5ROLL-GRN, stock: -3, last_updated: 2026-06-10T07:09:34.986672+00:00
+  --> NOTE: This item was NOT audited today at this location.
+- [OPM Ali] SKU: CUKUPP-BROWN-TAPE-160M, stock: -16, last_updated: 2026-05-24T21:08:48.402574+00:00
+  --> NOTE: This item was NOT audited today at this location.
+- [Nilai] SKU: BW-DL-CLR-100Mx33CMx3ROLL-BLU, stock: -8, last_updated: 2026-06-10T13:56:11.808786+00:00
+  --> NOTE: This item was NOT audited today at this location.
+- [SPD] SKU: BW-SL-BLK-100Mx50CMx2ROLL-RED, stock: -103, last_updated: 2026-06-05T01:47:58.940559+00:00
+  --> NOTE: This item was NOT audited today at this location.
+- [OPM Ali] SKU: B40-ROLL, stock: -40, last_updated: 2026-05-11T23:17:57.738734+00:00
+  --> NOTE: This item was NOT audited today at this location.
+- [Nilai] SKU: BW-SL-SLR-100Mx100CMx1ROLL-RED, stock: -11, last_updated: 2026-06-04T10:30:47.188799+00:00
+  --> NOTE: This item was NOT audited today at this location.
+- [OPM Ali] SKU: CUKUPP-B45, stock: -10, last_updated: 2026-05-08T03:09:43.848256+00:00
+  --> NOTE: This item was NOT audited today at this location.
+- [OPM Corner] SKU: SF-BLACK, stock: -4, last_updated: 2026-04-08T08:00:00+00:00
+  --> NOTE: This item was NOT audited today at this location.
+- [OPM Ali] SKU: CUKUPP-BROWN-TAPE-80M, stock: -20, last_updated: 2026-06-09T23:53:25.161599+00:00
+  --> NOTE: This item was NOT audited today at this location.
+- [OPM Lama] SKU: B17-ROLL, stock: -24, last_updated: 2026-05-08T05:48:56.35993+00:00
+  --> NOTE: This item was NOT audited today at this location.
+- [OPM Lama] SKU: BW-DL-BLK-100Mx50CMx2ROLL-RED, stock: -1, last_updated: 2026-04-10T10:21:26.572041+00:00
+  --> NOTE: This item was NOT audited today at this location.
+- [OPM Corner] SKU: CUKUPP-PINK-25, stock: -14, last_updated: 2026-06-07T23:42:26.641642+00:00
+  --> NOTE: This item was NOT audited today at this location.
+- [Nilai] SKU: AWB-5000STACK-2, stock: -81, last_updated: 2026-06-08T15:52:28.085193+00:00
+  --> NOTE: This item was NOT audited today at this location.
+- [Nilai] SKU: BW-SL-BLK-100Mx100CMx1ROLL-GRN, stock: -186, last_updated: 2026-06-08T22:04:39.523045+00:00
+  --> NOTE: This item was NOT audited today at this location.
+- [Nilai] SKU: BW-SL-CLR-100Mx50CMx2ROLL-ORN, stock: -424, last_updated: 2026-06-10T12:26:10.451405+00:00
+  --> NOTE: This item was NOT audited today at this location.
+- [OPM Corner] SKU: CUKUPP-W38, stock: -46, last_updated: 2026-06-03T22:40:21.352798+00:00
+  --> NOTE: This item was NOT audited today at this location.
+- [OPM Ali] SKU: CUKUPP-B32, stock: -10, last_updated: 2026-05-08T03:09:43.848256+00:00
+  --> NOTE: This item was NOT audited today at this location.
+- [OPM Lama] SKU: BW-SL-CLR-100Mx25CMx4ROLL-BLU, stock: -2, last_updated: 2026-04-08T11:33:42.317536+00:00
+  --> NOTE: This item was NOT audited today at this location.
+- [OPM Corner] SKU: AIRTUBE-15CM-300M, stock: -55, last_updated: 2026-05-18T09:48:28.904569+00:00
+  --> NOTE: This item was NOT audited today at this location.
+- [SPD] SKU: B40-ROLL, stock: -5, last_updated: 2026-06-09T10:37:11.484621+00:00
+  --> NOTE: This item was NOT audited today at this location.
+- [Nilai] SKU: BW-SL-CLR-100Mx33CMx3ROLL-GRN, stock: -472, last_updated: 2026-06-10T04:36:15.780019+00:00
+  --> NOTE: This item was NOT audited today at this location.
+- [Nilai] SKU: CUKUPP-W20, stock: -4, last_updated: 2026-05-14T02:30:46.583912+00:00
+  --> NOTE: This item was NOT audited today at this location.
+- [OPM Ali] SKU: SF-BABYROLL, stock: -6, last_updated: 2026-06-10T10:03:49.449336+00:00
+  --> NOTE: This item was NOT audited today at this location.
+- [null] SKU: AIRTUBE-45CM-300M, stock: -3, last_updated: 2026-04-09T15:02:25.510018+00:00
+  --> NOTE: This item was NOT audited today at this location.
+- [OPM Corner] SKU: B40-ROLL, stock: -408, last_updated: 2026-05-10T14:06:27.20841+00:00
+  --> NOTE: This item was NOT audited today at this location.
+- [OPM Corner] SKU: AIRTUBE-40CM-300M, stock: -114, last_updated: 2026-06-08T03:51:36.478454+00:00
+  --> NOTE: This item was NOT audited today at this location.
+- [OPM Lama] SKU: SF-BLACK, stock: -26, last_updated: 2026-06-10T02:15:38.612411+00:00
+  --> NOTE: This item was NOT audited today at this location.
+- [SPD] SKU: SF-CLEAR, stock: -20, last_updated: 2026-04-08T08:00:00+00:00
+  --> NOTE: This item was NOT audited today at this location.
+- [Nilai] SKU: AIRTUBE-45CM-300M, stock: -3, last_updated: 2026-05-26T06:46:00.50502+00:00
+  --> NOTE: This item was NOT audited today at this location.
+- [Nilai] SKU: AWB-500STACK-20, stock: -7, last_updated: 2026-06-02T01:22:03.113038+00:00
+  --> NOTE: This item was NOT audited today at this location.
+- [null] SKU: CUKUPP-CLEAR-TAPE-80M, stock: -8, last_updated: 2026-04-09T15:02:25.162342+00:00
+  --> NOTE: This item was NOT audited today at this location.
+- [SPD] SKU: CUKUPP-CLEAR-TAPE-18MM, stock: -5, last_updated: 2026-05-15T23:10:47.929569+00:00
+  --> NOTE: This item was NOT audited today at this location.
+- [SPD] SKU: CUKUPP-CLEAR-TAPE-160M, stock: -91, last_updated: 2026-05-08T02:59:41.053574+00:00
+  --> NOTE: This item was NOT audited today at this location.
+- [OPM Ali] SKU: CUKUPP-CLEAR-TAPE-80M, stock: -732, last_updated: 2026-06-10T10:58:18.340223+00:00
+  --> NOTE: This item was NOT audited today at this location.
+- [OPM Lama] SKU: BW-SL-CLR-100Mx50CMx2ROLL-ORN, stock: -75, last_updated: 2026-06-10T11:12:36.33503+00:00
+  --> NOTE: This item WAS audited today at this location!
+- [Nilai] SKU: SF-CLEAR, stock: -1041, last_updated: 2026-06-09T07:49:22.409468+00:00
+  --> NOTE: This item was NOT audited today at this location.
+- [Nilai] SKU: AIRTUBE-40CM-300M, stock: -32, last_updated: 2026-06-10T02:29:49.41821+00:00
+  --> NOTE: This item was NOT audited today at this location.
+- [OPM Corner] SKU: B25-ROLL, stock: -322, last_updated: 2026-05-22T14:02:38.176201+00:00
+  --> NOTE: This item was NOT audited today at this location.
+- [OPM Lama] SKU: B40-ROLL, stock: -16, last_updated: 2026-05-07T12:32:12.914877+00:00
+  --> NOTE: This item was NOT audited today at this location.
+- [Nilai] SKU: BW-SL-BLK-100Mx33CMx3ROLL-GRN, stock: -112, last_updated: 2026-05-25T20:36:47.152404+00:00
+  --> NOTE: This item was NOT audited today at this location.
+- [Nilai] SKU: AIRTUBE-25CM-300M, stock: -61, last_updated: 2026-06-02T01:22:03.113038+00:00
+  --> NOTE: This item was NOT audited today at this location.
+- [SPD] SKU: BW-SL-CLR-100Mx33CMx3ROLL-GRN, stock: -6, last_updated: 2026-05-15T23:10:47.929569+00:00
+  --> NOTE: This item was NOT audited today at this location.
+- [OPM Corner] SKU: CUKUPP-B40, stock: -2, last_updated: 2026-06-10T02:43:45.764303+00:00
+  --> NOTE: This item was NOT audited today at this location.
+- [OPM Ali] SKU: AIRTUBE-20CM-300M, stock: -15, last_updated: 2026-05-25T07:53:12.859137+00:00
+  --> NOTE: This item was NOT audited today at this location.
+- [SPD] SKU: W35-ROLL, stock: -1, last_updated: 2026-05-17T23:26:58.546211+00:00
+  --> NOTE: This item was NOT audited today at this location.
+- [OPM Ali] SKU: AIRTUBE-45CM-300M, stock: -17, last_updated: 2026-05-12T01:11:31.355987+00:00
+  --> NOTE: This item was NOT audited today at this location.
+- [OPM Lama] SKU: CUKUPP-W28, stock: -10, last_updated: 2026-06-10T01:41:02.11152+00:00
+  --> NOTE: This item was NOT audited today at this location.
+- [OPM Corner] SKU: CUKUPP-CLEAR-TAPE-160M, stock: -6, last_updated: 2026-05-24T08:29:02.579049+00:00
+  --> NOTE: This item was NOT audited today at this location.
+- [OPM Ali] SKU: CUKUPP-B17, stock: -6, last_updated: 2026-06-09T10:37:11.484621+00:00
+  --> NOTE: This item was NOT audited today at this location.
+- [null] SKU: B25-ROLL, stock: -230, last_updated: 2026-04-08T06:34:54.631571+00:00
+  --> NOTE: This item was NOT audited today at this location.
+- [Nilai] SKU: CUKUPP-BROWN-TAPE-160M, stock: -5, last_updated: 2026-05-20T01:08:54.376921+00:00
+  --> NOTE: This item was NOT audited today at this location.
+- [Nilai] SKU: BW-SL-CLR-100Mx33CMx3ROLL-BLU, stock: -15, last_updated: 2026-04-08T08:00:00+00:00
+  --> NOTE: This item was NOT audited today at this location.
+- [OPM Corner] SKU: CUKUPP-W20, stock: -41, last_updated: 2026-06-03T22:40:21.352798+00:00
+  --> NOTE: This item was NOT audited today at this location.
+- [OPM Corner] SKU: CUKUPP-PINK-17, stock: -4, last_updated: 2026-06-07T23:42:26.641642+00:00
+  --> NOTE: This item was NOT audited today at this location.
+- [SPD] SKU: B35-ROLL, stock: -1, last_updated: 2026-05-17T23:26:58.546211+00:00
+  --> NOTE: This item was NOT audited today at this location.
+- [OPM Corner] SKU: CUKUPP-MINT-32, stock: -1, last_updated: 2026-04-27T08:05:08.025252+00:00
+  --> NOTE: This item was NOT audited today at this location.
+- [OPM Ali] SKU: W28-ROLL, stock: -570, last_updated: 2026-05-08T03:09:43.848256+00:00
+  --> NOTE: This item was NOT audited today at this location.
+- [Nilai] SKU: AIRTUBE-20CM-50M, stock: -6, last_updated: 2026-06-07T06:58:03.210355+00:00
+  --> NOTE: This item was NOT audited today at this location.
+- [OPM Ali] SKU: B20-ROLL, stock: -62, last_updated: 2026-05-11T23:17:57.738734+00:00
+  --> NOTE: This item was NOT audited today at this location.

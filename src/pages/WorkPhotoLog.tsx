@@ -384,7 +384,6 @@ const WorkPhotoLog: React.FC<Props> = ({ user }) => {
                     ref={fileInputRef}
                     type="file"
                     accept="image/*"
-                    capture="environment"
                     className="hidden"
                     onChange={handleFileSelect}
                 />

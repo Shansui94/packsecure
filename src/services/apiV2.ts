@@ -301,7 +301,7 @@ export interface SalaryAdvance {
     employee_id: string;
     amount: number;
     bank_in_date: string;
-    status: 'Pending' | 'Approved' | 'Rejected';
+    status: 'Pending' | 'Approved' | 'Paid' | 'Rejected';
     rejection_reason?: string;
     created_at?: string;
     updated_at?: string;
@@ -379,7 +379,7 @@ export const getSalaryAdvances = async (): Promise<any[]> => {
     }));
 };
 
-export const updateSalaryAdvanceStatus = async (id: string, status: 'Approved' | 'Rejected', rejectionReason?: string): Promise<boolean> => {
+export const updateSalaryAdvanceStatus = async (id: string, status: 'Approved' | 'Paid' | 'Rejected', rejectionReason?: string): Promise<boolean> => {
     const updates: any = { status, updated_at: new Date().toISOString() };
     if (rejectionReason !== undefined) {
         updates.rejection_reason = rejectionReason;

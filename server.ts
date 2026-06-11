@@ -4,9 +4,8 @@ import express from 'express';
 import cors from 'cors';
 import chatHandler from './api/agent/chat';
 import manageEmployeeHandler from './api/manage-employee';
-import createDriverHandler from './api/create-driver';
-import deleteDriverHandler from './api/delete-driver';
 import visionHandler from './api/agent/vision';
+import geocodeHandler from './api/geocode';
 
 const app = express();
 const PORT = 8080;
@@ -28,9 +27,8 @@ const mountVercelHandler = (path: string, handler: (req: any, res: any) => Promi
 };
 
 mountVercelHandler('/api/manage-employee', manageEmployeeHandler);
-mountVercelHandler('/api/create-driver', createDriverHandler);
-mountVercelHandler('/api/delete-driver', deleteDriverHandler);
 mountVercelHandler('/api/agent/vision', visionHandler);
+mountVercelHandler('/api/geocode', geocodeHandler);
 
 // Mimic Vercel Request/Response for the handler
 app.post('/api/agent/chat', async (req, res) => {

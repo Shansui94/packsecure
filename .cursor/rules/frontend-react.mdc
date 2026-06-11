@@ -1,0 +1,44 @@
+---
+description: React 前端与页面开发约定
+globs: src/**/*
+alwaysApply: false
+---
+
+# 前端开发规则
+
+## 技术约定
+
+- React 19 函数组件 + TypeScript
+- 样式：Tailwind CSS 4，深色模式通过 `html.dark`（见 `Layout.tsx`）
+- 数据：优先用 `@supabase/supabase-js` 客户端（`src/services/supabase.ts`）
+- 图标：`lucide-react`
+
+## 路由与页面
+
+- **无 React Router**：页面由 `App.tsx` 中 `activePage` 字符串 + `switch` 渲染
+- 新增页面必须：新建 `src/pages/X.tsx` → `App.tsx` 增加 `case` → `Layout.tsx` 增加导航项
+- `activePage` 会写入 `localStorage.lastActivePage`
+- IoT：`#/production/` 触发 `isIoTMode`，跳过 Supabase 登录
+
+## 权限
+
+- 角色类型见 `src/types/index.ts` 的 `UserRole`
+- 菜单：`Layout.tsx` 读 `role_permissions`（有 DB 记录时以 DB 为准）；`App.tsx` 路由守卫用 `utils/pageAccess.ts`
+- `user.roleModules` 可额外解锁页面
+
+## 实践
+
+```tsx
+// ✅ 从 services 引入 supabase
+import { supabase } from '../services/supabase';
+
+// ❌ 不要在组件里 new createClient（除非有充分理由）
+```
+
+- 复用 `src/components/` 已有组件，保持布局与 `Layout` 子区域一致
+- 活动追踪用 `logActivity`（`src/utils/logger.ts`），避免重复造轮子
+- Realtime 订阅在 `useEffect` 内创建，cleanup 里 `supabase.removeChannel`
+
+## 验证
+
+`npm run dev` 或 `npm run dev:all`，用目标角色登录，检查 Console 无报错、Network 请求符合预期。

@@ -580,11 +580,16 @@ const PersonalMonthlyReport: React.FC<Props> = ({ user }) => {
                         });
                     }
                     if (d.pod_photo_url) {
-                        dayPhotos.push({
-                            created_at: d.pod_timestamp || d.created_at || `${dateStr}T12:00:00.000Z`,
-                            category: 'Proof of Delivery / POD',
-                            photo_url: d.pod_photo_url,
-                            risk_flag: false
+                        d.pod_photo_url.split(',').forEach((url: string, index: number) => {
+                            const trimmed = url.trim();
+                            if (trimmed) {
+                                dayPhotos.push({
+                                    created_at: d.pod_timestamp || d.created_at || `${dateStr}T12:00:00.000Z`,
+                                    category: `Proof of Delivery / POD (${index + 1})`,
+                                    photo_url: trimmed,
+                                    risk_flag: false
+                                });
+                            }
                         });
                     }
                     if (d.pod_signature_url) {
@@ -1468,14 +1473,20 @@ const PersonalMonthlyReport: React.FC<Props> = ({ user }) => {
                                                         </a>
                                                     </div>
                                                 )}
-                                                {selectedTrip.pod_photo_url && (
-                                                    <div className="bg-[#121214] border border-[#27272a] p-2 rounded-xl flex flex-col gap-1">
-                                                        <span className="text-[8px] font-black text-gray-400 uppercase tracking-wider text-center">Gambar POD / Proof of Delivery</span>
-                                                        <a href={selectedTrip.pod_photo_url} target="_blank" rel="noreferrer" className="relative aspect-video rounded-lg overflow-hidden border border-white/5 bg-black flex items-center justify-center cursor-zoom-in">
-                                                            <img src={selectedTrip.pod_photo_url} alt="Proof of Delivery" className="max-w-full max-h-full object-contain" />
-                                                        </a>
-                                                    </div>
-                                                )}
+                                                {selectedTrip.pod_photo_url && selectedTrip.pod_photo_url.split(',').map((url: string, idx: number) => {
+                                                    const trimmed = url.trim();
+                                                    if (!trimmed) return null;
+                                                    const isDo = idx % 2 === 0;
+                                                    const label = isDo ? 'Gambar DO / DO Proof' : 'Gambar Barang / Cargo Proof';
+                                                    return (
+                                                        <div key={idx} className="bg-[#121214] border border-[#27272a] p-2 rounded-xl flex flex-col gap-1">
+                                                            <span className="text-[8px] font-black text-gray-400 uppercase tracking-wider text-center">{label} ({Math.floor(idx / 2) + 1})</span>
+                                                            <a href={trimmed} target="_blank" rel="noreferrer" className="relative aspect-video rounded-lg overflow-hidden border border-white/5 bg-black flex items-center justify-center cursor-zoom-in">
+                                                                <img src={trimmed} alt={`Proof of Delivery ${idx + 1}`} className="max-w-full max-h-full object-contain" />
+                                                            </a>
+                                                        </div>
+                                                    );
+                                                })}
                                             </div>
                                         </div>
                                     )}
@@ -1551,14 +1562,20 @@ const PersonalMonthlyReport: React.FC<Props> = ({ user }) => {
                                                 )}
 
                                                 {/* POD Photo */}
-                                                {selectedTrip.pod_photo_url && (
-                                                    <div className="bg-[#121214] border border-[#27272a] p-2.5 rounded-xl flex flex-col gap-1.5">
-                                                        <span className="text-[9px] font-black text-gray-400 uppercase tracking-wider text-center">Gambar POD / Proof of Delivery</span>
-                                                        <a href={selectedTrip.pod_photo_url} target="_blank" rel="noreferrer" className="relative aspect-video rounded-lg overflow-hidden border border-white/5 bg-black flex items-center justify-center cursor-zoom-in group-hover:border-violet-500/50 transition-colors">
-                                                            <img src={selectedTrip.pod_photo_url} alt="Proof of Delivery" className="max-w-full max-h-full object-contain" />
-                                                        </a>
-                                                    </div>
-                                                )}
+                                                {selectedTrip.pod_photo_url && selectedTrip.pod_photo_url.split(',').map((url: string, idx: number) => {
+                                                    const trimmed = url.trim();
+                                                    if (!trimmed) return null;
+                                                    const isDo = idx % 2 === 0;
+                                                    const label = isDo ? 'Gambar DO / DO Proof' : 'Gambar Barang / Cargo Proof';
+                                                    return (
+                                                        <div key={idx} className="bg-[#121214] border border-[#27272a] p-2.5 rounded-xl flex flex-col gap-1.5">
+                                                            <span className="text-[9px] font-black text-gray-400 uppercase tracking-wider text-center">{label} ({Math.floor(idx / 2) + 1})</span>
+                                                            <a href={trimmed} target="_blank" rel="noreferrer" className="relative aspect-video rounded-lg overflow-hidden border border-white/5 bg-black flex items-center justify-center cursor-zoom-in group-hover:border-violet-500/50 transition-colors">
+                                                                <img src={trimmed} alt={`Proof of Delivery ${idx + 1}`} className="max-w-full max-h-full object-contain" />
+                                                            </a>
+                                                        </div>
+                                                    );
+                                                })}
 
                                                 {/* Signature */}
                                                 {selectedTrip.pod_signature_url && (

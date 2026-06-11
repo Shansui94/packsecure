@@ -12,11 +12,11 @@ const supabase = createClient(
 
 async function run() {
   const { data, error } = await supabase
-    .from('production_logs_v2')
-    .select('created_at, machine_id, job_id, sku, note')
-    .order('created_at', { ascending: true })
-    .limit(10);
+    .from('salary_advances')
+    .update({ status: 'Paid' })
+    .eq('id', 'f9b89006-5385-470b-81ba-ae5b76669b15')
+    .select();
     
-  if (data) fs.writeFileSync('db_output.json', JSON.stringify(data, null, 2));
+  console.log("Update result:", data, error);
 }
 run();

@@ -7,6 +7,38 @@ import {
 } from 'lucide-react';
 import { getSalaryAdvances, updateSalaryAdvanceStatus } from '../services/apiV2';
 
+const formatYYYYMMDD = (dateStr: string | null | undefined): string => {
+    if (!dateStr) return '';
+    const cleanStr = dateStr.includes('T') ? dateStr.split('T')[0] : dateStr;
+    const parts = cleanStr.split('-');
+    if (parts.length !== 3) return dateStr;
+    const [y, m, d] = parts;
+    const months = ['Jan', 'Feb', 'Mar', 'Apr', 'May', 'Jun', 'Jul', 'Aug', 'Sep', 'Oct', 'Nov', 'Dec'];
+    const monthIndex = parseInt(m, 10) - 1;
+    const monthName = months[monthIndex] || m;
+    return `${parseInt(d, 10)} ${monthName} ${y}`;
+};
+
+const formatDDMon = (dateStr: string | null | undefined): string => {
+    if (!dateStr) return '';
+    const cleanStr = dateStr.includes('T') ? dateStr.split('T')[0] : dateStr;
+    const parts = cleanStr.split('-');
+    if (parts.length !== 3) return dateStr;
+    const [, m, d] = parts;
+    const months = ['Jan', 'Feb', 'Mar', 'Apr', 'May', 'Jun', 'Jul', 'Aug', 'Sep', 'Oct', 'Nov', 'Dec'];
+    const monthIndex = parseInt(m, 10) - 1;
+    const monthName = months[monthIndex] || m;
+    return `${String(parseInt(d, 10)).padStart(2, '0')} ${monthName}`;
+};
+
+const formatCSVDate = (dateStr: string | null | undefined): string => {
+    if (!dateStr) return '';
+    const cleanStr = dateStr.includes('T') ? dateStr.split('T')[0] : dateStr;
+    const parts = cleanStr.split('-');
+    if (parts.length !== 3) return dateStr;
+    const [y, m, d] = parts;
+    return `${d}/${m}/${y}`;
+};
 
 // ── TYPES ────────────────────────────────────────────────────
 interface Employee {
@@ -25,6 +57,8 @@ interface Employee {
     trip_allowance: number;
     attendance_bonus: number;
     attendance_bonus_threshold: number;
+    role_modules?: string[];
+    base_location?: string;
 }
 
 const ALL_PAGES = [
@@ -32,6 +66,8 @@ const ALL_PAGES = [
     { id: 'scanner', label: 'Production Control', group: 'Factory' },
     { id: 'livestock', label: 'Live Stock', group: 'Factory' },
     { id: 'production', label: 'Production Logs', group: 'Factory' },
+    { id: 'floor-plan', label: 'Floor Plan (厂房布局)', group: 'Factory' },
+    { id: 'machine-schedule', label: 'Machine Schedule (排产)', group: 'Factory' },
     { id: 'inventory', label: 'Inventory', group: 'Inventory' },
     { id: 'products', label: 'Product Library', group: 'Inventory' },
     { id: 'stock-movement', label: 'Stock Movement', group: 'Inventory' },
@@ -49,12 +85,18 @@ const ALL_PAGES = [
     { id: 'data-v2', label: 'Data Command', group: 'Admin' },
     { id: 'iot', label: 'IoT Settings', group: 'Admin' },
     { id: 'reports', label: 'Executive Reports', group: 'Admin' },
+    { id: 'activity-logs', label: 'Activity Logs (操作日志)', group: 'Admin' },
+    { id: 'dev-log', label: 'Dev Log (开发日志)', group: 'Admin' },
     { id: 'maintenance', label: 'Maintenance Control', group: 'Other' },
     { id: 'claims', label: 'Claims', group: 'Other' },
     { id: 'notes', label: 'Notes', group: 'Other' },
     { id: 'tasks', label: 'Tasks', group: 'Other' },
     { id: 'driver-leave', label: 'Apply Leave', group: 'Other' },
     { id: 'report-history', label: 'Reports', group: 'Other' },
+    { id: 'leave-calendar', label: 'Leave Center (请假中心)', group: 'Other' },
+    { id: 'sop-center', label: 'SOP Guide (SOP 指南)', group: 'Other' },
+    { id: 'work-photos', label: 'Work Photos (工作记录)', group: 'Other' },
+    { id: 'personal-report', label: 'Monthly Report (月度报告)', group: 'Other' },
 ];
 
 const ALL_ROLES = ['SuperAdmin', 'Admin', 'Manager', 'LogisticsCoordinator', 'HR', 'Operator', 'Driver'];
@@ -73,15 +115,21 @@ const EmployeeModal: React.FC<{
     emp: Partial<Employee> | null;
     onClose: () => void;
     onSave: () => void;
-}> = ({ emp, onClose, onSave }) => {
+    currentUser: any;
+}> = ({ emp, onClose, onSave, currentUser }) => {
     const isNew = !emp?.id;
+    const isSuperAdminOrHR = currentUser?.role === 'SuperAdmin' || currentUser?.role === 'HR';
     const [form, setForm] = useState<Partial<Employee> & { pin_input?: string }>(emp ? {
         ...emp,
-        pin_input: emp.pin_code || emp.employee_id || ''
+        pin_input: emp.pin_code || emp.employee_id || '',
+        role_modules: emp.role_modules || [],
+        base_location: emp.base_location || 'Taiping'
     } : {
         role: 'Operator', pay_type: 'hourly', status: 'active',
         hourly_rate: 0, base_salary: 0, trip_allowance: 0,
         attendance_bonus: 0, attendance_bonus_threshold: 0,
+        role_modules: [],
+        base_location: 'Taiping'
     });
     const [saving, setSaving] = useState(false);
     const [error, setError] = useState('');
@@ -111,6 +159,19 @@ const EmployeeModal: React.FC<{
             setForm(f => ({ ...f, pin_input: nextPin } as any));
         });
     }, [isNew]);
+
+    const pin = (form as any).pin_input || '';
+
+    // Auto-generate email preview for new Driver/Operator
+    useEffect(() => {
+        if (isNew && form.name && pin && (form.role === 'Driver' || form.role === 'Operator')) {
+            const cleanName = form.name.trim().toLowerCase().replace(/\s/g, '');
+            const generated = `${cleanName}.${pin}@packsecure.com`;
+            if (!form.email || form.email.startsWith('emp_') || form.email.includes('@packsecure.local')) {
+                setForm(f => ({ ...f, email: generated }));
+            }
+        }
+    }, [form.name, pin, form.role, isNew]);
 
     const handleSave = async () => {
         const pin = (form as any).pin_input || '';
@@ -144,7 +205,7 @@ const EmployeeModal: React.FC<{
                 });
 
                 const raw = await res.text();
-                let data: { error?: string } = {};
+                let data: any = {};
                 try {
                     data = raw ? JSON.parse(raw) : {};
                 } catch {
@@ -226,12 +287,17 @@ const EmployeeModal: React.FC<{
             auth_user_id: targetAuthId,
             name: form.name, email: validEmail, phone: form.phone || null,
             role: form.role, status: form.status || 'active',
-            pay_type: form.pay_type, hourly_rate: Number(form.hourly_rate) || 0,
-            base_salary: Number(form.base_salary) || 0,
-            trip_allowance: Number(form.trip_allowance) || 0,
-            attendance_bonus: Number(form.attendance_bonus) || 0,
-            attendance_bonus_threshold: Number(form.attendance_bonus_threshold) || 0,
+            role_modules: form.role_modules || []
         };
+
+        if (isSuperAdminOrHR) {
+            payload.pay_type = form.pay_type;
+            payload.hourly_rate = Number(form.hourly_rate) || 0;
+            payload.base_salary = Number(form.base_salary) || 0;
+            payload.trip_allowance = Number(form.trip_allowance) || 0;
+            payload.attendance_bonus = Number(form.attendance_bonus) || 0;
+            payload.attendance_bonus_threshold = Number(form.attendance_bonus_threshold) || 0;
+        }
         // Only set pin_code / employee_id when provided
         if (pin) { payload.pin_code = pin; payload.employee_id = pin; }
 
@@ -240,7 +306,17 @@ const EmployeeModal: React.FC<{
             : await supabase.from('sys_users_v2').update(payload).eq('id', form.id);
 
         if (err) setError(err.message);
-        else { onSave(); onClose(); }
+        else {
+            // Sync base_location to users_public
+            if (targetAuthId && form.base_location) {
+                const { error: locErr } = await supabase.from('users_public')
+                    .update({ base_location: form.base_location })
+                    .eq('id', targetAuthId);
+                if (locErr) console.warn("Failed to sync base_location to users_public:", locErr.message);
+            }
+            onSave();
+            onClose();
+        }
         setSaving(false);
     };
 
@@ -312,45 +388,127 @@ const EmployeeModal: React.FC<{
                                 <option value="resigned">Resigned</option>
                             </select>
                         </div>
-                    </div>
-
-                    {/* Pay Type */}
-                    <div>
-                        <label className="block text-[10px] text-gray-500 uppercase tracking-widest mb-1.5">Pay Type</label>
-                        <div className="grid grid-cols-3 gap-2">
-                            {Object.entries(PAY_TYPE_LABELS).map(([k, v]) => (
-                                <button key={k} onClick={() => set('pay_type', k)}
-                                    className={`py-2 px-3 rounded-xl text-xs font-bold border transition-all ${form.pay_type === k ? 'bg-blue-500/20 text-blue-400 border-blue-500/30' : 'bg-white/5 text-gray-500 border-white/5 hover:text-white'}`}>
-                                    {v}
-                                </button>
-                            ))}
-                        </div>
-                    </div>
-
-                    {/* Pay Fields based on type */}
-                    <div className="bg-black/30 rounded-2xl p-4 space-y-3 border border-white/5">
-                        {form.pay_type === 'hourly' && (
-                            f('Hourly Rate (RM)', 'hourly_rate', 'number', '6.50')
-                        )}
-                        {form.pay_type === 'monthly' && (
-                            f('Monthly Salary (RM)', 'base_salary', 'number', '2000')
-                        )}
-                        {form.pay_type === 'driver' && (<>
-                            {f('Base Salary (RM, 0 = no base)', 'base_salary', 'number', '0')}
-                            {f('Trip Allowance (RM/trip)', 'trip_allowance', 'number', '30')}
-                        </>)}
-                        {/* Attendance Bonus for all */}
-                        <div className="grid grid-cols-2 gap-3 pt-2 border-t border-white/5">
-                            {f('全勤奖 Attendance Bonus (RM)', 'attendance_bonus', 'number', '200')}
-                            <div>
-                                <label className="block text-[10px] text-gray-500 uppercase tracking-widest mb-1.5">Max Absent Days Still Eligible</label>
-                                <input type="number" value={form.attendance_bonus_threshold ?? 0} onChange={e => set('attendance_bonus_threshold', e.target.value)}
-                                    placeholder="0 = perfect attendance"
-                                    className="w-full bg-black/40 border border-white/10 rounded-xl px-3 py-2.5 text-sm text-white placeholder-gray-700 focus:outline-none focus:border-white/30" />
-                                <div className="text-[9px] text-gray-600 mt-1">0 = zero absences required</div>
+                        <div>
+                            <label className="block text-[10px] text-gray-500 uppercase tracking-widest mb-1.5">Base Location (📍 Origin)</label>
+                            <div className="grid grid-cols-2 gap-2">
+                                {['Taiping', 'Nilai'].map(loc => (
+                                    <button
+                                        key={loc}
+                                        type="button"
+                                        onClick={() => setForm(f => ({ ...f, base_location: loc }))}
+                                        className={`py-2 px-3 rounded-xl text-xs font-bold border transition-all ${
+                                            form.base_location === loc
+                                                ? 'bg-blue-500/20 text-blue-400 border-blue-500/30'
+                                                : 'bg-white/5 text-gray-500 border-white/5 hover:text-white'
+                                        }`}
+                                    >
+                                        {loc}
+                                    </button>
+                                ))}
                             </div>
                         </div>
                     </div>
+
+                    {/* Pay Type */}
+                    {isSuperAdminOrHR && (
+                        <div>
+                            <label className="block text-[10px] text-gray-500 uppercase tracking-widest mb-1.5">Pay Type</label>
+                            <div className="grid grid-cols-3 gap-2">
+                                {Object.entries(PAY_TYPE_LABELS).map(([k, v]) => (
+                                    <button key={k} onClick={() => set('pay_type', k)}
+                                        className={`py-2 px-3 rounded-xl text-xs font-bold border transition-all ${form.pay_type === k ? 'bg-blue-500/20 text-blue-400 border-blue-500/30' : 'bg-white/5 text-gray-500 border-white/5 hover:text-white'}`}>
+                                        {v}
+                                    </button>
+                                ))}
+                            </div>
+                        </div>
+                    )}
+
+                    {/* Pay Fields based on type */}
+                    {isSuperAdminOrHR && (
+                        <div className="bg-black/30 rounded-2xl p-4 space-y-3 border border-white/5">
+                            {form.pay_type === 'hourly' && (
+                                f('Hourly Rate (RM)', 'hourly_rate', 'number', '6.50')
+                            )}
+                            {form.pay_type === 'monthly' && (
+                                f('Monthly Salary (RM)', 'base_salary', 'number', '2000')
+                            )}
+                            {form.pay_type === 'driver' && (<>
+                                {f('Base Salary (RM, 0 = no base)', 'base_salary', 'number', '0')}
+                                {f('Trip Allowance (RM/trip)', 'trip_allowance', 'number', '30')}
+                            </>)}
+                            {/* Attendance Bonus for all */}
+                            <div className="grid grid-cols-2 gap-3 pt-2 border-t border-white/5">
+                                {f('全勤奖 Attendance Bonus (RM)', 'attendance_bonus', 'number', '200')}
+                                <div>
+                                    <label className="block text-[10px] text-gray-500 uppercase tracking-widest mb-1.5">Max Absent Days Still Eligible</label>
+                                    <input type="number" value={form.attendance_bonus_threshold ?? 0} onChange={e => set('attendance_bonus_threshold', e.target.value)}
+                                        placeholder="0 = perfect attendance"
+                                        className="w-full bg-black/40 border border-white/10 rounded-xl px-3 py-2.5 text-sm text-white placeholder-gray-700 focus:outline-none focus:border-white/30" />
+                                    <div className="text-[9px] text-gray-600 mt-1">0 = zero absences required</div>
+                                </div>
+                            </div>
+                        </div>
+                    )}
+
+                    {/* Custom Module Unlocks */}
+                    {['SuperAdmin', 'Admin', 'Manager'].includes(currentUser?.role || '') && (
+                        <div className="pt-4 border-t border-white/5 space-y-2">
+                            <label className="block text-[10px] text-emerald-400 font-bold uppercase tracking-widest">
+                                🛡️ Custom Module Unlocks (特权开通)
+                            </label>
+                            <p className="text-[10px] text-gray-500 leading-tight">
+                                为员工开通专属页面访问权限（无需改变角色，适用于临时授权）。
+                            </p>
+                            <div className="grid grid-cols-2 gap-2">
+                                {[
+                                    { id: 'stock-audit', label: 'Stock Audit (盘点)' },
+                                    { id: 'stock-movement', label: 'Stock Move (移库)' },
+                                    { id: 'inventory', label: 'Inventory (原材库存)' },
+                                    { id: 'livestock', label: 'Live Stock (成品仓)' },
+                                    { id: 'scanner', label: 'Scanner (生产打码)' },
+                                    { id: 'machine-schedule', label: 'Machine Schedule (排产)' },
+                                    { id: 'floor-plan', label: 'Floor Plan (厂房布局)' },
+                                    { id: 'data-v2', label: 'Data Base (底层库)' },
+                                    { id: 'order-summary', label: 'Daily Prep (生产预备)' },
+                                    { id: 'delivery', label: 'Trip Admin (行政派车)' },
+                                    { id: 'delivery-driver', label: 'My Delivery (司机手机端)' },
+                                    { id: 'reports', label: 'Exec Reports (总报表)' },
+                                    { id: 'maintenance', label: 'Maintenance (机器维修)' },
+                                    { id: 'hr', label: 'HR Portal (行政人事)' },
+                                    { id: 'leave-calendar', label: 'Leave Center (请假中心)' },
+                                    { id: 'sop-center', label: 'SOP Guide (SOP 指南)' },
+                                    { id: 'work-photos', label: 'Work Photos (工作记录)' },
+                                    { id: 'personal-report', label: 'Monthly Report (月度报告)' },
+                                    { id: 'activity-logs', label: 'Activity Logs (操作日志)' },
+                                    { id: 'dev-log', label: 'Dev Log (开发日志)' }
+                                ].map(mod => {
+                                    const roleModules = form.role_modules || [];
+                                    const isEnabled = roleModules.includes(mod.id);
+                                    return (
+                                        <button
+                                            key={mod.id}
+                                            type="button"
+                                            onClick={() => {
+                                                const newMods = isEnabled 
+                                                    ? roleModules.filter(m => m !== mod.id)
+                                                    : [...roleModules, mod.id];
+                                                setForm(f => ({ ...f, role_modules: newMods }));
+                                            }}
+                                            className={`px-2 py-2 rounded-xl text-left text-xs font-bold transition-all border flex items-center justify-between ${
+                                                isEnabled 
+                                                    ? 'bg-emerald-500/10 border-emerald-500/30 text-emerald-400'
+                                                    : 'bg-white/5 border-white/5 text-gray-500 hover:border-white/10 hover:text-gray-300'
+                                            }`}
+                                        >
+                                            <span className="truncate">{mod.label}</span>
+                                            {isEnabled && <div className="w-1.5 h-1.5 rounded-full bg-emerald-400 shadow-[0_0_5px_rgba(16,185,129,0.8)]" />}
+                                        </button>
+                                    );
+                                })}
+                            </div>
+                        </div>
+                    )}
 
                     {error && <div className="text-red-400 text-xs bg-red-500/10 border border-red-500/20 rounded-xl px-3 py-2">{error}</div>}
                 </div>
@@ -368,15 +526,42 @@ const EmployeeModal: React.FC<{
 };
 
 // ── MAIN COMPONENT ────────────────────────────────────────────
-const HRPortal: React.FC<{ user?: any }> = ({ user }) => {
-    const [activeTab, setActiveTab] = useState<'personnel' | 'permissions' | 'payroll' | 'advances'>('personnel');
+interface HRPortalProps {
+    user?: any;
+    initialTab?: 'personnel' | 'permissions' | 'payroll' | 'advances';
+    initialRoleFilter?: string;
+}
 
+const HRPortal: React.FC<HRPortalProps> = ({ user, initialTab, initialRoleFilter }) => {
+    const isSuperAdminOrHR = user?.role === 'SuperAdmin' || user?.role === 'HR';
+    const [activeTab, setActiveTab] = useState<'personnel' | 'permissions' | 'payroll' | 'advances'>(
+        (initialTab && (initialTab !== 'payroll' && initialTab !== 'advances' || isSuperAdminOrHR)) 
+            ? initialTab 
+            : 'personnel'
+    );
+    const [roleFilter, setRoleFilter] = useState<string>(initialRoleFilter || 'All');
+
+    // Sync tab/filter if redirect parameters change
+    useEffect(() => {
+        if (initialTab) {
+            if (initialTab === 'payroll' || initialTab === 'advances') {
+                if (isSuperAdminOrHR) setActiveTab(initialTab);
+            } else {
+                setActiveTab(initialTab);
+            }
+        }
+    }, [initialTab, isSuperAdminOrHR]);
+
+    useEffect(() => {
+        if (initialRoleFilter) setRoleFilter(initialRoleFilter);
+    }, [initialRoleFilter]);
 
     // Personnel
     const [employees, setEmployees] = useState<Employee[]>([]);
     const [loadingEmp, setLoadingEmp] = useState(true);
     const [editingEmp, setEditingEmp] = useState<Partial<Employee> | null | 'new'>(null);
     const [empSearch, setEmpSearch] = useState('');
+    const [deletingId, setDeletingId] = useState<string | null>(null);
 
     // Permissions
     const [permissions, setPermissions] = useState<Record<string, Record<string, boolean>>>({});
@@ -408,12 +593,64 @@ const HRPortal: React.FC<{ user?: any }> = ({ user }) => {
     // ── Personnel ────────────────────────────────────────────
     const fetchEmployees = useCallback(async () => {
         setLoadingEmp(true);
-        const { data } = await supabase.from('sys_users_v2')
-            .select('id, auth_user_id, employee_id, pin_code, name, email, phone, role, status, pay_type, hourly_rate, base_salary, trip_allowance, attendance_bonus, attendance_bonus_threshold')
+        // Fetch core data from sys_users_v2
+        const { data: v2Data } = await supabase.from('sys_users_v2')
+            .select('id, auth_user_id, employee_id, pin_code, name, email, phone, role, status, pay_type, hourly_rate, base_salary, trip_allowance, attendance_bonus, attendance_bonus_threshold, role_modules')
             .order('name');
-        setEmployees(data || []);
+
+        // Fetch base_location from users_public
+        const { data: pubData } = await supabase.from('users_public')
+            .select('id, base_location');
+
+        if (v2Data) {
+            const locationMap = new Map(pubData?.map(p => [p.id, p.base_location]) || []);
+            const merged: Employee[] = v2Data.map(emp => ({
+                ...emp,
+                base_location: locationMap.get(emp.auth_user_id) || 'Taiping'
+            }));
+            setEmployees(merged);
+        } else {
+            setEmployees([]);
+        }
         setLoadingEmp(false);
     }, []);
+
+    const handleDeleteEmployee = async (emp: Employee) => {
+        if (!emp) return;
+        const confirmMsg = `确认要彻底删除员工「${emp.name}」吗？\n\n警告：此操作将从系统 Auth、员工记录、请假历史、薪资记录中彻底清除该账户，且不可撤销！`;
+        if (!window.confirm(confirmMsg)) return;
+
+        setDeletingId(emp.id);
+        try {
+            const { data: { session } } = await supabase.auth.getSession();
+            if (!session) throw new Error('Not authenticated');
+
+            const res = await fetch('/api/manage-employee', {
+                method: 'POST',
+                headers: {
+                    'Content-Type': 'application/json',
+                    'Authorization': `Bearer ${session.access_token}`
+                },
+                body: JSON.stringify({
+                    action: 'delete',
+                    uid: emp.auth_user_id || emp.id,
+                    rowId: emp.id,
+                    isDriver: emp.role === 'Driver'
+                })
+            });
+
+            const json = await res.json();
+            if (!res.ok) throw new Error(json.error || 'Failed to delete employee');
+
+            alert('✅ 员工账户已成功删除！');
+            fetchEmployees();
+        } catch (err: any) {
+            console.error('Delete employee error:', err);
+            alert('❌ 删除失败: ' + err.message);
+        } finally {
+            setDeletingId(null);
+        }
+    };
 
     useEffect(() => { fetchEmployees(); }, [fetchEmployees]);
 
@@ -566,13 +803,30 @@ const HRPortal: React.FC<{ user?: any }> = ({ user }) => {
     }, [activeTab, fetchSalaryAdvances]);
 
     const handleApproveAdvance = async (id: string) => {
-        if (!window.confirm("Approve and mark this advance as PAID? (确认批准并打款？)")) return;
+        if (!window.confirm("Approve this salary advance request? (确认批准该预支薪资申请？)")) return;
         const success = await updateSalaryAdvanceStatus(id, 'Approved');
         if (success) {
-            alert("✅ Advance approved and marked as PAID!");
+            alert("✅ Advance request approved!");
             fetchSalaryAdvances();
         } else {
             alert("❌ Failed to update status.");
+        }
+    };
+
+    const handleMarkAsPaid = async (id: string) => {
+        if (!window.confirm("Mark this advance as PAID (Bank-in completed)? (确认已打款给司机？)")) return;
+        const success = await updateSalaryAdvanceStatus(id, 'Paid');
+        if (success) {
+            alert("✅ Advance marked as PAID!");
+            fetchSalaryAdvances();
+        } else {
+            alert(
+                "❌ Failed to mark as PAID.\n\n" +
+                "This is likely because the database constraint hasn't been updated yet to support the 'Paid' status.\n\n" +
+                "Please run this SQL in your Supabase Dashboard SQL Editor:\n\n" +
+                "ALTER TABLE public.salary_advances DROP CONSTRAINT IF EXISTS salary_advances_status_check;\n" +
+                "ALTER TABLE public.salary_advances ADD CONSTRAINT salary_advances_status_check CHECK (status IN ('Pending', 'Approved', 'Paid', 'Rejected'));"
+            );
         }
     };
 
@@ -602,7 +856,7 @@ const HRPortal: React.FC<{ user?: any }> = ({ user }) => {
             adv.employee?.name || 'Unknown User',
             adv.employee?.employee_id || 'N/A',
             new Date(adv.created_at).toLocaleDateString('en-GB'),
-            new Date(adv.bank_in_date).toLocaleDateString('en-GB'),
+            formatCSVDate(adv.bank_in_date),
             Number(adv.amount).toFixed(2),
             adv.status,
             adv.rejection_reason || adv.notes || ''
@@ -658,10 +912,10 @@ const HRPortal: React.FC<{ user?: any }> = ({ user }) => {
         const { data: existing } = await supabase.from('payroll_records')
             .select('*').eq('month', payMonth).eq('year', payYear);
 
-        // Fetch approved advances for the month
+        // Fetch approved or paid advances for the month
         const { data: approvedAdvances } = await supabase.from('salary_advances')
             .select('employee_id, amount, bank_in_date')
-            .eq('status', 'Approved')
+            .in('status', ['Approved', 'Paid'])
             .gte('bank_in_date', firstDay).lte('bank_in_date', lastDay);
 
         const advancesMap: Record<string, { total: number; details: string[] }> = {};
@@ -670,7 +924,7 @@ const HRPortal: React.FC<{ user?: any }> = ({ user }) => {
             if (!advancesMap[empId]) {
                 advancesMap[empId] = { total: 0, details: [] };
             }
-            const dateStr = new Date(adv.bank_in_date).toLocaleDateString('en-GB', { day: '2-digit', month: 'short' });
+            const dateStr = formatDDMon(adv.bank_in_date);
             advancesMap[empId].total += Number(adv.amount);
             advancesMap[empId].details.push(`RM${Number(adv.amount)} (${dateStr})`);
         });
@@ -720,7 +974,7 @@ const HRPortal: React.FC<{ user?: any }> = ({ user }) => {
             let details = '';
             const hoursWorked = hoursMap[emp.employee_id] || 0;
             const tripData = tripEarningsMap[emp.auth_user_id] || { total: 0, count: 0, breakdown: [] };
-            const absentDays = leaveMap[emp.employee_id] || 0;
+            const absentDays = leaveMap[emp.auth_user_id] || 0;
             const advanceData = advancesMap[emp.auth_user_id] || { total: 0, details: [] };
             const advanceDeduction = advanceData.total;
 
@@ -792,10 +1046,19 @@ const HRPortal: React.FC<{ user?: any }> = ({ user }) => {
         setPayMonth(m); setPayYear(y);
     };
 
-    const filteredEmps = employees.filter(e =>
-        !empSearch || e.name?.toLowerCase().includes(empSearch.toLowerCase()) ||
-        e.role?.toLowerCase().includes(empSearch.toLowerCase()) ||
-        e.employee_id?.toLowerCase().includes(empSearch.toLowerCase()));
+    const isLogisticsCoordinator = user?.role === 'LogisticsCoordinator';
+    const effectiveRoleFilter = isLogisticsCoordinator ? 'Driver' : roleFilter;
+
+    const filteredEmps = employees.filter(e => {
+        const matchesSearch = !empSearch || 
+            e.name?.toLowerCase().includes(empSearch.toLowerCase()) ||
+            e.role?.toLowerCase().includes(empSearch.toLowerCase()) ||
+            e.employee_id?.toLowerCase().includes(empSearch.toLowerCase());
+        
+        const matchesRole = effectiveRoleFilter === 'All' || e.role === effectiveRoleFilter;
+        
+        return matchesSearch && matchesRole;
+    });
 
     const totalPayroll = payrollData.reduce((s, r) => s + r.net, 0);
 
@@ -813,6 +1076,19 @@ const HRPortal: React.FC<{ user?: any }> = ({ user }) => {
         { id: 'advances', label: '💸 Salary Advances' },
     ] as const;
 
+    const visibleTabs = TABS.filter(tab => {
+        if (isLogisticsCoordinator) {
+            return tab.id === 'personnel';
+        }
+        if (user?.role === 'HR') {
+            return tab.id !== 'permissions';
+        }
+        if (tab.id === 'payroll' || tab.id === 'advances') {
+            return isSuperAdminOrHR;
+        }
+        return true;
+    });
+
 
     return (
         <div className="p-4 md:p-6 bg-[#07070a] min-h-screen text-white font-sans">
@@ -826,7 +1102,7 @@ const HRPortal: React.FC<{ user?: any }> = ({ user }) => {
 
             {/* Tabs */}
             <div className="flex gap-2 mb-6 flex-wrap">
-                {TABS.map(tab => (
+                {visibleTabs.map(tab => (
                     <button key={tab.id} onClick={() => setActiveTab(tab.id)}
                         className={`px-4 py-2.5 rounded-xl font-bold text-xs uppercase tracking-wider transition-all border ${activeTab === tab.id
                             ? 'bg-blue-600/20 text-blue-400 border-blue-500/30'
@@ -839,10 +1115,33 @@ const HRPortal: React.FC<{ user?: any }> = ({ user }) => {
             {/* ── PERSONNEL ── */}
             {activeTab === 'personnel' && (
                 <div>
-                    <div className="flex items-center justify-between mb-4 gap-3">
-                        <input type="text" value={empSearch} onChange={e => setEmpSearch(e.target.value)}
-                            placeholder="Search name, role, ID..."
-                            className="flex-1 max-w-xs bg-white/5 border border-white/10 rounded-xl px-4 py-2.5 text-sm text-white placeholder-gray-600 focus:outline-none focus:border-blue-500/50" />
+                    <div className="flex items-center justify-between mb-4 gap-3 flex-wrap">
+                        <div className="flex items-center gap-2 flex-wrap">
+                            <input type="text" value={empSearch} onChange={e => setEmpSearch(e.target.value)}
+                                placeholder="Search name, role, ID..."
+                                className="w-64 bg-white/5 border border-white/10 rounded-xl px-4 py-2.5 text-sm text-white placeholder-gray-600 focus:outline-none focus:border-blue-500/50" />
+                            {!isLogisticsCoordinator && (
+                                <select
+                                    value={roleFilter}
+                                    onChange={e => setRoleFilter(e.target.value)}
+                                    className="bg-white/5 border border-white/10 rounded-xl px-4 py-2.5 text-sm text-white focus:outline-none focus:border-blue-500/50"
+                                >
+                                    <option value="All">All Roles</option>
+                                    <option value="SuperAdmin">SuperAdmin</option>
+                                    <option value="Admin">Admin</option>
+                                    <option value="Manager">Manager</option>
+                                    <option value="LogisticsCoordinator">LogisticsCoordinator</option>
+                                    <option value="HR">HR</option>
+                                    <option value="Operator">Operator</option>
+                                    <option value="Driver">Driver</option>
+                                </select>
+                            )}
+                            {isLogisticsCoordinator && (
+                                <span className="text-xs text-gray-500 border border-white/5 bg-white/2 px-3 py-2 rounded-xl">
+                                    Locked to Driver role
+                                </span>
+                            )}
+                        </div>
                         <button onClick={() => setEditingEmp('new')}
                             className="flex items-center gap-2 px-4 py-2.5 bg-blue-600 hover:bg-blue-500 rounded-xl text-sm text-white font-bold transition-colors">
                             <Plus size={14} /> New Employee
@@ -856,7 +1155,10 @@ const HRPortal: React.FC<{ user?: any }> = ({ user }) => {
                             <table className="w-full text-sm">
                                 <thead>
                                     <tr className="bg-white/[0.03] text-gray-500 text-[10px] uppercase tracking-widest">
-                                        {['Employee', 'Role', 'Pay Type', 'Rate / Salary', '全勤奖', 'Status', ''].map(h => (
+                                        {(isSuperAdminOrHR 
+                                            ? ['Employee', 'Role', 'Pay Type', 'Rate / Salary', '全勤奖', 'Status', '']
+                                            : ['Employee', 'Role', 'Status', '']
+                                        ).map(h => (
                                             <th key={h} className="px-4 py-3 text-left border-b border-white/5 font-bold">{h}</th>
                                         ))}
                                     </tr>
@@ -877,37 +1179,57 @@ const HRPortal: React.FC<{ user?: any }> = ({ user }) => {
                                                     {emp.role}
                                                 </span>
                                             </td>
-                                            <td className="px-4 py-3 text-xs text-gray-400">
-                                                {PAY_TYPE_LABELS[emp.pay_type] || emp.pay_type}
-                                            </td>
-                                            <td className="px-4 py-3 font-mono text-xs text-white">
-                                                {emp.pay_type === 'hourly' && `RM ${Number(emp.hourly_rate).toFixed(2)}/hr`}
-                                                {emp.pay_type === 'monthly' && `RM ${Number(emp.base_salary).toLocaleString()}/mo`}
-                                                {emp.pay_type === 'driver' && (
-                                                    <div>
-                                                        <div className="text-gray-400">{emp.base_salary > 0 ? `Base: RM${emp.base_salary}` : 'No base'}</div>
-                                                        <div className="text-amber-400">+RM{emp.trip_allowance}/trip</div>
-                                                    </div>
-                                                )}
-                                            </td>
-                                            <td className="px-4 py-3">
-                                                {emp.attendance_bonus > 0 ? (
-                                                    <div className="text-yellow-400 font-bold text-xs flex items-center gap-1">
-                                                        <Star size={10} /> RM{emp.attendance_bonus}
-                                                        <span className="text-gray-600 text-[9px]">≤{emp.attendance_bonus_threshold}d</span>
-                                                    </div>
-                                                ) : <span className="text-gray-700 text-xs">—</span>}
-                                            </td>
+                                            {isSuperAdminOrHR && (
+                                                <>
+                                                    <td className="px-4 py-3 text-xs text-gray-400">
+                                                        {PAY_TYPE_LABELS[emp.pay_type] || emp.pay_type}
+                                                    </td>
+                                                    <td className="px-4 py-3 font-mono text-xs text-white">
+                                                        {emp.pay_type === 'hourly' && `RM ${Number(emp.hourly_rate).toFixed(2)}/hr`}
+                                                        {emp.pay_type === 'monthly' && `RM ${Number(emp.base_salary).toLocaleString()}/mo`}
+                                                        {emp.pay_type === 'driver' && (
+                                                            <div>
+                                                                <div className="text-gray-400">{emp.base_salary > 0 ? `Base: RM${emp.base_salary}` : 'No base'}</div>
+                                                                <div className="text-amber-400">+RM{emp.trip_allowance}/trip</div>
+                                                            </div>
+                                                        )}
+                                                    </td>
+                                                    <td className="px-4 py-3">
+                                                        {emp.attendance_bonus > 0 ? (
+                                                            <div className="text-yellow-400 font-bold text-xs flex items-center gap-1">
+                                                                <Star size={10} /> RM{emp.attendance_bonus}
+                                                                <span className="text-gray-600 text-[9px]">≤{emp.attendance_bonus_threshold}d</span>
+                                                            </div>
+                                                        ) : <span className="text-gray-700 text-xs">—</span>}
+                                                    </td>
+                                                </>
+                                            )}
                                             <td className="px-4 py-3">
                                                 <span className={`text-[10px] font-bold uppercase px-2.5 py-1 rounded-full border ${emp.status === 'active' ? 'border-green-500/20 bg-green-500/10 text-green-400' : 'border-red-500/20 bg-red-500/10 text-red-400'}`}>
                                                     {emp.status}
                                                 </span>
                                             </td>
                                             <td className="px-4 py-3">
-                                                <button onClick={() => setEditingEmp(emp)}
-                                                    className="p-2 rounded-lg bg-white/5 hover:bg-white/10 text-gray-400 hover:text-white transition-colors">
-                                                    <Edit2 size={13} />
-                                                </button>
+                                                <div className="flex items-center gap-1">
+                                                    <button onClick={() => setEditingEmp(emp)}
+                                                        className="p-2 rounded-lg bg-white/5 hover:bg-white/10 text-gray-400 hover:text-white transition-colors"
+                                                        title="Edit details">
+                                                        <Edit2 size={13} />
+                                                    </button>
+                                                    {['SuperAdmin', 'Admin', 'Manager'].includes(user?.role || '') && (
+                                                        <button 
+                                                            onClick={() => handleDeleteEmployee(emp)}
+                                                            disabled={deletingId === emp.id}
+                                                            className="p-2 rounded-lg bg-white/5 hover:bg-red-500/10 text-gray-400 hover:text-red-400 disabled:opacity-50 transition-colors"
+                                                            title="Delete employee">
+                                                            {deletingId === emp.id ? (
+                                                                <Loader size={13} className="animate-spin" />
+                                                            ) : (
+                                                                <Trash2 size={13} />
+                                                            )}
+                                                        </button>
+                                                    )}
+                                                </div>
                                             </td>
                                         </tr>
                                     ))}
@@ -1202,18 +1524,20 @@ const HRPortal: React.FC<{ user?: any }> = ({ user }) => {
                                                 {new Date(adv.created_at).toLocaleDateString('en-GB', { day: '2-digit', month: 'short', year: 'numeric' })}
                                             </td>
                                             <td className="px-4 py-4 text-xs font-bold text-zinc-300">
-                                                {new Date(adv.bank_in_date).toLocaleDateString('en-GB', { day: '2-digit', month: 'short', year: 'numeric' })}
+                                                {formatYYYYMMDD(adv.bank_in_date)}
                                             </td>
                                             <td className="px-4 py-4 font-mono font-bold text-white">
                                                 RM {Number(adv.amount).toFixed(2)}
                                             </td>
                                             <td className="px-4 py-4">
                                                 <span className={`text-[10px] font-black uppercase tracking-wider px-2.5 py-1 rounded-full border ${
-                                                    adv.status === 'Approved' ? 'border-green-500/20 bg-green-500/10 text-green-400' :
+                                                    adv.status === 'Paid' ? 'border-green-500/20 bg-green-500/10 text-green-400' :
+                                                    adv.status === 'Approved' ? 'border-blue-500/20 bg-blue-500/10 text-blue-400' :
                                                     adv.status === 'Rejected' ? 'border-red-500/20 bg-red-500/10 text-red-400' :
                                                     'border-yellow-500/20 bg-yellow-500/10 text-yellow-500'
                                                 }`}>
-                                                    {adv.status === 'Approved' ? 'Approved / Paid' :
+                                                    {adv.status === 'Paid' ? 'Paid' :
+                                                     adv.status === 'Approved' ? 'Approved / Unpaid' :
                                                      adv.status === 'Rejected' ? 'Rejected' :
                                                      'Pending'}
                                                 </span>
@@ -1231,9 +1555,27 @@ const HRPortal: React.FC<{ user?: any }> = ({ user }) => {
                                                         <button 
                                                             onClick={() => handleApproveAdvance(adv.id)}
                                                             className="px-3 py-1.5 bg-green-600/10 hover:bg-green-600/20 text-green-400 border border-green-500/20 rounded-lg text-xs font-bold transition-all flex items-center gap-1"
-                                                            title="Approve / Bank In"
+                                                            title="Approve"
                                                         >
                                                             <Check size={14} /> Approve
+                                                        </button>
+                                                        <button 
+                                                            onClick={() => { setSelectedAdvanceId(adv.id); setIsRejectionModalOpen(true); }}
+                                                            className="px-3 py-1.5 bg-red-600/10 hover:bg-red-600/20 text-red-400 border border-red-500/20 rounded-lg text-xs font-bold transition-all flex items-center gap-1"
+                                                            title="Reject"
+                                                        >
+                                                            <X size={14} /> Reject
+                                                        </button>
+                                                    </div>
+                                                )}
+                                                {adv.status === 'Approved' && (
+                                                    <div className="flex justify-end gap-2">
+                                                        <button 
+                                                            onClick={() => handleMarkAsPaid(adv.id)}
+                                                            className="px-3 py-1.5 bg-emerald-600/10 hover:bg-emerald-600/20 text-emerald-400 border border-emerald-500/20 rounded-lg text-xs font-bold transition-all flex items-center gap-1"
+                                                            title="Mark as Paid"
+                                                        >
+                                                            <DollarSign size={14} /> Mark as Paid
                                                         </button>
                                                         <button 
                                                             onClick={() => { setSelectedAdvanceId(adv.id); setIsRejectionModalOpen(true); }}
@@ -1304,6 +1646,7 @@ const HRPortal: React.FC<{ user?: any }> = ({ user }) => {
                     emp={editingEmp === 'new' ? null : editingEmp}
                     onClose={() => setEditingEmp(null)}
                     onSave={fetchEmployees}
+                    currentUser={user}
                 />
             )}
         {/* Zone Form Modal */}

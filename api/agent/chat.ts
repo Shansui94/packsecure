@@ -10,11 +10,11 @@ const supabase = createClient(supabaseUrl, supabaseKey);
 // Define Gemini Tool Function Declarations
 const querySalesOrdersTool: any = {
     name: "querySalesOrders",
-    description: "Query sales orders (trips) from the database to answer logistics, delivery, destination, or status questions.",
+    description: "Query sales orders from the database to get logistics trips, delivery details, destination, status, or counts. In this system, logistics trips (行程/趟数/配送) are represented as sales orders in the 'sales_orders' table. Always use this tool to count trips or query delivery details for any date range or zone (leave zone empty to query all zones).",
     parameters: {
         type: "OBJECT",
         properties: {
-            zone: { type: "STRING", description: "Filter by customer zone (e.g. Kelantan, Taiping, Johor, Selangor)" },
+            zone: { type: "STRING", description: "Filter by customer zone (e.g. Kelantan, Taiping, Johor, Selangor). Leave empty to query all zones." },
             status: { type: "STRING", description: "Filter by order status (e.g. Delivered, Planned, Shipped, New)" },
             startDate: { type: "STRING", description: "Filter by deadline date >= YYYY-MM-DD (e.g. '2026-05-01')" },
             endDate: { type: "STRING", description: "Filter by deadline date <= YYYY-MM-DD (e.g. '2026-05-31')" }
@@ -55,15 +55,17 @@ Tone: Professional, expert, helpful, and concise.
 Focus: Database structures, system metadata, user activities, and data analysis reports.
 Static Knowledge of Database Schema:
 - Table "sales_orders" (销售订单/行程): order_number (Text, 订单号), customer (Text, 客户), status (Text, 状态: New/Planned/Shipped/Delivered), order_date (Date, 下单日期), deadline (Date, 截止/配送日期), notes (Text, 备注), zone (Text, 配送区域), trip_drop_count (Integer, 配送点数).
+  NOTE: In this system, logistics "trips" (行程/趟数/配送) are represented as sales orders and stored in the "sales_orders" table. There is NO "trips" or "deliveries" table. Always use the "querySalesOrders" tool when queried about logistics trips, delivery numbers, or trip counts.
 - Table "employee_leave" (员工请假): employee_id (UUID, 关联用户), start_date (Date, 开始日期), end_date (Date, 结束日期), count_days (Integer, 请假天数), reason (Text, 原因), status (Text, 状态: Pending/Approved/Rejected), reviewed_by (UUID), reviewed_at (TIMESTAMPTZ).
 - Table "claims" (费用报销): userId (UUID, 关联用户), userName (Text, 用户姓名), type (Text, 类型: Overtime/Medical/Transport/Meal/Other), amount (Numeric, 报销金额), description (Text, 描述), status (Text, 状态: Pending/Approved/Rejected), timestamp (TIMESTAMPTZ).
 - Table "users_public" (用户配置): id (UUID, 主键), email (Text, 邮箱), name (Text, 姓名), role (Text, 角色: SuperAdmin/Admin/Manager/Operator/Driver/HR/Finance/Sales), phone (Text, 电话), employee_id (Text, 工号), status (Text, 状态: Pending/Approved/Active).
 
 Guidelines:
 1. When asked for table schemas or structures (e.g., "🔍 查主表 Schema"), DO NOT return raw SQL "CREATE TABLE" DDL code blocks. Instead, present the schema using neat Markdown tables in Chinese (with headers: 字段名, 类型, 说明).
-2. For query results, summarize them in clear, direct Chinese (e.g., "5月份送往吉兰丹的订单一共是有 28 笔。"), followed by structured markdown tables or bulleted lists if details are requested.
-3. Avoid code/SQL dumps unless the user explicitly requests raw code or SQL scripts (e.g., "给我写个 SQL" or "编写 SQL 迁移脚本").
-4. When referencing pages, append action triggers like [ACTION:navigate:data-v2] or [ACTION:navigate:activity-logs] at the end.
+2. For logistics "trips" (行程) queries, always use the "querySalesOrders" tool to fetch real data. DO NOT say the data is not in the context or suggest hypothetical SQL queries on a "trips" or "deliveries" table. If the user asks for trip count of a period (e.g., "上个月"), invoke the tool with corresponding startDate and endDate.
+3. For query results, summarize them in clear, direct Chinese (e.g., "5月份送往吉兰丹的订单一共是有 28 笔。"), followed by structured markdown tables or bulleted lists if details are requested.
+4. Avoid code/SQL dumps unless the user explicitly requests raw code or SQL scripts (e.g., "给我写个 SQL" or "编写 SQL 迁移脚本").
+5. When referencing pages, append action triggers like [ACTION:navigate:data-v2] or [ACTION:navigate:activity-logs] at the end.
     `,
     Admin: `
 Role: You are JARVIS, the Operations Co-Pilot and System Administrator for Packsecure. You are talking to the System Administrator.
@@ -71,14 +73,16 @@ Tone: Professional, Data-Driven, Prompt, Informative.
 Focus: Master items, fleet management, customer regions, database schemas, and active machines.
 Static Knowledge of Database Schema:
 - Table "sales_orders" (销售订单/行程): order_number, customer, status, order_date, deadline, notes, zone, trip_drop_count.
+  NOTE: Logistics "trips" (行程/趟数/配送) are represented as sales orders and stored in the "sales_orders" table. Always use "querySalesOrders" tool for any trips or delivery count inquiries. Do not assume "trips" or "deliveries" table exists.
 - Table "employee_leave" (员工请假): employee_id, start_date, end_date, count_days, reason, status.
 - Table "claims" (费用报销): userId, userName, type, amount, description, status, timestamp.
 - Table "users_public" (用户配置): id, email, name, role, phone, employee_id, status.
 
 Guidelines:
 1. When asked for table schemas or structures (e.g., "🔍 查主表 Schema"), present the schema using neat Markdown tables in Chinese (with headers: 字段名, 类型, 说明) rather than raw SQL "CREATE TABLE" statements.
-2. Answer inquiries in clear Chinese with user-friendly summaries and reports. Avoid code/SQL dumps unless requested.
-3. When referencing pages, include action triggers such as [ACTION:navigate:data-v2] or [ACTION:navigate:users] at the end.
+2. For logistics "trips" (行程) queries, always use the "querySalesOrders" tool to fetch real data. DO NOT suggest hypothetical SQL queries on "trips" or "deliveries" tables.
+3. Answer inquiries in clear Chinese with user-friendly summaries and reports. Avoid code/SQL dumps unless requested.
+4. When referencing pages, include action triggers such as [ACTION:navigate:data-v2] or [ACTION:navigate:users] at the end.
     `,
     Manager: `
 Role: You are 'Titan', the Senior Production Manager for Packsecure. You are talking to the Factory Manager.
@@ -129,7 +133,9 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
 
         // Default role to Operator if user context is missing
         const role = userContext?.role || 'Operator';
-        const uid = userContext?.uid;
+        const rawUid = userContext?.uid;
+        const uuidRegex = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
+        const uid = uuidRegex.test(rawUid || '') ? rawUid : '00000000-0000-0000-0000-000000000000';
         const name = userContext?.name || 'Colleague';
         const email = userContext?.email;
 
@@ -212,6 +218,15 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
 
         // Wait for static queries to complete
         await Promise.all(promises);
+
+        // Debugging logs for prompt size and contents
+        console.log(`[Chat Debug] Request payload size: ${JSON.stringify(req.body).length}`);
+        console.log(`[Chat Debug] query length: ${query?.length || 0}`);
+        console.log(`[Chat Debug] userContext keys: ${Object.keys(userContext || {})}`);
+        console.log(`[Chat Debug] role: ${role}`);
+        console.log(`[Chat Debug] contextData length: ${JSON.stringify(contextData).length}`);
+        console.log(`[Chat Debug] sopArticles length: ${JSON.stringify(sopArticles).length}`);
+
 
         // --- CONSTRUCT SYSTEM PROMPTS AND TEMPLATES ---
         const systemPersona = SYSTEM_PROMPTS[role] || SYSTEM_PROMPTS.Operator;

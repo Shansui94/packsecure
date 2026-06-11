@@ -1,0 +1,39 @@
+---
+description: Packsecure 全局约定（架构、安全、协作）
+alwaysApply: true
+---
+
+# Packsecure OS — 全局规则
+
+## 语言与沟通
+
+- 与维护者沟通、注释、提交说明优先使用**中文**
+- UI 文案保持与现有页面一致的中文术语（工厂、工单、库存等）
+
+## 架构要点
+
+- 应用根目录即 `packsecure/`（本仓库可运行单体）
+- 前端 Vite `:5173`，本地 API Express `:8080`，`/api` 由 Vite 代理（见 `vite.config.ts`）
+- `api/*.ts` 为 Vercel Serverless 形态；`server.ts` 仅用于本地挂载部分路由
+- 详细地图见根目录 `AGENTS.md`
+
+## 安全
+
+- 绝不提交 `.env`；不在回复中粘贴密钥
+- 浏览器环境只用 `VITE_SUPABASE_URL`、`VITE_SUPABASE_ANON_KEY`
+- `SUPABASE_SERVICE_ROLE_KEY`、`GOOGLE_API_KEY` 仅 `api/`、`server.ts`、`scripts/` 使用
+
+## 修改原则
+
+- 只改完成任务所需的文件；禁止顺手大重构
+- 不删除与任务无关的注释或代码
+- 未明确要求时：**不要** `git commit`、`git push`
+- 改完说明如何验证（命令 + 菜单/角色）
+
+## 全栈职责（单人维护）
+
+同一维护者负责前端、API、脚本，跨层改动时需自检：
+
+- 前端改 API 契约 → 同步 `api/` 与 `server.ts` 挂载
+- API 改表结构 → 同步前端查询字段与 `src/types`
+- 脚本改数据 → 说明影响表与是否可逆

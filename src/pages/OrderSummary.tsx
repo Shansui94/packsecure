@@ -1,10 +1,11 @@
-import React, { useState, useEffect, useCallback } from 'react';
+import React, { useState, useEffect, useCallback, useRef } from 'react';
 import { DragDropContext, Droppable, Draggable, DropResult } from '@hello-pangea/dnd';
 import { supabase } from '../services/supabase';
 import { getV2Items, getInventoryStatus } from '../services/apiV2';
 import { WAREHOUSES } from '../data/factoryData';
 import { SalesOrder, SalesOrderItem, User } from '../types';
-import { Calendar, User as UserIcon, Truck, MapPin, Package } from 'lucide-react';
+import { Calendar, User as UserIcon, Truck, MapPin, Package, Camera, Trash2, X } from 'lucide-react';
+import { parsePrepPhotos, stringifyPrepPhotos, PrepPhoto } from '../utils/prepPhotos';
 
 const LOCATIONS = WAREHOUSES;
 type Location = string;
@@ -70,12 +71,130 @@ interface OrderSummaryProps {
     user?: any;
 }
 
-const OrderSummary: React.FC<OrderSummaryProps> = ({ user: _user }) => {
+const OrderSummary: React.FC<OrderSummaryProps> = ({ user }) => {
     const [orders, setOrders] = useState<SalesOrder[]>([]);
+    const [previewImageUrl, setPreviewImageUrl] = useState<string | null>(null);
     const [drivers, setDrivers] = useState<User[]>([]);
     const [selectedDate, setSelectedDate] = useState<string>(new Date().toISOString().split('T')[0]);
     const [loading, setLoading] = useState(false);
     const [activeTab, setActiveTab] = useState<Location>(LOCATIONS[0] || 'Unknown');
+
+    const [uploadingId, setUploadingId] = useState<string | null>(null);
+    const fileInputRef = useRef<HTMLInputElement>(null);
+    const [selectedOrderIdForUpload, setSelectedOrderIdForUpload] = useState<string | null>(null);
+
+    const handleUploadButtonClick = (orderId: string) => {
+        setSelectedOrderIdForUpload(orderId);
+        if (fileInputRef.current) {
+            fileInputRef.current.value = '';
+            fileInputRef.current.click();
+        }
+    };
+
+    const compressImage = (file: File, maxWidth = 1200, quality = 0.75): Promise<string> => {
+        return new Promise((resolve, reject) => {
+            const reader = new FileReader();
+            reader.onload = (e) => {
+                const img = new Image();
+                img.onload = () => {
+                    const canvas = document.createElement('canvas');
+                    let w = img.width, h = img.height;
+                    if (w > maxWidth) {
+                        h = (maxWidth / w) * h;
+                        w = maxWidth;
+                    }
+                    canvas.width = w;
+                    canvas.height = h;
+                    const ctx = canvas.getContext('2d')!;
+                    ctx.drawImage(img, 0, 0, w, h);
+                    const dataUrl = canvas.toDataURL('image/jpeg', quality);
+                    resolve(dataUrl);
+                };
+                img.onerror = reject;
+                if (e.target?.result) {
+                    img.src = e.target.result as string;
+                } else {
+                    reject(new Error("File conversion failed"));
+                }
+            };
+            reader.onerror = reject;
+            reader.readAsDataURL(file);
+        });
+    };
+
+    const handlePhotoSelect = async (e: React.ChangeEvent<HTMLInputElement>) => {
+        const file = e.target.files?.[0];
+        const orderId = selectedOrderIdForUpload;
+        if (!file || !orderId) return;
+
+        setUploadingId(orderId);
+        try {
+            const currentOrder = orders.find(o => o.id === orderId);
+            const existingPhotos = parsePrepPhotos(currentOrder?.preparation_photo_url);
+
+            const compressedDataUrl = await compressImage(file);
+            const base64Content = compressedDataUrl.split(',')[1];
+            const blob = await fetch(`data:image/jpeg;base64,${base64Content}`).then(r => r.blob());
+
+            const filename = `prep_${orderId}_${Date.now()}.jpg`;
+
+            const { error: uploadError } = await supabase.storage
+                .from('work-photos')
+                .upload(filename, blob, { contentType: 'image/jpeg' });
+
+            if (uploadError) throw uploadError;
+
+            const { data: urlData } = supabase.storage.from('work-photos').getPublicUrl(filename);
+            const publicUrl = urlData.publicUrl;
+
+            // Create new photo item and append to existing
+            const newPhoto: PrepPhoto = { url: publicUrl, location: activeTab };
+            const updatedPhotos = [...existingPhotos, newPhoto];
+            const updatedPhotoUrlField = stringifyPrepPhotos(updatedPhotos);
+
+            const { error: updateError } = await supabase
+                .from('sales_orders')
+                .update({ preparation_photo_url: updatedPhotoUrlField })
+                .eq('id', orderId);
+
+            if (updateError) throw updateError;
+
+            setOrders(prev => prev.map(o => o.id === orderId ? { ...o, preparation_photo_url: updatedPhotoUrlField } : o));
+            alert(`✅ ${activeTab} 备货图片上传成功！ / Cargo photo uploaded successfully!`);
+        } catch (err: any) {
+            console.error("Failed to upload photo:", err);
+            alert("Upload failed: " + err.message);
+        } finally {
+            setUploadingId(null);
+            setSelectedOrderIdForUpload(null);
+        }
+    };
+
+    const handleDeletePhoto = async (orderId: string, photoIndex: number) => {
+        if (!window.confirm("确定要删除这张备货照片吗？ / Are you sure you want to delete this photo?")) return;
+        
+        try {
+            const currentOrder = orders.find(o => o.id === orderId);
+            if (!currentOrder) return;
+            const existingPhotos = parsePrepPhotos(currentOrder.preparation_photo_url);
+            
+            const updatedPhotos = existingPhotos.filter((_, idx) => idx !== photoIndex);
+            const updatedPhotoUrlField = updatedPhotos.length > 0 ? stringifyPrepPhotos(updatedPhotos) : null;
+            
+            const { error } = await supabase
+                .from('sales_orders')
+                .update({ preparation_photo_url: updatedPhotoUrlField })
+                .eq('id', orderId);
+                
+            if (error) throw error;
+            
+            setOrders(prev => prev.map(o => o.id === orderId ? { ...o, preparation_photo_url: updatedPhotoUrlField } : o));
+            alert("✅ 照片已成功删除！ / Photo deleted successfully!");
+        } catch (err: any) {
+            console.error("Failed to delete photo:", err);
+            alert("Delete failed: " + err.message);
+        }
+    };
 
     const [skuNameMap, setSkuNameMap] = useState<Record<string, string>>({});
     // Maps [LocationName] -> [ItemName] -> StockQty
@@ -174,6 +293,7 @@ const OrderSummary: React.FC<OrderSummaryProps> = ({ user: _user }) => {
                     factoryId: o.factory_id,
                     trip_origin: o.trip_origin,
                     trip_drop_count: o.trip_drop_count,
+                    preparation_photo_url: o.preparation_photo_url,
                 }));
                 
                 const getTenChars = (s?: string) => s ? s.slice(0, 10) : '';
@@ -285,6 +405,9 @@ const OrderSummary: React.FC<OrderSummaryProps> = ({ user: _user }) => {
 
     // Production summary — only count items belonging to the active tab
     const productSummary = activeTabOrders.reduce((acc, order) => {
+        // Exclude orders that have already been loaded or delivered
+        if (order.status === 'Loaded' || order.status === 'Delivered') return acc;
+
         order.items.forEach(item => {
             if (getItemLocation(item, order) !== activeTab) return;
             const name = resolveItemName(item);
@@ -442,6 +565,11 @@ const OrderSummary: React.FC<OrderSummaryProps> = ({ user: _user }) => {
                                             orders={colOrders}
                                             isUnassigned
                                             resolveItemName={resolveItemName}
+                                            onUploadClick={handleUploadButtonClick}
+                                            onDeleteClick={handleDeletePhoto}
+                                            onPhotoClick={setPreviewImageUrl}
+                                            uploadingId={uploadingId}
+                                            isDragDisabled={user?.role === 'Operator'}
                                         />
                                     );
                                 })()}
@@ -456,11 +584,48 @@ const OrderSummary: React.FC<OrderSummaryProps> = ({ user: _user }) => {
                                             label={getDriverName(driverId)}
                                             orders={colOrders}
                                             resolveItemName={resolveItemName}
+                                            onUploadClick={handleUploadButtonClick}
+                                            onDeleteClick={handleDeletePhoto}
+                                            onPhotoClick={setPreviewImageUrl}
+                                            uploadingId={uploadingId}
+                                            isDragDisabled={user?.role === 'Operator'}
                                         />
                                     );
                                 })}
                             </div>
                         )}
+                    </div>
+                )}
+                {/* Hidden input for mobile camera upload */}
+                <input 
+                    ref={fileInputRef}
+                    type="file"
+                    accept="image/*"
+                    className="hidden"
+                    onChange={handlePhotoSelect}
+                />
+
+                {/* Full Screen Image Preview Modal */}
+                {previewImageUrl && (
+                    <div 
+                        className="fixed inset-0 z-[9999] bg-black/95 flex flex-col items-center justify-center p-4 backdrop-blur-sm"
+                        onClick={() => setPreviewImageUrl(null)}
+                    >
+                        <button 
+                            onClick={() => setPreviewImageUrl(null)} 
+                            className="absolute top-4 right-4 p-3 bg-white/10 hover:bg-white/20 active:scale-95 text-white rounded-full transition-all"
+                        >
+                            <X size={24} />
+                        </button>
+                        <img 
+                            src={previewImageUrl} 
+                            alt="Preview" 
+                            className="max-w-full max-h-[85vh] object-contain rounded-xl shadow-2xl border border-white/10 animate-in zoom-in-95 duration-200" 
+                            onClick={(e) => e.stopPropagation()}
+                        />
+                        <p className="text-xs text-slate-500 font-bold uppercase tracking-widest mt-4">
+                            Ketik di mana-mana untuk tutup / Tap anywhere to close
+                        </p>
                     </div>
                 )}
             </div>
@@ -475,7 +640,12 @@ const DriverColumn: React.FC<{
     orders: SalesOrder[];
     isUnassigned?: boolean;
     resolveItemName: (item: { product: string; sku?: string }) => string;
-}> = ({ droppableId, label, orders, isUnassigned, resolveItemName }) => (
+    onUploadClick: (orderId: string) => void;
+    onDeleteClick: (orderId: string, photoIndex: number) => void;
+    onPhotoClick: (url: string) => void;
+    uploadingId: string | null;
+    isDragDisabled?: boolean;
+}> = ({ droppableId, label, orders, isUnassigned, resolveItemName, onUploadClick, onDeleteClick, onPhotoClick, uploadingId, isDragDisabled }) => (
     <div className={`flex flex-col gap-4 rounded-2xl p-4 border transition-all ${isUnassigned ? 'bg-slate-900/50 border-dashed border-slate-700' : 'bg-slate-900/50 border-slate-800'
         }`}>
         {/* Column Header */}
@@ -502,13 +672,13 @@ const DriverColumn: React.FC<{
         <Droppable droppableId={droppableId}>
             {(provided, snapshot) => (
                 <div
-                    ref={provided.innerRef}
-                    {...provided.droppableProps}
-                    className={`flex-1 p-1 space-y-3 min-h-[80px] transition-colors rounded-xl ${snapshot.isDraggingOver ? 'bg-blue-500/5 border border-blue-500/20' : ''
-                        }`}
+                     ref={provided.innerRef}
+                     {...provided.droppableProps}
+                     className={`flex-1 p-1 space-y-3 min-h-[80px] transition-colors rounded-xl ${snapshot.isDraggingOver ? 'bg-blue-500/5 border border-blue-500/20' : ''
+                         }`}
                 >
                     {orders.map((order, index) => (
-                        <Draggable key={order.id} draggableId={order.id} index={index}>
+                        <Draggable key={order.id} draggableId={order.id} index={index} isDragDisabled={isDragDisabled}>
                             {(provided, snapshot) => (
                                 <div
                                     ref={provided.innerRef}
@@ -543,11 +713,18 @@ const DriverColumn: React.FC<{
                                         {order.deliveryAddress || 'No Address'}
                                     </div>
 
-                                    <div className="bg-black/30 rounded-lg p-2 space-y-1">
+                                    <div className="bg-black/30 rounded-lg p-2 space-y-2">
                                         {order.items.map((item, idx) => (
-                                            <div key={idx} className="flex justify-between text-xs">
-                                                <span className="text-gray-300">{resolveItemName(item)}</span>
-                                                <span className="font-mono text-gray-400">x{item.quantity}</span>
+                                            <div key={idx} className="text-xs border-b border-white/[0.02] last:border-0 pb-1.5 last:pb-0">
+                                                <div className="flex justify-between">
+                                                    <span className="text-gray-300 font-medium">{resolveItemName(item)}</span>
+                                                    <span className="font-mono text-gray-400">x{item.quantity}</span>
+                                                </div>
+                                                {item.remark && (
+                                                    <p className="text-[10px] text-amber-500/80 font-mono tracking-wide mt-1 bg-amber-500/5 px-1.5 py-0.5 rounded border border-amber-500/10 w-fit max-w-full whitespace-pre-wrap">
+                                                        {item.remark}
+                                                    </p>
+                                                )}
                                             </div>
                                         ))}
                                     </div>
@@ -557,6 +734,57 @@ const DriverColumn: React.FC<{
                                             Note: {order.notes}
                                         </div>
                                     )}
+
+                                    {/* Cargo Prep Photo Upload / Thumbnail */}
+                                    {(() => {
+                                        const photos = parsePrepPhotos(order.preparation_photo_url);
+                                        return (
+                                            <div className="mt-3 border-t border-white/5 pt-3 space-y-2">
+                                                {photos.length > 0 && (
+                                                    <div className="flex flex-wrap gap-2">
+                                                        {photos.map((p, idx) => (
+                                                            <div key={idx} className="relative w-12 h-12 rounded-lg overflow-hidden border border-white/10 shrink-0 bg-black/40 shadow-inner group cursor-zoom-in" onClick={() => onPhotoClick(p.url)}>
+                                                                <img 
+                                                                    src={p.url} 
+                                                                    alt={`Cargo Prep - ${p.location}`} 
+                                                                    className="w-full h-full object-cover group-hover:scale-105 transition-transform duration-300"
+                                                                />
+                                                                {/* Location tag label overlay */}
+                                                                <div className="absolute bottom-0 inset-x-0 bg-black/75 text-[8px] font-black text-center text-amber-400 uppercase py-0.5 truncate leading-none">
+                                                                    {p.location}
+                                                                </div>
+                                                                {/* Delete overlay */}
+                                                                <button
+                                                                    onClick={(e) => {
+                                                                        e.stopPropagation();
+                                                                        onDeleteClick(order.id, idx);
+                                                                    }}
+                                                                    className="absolute top-0 right-0 p-0.5 bg-red-600/90 hover:bg-red-600 rounded text-white opacity-0 group-hover:opacity-100 transition-opacity"
+                                                                    title="Delete Photo"
+                                                                >
+                                                                    <Trash2 size={8} />
+                                                                </button>
+                                                            </div>
+                                                        ))}
+                                                    </div>
+                                                )}
+                                                
+                                                <div className="flex justify-between items-center">
+                                                    <span className="text-[9px] text-zinc-600 font-bold uppercase tracking-widest">
+                                                        {photos.length > 0 ? `${photos.length} Photos` : 'No Cargo Photo'}
+                                                    </span>
+                                                    <button
+                                                        onClick={() => onUploadClick(order.id)}
+                                                        disabled={uploadingId === order.id}
+                                                        className="px-2.5 py-1.5 bg-amber-600/10 hover:bg-amber-600/20 border border-amber-500/20 rounded-lg text-[10px] font-bold text-amber-400 uppercase tracking-wider flex items-center gap-1.5 transition-colors"
+                                                    >
+                                                        <Camera size={11} />
+                                                        {uploadingId === order.id ? 'Uploading...' : 'Add Photo'}
+                                                    </button>
+                                                </div>
+                                            </div>
+                                        );
+                                    })()}
                                 </div>
                             )}
                         </Draggable>

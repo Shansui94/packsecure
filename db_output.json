@@ -1,72 +1,42 @@
 [
   {
-    "created_at": "2026-03-01T00:00:38+00:00",
-    "machine_id": "T1.3-M02",
-    "job_id": null,
-    "sku": "BW-SL-CLR-100Mx100CMx1ROLL-RED",
-    "note": null
+    "id": "f9b89006-5385-470b-81ba-ae5b76669b15",
+    "employee_id": "296c7093-9633-4aca-8ba0-0847464df195",
+    "amount": 100,
+    "bank_in_date": "2026-06-01",
+    "status": "Approved",
+    "rejection_reason": null,
+    "created_at": "2026-05-30T03:21:26.736906+00:00",
+    "updated_at": "2026-05-30T03:31:36.251+00:00"
   },
   {
-    "created_at": "2026-03-01T00:02:54+00:00",
-    "machine_id": "N2-M02",
-    "job_id": null,
-    "sku": "UNKNOWN-BUBBLEWRAP",
-    "note": null
+    "id": "2bc761b7-6d2e-4c58-8928-7d290b94d902",
+    "employee_id": "296c7093-9633-4aca-8ba0-0847464df195",
+    "amount": 150,
+    "bank_in_date": "2026-06-01",
+    "status": "Approved",
+    "rejection_reason": null,
+    "created_at": "2026-05-30T03:24:55.054189+00:00",
+    "updated_at": "2026-05-30T03:31:29.757+00:00"
   },
   {
-    "created_at": "2026-03-01T00:03:00+00:00",
-    "machine_id": "N1-M01",
-    "job_id": null,
-    "sku": "UNKNOWN-BUBBLEWRAP",
-    "note": null
+    "id": "2662535f-2f72-41de-8076-747f9975538b",
+    "employee_id": "296c7093-9633-4aca-8ba0-0847464df195",
+    "amount": 50,
+    "bank_in_date": "2026-06-01",
+    "status": "Approved",
+    "rejection_reason": null,
+    "created_at": "2026-05-30T03:28:46.654715+00:00",
+    "updated_at": "2026-05-30T03:31:19.449+00:00"
   },
   {
-    "created_at": "2026-03-01T00:06:21+00:00",
-    "machine_id": "T1.3-M02",
-    "job_id": null,
-    "sku": "BW-SL-CLR-100Mx100CMx1ROLL-RED",
-    "note": null
-  },
-  {
-    "created_at": "2026-03-01T00:08:08+00:00",
-    "machine_id": "N1-M01",
-    "job_id": null,
-    "sku": "UNKNOWN-BUBBLEWRAP",
-    "note": null
-  },
-  {
-    "created_at": "2026-03-01T00:08:32+00:00",
-    "machine_id": "N2-M02",
-    "job_id": null,
-    "sku": "UNKNOWN-BUBBLEWRAP",
-    "note": null
-  },
-  {
-    "created_at": "2026-03-01T00:12:03+00:00",
-    "machine_id": "T1.3-M02",
-    "job_id": null,
-    "sku": "BW-SL-CLR-100Mx100CMx1ROLL-RED",
-    "note": null
-  },
-  {
-    "created_at": "2026-03-01T00:13:16+00:00",
-    "machine_id": "N1-M01",
-    "job_id": null,
-    "sku": "UNKNOWN-BUBBLEWRAP",
-    "note": null
-  },
-  {
-    "created_at": "2026-03-01T00:14:10+00:00",
-    "machine_id": "N2-M02",
-    "job_id": null,
-    "sku": "UNKNOWN-BUBBLEWRAP",
-    "note": null
-  },
-  {
-    "created_at": "2026-03-01T00:17:45+00:00",
-    "machine_id": "T1.3-M02",
-    "job_id": null,
-    "sku": "BW-SL-CLR-100Mx100CMx1ROLL-RED",
-    "note": null
+    "id": "9184df1f-861c-468e-a7e6-4114236ad777",
+    "employee_id": "296c7093-9633-4aca-8ba0-0847464df195",
+    "amount": 150,
+    "bank_in_date": "2026-06-14",
+    "status": "Approved",
+    "rejection_reason": null,
+    "created_at": "2026-06-03T16:05:36.767268+00:00",
+    "updated_at": "2026-06-03T16:26:16.282+00:00"
   }
 ]

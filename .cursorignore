@@ -1,0 +1,20 @@
+﻿# 依赖与构建产物
+node_modules/
+dist/
+.vercel/
+
+# 锁文件（体积大，索引价值低）
+package-lock.json
+
+# 日志与缓存
+*.log
+.cache/
+.turbo/
+
+# 历史批量调试脚本（减少无关索引）
+scripts/debug_opm_lama*.ts
+
+# 环境密钥（切勿索引）
+.env
+.env.*
+!.env.example

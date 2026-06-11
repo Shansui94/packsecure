@@ -26,6 +26,7 @@ import MachineLabels from './pages/MachineLabels';
 import ExecutiveReports from './pages/ExecutiveReports';
 import DataManagement from './pages/DataManagement';
 import ReportHistory from './pages/ReportHistory';
+import ProductionReports from './pages/ProductionReports';
 import UnderConstruction from './pages/UnderConstruction';
 
 import UpdatePassword from './pages/UpdatePassword';
@@ -33,14 +34,11 @@ import OrderSummary from './pages/OrderSummary'; // New Page
 // import CustomerImport from './pages/CustomerImport'; // Added Import Page
 // import UniversalIntake from './pages/UniversalIntake';
 // import SimpleStock from './pages/SimpleStock';
-import UserManagement from './pages/UserManagement';
-import DriverManagement from './pages/DriverManagement';
 import HRPortal from './pages/HRPortal';
 import IoTManagement from './pages/IoTManagement';
 import Notes from './pages/Notes';
 import Tasks from './pages/Tasks';
 import FactoryLiveOS from './pages/FactoryLiveOS';
-import OperatorManagement from './pages/OperatorManagement';
 import DevLog from './pages/DevLog';
 import LeaveCalendar from './pages/LeaveCalendar';
 import SOPCenter from './pages/SOPCenter';
@@ -224,13 +222,13 @@ function App() {
         // Define allowable pages per role
         const allowedPages: Record<string, string[]> = {
             'SuperAdmin': ['*'], // The Only One with Full Access
-            'Admin': ['profile', 'construction', 'factory-live-os', 'dashboard', 'data-v2', 'customer-import', 'universal-intake', 'scanner', 'jobs', 'livestock', 'inventory', 'recipes', 'products', 'delivery', 'order-summary', 'dispatch', 'production', 'report-history', 'users', 'hr', 'simple-stock', 'maintenance', 'lorry-management', 'iot', 'driver-management', 'operators', 'dev-log', 'leave-calendar', 'personal-report', 'machine-schedule', 'activity-logs', 'floor-plan'],
-            'Manager': ['profile', 'construction', 'factory-live-os', 'dashboard', 'data-v2', 'customer-import', 'universal-intake', 'jobs', 'livestock', 'inventory', 'recipes', 'products', 'delivery', 'order-summary', 'dispatch', 'production', 'report-history', 'hr', 'simple-stock', 'maintenance', 'lorry-management', 'iot', 'driver-management', 'operators', 'leave-calendar', 'personal-report', 'machine-schedule', 'activity-logs', 'floor-plan'],
-            'LogisticsCoordinator': ['profile', 'construction', 'dashboard', 'livestock', 'delivery', 'order-summary', 'products', 'maintenance', 'driver-management', 'leave-calendar', 'personal-report', 'activity-logs'],
-            'Driver': ['delivery-driver', 'delivery-history', 'leave-calendar', 'lorry-service', 'profile', 'personal-report', 'activity-logs'],
-            'Operator': ['scanner', 'leave-calendar', 'profile', 'personal-report', 'activity-logs'],
+            'Admin': ['profile', 'construction', 'factory-live-os', 'dashboard', 'data-v2', 'customer-import', 'universal-intake', 'scanner', 'jobs', 'livestock', 'inventory', 'recipes', 'products', 'delivery', 'order-summary', 'dispatch', 'production', 'report-history', 'users', 'hr', 'simple-stock', 'maintenance', 'lorry-management', 'iot', 'driver-management', 'operators', 'dev-log', 'leave-calendar', 'personal-report', 'machine-schedule', 'activity-logs', 'floor-plan', 'stock-movement', 'stock-audit', 'audit-report', 'reports', 'notes', 'tasks', 'sop-center', 'work-photos', 'executive-reports', 'driver-leave'],
+            'Manager': ['profile', 'construction', 'factory-live-os', 'dashboard', 'data-v2', 'customer-import', 'universal-intake', 'jobs', 'livestock', 'inventory', 'recipes', 'products', 'delivery', 'order-summary', 'dispatch', 'production', 'report-history', 'hr', 'simple-stock', 'maintenance', 'lorry-management', 'iot', 'driver-management', 'operators', 'leave-calendar', 'personal-report', 'machine-schedule', 'activity-logs', 'floor-plan', 'stock-movement', 'stock-audit', 'audit-report', 'reports', 'notes', 'tasks', 'sop-center', 'work-photos', 'executive-reports', 'driver-leave'],
+            'LogisticsCoordinator': ['profile', 'construction', 'dashboard', 'livestock', 'delivery', 'order-summary', 'products', 'maintenance', 'driver-management', 'leave-calendar', 'personal-report', 'activity-logs', 'notes', 'tasks', 'sop-center', 'work-photos'],
+            'Driver': ['delivery-driver', 'delivery-history', 'leave-calendar', 'lorry-service', 'profile', 'personal-report', 'activity-logs', 'notes', 'tasks', 'sop-center', 'work-photos', 'driver-leave'],
+            'Operator': ['scanner', 'leave-calendar', 'profile', 'personal-report', 'activity-logs', 'notes', 'tasks', 'sop-center', 'work-photos', 'order-summary'],
             'Device': ['scanner'],
-            'HR': ['profile', 'hr', 'leave-calendar', 'notes', 'tasks', 'personal-report', 'activity-logs'],
+            'HR': ['profile', 'hr', 'leave-calendar', 'notes', 'tasks', 'personal-report', 'activity-logs', 'sop-center', 'work-photos', 'driver-leave'],
             'Sales': ['profile', 'construction', 'personal-report', 'activity-logs'],
             'Finance': ['profile', 'construction', 'personal-report', 'activity-logs']
         };
@@ -717,13 +715,15 @@ function App() {
                 return <ProductionControl user={user as any} jobs={jobs} />;
             case 'report-history':
                 return <ReportHistory user={user as any} />;
+            case 'reports':
+                return <ProductionReports user={user} />;
             case 'executive-reports':
                 return <ExecutiveReports user={user} />;
             // Organization
             case 'users':
-                return <UserManagement currentUser={user} />;
+                return <HRPortal user={user} initialTab="personnel" />;
             case 'driver-management':
-                return <DriverManagement currentUser={user} />;
+                return <HRPortal user={user} initialTab="personnel" initialRoleFilter="Driver" />;
             case 'hr':
                 return <HRPortal user={user} />;
             case 'update-password':
@@ -733,7 +733,7 @@ function App() {
             case 'floor-plan':
                 return <FloorPlan user={user} />;
             case 'operators':
-                return <OperatorManagement />;
+                return <HRPortal user={user} initialTab="personnel" initialRoleFilter="Operator" />;
             case 'dev-log':
                 return <DevLog />;
             case 'notes':

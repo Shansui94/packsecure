@@ -333,10 +333,7 @@ const Layout: React.FC<LayoutProps> = ({ children, activePage, setActivePage, us
 
                                 <NavGroup title="Organization">
                                     <NavItem id="leave-calendar" icon={Calendar} label="Leave Center" roles={['SuperAdmin', 'Admin', 'Manager', 'HR', 'Driver', 'Operator']} />
-                                    <NavItem id="users" icon={Users} label="User Management" roles={['SuperAdmin', 'Admin']} />
-                                    <NavItem id="hr" icon={Users} label="HR Portal" roles={['SuperAdmin', 'Admin', 'Manager']} />
-                                    <NavItem id="driver-management" icon={Users} label="Driver Management" roles={['SuperAdmin', 'Admin', 'Manager']} />
-                                    <NavItem id="operators" icon={Users} label="操作员管理" roles={['SuperAdmin', 'Admin', 'Manager']} />
+                                    <NavItem id="hr" icon={Users} label="Staff Hub / HR Portal" roles={['SuperAdmin', 'Admin', 'Manager']} />
                                     <NavItem id="reports" icon={FileBarChart} label="EXECUTIVE REPORTS" roles={['SuperAdmin', 'Manager']} />
                                     <NavItem id="iot" icon={Cpu} label="IOT SETTINGS" roles={['SuperAdmin', 'Admin', 'Manager']} />
                                     <NavItem id="dev-log" icon={Activity} label="Dev Log" roles={['SuperAdmin', 'Admin']} />
@@ -344,6 +341,7 @@ const Layout: React.FC<LayoutProps> = ({ children, activePage, setActivePage, us
                                     <div className="h-4" />
                                     {!isNeoson && <NavItem id="personal-report" icon={FileText} label="My Monthly Report" roles={['SuperAdmin', 'Admin', 'Manager']} />}
                                 </NavGroup>
+
                                 {!isNeoson && (
                                     <NavGroup title="Productivity">
                                         <NavItem id="sop-center" icon={BookOpen} label="SOP 指南" roles={['SuperAdmin', 'Admin', 'Manager']} />
@@ -400,6 +398,7 @@ const Layout: React.FC<LayoutProps> = ({ children, activePage, setActivePage, us
                             <>
                                 <NavGroup title="Production Floor">
                                     <NavItem id="scanner" icon={Scan} label="Production Control" roles={['Operator']} />
+                                    <NavItem id="order-summary" icon={FileBarChart} label="Daily Prep" roles={['Operator']} />
                                     <NavItem id="personal-report" icon={FileText} label="My Monthly Report" roles={['Operator']} />
                                 </NavGroup>
 

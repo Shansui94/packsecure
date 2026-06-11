@@ -1,0 +1,213 @@
+=== DRIVER TRIP AUDIT LOG ===
+
+Fetching all drivers from users_public to map IDs to names...
+Fetching all orders since 2026-06-01 or those that are not Delivered/Cancelled...
+Found 168 matching active/recent orders.
+
+Driver: Taufik (14 orders)
+  - Order: DO-Taufik-260609-003 | ID: 279f1cfb-5acd-495b-aa52-4425a8edc065 | Status: New | Origin: TAIPING | Destination: undefined | Date: 2026-06-09 | Deadline: 2026-06-10 | CreatedAt: 2026-06-09T10:06:53.709654+00:00
+  - Order: DO-Taufik-260609-002 | ID: 8e9a680c-03f8-4122-ae76-da2e9d06654a | Status: Cancelled | Origin: TAIPING | Destination: undefined | Date: 2026-06-09 | Deadline: 2026-06-10 | CreatedAt: 2026-06-09T07:34:54.461135+00:00
+  - Order: DO-Taufik-260609-001 | ID: 7f1fe35b-36a6-4ebb-807a-190b05778f43 | Status: New | Origin: TAIPING | Destination: undefined | Date: 2026-06-09 | Deadline: 2026-06-10 | CreatedAt: 2026-06-09T07:33:56.722838+00:00
+  - Order: DO-Ameer-260608-002 | ID: cc30e373-b42b-4dad-8551-6a869519c367 | Status: Cancelled | Origin: TAIPING | Destination: undefined | Date: 2026-06-08 | Deadline: 2026-06-10 | CreatedAt: 2026-06-08T10:23:47.002453+00:00
+  - Order: DO-Taufik-260608-002 | ID: d6854d35-92df-46cd-ae6a-175dbaa30136 | Status: Delivered | Origin: TAIPING | Destination: undefined | Date: 2026-06-08 | Deadline: 2026-06-09 | CreatedAt: 2026-06-08T09:54:57.049332+00:00
+  - Order: DO-Taufik-260608-001 | ID: 4de9a4ff-9d5e-46fd-8a6d-0e892576841f | Status: Delivered | Origin: TAIPING | Destination: undefined | Date: 2026-06-08 | Deadline: 2026-06-09 | CreatedAt: 2026-06-08T09:53:20.078371+00:00
+  - Order: DO-Taufik-260606-001 | ID: 9a5348f0-dbf6-4514-8fdf-0ae65de1c649 | Status: Delivered | Origin: TAIPING | Destination: undefined | Date: 2026-06-06 | Deadline: 2026-06-08 | CreatedAt: 2026-06-06T08:52:36.997556+00:00
+  - Order: DO-Taufik-260605-002 | ID: a2402aef-8afc-484f-b709-60a09fe5ad38 | Status: Delivered | Origin: TAIPING | Destination: undefined | Date: 2026-06-05 | Deadline: 2026-06-06 | CreatedAt: 2026-06-05T09:26:51.523652+00:00
+  - Order: DO-Taufik-260605-001 | ID: 14d36dfc-c0b3-4875-a510-f28e9465d9fe | Status: Cancelled | Origin: TAIPING | Destination: undefined | Date: 2026-06-05 | Deadline: 2026-06-06 | CreatedAt: 2026-06-05T07:03:16.832355+00:00
+  - Order: DO-Taufik-260604-003 | ID: 417bcb5d-2bca-4b8d-b064-909a31439604 | Status: Delivered | Origin: TAIPING | Destination: undefined | Date: 2026-06-04 | Deadline: 2026-06-05 | CreatedAt: 2026-06-04T08:56:58.704959+00:00
+  - Order: DO-Taufik-260604-002 | ID: 5ff31af6-c192-410d-a8e9-46fe905cc807 | Status: Delivered | Origin: TAIPING | Destination: undefined | Date: 2026-06-04 | Deadline: 2026-06-05 | CreatedAt: 2026-06-04T08:52:11.256389+00:00
+  - Order: DO-Taufik-260604-001 | ID: 7abf0e8d-46ad-487d-84d8-558db7fec428 | Status: Cancelled | Origin: TAIPING | Destination: undefined | Date: 2026-06-04 | Deadline: 2026-06-04 | CreatedAt: 2026-06-03T20:21:15.284735+00:00
+  - Order: DO-Taufik-260603-001 | ID: 312c2361-f5f4-4001-97e1-0ef370518a1c | Status: Delivered | Origin: TAIPING | Destination: undefined | Date: 2026-06-03 | Deadline: 2026-06-04 | CreatedAt: 2026-06-03T07:13:30.966765+00:00
+  - Order: DO-Ameer-260602-002 | ID: 437fedb2-e5ef-4a3e-8deb-daee8b5e087c | Status: Delivered | Origin: TAIPING | Destination: undefined | Date: 2026-06-02 | Deadline: 2026-06-03 | CreatedAt: 2026-06-02T03:42:04.786915+00:00
+
+Driver: Tahir (9 orders)
+  - Order: DO-Tahir-260609-001 | ID: 5edab933-d726-42b1-acc3-5cb7c3d9fa9f | Status: New | Origin: NILAI | Destination: undefined | Date: 2026-06-09 | Deadline: 2026-06-10 | CreatedAt: 2026-06-09T09:08:38.197447+00:00
+  - Order: DO-Tahir-260608-002 | ID: 844f42b8-ce93-46f2-a9f1-8ec5552fe84a | Status: Delivered | Origin: NILAI | Destination: undefined | Date: 2026-06-08 | Deadline: 2026-06-09 | CreatedAt: 2026-06-08T11:57:32.489781+00:00
+  - Order: DO-Tahir-260608-001 | ID: 9a2969b2-a1f1-44ec-8f3e-08f3ab9123b6 | Status: Cancelled | Origin: NILAI | Destination: undefined | Date: 2026-06-08 | Deadline: 2026-06-09 | CreatedAt: 2026-06-08T10:17:51.29119+00:00
+  - Order: DO-Tahir-260607-002 | ID: 8996731e-2089-4e41-b441-8245edb66bbf | Status: Delivered | Origin: NILAI | Destination: undefined | Date: 2026-06-07 | Deadline: 2026-06-08 | CreatedAt: 2026-06-06T22:58:37.651947+00:00
+  - Order: DO-Tahir-260607-001 | ID: c1e35960-2db9-44c9-a4e7-498e26ac8a36 | Status: Delivered | Origin: NILAI | Destination: undefined | Date: 2026-06-07 | Deadline: 2026-06-08 | CreatedAt: 2026-06-06T22:57:49.571592+00:00
+  - Order: DO-Tahir-260604-002 | ID: be9508cc-f801-47f8-b01e-ea2d9eed3d10 | Status: Delivered | Origin: NILAI | Destination: undefined | Date: 2026-06-04 | Deadline: 2026-06-05 | CreatedAt: 2026-06-04T09:47:17.034707+00:00
+  - Order: DO-Tahir-260604-001 | ID: 5ad8c9e4-6ccd-4497-9079-938bb25ab039 | Status: Delivered | Origin: NILAI | Destination: undefined | Date: 2026-06-04 | Deadline: 2026-06-04 | CreatedAt: 2026-06-04T06:11:46.335285+00:00
+  - Order: DO-Tahir-260603-001 | ID: b732ca16-eb17-4cc4-a66a-ceed0d15c984 | Status: Delivered | Origin: NILAI | Destination: undefined | Date: 2026-06-03 | Deadline: 2026-06-04 | CreatedAt: 2026-06-03T10:38:28.664354+00:00
+  - Order: DO-Tahir-260601-001 | ID: 9570537f-701e-4c00-bd2a-e1670df42a8e | Status: Delivered | Origin: NILAI | Destination: undefined | Date: 2026-06-01 | Deadline: 2026-06-02 | CreatedAt: 2026-06-01T03:34:33.412767+00:00
+
+Driver: SAM (14 orders)
+  - Order: DO-SAM-260609-003 | ID: a73fb9c8-c68a-424d-881c-33bb05261888 | Status: New | Origin: NILAI | Destination: undefined | Date: 2026-06-09 | Deadline: 2026-06-10 | CreatedAt: 2026-06-09T09:08:02.603264+00:00
+  - Order: DO-SAM-260609-002 | ID: 4a08d8ac-ac98-4fc0-a653-5424c0d5ba52 | Status: New | Origin: NILAI | Destination: undefined | Date: 2026-06-09 | Deadline: 2026-06-10 | CreatedAt: 2026-06-09T09:06:50.669012+00:00
+  - Order: DO-SAM-260609-001 | ID: a8658a6c-6b5a-4d50-9648-c05b0ed2a3ff | Status: New | Origin: NILAI | Destination: undefined | Date: 2026-06-09 | Deadline: 2026-06-10 | CreatedAt: 2026-06-09T09:04:52.835931+00:00
+  - Order: DO-SAM-260608-002 | ID: 9cdb5565-f244-42b5-98d6-d6d341b84de1 | Status: Delivered | Origin: NILAI | Destination: undefined | Date: 2026-06-08 | Deadline: 2026-06-09 | CreatedAt: 2026-06-08T10:12:43.5018+00:00
+  - Order: DO-SAM-260608-001 | ID: b48a61b8-0f26-4d6a-9d5d-1843873266b9 | Status: Delivered | Origin: NILAI | Destination: undefined | Date: 2026-06-08 | Deadline: 2026-06-08 | CreatedAt: 2026-06-08T09:55:34.525797+00:00
+  - Order: DO-SAM-260607-002 | ID: ec9e45ae-fdb0-4090-970e-ce01343eb48d | Status: Delivered | Origin: NILAI | Destination: undefined | Date: 2026-06-07 | Deadline: 2026-06-08 | CreatedAt: 2026-06-06T22:56:20.229513+00:00
+  - Order: DO-SAM-260607-001 | ID: 9586c235-48d0-4570-b5e1-8ecb736c1b78 | Status: Delivered | Origin: NILAI | Destination: undefined | Date: 2026-06-07 | Deadline: 2026-06-08 | CreatedAt: 2026-06-06T22:54:50.317842+00:00
+  - Order: DO-SAM-260606-001 | ID: ae349477-2003-431c-8d07-6d4162a1f05c | Status: Delivered | Origin: NILAI | Destination: undefined | Date: 2026-06-06 | Deadline: 2026-06-07 | CreatedAt: 2026-06-06T05:28:22.043009+00:00
+  - Order: DO-SAM-260605-001 | ID: cf77475a-2635-4cd5-980d-edb72471a9ba | Status: Delivered | Origin: NILAI | Destination: undefined | Date: 2026-06-05 | Deadline: 2026-06-06 | CreatedAt: 2026-06-05T09:54:02.444682+00:00
+  - Order: DO-SAM-260604-002 | ID: 78575602-7c29-4730-b761-277acd2af90b | Status: Delivered | Origin: NILAI | Destination: undefined | Date: 2026-06-04 | Deadline: 2026-06-05 | CreatedAt: 2026-06-04T09:41:14.31029+00:00
+  - Order: DO-SAM-260604-001 | ID: 6c0f03e9-6fb7-4312-9761-e1e79e69f5e7 | Status: Delivered | Origin: NILAI | Destination: undefined | Date: 2026-06-04 | Deadline: 2026-06-05 | CreatedAt: 2026-06-04T09:39:49.594345+00:00
+  - Order: DO-Ayam-260603-001 | ID: 63f7897d-7a68-4349-870a-8a845a0a8d79 | Status: Delivered | Origin: NILAI | Destination: undefined | Date: 2026-06-03 | Deadline: 2026-06-04 | CreatedAt: 2026-06-03T11:20:56.038606+00:00
+  - Order: DO-SAM-260603-001 | ID: 3a4e6254-651e-47f0-a07d-07ab06dc54f4 | Status: Delivered | Origin: NILAI | Destination: undefined | Date: 2026-06-03 | Deadline: 2026-06-04 | CreatedAt: 2026-06-03T11:20:10.733751+00:00
+  - Order: DO-SAM-260602-001 | ID: 61d0c816-7b96-41ec-84fb-07abed7a0411 | Status: Delivered | Origin: NILAI | Destination: undefined | Date: 2026-06-02 | Deadline: 2026-06-03 | CreatedAt: 2026-06-02T04:54:07.175913+00:00
+
+Driver: Khairol (8 orders)
+  - Order: DO-Khairol-260609-001 | ID: cfc96e8c-71db-4841-ad62-5c8a5ae9bcd6 | Status: Loaded | Origin: NILAI | Destination: undefined | Date: 2026-06-09 | Deadline: 2026-06-10 | CreatedAt: 2026-06-09T09:03:38.789535+00:00
+  - Order: DO-Khairol-260608-001 | ID: 5c10a99a-2295-423b-8789-de485797ea78 | Status: Delivered | Origin: NILAI | Destination: undefined | Date: 2026-06-08 | Deadline: 2026-06-09 | CreatedAt: 2026-06-08T10:11:14.905154+00:00
+  - Order: DO-Khairol-260605-001 | ID: 4a47d6cf-1f07-49fc-a21f-6891a047f41e | Status: Delivered | Origin: NILAI | Destination: undefined | Date: 2026-06-05 | Deadline: 2026-06-06 | CreatedAt: 2026-06-05T09:52:41.907427+00:00
+  - Order: DO-Khairol-260604-002 | ID: 5b6d37e3-cc17-4224-ba7a-c924721227ba | Status: Delivered | Origin: NILAI | Destination: undefined | Date: 2026-06-04 | Deadline: 2026-06-05 | CreatedAt: 2026-06-04T11:17:50.445953+00:00
+  - Order: DO-Khairol-260604-001 | ID: 112e371f-d3eb-436a-8fe8-44bcd14048c7 | Status: Delivered | Origin: NILAI | Destination: undefined | Date: 2026-06-04 | Deadline: 2026-06-05 | CreatedAt: 2026-06-04T09:42:11.77758+00:00
+  - Order: DO-Khairol-260603-001 | ID: e0a7fb11-1fab-4ebb-8ee9-ce221efbe008 | Status: Delivered | Origin: NILAI | Destination: undefined | Date: 2026-06-03 | Deadline: 2026-06-04 | CreatedAt: 2026-06-03T11:08:15.136484+00:00
+  - Order: DO-Ayam-260602-001 | ID: f80d607e-8410-4976-9d59-49a857bfead2 | Status: Delivered | Origin: NILAI | Destination: undefined | Date: 2026-06-02 | Deadline: 2026-06-03 | CreatedAt: 2026-06-02T04:53:21.802293+00:00
+  - Order: DO-Khairol-260601-001 | ID: 129a5649-2b6d-4e3c-9ccd-8baee44a69cb | Status: Delivered | Origin: NILAI | Destination: undefined | Date: 2026-06-01 | Deadline: 2026-06-02 | CreatedAt: 2026-06-01T04:00:01.20001+00:00
+
+Driver: Ayam (9 orders)
+  - Order: DO-Ayam-260609-001 | ID: 82f68020-d9a0-43ad-b87f-10ec3b397175 | Status: New | Origin: NILAI | Destination: undefined | Date: 2026-06-09 | Deadline: 2026-06-10 | CreatedAt: 2026-06-09T09:02:36.063195+00:00
+  - Order: DO-Ayam-260608-002 | ID: 033fa702-ccfa-4840-9b19-76bb597b26b8 | Status: Delivered | Origin: NILAI | Destination: undefined | Date: 2026-06-08 | Deadline: 2026-06-09 | CreatedAt: 2026-06-08T10:14:48.642968+00:00
+  - Order: DO-Ayam-260608-001 | ID: 1db685fd-34e8-476b-a29a-5a933d2852cf | Status: Delivered | Origin: NILAI | Destination: undefined | Date: 2026-06-08 | Deadline: 2026-06-09 | CreatedAt: 2026-06-08T10:14:09.495226+00:00
+  - Order: DO-Ayam-260607-001 | ID: 74a68e5d-9645-4570-a67f-76a44de19017 | Status: Delivered | Origin: NILAI | Destination: undefined | Date: 2026-06-07 | Deadline: 2026-06-08 | CreatedAt: 2026-06-06T23:01:27.516338+00:00
+  - Order: DO-Ayam-260605-002 | ID: 561c3eae-634e-4261-8ad9-0b973e34e0e3 | Status: Delivered | Origin: NILAI | Destination: undefined | Date: 2026-06-05 | Deadline: 2026-06-06 | CreatedAt: 2026-06-05T09:51:40.659476+00:00
+  - Order: DO-Ayam-260605-001 | ID: 88371e43-09aa-48bf-9ca2-2baf6269306a | Status: Delivered | Origin: NILAI | Destination: undefined | Date: 2026-06-05 | Deadline: 2026-06-05 | CreatedAt: 2026-06-05T02:38:49.163578+00:00
+  - Order: DO-Ayam-260604-001 | ID: 9839d31c-8fe3-44ae-ad6d-536979e0d434 | Status: Delivered | Origin: NILAI | Destination: undefined | Date: 2026-06-04 | Deadline: 2026-06-05 | CreatedAt: 2026-06-04T09:45:10.290693+00:00
+  - Order: DO-Tahir-260602-001 | ID: 17d735b4-31dc-4fe7-8f5f-ac5bba794447 | Status: Delivered | Origin: NILAI | Destination: undefined | Date: 2026-06-02 | Deadline: 2026-06-03 | CreatedAt: 2026-06-02T04:46:59.539342+00:00
+  - Order: DO-Ayam-260601-001 | ID: 473652f3-5f67-4103-8e70-04d23c848016 | Status: Delivered | Origin: NILAI | Destination: undefined | Date: 2026-06-01 | Deadline: 2026-06-02 | CreatedAt: 2026-06-01T03:52:57.820232+00:00
+
+Driver: Mahadi (14 orders)
+  - Order: DO-Mahadi-260609-002 | ID: 6b67f08f-89de-4136-b7cf-ff73452b2b83 | Status: New | Origin: NILAI | Destination: undefined | Date: 2026-06-09 | Deadline: 2026-06-10 | CreatedAt: 2026-06-09T09:00:11.759458+00:00
+  - Order: DO-Mahadi-260609-001 | ID: 9284fae1-e923-4e64-bf70-b06d09adda82 | Status: New | Origin: NILAI | Destination: undefined | Date: 2026-06-09 | Deadline: 2026-06-10 | CreatedAt: 2026-06-09T08:59:25.981789+00:00
+  - Order: DO-Mahadi-260608-002 | ID: b8d976eb-bb93-4b43-951c-25145b54049e | Status: Cancelled | Origin: NILAI | Destination: undefined | Date: 2026-06-08 | Deadline: 2026-06-09 | CreatedAt: 2026-06-08T10:16:53.966242+00:00
+  - Order: DO-Mahadi-260608-001 | ID: 8183ce1c-fa20-46bc-afcb-61917f2af122 | Status: Cancelled | Origin: NILAI | Destination: undefined | Date: 2026-06-08 | Deadline: 2026-06-09 | CreatedAt: 2026-06-08T10:16:22.613526+00:00
+  - Order: DO-Mahadi-260607-002 | ID: 3d537563-511b-474b-aa64-3108f0b52c59 | Status: Delivered | Origin: NILAI | Destination: undefined | Date: 2026-06-07 | Deadline: 2026-06-08 | CreatedAt: 2026-06-07T07:46:34.992724+00:00
+  - Order: DO-Mahadi-260607-001 | ID: 34fe9146-914b-4b94-bbad-93f8f0a5bb3e | Status: Delivered | Origin: NILAI | Destination: undefined | Date: 2026-06-07 | Deadline: 2026-06-08 | CreatedAt: 2026-06-06T23:00:39.610741+00:00
+  - Order: DO-Mahadi-260605-001 | ID: c7de657c-2a91-4672-9c19-0f64331b818d | Status: Delivered | Origin: NILAI | Destination: undefined | Date: 2026-06-05 | Deadline: 2026-06-06 | CreatedAt: 2026-06-05T09:56:13.009606+00:00
+  - Order: DO-Mahadi-260604-002 | ID: 338dd9ab-b32b-4440-b7c5-4516f7ee16d2 | Status: Delivered | Origin: NILAI | Destination: undefined | Date: 2026-06-04 | Deadline: 2026-06-05 | CreatedAt: 2026-06-04T09:52:02.535878+00:00
+  - Order: DO-Mahadi-260604-001 | ID: c3ef159d-42f0-4293-8bbf-8688ac7679c8 | Status: Delivered | Origin: NILAI | Destination: undefined | Date: 2026-06-04 | Deadline: 2026-06-04 | CreatedAt: 2026-06-04T02:29:02.083635+00:00
+  - Order: DO-Ayam-260603-002 | ID: 64fa482d-bb79-44b3-af34-fdb2678d5af4 | Status: Delivered | Origin: NILAI | Destination: undefined | Date: 2026-06-03 | Deadline: 2026-06-04 | CreatedAt: 2026-06-03T11:22:10.04468+00:00
+  - Order: DO-Mahadi-260603-002 | ID: 9d1f071f-d936-48ea-b405-5b2994ba19b7 | Status: Delivered | Origin: NILAI | Destination: undefined | Date: 2026-06-03 | Deadline: 2026-06-04 | CreatedAt: 2026-06-03T11:12:44.931952+00:00
+  - Order: DO-Mahadi-260603-001 | ID: e0010f04-1c7b-4a23-9cd0-ec0f32924176 | Status: Delivered | Origin: NILAI | Destination: undefined | Date: 2026-06-03 | Deadline: 2026-06-04 | CreatedAt: 2026-06-03T11:11:26.707115+00:00
+  - Order: DO-Mahadi-260602-001 | ID: 8bd76f14-f359-4cda-bacd-284c852613c6 | Status: Delivered | Origin: NILAI | Destination: undefined | Date: 2026-06-02 | Deadline: 2026-06-03 | CreatedAt: 2026-06-02T04:40:51.883749+00:00
+  - Order: DO-Mahadi-260601-001 | ID: 86cafa8b-fefc-4962-875d-cb349e288a3a | Status: Delivered | Origin: NILAI | Destination: undefined | Date: 2026-06-01 | Deadline: 2026-06-02 | CreatedAt: 2026-06-01T03:30:13.71495+00:00
+
+Driver: Bob (18 orders)
+  - Order: DO-Bob-260609-003 | ID: 2495d88a-6f2e-4aea-a527-a1d553153071 | Status: Delivered | Origin: TAIPING | Destination: undefined | Date: 2026-06-09 | Deadline: 2026-06-10 | CreatedAt: 2026-06-09T08:40:25.432961+00:00
+  - Order: DO-Bob-260609-002 | ID: 80631fde-8912-4546-abbb-000e533c00df | Status: Delivered | Origin: TAIPING | Destination: undefined | Date: 2026-06-09 | Deadline: 2026-06-10 | CreatedAt: 2026-06-09T08:05:10.31025+00:00
+  - Order: DO-Bob-260609-001 | ID: c4b1a8be-ba3a-4a3c-a29d-df58d1686b4b | Status: Delivered | Origin: TAIPING | Destination: undefined | Date: 2026-06-09 | Deadline: 2026-06-10 | CreatedAt: 2026-06-09T07:59:20.630959+00:00
+  - Order: DO-Bob-260608-003 | ID: ea07eb7d-59a5-4245-9047-52701255b8f2 | Status: Delivered | Origin: TAIPING | Destination: undefined | Date: 2026-06-08 | Deadline: 2026-06-08 | CreatedAt: 2026-06-08T06:50:58.293614+00:00
+  - Order: DO-Bob-260608-002 | ID: 24c3e243-247b-4137-84f0-c37c54da675d | Status: Delivered | Origin: TAIPING | Destination: undefined | Date: 2026-06-08 | Deadline: 2026-06-08 | CreatedAt: 2026-06-08T06:47:10.286678+00:00
+  - Order: DO-Bob-260608-001 | ID: c6956ba8-0741-40b0-9cdf-e571875e2c0b | Status: Delivered | Origin: TAIPING | Destination: undefined | Date: 2026-06-08 | Deadline: 2026-06-08 | CreatedAt: 2026-06-08T04:26:38.033467+00:00
+  - Order: DO-Bob-260605-003 | ID: b3c810a8-a55e-405b-bb89-928742b3b4ba | Status: Delivered | Origin: TAIPING | Destination: undefined | Date: 2026-06-05 | Deadline: 2026-06-05 | CreatedAt: 2026-06-05T10:26:41.273372+00:00
+  - Order: DO-Bob-260605-002 | ID: 09776589-56cb-4982-9851-7409fff272d5 | Status: Delivered | Origin: TAIPING | Destination: undefined | Date: 2026-06-05 | Deadline: 2026-06-05 | CreatedAt: 2026-06-05T10:22:25.104322+00:00
+  - Order: DO-Bob-260605-001 | ID: 618adc5e-71a7-4ffa-8e90-e1b0af689407 | Status: Delivered | Origin: TAIPING | Destination: undefined | Date: 2026-06-05 | Deadline: 2026-06-05 | CreatedAt: 2026-06-05T10:17:58.510906+00:00
+  - Order: DO-Bob-260604-003 | ID: 7bfa9a37-71b1-4592-a4d6-ff085c5affeb | Status: Delivered | Origin: TAIPING | Destination: undefined | Date: 2026-06-04 | Deadline: 2026-06-04 | CreatedAt: 2026-06-04T11:20:47.655973+00:00
+  - Order: DO-Bob-260604-002 | ID: e869cabc-24f5-4d46-b90a-0033cd78fed7 | Status: Delivered | Origin: TAIPING | Destination: undefined | Date: 2026-06-04 | Deadline: 2026-06-04 | CreatedAt: 2026-06-04T11:16:52.857103+00:00
+  - Order: DO-Bob-260604-001 | ID: 062c3d28-6831-4b3b-8a23-f4436f0321f6 | Status: Delivered | Origin: TAIPING | Destination: undefined | Date: 2026-06-04 | Deadline: 2026-06-04 | CreatedAt: 2026-06-04T11:10:50.219993+00:00
+  - Order: DO-Bob-260603-003 | ID: ef1f4461-6253-478c-8591-046d5c726200 | Status: Delivered | Origin: TAIPING | Destination: undefined | Date: 2026-06-03 | Deadline: 2026-06-03 | CreatedAt: 2026-06-03T11:49:02.633399+00:00
+  - Order: DO-Bob-260603-002 | ID: f6acbd65-b156-4277-bc1b-e4eab30ae000 | Status: Delivered | Origin: TAIPING | Destination: undefined | Date: 2026-06-03 | Deadline: 2026-06-03 | CreatedAt: 2026-06-03T11:42:57.166717+00:00
+  - Order: DO-Bob-260603-001 | ID: a2cd3d9f-3285-42e5-b19a-ac3ecc5b294c | Status: Delivered | Origin: TAIPING | Destination: undefined | Date: 2026-06-03 | Deadline: 2026-06-03 | CreatedAt: 2026-06-03T10:58:56.671038+00:00
+  - Order: DO-Bob-260602-003 | ID: 398cecfb-3eb4-43b4-85ce-04cbf7330ed8 | Status: Delivered | Origin: TAIPING | Destination: undefined | Date: 2026-06-02 | Deadline: 2026-06-02 | CreatedAt: 2026-06-02T10:46:08.643308+00:00
+  - Order: DO-Bob-260602-002 | ID: a857007d-56f8-46b7-9574-a214d0fe9bb6 | Status: Delivered | Origin: TAIPING | Destination: undefined | Date: 2026-06-02 | Deadline: 2026-06-02 | CreatedAt: 2026-06-02T10:42:04.912671+00:00
+  - Order: DO-Bob-260602-001 | ID: 3f01942d-840e-4cfa-b7ed-77c04a774c96 | Status: Delivered | Origin: TAIPING | Destination: undefined | Date: 2026-06-02 | Deadline: 2026-06-02 | CreatedAt: 2026-06-02T10:38:24.625955+00:00
+
+Driver: Dean (8 orders)
+  - Order: DO-Dean-260609-001 | ID: 82034864-6414-41dc-9a60-2888f4a449d5 | Status: New | Origin: TAIPING | Destination: undefined | Date: 2026-06-09 | Deadline: 2026-06-10 | CreatedAt: 2026-06-09T08:32:57.588547+00:00
+  - Order: DO-Dean-260608-001 | ID: 30f703c2-62a5-4898-9900-4136f0c69e3d | Status: Delivered | Origin: TAIPING | Destination: undefined | Date: 2026-06-08 | Deadline: 2026-06-09 | CreatedAt: 2026-06-08T09:43:54.16708+00:00
+  - Order: DO-Dean-260606-001 | ID: 1215128b-d9fb-4dfb-9a0f-5f40a33c7d9b | Status: Delivered | Origin: TAIPING | Destination: undefined | Date: 2026-06-06 | Deadline: 2026-06-07 | CreatedAt: 2026-06-06T05:09:09.170651+00:00
+  - Order: DO-Dean-260605-002 | ID: fd14c1ec-f3c9-4cac-8e58-c5026b3a21af | Status: Delivered | Origin: TAIPING | Destination: undefined | Date: 2026-06-05 | Deadline: 2026-06-06 | CreatedAt: 2026-06-05T07:02:33.92514+00:00
+  - Order: DO-Dean-260605-001 | ID: 16e7c937-4967-4231-89fa-4c0965c92ba4 | Status: Delivered | Origin: TAIPING | Destination: undefined | Date: 2026-06-05 | Deadline: 2026-06-05 | CreatedAt: 2026-06-04T20:59:09.089523+00:00
+  - Order: DO-Dean-260604-001 | ID: 56b96b33-8c33-484c-9635-114c0fe4e601 | Status: Cancelled | Origin: TAIPING | Destination: undefined | Date: 2026-06-04 | Deadline: 2026-06-05 | CreatedAt: 2026-06-04T08:51:07.381146+00:00
+  - Order: DO-Dean-260603-001 | ID: 124ecf58-1142-4cac-b359-cbed12197305 | Status: Delivered | Origin: TAIPING | Destination: undefined | Date: 2026-06-03 | Deadline: 2026-06-04 | CreatedAt: 2026-06-03T07:31:18.182132+00:00
+  - Order: DO-Dean-260602-001 | ID: 0b8c5e06-689e-425b-b492-713de69acaf9 | Status: Delivered | Origin: TAIPING | Destination: undefined | Date: 2026-06-02 | Deadline: 2026-06-03 | CreatedAt: 2026-06-02T03:09:24.548748+00:00
+
+Driver: Yashin (9 orders)
+  - Order: DO-Yashin-260609-003 | ID: 95a29c0d-a127-4859-926c-889f980928ed | Status: New | Origin: TAIPING | Destination: undefined | Date: 2026-06-09 | Deadline: 2026-06-10 | CreatedAt: 2026-06-09T07:32:23.233466+00:00
+  - Order: DO-Yashin-260609-002 | ID: a7850473-bb03-4b0f-a9a9-37de51e07eac | Status: New | Origin: TAIPING | Destination: undefined | Date: 2026-06-09 | Deadline: 2026-06-10 | CreatedAt: 2026-06-09T07:31:40.304304+00:00
+  - Order: DO-Yashin-260609-001 | ID: 3074dfb6-7d89-4c5a-bdf4-aee78fb896f2 | Status: New | Origin: TAIPING | Destination: undefined | Date: 2026-06-09 | Deadline: 2026-06-10 | CreatedAt: 2026-06-09T07:30:30.828815+00:00
+  - Order: DO-Yashin-260608-001 | ID: fe74e639-5628-4fa6-9896-ae96c810b6f7 | Status: Delivered | Origin: TAIPING | Destination: undefined | Date: 2026-06-08 | Deadline: 2026-06-09 | CreatedAt: 2026-06-08T09:48:44.217041+00:00
+  - Order: DO-Yashin-260606-002 | ID: a3b77faf-cb50-43e3-8392-9b6e63bb7b0a | Status: Delivered | Origin: TAIPING | Destination: undefined | Date: 2026-06-06 | Deadline: 2026-06-08 | CreatedAt: 2026-06-06T10:03:27.953231+00:00
+  - Order: DO-Yashin-260606-001 | ID: 83fbf4a0-e4df-4e97-b3d1-c4a2f930869f | Status: Delivered | Origin: TAIPING | Destination: undefined | Date: 2026-06-06 | Deadline: 2026-06-07 | CreatedAt: 2026-06-06T04:58:05.113347+00:00
+  - Order: DO-Yashin-260605-001 | ID: 438b4b8e-b063-428f-b9ff-e795cc029149 | Status: Delivered | Origin: TAIPING | Destination: undefined | Date: 2026-06-05 | Deadline: 2026-06-06 | CreatedAt: 2026-06-05T06:56:21.274684+00:00
+  - Order: DO-Yashin-260603-001 | ID: 16205d10-8fc1-4266-a32c-aa613babcbea | Status: Delivered | Origin: TAIPING | Destination: undefined | Date: 2026-06-03 | Deadline: 2026-06-04 | CreatedAt: 2026-06-03T07:08:36.648724+00:00
+  - Order: DO-Yashin-260602-001 | ID: 80478d32-8ced-4b97-96c9-0c011fa14f39 | Status: Delivered | Origin: TAIPING | Destination: undefined | Date: 2026-06-02 | Deadline: 2026-06-03 | CreatedAt: 2026-06-02T03:26:28.73991+00:00
+
+Driver: Waldan (8 orders)
+  - Order: DO-Waldan-260609-001 | ID: 6ce60c7c-8c01-4058-9183-e9059d5abb78 | Status: New | Origin: TAIPING | Destination: undefined | Date: 2026-06-09 | Deadline: 2026-06-10 | CreatedAt: 2026-06-09T07:27:24.061818+00:00
+  - Order: DO-Waldan-260608-002 | ID: c8c4e15b-d735-4c0b-95a6-7cd5eaf6f1ac | Status: New | Origin: TAIPING | Destination: undefined | Date: 2026-06-08 | Deadline: 2026-06-10 | CreatedAt: 2026-06-08T09:40:21.432148+00:00
+  - Order: DO-Waldan-260608-001 | ID: 105884db-c0ae-4c4f-86d4-452faafd93c6 | Status: Delivered | Origin: TAIPING | Destination: undefined | Date: 2026-06-08 | Deadline: 2026-06-09 | CreatedAt: 2026-06-08T09:39:18.966778+00:00
+  - Order: DO-Waldan-260606-001 | ID: aa28cfde-c197-4223-a402-9263106360cb | Status: Delivered | Origin: TAIPING | Destination: undefined | Date: 2026-06-06 | Deadline: 2026-06-08 | CreatedAt: 2026-06-06T08:44:30.557702+00:00
+  - Order: DO-Waldan-260605-002 | ID: ee5da495-ef00-4e5b-b173-09ef01aa3237 | Status: Cancelled | Origin: TAIPING | Destination: undefined | Date: 2026-06-05 | Deadline: 2026-06-06 | CreatedAt: 2026-06-05T06:57:26.465613+00:00
+  - Order: DO-Waldan-260605-001 | ID: 17d9adf5-b2f2-48c7-a760-ca45ebe9fc87 | Status: Delivered | Origin: TAIPING | Destination: undefined | Date: 2026-06-05 | Deadline: 2026-06-05 | CreatedAt: 2026-06-04T20:22:26.121984+00:00
+  - Order: DO-Waldan-260604-001 | ID: 4d3a8746-1f4a-4dc6-a058-3f3b4076a4be | Status: Delivered | Origin: TAIPING | Destination: undefined | Date: 2026-06-04 | Deadline: 2026-06-05 | CreatedAt: 2026-06-04T09:02:16.398594+00:00
+  - Order: DO-Taufik-260602-001 | ID: 70a16439-46f5-4ce4-accc-f6bc4770b459 | Status: Delivered | Origin: TAIPING | Destination: undefined | Date: 2026-06-02 | Deadline: 2026-06-03 | CreatedAt: 2026-06-02T03:25:45.924621+00:00
+
+Driver: Faizal (6 orders)
+  - Order: DO-Faizal-260609-001 | ID: c02d7805-b7de-4b4f-a7fd-8ab798ea2a26 | Status: New | Origin: TAIPING | Destination: undefined | Date: 2026-06-09 | Deadline: 2026-06-10 | CreatedAt: 2026-06-09T07:26:02.432539+00:00
+  - Order: DO-Faizal-260608-001 | ID: 988a8e38-7e27-49a8-ae0e-2576c4084267 | Status: Pending Approval | Origin: TAIPING | Destination: undefined | Date: 2026-06-08 | Deadline: 2026-06-09 | CreatedAt: 2026-06-08T09:56:57.884898+00:00
+  - Order: DO-Faizal-260606-001 | ID: abf760f4-a966-4f54-a41d-778739374792 | Status: Delivered | Origin: TAIPING | Destination: undefined | Date: 2026-06-06 | Deadline: 2026-06-07 | CreatedAt: 2026-06-06T04:55:54.504604+00:00
+  - Order: DO-Faizal-260605-001 | ID: df9055a8-7e65-4d46-a065-d0fe95482db1 | Status: Delivered | Origin: TAIPING | Destination: undefined | Date: 2026-06-05 | Deadline: 2026-06-05 | CreatedAt: 2026-06-04T21:49:41.840676+00:00
+  - Order: DO-Faizal-260602-002 | ID: fc9bf166-e2f7-4a1b-b583-964847198433 | Status: Delivered | Origin: TAIPING | Destination: undefined | Date: 2026-06-02 | Deadline: 2026-06-02 | CreatedAt: 2026-06-02T10:03:47.032707+00:00
+  - Order: DO-Faizal-260602-001 | ID: 3da61208-9a71-460e-9d5e-d220387b327c | Status: Delivered | Origin: TAIPING | Destination: undefined | Date: 2026-06-02 | Deadline: 2026-06-03 | CreatedAt: 2026-06-02T03:07:05.406941+00:00
+
+Driver: WAN (8 orders)
+  - Order: DO-WAN-260609-001 | ID: fd81a5a0-9eff-4cbd-ada8-d2bc1ecb66bc | Status: New | Origin: TAIPING | Destination: undefined | Date: 2026-06-09 | Deadline: 2026-06-10 | CreatedAt: 2026-06-09T07:23:27.501923+00:00
+  - Order: DO-WAN-260606-003 | ID: bf393cef-9664-440c-b154-fa90679b5fd6 | Status: Delivered | Origin: TAIPING | Destination: undefined | Date: 2026-06-06 | Deadline: 2026-06-08 | CreatedAt: 2026-06-06T09:48:44.92262+00:00
+  - Order: DO-WAN-260606-002 | ID: 88f3b118-cda8-4770-868d-b86df73426f8 | Status: Delivered | Origin: TAIPING | Destination: undefined | Date: 2026-06-06 | Deadline: 2026-06-08 | CreatedAt: 2026-06-06T09:48:00.383084+00:00
+  - Order: DO-WAN-260606-001 | ID: 261d9ea0-e37c-49f4-a31e-a9ca8ee2a3e6 | Status: Delivered | Origin: TAIPING | Destination: undefined | Date: 2026-06-06 | Deadline: 2026-06-07 | CreatedAt: 2026-06-06T05:05:25.05957+00:00
+  - Order: DO-WAN-260604-002 | ID: 16e2237c-5195-47f9-b076-1451d84ad8d5 | Status: Delivered | Origin: TAIPING | Destination: undefined | Date: 2026-06-04 | Deadline: 2026-06-05 | CreatedAt: 2026-06-04T08:42:24.037126+00:00
+  - Order: DO-WAN-260604-001 | ID: 57be63b0-a5a5-4ce3-a730-8429155f3961 | Status: Delivered | Origin: TAIPING | Destination: undefined | Date: 2026-06-04 | Deadline: 2026-06-05 | CreatedAt: 2026-06-04T08:40:44.050947+00:00
+  - Order: DO-WAN-260603-001 | ID: 272b9912-8472-439b-b8b1-3dc6a6678789 | Status: Delivered | Origin: TAIPING | Destination: undefined | Date: 2026-06-03 | Deadline: 2026-06-04 | CreatedAt: 2026-06-03T07:12:33.720916+00:00
+  - Order: DO-WAN-260602-001 | ID: 29082f6a-23cb-4adc-8c5f-8e90ebd1784d | Status: Delivered | Origin: TAIPING | Destination: undefined | Date: 2026-06-02 | Deadline: 2026-06-03 | CreatedAt: 2026-06-02T03:23:44.464863+00:00
+
+Driver: Ameer (9 orders)
+  - Order: DO-Ameer-260609-001 | ID: a193174a-62f3-44f8-b8c6-9ef04e2b6a9a | Status: Delivered | Origin: TAIPING | Destination: undefined | Date: 2026-06-09 | Deadline: 2026-06-09 | CreatedAt: 2026-06-09T03:23:01.462402+00:00
+  - Order: DO-Ameer-260608-001 | ID: b8909588-bd69-485c-8a5e-cb88ed5580a6 | Status: Delivered | Origin: TAIPING | Destination: undefined | Date: 2026-06-08 | Deadline: 2026-06-09 | CreatedAt: 2026-06-08T09:49:26.306247+00:00
+  - Order: DO-Ameer-260607-001 | ID: c0f9264c-aa18-4f56-9f63-81153caf34e4 | Status: Delivered | Origin: TAIPING | Destination: undefined | Date: 2026-06-07 | Deadline: 2026-06-08 | CreatedAt: 2026-06-06T21:23:08.835777+00:00
+  - Order: DO-Ameer-260606-001 | ID: 3299f870-ed9c-40a0-aa53-731ed66191a3 | Status: Delivered | Origin: TAIPING | Destination: undefined | Date: 2026-06-06 | Deadline: 2026-06-07 | CreatedAt: 2026-06-06T05:10:19.360851+00:00
+  - Order: DO-Ameer-260605-002 | ID: 34fcf8bb-24d7-4438-bfb8-03aeb811a571 | Status: Delivered | Origin: TAIPING | Destination: undefined | Date: 2026-06-05 | Deadline: 2026-06-06 | CreatedAt: 2026-06-05T09:28:12.878213+00:00
+  - Order: DO-Ameer-260605-001 | ID: abd501f0-7156-4729-bca0-1e7ebed90a38 | Status: Cancelled | Origin: TAIPING | Destination: undefined | Date: 2026-06-05 | Deadline: 2026-06-06 | CreatedAt: 2026-06-05T07:01:17.977624+00:00
+  - Order: DO-Ameer-260604-001 | ID: 2aa7761a-3f05-4d88-a49c-8e22a0b9b6cb | Status: Delivered | Origin: TAIPING | Destination: undefined | Date: 2026-06-04 | Deadline: 2026-06-05 | CreatedAt: 2026-06-04T08:49:20.356192+00:00
+  - Order: DO-Ameer-260603-001 | ID: 8b7de07e-2702-4e5a-bcaa-46a6e5fccd52 | Status: Delivered | Origin: TAIPING | Destination: undefined | Date: 2026-06-03 | Deadline: 2026-06-04 | CreatedAt: 2026-06-03T07:06:20.701496+00:00
+  - Order: DO-Ameer-260602-001 | ID: 0c7b6833-1cf3-469f-bb39-bdb438c0ef4f | Status: Cancelled | Origin: TAIPING | Destination: undefined | Date: 2026-06-02 | Deadline: 2026-06-03 | CreatedAt: 2026-06-02T03:02:59.791706+00:00
+
+Driver: yan (10 orders)
+  - Order: DO-yan-260608-002 | ID: 86a91565-f69b-415f-bf69-5ea206a63157 | Status: Delivered | Origin: TAIPING | Destination: undefined | Date: 2026-06-08 | Deadline: 2026-06-10 | CreatedAt: 2026-06-08T10:06:07.52713+00:00
+  - Order: DO-yan-260608-001 | ID: 3b782930-6ea7-43aa-99ad-2a661ee2c945 | Status: New | Origin: TAIPING | Destination: undefined | Date: 2026-06-08 | Deadline: 2026-06-10 | CreatedAt: 2026-06-08T09:41:51.092242+00:00
+  - Order: DO-yan-260606-002 | ID: d02c2ce1-9d3f-4792-a3ac-312cec5a65f8 | Status: Delivered | Origin: TAIPING | Destination: undefined | Date: 2026-06-06 | Deadline: 2026-06-08 | CreatedAt: 2026-06-06T09:19:03.767983+00:00
+  - Order: DO-yan-260606-001 | ID: 1660b233-de94-4568-bbfd-bf3623065eb4 | Status: Delivered | Origin: TAIPING | Destination: undefined | Date: 2026-06-06 | Deadline: 2026-06-07 | CreatedAt: 2026-06-06T05:01:15.80538+00:00
+  - Order: DO-yan-260605-002 | ID: 210776bf-089d-436b-ae4d-a36acf7613d5 | Status: Delivered | Origin: TAIPING | Destination: undefined | Date: 2026-06-05 | Deadline: 2026-06-06 | CreatedAt: 2026-06-05T07:06:05.899351+00:00
+  - Order: DO-yan-260605-001 | ID: de17bb6b-a302-40b4-89e3-ac02bd30d500 | Status: Delivered | Origin: TAIPING | Destination: undefined | Date: 2026-06-05 | Deadline: 2026-06-08 | CreatedAt: 2026-06-05T07:05:10.372102+00:00
+  - Order: DO-yan-260604-002 | ID: d9d37526-7c80-47db-8814-a322dc3298dd | Status: Delivered | Origin: TAIPING | Destination: undefined | Date: 2026-06-04 | Deadline: 2026-06-05 | CreatedAt: 2026-06-04T09:01:02.506063+00:00
+  - Order: DO-yan-260604-001 | ID: 15006116-4c4e-4c42-9dec-cb41caf2eb18 | Status: Delivered | Origin: TAIPING | Destination: undefined | Date: 2026-06-04 | Deadline: 2026-06-04 | CreatedAt: 2026-06-04T05:37:39.354051+00:00
+  - Order: DO-yan-260603-002 | ID: f4218ed6-bbc4-49b7-a37a-a975eea44ce6 | Status: Delivered | Origin: TAIPING | Destination: undefined | Date: 2026-06-03 | Deadline: 2026-06-04 | CreatedAt: 2026-06-03T06:55:52.122771+00:00
+  - Order: DO-yan-260603-001 | ID: 6ca6a731-e167-4a4f-bac9-c90e89779987 | Status: Delivered | Origin: TAIPING | Destination: undefined | Date: 2026-06-03 | Deadline: 2026-06-03 | CreatedAt: 2026-06-03T01:35:23.866909+00:00
+
+Driver: Neoson Chun (13 orders)
+  - Order: DO-Neoson-260608-001 | ID: 2d944c0c-02db-423e-b3f0-b28f05082569 | Status: Delivered | Origin: TAIPING | Destination: undefined | Date: 2026-06-08 | Deadline: 2026-06-09 | CreatedAt: 2026-06-08T08:46:34.911928+00:00
+  - Order: DO-Bob-260606-003 | ID: 32829466-1576-4690-add7-e413be84544a | Status: Delivered | Origin: TAIPING | Destination: undefined | Date: 2026-06-06 | Deadline: 2026-06-06 | CreatedAt: 2026-06-06T06:29:43.484579+00:00
+  - Order: DO-Bob-260606-002 | ID: 79499a75-8929-4f91-b477-1abbd79d1bcd | Status: Delivered | Origin: TAIPING | Destination: undefined | Date: 2026-06-06 | Deadline: 2026-06-06 | CreatedAt: 2026-06-06T06:06:07.225301+00:00
+  - Order: DO-Bob-260606-001 | ID: 868408f6-e4c7-44ea-b89b-0103e0887c46 | Status: Delivered | Origin: TAIPING | Destination: undefined | Date: 2026-06-06 | Deadline: 2026-06-06 | CreatedAt: 2026-06-06T05:59:22.323498+00:00
+  - Order: DO-Neoson-260606-001 | ID: c21a9dd3-69d8-4970-b561-c23b5479e145 | Status: Delivered | Origin: TAIPING | Destination: undefined | Date: 2026-06-06 | Deadline: 2026-06-06 | CreatedAt: 2026-06-06T03:54:11.40144+00:00
+  - Order: DO-Neoson-260604-001 | ID: f5b2a63f-ff51-4663-8b7b-00ea8b0612e8 | Status: Delivered | Origin: TAIPING | Destination: undefined | Date: 2026-06-04 | Deadline: 2026-06-04 | CreatedAt: 2026-06-04T02:55:00.279225+00:00
+  - Order: DO-Neoson-260603-002 | ID: ce86eb6e-5a63-42e2-8c14-0fbb632beb66 | Status: Delivered | Origin: TAIPING | Destination: undefined | Date: 2026-06-03 | Deadline: 2026-06-03 | CreatedAt: 2026-06-03T08:20:20.9814+00:00
+  - Order: DO-Neoson-260603-001 | ID: 4f5466f5-525f-4347-b41c-033b7f3bfc46 | Status: New | Origin: TAIPING | Destination: undefined | Date: 2026-06-03 | Deadline: 2026-06-03 | CreatedAt: 2026-06-03T07:02:08.649138+00:00
+  - Order: DO-Neoson-260602-002 | ID: 6b446cf1-d7ad-4760-88fe-c9be7d01971f | Status: Cancelled | Origin: TAIPING | Destination: undefined | Date: 2026-06-02 | Deadline: 2026-06-03 | CreatedAt: 2026-06-02T08:44:57.834212+00:00
+  - Order: DO-Neoson-260602-001 | ID: 57d0f5fd-2ce9-479c-87cf-cf54c195bf6b | Status: Cancelled | Origin: TAIPING | Destination: undefined | Date: 2026-06-02 | Deadline: 2026-06-03 | CreatedAt: 2026-06-02T03:04:40.365687+00:00
+  - Order: DO-Neoson-260601-003 | ID: b018b35d-3f95-4ee5-90d2-d5c2f74e3848 | Status: Delivered | Origin: TAIPING | Destination: undefined | Date: 2026-06-01 | Deadline: 2026-06-01 | CreatedAt: 2026-06-01T07:42:14.182017+00:00
+  - Order: DO-Neoson-260601-002 | ID: 6421afd1-176e-4c97-adcb-cadfd02eb60c | Status: Delivered | Origin: TAIPING | Destination: undefined | Date: 2026-06-01 | Deadline: 2026-06-01 | CreatedAt: 2026-06-01T07:28:06.610453+00:00
+  - Order: DO-Neoson-260601-001 | ID: 7a37a76a-8e82-4685-b8de-bf915b56850b | Status: Delivered | Origin: TAIPING | Destination: undefined | Date: 2026-06-01 | Deadline: 2026-06-01 | CreatedAt: 2026-06-01T04:10:39.12695+00:00
+
+Driver: DRIVER TEST (6 orders)
+  - Order: DO-DRIVER-260608-001 | ID: c8ef54ff-bc5e-45b3-998f-3ab49451eab0 | Status: Delivered | Origin: TAIPING | Destination: undefined | Date: 2026-06-08 | Deadline: 2026-06-09 | CreatedAt: 2026-06-08T07:15:13.663557+00:00
+  - Order: DO-DRIVER-260606-001 | ID: a99e23fa-eb7e-4e50-a228-be5e91e1cb3d | Status: Cancelled | Origin: TAIPING | Destination: undefined | Date: 2026-06-06 | Deadline: 2026-06-07 | CreatedAt: 2026-06-06T01:37:55.006376+00:00
+  - Order: DO-DRIVER-260603-004 | ID: 4bef1f4f-8e95-4139-885d-be2ac38923f1 | Status: Cancelled | Origin: TAIPING | Destination: undefined | Date: 2026-06-03 | Deadline: 2026-06-04 | CreatedAt: 2026-06-03T15:35:46.956387+00:00
+  - Order: DO-DRIVER-260603-003 | ID: 0e116946-b5c8-49fc-99a4-63f791d4cb50 | Status: Delivered | Origin: TAIPING | Destination: undefined | Date: 2026-06-03 | Deadline: 2026-06-04 | CreatedAt: 2026-06-03T15:34:31.280501+00:00
+  - Order: DO-DRIVER-260603-002 | ID: 36db8628-c0f2-4ea8-aa85-12a12ace594c | Status: Cancelled | Origin: TAIPING | Destination: undefined | Date: 2026-06-03 | Deadline: 2026-06-04 | CreatedAt: 2026-06-03T15:31:24.373761+00:00
+  - Order: DO-DRIVER-260603-001 | ID: 5807c860-535f-4edf-ae3d-1b0b00c89ccd | Status: Delivered | Origin: TAIPING | Destination: undefined | Date: 2026-06-03 | Deadline: 2026-06-04 | CreatedAt: 2026-06-03T13:50:09.835959+00:00
+
+Driver: ikhwan (1 orders)
+  - Order: DO-ikhwan-260606-001 | ID: fc45c57e-5892-4b55-b08e-00f2b755c1fa | Status: Delivered | Origin: TAIPING | Destination: undefined | Date: 2026-06-06 | Deadline: 2026-06-07 | CreatedAt: 2026-06-06T05:04:10.841865+00:00
+
+Driver: Unassigned (1 orders)
+  - Order: DO-HQ-260605-001 | ID: 5b4afce4-3fbc-41ec-a612-7d1c625206f7 | Status: Cancelled | Origin: TAIPING | Destination: undefined | Date: 2026-06-05 | Deadline: 2026-06-05 | CreatedAt: 2026-06-05T10:09:40.331415+00:00
+
+Driver: Shahrul (2 orders)
+  - Order: DO-Shahrul-260605-002 | ID: d55e45ed-fcfc-4900-bc66-135a05a5975f | Status: Delivered | Origin: TAIPING | Destination: undefined | Date: 2026-06-05 | Deadline: 2026-06-06 | CreatedAt: 2026-06-05T09:22:18.652193+00:00
+  - Order: DO-Shahrul-260605-001 | ID: 14d8178b-d760-4aa4-8c95-f6de5bea3def | Status: Cancelled | Origin: TAIPING | Destination: undefined | Date: 2026-06-05 | Deadline: 2026-06-06 | CreatedAt: 2026-06-05T08:44:53.461295+00:00
+
+Driver: Eric (1 orders)
+  - Order: DO-Eric-260525-001 | ID: b70112b5-295b-48fb-b5d9-07d5624932d3 | Status: New | Origin: NILAI | Destination: undefined | Date: 2026-05-25 | Deadline: 2026-05-25 | CreatedAt: 2026-05-25T01:20:04.731968+00:00

@@ -1,8 +1,9 @@
 import React, { useState, useEffect, useRef } from 'react';
 import { supabase } from '../services/supabase';
-import { Truck, CheckCircle, Package, ChevronRight, X, RefreshCw, Camera, Image as ImageIcon, QrCode } from 'lucide-react';
+import { Truck, CheckCircle, Package, ChevronRight, X, RefreshCw, Camera, Image as ImageIcon, QrCode, Upload } from 'lucide-react';
 import { SalesOrder } from '../types';
 import { Scanner } from '@yudiel/react-qr-scanner';
+import { parsePrepPhotos } from '../utils/prepPhotos';
 
 
 interface DriverDeliveryProps {
@@ -37,15 +38,91 @@ const compressImage = (file: File, maxWidth = 1200, quality = 0.7): Promise<stri
     });
 };
 
+const watermarkImage = (base64Str: string, textLines: string[]): Promise<string> => {
+    return new Promise((resolve, reject) => {
+        const img = new window.Image();
+        img.onload = () => {
+            const canvas = document.createElement('canvas');
+            const w = img.width;
+            const h = img.height;
+            canvas.width = w;
+            canvas.height = h;
+            const ctx = canvas.getContext('2d')!;
+            
+            // Draw original image
+            ctx.drawImage(img, 0, 0, w, h);
+            
+            // Add watermarking overlay
+            const bannerHeight = Math.max(50, Math.floor(h * 0.12)); 
+            ctx.fillStyle = 'rgba(0, 0, 0, 0.6)'; // Semi-transparent black
+            ctx.fillRect(0, h - bannerHeight, w, bannerHeight);
+            
+            // Font setup
+            const fontSize = Math.max(12, Math.floor(bannerHeight / (textLines.length + 1)));
+            ctx.font = `bold ${fontSize}px sans-serif`;
+            ctx.fillStyle = '#ffffff'; // White text
+            ctx.textBaseline = 'top';
+            
+            // Draw text lines
+            const paddingLeft = Math.max(15, Math.floor(w * 0.03));
+            const totalTextHeight = textLines.length * fontSize * 1.25;
+            const paddingTop = h - bannerHeight + (bannerHeight - totalTextHeight) / 2;
+            
+            textLines.forEach((line, index) => {
+                let drawLine = line;
+                const maxTextWidth = w - paddingLeft * 2;
+                if (ctx.measureText(line).width > maxTextWidth) {
+                    while (drawLine.length > 5 && ctx.measureText(drawLine + '...').width > maxTextWidth) {
+                        drawLine = drawLine.slice(0, -1);
+                    }
+                    drawLine += '...';
+                }
+                ctx.fillText(drawLine, paddingLeft, paddingTop + (index * fontSize * 1.25));
+            });
+            
+            // Output as Jpeg
+            const watermarkedDataUrl = canvas.toDataURL('image/jpeg', 0.85);
+            resolve(watermarkedDataUrl.split(',')[1]); // return just the base64 part
+        };
+        img.onerror = reject;
+        img.src = `data:image/jpeg;base64,${base64Str}`;
+    });
+};
+
+const fetchAddressFromCoords = async (lat: number, lng: number): Promise<string> => {
+    try {
+        const response = await fetch('/api/geocode', {
+            method: 'POST',
+            headers: {
+                'Content-Type': 'application/json'
+            },
+            body: JSON.stringify({ lat, lng })
+        });
+        if (!response.ok) {
+            throw new Error(`HTTP ${response.status}`);
+        }
+        const data = await response.json();
+        if (data.success && data.address) {
+            return data.address;
+        }
+        throw new Error(data.error || 'Geocoding failed');
+    } catch (err) {
+        console.warn('Geocoding error:', err);
+        return `Lat: ${lat.toFixed(6)}, Lng: ${lng.toFixed(6)}`;
+    }
+};
+
 const DriverDelivery: React.FC<DriverDeliveryProps> = ({ user }) => {
     // State
     const [tasks, setTasks] = useState<SalesOrder[]>([]);
+    const [previewImageUrl, setPreviewImageUrl] = useState<string | null>(null);
     const [loading, setLoading] = useState(true);
     const [activeTab, setActiveTab] = useState<'todo' | 'done'>('todo');
     
     // Lorry Binding State
     const [currentLorry, setCurrentLorry] = useState<any>(null);
     const [isScannerOpen, setIsScannerOpen] = useState(false);
+    const [scannerMode, setScannerMode] = useState<'bind' | 'unbind'>('bind');
 
     // NAIK BARANG (Load Items) State
     const [selectedOrder, setSelectedOrder] = useState<SalesOrder | null>(null);
@@ -61,6 +138,24 @@ const DriverDelivery: React.FC<DriverDeliveryProps> = ({ user }) => {
     const [pickUpNote, setPickUpNote] = useState('');
     const [pickupLocation, setPickupLocation] = useState<string>('Searching GPS...');
     const pickUpFileInputRef = useRef<HTMLInputElement>(null);
+
+    // SAHKAN HANTARAN (Unload Items) State
+    const [isUnloadModalOpen, setIsUnloadModalOpen] = useState(false);
+    const [unloadDoPhotoBase64, setUnloadDoPhotoBase64] = useState<string | null>(null);
+    const [unloadProductPhotoBase64, setUnloadProductPhotoBase64] = useState<string | null>(null);
+    const [uploadingTarget, setUploadingTarget] = useState<'do' | 'product' | null>(null);
+    const activeFileInputRef = useRef<'do' | 'product' | null>(null);
+    const [deliveryNote, setDeliveryNote] = useState('');
+    const [gpsCoordinates, setGpsCoordinates] = useState<string>('Fetching GPS...');
+    const [fetchingGps, setFetchingGps] = useState(false);
+    const [isFinalDrop, setIsFinalDrop] = useState(false);
+    const unloadCameraInputRef = useRef<HTMLInputElement>(null);
+    const unloadGalleryInputRef = useRef<HTMLInputElement>(null);
+
+    // Later DO Upload State
+    const [laterUploadTarget, setLaterUploadTarget] = useState<{ orderId: string, photoIndex: number } | null>(null);
+    const [laterUploading, setLaterUploading] = useState(false);
+    const laterFileInputRef = useRef<HTMLInputElement>(null);
 
 
 
@@ -109,7 +204,7 @@ const DriverDelivery: React.FC<DriverDeliveryProps> = ({ user }) => {
 
                     const getStatusPriority = (status: string) => {
                         if (status === 'Assigned' || status === 'New') return 1;
-                        if (status === 'Loaded') return 2;
+                        if (status === 'Loaded' || status === 'Pending Approval') return 2;
                         return 3; // Other statuses, including 'Delivered'
                     };
 
@@ -198,13 +293,25 @@ const DriverDelivery: React.FC<DriverDeliveryProps> = ({ user }) => {
 
                 alert("⚠️ Kuantiti pesanan berubah. Menunggu kelulusan logistik. / Order quantity changed. Pending logistics approval.");
 
+                // Optimistic Update: Move to Pending Approval locally so button changes to Confirm Delivery immediately
+                setTasks(prev => prev.map(t => {
+                    if (t.id === selectedOrder.id) {
+                        return { 
+                            ...t, 
+                            status: 'Pending Approval', 
+                            items: updatedItems, 
+                            proof_of_load_url: photoUrl 
+                        };
+                    }
+                    return t;
+                }));
+
             } else {
                 // 2. NO AMENDMENTS - Stock already deducted at order creation via DB trigger
-                //    Just update status to Delivered
+                //    Just update status to Loaded
 
                 const { data: updatedData, error: updateError } = await supabase.from('sales_orders').update({
-                    status: 'Delivered',
-                    pod_timestamp: new Date().toISOString(),
+                    status: 'Loaded',
                     proof_of_load_url: photoUrl
                 }).eq('id', selectedOrder.id).select();
 
@@ -213,14 +320,13 @@ const DriverDelivery: React.FC<DriverDeliveryProps> = ({ user }) => {
                     throw new Error("Update failed: Permission denied or Order not found. (RLS Check Failed)");
                 }
 
-                // Optimistic Update: Move to Done locally
+                // Optimistic Update: Move to Loaded locally
                 setTasks(prev => prev.map(t => {
                     if (t.id === selectedOrder.id) {
-                        return { ...t, status: 'Delivered' };
+                        return { ...t, status: 'Loaded' };
                     }
                     return t;
                 }));
-                // alert("✅ Stock Deducted & Loaded!");
             }
 
             setIsLoadModalOpen(false);
@@ -247,8 +353,14 @@ const DriverDelivery: React.FC<DriverDeliveryProps> = ({ user }) => {
                 setPickupLocation('Fetching GPS...');
                 if ('geolocation' in navigator) {
                     navigator.geolocation.getCurrentPosition(
-                        (position) => {
-                            setPickupLocation(`Lat: ${position.coords.latitude.toFixed(4)}, Lng: ${position.coords.longitude.toFixed(4)}`);
+                        async (position) => {
+                            const lat = position.coords.latitude;
+                            const lng = position.coords.longitude;
+                            setPickupLocation(`Lat: ${lat.toFixed(4)}, Lng: ${lng.toFixed(4)}`);
+                            
+                            // Reverse geocode to address
+                            const address = await fetchAddressFromCoords(lat, lng);
+                            setPickupLocation(address);
                         },
                         (error) => {
                             console.warn("GPS Error:", error);
@@ -346,13 +458,341 @@ const DriverDelivery: React.FC<DriverDeliveryProps> = ({ user }) => {
         }
     };
 
+    // 5b. Unloading handlers (Confirm Delivery / Sahkan Hantaran)
+    const handleOpenUnloadModal = (order: SalesOrder) => {
+        setSelectedOrder(order);
+        setUnloadDoPhotoBase64(null);
+        setUnloadProductPhotoBase64(null);
+        setDeliveryNote('');
+        setGpsCoordinates('Fetching GPS...');
+        setIsFinalDrop(false); // Force false, trip completion is handled by QR code return scan at base
+        setIsUnloadModalOpen(true);
+        triggerGpsFetch();
+    };
+
+    const triggerGpsFetch = () => {
+        setFetchingGps(true);
+        if ('geolocation' in navigator) {
+            navigator.geolocation.getCurrentPosition(
+                async (position) => {
+                    const lat = position.coords.latitude;
+                    const lng = position.coords.longitude;
+                    const coords = `Lat: ${lat.toFixed(6)}, Lng: ${lng.toFixed(6)}`;
+                    setGpsCoordinates(coords);
+                    setFetchingGps(false);
+
+                    // Asynchronously resolve address
+                    const address = await fetchAddressFromCoords(lat, lng);
+                    setGpsCoordinates(address);
+                },
+                (error) => {
+                    console.warn("GPS Error:", error);
+                    setGpsCoordinates('GPS Unavailable');
+                    setFetchingGps(false);
+                },
+                { enableHighAccuracy: true, timeout: 10000 }
+            );
+        } else {
+            setGpsCoordinates('GPS Not Supported');
+            setFetchingGps(false);
+        }
+    };
+
+    const handleUnloadPhotoSelect = async (e: React.ChangeEvent<HTMLInputElement>) => {
+        const file = e.target.files?.[0];
+        const target = activeFileInputRef.current;
+        if (!file || !target) return;
+
+        try {
+            setUploadingTarget(target);
+            const compressedBase64 = await compressImage(file);
+            const base64Only = compressedBase64.split(',')[1];
+            
+            // Format Watermark Text Lines
+            const now = new Date();
+            const timeStr = now.toLocaleDateString('en-GB', { day: '2-digit', month: 'short', year: 'numeric' }) + ' ' + 
+                            now.toLocaleTimeString('en-GB', { hour: '2-digit', minute: '2-digit', second: '2-digit' });
+            
+            const typeLabel = target === 'do' ? 'DO PROOF / BUKTI DO' : 'CARGO PROOF / BUKTI BARANG';
+            const lines = [
+                `SO: ${selectedOrder?.orderNumber || ''} | Plate: ${currentLorry?.plate_number || 'No Lorry'}`,
+                `Time: ${timeStr} | Type: ${typeLabel}`,
+                `Location: ${gpsCoordinates}`
+            ];
+
+            const watermarkedBase64 = await watermarkImage(base64Only, lines);
+            if (target === 'do') {
+                setUnloadDoPhotoBase64(watermarkedBase64);
+            } else {
+                setUnloadProductPhotoBase64(watermarkedBase64);
+            }
+        } catch (err: any) {
+            alert('Gagal memproses gambar / Failed to process photo: ' + err.message);
+        } finally {
+            setUploadingTarget(null);
+            if (e.target) e.target.value = '';
+        }
+    };
+
+    const handleConfirmUnload = async () => {
+        if (!selectedOrder) return;
+
+        const confirmMsg = isFinalDrop
+            ? "Adakah anda pasti mahu TAMATKAN TRIP ini?\n\nAre you sure you want to END this trip?"
+            : "Adakah anda pasti mahu HANTAR drop point ini?\n\nAre you sure you want to SUBMIT this drop point?";
+        if (!window.confirm(confirmMsg)) return;
+        
+        // Product Photo is required unless it's a final drop where photos are optional.
+        // DO Photo is always optional during initial delivery (can be uploaded later).
+        const needsProductPhoto = !isFinalDrop;
+        if (needsProductPhoto && !unloadProductPhotoBase64) {
+            alert("⚠️ Sila ambil gambar barang! / Please take the Product photo!");
+            return;
+        }
+
+        setSubmitting(true);
+        let doUrl = '';
+        let prodUrl = '';
+
+        try {
+            // 1. Upload DO Photo
+            if (unloadDoPhotoBase64) {
+                try {
+                    const doFileName = `unload_do_${selectedOrder.orderNumber}_${Date.now()}.jpg`;
+                    const doBlob = await fetch(`data:image/jpeg;base64,${unloadDoPhotoBase64}`).then(r => r.blob());
+                    const { error: doUploadError } = await supabase.storage
+                        .from('work-photos')
+                        .upload(doFileName, doBlob, { contentType: 'image/jpeg' });
+
+                    if (doUploadError) throw doUploadError;
+                    const { data: doUrlData } = supabase.storage.from('work-photos').getPublicUrl(doFileName);
+                    doUrl = doUrlData.publicUrl;
+                } catch (err: any) {
+                    throw new Error("Gagal memuat naik gambar DO: " + err.message);
+                }
+            }
+
+            // 2. Upload Product Photo
+            if (unloadProductPhotoBase64) {
+                try {
+                    const prodFileName = `unload_prod_${selectedOrder.orderNumber}_${Date.now()}.jpg`;
+                    const prodBlob = await fetch(`data:image/jpeg;base64,${unloadProductPhotoBase64}`).then(r => r.blob());
+                    const { error: prodUploadError } = await supabase.storage
+                        .from('work-photos')
+                        .upload(prodFileName, prodBlob, { contentType: 'image/jpeg' });
+
+                    if (prodUploadError) throw prodUploadError;
+                    const { data: prodUrlData } = supabase.storage.from('work-photos').getPublicUrl(prodFileName);
+                    prodUrl = prodUrlData.publicUrl;
+                } catch (err: any) {
+                    throw new Error("Gagal memuat naik gambar barang: " + err.message);
+                }
+            }
+
+            // Append to existing photos as a structured pair [DO, Product] per drop
+            const newPair = [doUrl, prodUrl];
+            const existingPhotos = selectedOrder.pod_photo_url ? selectedOrder.pod_photo_url.split(',') : [];
+            const newPhotos = [...existingPhotos, ...newPair];
+            const podPhotoUrl = newPhotos.join(',');
+
+            // Append driver notes to original order notes with timestamp
+            const now = new Date();
+            const timeStr = now.toLocaleDateString('en-GB', { day: '2-digit', month: '2-digit' }) + ' ' +
+                            now.toLocaleTimeString('en-GB', { hour: '2-digit', minute: '2-digit' });
+            
+            const hasNewPhotos = Boolean(doUrl) || Boolean(prodUrl);
+            const defaultNote = hasNewPhotos ? "Proof uploaded" : "Trip completed";
+            const newNoteSegment = deliveryNote.trim() 
+                ? `[${timeStr}] ${deliveryNote.trim()}`
+                : `[${timeStr}] ${defaultNote}`;
+
+            let finalNote = selectedOrder.notes || '';
+            if (finalNote) {
+                finalNote = `${finalNote}\n${newNoteSegment}`;
+            } else {
+                finalNote = newNoteSegment;
+            }
+
+            // If the order status was 'Pending Approval', it remains in 'Pending Approval' status
+            // so the admin still reviews and approves it later.
+            const nextStatus = selectedOrder.status === 'Pending Approval'
+                ? 'Pending Approval'
+                : (isFinalDrop ? 'Delivered' : 'Loaded');
+
+            // Update order status, set pod_photo_url, pod_timestamp, notes, etc.
+            const { data: updatedData, error: updateError } = await supabase.from('sales_orders').update({
+                status: nextStatus,
+                pod_timestamp: new Date().toISOString(),
+                pod_photo_url: podPhotoUrl,
+                notes: finalNote
+            }).eq('id', selectedOrder.id).select();
+
+            if (updateError) throw updateError;
+            if (!updatedData || updatedData.length === 0) {
+                throw new Error("Update failed: Permission denied or Order not found. (RLS Check Failed)");
+            }
+
+            // Optimistic Update locally
+            setTasks(prev => prev.map(t => {
+                if (t.id === selectedOrder.id) {
+                    return { 
+                        ...t, 
+                        status: nextStatus, 
+                        pod_photo_url: podPhotoUrl, 
+                        pod_timestamp: new Date().toISOString(), 
+                        notes: finalNote 
+                    };
+                }
+                return t;
+            }));
+
+            setIsUnloadModalOpen(false);
+            setUnloadDoPhotoBase64(null);
+            setUnloadProductPhotoBase64(null);
+            setDeliveryNote('');
+
+            if (isFinalDrop) {
+                alert("✅ Trip selesai sepenuhnya! / Trip completed fully!");
+            } else {
+                alert("✅ Gambar & Catatan disimpan! Sila teruskan ke drop point seterusnya. / Photos & Note saved! Please proceed to the next drop point.");
+            }
+        } catch (err: any) {
+            alert("Ralat mengesahkan penghantaran / Error confirming delivery: " + err.message);
+        } finally {
+            setSubmitting(false);
+        }
+    };
+
+    const handleTriggerLaterUpload = (orderId: string, idx: number) => {
+        setLaterUploadTarget({ orderId, photoIndex: idx });
+        laterFileInputRef.current?.click();
+    };
+
+    const handleLaterFileSelect = async (e: React.ChangeEvent<HTMLInputElement>) => {
+        const file = e.target.files?.[0];
+        if (!file || !laterUploadTarget) return;
+
+        setLaterUploading(true);
+        try {
+            // Compress image
+            const compressedBase64 = await compressImage(file);
+            const base64Only = compressedBase64.split(',')[1];
+
+            // Load order details to get orderNumber (needed for fileName)
+            const targetOrder = tasks.find(t => t.id === laterUploadTarget.orderId);
+            if (!targetOrder) throw new Error("Order not found");
+
+            // Format Watermark Text Lines
+            const now = new Date();
+            const timeStr = now.toLocaleDateString('en-GB', { day: '2-digit', month: 'short', year: 'numeric' }) + ' ' + 
+                            now.toLocaleTimeString('en-GB', { hour: '2-digit', minute: '2-digit', second: '2-digit' });
+            
+            const lines = [
+                `SO: ${targetOrder.orderNumber || ''} | Plate: ${currentLorry?.plate_number || 'No Lorry'}`,
+                `Time: ${timeStr} | Type: DO PROOF (LATER) / BUKTI DO`,
+                `Location: ${gpsCoordinates}`
+            ];
+
+            const watermarkedBase64 = await watermarkImage(base64Only, lines);
+
+            // Upload to Supabase Storage
+            const fileName = `unload_do_later_${targetOrder.orderNumber}_${Date.now()}.jpg`;
+            const blob = await fetch(`data:image/jpeg;base64,${watermarkedBase64}`).then(r => r.blob());
+
+            const { error: uploadError } = await supabase.storage
+                .from('work-photos')
+                .upload(fileName, blob, { contentType: 'image/jpeg' });
+
+            if (uploadError) throw uploadError;
+
+            const { data: urlData } = supabase.storage.from('work-photos').getPublicUrl(fileName);
+            const publicUrl = urlData.publicUrl;
+
+            // Fetch the current pod_photo_url from database to be accurate
+            const { data: freshOrder, error: fetchErr } = await supabase
+                .from('sales_orders')
+                .select('pod_photo_url')
+                .eq('id', laterUploadTarget.orderId)
+                .single();
+
+            if (fetchErr) throw fetchErr;
+
+            const currentPhotos = freshOrder.pod_photo_url ? freshOrder.pod_photo_url.split(',') : [];
+            
+            // Expand or replace at photoIndex
+            while (currentPhotos.length <= laterUploadTarget.photoIndex) {
+                currentPhotos.push('');
+            }
+            currentPhotos[laterUploadTarget.photoIndex] = publicUrl;
+            const updatedPodUrl = currentPhotos.join(',');
+
+            // Update database
+            const { error: updateErr } = await supabase
+                .from('sales_orders')
+                .update({ pod_photo_url: updatedPodUrl })
+                .eq('id', laterUploadTarget.orderId);
+
+            if (updateErr) throw updateErr;
+
+            alert("✅ Gambar DO berjaya dimuat naik! / DO Photo successfully uploaded!");
+            
+            // Refresh tasks
+            fetchTasks();
+        } catch (err: any) {
+            alert("Gagal memproses/memuat naik gambar: " + err.message);
+        } finally {
+            setLaterUploading(false);
+            setLaterUploadTarget(null);
+            if (e.target) e.target.value = '';
+        }
+    };
+
     // 6. Bind Lorry (Scan QR)
     const handleScanComplete = async (text: string) => {
         try {
             setSubmitting(true);
-            const data = JSON.parse(text);
             
-            if (data.type !== 'LorryBind' || !data.lorryId) {
+            let qrType = '';
+            let lorryId = '';
+            try {
+                const data = JSON.parse(text);
+                qrType = data.type;
+                lorryId = data.lorryId;
+            } catch (e) {
+                // Keep default empty values
+            }
+
+            // Handle Unbind / Return Lorry (End Trip)
+            if (scannerMode === 'unbind') {
+                // Must scan the same lorry's QR to confirm unbinding
+                if (qrType !== 'LorryBind' || !lorryId || lorryId !== currentLorry?.id) {
+                    throw new Error("Kod QR tidak sah. Sila imbas QR Lori yang sedang anda gunakan untuk mengesahkan pemulangan. / Invalid QR Code. Please scan the QR of the lorry you are currently using.");
+                }
+
+                // 1. Unbind Lorry
+                const { error: unbindError } = await supabase.from('lorries')
+                    .update({ driver_id: null, driver_name: null, status: 'Available' })
+                    .eq('id', currentLorry.id);
+
+                if (unbindError) throw unbindError;
+
+                // 2. Auto Tamat all Loaded orders today
+                const { error: orderError } = await supabase.from('sales_orders')
+                    .update({ status: 'Delivered' })
+                    .eq('driver_id', user.uid)
+                    .eq('status', 'Loaded');
+
+                if (orderError) throw orderError;
+
+                alert("✅ Syif Selesai & Lori dilepaskan! Semua hantaran telah dihantar. / Shift completed & Lorry unbound! All deliveries submitted.");
+                setCurrentLorry(null);
+                setIsScannerOpen(false);
+                fetchTasks(); // Refresh lorry status
+                return;
+            }
+            
+            // Handle Bind Lorry
+            if (qrType !== 'LorryBind' || !lorryId) {
                 throw new Error("Kod QR tidak sah. Bukan QR Lori. / Invalid QR Code. Not a Lorry QR.");
             }
 
@@ -366,7 +806,7 @@ const DriverDelivery: React.FC<DriverDeliveryProps> = ({ user }) => {
                     driver_name: user.name || user.email, 
                     status: 'On-Route' 
                 })
-                .eq('id', data.lorryId);
+                .eq('id', lorryId);
 
             if (bindError) throw bindError;
 
@@ -426,8 +866,16 @@ const DriverDelivery: React.FC<DriverDeliveryProps> = ({ user }) => {
     }, [user]);
 
     // View Logic
-    const todoList = tasks.filter(t => t.status !== 'Delivered' && t.status !== 'Pending Approval' && t.status !== 'Cancelled');
-    const doneList = tasks.filter(t => t.status === 'Delivered' || t.status === 'Pending Approval');
+    // For 'Pending Approval' orders: they remain in the Todo list (todoList) until they are delivered (i.e. have pod_photo_url)
+    const todoList = tasks.filter(t => 
+        t.status !== 'Delivered' && 
+        t.status !== 'Cancelled' && 
+        !(t.status === 'Pending Approval' && t.pod_photo_url && t.pod_photo_url.trim() !== '')
+    );
+    const doneList = tasks.filter(t => 
+        t.status === 'Delivered' || 
+        (t.status === 'Pending Approval' && t.pod_photo_url && t.pod_photo_url.trim() !== '')
+    );
     const displayList = activeTab === 'todo' ? todoList : doneList;
 
     return (
@@ -485,7 +933,7 @@ const DriverDelivery: React.FC<DriverDeliveryProps> = ({ user }) => {
                             </div>
                         </div>
                         <button 
-                            onClick={handleUnbindLorry}
+                            onClick={() => { setScannerMode('unbind'); setIsScannerOpen(true); }}
                             disabled={submitting}
                             className="px-4 py-2 bg-slate-900/50 hover:bg-slate-800 border border-slate-700 rounded-xl text-[10px] font-black uppercase text-slate-300 tracking-wider transition-all disabled:opacity-50"
                         >
@@ -494,7 +942,7 @@ const DriverDelivery: React.FC<DriverDeliveryProps> = ({ user }) => {
                     </div>
                 ) : (
                     <button 
-                        onClick={() => setIsScannerOpen(true)}
+                        onClick={() => { setScannerMode('bind'); setIsScannerOpen(true); }}
                         className="w-full bg-slate-800/80 hover:bg-slate-700/80 border-2 border-dashed border-slate-600 rounded-2xl p-4 flex items-center justify-center gap-3 transition-all"
                     >
                         <QrCode className="text-blue-400" size={24} />
@@ -552,7 +1000,7 @@ const DriverDelivery: React.FC<DriverDeliveryProps> = ({ user }) => {
                                             {order.zone && <span className="text-[10px] font-black uppercase bg-amber-500/20 text-amber-500 px-2 py-0.5 rounded border border-amber-500/20">{order.zone}</span>}
                                             {(order as any).trip_drop_count > 1 && <span className="text-[10px] font-black uppercase bg-emerald-500/20 text-emerald-400 px-2 py-0.5 rounded border border-emerald-500/20">{(order as any).trip_drop_count} Hentian / Drops</span>}
                                         </div>
-                                        <h2 className="text-lg font-black text-white line-clamp-2 leading-tight">{order.deliveryAddress || order.zone || 'No Route Specified'}</h2>
+                                        <h2 className={`text-lg font-black text-white leading-tight whitespace-pre-line ${(order as any).trip_drop_count > 1 ? '' : 'line-clamp-2'}`}>{order.deliveryAddress || order.zone || 'No Route Specified'}</h2>
                                         {(order as any).deliveryDate && (
                                             <div className="flex items-center gap-2 mt-1 text-xs font-bold uppercase tracking-wider">
                                                 <span className="text-orange-500">
@@ -571,11 +1019,36 @@ const DriverDelivery: React.FC<DriverDeliveryProps> = ({ user }) => {
                             {order.notes && (
                                 <div className="mb-4 bg-slate-800/50 p-2 rounded-lg border border-slate-700/50">
                                     <p className="text-[10px] text-slate-500 uppercase font-black mb-1">Nota / Notes</p>
-                                    <p className="text-sm text-slate-300">{order.notes}</p>
+                                    <p className="text-sm text-slate-300 whitespace-pre-line">{order.notes}</p>
                                 </div>
                             )}
 
-                            {/* Items Summary with Remarks (Grouped by Location) */}
+                            {/* Cargo Preparation Photo */}
+                            {(() => {
+                                const photos = parsePrepPhotos((order as any).preparation_photo_url);
+                                if (photos.length === 0) return null;
+                                return (
+                                    <div className="mb-4 bg-slate-800/30 p-3 rounded-xl border border-slate-800/80">
+                                        <p className="text-[10px] text-amber-500 uppercase font-black mb-2 flex items-center gap-1">📦 Gambar Barang Bersedia / Cargo Prep Photo</p>
+                                        <div className={`grid gap-2 max-w-md mx-auto ${photos.length > 1 ? 'grid-cols-2' : 'grid-cols-1'}`}>
+                                            {photos.map((p, idx) => (
+                                                <div key={idx} className="relative rounded-lg overflow-hidden border border-white/5 bg-black/40 aspect-video">
+                                                    <img 
+                                                        src={p.url} 
+                                                        alt={`Cargo Prep - ${p.location}`} 
+                                                        className="w-full h-full object-cover cursor-zoom-in hover:scale-105 transition-transform duration-300" 
+                                                        onClick={() => setPreviewImageUrl(p.url)}
+                                                    />
+                                                    <div className="absolute top-1 left-1 bg-black/80 backdrop-blur-sm text-[8px] font-black text-amber-400 px-1.5 py-0.5 rounded border border-amber-500/20 uppercase tracking-wider">
+                                                        {p.location}
+                                                    </div>
+                                                </div>
+                                            ))}
+                                        </div>
+                                    </div>
+                                );
+                            })()}
+
                             <div className="space-y-3 mb-6">
                                 {(() => {
                                     const grouped = (order.items || []).reduce((acc: any, item: any) => {
@@ -619,15 +1092,90 @@ const DriverDelivery: React.FC<DriverDeliveryProps> = ({ user }) => {
                             </div>
 
 
+                            {/* POD Photos and Notes (for Delivered orders) */}
+                            {order.pod_photo_url && (
+                                <div className="mb-4 bg-slate-950/40 p-3 rounded-xl border border-slate-800/80">
+                                    <p className="text-[10px] text-emerald-400 uppercase font-black mb-2 flex items-center gap-1">📸 Bukti Penghantaran / Proof of Delivery (POD)</p>
+                                    <div className="grid grid-cols-4 gap-2">
+                                        {order.pod_photo_url.split(',').map((url, idx) => {
+                                            const isDo = idx % 2 === 0;
+                                            if (!url || url.trim() === '') {
+                                                if (isDo) {
+                                                    const isUploadingThis = laterUploading && 
+                                                        laterUploadTarget?.orderId === order.id && 
+                                                        laterUploadTarget?.photoIndex === idx;
+
+                                                    return (
+                                                        <div key={idx} className="relative rounded-lg border border-dashed border-slate-700 bg-slate-900/50 hover:bg-slate-900 hover:border-blue-500/50 transition-all aspect-square flex flex-col items-center justify-center gap-1 group cursor-pointer"
+                                                             onClick={(e) => {
+                                                                 e.stopPropagation();
+                                                                 if (!isUploadingThis) handleTriggerLaterUpload(order.id, idx);
+                                                             }}
+                                                        >
+                                                            {isUploadingThis ? (
+                                                                <>
+                                                                    <div className="w-4 h-4 border-2 border-blue-500/30 border-t-blue-500 rounded-full animate-spin"></div>
+                                                                    <span className="text-[6px] text-blue-400 font-bold uppercase text-center">UPLOADING...</span>
+                                                                </>
+                                                            ) : (
+                                                                <>
+                                                                    <Upload size={16} className="text-slate-500 group-hover:text-blue-400 transition-colors" />
+                                                                    <span className="text-[8px] font-black text-slate-400 group-hover:text-slate-200 uppercase tracking-wider text-center px-1">
+                                                                        UPLOAD DO
+                                                                    </span>
+                                                                </>
+                                                            )}
+                                                        </div>
+                                                    );
+                                                }
+                                                return (
+                                                    <div key={idx} className="relative rounded-lg border border-dashed border-slate-800 bg-slate-950/50 aspect-square flex items-center justify-center">
+                                                        <span className="text-[8px] font-black text-slate-600 uppercase tracking-wider text-center">NO PHOTO</span>
+                                                    </div>
+                                                );
+                                            }
+                                            return (
+                                                <div key={idx} className="relative rounded-lg overflow-hidden border border-white/5 bg-black/40 aspect-square group">
+                                                    <img 
+                                                        src={url} 
+                                                        alt={`POD - ${idx + 1}`} 
+                                                        className="w-full h-full object-cover cursor-zoom-in hover:scale-105 transition-transform duration-300" 
+                                                        onClick={() => setPreviewImageUrl(url)}
+                                                    />
+                                                    <div className="absolute top-1 left-1 bg-black/80 backdrop-blur-sm text-[8px] font-black text-emerald-400 px-1.5 py-0.5 rounded border border-emerald-500/20 uppercase tracking-wider">
+                                                        {isDo ? 'DO' : 'Barang'}
+                                                    </div>
+                                                </div>
+                                            );
+                                        })}
+                                    </div>
+                                    {order.pod_timestamp && (
+                                        <p className="text-[9px] text-slate-500 mt-2 font-mono uppercase">
+                                            Dihantar pada / Delivered: {new Date(order.pod_timestamp).toLocaleString('en-GB')}
+                                        </p>
+                                    )}
+                                </div>
+                            )}
+
                             {/* ACTION BUTTON (Only for To-Do) */}
                             {activeTab === 'todo' && (
-                                <button
-                                    onClick={() => handleOpenLoadModal(order)}
-                                    className="w-full py-4 bg-blue-600 hover:bg-blue-500 text-white rounded-xl font-bold uppercase text-sm tracking-widest flex items-center justify-center gap-3 shadow-lg shadow-blue-900/30 active:scale-95 transition-all"
-                                >
-                                    <Truck size={18} /> Naik Barang
-                                    <ChevronRight size={16} className="opacity-50" />
-                                </button>
+                                (order.status === 'Loaded' || order.status === 'Pending Approval') ? (
+                                    <button
+                                        onClick={() => handleOpenUnloadModal(order)}
+                                        className="w-full py-4 bg-emerald-600 hover:bg-emerald-500 text-white rounded-xl font-bold uppercase text-sm tracking-widest flex items-center justify-center gap-3 shadow-lg shadow-emerald-950/30 active:scale-95 transition-all"
+                                    >
+                                        <CheckCircle size={18} /> Sahkan Hantaran / Confirm Delivery
+                                        <ChevronRight size={16} className="opacity-50" />
+                                    </button>
+                                ) : (
+                                    <button
+                                        onClick={() => handleOpenLoadModal(order)}
+                                        className="w-full py-4 bg-blue-600 hover:bg-blue-500 text-white rounded-xl font-bold uppercase text-sm tracking-widest flex items-center justify-center gap-3 shadow-lg shadow-blue-900/30 active:scale-95 transition-all"
+                                    >
+                                        <Truck size={18} /> Naik Barang
+                                        <ChevronRight size={16} className="opacity-50" />
+                                    </button>
+                                )
                             )}
 
                             {activeTab === 'done' && (
@@ -641,7 +1189,7 @@ const DriverDelivery: React.FC<DriverDeliveryProps> = ({ user }) => {
                                         </>
                                     ) : (
                                         <>
-                                            <CheckCircle size={14} /> Stok Ditolak / Stock Deducted
+                                            <CheckCircle size={14} /> Stok Ditolak & Hantar / Delivered & Stock Deducted
                                         </>
                                     )}
                                 </div>
@@ -667,6 +1215,32 @@ const DriverDelivery: React.FC<DriverDeliveryProps> = ({ user }) => {
 
                         {/* ITEMS LIST (GROUPED BY LOCATION) */}
                         <div className="flex-1 overflow-y-auto p-4 space-y-6 bg-black">
+                            {/* Cargo Preparation Photo */}
+                            {(() => {
+                                const photos = parsePrepPhotos((selectedOrder as any).preparation_photo_url);
+                                if (photos.length === 0) return null;
+                                return (
+                                    <div className="bg-slate-900 border border-slate-800 p-4 rounded-xl space-y-2 mb-4">
+                                        <p className="text-[10px] text-amber-500 uppercase font-black flex items-center gap-1">📦 Rujukan Gambar Bersedia / Cargo Prep Photo</p>
+                                        <div className={`grid gap-2 max-w-sm w-full mx-auto ${photos.length > 1 ? 'grid-cols-2' : 'grid-cols-1'}`}>
+                                            {photos.map((p, idx) => (
+                                                <div key={idx} className="relative rounded-lg overflow-hidden border border-white/5 bg-black/40 aspect-video">
+                                                    <img 
+                                                        src={p.url} 
+                                                        alt={`Cargo Prep - ${p.location}`} 
+                                                        className="w-full h-full object-cover cursor-zoom-in hover:scale-105 transition-transform duration-300" 
+                                                        onClick={() => setPreviewImageUrl(p.url)}
+                                                    />
+                                                    <div className="absolute top-1 left-1 bg-black/80 backdrop-blur-sm text-[8px] font-black text-amber-400 px-1.5 py-0.5 rounded border border-amber-500/20 uppercase tracking-wider">
+                                                        {p.location}
+                                                    </div>
+                                                </div>
+                                            ))}
+                                        </div>
+                                    </div>
+                                );
+                            })()}
+
                             {/* Group items by Location parsed from remark "Loc: xxx" */}
                             {(() => {
                                 const grouped: Record<string, any[]> = {};
@@ -771,7 +1345,6 @@ const DriverDelivery: React.FC<DriverDeliveryProps> = ({ user }) => {
                                 ref={fileInputRef}
                                 type="file"
                                 accept="image/*"
-                                capture="environment"
                                 className="hidden"
                                 onChange={(e) => handleFileSelect(e, false)}
                             />
@@ -779,6 +1352,243 @@ const DriverDelivery: React.FC<DriverDeliveryProps> = ({ user }) => {
                     </div>
                 )
             }
+
+            {/* UNLOADING MODAL */}
+            {isUnloadModalOpen && selectedOrder && (
+                <div className="fixed inset-0 z-[200] bg-black flex flex-col animate-in slide-in-from-bottom-10">
+                    {/* Header */}
+                    <div className="p-4 border-b border-slate-800 flex justify-between items-center bg-slate-900 safe-top-padding">
+                        <div>
+                            <h2 className="font-black text-white text-lg">SAHKAN HANTARAN / CONFIRM DELIVERY</h2>
+                            <p className="text-[10px] text-slate-500 uppercase font-bold">{selectedOrder.orderNumber}</p>
+                        </div>
+                        <button onClick={() => setIsUnloadModalOpen(false)} className="p-2 bg-slate-800 rounded-full text-white"><X size={20} /></button>
+                    </div>
+
+                    <div className="flex-1 overflow-y-auto p-4 space-y-6 bg-black">
+                        {/* GPS Location Panel */}
+                        <div className="bg-slate-900/80 border border-slate-800 p-4 rounded-2xl flex items-center justify-between">
+                            <div className="flex items-center gap-3">
+                                <div className={`w-9 h-9 rounded-xl flex items-center justify-center ${fetchingGps ? 'bg-amber-500/10 text-amber-500 animate-pulse' : 'bg-emerald-500/10 text-emerald-400'}`}>
+                                    📍
+                                </div>
+                                <div>
+                                    <p className="text-[10px] font-black text-slate-500 uppercase tracking-widest">Lokasi GPS Semasa / GPS Coordinate</p>
+                                    <p className="text-white font-mono text-xs">{gpsCoordinates}</p>
+                                </div>
+                            </div>
+                            <button
+                                onClick={triggerGpsFetch}
+                                disabled={fetchingGps}
+                                className="px-3 py-1.5 bg-slate-800 hover:bg-slate-700 border border-slate-700 rounded-xl text-[10px] font-bold uppercase text-slate-300 transition-all flex items-center gap-1 active:scale-95 disabled:opacity-50"
+                            >
+                                <RefreshCw size={10} className={fetchingGps ? 'animate-spin' : ''} />
+                                {fetchingGps ? 'GPS...' : 'RE-SYNC'}
+                            </button>
+                        </div>
+
+                        {/* Unloading Photos (DO and Product) */}
+                        <div className="grid grid-cols-2 gap-4">
+                            {/* DO Photo Slot */}
+                            <div className="space-y-2">
+                                <label className="text-xs font-bold text-slate-400 uppercase tracking-widest block">
+                                    1. GAMBAR DO (Delivery Order) {isFinalDrop && <span className="text-[10px] text-amber-500 font-bold lowercase tracking-normal bg-amber-500/10 px-1.5 py-0.5 rounded ml-1">(pilihan / optional)</span>}
+                                </label>
+                                {unloadDoPhotoBase64 ? (
+                                    <div className="relative aspect-square rounded-xl overflow-hidden border border-slate-800 bg-slate-900 shadow-inner group">
+                                        <img 
+                                            src={`data:image/jpeg;base64,${unloadDoPhotoBase64}`} 
+                                            alt="DO Photo" 
+                                            className="w-full h-full object-cover cursor-zoom-in" 
+                                            onClick={() => setPreviewImageUrl(`data:image/jpeg;base64,${unloadDoPhotoBase64}`)}
+                                        />
+                                        <button 
+                                            onClick={() => setUnloadDoPhotoBase64(null)}
+                                            className="absolute top-2 right-2 p-1.5 bg-red-600 hover:bg-red-500 text-white rounded-full shadow-lg transition-colors active:scale-90"
+                                        >
+                                            <X size={14} />
+                                        </button>
+                                    </div>
+                                ) : (
+                                    <div className="w-full aspect-square rounded-xl border border-slate-800 bg-slate-900/30 p-2 flex flex-col items-center justify-center gap-2.5">
+                                        {uploadingTarget === 'do' ? (
+                                            <>
+                                                <div className="w-6 h-6 border-2 border-blue-500/30 border-t-blue-500 rounded-full animate-spin"></div>
+                                                <span className="text-[10px] text-blue-400 font-bold uppercase text-center px-2">Memproses...</span>
+                                            </>
+                                        ) : (
+                                            <>
+                                                <button
+                                                    type="button"
+                                                    onClick={() => {
+                                                        activeFileInputRef.current = 'do';
+                                                        unloadCameraInputRef.current?.click();
+                                                    }}
+                                                    disabled={submitting}
+                                                    className="w-full py-2.5 bg-slate-800 hover:bg-slate-750 border border-slate-700 text-white rounded-lg text-[10px] font-bold uppercase tracking-wider flex items-center justify-center gap-1.5 active:scale-95 transition-all"
+                                                 >
+                                                     <Camera size={14} className="text-emerald-400" />
+                                                     📸 Kamera / Camera
+                                                 </button>
+                                                 <button
+                                                     type="button"
+                                                     onClick={() => {
+                                                         activeFileInputRef.current = 'do';
+                                                         unloadGalleryInputRef.current?.click();
+                                                     }}
+                                                     disabled={submitting}
+                                                     className="w-full py-2.5 bg-slate-800 hover:bg-slate-750 border border-slate-700 text-white rounded-lg text-[10px] font-bold uppercase tracking-wider flex items-center justify-center gap-1.5 active:scale-95 transition-all"
+                                                 >
+                                                     <span>📁</span>
+                                                     <span>Galeri / Gallery</span>
+                                                 </button>
+                                            </>
+                                        )}
+                                    </div>
+                                )}
+                            </div>
+
+                            {/* Product Photo Slot */}
+                            <div className="space-y-2">
+                                <label className="text-xs font-bold text-slate-400 uppercase tracking-widest block">
+                                    2. GAMBAR BARANG (PRODUK) {isFinalDrop && <span className="text-[10px] text-amber-500 font-bold lowercase tracking-normal bg-amber-500/10 px-1.5 py-0.5 rounded ml-1">(pilihan / optional)</span>}
+                                </label>
+                                {unloadProductPhotoBase64 ? (
+                                    <div className="relative aspect-square rounded-xl overflow-hidden border border-slate-800 bg-slate-900 shadow-inner group">
+                                        <img 
+                                            src={`data:image/jpeg;base64,${unloadProductPhotoBase64}`} 
+                                            alt="Product Photo" 
+                                            className="w-full h-full object-cover cursor-zoom-in" 
+                                            onClick={() => setPreviewImageUrl(`data:image/jpeg;base64,${unloadProductPhotoBase64}`)}
+                                        />
+                                        <button 
+                                            onClick={() => setUnloadProductPhotoBase64(null)}
+                                            className="absolute top-2 right-2 p-1.5 bg-red-600 hover:bg-red-500 text-white rounded-full shadow-lg transition-colors active:scale-90"
+                                        >
+                                            <X size={14} />
+                                        </button>
+                                    </div>
+                                ) : (
+                                    <div className="w-full aspect-square rounded-xl border border-slate-800 bg-slate-900/30 p-2 flex flex-col items-center justify-center gap-2.5">
+                                        {uploadingTarget === 'product' ? (
+                                            <>
+                                                <div className="w-6 h-6 border-2 border-blue-500/30 border-t-blue-500 rounded-full animate-spin"></div>
+                                                <span className="text-[10px] text-blue-400 font-bold uppercase text-center px-2">Memproses...</span>
+                                            </>
+                                        ) : (
+                                            <>
+                                                <button
+                                                    type="button"
+                                                    onClick={() => {
+                                                        activeFileInputRef.current = 'product';
+                                                        unloadCameraInputRef.current?.click();
+                                                    }}
+                                                    disabled={submitting}
+                                                    className="w-full py-2.5 bg-slate-800 hover:bg-slate-750 border border-slate-700 text-white rounded-lg text-[10px] font-bold uppercase tracking-wider flex items-center justify-center gap-1.5 active:scale-95 transition-all"
+                                                 >
+                                                     <Camera size={14} className="text-emerald-400" />
+                                                     📸 Kamera / Camera
+                                                 </button>
+                                                 <button
+                                                     type="button"
+                                                     onClick={() => {
+                                                         activeFileInputRef.current = 'product';
+                                                         unloadGalleryInputRef.current?.click();
+                                                     }}
+                                                     disabled={submitting}
+                                                     className="w-full py-2.5 bg-slate-800 hover:bg-slate-750 border border-slate-700 text-white rounded-lg text-[10px] font-bold uppercase tracking-wider flex items-center justify-center gap-1.5 active:scale-95 transition-all"
+                                                 >
+                                                     <span>📁</span>
+                                                     <span>Galeri / Gallery</span>
+                                                 </button>
+                                            </>
+                                        )}
+                                    </div>
+                                )}
+                            </div>
+                        </div>
+
+                        {/* Delivery Note */}
+                        <div className="space-y-2">
+                            <label className="text-xs font-bold text-slate-400 uppercase tracking-widest block">
+                                3. REMARK / CATATAN PENGHANTARAN
+                            </label>
+                            <textarea
+                                value={deliveryNote}
+                                onChange={e => setDeliveryNote(e.target.value)}
+                                placeholder="Tuliskan nota penghantaran di sini (contoh: Barang diletakkan di pondok pengawal, ditandatangani oleh En. Lee)"
+                                className="w-full bg-slate-950 border border-slate-800 rounded-xl p-4 text-white placeholder:text-slate-700 focus:border-blue-500 focus:ring-1 focus:ring-blue-500 outline-none resize-none h-24 text-sm transition-all"
+                            />
+                        </div>
+
+                        {/* Previously Uploaded Photos */}
+                        {selectedOrder.pod_photo_url && (
+                            <div className="space-y-2">
+                                <label className="text-xs font-bold text-slate-500 uppercase tracking-widest block">
+                                    GAMBAR HANTARAN TERDAHULU / PREVIOUSLY UPLOADED PHOTOS
+                                </label>
+                                <div className="grid grid-cols-4 gap-2 bg-slate-900/40 p-3 rounded-xl border border-slate-800/80">
+                                    {selectedOrder.pod_photo_url.split(',').map((url, idx) => (
+                                        <div key={idx} className="relative rounded-lg overflow-hidden border border-white/5 bg-black/40 aspect-square">
+                                            <img 
+                                                src={url} 
+                                                alt={`POD - ${idx + 1}`} 
+                                                className="w-full h-full object-cover cursor-zoom-in" 
+                                                onClick={() => setPreviewImageUrl(url)}
+                                            />
+                                        </div>
+                                    ))}
+                                </div>
+                            </div>
+                        )}
+
+                        {/* Final Drop Toggle Checkbox */}
+                        {/* Final Drop Toggle Checkbox (Hidden: Trip completion handled by office scan QR) */}
+                        {false && (
+                            <div className="bg-slate-900 border border-slate-800 p-4 rounded-xl flex items-center justify-between">
+                                <div>
+                                    <p className="text-sm font-bold text-white uppercase">HANTARAN TERAKHIR (TAMAT TRIP)? / FINAL DROP (END TRIP)?</p>
+                                    <p className="text-[10px] text-slate-500 uppercase font-medium">
+                                        Tandakan ini jika semua drop point / destinasi untuk trip ini telah selesai.
+                                    </p>
+                                </div>
+                                <input 
+                                    type="checkbox"
+                                    checked={isFinalDrop}
+                                    onChange={(e) => setIsFinalDrop(e.target.checked)}
+                                    className="w-6 h-6 rounded-lg bg-black border border-slate-700 accent-blue-600 outline-none cursor-pointer"
+                                />
+                            </div>
+                        )}
+                    </div>
+
+                    {/* Footer Actions */}
+                    <div className="p-4 border-t border-slate-800 bg-slate-900 space-y-3 safe-bottom-padding">
+                        <button
+                            onClick={handleConfirmUnload}
+                            disabled={submitting || uploadingTarget !== null || (!isFinalDrop && !unloadProductPhotoBase64)}
+                            className="w-full py-4 bg-emerald-600 hover:bg-emerald-500 disabled:bg-slate-800 text-white disabled:text-slate-500 rounded-xl font-black text-lg uppercase tracking-widest shadow-lg shadow-emerald-950/40 disabled:shadow-none transition-all active:scale-95 flex items-center justify-center gap-2"
+                        >
+                            {submitting ? (
+                                <>
+                                    <div className="w-5 h-5 border-2 border-white/20 border-t-white rounded-full animate-spin"></div>
+                                    <span>PENGHANTARAN SEDANG DIHANTAR... / CONFIRMING...</span>
+                                </>
+                            ) : (
+                                <>
+                                    <CheckCircle size={20} />
+                                    <span>
+                                        {isFinalDrop 
+                                            ? "HANTAR & TAMAT TRIP / SUBMIT & END TRIP" 
+                                            : "HANTAR DROP POINT INI / SUBMIT THIS DROP POINT"
+                                        }
+                                    </span>
+                                </>
+                            )}
+                        </button>
+                    </div>
+                </div>
+            )}
 
             {/* PICK UP MODAL AD-HOC */}
             {isPickUpModalOpen && (
@@ -807,7 +1617,12 @@ const DriverDelivery: React.FC<DriverDeliveryProps> = ({ user }) => {
                                 </button>
                             ) : (
                                 <div className="w-full relative rounded-xl overflow-hidden border border-slate-700">
-                                    <img src={`data:image/jpeg;base64,${loadPhotoBase64}`} alt="Pick Up" className="w-full h-48 object-cover" />
+                                    <img 
+                                        src={`data:image/jpeg;base64,${loadPhotoBase64}`} 
+                                        alt="Pick Up" 
+                                        className="w-full h-48 object-cover cursor-zoom-in" 
+                                        onClick={() => setPreviewImageUrl(`data:image/jpeg;base64,${loadPhotoBase64}`)}
+                                    />
                                     <button 
                                         onClick={() => setLoadPhotoBase64(null)}
                                         className="absolute top-3 right-3 p-2 bg-red-500 rounded-full text-white shadow-lg"
@@ -847,7 +1662,13 @@ const DriverDelivery: React.FC<DriverDeliveryProps> = ({ user }) => {
             {isScannerOpen && (
                 <div className="fixed inset-0 z-[300] bg-black flex flex-col animate-in slide-in-from-bottom-10">
                     <div className="p-4 border-b border-slate-800 flex justify-between items-center bg-slate-900 safe-top-padding">
-                        <h2 className="font-black text-white text-lg flex items-center gap-2"><QrCode size={20} className="text-blue-500" /> IMBAS QR LORI / SCAN LORRY QR</h2>
+                        <h2 className="font-black text-white text-lg flex items-center gap-2">
+                            <QrCode size={20} className="text-blue-500" />
+                            {scannerMode === 'bind' 
+                                ? "IMBAS QR LORI / SCAN LORRY QR" 
+                                : "IMBAS QR LORI (PEMULANGAN) / SCAN LORRY QR (RETURN VEHICLE)"
+                            }
+                        </h2>
                         <button onClick={() => setIsScannerOpen(false)} className="p-2 bg-slate-800 rounded-full text-white"><X size={20} /></button>
                     </div>
                     
@@ -856,7 +1677,12 @@ const DriverDelivery: React.FC<DriverDeliveryProps> = ({ user }) => {
                             {submitting ? (
                                 <div className="absolute inset-0 flex flex-col items-center justify-center bg-black/80 z-10 text-blue-400 gap-4">
                                     <div className="w-8 h-8 border-4 border-blue-500/30 border-t-blue-500 rounded-full animate-spin" />
-                                    <span className="font-black tracking-widest text-xs uppercase">Menghubungkan... / Binding...</span>
+                                    <span className="font-black tracking-widest text-xs uppercase">
+                                        {scannerMode === 'bind' 
+                                            ? "Menghubungkan... / Binding..." 
+                                            : "Memproses... / Processing..."
+                                        }
+                                    </span>
                                 </div>
                             ) : null}
                             <Scanner 
@@ -869,11 +1695,62 @@ const DriverDelivery: React.FC<DriverDeliveryProps> = ({ user }) => {
                             />
                         </div>
                         <p className="text-slate-500 text-xs font-bold uppercase tracking-widest mt-8 text-center max-w-xs">
-                            Halakan kamera anda ke kod QR di papan pemuka lori untuk mendaftar syif anda. / Point your camera at the QR code on the lorry dashboard to bind your shift.
+                            {scannerMode === 'bind'
+                                ? "Halakan kamera anda ke kod QR di papan pemuka lori untuk mendaftar syif anda. / Point your camera at the QR code on the lorry dashboard to bind your shift."
+                                : "Halakan kamera anda ke kod QR lori anda semula untuk mengesahkan pemulangan lori & tamatkan trip. / Point your camera at your lorry QR code again to confirm return & end trip."
+                            }
                         </p>
                     </div>
                 </div>
             )}
+
+            {/* Full Screen Image Preview Modal */}
+            {previewImageUrl && (
+                <div 
+                    className="fixed inset-0 z-[9999] bg-black/95 flex flex-col items-center justify-center p-4 backdrop-blur-sm"
+                    onClick={() => setPreviewImageUrl(null)}
+                >
+                    <button 
+                        onClick={() => setPreviewImageUrl(null)} 
+                        className="absolute top-4 right-4 p-3 bg-white/10 hover:bg-white/20 active:scale-95 text-white rounded-full transition-all"
+                    >
+                        <X size={24} />
+                    </button>
+                    <img 
+                        src={previewImageUrl} 
+                        alt="Preview" 
+                        className="max-w-full max-h-[85vh] object-contain rounded-xl shadow-2xl border border-white/10 animate-in zoom-in-95 duration-200" 
+                        onClick={(e) => e.stopPropagation()}
+                    />
+                    <p className="text-xs text-slate-500 font-bold uppercase tracking-widest mt-4">
+                        Ketik di mana-mana untuk tutup / Tap anywhere to close
+                    </p>
+                </div>
+            )}
+
+            {/* Hidden inputs for image uploads at root level so they are always in the DOM */}
+            <input
+                ref={unloadCameraInputRef}
+                type="file"
+                accept="image/*"
+                capture="environment"
+                className="hidden"
+                onChange={handleUnloadPhotoSelect}
+            />
+            <input
+                ref={unloadGalleryInputRef}
+                type="file"
+                accept="image/*"
+                className="hidden"
+                onChange={handleUnloadPhotoSelect}
+            />
+            <input
+                ref={laterFileInputRef}
+                type="file"
+                accept="image/*"
+                className="hidden"
+                onChange={handleLaterFileSelect}
+            />
 
         </div >
     );

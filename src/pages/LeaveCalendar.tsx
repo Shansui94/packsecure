@@ -44,15 +44,46 @@ const LeaveCalendar: React.FC<Props> = ({ user }) => {
     const [eligibleLimit, setEligibleLimit] = useState(0);
     const [loadingLimit, setLoadingLimit] = useState(false);
 
+    const toLocalYYYYMMDD = (d: Date): string => {
+        const y = d.getFullYear();
+        const m = String(d.getMonth() + 1).padStart(2, '0');
+        const day = String(d.getDate()).padStart(2, '0');
+        return `${y}-${m}-${day}`;
+    };
+
+    const formatYYYYMMDD = (dateStr: string | null | undefined): string => {
+        if (!dateStr) return '';
+        const cleanStr = dateStr.includes('T') ? dateStr.split('T')[0] : dateStr;
+        const parts = cleanStr.split('-');
+        if (parts.length !== 3) return dateStr;
+        const [y, m, d] = parts;
+        const months = ['Jan', 'Feb', 'Mar', 'Apr', 'May', 'Jun', 'Jul', 'Aug', 'Sep', 'Oct', 'Nov', 'Dec'];
+        const monthIndex = parseInt(m, 10) - 1;
+        const monthName = months[monthIndex] || m;
+        return `${parseInt(d, 10)} ${monthName} ${y}`;
+    };
+
+    const formatDDMon = (dateStr: string | null | undefined): string => {
+        if (!dateStr) return '';
+        const cleanStr = dateStr.includes('T') ? dateStr.split('T')[0] : dateStr;
+        const parts = cleanStr.split('-');
+        if (parts.length !== 3) return dateStr;
+        const [, m, d] = parts;
+        const months = ['Jan', 'Feb', 'Mar', 'Apr', 'May', 'Jun', 'Jul', 'Aug', 'Sep', 'Oct', 'Nov', 'Dec'];
+        const monthIndex = parseInt(m, 10) - 1;
+        const monthName = months[monthIndex] || m;
+        return `${String(parseInt(d, 10)).padStart(2, '0')} ${monthName}`;
+    };
+
     const getComingMonday = (fromDate: Date = new Date()): string => {
         const day = fromDate.getDay();
         const result = new Date(fromDate);
         if (day === 1) {
-            return result.toISOString().split('T')[0];
+            return toLocalYYYYMMDD(result);
         }
         const daysToMonday = (1 - day + 7) % 7;
         result.setDate(fromDate.getDate() + daysToMonday);
-        return result.toISOString().split('T')[0];
+        return toLocalYYYYMMDD(result);
     };
 
     const getFirstMondayAfter15 = (year: number, month: number): Date => {
@@ -74,8 +105,10 @@ const LeaveCalendar: React.FC<Props> = ({ user }) => {
             return currentCycle;
         } else {
             // Calculate next Monday from tomorrow to ensure it rolls over if today is Monday
-            const comingMondayStr = getComingMonday(new Date(now.getTime() + 24 * 60 * 60 * 1000));
-            return new Date(comingMondayStr);
+            const tomorrow = new Date(now.getFullYear(), now.getMonth(), now.getDate() + 1);
+            const comingMondayStr = getComingMonday(tomorrow);
+            const [y, m, d] = comingMondayStr.split('-').map(Number);
+            return new Date(y, m - 1, d);
         }
     };
 
@@ -86,8 +119,8 @@ const LeaveCalendar: React.FC<Props> = ({ user }) => {
             const now = new Date();
             const year = now.getFullYear();
             const month = now.getMonth();
-            const firstDayStr = new Date(year, month, 1).toISOString().split('T')[0];
-            const lastDayStr = new Date(year, month + 1, 0).toISOString().split('T')[0];
+            const firstDayStr = toLocalYYYYMMDD(new Date(year, month, 1));
+            const lastDayStr = toLocalYYYYMMDD(new Date(year, month + 1, 0));
 
             // 1. Get deliveries
             const { data: trips, error: tripsErr } = await supabase
@@ -134,7 +167,7 @@ const LeaveCalendar: React.FC<Props> = ({ user }) => {
                 .from('salary_advances')
                 .select('amount')
                 .eq('employee_id', user.uid)
-                .in('status', ['Approved', 'Pending'])
+                .in('status', ['Approved', 'Pending', 'Paid'])
                 .gte('created_at', `${firstDayStr}T00:00:00.000Z`);
 
             if (advsErr) throw advsErr;
@@ -197,7 +230,7 @@ const LeaveCalendar: React.FC<Props> = ({ user }) => {
 
         setSubmittingAdvance(true);
         try {
-            const targetDateStr = getTargetPaymentDate().toISOString().split('T')[0];
+            const targetDateStr = toLocalYYYYMMDD(getTargetPaymentDate());
             const result = await createSalaryAdvance(user.uid, amount, targetDateStr);
             if (result) {
                 alert("✅ Permohonan advance gaji berjaya dihantar! / Salary advance requested successfully!");
@@ -319,8 +352,8 @@ const LeaveCalendar: React.FC<Props> = ({ user }) => {
     };
 
     const activePanelLeaves = selectedDateFilter ? getLeavesOnDate(selectedDateFilter) : approvedLeaves.filter(l => {
-        const firstDayStr = new Date(currentYear, currentMonth, 1).toISOString().split('T')[0];
-        const lastDayStr = new Date(currentYear, currentMonth + 1, 0).toISOString().split('T')[0];
+        const firstDayStr = toLocalYYYYMMDD(new Date(currentYear, currentMonth, 1));
+        const lastDayStr = toLocalYYYYMMDD(new Date(currentYear, currentMonth + 1, 0));
         return l.start_date <= lastDayStr && l.end_date >= firstDayStr;
     });
 
@@ -441,12 +474,14 @@ const LeaveCalendar: React.FC<Props> = ({ user }) => {
     const getConflictingDriversOnLeave = (req: LeaveRecord) => {
         if (req.users_public?.role !== 'Driver') return [];
 
-        const start = new Date(req.start_date);
-        const end = new Date(req.end_date);
+        const [sYear, sMonth, sDay] = req.start_date.split('-').map(Number);
+        const [eYear, eMonth, eDay] = req.end_date.split('-').map(Number);
+        const start = new Date(sYear, sMonth - 1, sDay);
+        const end = new Date(eYear, eMonth - 1, eDay);
         const dates: string[] = [];
         const curr = new Date(start);
         while (curr <= end) {
-            dates.push(curr.toISOString().split('T')[0]);
+            dates.push(toLocalYYYYMMDD(curr));
             curr.setDate(curr.getDate() + 1);
         }
 
@@ -519,7 +554,7 @@ const LeaveCalendar: React.FC<Props> = ({ user }) => {
                                 if (dayNum === null) return <div key={`blank-${i}`} className="bg-white/[0.01] rounded-lg sm:rounded-2xl border border-dashed border-white/[0.03]"></div>;
 
                                 const dateStr = `${currentYear}-${String(currentMonth + 1).padStart(2, '0')}-${String(dayNum).padStart(2, '0')}`;
-                                const isToday = dateStr === today.toISOString().split('T')[0];
+                                const isToday = dateStr === toLocalYYYYMMDD(today);
                                 const isSelected = selectedDateFilter === dateStr;
                                 const dayLeaves = getLeavesOnDate(dateStr);
                                 const isWeekend = (i % 7 === 0) || (i % 7 === 6);
@@ -590,7 +625,7 @@ const LeaveCalendar: React.FC<Props> = ({ user }) => {
                         <div>
                             <h2 className="text-sm font-black text-white uppercase tracking-widest">
                                 {selectedDateFilter
-                                    ? new Date(selectedDateFilter).toLocaleDateString('en-GB', { day: 'numeric', month: 'short', year: 'numeric' })
+                                    ? formatYYYYMMDD(selectedDateFilter)
                                     : `${MONTH_NAMES[currentMonth]} Summary`}
                             </h2>
                             <p className="text-[10px] text-slate-500 uppercase tracking-widest mt-0.5">
@@ -847,7 +882,7 @@ const LeaveCalendar: React.FC<Props> = ({ user }) => {
                                     <div>
                                         <div className="text-white font-black text-sm sm:text-base">RM {Number(adv.amount).toFixed(2)}</div>
                                         <div className="text-[10px] text-blue-400 font-bold uppercase mt-1 flex items-center gap-1.5">
-                                            <CalendarIcon size={10} /> Bank-In: {new Date(adv.bank_in_date).toLocaleDateString('en-GB', { day: '2-digit', month: 'short', year: 'numeric' })}
+                                            <CalendarIcon size={10} /> Bank-In: {formatYYYYMMDD(adv.bank_in_date)}
                                         </div>
                                         {adv.rejection_reason && (
                                             <div className="text-[10px] text-red-400 bg-red-950/20 border border-red-500/10 rounded px-2 py-1 mt-2 font-sans">
@@ -857,11 +892,13 @@ const LeaveCalendar: React.FC<Props> = ({ user }) => {
                                     </div>
                                     <div className="flex flex-col items-end gap-2 shrink-0">
                                         <span className={`px-3 py-1 rounded-full text-[9px] font-black uppercase border tracking-wider ${
-                                            adv.status === 'Approved' ? 'bg-emerald-500/10 text-emerald-400 border-emerald-500/20' :
+                                            adv.status === 'Paid' ? 'bg-emerald-500/10 text-emerald-400 border-emerald-500/20' :
+                                            adv.status === 'Approved' ? 'bg-blue-500/10 text-blue-400 border-blue-500/20' :
                                             adv.status === 'Rejected' ? 'bg-rose-500/10 text-rose-400 border-rose-500/20' :
                                             'bg-amber-500/10 text-amber-400 border-amber-500/20'
                                         }`}>
-                                            {adv.status === 'Approved' ? 'Dibayar / Paid' :
+                                            {adv.status === 'Paid' ? 'Dibayar / Paid' :
+                                             adv.status === 'Approved' ? 'Diluluskan / Approved' :
                                              adv.status === 'Rejected' ? 'Ditolak / Rejected' :
                                              'Proses / Pending'}
                                         </span>
@@ -882,29 +919,31 @@ const LeaveCalendar: React.FC<Props> = ({ user }) => {
                                     <div className="flex items-center gap-2 sm:gap-1.5 shrink-0">
                                         <div className={`w-4 h-4 rounded-full flex items-center justify-center text-[8px] font-black shrink-0 ${
                                             adv.status === 'Pending' ? 'bg-amber-500 text-black animate-pulse shadow-[0_0_8px_rgba(245,158,11,0.5)]' :
-                                            adv.status === 'Approved' || adv.status === 'Rejected' ? 'bg-blue-500 text-black' : 'bg-slate-850 text-slate-500'
+                                            adv.status === 'Approved' || adv.status === 'Paid' || adv.status === 'Rejected' ? 'bg-blue-500 text-black' : 'bg-slate-850 text-slate-500'
                                         }`}>
                                             {adv.status !== 'Pending' ? '✓' : '2'}
                                         </div>
                                         <span className={adv.status === 'Pending' ? 'text-amber-500 uppercase animate-pulse' : adv.status !== 'Pending' ? 'text-blue-400 uppercase' : 'text-slate-500 uppercase'}>2. Diproses / Reviewing</span>
                                     </div>
                                     <div className="hidden sm:block h-0.5 bg-slate-800 flex-1 mx-2 shrink">
-                                        <div className={`h-full ${adv.status === 'Approved' ? 'bg-emerald-500' : adv.status === 'Rejected' ? 'bg-rose-500' : 'bg-slate-850'}`} style={{ width: adv.status !== 'Pending' ? '100%' : '0%' }}></div>
+                                        <div className={`h-full ${adv.status === 'Paid' ? 'bg-emerald-500' : adv.status === 'Approved' ? 'bg-amber-500 animate-pulse' : adv.status === 'Rejected' ? 'bg-rose-500' : 'bg-slate-850'}`} style={{ width: adv.status === 'Paid' || adv.status === 'Rejected' ? '100%' : adv.status === 'Approved' ? '50%' : '0%' }}></div>
                                     </div>
                                     <div className="sm:hidden w-0.5 h-2.5 bg-slate-800 ml-2" />
                                     
                                     <div className="flex items-center gap-2 sm:gap-1.5 shrink-0">
                                         <div className={`w-4 h-4 rounded-full flex items-center justify-center text-[8px] font-black shrink-0 ${
-                                            adv.status === 'Approved' ? 'bg-emerald-500 text-black' :
+                                            adv.status === 'Paid' ? 'bg-emerald-500 text-black' :
+                                            adv.status === 'Approved' ? 'bg-amber-500 text-black animate-pulse shadow-[0_0_8px_rgba(245,158,11,0.5)]' :
                                             adv.status === 'Rejected' ? 'bg-rose-500 text-white' : 'bg-slate-850 text-slate-500'
                                         }`}>
-                                            {adv.status === 'Approved' ? '✓' : adv.status === 'Rejected' ? '✕' : '3'}
+                                            {adv.status === 'Paid' ? '✓' : adv.status === 'Rejected' ? '✕' : '3'}
                                         </div>
                                         <span className={
-                                            adv.status === 'Approved' ? 'text-emerald-400 uppercase' :
+                                            adv.status === 'Paid' ? 'text-emerald-400 uppercase' :
+                                            adv.status === 'Approved' ? 'text-amber-500 uppercase animate-pulse' :
                                             adv.status === 'Rejected' ? 'text-rose-400 uppercase' : 'text-slate-500 uppercase'
                                         }>
-                                            {adv.status === 'Rejected' ? '3. Ditolak / Rejected' : '3. Dibayar / Paid'}
+                                            {adv.status === 'Rejected' ? '3. Ditolak / Rejected' : adv.status === 'Approved' ? '3. Menunggu Bayaran / Pending Payment' : '3. Dibayar / Paid'}
                                         </span>
                                     </div>
                                 </div>
@@ -1025,7 +1064,7 @@ const LeaveCalendar: React.FC<Props> = ({ user }) => {
                                                 if (!driverToDetails[key]) {
                                                     driverToDetails[key] = { dates: [], status: c.status };
                                                 }
-                                                const formattedDate = new Date(c.date).toLocaleDateString('en-GB', { day: '2-digit', month: 'short' });
+                                                const formattedDate = formatDDMon(c.date);
                                                 if (!driverToDetails[key].dates.includes(formattedDate)) {
                                                     driverToDetails[key].dates.push(formattedDate);
                                                 }
@@ -1155,7 +1194,7 @@ const LeaveCalendar: React.FC<Props> = ({ user }) => {
             <div className="max-w-7xl w-full mx-auto">
                 <div className="flex items-center gap-3 sm:gap-4 mb-5 sm:mb-6">
                     <div className="p-2.5 sm:p-3 bg-gradient-to-br from-blue-600/20 to-purple-600/20 rounded-xl sm:rounded-2xl border border-blue-500/20 shadow-[0_0_20px_rgba(59,130,246,0.15)] text-blue-400 shrink-0">
-                        <CalendarIcon size={20} sm:size={24} />
+                        <CalendarIcon className="w-5 h-5 sm:w-6 sm:h-6" />
                     </div>
                     <div>
                         <h1 className="text-lg sm:text-2xl font-black italic uppercase tracking-wider bg-clip-text text-transparent bg-gradient-to-r from-blue-400 to-purple-400 drop-shadow-sm leading-tight">

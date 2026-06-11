@@ -527,7 +527,7 @@ const ProductionControl: React.FC<ProductionControlProps> = ({ user, jobs = [] }
                 .from('sys_users_v2')
                 .select('id, name, employee_id')
                 .eq('employee_id', code)
-                .eq('status', 'Active')
+                .in('status', ['Active', 'active'])
                 .limit(1);
 
             if (data && data.length > 0) {

@@ -3,7 +3,7 @@ import { supabase } from '../services/supabase';
 import { getV2Items } from '../services/apiV2';
 import { V2Item } from '../types/v2';
 import { User } from '../types';
-import { ClipboardCheck, Search, Filter, Warehouse, CheckCircle2, ChevronRight, Calculator, Check, AlertCircle } from 'lucide-react';
+import { ClipboardCheck, Search, Filter, Warehouse, CheckCircle2, ChevronRight, Calculator, Check, AlertCircle, Calendar } from 'lucide-react';
 
 import { WAREHOUSES } from '../data/factoryData';
 
@@ -33,14 +33,25 @@ const StockAudit: React.FC<StockAuditProps> = ({ user }) => {
     // Audit Data
     const [auditList, setAuditList] = useState<AuditItem[]>([]);
 
+    // Retroactive Audit Date/Time State
+    const [useCustomTime, setUseCustomTime] = useState(false);
+    const [customTime, setCustomTime] = useState('');
+
     // UI State
     const [loading, setLoading] = useState(true);
     const [processing, setProcessing] = useState(false);
     const [toast, setToast] = useState<{ msg: string; type: 'ok' | 'err' } | null>(null);
     const [step, setStep] = useState<1 | 2>(1); // 1: Setup, 2: Counting
 
+    // Formats a Date object to YYYY-MM-DDTHH:mm local timezone representation for datetime-local inputs
+    const formatLocalISO = (date: Date) => {
+        const tzOffset = date.getTimezoneOffset() * 60000;
+        return (new Date(date.getTime() - tzOffset)).toISOString().slice(0, 16);
+    };
+
     useEffect(() => {
         loadData();
+        setCustomTime(formatLocalISO(new Date()));
     }, []);
 
     const loadData = async () => {
@@ -74,29 +85,70 @@ const StockAudit: React.FC<StockAuditProps> = ({ user }) => {
         setTimeout(() => setToast(null), 3000);
     };
 
-    const handleStartAudit = () => {
-        // Filter items based on ItemType requirement
-        let filtered = items;
-        if (itemType !== 'All') {
-            filtered = filtered.filter(i => i.type === itemType);
+    const handleStartAudit = async () => {
+        setProcessing(true);
+        const targetBalances: Record<string, number> = {};
+
+        try {
+            if (useCustomTime && customTime) {
+                // Retroactive audit: fetch all ledger transactions for selected location up to selected timestamp
+                let allTxns: { sku: string; change_qty: number | string }[] = [];
+                let page = 0;
+                const pageSize = 1000;
+                
+                while (true) {
+                    const { data, error } = await supabase
+                        .from('stock_ledger_v2')
+                        .select('sku, change_qty')
+                        .eq('loc_id', warehouse)
+                        .lte('timestamp', new Date(customTime).toISOString())
+                        .range(page * pageSize, (page + 1) * pageSize - 1);
+
+                    if (error) throw error;
+                    if (!data || data.length === 0) break;
+                    allTxns = allTxns.concat(data);
+                    if (data.length < pageSize) break;
+                    page++;
+                }
+
+                allTxns.forEach(t => {
+                    const qty = Number(t.change_qty);
+                    targetBalances[t.sku] = (targetBalances[t.sku] || 0) + qty;
+                });
+            } else {
+                // Live audit: use pre-loaded balances from v2_inventory_view
+                items.forEach(item => {
+                    const skuBalances = systemBalances[item.sku] || {};
+                    targetBalances[item.sku] = skuBalances[warehouse] || 0;
+                });
+            }
+
+            // Filter items based on ItemType requirement
+            let filtered = items;
+            if (itemType !== 'All') {
+                filtered = filtered.filter(i => i.type === itemType);
+            }
+
+            // Map to AuditItem
+            const initialAudit: AuditItem[] = filtered.map(item => {
+                return {
+                    ...item,
+                    systemQty: targetBalances[item.sku] || 0,
+                    physicalQty: '', // Empty initially so user must count
+                };
+            });
+
+            // Sort alphabetically by SKU
+            initialAudit.sort((a, b) => a.sku.localeCompare(b.sku));
+
+            setAuditList(initialAudit);
+            setStep(2);
+            setSearch('');
+        } catch (error: any) {
+            showToast('Error generating checklist: ' + error.message, 'err');
+        } finally {
+            setProcessing(false);
         }
-
-        // Map to AuditItem
-        const initialAudit: AuditItem[] = filtered.map(item => {
-            const skuBalances = systemBalances[item.sku] || {};
-            return {
-                ...item,
-                systemQty: skuBalances[warehouse] || 0,
-                physicalQty: '', // Empty initially so user must count
-            };
-        });
-
-        // Sort alphabetically by SKU
-        initialAudit.sort((a, b) => a.sku.localeCompare(b.sku));
-
-        setAuditList(initialAudit);
-        setStep(2);
-        setSearch('');
     };
 
     const handlePhysicalQtyChange = (sku: string, val: string) => {
@@ -130,16 +182,21 @@ const StockAudit: React.FC<StockAuditProps> = ({ user }) => {
 
         setProcessing(true);
         try {
-            const inserts = adjustments.map(adj => ({
-                sku: adj?.sku,
-                change_qty: adj?.variance,
-                event_type: 'Audit Adjustment',
-                loc_id: warehouse, // NEW: Apply to specific location
-                ref_doc: `AUDIT-${new Date().toISOString().split('T')[0].replace(/-/g, '')}`,
-                notes: `Auto-adjusted from Audit at [${warehouse}]. System: ${adj?.systemQty}, Actual: ${adj?.physical}`,
-                created_by: user?.uid || null,
-                created_by_name: user?.name || null,
-            }));
+            const inserts = adjustments.map(adj => {
+                const auditDateObj = useCustomTime && customTime ? new Date(customTime) : new Date();
+                const formattedDate = auditDateObj.toISOString().split('T')[0].replace(/-/g, '');
+                return {
+                    sku: adj?.sku,
+                    change_qty: adj?.variance,
+                    event_type: 'Audit Adjustment',
+                    loc_id: warehouse,
+                    ref_doc: `AUDIT-${formattedDate}`,
+                    notes: `Auto-adjusted from Audit at [${warehouse}]${useCustomTime ? ' (Retroactive)' : ''}. System: ${adj?.systemQty}, Actual: ${adj?.physical}`,
+                    created_by: user?.uid || null,
+                    created_by_name: user?.name || null,
+                    timestamp: auditDateObj.toISOString()
+                };
+            });
 
             const { error } = await supabase.from('stock_ledger_v2').insert(inserts);
             if (error) throw error;
@@ -252,12 +309,57 @@ const StockAudit: React.FC<StockAuditProps> = ({ user }) => {
                                 </div>
                             </div>
 
-                            <div className="border-t border-white/5 pt-6 pl-8 mt-2">
+                            {/* Retroactive Audit Controls */}
+                            <div className="border-t border-white/5 pt-6 pl-8 flex flex-col gap-6">
+                                <label className="flex items-center gap-3 cursor-pointer group/toggle">
+                                    <div className="relative">
+                                        <input 
+                                            type="checkbox" 
+                                            checked={useCustomTime} 
+                                            onChange={(e) => setUseCustomTime(e.target.checked)}
+                                            className="sr-only peer"
+                                        />
+                                        <div className="w-10 h-6 bg-white/10 rounded-full peer peer-focus:ring-2 peer-focus:ring-cyan-500/50 peer-checked:after:translate-x-full peer-checked:after:border-white after:content-[''] after:absolute after:top-0.5 after:left-[2px] after:bg-gray-400 peer-checked:after:bg-cyan-400 after:border-gray-300 after:border after:rounded-full after:h-5 after:w-5 after:transition-all peer-checked:bg-cyan-950/50 peer-checked:border-cyan-500/50 border border-white/5" />
+                                    </div>
+                                    <span className="text-sm font-bold text-gray-400 group-hover/toggle:text-white transition-colors">
+                                        Retroactive Audit (Record past counts)
+                                    </span>
+                                </label>
+                                
+                                {useCustomTime && (
+                                    <div className="animate-in fade-in slide-in-from-top-2 duration-200">
+                                        <label className="block text-xs font-bold text-gray-400 uppercase tracking-widest mb-2 flex items-center gap-2">
+                                            <Calendar size={14} className="text-cyan-400" /> Audit Date & Time
+                                        </label>
+                                        <input
+                                            type="datetime-local"
+                                            value={customTime}
+                                            onChange={(e) => setCustomTime(e.target.value)}
+                                            className="w-full bg-black/40 border border-white/10 rounded-xl px-4 py-3 text-sm focus:outline-none focus:border-cyan-500/50 text-white font-bold"
+                                        />
+                                        <p className="text-gray-500 text-[11px] mt-1.5 leading-relaxed font-semibold">
+                                            The system will automatically compute historical stock levels at this specific date/time.
+                                        </p>
+                                    </div>
+                                )}
+                            </div>
+
+                            <div className="border-t border-white/5 pt-6 pl-8">
                                 <button
                                     onClick={handleStartAudit}
-                                    className="w-full bg-gradient-to-r from-cyan-600 to-blue-600 hover:from-cyan-500 hover:to-blue-500 text-white py-4 rounded-xl font-black uppercase tracking-widest text-sm transition-all shadow-lg shadow-cyan-900/30 flex items-center justify-center gap-2"
+                                    disabled={processing}
+                                    className="w-full bg-gradient-to-r from-cyan-600 to-blue-600 hover:from-cyan-500 hover:to-blue-500 text-white py-4 rounded-xl font-black uppercase tracking-widest text-sm transition-all shadow-lg shadow-cyan-900/30 flex items-center justify-center gap-2 disabled:opacity-50 disabled:cursor-not-allowed"
                                 >
-                                    Generate Checklist <ChevronRight size={18} />
+                                    {processing ? (
+                                        <>
+                                            <div className="w-5 h-5 border-2 border-white/30 border-t-white rounded-full animate-spin" />
+                                            Initializing Audit Engine...
+                                        </>
+                                    ) : (
+                                        <>
+                                            Generate Checklist <ChevronRight size={18} />
+                                        </>
+                                    )}
                                 </button>
                             </div>
                         </div>
