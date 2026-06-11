@@ -274,6 +274,7 @@ const OrderSummary: React.FC<OrderSummaryProps> = ({ user }) => {
                 .select('*')
                 .neq('status', 'Cancelled')
                 .neq('status', 'Delivered')
+                .neq('status', 'Loaded')
                 .or(`order_date.eq.${selectedDate},deadline.eq.${selectedDate}`);
 
             if (ordersData) {
