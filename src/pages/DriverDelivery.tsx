@@ -124,6 +124,16 @@ const DriverDelivery: React.FC<DriverDeliveryProps> = ({ user }) => {
     const [isScannerOpen, setIsScannerOpen] = useState(false);
     const [scannerMode, setScannerMode] = useState<'bind' | 'unbind'>('bind');
 
+    // Lorry Mileage & Odometer State
+    const [scannedLorryData, setScannedLorryData] = useState<any>(null);
+    const [isOdometerModalOpen, setIsOdometerModalOpen] = useState(false);
+    const [odometerPhotoBase64, setOdometerPhotoBase64] = useState<string | null>(null);
+    const [detectedMileage, setDetectedMileage] = useState<number | null>(null);
+    const [confirmedMileage, setConfirmedMileage] = useState<string>('');
+    const [isAnalyzingOdometer, setIsAnalyzingOdometer] = useState(false);
+    const [submittingOdometer, setSubmittingOdometer] = useState(false);
+    const odometerCameraInputRef = useRef<HTMLInputElement>(null);
+
     // NAIK BARANG (Load Items) State
     const [selectedOrder, setSelectedOrder] = useState<SalesOrder | null>(null);
     const [isLoadModalOpen, setIsLoadModalOpen] = useState(false);
@@ -750,33 +760,221 @@ const DriverDelivery: React.FC<DriverDeliveryProps> = ({ user }) => {
     // 6. Bind Lorry (Scan QR)
     const handleScanComplete = async (text: string) => {
         try {
-            setSubmitting(true);
-            
             let qrType = '';
             let lorryId = '';
+            let plate = '';
             try {
                 const data = JSON.parse(text);
                 qrType = data.type;
                 lorryId = data.lorryId;
+                plate = data.plate || '';
             } catch (e) {
                 // Keep default empty values
             }
 
             // Handle Unbind / Return Lorry (End Trip)
             if (scannerMode === 'unbind') {
-                // Must scan the same lorry's QR to confirm unbinding
                 if (qrType !== 'LorryBind' || !lorryId || lorryId !== currentLorry?.id) {
                     throw new Error("Kod QR tidak sah. Sila imbas QR Lori yang sedang anda gunakan untuk mengesahkan pemulangan. / Invalid QR Code. Please scan the QR of the lorry you are currently using.");
                 }
 
-                // 1. Unbind Lorry
+                setIsScannerOpen(false);
+                setScannedLorryData({ id: lorryId, mode: 'unbind', plate_number: currentLorry?.plate_number || 'Lorry' });
+                setOdometerPhotoBase64(null);
+                setDetectedMileage(null);
+                setConfirmedMileage('');
+                setIsOdometerModalOpen(true);
+                return;
+            }
+            
+            // Handle Bind Lorry
+            if (qrType !== 'LorryBind' || !lorryId) {
+                throw new Error("Kod QR tidak sah. Bukan QR Lori. / Invalid QR Code. Not a Lorry QR.");
+            }
+
+            setIsScannerOpen(false);
+            setScannedLorryData({ id: lorryId, mode: 'bind', plate_number: plate || 'Lorry' });
+            setOdometerPhotoBase64(null);
+            setDetectedMileage(null);
+            setConfirmedMileage('');
+            setIsOdometerModalOpen(true);
+            
+        } catch (err: any) {
+            alert(`Scan Error: ${err.message || 'Invalid format'}`);
+        }
+    };
+
+    // 6.1 Handle Odometer Photo Select & AI Extraction
+    const handleOdometerPhotoSelect = async (e: React.ChangeEvent<HTMLInputElement>) => {
+        const file = e.target.files?.[0];
+        if (!file || !scannedLorryData) return;
+
+        setIsAnalyzingOdometer(true);
+        try {
+            // Compress image
+            const compressedBase64 = await compressImage(file);
+            const base64Only = compressedBase64.split(',')[1];
+            setOdometerPhotoBase64(base64Only);
+
+            // Fetch AI extract from vision endpoint
+            const response = await fetch('/api/agent/vision', {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({
+                    imageBase64: base64Only,
+                    type: 'odometer'
+                })
+            });
+
+            if (!response.ok) {
+                throw new Error("Gagal menganalisis gambar dengan AI. / Failed to analyze image with AI.");
+            }
+
+            const data = await response.json();
+            if (data && typeof data.mileage === 'number') {
+                setDetectedMileage(data.mileage);
+                setConfirmedMileage(data.mileage.toString());
+            } else {
+                setDetectedMileage(null);
+                setConfirmedMileage('');
+                alert("AI tidak dapat mengesan bacaan odometer. Sila masukkan secara manual. / AI could not detect odometer reading. Please enter manually.");
+            }
+        } catch (err: any) {
+            console.error("Odometer AI Extract Error:", err);
+            alert("Ralat AI: " + err.message + "\nSila masukkan odometer secara manual. / AI Error. Please enter odometer manually.");
+        } finally {
+            setIsAnalyzingOdometer(false);
+            if (e.target) e.target.value = '';
+        }
+    };
+
+    // 6.2 Handle Odometer Confirm & Bind/Unbind Lorry
+    const handleOdometerConfirm = async () => {
+        if (!scannedLorryData || !odometerPhotoBase64) {
+            alert("Sila ambil gambar odometer dahulu! / Please take a photo of the odometer first!");
+            return;
+        }
+
+        const mileageVal = parseInt(confirmedMileage, 10);
+        if (isNaN(mileageVal) || mileageVal <= 0) {
+            alert("Sila masukkan bacaan odometer yang sah! / Please enter a valid odometer reading!");
+            return;
+        }
+
+        setSubmittingOdometer(true);
+        try {
+            // Add Watermark
+            const now = new Date();
+            const timeStr = now.toLocaleDateString('en-GB', { day: '2-digit', month: 'short', year: 'numeric' }) + ' ' + 
+                            now.toLocaleTimeString('en-GB', { hour: '2-digit', minute: '2-digit', second: '2-digit' });
+            
+            const lines = [
+                `Plate: ${scannedLorryData.plate_number}`,
+                `Time: ${timeStr} | Type: ODOMETER / MILEAGE`,
+                `Driver: ${user.name || user.email}`
+            ];
+            
+            const watermarkedBase64 = await watermarkImage(odometerPhotoBase64, lines);
+            
+            // Upload to Supabase Storage
+            const fileName = `odometer_${scannedLorryData.id}_${Date.now()}.jpg`;
+            const blob = await fetch(`data:image/jpeg;base64,${watermarkedBase64}`).then(r => r.blob());
+
+            const { error: uploadError } = await supabase.storage
+                .from('work-photos')
+                .upload(fileName, blob, { contentType: 'image/jpeg' });
+
+            if (uploadError) throw uploadError;
+
+            const { data: urlData } = supabase.storage.from('work-photos').getPublicUrl(fileName);
+            const photoUrl = urlData.publicUrl;
+
+            // Handle BIND / START SHIFT
+            if (scannedLorryData.mode === 'bind') {
+                // Fetch previous mileage log for discrepancy check
+                const { data: lastLog, error: lastLogErr } = await supabase
+                    .from('lorry_mileage_logs')
+                    .select('mileage')
+                    .eq('lorry_id', scannedLorryData.id)
+                    .order('created_at', { ascending: false })
+                    .limit(1)
+                    .maybeSingle();
+
+                if (lastLogErr) console.warn("Failed to fetch last mileage log:", lastLogErr);
+
+                if (lastLog && lastLog.mileage !== mileageVal) {
+                    // Create discrepancy alert!
+                    const diff = mileageVal - lastLog.mileage;
+                    const { error: alertErr } = await supabase
+                        .from('lorry_mileage_alerts')
+                        .insert({
+                            lorry_id: scannedLorryData.id,
+                            driver_id: user.uid,
+                            logged_mileage: mileageVal,
+                            expected_mileage: lastLog.mileage,
+                            difference: diff,
+                            photo_url: photoUrl,
+                            resolved: false
+                        });
+
+                    if (alertErr) console.error("Failed to create discrepancy alert:", alertErr);
+                }
+
+                // Insert new start log
+                const { error: logErr } = await supabase
+                    .from('lorry_mileage_logs')
+                    .insert({
+                        lorry_id: scannedLorryData.id,
+                        driver_id: user.uid,
+                        mileage: mileageVal,
+                        photo_url: photoUrl,
+                        log_type: 'start'
+                    });
+
+                if (logErr) throw logErr;
+
+                // Bind driver to new lorry
+                // 1. Unbind driver from any current lorry
+                await supabase.from('lorries').update({ driver_id: null, driver_name: null, status: 'Available' }).eq('driver_id', user.uid);
+                
+                // 2. Bind driver to new lorry
+                const { error: bindError } = await supabase.from('lorries')
+                    .update({ 
+                        driver_id: user.uid, 
+                        driver_name: user.name || user.email, 
+                        status: 'On-Route' 
+                    })
+                    .eq('id', scannedLorryData.id);
+
+                if (bindError) throw bindError;
+
+                alert("✅ Lori Berjaya Ditambat! / Lorry Bound Successfully!");
+                setIsOdometerModalOpen(false);
+                fetchTasks(); // Refresh lorry status
+            } 
+            // Handle UNBIND / END SHIFT
+            else if (scannedLorryData.mode === 'unbind') {
+                // Insert ending log
+                const { error: logErr } = await supabase
+                    .from('lorry_mileage_logs')
+                    .insert({
+                        lorry_id: scannedLorryData.id,
+                        driver_id: user.uid,
+                        mileage: mileageVal,
+                        photo_url: photoUrl,
+                        log_type: 'end'
+                    });
+
+                if (logErr) throw logErr;
+
+                // Unbind lorry
                 const { error: unbindError } = await supabase.from('lorries')
                     .update({ driver_id: null, driver_name: null, status: 'Available' })
-                    .eq('id', currentLorry.id);
+                    .eq('id', scannedLorryData.id);
 
                 if (unbindError) throw unbindError;
 
-                // 2. Auto Tamat all Loaded orders today
+                // Auto Tamat all Loaded orders today
                 const { error: orderError } = await supabase.from('sales_orders')
                     .update({ status: 'Delivered' })
                     .eq('driver_id', user.uid)
@@ -786,38 +984,14 @@ const DriverDelivery: React.FC<DriverDeliveryProps> = ({ user }) => {
 
                 alert("✅ Syif Selesai & Lori dilepaskan! Semua hantaran telah dihantar. / Shift completed & Lorry unbound! All deliveries submitted.");
                 setCurrentLorry(null);
-                setIsScannerOpen(false);
+                setIsOdometerModalOpen(false);
                 fetchTasks(); // Refresh lorry status
-                return;
-            }
-            
-            // Handle Bind Lorry
-            if (qrType !== 'LorryBind' || !lorryId) {
-                throw new Error("Kod QR tidak sah. Bukan QR Lori. / Invalid QR Code. Not a Lorry QR.");
             }
 
-            // 1. Unbind driver from any current lorry
-            await supabase.from('lorries').update({ driver_id: null, driver_name: null, status: 'Available' }).eq('driver_id', user.uid);
-            
-            // 2. Bind driver to new lorry
-            const { error: bindError } = await supabase.from('lorries')
-                .update({ 
-                    driver_id: user.uid, 
-                    driver_name: user.name || user.email, 
-                    status: 'On-Route' 
-                })
-                .eq('id', lorryId);
-
-            if (bindError) throw bindError;
-
-            alert("✅ Lori Berjaya Ditambat! / Lorry Bound Successfully!");
-            setIsScannerOpen(false);
-            fetchTasks(); // Refresh lorry status
-            
         } catch (err: any) {
-            alert(`Scan Error: ${err.message || 'Invalid format'}`);
+            alert("Ralat mengesahkan odometer / Error confirming odometer: " + err.message);
         } finally {
-            setSubmitting(false);
+            setSubmittingOdometer(false);
         }
     };
 
@@ -1751,6 +1925,174 @@ const DriverDelivery: React.FC<DriverDeliveryProps> = ({ user }) => {
                 className="hidden"
                 onChange={handleLaterFileSelect}
             />
+            <input
+                ref={odometerCameraInputRef}
+                type="file"
+                accept="image/*"
+                capture="environment"
+                className="hidden"
+                onChange={handleOdometerPhotoSelect}
+            />
+
+            {/* ODOMETER PHOTO VERIFICATION MODAL */}
+            {isOdometerModalOpen && scannedLorryData && (
+                <div className="fixed inset-0 z-[300] bg-slate-950/95 flex flex-col items-center justify-center p-4 backdrop-blur-md overflow-y-auto animate-in fade-in duration-200">
+                    <div className="bg-[#1a1a1f] border border-slate-800 w-full max-w-lg rounded-[32px] p-6 shadow-2xl space-y-6 animate-in zoom-in-95 duration-200 my-auto">
+                        
+                        {/* Header */}
+                        <div className="flex justify-between items-center pb-2 border-b border-slate-800">
+                            <div>
+                                <h3 className="text-xl font-black text-white italic uppercase tracking-tighter flex items-center gap-2">
+                                    <Truck className="text-blue-500 animate-pulse" />
+                                    BACAAN ODOMETER / ODOMETER READING
+                                </h3>
+                                <p className="text-[10px] text-slate-400 font-bold uppercase tracking-wider mt-0.5">
+                                    {scannedLorryData.mode === 'bind' ? 'Mula Syif (Start Shift)' : 'Tamat Syif (End Shift)'} | Plate: <span className="text-blue-400">{scannedLorryData.plate_number}</span>
+                                </p>
+                            </div>
+                            <button
+                                onClick={() => {
+                                    if (window.confirm("Batal? / Cancel?")) {
+                                        setIsOdometerModalOpen(false);
+                                        setScannedLorryData(null);
+                                    }
+                                }}
+                                className="p-2 bg-slate-900 border border-slate-800 hover:bg-slate-800 rounded-full text-slate-400 hover:text-white transition-all"
+                            >
+                                <X size={18} />
+                            </button>
+                        </div>
+
+                        {/* Guide / Instruction */}
+                        {!odometerPhotoBase64 && (
+                            <div className="space-y-4">
+                                <div className="bg-slate-900/50 p-4 rounded-2xl border border-slate-800/80 space-y-2">
+                                    <h4 className="text-xs font-black text-slate-300 uppercase tracking-wider">Panduan Mengambil Gambar / Photo Guide:</h4>
+                                    <ul className="text-[11px] text-slate-400 space-y-1 list-disc list-inside">
+                                        <li>Ambil gambar meter ODO di papan pemuka lori / Take photo of the ODO meter on the dashboard.</li>
+                                        <li>Pastikan nombor ODO kelihatan jelas dan tidak silau / Ensure ODO numbers are clearly visible and glare-free.</li>
+                                        <li>Lihat contoh di bawah / Refer to the example below.</li>
+                                    </ul>
+                                </div>
+                                
+                                {/* Example Image Box */}
+                                <div className="bg-slate-950 border border-slate-800 rounded-2xl p-2 relative group overflow-hidden">
+                                    <div className="absolute top-2 left-2 z-10 px-2 py-0.5 bg-blue-600/90 text-white text-[9px] font-black uppercase rounded tracking-wider">
+                                        Contoh / Example
+                                    </div>
+                                    <div className="aspect-[16/9] w-full rounded-xl overflow-hidden bg-slate-900 flex items-center justify-center">
+                                        <img 
+                                            src="/odometer_example.jpg" 
+                                            alt="Odometer Example" 
+                                            className="w-full h-full object-cover opacity-80" 
+                                            onError={(e) => {
+                                                e.currentTarget.style.display = 'none';
+                                            }}
+                                        />
+                                        <div className="absolute inset-0 flex flex-col items-center justify-center text-center p-4 bg-black/40">
+                                            <Camera size={32} className="text-slate-400 mb-2 group-hover:text-blue-500 transition-colors" />
+                                            <span className="text-[10px] text-slate-300 font-bold uppercase tracking-widest">ODO Display must be legible</span>
+                                            <span className="text-[8px] text-slate-500 font-bold uppercase mt-1">(e.g., ODO 95671 km)</span>
+                                        </div>
+                                    </div>
+                                </div>
+
+                                <button
+                                    onClick={() => odometerCameraInputRef.current?.click()}
+                                    className="w-full py-4 bg-blue-600 hover:bg-blue-500 text-white rounded-2xl font-black text-sm uppercase tracking-widest shadow-lg shadow-blue-950/50 transition-all flex items-center justify-center gap-2"
+                                >
+                                    <Camera size={18} />
+                                    AMBIL FOTO ODOMETER / TAKE ODO PHOTO
+                                </button>
+                            </div>
+                        )}
+
+                        {/* Image Preview & AI Analysis */}
+                        {odometerPhotoBase64 && (
+                            <div className="space-y-6">
+                                <div className="relative aspect-[16/10] w-full rounded-2xl border border-slate-800 bg-slate-950 overflow-hidden flex items-center justify-center shadow-inner">
+                                    <img 
+                                        src={`data:image/jpeg;base64,${odometerPhotoBase64}`} 
+                                        alt="Odometer Capture" 
+                                        className="w-full h-full object-cover"
+                                    />
+                                    
+                                    {isAnalyzingOdometer && (
+                                        <div className="absolute inset-0 bg-slate-950/80 backdrop-blur-sm flex flex-col items-center justify-center text-center p-4">
+                                            <div className="w-10 h-10 border-4 border-blue-500/20 border-t-blue-500 rounded-full animate-spin mb-3"></div>
+                                            <p className="text-sm font-bold text-white uppercase tracking-wider">AI Menganalisis Foto... / AI Analyzing ODO...</p>
+                                            <p className="text-[9px] text-slate-500 uppercase tracking-widest mt-1">Sila tunggu sebentar / Please wait a moment</p>
+                                        </div>
+                                    )}
+                                </div>
+
+                                {!isAnalyzingOdometer && (
+                                    <div className="space-y-4 animate-in fade-in duration-300">
+                                        <div className="bg-slate-900 border border-slate-800/80 p-4 rounded-2xl space-y-3">
+                                            <label className="block text-xs font-black text-slate-400 uppercase tracking-wider">
+                                                Masukkan Bacaan ODO (km) / Confirm ODO Value:
+                                            </label>
+                                            
+                                            <div className="relative flex items-center">
+                                                <input 
+                                                    type="number"
+                                                    pattern="[0-9]*"
+                                                    inputMode="numeric"
+                                                    placeholder="Contoh: 95671"
+                                                    className="w-full bg-slate-950 border border-slate-800 rounded-xl py-3 px-4 text-white text-lg font-mono font-bold focus:border-blue-500 outline-none text-center tracking-widest"
+                                                    value={confirmedMileage}
+                                                    onChange={(e) => setConfirmedMileage(e.target.value)}
+                                                />
+                                                <span className="absolute right-4 text-xs font-black text-slate-500 uppercase">KM</span>
+                                            </div>
+
+                                            {detectedMileage !== null ? (
+                                                <div className="flex items-center gap-2 text-[10px] text-emerald-400 font-bold bg-emerald-500/5 border border-emerald-500/15 py-2 px-3 rounded-lg">
+                                                    <CheckCircle size={12} />
+                                                    <span>AI berjaya mengesan bacaan ODO: {detectedMileage} km</span>
+                                                </div>
+                                            ) : (
+                                                <div className="flex items-center gap-2 text-[10px] text-amber-400 font-bold bg-amber-500/5 border border-amber-500/15 py-2 px-3 rounded-lg">
+                                                    <span>⚠️ Sila masukkan bacaan ODO secara manual jika AI tidak mengesan dengan tepat.</span>
+                                                </div>
+                                            )}
+                                        </div>
+
+                                        <div className="flex gap-3">
+                                            <button
+                                                type="button"
+                                                onClick={() => odometerCameraInputRef.current?.click()}
+                                                disabled={submittingOdometer}
+                                                className="flex-1 py-4 bg-slate-900 hover:bg-slate-800 border border-slate-800 text-slate-400 hover:text-white rounded-xl font-bold text-xs uppercase tracking-widest transition-all"
+                                            >
+                                                Ambil Semula / Retake
+                                            </button>
+                                            <button
+                                                type="button"
+                                                onClick={handleOdometerConfirm}
+                                                disabled={submittingOdometer || isAnalyzingOdometer}
+                                                className="flex-2 py-4 bg-blue-600 hover:bg-blue-500 disabled:bg-slate-800 text-white disabled:text-slate-500 rounded-xl font-black text-xs uppercase tracking-widest shadow-lg shadow-blue-950/50 disabled:shadow-none transition-all flex items-center justify-center gap-2"
+                                            >
+                                                {submittingOdometer ? (
+                                                    <>
+                                                        <div className="w-4 h-4 border-2 border-white/20 border-t-white rounded-full animate-spin"></div>
+                                                        <span>Menghantar... / Submitting...</span>
+                                                    </>
+                                                ) : (
+                                                    <>
+                                                        <CheckCircle size={14} />
+                                                        <span>Sah & Simpan / Confirm & Save</span>
+                                                    </>
+                                                )}
+                                            </button>
+                                        </div>
+                                    </div>
+                                )}
+                            </div>
+                        )}
+                    </div>
+                </div>
+            )}
 
         </div >
     );

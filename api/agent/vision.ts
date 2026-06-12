@@ -94,6 +94,18 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
                 prompt += driversList.map(d => `- Name: ${d.name}`).join('\n');
                 prompt += `\n\nPlease match the driver name for each trip/section to the closest driver name in the list above.`;
             }
+        } else if (type === 'odometer') {
+            prompt = `This image is a photo of a vehicle's dashboard/instrument cluster focusing on the odometer (digital or mechanical mileage display).
+Please analyze the image, locate the odometer display (often labeled "ODO" or showing a number followed by "km" or similar digital numbers), and extract the current mileage as a clean integer.
+
+Return a STRICT JSON object:
+{
+  "mileage": number | null, // The odometer reading as a clean integer (e.g. 95671). If not visible or cannot be determined, return null.
+  "confidence": "high" | "medium" | "low", // The confidence level of your reading.
+  "reason": "string describing your reasoning or any visual clarity issues"
+}
+
+Do not include markdown formatting. Return raw JSON only.`;
         } else {
             prompt = `Extract customer data from this image (e.g. invoice, delivery order, contact card).
         Return a STRICT JSON ARRAY of objects. 
