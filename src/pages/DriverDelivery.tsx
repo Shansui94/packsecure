@@ -1055,8 +1055,15 @@ const DriverDelivery: React.FC<DriverDeliveryProps> = ({ user }) => {
 
                 if (unbindError) throw unbindError;
 
-                // 取消自动完成 Loaded 订单的逻辑，防止未上传照片的任务被自动改为已送达。
-                // 司机如遇照片上传失败，该任务保持 Loaded，由管理人员在后台确认后手动完成。
+                // 自动完成所有已 Loaded 且上传了卸货照片的订单 (满足扫码退车自动 selesai，且防止无图任务被完成)
+                const { error: orderError } = await supabase.from('sales_orders')
+                    .update({ status: 'Delivered' })
+                    .eq('driver_id', user.uid)
+                    .eq('status', 'Loaded')
+                    .not('pod_photo_url', 'is', null)
+                    .neq('pod_photo_url', '');
+
+                if (orderError) throw orderError;
 
                 alert("✅ Syif Selesai & Lori dilepaskan! / Shift completed & Lorry unbound!");
                 setCurrentLorry(null);
