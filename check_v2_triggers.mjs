@@ -11,13 +11,15 @@ const s = createClient(
 
 async function checkTriggersV2() {
     console.log("Checking triggers on production_logs_v2 in Information Schema...");
-    const { data } = await s.rpc('execute_sql', {
+    const { data, error } = await s.rpc('execute_sql', {
         sql_query: "SELECT trigger_name, event_manipulation, event_object_table, action_statement FROM information_schema.triggers WHERE event_object_table = 'production_logs_v2'"
-    }).catch(err => {
-        return { data: 'RPC failed: ' + err.message };
     });
 
-    console.log(JSON.stringify(data, null, 2));
+    if (error) {
+        console.error("RPC failed:", error);
+    } else {
+        console.log(JSON.stringify(data, null, 2));
+    }
 }
 
 checkTriggersV2();

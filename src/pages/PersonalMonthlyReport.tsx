@@ -1,9 +1,11 @@
 import React, { useState, useEffect, useMemo } from 'react';
 import {
     CalendarDays, Award, AlertTriangle, Camera,
-    DollarSign, Clock, ChevronLeft, ChevronRight, Activity, Users, Truck, X
+    DollarSign, Clock, ChevronLeft, ChevronRight, Activity, Users, Truck, X,
+    FileSpreadsheet
 } from 'lucide-react';
 import { supabase } from '../services/supabase';
+import * as XLSX from 'xlsx';
 
 interface Props {
     user: any;
@@ -76,6 +78,7 @@ const PersonalMonthlyReport: React.FC<Props> = ({ user }) => {
     const [payroll, setPayroll] = useState<any | null>(null);
     const [deliveries, setDeliveries] = useState<any[]>([]);
     const [deliveryRates, setDeliveryRates] = useState<any[]>([]);
+    const [driverLorryPlate, setDriverLorryPlate] = useState<string>('N/A');
     
     // Modal / selection states
     const [selectedTrip, setSelectedTrip] = useState<any | null>(null);
@@ -368,9 +371,18 @@ const PersonalMonthlyReport: React.FC<Props> = ({ user }) => {
                     .gte('deadline', startDateTs.split('T')[0])
                     .lte('deadline', endDateTs.split('T')[0]);
                 setDeliveries(deliveryData || []);
+
+                // Fetch tied lorry for driver / Dapatkan lorry yang terikat untuk pemandu
+                const { data: lorryData } = await supabase
+                    .from('lorries')
+                    .select('plate_number')
+                    .eq('driver_id', selectedEmployeeId)
+                    .maybeSingle();
+                setDriverLorryPlate(lorryData?.plate_number || 'N/A');
             } else {
                 setDeliveries([]);
                 setDeliveryRates([]);
+                setDriverLorryPlate('N/A');
             }
 
         } catch (error) {
@@ -491,6 +503,55 @@ const PersonalMonthlyReport: React.FC<Props> = ({ user }) => {
             console.error("Failed to save trip details:", err);
             alert("Ralat menyimpan trip: / Error saving trip: " + err.message);
         }
+    };
+
+    const handleDownloadExcel = () => {
+        // Collect all tripDetails from dailyMetrics
+        const allTrips: any[] = [];
+        dailyMetrics.forEach(day => {
+            if (day.tripDetails && day.tripDetails.length > 0) {
+                day.tripDetails.forEach(trip => {
+                    allTrips.push({
+                        date: day.dateStr,
+                        plateNumber: driverLorryPlate,
+                        origin: trip.trip_origin || 'TAIPING',
+                        destination: trip.zone || 'Unknown',
+                        price: trip.earnings || 0
+                    });
+                });
+            }
+        });
+
+        if (allTrips.length === 0) {
+            alert("Tiada data perjalanan untuk dieksport. / No trip data to export.");
+            return;
+        }
+
+        // Format data for sheet
+        const excelRows = allTrips.map(t => ({
+            'Tarikh / Date': t.date,
+            'No. Pendaftaran Lorry / Lorry Plate Number': t.plateNumber,
+            'Tempat Asal / Origin': t.origin,
+            'Destinasi / Destination': t.destination,
+            'Harga / Price (RM)': t.price
+        }));
+
+        const ws = XLSX.utils.json_to_sheet(excelRows);
+        const wb = XLSX.utils.book_new();
+        XLSX.utils.book_append_sheet(wb, ws, 'Trip Logs');
+
+        // Set column widths for better layout
+        ws['!cols'] = [
+            { wch: 15 }, // Date
+            { wch: 25 }, // Lorry Plate Number
+            { wch: 20 }, // Origin
+            { wch: 30 }, // Destination
+            { wch: 15 }  // Price
+        ];
+
+        const driverName = viewedProfile?.name || user?.name || 'Driver';
+        const fileName = `Laporan_Trip_Pemandu_${driverName.replace(/\s+/g, '_')}_${selectedYear}_${String(selectedMonth).padStart(2, '0')}.xlsx`;
+        XLSX.writeFile(wb, fileName);
     };
 
     const changeMonth = (offset: number) => {
@@ -637,12 +698,14 @@ const PersonalMonthlyReport: React.FC<Props> = ({ user }) => {
                 const rateInfo = rateMap[key];
                 const drops = Math.max(1, t.trip_drop_count || 1);
 
+                let tEarnings = 0;
                 if (rateInfo) {
                     const base = Number(rateInfo.base_rate) || 0;
                     const maxPlaces = Number(rateInfo.max_places) || 0;
                     const extraPlaces = Math.max(0, drops - maxPlaces);
                     const extraRate = extraPlaces * (Number(rateInfo.extra_rate_per_place) || 0);
-                    tripEarnings += (base + extraRate);
+                    tEarnings = base + extraRate;
+                    tripEarnings += tEarnings;
                 }
 
                 // Push formatting: "TAIPING ➞ KL (2 Drops)"
@@ -659,6 +722,7 @@ const PersonalMonthlyReport: React.FC<Props> = ({ user }) => {
                     trip_origin: t.trip_origin || null,
                     zone: t.zone || null,
                     trip_drop_count: t.trip_drop_count || 1,
+                    earnings: tEarnings,
                     displayString: `${originRaw} ➞ ${displayZone} (${drops} Drop${drops > 1 ? 's' : ''})`
                 });
             });
@@ -736,28 +800,40 @@ const PersonalMonthlyReport: React.FC<Props> = ({ user }) => {
                     </div>
                 </div>
 
-                <div className="flex items-center gap-3 bg-[#0d0d12]/80 border border-white/10 rounded-2xl px-5 py-3 shadow-lg backdrop-blur-md">
-                    <button onClick={() => changeMonth(-1)} className="p-2 rounded-xl hover:bg-white/10 text-gray-400 hover:text-white transition-all active:scale-95">
-                        <ChevronLeft size={20} />
-                    </button>
-                    <div className="text-center min-w-[140px]">
-                        <div className="text-xl font-black text-white">
-                            {(() => {
-                                const msNames: Record<string, string> = {
-                                    'January': 'Januari / January', 'February': 'Februari / February', 'March': 'Mac / March',
-                                    'April': 'April / April', 'May': 'Mei / May', 'June': 'Jun / June', 'July': 'Julai / July',
-                                    'August': 'Ogos / August', 'September': 'September / September', 'October': 'Oktober / October',
-                                    'November': 'November / November', 'December': 'Disember / December'
-                                };
-                                return msNames[MONTH_NAMES[selectedMonth - 1]] || MONTH_NAMES[selectedMonth - 1];
-                            })()}
+                <div className="flex items-center gap-3">
+                    {isDriver && (
+                        <button
+                            onClick={handleDownloadExcel}
+                            className="flex items-center gap-2 bg-gradient-to-r from-emerald-500/80 to-teal-600/80 hover:from-emerald-500 hover:to-teal-600 text-white border border-emerald-500/30 px-5 py-3 rounded-2xl font-black uppercase text-xs tracking-widest transition-all shadow-lg shadow-emerald-950/20 active:scale-95 cursor-pointer"
+                        >
+                            <FileSpreadsheet size={16} className="text-emerald-400" />
+                            <span>Download Excel</span>
+                        </button>
+                    )}
+
+                    <div className="flex items-center gap-3 bg-[#0d0d12]/80 border border-white/10 rounded-2xl px-5 py-3 shadow-lg backdrop-blur-md">
+                        <button onClick={() => changeMonth(-1)} className="p-2 rounded-xl hover:bg-white/10 text-gray-400 hover:text-white transition-all active:scale-95">
+                            <ChevronLeft size={20} />
+                        </button>
+                        <div className="text-center min-w-[140px]">
+                            <div className="text-xl font-black text-white">
+                                {(() => {
+                                    const msNames: Record<string, string> = {
+                                        'January': 'Januari / January', 'February': 'Februari / February', 'March': 'Mac / March',
+                                        'April': 'April / April', 'May': 'Mei / May', 'June': 'Jun / June', 'July': 'Julai / July',
+                                        'August': 'Ogos / August', 'September': 'September / September', 'October': 'Oktober / October',
+                                        'November': 'November / November', 'December': 'Disember / December'
+                                    };
+                                    return msNames[MONTH_NAMES[selectedMonth - 1]] || MONTH_NAMES[selectedMonth - 1];
+                                })()}
+                            </div>
+                            <div className="text-xs text-blue-400 tracking-widest uppercase font-bold">{selectedYear}</div>
                         </div>
-                        <div className="text-xs text-blue-400 tracking-widest uppercase font-bold">{selectedYear}</div>
+                        <button onClick={() => changeMonth(1)} disabled={selectedMonth === today.getMonth() + 1 && selectedYear === today.getFullYear()}
+                            className="p-2 rounded-xl hover:bg-white/10 text-gray-400 hover:text-white transition-all disabled:opacity-20 disabled:hover:bg-transparent cursor-pointer active:scale-95">
+                            <ChevronRight size={20} />
+                        </button>
                     </div>
-                    <button onClick={() => changeMonth(1)} disabled={selectedMonth === today.getMonth() + 1 && selectedYear === today.getFullYear()}
-                        className="p-2 rounded-xl hover:bg-white/10 text-gray-400 hover:text-white transition-all disabled:opacity-20 disabled:hover:bg-transparent cursor-pointer active:scale-95">
-                        <ChevronRight size={20} />
-                    </button>
                 </div>
             </div>
 

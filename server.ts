@@ -6,6 +6,7 @@ import chatHandler from './api/agent/chat';
 import manageEmployeeHandler from './api/manage-employee';
 import visionHandler from './api/agent/vision';
 import geocodeHandler from './api/geocode';
+import aiPhotoHandler from './api/agent/ai-photo';
 
 const app = express();
 const PORT = 8080;
@@ -29,6 +30,7 @@ const mountVercelHandler = (path: string, handler: (req: any, res: any) => Promi
 mountVercelHandler('/api/manage-employee', manageEmployeeHandler);
 mountVercelHandler('/api/agent/vision', visionHandler);
 mountVercelHandler('/api/geocode', geocodeHandler);
+mountVercelHandler('/api/agent/ai-photo', aiPhotoHandler);
 
 // Mimic Vercel Request/Response for the handler
 app.post('/api/agent/chat', async (req, res) => {

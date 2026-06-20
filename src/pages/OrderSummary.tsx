@@ -6,6 +6,8 @@ import { WAREHOUSES } from '../data/factoryData';
 import { SalesOrder, SalesOrderItem, User } from '../types';
 import { Calendar, User as UserIcon, Truck, MapPin, Package, Camera, Trash2, X } from 'lucide-react';
 import { parsePrepPhotos, stringifyPrepPhotos, PrepPhoto } from '../utils/prepPhotos';
+import { compressImage, dataURLtoBlob } from '../utils/imageCompress';
+
 
 const LOCATIONS = WAREHOUSES;
 type Location = string;
@@ -91,37 +93,6 @@ const OrderSummary: React.FC<OrderSummaryProps> = ({ user }) => {
         }
     };
 
-    const compressImage = (file: File, maxWidth = 1200, quality = 0.75): Promise<string> => {
-        return new Promise((resolve, reject) => {
-            const reader = new FileReader();
-            reader.onload = (e) => {
-                const img = new Image();
-                img.onload = () => {
-                    const canvas = document.createElement('canvas');
-                    let w = img.width, h = img.height;
-                    if (w > maxWidth) {
-                        h = (maxWidth / w) * h;
-                        w = maxWidth;
-                    }
-                    canvas.width = w;
-                    canvas.height = h;
-                    const ctx = canvas.getContext('2d')!;
-                    ctx.drawImage(img, 0, 0, w, h);
-                    const dataUrl = canvas.toDataURL('image/jpeg', quality);
-                    resolve(dataUrl);
-                };
-                img.onerror = reject;
-                if (e.target?.result) {
-                    img.src = e.target.result as string;
-                } else {
-                    reject(new Error("File conversion failed"));
-                }
-            };
-            reader.onerror = reject;
-            reader.readAsDataURL(file);
-        });
-    };
-
     const handlePhotoSelect = async (e: React.ChangeEvent<HTMLInputElement>) => {
         const file = e.target.files?.[0];
         const orderId = selectedOrderIdForUpload;
@@ -133,8 +104,7 @@ const OrderSummary: React.FC<OrderSummaryProps> = ({ user }) => {
             const existingPhotos = parsePrepPhotos(currentOrder?.preparation_photo_url);
 
             const compressedDataUrl = await compressImage(file);
-            const base64Content = compressedDataUrl.split(',')[1];
-            const blob = await fetch(`data:image/jpeg;base64,${base64Content}`).then(r => r.blob());
+            const blob = dataURLtoBlob(compressedDataUrl);
 
             const filename = `prep_${orderId}_${Date.now()}.jpg`;
 
@@ -169,6 +139,7 @@ const OrderSummary: React.FC<OrderSummaryProps> = ({ user }) => {
             setSelectedOrderIdForUpload(null);
         }
     };
+
 
     const handleDeletePhoto = async (orderId: string, photoIndex: number) => {
         if (!window.confirm("确定要删除这张备货照片吗？ / Are you sure you want to delete this photo?")) return;

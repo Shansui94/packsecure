@@ -407,9 +407,11 @@ export default function DataManagement() {
             delete payload.subtitle;
             delete payload.bom_items_v2; // Don't save nested relations directly here for now
 
-            // Remove Generated/Computed Columns
+            // Remove Generated/Computed/Helper Columns
             if (activeTab === 'items') {
                 delete payload.volume_m3;
+                delete payload.weight_kg;
+                delete payload.pack_dims;
             }
 
             // DYNAMIC PK HANDLING: if the table's DB Primary Key is NOT 'id', we must strip the 'id' field
@@ -511,7 +513,18 @@ export default function DataManagement() {
             } else if (activeTab === 'items') {
                 finalRows = rows.map((r: any) => {
                     const newR = { ...r };
-                    delete newR.volume_m3; // Strip generated column
+                    if (newR.weight_kg !== undefined && newR.gross_weight_kg === undefined) {
+                        newR.gross_weight_kg = newR.weight_kg;
+                    }
+                    if (newR.volume_m3 !== undefined && newR.volume_cbm === undefined) {
+                        newR.volume_cbm = newR.volume_m3;
+                    }
+                    if (newR.pack_dims !== undefined && newR.box_dims === undefined) {
+                        newR.box_dims = newR.pack_dims;
+                    }
+                    delete newR.volume_m3;
+                    delete newR.weight_kg;
+                    delete newR.pack_dims;
                     return newR;
                 });
             }
@@ -797,9 +810,9 @@ export default function DataManagement() {
                                         <InputGroup label="Product Name" value={form.name} onChange={(v: any) => setForm({ ...form, name: v })} required />
 
                                         <div className="col-span-2 p-4 bg-white/5 rounded-xl border border-white/5 grid grid-cols-3 gap-4">
-                                            <InputGroup label="Weight (kg/unit)" type="number" value={form.weight_kg} onChange={(v: any) => setForm({ ...form, weight_kg: v })} />
-                                            <InputGroup label="Volume (m³/unit)" type="number" value={form.volume_m3} onChange={(v: any) => setForm({ ...form, volume_m3: v })} />
-                                            <InputGroup label="Pack Dims" value={form.pack_dims} onChange={(v: any) => setForm({ ...form, pack_dims: v })} placeholder="LxWxH" />
+                                            <InputGroup label="Weight (kg/unit)" type="number" value={form.gross_weight_kg} onChange={(v: any) => setForm({ ...form, gross_weight_kg: v })} />
+                                            <InputGroup label="Volume (m³/unit)" type="number" value={form.volume_cbm} onChange={(v: any) => setForm({ ...form, volume_cbm: v })} />
+                                            <InputGroup label="Pack Dims" value={form.box_dims} onChange={(v: any) => setForm({ ...form, box_dims: v })} placeholder="LxWxH" />
                                         </div>
                                         <InputGroup label="Description" value={form.description} onChange={(v: any) => setForm({ ...form, description: v })} colSpan={2} />
                                     </div>

@@ -43,6 +43,7 @@ import DevLog from './pages/DevLog';
 import LeaveCalendar from './pages/LeaveCalendar';
 import SOPCenter from './pages/SOPCenter';
 import WorkPhotoLog from './pages/WorkPhotoLog';
+import YieldControl from './pages/YieldControl';
 import PersonalMonthlyReport from './pages/PersonalMonthlyReport';
 import MachineSchedule from './pages/MachineSchedule';
 import ActivityLogs from './pages/ActivityLogs';
@@ -223,8 +224,8 @@ function App() {
         const allowedPages: Record<string, string[]> = {
             'SuperAdmin': ['*'], // The Only One with Full Access
             'Admin': ['profile', 'construction', 'factory-live-os', 'dashboard', 'data-v2', 'customer-import', 'universal-intake', 'scanner', 'jobs', 'livestock', 'inventory', 'recipes', 'products', 'delivery', 'order-summary', 'dispatch', 'production', 'report-history', 'users', 'hr', 'simple-stock', 'maintenance', 'lorry-management', 'iot', 'driver-management', 'operators', 'dev-log', 'leave-calendar', 'personal-report', 'machine-schedule', 'activity-logs', 'floor-plan', 'stock-movement', 'stock-audit', 'audit-report', 'reports', 'notes', 'tasks', 'sop-center', 'work-photos', 'executive-reports', 'driver-leave'],
-            'Manager': ['profile', 'construction', 'factory-live-os', 'dashboard', 'data-v2', 'customer-import', 'universal-intake', 'jobs', 'livestock', 'inventory', 'recipes', 'products', 'delivery', 'order-summary', 'dispatch', 'production', 'report-history', 'hr', 'simple-stock', 'maintenance', 'lorry-management', 'iot', 'driver-management', 'operators', 'leave-calendar', 'personal-report', 'machine-schedule', 'activity-logs', 'floor-plan', 'stock-movement', 'stock-audit', 'audit-report', 'reports', 'notes', 'tasks', 'sop-center', 'work-photos', 'executive-reports', 'driver-leave'],
-            'LogisticsCoordinator': ['profile', 'construction', 'dashboard', 'livestock', 'delivery', 'order-summary', 'products', 'maintenance', 'driver-management', 'leave-calendar', 'personal-report', 'activity-logs', 'notes', 'tasks', 'sop-center', 'work-photos'],
+            'Manager': ['profile', 'construction', 'factory-live-os', 'dashboard', 'data-v2', 'customer-import', 'universal-intake', 'jobs', 'livestock', 'inventory', 'recipes', 'products', 'delivery', 'order-summary', 'dispatch', 'production', 'report-history', 'hr', 'simple-stock', 'maintenance', 'lorry-management', 'iot', 'driver-management', 'operators', 'leave-calendar', 'personal-report', 'machine-schedule', 'activity-logs', 'floor-plan', 'stock-movement', 'stock-audit', 'audit-report', 'reports', 'notes', 'tasks', 'sop-center', 'work-photos', 'executive-reports', 'driver-leave', 'scanner'],
+            'LogisticsCoordinator': ['profile', 'construction', 'dashboard', 'livestock', 'delivery', 'order-summary', 'products', 'maintenance', 'driver-management', 'leave-calendar', 'personal-report', 'activity-logs', 'notes', 'tasks', 'sop-center', 'work-photos', 'reports'],
             'Driver': ['delivery-driver', 'delivery-history', 'leave-calendar', 'lorry-service', 'profile', 'personal-report', 'activity-logs', 'notes', 'tasks', 'sop-center', 'work-photos', 'driver-leave'],
             'Operator': ['scanner', 'leave-calendar', 'profile', 'personal-report', 'activity-logs', 'notes', 'tasks', 'sop-center', 'work-photos', 'order-summary'],
             'Device': ['scanner'],
@@ -284,6 +285,7 @@ function App() {
                 .eq('id', currentUser.id)
                 .single();
 
+            let sysUser: any = null;
             if (profile) {
                 role = (profile.role as UserRole) || 'Operator';
                 status = profile.status || 'Active';
@@ -292,11 +294,13 @@ function App() {
             } else {
                 // ⚡ Fallback: try sys_users_v2 directly via auth_user_id
                 // (handles cases where users_public RLS blocks the anon key read)
-                const { data: sysUser } = await supabase
+                const { data: fetchedSysUser } = await supabase
                     .from('sys_users_v2')
-                    .select('role, status, name, employee_id')
+                    .select('role, status, name, employee_id, factory_id')
                     .eq('auth_user_id', currentUser.id)
                     .maybeSingle();
+
+                sysUser = fetchedSysUser;
 
                 if (sysUser) {
                     console.log('[Auth] Found profile via sys_users_v2 fallback for:', currentUser.email);
@@ -331,6 +335,9 @@ function App() {
                 status = 'Active';
             }
 
+            // Check if profile has it, or sysUser
+            const resolvedFactoryId = profile?.factory_id || sysUser?.factory_id || undefined;
+
             // CHECK STATUS
             if (status === 'Pending' || status === 'Rejected') {
                 console.warn(`User status is ${status}. Signing out.`);
@@ -341,15 +348,21 @@ function App() {
                 return;
             }
 
-            // Fetch dynamic module unlocks
+            // Fetch dynamic module unlocks and pin_code
             let roleModules: string[] = [];
+            let resolvedPinCode: string | undefined = undefined;
             try {
-                const { data: v2Data } = await supabase.from('sys_users_v2').select('role_modules').eq('auth_user_id', currentUser.id).maybeSingle();
-                if (v2Data && v2Data.role_modules) {
-                    roleModules = v2Data.role_modules;
+                const { data: v2Data } = await supabase
+                    .from('sys_users_v2')
+                    .select('role_modules, pin_code')
+                    .eq('auth_user_id', currentUser.id)
+                    .maybeSingle();
+                if (v2Data) {
+                    if (v2Data.role_modules) roleModules = v2Data.role_modules;
+                    if (v2Data.pin_code) resolvedPinCode = v2Data.pin_code;
                 }
             } catch (e) {
-                console.warn("Failed to fetch custom modules", e);
+                console.warn("Failed to fetch custom modules / PIN", e);
             }
 
             setUser({
@@ -361,7 +374,9 @@ function App() {
                 gps: 'Unknown',
                 status: status as any,
                 loginTime: new Date().toLocaleTimeString(),
-                roleModules: roleModules
+                roleModules: roleModules,
+                factoryId: resolvedFactoryId,
+                pinCode: resolvedPinCode
             });
             setIsLoggedIn(true);
 
@@ -376,7 +391,8 @@ function App() {
             if (!localStorage.getItem('lastActivePage')) {
                 if (employeeId === '009') setActivePage('order-summary');
                 else if (role === 'SuperAdmin') setActivePage('dashboard');
-                else if (role === 'Operator' || role === 'Device') setActivePage('scanner');
+                else if (role === 'Operator') setActivePage('scanner');
+                else if (role === 'Device') setActivePage('scanner');
                 else if (role === 'Driver') setActivePage('delivery-driver');
                 else if (role === 'Manager') setActivePage('order-summary');
                 else if (['Admin', 'Sales', 'Finance'].includes(role)) setActivePage('construction');
@@ -688,7 +704,7 @@ function App() {
             case 'product-library': // 兼容旧路由键
                 return <ProductLibrary />;
             case 'recipes':
-                return null; // <RecipeManager />;
+                return <YieldControl />;
             case 'delivery':
                 return <DeliveryOrderManagement />;
             case 'order-summary':
@@ -753,8 +769,6 @@ function App() {
                 return <MachineSchedule user={user} />;
             case 'activity-logs':
                 return <ActivityLogs user={user} />;
-            case 'operator-dashboard':
-                return <UnderConstruction title="Coming Soon" />;
             case 'data':
                 return <UnderConstruction title="Access Restricted" />;
             case 'construction':

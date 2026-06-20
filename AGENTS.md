@@ -1,6 +1,6 @@
 # Packsecure OS — Agent 指南
 
-面向 Cursor Agent 的项目说明。维护者单人全栈负责前端、API、数据库脚本与部署。
+面向 Antigravity Agent 的项目说明。维护者单人全栈负责前端、API、数据库脚本与部署。
 
 ## 产品概述
 

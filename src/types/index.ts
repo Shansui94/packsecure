@@ -42,6 +42,7 @@ export interface User {
     bankAccountNo?: string;
     factoryId?: string; // NEW: Assigned Factory (T1, N1, etc.)
     base_location?: string; // NEW: Assigned Location for Trip Management (Taiping/Nilai)
+    pinCode?: string; // NEW: 4-digit PIN code for verification
 }
 
 // 3. Job Order (Production Task)
@@ -92,6 +93,7 @@ export interface SalesOrderItem {
     quantity: number; // Rolls
     remark?: string; // NEW: Remark field
     sourceLocation?: string; // NEW: Optional Multi-Location Pickup
+    originalName?: string; // NEW: Raw name extracted from scan before correction
 }
 
 export interface SalesOrder {
@@ -125,6 +127,8 @@ export interface SalesOrder {
     preparation_photo_url?: string | null;
     deliveryDate?: string;
     driver_id?: string;
+    extracted_do_number?: string | null;
+    whatsapp_screenshot_url?: string | null;
 }
 
 export interface DeliveryRate {
@@ -180,6 +184,8 @@ export interface Lorry {
     driverUserId: string; // Map to User.uid
     preferredZone?: string;
     status: 'Available' | 'On-Route' | 'Maintenance';
+    maxVolumeM3?: number;
+    maxWeightKg?: number;
 }
 
 // 4. Inventory Item (Raw Material)

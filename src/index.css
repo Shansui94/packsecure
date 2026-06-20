@@ -1,15 +1,102 @@
 @import "tailwindcss";
 
+@theme {
+  --color-apple-bg: var(--bg-primary);
+  --color-apple-surface: var(--bg-secondary);
+  --color-apple-textMain: var(--text-primary);
+  --color-apple-text-main: var(--text-primary);
+  --color-apple-textMuted: var(--text-secondary);
+  --color-apple-text-muted: var(--text-secondary);
+  --color-apple-blue: var(--apple-blue);
+  --color-apple-red: #FF3B30;
+  --color-apple-green: #5ACC5A;
+  --color-apple-orange: var(--apple-orange);
+  --color-apple-border: var(--apple-border);
+
+  --color-blue-50: #fff7ed;
+  --color-blue-100: #ffedd5;
+  --color-blue-200: #fed7aa;
+  --color-blue-300: #fdbb74;
+  --color-blue-400: #f97316;
+  --color-blue-500: #E97132;
+  --color-blue-600: #FE4B13;
+  --color-blue-700: #d94b06;
+  --color-blue-800: #b23907;
+  --color-blue-900: #7c2d12;
+  --color-blue-950: #431407;
+
+  --color-indigo-50: #fff5f5;
+  --color-indigo-100: #fed7d7;
+  --color-indigo-200: #feb2b2;
+  --color-indigo-300: #f98080;
+  --color-indigo-400: #f55050;
+  --color-indigo-500: #FF5E36;
+  --color-indigo-600: #E03D16;
+  --color-indigo-700: #c53030;
+  --color-indigo-800: #9b2c2c;
+  --color-indigo-900: #742a2a;
+  --color-indigo-950: #3c0d0d;
+}
+
 :root {
-  --bg-primary: #121215;
-  /* Soft Charcoal (Was Deep Black) - Easier on eyes */
-  --text-primary: #e4e4e7;
-  /* Zinc-200 (Was Pure White) */
-  --bg-secondary: #1e1e24;
-  /* Slightly lighter surface */
-  --accent-glow: 0 0 20px rgba(59, 130, 246, 0.5);
+  --bg-primary: #F5F5F7;
+  --bg-secondary: #FFFFFF;
+  --text-primary: #1D1D1F;
+  --text-secondary: #86868B;
+  
+  --apple-blue: #E97132;
+  --apple-orange: #FE4B13;
+  --apple-border: rgba(0, 0, 0, 0.08);
+
+  --accent-glow: 0 0 20px rgba(233, 113, 50, 0.15);
   --font-main: 'Inter', system-ui, -apple-system, sans-serif;
+  color-scheme: light;
+}
+
+html.dark {
+  --bg-primary: #050505;
+  --bg-secondary: #121215;
+  --text-primary: #FFFFFF;
+  --text-secondary: #8E8E8E;
+  
+  --apple-border: rgba(255, 255, 255, 0.08);
+  
+  --accent-glow: 0 0 20px rgba(233, 113, 50, 0.4);
   color-scheme: dark;
+}
+
+/* --- GOOGLE TRANSLATION OVERRIDES --- */
+body {
+  top: 0 !important;
+  position: static !important;
+}
+.goog-te-banner-frame,
+.goog-te-balloon-frame,
+iframe.goog-te-banner-frame,
+iframe.skiptranslate,
+#goog-gt-tt,
+.goog-tooltip,
+.goog-tooltip-value,
+.goog-te-gadget,
+.goog-te-gadget-simple,
+.skiptranslate,
+.VIpgJd-ZVi9od-ORHb-OEVmcd,
+.VIpgJd-ZVi9od-ORHb-OEVmcd-ti35s-va74A,
+.VIpgJd-ZVi9od-a2s2C-dgl2ce-Ornhxa-e3g2oc,
+.VIpgJd-ZVi9od-l47o5e-LgbsSe {
+  display: none !important;
+  visibility: hidden !important;
+  opacity: 0 !important;
+  pointer-events: none !important;
+}
+.goog-text-highlight {
+  background-color: transparent !important;
+  box-shadow: none !important;
+  border: none !important;
+  pointer-events: none !important;
+}
+#google_translate_element {
+  display: none !important;
 }
 
 body {
@@ -57,11 +144,11 @@ body {
 
 /* --- UTILITIES --- */
 .glass-panel {
-  @apply bg-[#1e1e24]/80 backdrop-blur-xl border border-white/[0.08] shadow-2xl rounded-2xl;
+  @apply bg-apple-surface/80 backdrop-blur-xl border border-apple-border shadow-2xl rounded-2xl;
 }
 
 .glass-card {
-  @apply bg-white/[0.04] border border-white/[0.08] rounded-xl p-6 transition-all hover:bg-white/[0.08] hover:border-white/10;
+  @apply bg-apple-surface border border-apple-border rounded-xl p-6 transition-all hover:opacity-90;
 }
 
 .btn-primary {
@@ -98,13 +185,13 @@ body {
 input,
 select,
 textarea {
-  color: #f8fafc; /* Slate-50 */
+  color: var(--text-primary);
 }
 
 /* Fix option and dropdown styling in dark mode */
 select option {
-  background-color: #1e1e24; /* bg-secondary */
-  color: #f8fafc;
+  background-color: var(--bg-secondary);
+  color: var(--text-primary);
 }
 
 /* Chrome autofill style overrides to keep theme consistent */
@@ -112,7 +199,149 @@ input:-webkit-autofill,
 input:-webkit-autofill:hover,
 input:-webkit-autofill:focus,
 input:-webkit-autofill:active {
-  -webkit-text-fill-color: #f8fafc !important;
-  -webkit-box-shadow: 0 0 0px 1000px #0f172a inset !important;
+  -webkit-text-fill-color: var(--text-primary) !important;
+  -webkit-box-shadow: 0 0 0px 1000px var(--bg-secondary) inset !important;
   transition: background-color 5000s ease-in-out 0s;
+}
+
+/* ==========================================
+   GLOBAL LIGHT MODE (白天模式) UTILITY OVERRIDES
+   ========================================== */
+html:not(.dark) {
+  /* 1. 覆盖硬编码暗色背景类 */
+  .bg-\[\#050505\],
+  .bg-\[\#09090b\],
+  .bg-slate-950,
+  .bg-zinc-950,
+  .bg-black {
+    background-color: var(--bg-primary) !important;
+  }
+
+  .bg-\[\#121214\],
+  .bg-\[\#121215\],
+  .bg-\[\#141418\],
+  .bg-\[\#18181b\],
+  .bg-slate-900,
+  .bg-zinc-900,
+  .bg-slate-800,
+  .bg-zinc-800 {
+    background-color: var(--bg-secondary) !important;
+  }
+
+  /* 2. 覆盖 hover 状态的暗色背景 */
+  .hover\:bg-slate-800:hover,
+  .hover\:bg-zinc-800:hover,
+  .hover\:bg-slate-900:hover {
+    background-color: rgba(0, 0, 0, 0.04) !important;
+  }
+
+  .hover\:bg-white\/5:hover {
+    background-color: rgba(0, 0, 0, 0.03) !important;
+  }
+
+  /* 3. 覆盖硬编码暗色边框类 */
+  .border-\[\#27272a\],
+  .border-slate-800,
+  .border-zinc-800,
+  .border-slate-700,
+  .border-zinc-700,
+  .border-slate-900,
+  .border-white\/5,
+  .border-white\/10 {
+    border-color: var(--apple-border) !important;
+  }
+
+  /* 4. 覆盖亮色/浅色文字类 */
+  .text-white,
+  .text-slate-50,
+  .text-slate-100,
+  .text-slate-200,
+  .text-gray-50,
+  .text-gray-100,
+  .text-gray-200,
+  .text-slate-300,
+  .text-gray-300,
+  .text-zinc-300 {
+    color: var(--text-primary) !important;
+  }
+
+  .text-slate-400,
+  .text-gray-400,
+  .text-zinc-400 {
+    color: var(--text-secondary) !important;
+  }
+
+  /* 5. 保护彩色/渐变背景容器中的文字与图标 */
+  .btn-primary,
+  .bg-blue-500,
+  .bg-blue-600,
+  .bg-emerald-500,
+  .bg-emerald-600,
+  .bg-green-500,
+  .bg-green-600,
+  .bg-red-500,
+  .bg-red-600,
+  .bg-orange-500,
+  .bg-orange-600,
+  .bg-amber-500,
+  .bg-amber-600,
+  .bg-purple-500,
+  .bg-gradient-to-r,
+  .bg-gradient-to-br,
+  .bg-gradient-to-t,
+  .bg-gradient-to-l,
+  .bg-apple-orange,
+  .bg-apple-red,
+  .bg-apple-blue {
+    /* 强力保护：彩色背景下的文字依然必须为白色 */
+    & .text-white,
+    & .text-slate-50,
+    & .text-slate-100,
+    & .text-slate-200,
+    & .text-gray-100,
+    & .text-gray-200,
+    & .text-slate-300,
+    &.text-white,
+    &.text-slate-100,
+    &.text-slate-200 {
+      color: #FFFFFF !important;
+    }
+
+    & .text-slate-400,
+    & .text-gray-400 {
+      color: rgba(255, 255, 255, 0.7) !important;
+    }
+  }
+
+  /* 6. 侧边栏 NavItem 及底部 Profile 区优化 */
+  aside {
+    /* 非活动链接字色微调 */
+    button.text-gray-400 {
+      color: #555555 !important;
+      &:hover {
+        color: #000000 !important;
+        background-color: rgba(0, 0, 0, 0.05) !important;
+      }
+    }
+    /* 活动链接变橙色配浅橙底 */
+    button.text-white {
+      color: var(--apple-blue) !important;
+      background-color: rgba(233, 113, 50, 0.08) !important;
+      border: 1px solid rgba(233, 113, 50, 0.15) !important;
+      & .absolute {
+        display: none !important;
+      }
+      & svg {
+        color: var(--apple-blue) !important;
+      }
+    }
+  }
+
+  /* 7. 输入控件输入及 placeholder 自适应 */
+  input, select, textarea {
+    color: var(--text-primary) !important;
+    &::placeholder {
+      color: var(--text-secondary) !important;
+    }
+  }
 }

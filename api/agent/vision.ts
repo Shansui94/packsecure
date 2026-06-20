@@ -1,5 +1,6 @@
 import { VercelRequest, VercelResponse } from '@vercel/node';
 import { GoogleGenerativeAI } from '@google/generative-ai';
+import { createClient } from '@supabase/supabase-js';
 
 const TRIP_PROMPT = `This image is a handwritten or printed delivery trip sheet (出货单), loading list, or order form.
 The sheet may contain multiple trip sections, often divided by horizontal lines or lists, each assigned to a different driver (e.g. "Sam Trip", "Tahir 1", "Tahir 2", "Mahadi 1", "Mahadi 2", "Ayan").
@@ -76,6 +77,20 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
             return res.status(500).json({ error: 'Server AI Key not configured' });
         }
 
+        // Fetch product aliases from database
+        const supabaseUrl = process.env.VITE_SUPABASE_URL || '';
+        const supabaseKey = process.env.SUPABASE_SERVICE_ROLE_KEY || process.env.VITE_SUPABASE_ANON_KEY || '';
+        let aliasList: any[] = [];
+        if (supabaseUrl && supabaseKey) {
+            try {
+                const sbClient = createClient(supabaseUrl, supabaseKey);
+                const { data } = await sbClient.from('product_aliases_v2').select('customer, alias_name, sku');
+                if (data) aliasList = data;
+            } catch (err) {
+                console.error("Failed to fetch product aliases:", err);
+            }
+        }
+
         const genAI = new GoogleGenerativeAI(apiKey);
         const model = genAI.getGenerativeModel({ model: 'gemini-2.5-flash' });
 
@@ -106,6 +121,41 @@ Return a STRICT JSON object:
 }
 
 Do not include markdown formatting. Return raw JSON only.`;
+        } else if (type === 'whatsapp_order') {
+            prompt = `This image is a screenshot of a WhatsApp chat containing order details (e.g. customer name, address/destination, items to be delivered, quantities, and other instructions).
+Please analyze the image, extract the order details, and return a single JSON object.
+
+IMPORTANT IMAGE ORIENTATION NOTE:
+- The image might be rotated. Adjust your reading frame if needed to read the text correctly.
+
+Return a STRICT JSON object with:
+- "customer": string, the customer name. Try to extract the company or person name placing the order.
+- "deliveryAddress": string, the delivery address or destination location (e.g. "Kuala Lumpur", "Taiping", "Nilai", "No 5 Jalan Industri...").
+- "zone": string, the region or zone if inferable (e.g. SELANGOR, CENTRAL, NORTH, SOUTH, JOHOR, PENANG, PERAK).
+- "notes": string, any specific remarks, delivery instructions, or chat text that is relevant.
+- "items": array of item objects:
+  { "sku": string, "product": string, "quantity": number, "remark": string, "sourceLocation": string }
+
+CRITICAL PARSING RULES FOR ITEMS:
+1. Extract all items/products listed in the message.
+2. For "product", extract the name of the product.
+3. For "quantity", extract the number of rolls, boxes, or units. Convert equations to their final calculated sum if written like "10+5".
+4. For "remark", extract any specific note for that item (e.g. "urgent", "colored core", etc.).
+5. If a product list is provided, match the items to the closest product in the list.
+
+Do not include markdown formatting. Return raw JSON only.`;
+
+            if (productsList && Array.isArray(productsList) && productsList.length > 0) {
+                prompt += `\n\nReference Product List (SKU and Name):\n`;
+                prompt += productsList.map(p => `- SKU: ${p.sku} | Name: ${p.name}`).join('\n');
+                prompt += `\n\nPlease match the items in the chat to the closest product from the list above. If a match is found, use the exact "sku" and "product" name from the list.`;
+            }
+
+            if (aliasList && aliasList.length > 0) {
+                prompt += `\n\nKnown Product Aliases (Custom Name mappings used by specific customers):\n`;
+                prompt += aliasList.map(a => `- Customer: ${a.customer || 'GLOBAL'} | Custom Name: ${a.alias_name} | Maps to SKU: ${a.sku}`).join('\n');
+                prompt += `\n\nIf the chat screenshot uses a custom name (e.g. "黑膜") that matches a known alias, map it directly to the corresponding standard SKU.`;
+            }
         } else {
             prompt = `Extract customer data from this image (e.g. invoice, delivery order, contact card).
         Return a STRICT JSON ARRAY of objects. 

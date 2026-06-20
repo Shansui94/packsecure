@@ -42,3 +42,17 @@ export function dataUrlToBase64Payload(dataUrl: string): { base64: string; mimeT
     }
     return { mimeType: 'image/jpeg', base64: dataUrl.includes(',') ? dataUrl.split(',')[1] : dataUrl };
 }
+
+/** Converts data URL (base64) to a Blob object without using window.fetch */
+export function dataURLtoBlob(dataUrl: string): Blob {
+    const arr = dataUrl.split(',');
+    const mime = arr[0].match(/:(.*?);/)?.[1] || 'image/jpeg';
+    const bstr = atob(arr[1]);
+    let n = bstr.length;
+    const u8arr = new Uint8Array(n);
+    while (n--) {
+        u8arr[n] = bstr.charCodeAt(n);
+    }
+    return new Blob([u8arr], { type: mime });
+}
+

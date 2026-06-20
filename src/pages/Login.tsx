@@ -1,8 +1,10 @@
 
 import React, { useState } from 'react';
-import { Mail, Lock } from 'lucide-react'; // Added Mail, Lock
+import { Mail, Lock, Camera, QrCode, X, HardHat, Truck } from 'lucide-react';
 import { supabase } from '../services/supabase';
 import { loginPasswordFromInput } from '../utils/pinAuth';
+import { Scanner } from '@yudiel/react-qr-scanner';
+
 
 interface LoginProps {
     onLogin: (email: string | null, gps: string, role: string) => void;
@@ -17,7 +19,9 @@ const Login: React.FC<LoginProps> = ({ onLogin, onNavigate }) => {
     const [staffPassword, setStaffPassword] = useState<string>(''); // Staff Password
 
     // Mode State: 'device' | 'staff'
-    const [loginMode] = useState<'device' | 'staff'>('staff');
+    const [loginMode, setLoginMode] = useState<'device' | 'staff'>('staff');
+    const [isScanning, setIsScanning] = useState<boolean>(false);
+
     // Forgot Password State
     const [isForgotPassword, setIsForgotPassword] = useState(false);
     const [resetEmail, setResetEmail] = useState('');
@@ -151,14 +155,14 @@ const Login: React.FC<LoginProps> = ({ onLogin, onNavigate }) => {
 
 
     return (
-        <div className="min-h-screen flex items-center justify-center relative overflow-hidden bg-slate-900 font-sans">
+        <div className="min-h-screen flex items-center justify-center relative overflow-hidden bg-[#050505] font-sans">
             {/* Background Effects */}
             <div className="absolute inset-0 z-0">
-                <div className="absolute top-[-20%] left-[-10%] w-[60%] h-[60%] bg-blue-600/10 rounded-full blur-[120px] animate-pulse" />
-                <div className="absolute bottom-[-10%] right-[-10%] w-[50%] h-[50%] bg-purple-600/10 rounded-full blur-[100px] animate-pulse delay-1000" />
+                <div className="absolute top-[-20%] left-[-10%] w-[60%] h-[60%] bg-[#E97132]/10 rounded-full blur-[120px] animate-pulse" />
+                <div className="absolute bottom-[-10%] right-[-10%] w-[50%] h-[50%] bg-[#FE4B13]/10 rounded-full blur-[100px] animate-pulse delay-1000" />
             </div>
 
-            <div className="w-full max-w-md bg-slate-800/50 backdrop-blur-2xl border border-white/10 rounded-3xl p-8 shadow-2xl relative z-10 animate-fade-in-up transition-all duration-500">
+            <div className="w-full max-w-md bg-[#121215]/80 backdrop-blur-2xl border border-white/[0.08] rounded-3xl p-8 shadow-2xl relative z-10 animate-fade-in-up transition-all duration-500">
 
                 {/* HEADER */}
                 <div className="text-center mb-8">
@@ -218,7 +222,7 @@ const Login: React.FC<LoginProps> = ({ onLogin, onNavigate }) => {
                         <button
                             type="submit"
                             disabled={isLoading || resetStatus === 'success'}
-                            className="w-full bg-gradient-to-r from-orange-600 to-red-600 hover:from-orange-500 hover:to-red-500 text-white font-bold py-4 rounded-xl shadow-lg shadow-orange-500/20 transition-all transform hover:-translate-y-0.5 active:scale-95 mt-4 disabled:opacity-50 disabled:cursor-not-allowed"
+                            className="w-full bg-gradient-to-r from-[#E97132] to-[#FE4B13] hover:from-[#FE4B13] hover:to-[#E97132] text-white font-bold py-4 rounded-xl shadow-lg shadow-[#E97132]/20 transition-all transform hover:-translate-y-0.5 active:scale-95 mt-4 disabled:opacity-50 disabled:cursor-not-allowed"
                         >
                             {isLoading ? 'Sending...' : 'SEND RESET LINK'}
                         </button>
@@ -226,7 +230,7 @@ const Login: React.FC<LoginProps> = ({ onLogin, onNavigate }) => {
                         <button
                             type="button"
                             onClick={() => { setIsForgotPassword(false); setResetStatus('idle'); setError(''); }}
-                            className="w-full text-slate-500 hover:text-white text-xs font-bold py-2 mt-2 uppercase tracking-widest"
+                            className="w-full text-slate-500 hover:text-[#E97132] text-xs font-bold py-2 mt-2 uppercase tracking-widest"
                         >
                             Cancel & Return
                         </button>
@@ -241,36 +245,86 @@ const Login: React.FC<LoginProps> = ({ onLogin, onNavigate }) => {
                                 {/* LOW: 1. Machine Selection View */}
                                 {!selectedMachine ? (
                                     <div className="space-y-4">
-                                        <label className="block text-xs font-bold text-slate-400 uppercase tracking-wider mb-4 text-center">
-                                            Select Your Station
-                                        </label>
-                                        <div className="grid grid-cols-2 gap-4 max-h-[400px] overflow-y-auto pr-1">
-                                            {machines.map(m => (
-                                                <button
-                                                    key={m.machine_id}
-                                                    type="button"
-                                                    onClick={() => setSelectedMachine(m.machine_id)}
-                                                    className="p-6 rounded-2xl border flex flex-col items-center justify-center gap-2 transition-all bg-slate-800/50 border-slate-700/50 text-slate-300 hover:bg-cyan-900/20 hover:border-cyan-500/50 hover:text-cyan-400 hover:scale-[1.02] active:scale-95 shadow-lg"
-                                                >
-                                                    <div className="w-12 h-12 rounded-full flex items-center justify-center bg-slate-700/50 text-white shadow-inner mb-1">
-                                                        <span className="text-lg font-bold">{m.machine_id.replace('M', '')}</span>
+                                        {isScanning ? (
+                                            <div className="space-y-4 animate-fade-in-up">
+                                                <div className="flex justify-between items-center bg-[#E97132]/10 border border-[#E97132]/20 rounded-xl px-4 py-2.5">
+                                                    <span className="text-xs font-bold text-[#E97132] uppercase tracking-wider">Scan Machine QR Code</span>
+                                                    <button 
+                                                        type="button" 
+                                                        onClick={() => setIsScanning(false)}
+                                                        className="p-1 rounded-full bg-slate-800 text-slate-400 hover:text-white transition-colors"
+                                                    >
+                                                        <X size={14} />
+                                                    </button>
+                                                </div>
+                                                <div className="w-full aspect-square max-w-[280px] mx-auto overflow-hidden rounded-2xl border-2 border-[#E97132] shadow-lg shadow-[#E97132]/10 relative">
+                                                    <Scanner
+                                                        onResult={(text) => {
+                                                            if (text) {
+                                                                const cleanText = text.trim();
+                                                                const found = machines.find(m => m.machine_id === cleanText || m.name === cleanText);
+                                                                if (found) {
+                                                                    setSelectedMachine(found.machine_id);
+                                                                    setIsScanning(false);
+                                                                } else {
+                                                                    setError(`Unknown machine QR: ${cleanText}`);
+                                                                }
+                                                            }
+                                                        }}
+                                                        onError={(err) => {
+                                                            console.error("QR Scan Error:", err);
+                                                            setError("Failed to access camera for QR scanning.");
+                                                        }}
+                                                    />
+                                                </div>
+                                                {error && (
+                                                    <div className="text-red-400 text-xs text-center font-bold">
+                                                        ⚠️ {error}
                                                     </div>
-                                                    <span className="text-sm font-black uppercase tracking-wide truncate w-full text-center">{m.name}</span>
+                                                )}
+                                            </div>
+                                        ) : (
+                                            <>
+                                                <label className="block text-xs font-bold text-slate-400 uppercase tracking-wider mb-2 text-center">
+                                                    Select Your Station
+                                                </label>
+                                                <button
+                                                    type="button"
+                                                    onClick={() => { setIsScanning(true); setError(''); }}
+                                                    className="w-full py-4 mb-2 bg-[#E97132]/10 hover:bg-[#E97132]/20 border border-[#E97132]/30 rounded-2xl flex items-center justify-center gap-2 text-xs font-black text-[#E97132] transition-all hover:scale-[1.01] active:scale-95 shadow-md uppercase tracking-wider"
+                                                >
+                                                    <Camera size={14} />
+                                                    Scan Machine QR Code / 扫码登录机台
                                                 </button>
-                                            ))}
-                                        </div>
+                                                <div className="grid grid-cols-2 gap-4 max-h-[300px] overflow-y-auto pr-1">
+                                                    {machines.map(m => (
+                                                        <button
+                                                            key={m.machine_id}
+                                                            type="button"
+                                                            onClick={() => setSelectedMachine(m.machine_id)}
+                                                            className="p-6 rounded-2xl border flex flex-col items-center justify-center gap-2 transition-all bg-[#121215]/50 border-slate-800 text-slate-300 hover:bg-[#E97132]/10 hover:border-[#E97132]/50 hover:text-[#E97132] hover:scale-[1.02] active:scale-95 shadow-lg"
+                                                        >
+                                                            <div className="w-12 h-12 rounded-full flex items-center justify-center bg-slate-900/50 text-white shadow-inner mb-1">
+                                                                <span className="text-lg font-bold">{m.machine_id.replace('M', '')}</span>
+                                                            </div>
+                                                            <span className="text-sm font-black uppercase tracking-wide truncate w-full text-center">{m.name}</span>
+                                                        </button>
+                                                    ))}
+                                                </div>
+                                            </>
+                                        )}
                                     </div>
                                 ) : (
                                     /* LOW: 2. Password Entry View */
                                     <div className="space-y-4 animate-fade-in-up">
                                         {/* Selected Machine Header */}
-                                        <div className="flex items-center justify-between bg-cyan-900/20 border border-cyan-500/30 rounded-xl p-4 mb-4">
+                                        <div className="flex items-center justify-between bg-[#E97132]/10 border border-[#E97132]/30 rounded-xl p-4 mb-4">
                                             <div className="flex items-center gap-3">
-                                                <div className="w-10 h-10 rounded-full bg-cyan-600 flex items-center justify-center text-white font-bold text-sm shadow-lg">
+                                                <div className="w-10 h-10 rounded-full bg-[#E97132] flex items-center justify-center text-white font-bold text-sm shadow-lg">
                                                     {selectedMachine.replace('M', '')}
                                                 </div>
                                                 <div className="text-left">
-                                                    <div className="text-[10px] text-cyan-300 font-bold uppercase tracking-wider">Selected Station</div>
+                                                    <div className="text-[10px] text-[#E97132] font-bold uppercase tracking-wider">Selected Station</div>
                                                     <div className="text-white font-bold">{machines.find(m => m.machine_id === selectedMachine)?.name || selectedMachine}</div>
                                                 </div>
                                             </div>
@@ -289,7 +343,7 @@ const Login: React.FC<LoginProps> = ({ onLogin, onNavigate }) => {
                                                 type="password"
                                                 readOnly
                                                 value={password}
-                                                className="w-full bg-slate-900/80 border-2 border-slate-700 rounded-2xl py-4 text-center text-3xl font-mono tracking-[0.5em] text-cyan-400 focus:outline-none focus:border-cyan-500 shadow-inner"
+                                                className="w-full bg-slate-950 border-2 border-slate-800 rounded-2xl py-4 text-center text-3xl font-mono tracking-[0.5em] text-[#E97132] focus:outline-none focus:border-[#E97132] shadow-inner"
                                                 placeholder="••••"
                                             />
                                             {password.length > 0 && (
@@ -310,7 +364,7 @@ const Login: React.FC<LoginProps> = ({ onLogin, onNavigate }) => {
                                                     key={num}
                                                     type="button"
                                                     onClick={() => setPassword(prev => (prev.length < 4 ? prev + num : prev))}
-                                                    className="h-16 rounded-xl bg-slate-800 border border-slate-700 text-3xl font-bold text-white hover:bg-slate-700 hover:border-slate-500 active:scale-95 active:bg-cyan-600 transition-all shadow-sm"
+                                                    className="h-16 rounded-xl bg-[#121215] border border-slate-800 text-3xl font-bold text-white hover:bg-slate-800 hover:border-slate-700 active:scale-95 active:bg-[#E97132] transition-all shadow-sm"
                                                 >
                                                     {num}
                                                 </button>
@@ -319,7 +373,7 @@ const Login: React.FC<LoginProps> = ({ onLogin, onNavigate }) => {
                                             <button
                                                 type="button"
                                                 onClick={() => setPassword(prev => (prev.length < 4 ? prev + 0 : prev))}
-                                                className="h-16 rounded-xl bg-slate-800 border border-slate-700 text-3xl font-bold text-white hover:bg-slate-700 hover:border-slate-500 active:scale-95 active:bg-cyan-600 transition-all shadow-sm"
+                                                className="h-16 rounded-xl bg-[#121215] border border-slate-800 text-3xl font-bold text-white hover:bg-slate-800 hover:border-slate-700 active:scale-95 active:bg-[#E97132] transition-all shadow-sm"
                                             >
                                                 0
                                             </button>
@@ -341,7 +395,7 @@ const Login: React.FC<LoginProps> = ({ onLogin, onNavigate }) => {
                                         <button
                                             type="submit"
                                             disabled={isLoading || password.length !== 4}
-                                            className="w-full bg-gradient-to-r from-cyan-600 to-blue-600 hover:from-cyan-500 hover:to-blue-500 text-white font-bold py-4 rounded-xl shadow-lg shadow-cyan-500/20 transition-all transform hover:-translate-y-0.5 active:scale-95 mt-2 disabled:opacity-50 disabled:cursor-not-allowed"
+                                            className="w-full bg-gradient-to-r from-[#E97132] to-[#FE4B13] hover:from-[#FE4B13] hover:to-[#E97132] text-white font-bold py-4 rounded-xl shadow-lg shadow-[#E97132]/20 transition-all transform hover:-translate-y-0.5 active:scale-95 mt-2 disabled:opacity-50 disabled:cursor-not-allowed"
                                         >
                                             {isLoading ? 'ACCESSING...' : 'CONFIRM PIN'}
                                         </button>
@@ -359,7 +413,7 @@ const Login: React.FC<LoginProps> = ({ onLogin, onNavigate }) => {
                                             <input
                                                 type="text"
                                                 required
-                                                className="w-full bg-slate-900/50 border border-slate-700/50 rounded-xl pl-12 pr-4 py-4 text-white placeholder-slate-600 focus:outline-none focus:border-purple-500 focus:ring-1 focus:ring-purple-500 transition-all font-mono"
+                                                className="w-full bg-slate-955 border border-slate-800 rounded-xl pl-12 pr-4 py-4 text-white placeholder-slate-600 focus:outline-none focus:border-[#E97132]/50 focus:ring-1 focus:ring-[#E97132]/50 transition-all font-mono"
                                                 value={email}
                                                 onChange={(e) => setEmail(e.target.value)}
                                                 placeholder="Email or ID (e.g. 001)"
@@ -371,14 +425,14 @@ const Login: React.FC<LoginProps> = ({ onLogin, onNavigate }) => {
                                     <div className="group">
                                         <div className="flex justify-between items-center mb-2">
                                             <label className="block text-xs font-bold text-slate-400 uppercase tracking-wider ml-1">Password</label>
-                                            <button type="button" onClick={() => setIsForgotPassword(true)} className="text-xs text-purple-400 hover:text-purple-300 font-bold hover:underline">Forgot Password?</button>
+                                            <button type="button" onClick={() => setIsForgotPassword(true)} className="text-xs text-[#E97132] hover:text-[#FE4B13] font-bold hover:underline">Forgot Password?</button>
                                         </div>
                                         <div className="relative">
                                             <Lock size={16} className="absolute left-4 top-1/2 transform -translate-y-1/2 text-slate-500" />
                                             <input
                                                 type="password"
                                                 required
-                                                className="w-full bg-slate-900/50 border border-slate-700/50 rounded-xl pl-12 pr-4 py-4 text-white placeholder-slate-600 focus:outline-none focus:border-purple-500 focus:ring-1 focus:ring-purple-500 transition-all"
+                                                className="w-full bg-slate-955 border border-slate-800 rounded-xl pl-12 pr-4 py-4 text-white placeholder-slate-600 focus:outline-none focus:border-[#E97132]/50 focus:ring-1 focus:ring-[#E97132]/50 transition-all"
                                                 value={staffPassword}
                                                 onChange={(e) => setStaffPassword(e.target.value)}
                                                 placeholder="••••••••"
@@ -395,7 +449,7 @@ const Login: React.FC<LoginProps> = ({ onLogin, onNavigate }) => {
                                     <button
                                         type="submit"
                                         disabled={isLoading}
-                                        className="w-full bg-gradient-to-r from-purple-600 to-pink-600 hover:from-purple-500 hover:to-pink-500 text-white font-bold py-4 rounded-xl shadow-lg shadow-purple-500/20 transition-all transform hover:-translate-y-0.5 active:scale-95 mt-4"
+                                        className="w-full bg-gradient-to-r from-[#E97132] to-[#FE4B13] hover:from-[#FE4B13] hover:to-[#E97132] text-white font-bold py-4 rounded-xl shadow-lg shadow-[#E97132]/20 transition-all transform hover:-translate-y-0.5 active:scale-95 mt-4"
                                     >
                                         {isLoading ? 'Verifying...' : 'LOGIN TO DASHBOARD'}
                                     </button>
@@ -405,7 +459,7 @@ const Login: React.FC<LoginProps> = ({ onLogin, onNavigate }) => {
                                         <button
                                             type="button"
                                             onClick={() => onNavigate('register')}
-                                            className="text-xs text-purple-400 hover:text-white font-bold uppercase tracking-widest transition-colors"
+                                            className="text-xs text-[#E97132] hover:text-[#FE4B13] font-bold uppercase tracking-widest transition-colors"
                                         >
                                             Don't have an account? Register
                                         </button>
@@ -432,7 +486,7 @@ const Login: React.FC<LoginProps> = ({ onLogin, onNavigate }) => {
                         )}
 
                         {/* TOGGLE LINK */}
-                        {/* <div className="mt-8 text-center pt-6 border-t border-white/5">
+                        <div className="mt-8 text-center pt-6 border-t border-white/5">
                             <button
                                 onClick={() => {
                                     setLoginMode(loginMode === 'device' ? 'staff' : 'device');
@@ -450,7 +504,8 @@ const Login: React.FC<LoginProps> = ({ onLogin, onNavigate }) => {
                                     </>
                                 )}
                             </button>
-                        </div> */}
+                        </div>
+
                     </>
                 )}
             </div>

@@ -884,7 +884,7 @@ const HRPortal: React.FC<HRPortalProps> = ({ user, initialTab, initialRoleFilter
         // Employees
         const { data: emps } = await supabase.from('sys_users_v2')
             .select('id, auth_user_id, employee_id, name, role, pay_type, hourly_rate, base_salary, trip_allowance, attendance_bonus, attendance_bonus_threshold')
-            .eq('status', 'active').order('name');
+            .eq('status', 'Active').order('name');
 
         // Attendance hours for operators
         const { data: attendance } = await supabase.from('operator_attendance')
@@ -1542,7 +1542,7 @@ const HRPortal: React.FC<HRPortalProps> = ({ user, initialTab, initialRoleFilter
                                                      'Pending'}
                                                 </span>
                                             </td>
-                                            <td className="px-4 py-4 text-xs text-gray-500 max-w-[200px] truncate">
+                                            <td className="px-4 py-4 text-xs text-gray-500 max-w-[350px] break-words whitespace-pre-wrap">
                                                 {adv.status === 'Rejected' && adv.rejection_reason ? (
                                                     <span className="text-red-400 font-medium">❌ Reason: {adv.rejection_reason}</span>
                                                 ) : (

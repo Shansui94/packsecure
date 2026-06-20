@@ -1,5 +1,6 @@
-import { useState, useEffect, useRef } from 'react';
-import { Camera, Send, Loader, Tag, AlertTriangle, Clock, X, Sparkles, Image as ImageIcon, RefreshCw } from 'lucide-react';
+import React, { useState, useEffect, useRef } from 'react';
+import Webcam from 'react-webcam';
+import { Camera, Send, Loader, Tag, AlertTriangle, Clock, X, Sparkles, Image as ImageIcon, RefreshCw, Video, Square } from 'lucide-react';
 import { supabase } from '../services/supabase';
 import { User } from '../types';
 
@@ -15,6 +16,7 @@ interface WorkPhoto {
     risk_flag: boolean;
     risk_reason: string;
     created_at: string;
+    machine_id?: string; // Add machine_id
 }
 
 interface AIResult {
@@ -26,12 +28,11 @@ interface AIResult {
 }
 
 const CATEGORIES: Record<string, { label: string; emoji: string; color: string }> = {
-    production: { label: '生产', emoji: '🏭', color: 'bg-blue-500/20 text-blue-300 border-blue-500/30' },
-    maintenance: { label: '维修', emoji: '🔧', color: 'bg-orange-500/20 text-orange-300 border-orange-500/30' },
-    safety: { label: '安全', emoji: '🦺', color: 'bg-red-500/20 text-red-300 border-red-500/30' },
-    logistics: { label: '物流', emoji: '📦', color: 'bg-green-500/20 text-green-300 border-green-500/30' },
-    cleaning: { label: '清洁', emoji: '🧹', color: 'bg-cyan-500/20 text-cyan-300 border-cyan-500/30' },
-    other: { label: '其他', emoji: '📋', color: 'bg-gray-500/20 text-gray-300 border-gray-500/30' },
+    qc: { label: 'QC 质检', emoji: '🔍', color: 'bg-blue-500/20 text-blue-300 border-blue-500/30' },
+    defect: { label: 'Defect 次品', emoji: '⚠️', color: 'bg-rose-500/20 text-rose-300 border-rose-500/30' },
+    downtime: { label: '停机 Stop', emoji: '🛑', color: 'bg-red-500/20 text-red-300 border-red-500/30' },
+    startup: { label: '开机 Start', emoji: '🟢', color: 'bg-green-500/20 text-green-300 border-green-500/30' },
+    other: { label: '其他 Other', emoji: '📋', color: 'bg-gray-500/20 text-gray-300 border-gray-500/30' },
 };
 
 interface Props {
@@ -75,6 +76,20 @@ const WorkPhotoLog: React.FC<Props> = ({ user }) => {
     const [filterCategory, setFilterCategory] = useState<string>('all');
     const [selectedPhoto, setSelectedPhoto] = useState<WorkPhoto | null>(null);
     const fileInputRef = useRef<HTMLInputElement>(null);
+    const [showWebcam, setShowWebcam] = useState(false);
+    const [webcamError, setWebcamError] = useState<any>(null);
+    const webcamRef = useRef<Webcam>(null);
+
+    // Video Recording States
+    const [mediaType, setMediaType] = useState<'image' | 'video'>('image');
+    const [isRecording, setIsRecording] = useState(false);
+    const [recordingDuration, setRecordingDuration] = useState(0);
+    const mediaRecorderRef = useRef<MediaRecorder | null>(null);
+    const recordedChunks = useRef<Blob[]>([]);
+    const recordingTimer = useRef<any>(null);
+
+    const [machines, setMachines] = useState<any[]>([]);
+    const [selectedMachineId, setSelectedMachineId] = useState<string>('');
 
     const isAdmin = user?.role === 'SuperAdmin' || user?.role === 'Admin' || user?.role === 'Manager';
 
@@ -104,6 +119,14 @@ const WorkPhotoLog: React.FC<Props> = ({ user }) => {
 
     useEffect(() => { loadPhotos(); }, [filterCategory]);
 
+    useEffect(() => {
+        const loadMachines = async () => {
+            const { data } = await supabase.from('sys_machines_v2').select('machine_id, name').order('name');
+            if (data) setMachines(data);
+        };
+        loadMachines();
+    }, []);
+
     // Handle file selection
     const handleFileSelect = async (e: React.ChangeEvent<HTMLInputElement>) => {
         const file = e.target.files?.[0];
@@ -111,15 +134,101 @@ const WorkPhotoLog: React.FC<Props> = ({ user }) => {
 
         try {
             setUploading(true);
-            // Compress image
-            const dataUrl = await compressImage(file);
-            setPreviewUrl(dataUrl);
+            const isVideoFile = file.type.startsWith('video/');
+            setMediaType(isVideoFile ? 'video' : 'image');
 
-            // Extract base64 (strip data:image/jpeg;base64, prefix)
-            const base64 = dataUrl.split(',')[1];
+            if (isVideoFile) {
+                const videoUrl = URL.createObjectURL(file);
+                setPreviewUrl(videoUrl);
+                
+                const reader = new FileReader();
+                reader.onloadend = () => {
+                    const base64 = reader.result as string;
+                    setPreviewBase64(base64.split(',')[1]);
+                };
+                reader.readAsDataURL(file);
+
+                setAiResult({
+                    description: '工作视频记录 / Work Video Log',
+                    category: 'other',
+                    tags: ['video'],
+                    risk_flag: false,
+                    risk_reason: ''
+                });
+            } else {
+                // Compress image
+                const dataUrl = await compressImage(file);
+                setPreviewUrl(dataUrl);
+
+                // Extract base64
+                const base64 = dataUrl.split(',')[1];
+                setPreviewBase64(base64);
+
+                // Call AI
+                setAnalyzing(true);
+                try {
+                    const res = await fetch('/api/agent/ai-photo', {
+                        method: 'POST',
+                        headers: { 'Content-Type': 'application/json' },
+                        body: JSON.stringify({ imageBase64: base64 })
+                    });
+
+                    if (!res.ok) {
+                        const err = await res.json();
+                        throw new Error(err.error || 'AI analysis failed');
+                    }
+
+                    const result: AIResult = await res.json();
+                    setAiResult(result);
+                } catch (aiErr: any) {
+                    console.error('AI Error:', aiErr);
+                    setAiResult({
+                        description: '',
+                        category: 'other',
+                        tags: [],
+                        risk_flag: false,
+                        risk_reason: ''
+                    });
+                }
+                setAnalyzing(false);
+            }
+        } catch (err: any) {
+            console.error('File process error:', err);
+            alert('处理文件失败: ' + err.message);
+        } finally {
+            setUploading(false);
+        }
+        if (fileInputRef.current) fileInputRef.current.value = '';
+    };
+
+    const stopRecordingAndCleanup = () => {
+        if (mediaRecorderRef.current && mediaRecorderRef.current.state !== 'inactive') {
+            mediaRecorderRef.current.stop();
+        }
+        if (recordingTimer.current) {
+            clearInterval(recordingTimer.current);
+            recordingTimer.current = null;
+        }
+        setIsRecording(false);
+        setRecordingDuration(0);
+        recordedChunks.current = [];
+    };
+
+    const handleCloseWebcam = () => {
+        stopRecordingAndCleanup();
+        setShowWebcam(false);
+        setWebcamError(null);
+    };
+
+    const handleWebcamCapture = React.useCallback(async () => {
+        const imageSrc = webcamRef.current?.getScreenshot();
+        if (imageSrc) {
+            setPreviewUrl(imageSrc);
+            setMediaType('image');
+            const base64 = imageSrc.split(',')[1];
             setPreviewBase64(base64);
-
-            // Call AI
+            setShowWebcam(false);
+            
             setAnalyzing(true);
             try {
                 const res = await fetch('/api/agent/ai-photo', {
@@ -137,7 +246,6 @@ const WorkPhotoLog: React.FC<Props> = ({ user }) => {
                 setAiResult(result);
             } catch (aiErr: any) {
                 console.error('AI Error:', aiErr);
-                // Fallback: let user fill manually
                 setAiResult({
                     description: '',
                     category: 'other',
@@ -147,14 +255,80 @@ const WorkPhotoLog: React.FC<Props> = ({ user }) => {
                 });
             }
             setAnalyzing(false);
-        } catch (err: any) {
-            console.error('File process error:', err);
-            alert('处理图片失败: ' + err.message);
-        } finally {
-            setUploading(false);
         }
-        // Reset file input
-        if (fileInputRef.current) fileInputRef.current.value = '';
+    }, [webcamRef]);
+
+    const handleStartRecording = () => {
+        const stream = webcamRef.current?.video?.srcObject as MediaStream;
+        if (!stream) {
+            alert("无法获取摄像头视频流");
+            return;
+        }
+
+        recordedChunks.current = [];
+        let options = { mimeType: 'video/webm;codecs=vp9' };
+        let recorder: MediaRecorder;
+        
+        try {
+            recorder = new MediaRecorder(stream, options);
+        } catch (e) {
+            try {
+                recorder = new MediaRecorder(stream, { mimeType: 'video/webm' });
+            } catch (e2) {
+                recorder = new MediaRecorder(stream);
+            }
+        }
+
+        recorder.ondataavailable = (e) => {
+            if (e.data && e.data.size > 0) {
+                recordedChunks.current.push(e.data);
+            }
+        };
+
+        recorder.onstop = () => {
+            const blob = new Blob(recordedChunks.current, { type: 'video/webm' });
+            const videoUrl = URL.createObjectURL(blob);
+            setPreviewUrl(videoUrl);
+            setMediaType('video');
+
+            const reader = new FileReader();
+            reader.onloadend = () => {
+                const base64 = reader.result as string;
+                setPreviewBase64(base64.split(',')[1]);
+                setAiResult({
+                    description: '工作视频记录 / Work Video Log',
+                    category: 'other',
+                    tags: ['video'],
+                    risk_flag: false,
+                    risk_reason: ''
+                });
+            };
+            reader.readAsDataURL(blob);
+
+            setShowWebcam(false);
+            setIsRecording(false);
+            setRecordingDuration(0);
+        };
+
+        recorder.start(100);
+        mediaRecorderRef.current = recorder;
+        setIsRecording(true);
+        setRecordingDuration(0);
+        
+        if (recordingTimer.current) clearInterval(recordingTimer.current);
+        recordingTimer.current = setInterval(() => {
+            setRecordingDuration(prev => prev + 1);
+        }, 1000);
+    };
+
+    const handleStopRecording = () => {
+        if (mediaRecorderRef.current && mediaRecorderRef.current.state !== 'inactive') {
+            mediaRecorderRef.current.stop();
+        }
+        if (recordingTimer.current) {
+            clearInterval(recordingTimer.current);
+            recordingTimer.current = null;
+        }
     };
 
     // Submit photo
@@ -164,12 +338,14 @@ const WorkPhotoLog: React.FC<Props> = ({ user }) => {
 
         try {
             // 1. Upload to Supabase Storage
-            const fileName = `${user.employeeId || 'unknown'}_${Date.now()}.jpg`;
-            const blob = await fetch(`data:image/jpeg;base64,${previewBase64}`).then(r => r.blob());
+            const extension = mediaType === 'video' ? 'webm' : 'jpg';
+            const contentType = mediaType === 'video' ? 'video/webm' : 'image/jpeg';
+            const fileName = `${user.employeeId || 'unknown'}_${Date.now()}.${extension}`;
+            const blob = await fetch(`data:${contentType};base64,${previewBase64}`).then(r => r.blob());
 
             const { error: uploadError } = await supabase.storage
                 .from('work-photos')
-                .upload(fileName, blob, { contentType: 'image/jpeg' });
+                .upload(fileName, blob, { contentType });
 
             if (uploadError) throw uploadError;
 
@@ -188,6 +364,7 @@ const WorkPhotoLog: React.FC<Props> = ({ user }) => {
                 ai_tags: aiResult.tags,
                 risk_flag: aiResult.risk_flag,
                 risk_reason: aiResult.risk_reason,
+                machine_id: selectedMachineId || null,
             });
 
             if (dbError) throw dbError;
@@ -197,6 +374,7 @@ const WorkPhotoLog: React.FC<Props> = ({ user }) => {
             setPreviewBase64(null);
             setAiResult(null);
             setUserNote('');
+            setSelectedMachineId('');
             loadPhotos();
         } catch (err: any) {
             alert('上传失败: ' + err.message);
@@ -231,7 +409,8 @@ const WorkPhotoLog: React.FC<Props> = ({ user }) => {
     const riskCount = photos.filter(p => p.risk_flag).length;
 
     return (
-        <div className="min-h-screen bg-[#09090b] text-white">
+        <>
+            <div className="min-h-screen bg-[#09090b] text-white notranslate" translate="no">
             {/* Header */}
             <div className="bg-gradient-to-r from-violet-900/30 via-[#09090b] to-fuchsia-900/30 border-b border-white/5">
                 <div className="max-w-5xl mx-auto px-4 py-6">
@@ -262,25 +441,44 @@ const WorkPhotoLog: React.FC<Props> = ({ user }) => {
             <div className="max-w-5xl mx-auto px-4 py-6 space-y-6">
                 {/* Upload Area */}
                 {!previewUrl ? (
-                    <button
-                        onClick={() => fileInputRef.current?.click()}
-                        className="w-full py-12 rounded-2xl border-2 border-dashed border-violet-500/30 hover:border-violet-500/60 bg-violet-500/5 hover:bg-violet-500/10 transition-all group flex flex-col items-center gap-4"
-                    >
-                        <div className="w-16 h-16 rounded-2xl bg-gradient-to-br from-violet-500 to-fuchsia-600 flex items-center justify-center shadow-xl shadow-violet-500/30 group-hover:scale-110 transition-transform">
-                            <Camera size={32} className="text-white" />
-                        </div>
-                        <div>
-                            <p className="text-lg font-bold text-white">拍照或选择图片</p>
-                            <p className="text-xs text-gray-500 mt-1">AI 自动分析工作内容 · 生成标签</p>
-                        </div>
-                    </button>
+                    <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
+                        <button
+                            onClick={() => setShowWebcam(true)}
+                            className="py-12 rounded-2xl border-2 border-dashed border-violet-500/30 hover:border-violet-500/60 bg-violet-500/5 hover:bg-violet-500/10 transition-all group flex flex-col items-center justify-center gap-4 cursor-pointer"
+                        >
+                            <div className="w-16 h-16 rounded-2xl bg-gradient-to-br from-violet-500 to-fuchsia-600 flex items-center justify-center shadow-xl shadow-violet-500/30 group-hover:scale-110 transition-transform">
+                                <Camera size={32} className="text-white" />
+                            </div>
+                            <div className="text-center">
+                                <p className="text-lg font-bold text-white font-sans">实时相机拍照</p>
+                                <p className="text-xs text-gray-500 mt-1">使用摄像头实时拍照</p>
+                            </div>
+                        </button>
+
+                        <button
+                            onClick={() => fileInputRef.current?.click()}
+                            className="py-12 rounded-2xl border-2 border-dashed border-white/10 hover:border-white/25 bg-white/[0.02] hover:bg-white/5 transition-all group flex flex-col items-center justify-center gap-4 cursor-pointer"
+                        >
+                            <div className="w-16 h-16 rounded-2xl bg-white/10 flex items-center justify-center shadow-xl group-hover:scale-110 transition-transform text-gray-300 border border-white/10">
+                                <ImageIcon size={32} />
+                            </div>
+                            <div className="text-center">
+                                <p className="text-lg font-bold text-gray-300 font-sans">选择文件上传</p>
+                                <p className="text-xs text-gray-500 mt-1">从相册选择本地图片</p>
+                            </div>
+                        </button>
+                    </div>
                 ) : (
                     /* Preview + AI Result */
                     <div className="rounded-2xl border border-white/10 bg-[#0c0c0e] overflow-hidden">
-                        {/* Preview Image */}
+                        {/* Preview Media */}
                         <div className="relative">
-                            <img src={previewUrl} alt="Preview" className="w-full max-h-80 object-contain bg-black" />
-                            <button onClick={cancelUpload} className="absolute top-3 right-3 p-2 bg-black/60 rounded-full hover:bg-red-500/80 transition-colors">
+                            {mediaType === 'video' ? (
+                                <video src={previewUrl} controls className="w-full max-h-80 bg-black" />
+                            ) : (
+                                <img src={previewUrl} alt="Preview" className="w-full max-h-80 object-contain bg-black" />
+                            )}
+                            <button onClick={cancelUpload} className="absolute top-3 right-3 p-2 bg-black/60 rounded-full hover:bg-red-500/80 transition-colors z-10">
                                 <X size={16} />
                             </button>
                             {analyzing && (
@@ -336,6 +534,23 @@ const WorkPhotoLog: React.FC<Props> = ({ user }) => {
                                     </div>
                                 </div>
 
+                                {/* Machine Select */}
+                                <div>
+                                    <label className="text-[10px] uppercase font-bold text-gray-500 tracking-wider mb-1 block">关联机器（可选）</label>
+                                    <select
+                                        value={selectedMachineId}
+                                        onChange={e => setSelectedMachineId(e.target.value)}
+                                        className="w-full bg-gray-900 border border-gray-800 rounded-lg p-3 text-white text-sm focus:border-violet-500 outline-none"
+                                    >
+                                        <option value="">-- 选择机器 --</option>
+                                        {machines.map(m => (
+                                            <option key={m.machine_id} value={m.machine_id}>
+                                                {m.name} ({m.machine_id})
+                                            </option>
+                                        ))}
+                                    </select>
+                                </div>
+
                                 {/* Tags */}
                                 {aiResult.tags.length > 0 && (
                                     <div>
@@ -383,7 +598,7 @@ const WorkPhotoLog: React.FC<Props> = ({ user }) => {
                 <input
                     ref={fileInputRef}
                     type="file"
-                    accept="image/*"
+                    accept="image/*,video/*"
                     className="hidden"
                     onChange={handleFileSelect}
                 />
@@ -432,19 +647,37 @@ const WorkPhotoLog: React.FC<Props> = ({ user }) => {
                     <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-4">
                         {photos.map(photo => {
                             const cat = CATEGORIES[photo.category] || CATEGORIES.other;
+                            const isVideo = photo.photo_url.toLowerCase().endsWith('.webm') || photo.photo_url.toLowerCase().endsWith('.mp4');
                             return (
                                 <div
                                     key={photo.id}
                                     onClick={() => setSelectedPhoto(photo)}
                                     className="rounded-2xl border border-white/5 bg-[#0c0c0e] overflow-hidden hover:border-white/15 transition-all cursor-pointer group"
                                 >
-                                    <div className="relative aspect-video bg-black overflow-hidden">
-                                        <img
-                                            src={photo.photo_url}
-                                            alt=""
-                                            className="w-full h-full object-cover group-hover:scale-105 transition-transform duration-500"
-                                            loading="lazy"
-                                        />
+                                    <div className="relative aspect-video bg-black overflow-hidden flex items-center justify-center">
+                                        {isVideo ? (
+                                            <video
+                                                src={photo.photo_url}
+                                                className="w-full h-full object-cover"
+                                                preload="metadata"
+                                                muted
+                                                playsInline
+                                            />
+                                        ) : (
+                                            <img
+                                                src={photo.photo_url}
+                                                alt=""
+                                                className="w-full h-full object-cover group-hover:scale-105 transition-transform duration-500"
+                                                loading="lazy"
+                                            />
+                                        )}
+                                        {isVideo && (
+                                            <div className="absolute inset-0 flex items-center justify-center bg-black/30 group-hover:bg-black/10 transition-colors">
+                                                <div className="w-10 h-10 rounded-full bg-white/20 backdrop-blur-sm flex items-center justify-center text-white group-hover:scale-110 transition-transform">
+                                                    <Video size={20} />
+                                                </div>
+                                            </div>
+                                        )}
                                         {photo.risk_flag && (
                                             <div className="absolute top-2 right-2 px-2 py-1 rounded-lg bg-red-500/80 text-white text-[10px] font-bold flex items-center gap-1">
                                                 <AlertTriangle size={10} /> 风险
@@ -453,6 +686,11 @@ const WorkPhotoLog: React.FC<Props> = ({ user }) => {
                                         <div className={`absolute top-2 left-2 px-2 py-1 rounded-lg text-[10px] font-bold border ${cat.color}`}>
                                             {cat.emoji} {cat.label}
                                         </div>
+                                        {photo.machine_id && (
+                                            <div className="absolute bottom-2 left-2 px-2 py-1 rounded-lg bg-black/60 text-white border border-white/10 text-[10px] font-bold">
+                                                🤖 {photo.machine_id}
+                                            </div>
+                                        )}
                                     </div>
                                     <div className="p-3">
                                         <p className="text-sm text-gray-200 line-clamp-2">{photo.ai_description || photo.user_note || '无描述'}</p>
@@ -476,12 +714,17 @@ const WorkPhotoLog: React.FC<Props> = ({ user }) => {
                     </div>
                 )}
             </div>
+        </div>
 
             {/* Photo Detail Modal */}
             {selectedPhoto && (
-                <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/80 backdrop-blur-sm p-4" onClick={() => setSelectedPhoto(null)}>
+                <div key="photo-detail-modal-overlay" className="fixed inset-0 z-50 flex items-center justify-center bg-black/80 backdrop-blur-sm p-4 notranslate" translate="no" onClick={() => setSelectedPhoto(null)}>
                     <div className="bg-[#0c0c0e] border border-white/10 rounded-2xl max-w-lg w-full max-h-[90vh] overflow-y-auto" onClick={e => e.stopPropagation()}>
-                        <img src={selectedPhoto.photo_url} alt="" className="w-full max-h-96 object-contain bg-black" />
+                        {selectedPhoto.photo_url.toLowerCase().endsWith('.webm') || selectedPhoto.photo_url.toLowerCase().endsWith('.mp4') ? (
+                            <video src={selectedPhoto.photo_url} controls className="w-full max-h-96 bg-black" autoPlay />
+                        ) : (
+                            <img src={selectedPhoto.photo_url} alt="" className="w-full max-h-96 object-contain bg-black" />
+                        )}
                         <div className="p-5 space-y-3">
                             {selectedPhoto.risk_flag && (
                                 <div className="flex items-start gap-2 p-3 rounded-xl bg-red-500/10 border border-red-500/30">
@@ -494,6 +737,11 @@ const WorkPhotoLog: React.FC<Props> = ({ user }) => {
                             )}
                             <p className="text-white font-bold">{selectedPhoto.ai_description}</p>
                             {selectedPhoto.user_note && <p className="text-gray-400 text-sm">📝 {selectedPhoto.user_note}</p>}
+                            {selectedPhoto.machine_id && (
+                                <div className="inline-flex items-center gap-1.5 px-2.5 py-1 rounded-lg bg-violet-500/10 border border-violet-500/20 text-xs text-violet-300 font-bold">
+                                    🤖 关联机器: {selectedPhoto.machine_id}
+                                </div>
+                            )}
                             <div className="flex flex-wrap gap-2">
                                 {selectedPhoto.ai_tags?.map((tag, i) => (
                                     <span key={i} className="px-2 py-1 rounded-full bg-white/5 border border-white/10 text-xs text-gray-300">#{tag}</span>
@@ -507,7 +755,116 @@ const WorkPhotoLog: React.FC<Props> = ({ user }) => {
                     </div>
                 </div>
             )}
-        </div>
+
+            {/* WEBCAM CAPTURE MODAL */}
+            {showWebcam && (
+                <div key="webcam-capture-modal-overlay" className="fixed inset-0 z-[500] bg-black/95 flex flex-col items-center justify-center p-4 overflow-y-auto notranslate" translate="no">
+                    <div className="bg-[#1c1c1f] border border-violet-500/30 p-6 rounded-3xl w-full max-w-md shadow-2xl flex flex-col gap-4">
+                        <div className="flex justify-between items-center pb-2 border-b border-white/5">
+                            <h3 className="text-sm font-black text-violet-400 uppercase tracking-wider flex items-center gap-1.5 font-bold font-sans">
+                                <Camera size={16} /> 实时相机拍照 & 录像
+                            </h3>
+                            <button 
+                                onClick={handleCloseWebcam}
+                                className="text-gray-400 hover:text-white text-xs font-bold px-2.5 py-1 bg-white/5 hover:bg-white/10 rounded-lg transition-all"
+                            >
+                                关闭
+                            </button>
+                        </div>
+
+                        {!window.isSecureContext ? (
+                            <div key="insecure-context-wpl" className="p-4 bg-amber-500/10 border border-amber-500/20 rounded-2xl flex flex-col gap-2 text-amber-400">
+                                <p className="text-xs font-bold leading-relaxed flex items-center gap-1.5">
+                                    <span>⚠️ 摄像头未启用 (浏览器安全限制)</span>
+                                </p>
+                                <p className="text-[11px] text-gray-400 leading-normal">
+                                    您的浏览器限制在非安全连接 (HTTP) 下访问摄像头。请通过以下方式之一解决：
+                                    <br />
+                                    1. 使用 <span className="text-white font-mono font-bold">localhost</span> 在本地打开；
+                                    <br />
+                                    2. 在服务器上配置并使用 <span className="text-white font-mono font-bold">HTTPS</span> 安全连接；
+                                    <br />
+                                    3. 使用本地隧道工具映射为公网 HTTPS 链接测试。
+                                </p>
+                            </div>
+                        ) : webcamError ? (
+                            <div key="webcam-error-wpl" className="p-4 bg-red-500/10 border border-red-500/20 rounded-2xl flex flex-col gap-2 text-red-400">
+                                <p className="text-xs font-bold leading-relaxed">
+                                    ⚠️ 摄像头启动失败
+                                </p>
+                                <p className="text-[11px] text-gray-400 leading-normal">
+                                    无法访问摄像头设备，请检查是否已授予权限，或该摄像头是否已被其他应用占用。
+                                </p>
+                                <button
+                                    onClick={() => setWebcamError(null)}
+                                    className="mt-1 self-start px-3 py-1 bg-red-500/20 hover:bg-red-500/30 text-red-300 rounded-lg text-[10px] font-bold transition-all"
+                                >
+                                    重试
+                                </button>
+                            </div>
+                        ) : (
+                            <div key="webcam-active-wpl" className="relative aspect-video rounded-2xl bg-black overflow-hidden border border-white/10 flex items-center justify-center">
+                                <Webcam
+                                    audio={false}
+                                    ref={webcamRef}
+                                    screenshotFormat="image/jpeg"
+                                    videoConstraints={{
+                                        facingMode: "environment"
+                                    }}
+                                    onUserMediaError={(err) => setWebcamError(err)}
+                                    className="w-full h-full object-cover"
+                                />
+                                {isRecording && (
+                                    <div key="recording-banner-wpl" className="absolute top-3 right-3 flex items-center gap-1.5 px-2.5 py-1 rounded-full bg-red-600 text-white text-[10px] font-bold animate-pulse">
+                                        <div className="w-1.5 h-1.5 rounded-full bg-white" />
+                                        <span>REC {recordingDuration}s</span>
+                                    </div>
+                                )}
+                            </div>
+                        )}
+
+                        <div className="flex gap-2">
+                            <button
+                                onClick={handleWebcamCapture}
+                                disabled={!window.isSecureContext || !!webcamError || isRecording}
+                                className={`flex-1 py-3.5 font-bold text-xs rounded-xl flex items-center justify-center gap-1.5 transition-all shadow-md ${
+                                    !window.isSecureContext || !!webcamError || isRecording
+                                        ? 'bg-gray-800 text-gray-500 cursor-not-allowed border border-white/5'
+                                        : 'bg-violet-600 hover:bg-violet-500 active:scale-95 text-white shadow-violet-600/20'
+                                }`}
+                            >
+                                <Camera size={16} />
+                                <span>拍照截图</span>
+                            </button>
+                            
+                            <button
+                                onClick={isRecording ? handleStopRecording : handleStartRecording}
+                                disabled={!window.isSecureContext || !!webcamError}
+                                className={`flex-1 py-3.5 font-bold text-xs rounded-xl flex items-center justify-center gap-1.5 transition-all shadow-md ${
+                                    !window.isSecureContext || !!webcamError
+                                        ? 'bg-gray-800 text-gray-500 cursor-not-allowed border border-white/5'
+                                        : isRecording
+                                            ? 'bg-red-600 hover:bg-red-500 active:scale-95 text-white animate-pulse shadow-red-600/20'
+                                            : 'bg-fuchsia-600 hover:bg-fuchsia-500 active:scale-95 text-white shadow-fuchsia-600/20'
+                                }`}
+                            >
+                                {isRecording ? (
+                                    <>
+                                        <Square size={14} />
+                                        <span>停止录像 ({recordingDuration}s)</span>
+                                    </>
+                                ) : (
+                                    <>
+                                        <Video size={14} />
+                                        <span>录像 10s</span>
+                                    </>
+                                )}
+                            </button>
+                        </div>
+                    </div>
+                </div>
+            )}
+        </>
     );
 };
 

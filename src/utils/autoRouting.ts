@@ -15,7 +15,7 @@ export interface DraftTrip {
     recommendedDriverName?: string | null;
 }
 
-const MAX_VOL_M3 = 20; // Standard 3-tonner limit
+const MAX_VOL_M3 = 82 * 0.4489; // 82 rolls = ~36.8098 m3 (Standard Lorry Limit)
 const MAX_WEIGHT_KG = 3000;
 
 export const generateDraftTrips = (orders: any[]): DraftTrip[] => {

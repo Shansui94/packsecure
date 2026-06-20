@@ -27,7 +27,9 @@ const LorryManagement: React.FC = () => {
         plate_number: '',
         driver_id: '',
         preferred_zone: 'Not Specified',
-        status: 'Available'
+        status: 'Available',
+        max_volume_m3: 36.8098,
+        max_weight_kg: 3000
     });
 
     const handlePrintQR = (lorry: any) => {
@@ -104,7 +106,9 @@ const LorryManagement: React.FC = () => {
                 plate_number: lorry.plate_number,
                 driver_id: lorry.driver_id || '',
                 preferred_zone: lorry.preferred_zone || 'Not Specified',
-                status: lorry.status || 'Available'
+                status: lorry.status || 'Available',
+                max_volume_m3: lorry.max_volume_m3 != null ? Number(lorry.max_volume_m3) : 36.8098,
+                max_weight_kg: lorry.max_weight_kg != null ? Number(lorry.max_weight_kg) : 3000
             });
         } else {
             setEditingLorry(null);
@@ -112,7 +116,9 @@ const LorryManagement: React.FC = () => {
                 plate_number: '',
                 driver_id: '',
                 preferred_zone: 'Not Specified',
-                status: 'Available'
+                status: 'Available',
+                max_volume_m3: 36.8098,
+                max_weight_kg: 3000
             });
         }
         setIsModalOpen(true);
@@ -260,6 +266,27 @@ const LorryManagement: React.FC = () => {
                                                     <User size={14} />
                                                 </div>
                                                 <span className="text-sm font-bold text-slate-200">{lorry.driver_name || 'Unassigned'}</span>
+                                            </div>
+                                        </div>
+
+                                        <div className="bg-slate-950/50 p-4 rounded-2xl border border-slate-800/50">
+                                            <p className="text-[10px] font-black text-slate-600 uppercase tracking-widest mb-2">Maximum Capacity</p>
+                                            <div className="grid grid-cols-2 gap-4">
+                                                <div>
+                                                    <span className="text-[10px] font-bold text-slate-500 uppercase tracking-widest block mb-0.5">Volume Limit</span>
+                                                    <span className="text-sm font-black text-blue-400 font-mono">
+                                                        {lorry.max_volume_m3 != null ? Number(lorry.max_volume_m3).toFixed(2) : '36.81'} m³
+                                                    </span>
+                                                    <span className="text-[9px] text-slate-500 block mt-0.5">
+                                                        (~{Math.round((lorry.max_volume_m3 || 36.8098) / 0.4489)} rolls)
+                                                    </span>
+                                                </div>
+                                                <div>
+                                                    <span className="text-[10px] font-bold text-slate-500 uppercase tracking-widest block mb-0.5">Weight Limit</span>
+                                                    <span className="text-sm font-black text-emerald-400 font-mono">
+                                                        {lorry.max_weight_kg != null ? Number(lorry.max_weight_kg) : '3000'} kg
+                                                    </span>
+                                                </div>
                                             </div>
                                         </div>
                                     </div>
@@ -540,6 +567,35 @@ const LorryManagement: React.FC = () => {
                                     >
                                         {STATUSES.map(s => <option key={s} value={s}>{s}</option>)}
                                     </select>
+                                </div>
+                            </div>
+
+                            <div className="grid grid-cols-2 gap-4">
+                                <div>
+                                    <label className="block text-[10px] font-black text-slate-500 uppercase tracking-widest mb-2">Max Volume (m³)</label>
+                                    <input
+                                        required
+                                        type="number"
+                                        step="0.0001"
+                                        className="w-full bg-slate-950 border border-slate-800 rounded-2xl p-4 text-white font-bold focus:border-blue-500 outline-none font-mono"
+                                        placeholder="36.81"
+                                        value={formData.max_volume_m3}
+                                        onChange={(e) => setFormData({ ...formData, max_volume_m3: parseFloat(e.target.value) || 0 })}
+                                    />
+                                    <span className="text-[9px] text-slate-500 mt-1 block font-medium">
+                                        ~{Math.round((formData.max_volume_m3 || 0) / 0.4489)} rolls bubblewrap
+                                    </span>
+                                </div>
+                                <div>
+                                    <label className="block text-[10px] font-black text-slate-500 uppercase tracking-widest mb-2">Max Weight (kg)</label>
+                                    <input
+                                        required
+                                        type="number"
+                                        className="w-full bg-slate-950 border border-slate-800 rounded-2xl p-4 text-white font-bold focus:border-blue-500 outline-none font-mono"
+                                        placeholder="3000"
+                                        value={formData.max_weight_kg}
+                                        onChange={(e) => setFormData({ ...formData, max_weight_kg: parseInt(e.target.value, 10) || 0 })}
+                                    />
                                 </div>
                             </div>
 

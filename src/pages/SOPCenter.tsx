@@ -36,7 +36,14 @@ const ROLE_COLORS: Record<string, string> = {
 const SOPCenter = ({ userRole, user }: { userRole?: string; user?: any }) => {
     const [articles, setArticles] = useState<SOPArticle[]>([]);
     const [loading, setLoading] = useState(true);
-    const [searchTerm, setSearchTerm] = useState('');
+    const [searchTerm, setSearchTerm] = useState(() => {
+        const stored = localStorage.getItem('sop_center_search_term');
+        if (stored) {
+            localStorage.removeItem('sop_center_search_term');
+            return stored;
+        }
+        return '';
+    });
     const [selectedArticle, setSelectedArticle] = useState<SOPArticle | null>(null);
 
     // Admin state

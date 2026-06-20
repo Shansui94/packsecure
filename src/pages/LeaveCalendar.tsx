@@ -216,11 +216,6 @@ const LeaveCalendar: React.FC<Props> = ({ user }) => {
             return;
         }
 
-        if (amount > eligibleLimit) {
-            alert(`⚠️ Had Maksimum Advance: RM ${eligibleLimit.toFixed(2)} sahaja bagi permohonan semasa anda. / Max Advance Limit: RM ${eligibleLimit.toFixed(2)} for your current request.`);
-            return;
-        }
-
         // Check if there is already a pending advance
         const hasPending = advances.some(adv => adv.status === 'Pending');
         if (hasPending) {
@@ -794,7 +789,7 @@ const LeaveCalendar: React.FC<Props> = ({ user }) => {
                     <AlertCircle className="text-amber-500 shrink-0 mt-0.5" size={16} />
                     <div className="text-xs text-amber-200 leading-relaxed font-sans">
                         <p className="font-bold mb-1">Syarat Kelayakan / Eligibility Rules:</p>
-                        <p>1. Jumlah pinjaman adalah **automatik dihadkan** di bawah baki kelayakan anda (Pendapatan trip bulan ini - Penyangga RM 1,700 - Pinjaman sedia ada). / The advance amount is **automatically capped** under your remaining limit (Current month trip earnings - RM 1,700 buffer - Existing advances).</p>
+                        <p>1. Had kelayakan semasa adalah sebagai **rujukan sahaja** dan tiada sekatan jumlah pinjaman buat masa ini (Pendapatan trip bulan ini - Penyangga RM 1,700 - Pinjaman sedia ada). / The eligibility limit is for **reference only** and there is no restriction on the advance amount at this moment (Current month trip earnings - RM 1,700 buffer - Existing advances).</p>
                         <p className="mt-0.5">2. Hanya **satu (1) permohonan aktif** dibenarkan pada satu-satu masa. / Only **one (1) active request** is allowed at any time.</p>
                         <p className="mt-0.5">3. Permohonan sebelum 15hb akan **ditangguhkan (held)** dan diproses pada hari Isnin pertama selepas 15hb. / Requests submitted before the 15th will be **held** and processed on the first Monday after the 15th.</p>
                     </div>
@@ -810,15 +805,14 @@ const LeaveCalendar: React.FC<Props> = ({ user }) => {
                                 value={advanceAmount} 
                                 onChange={e => setAdvanceAmount(e.target.value)}
                                 placeholder="0.00" 
-                                max={eligibleLimit}
                                 className="w-full bg-black/40 border border-white/10 rounded-xl py-3.5 pl-12 pr-4 text-xl font-black text-white focus:border-amber-500 outline-none transition-all"
                             />
                         </div>
                         {eligibleLimit <= 0 && !loadingLimit && (
-                            <p className="text-red-400 text-[10px] font-bold uppercase tracking-wide mt-1.5 px-1">
+                            <p className="text-amber-400 text-[10px] font-bold uppercase tracking-wide mt-1.5 px-1">
                                 {monthEarnings <= 1700 
-                                    ? "⚠️ Pendapatan trip anda belum melebihi had penyangga RM 1,700. Sila selesaikan penghantaran order dahulu. / Earnings must exceed RM 1,700 buffer threshold. Please complete deliveries first."
-                                    : "⚠️ Baki kelayakan anda adalah RM 0.00 (had pinjaman bulan ini telah dipenuhi). / Remaining limit is RM 0.00."}
+                                    ? "💡 Pendapatan trip semasa adalah sebagai rujukan sahaja. Anda masih boleh menghantar permohonan. / Current trip earnings are for reference only. You can still submit the request."
+                                    : "💡 Baki kelayakan semasa adalah sebagai rujukan sahaja. Anda masih boleh menghantar permohonan. / Current remaining limit is for reference only. You can still submit the request."}
                             </p>
                         )}
                     </div>
@@ -845,7 +839,7 @@ const LeaveCalendar: React.FC<Props> = ({ user }) => {
 
                     <button
                         onClick={handleSubmitAdvance}
-                        disabled={submittingAdvance || !advanceAmount || eligibleLimit <= 0 || loadingLimit}
+                        disabled={submittingAdvance || !advanceAmount || loadingLimit}
                         className="w-full py-4 bg-amber-600 hover:bg-amber-500 disabled:bg-slate-800 disabled:text-slate-600 disabled:cursor-not-allowed text-white rounded-2xl font-black text-sm uppercase tracking-widest transition-all active:scale-95 flex items-center justify-center gap-2 shadow-lg shadow-amber-900/20"
                     >
                         {submittingAdvance ? (

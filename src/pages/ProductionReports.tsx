@@ -3,13 +3,15 @@ import { supabase } from '../services/supabase';
 import { 
     Calendar, TrendingUp, 
     ChevronLeft, ChevronRight, Search, Download, Loader, 
-    PieChart as PieIcon, BarChart2, Cpu, Activity, Info, Globe
+    PieChart as PieIcon, BarChart2, Cpu, Activity, Info, Globe, FileSpreadsheet
 } from 'lucide-react';
 import { 
     ResponsiveContainer, PieChart, Pie, Cell, Tooltip, Legend, 
     BarChart, Bar, XAxis, YAxis, CartesianGrid, AreaChart, Area 
 } from 'recharts';
 import { MACHINES } from '../data/factoryData';
+import { determineState } from '../utils/logistics';
+import * as XLSX from 'xlsx';
 
 interface ProductionReportsProps {
     user: any;
@@ -46,6 +48,11 @@ const ProductionReports: React.FC<ProductionReportsProps> = () => {
     const [tableLocation, setTableLocation] = useState<'all' | 'taiping' | 'nilai'>('all');
     const [skuNameMap, setSkuNameMap] = useState<Map<string, string>>(new Map());
     const [searchTerm, setSearchTerm] = useState('');
+    
+    // Tab and toggle states for logistics
+    const [activeReportTab, setActiveReportTab] = useState<'production' | 'logistics'>('production');
+    const [driversMap, setDriversMap] = useState<Map<string, string>>(new Map());
+    const [expandedStates, setExpandedStates] = useState<Record<string, boolean>>({});
 
     // Load SKU -> Name mappings
     useEffect(() => {
@@ -103,7 +110,7 @@ const ProductionReports: React.FC<ProductionReportsProps> = () => {
                 }
             }
 
-            // 2. Fetch Sales Orders (exclude Cancelled)
+            // 2. Fetch Sales Orders (exclude Cancelled) with extra logistics fields
             let allOrders: any[] = [];
             let hasMoreOrders = true;
             let offsetOrders = 0;
@@ -111,7 +118,7 @@ const ProductionReports: React.FC<ProductionReportsProps> = () => {
             while (hasMoreOrders) {
                 const { data, error } = await supabase
                     .from('sales_orders')
-                    .select('id, order_number, customer, items, zone, status, order_date, deadline, created_at')
+                    .select('id, order_number, customer, items, zone, status, order_date, deadline, created_at, delivery_address, driver_id, trip_id, trip_sequence, trip_origin, trip_drop_count')
                     .neq('status', 'Cancelled')
                     .or(`order_date.gte.${firstDay},deadline.gte.${firstDay},created_at.gte.${startDateTs}`)
                     .range(offsetOrders, offsetOrders + 999);
@@ -134,6 +141,25 @@ const ProductionReports: React.FC<ProductionReportsProps> = () => {
                 const dateStr = d.slice(0, 7); // YYYY-MM
                 return dateStr === `${selectedYear}-${String(selectedMonth).padStart(2, '0')}`;
             });
+
+            // 3. Fetch Driver names from sys_users_v2 and users_public
+            const [v2Users, pubUsers] = await Promise.all([
+                supabase.from('sys_users_v2').select('auth_user_id, name'),
+                supabase.from('users_public').select('id, name')
+            ]);
+
+            const dm = new Map<string, string>();
+            if (v2Users.data) {
+                v2Users.data.forEach((u: any) => {
+                    if (u.auth_user_id && u.name) dm.set(u.auth_user_id, u.name);
+                });
+            }
+            if (pubUsers.data) {
+                pubUsers.data.forEach((u: any) => {
+                    if (u.id && u.name) dm.set(u.id, u.name);
+                });
+            }
+            setDriversMap(dm);
 
             setLogs(allLogs);
             setOrders(filteredOrders);
@@ -399,6 +425,162 @@ const ProductionReports: React.FC<ProductionReportsProps> = () => {
         return stats.skuList;
     }, [stats, tableLocation]);
 
+    // Calculate logistics statistics (monthly trips by state)
+    const logisticsStats = useMemo(() => {
+        const stateMap: Record<string, {
+            state: string;
+            tripKeys: Set<string>;
+            totalDOs: number;
+            totalRolls: number;
+            orders: any[];
+        }> = {};
+
+        const tripDriverDate = new Set<string>();
+        let totalDOs = 0;
+        let totalRolls = 0;
+
+        orders.forEach(order => {
+            const addr = order.delivery_address || '';
+            const zone = order.zone || '';
+            const state = determineState(`${addr} ${zone}`.trim());
+            const date = (order.order_date || order.deadline || order.created_at || '').slice(0, 10);
+            const driverId = order.driver_id || 'unassigned';
+
+            const tripKey = `${driverId}_${date}_${state}`;
+            const globalTripKey = `${driverId}_${date}`;
+
+            if (!stateMap[state]) {
+                stateMap[state] = {
+                    state,
+                    tripKeys: new Set(),
+                    totalDOs: 0,
+                    totalRolls: 0,
+                    orders: []
+                };
+            }
+
+            stateMap[state].tripKeys.add(tripKey);
+            stateMap[state].totalDOs += 1;
+            stateMap[state].orders.push(order);
+            tripDriverDate.add(globalTripKey);
+            totalDOs += 1;
+
+            let orderRolls = 0;
+            const items = order.items || [];
+            items.forEach((item: any) => {
+                orderRolls += Number(item.quantity) || 0;
+            });
+            stateMap[state].totalRolls += orderRolls;
+            totalRolls += orderRolls;
+        });
+
+        const stateList = Object.values(stateMap).map(s => ({
+            state: s.state,
+            tripsCount: s.tripKeys.size,
+            dosCount: s.totalDOs,
+            rollsCount: s.totalRolls,
+            orders: s.orders
+        })).sort((a, b) => b.tripsCount - a.tripsCount);
+
+        return {
+            stateList,
+            totalTrips: tripDriverDate.size,
+            totalDOs,
+            totalRolls,
+            statesCount: stateList.filter(s => s.tripsCount > 0 && s.state !== 'Other').length
+        };
+    }, [orders]);
+
+    // Export logistics monthly report to Excel (.xlsx)
+    const handleExportLogistics = () => {
+        if (!logisticsStats.stateList.length) {
+            alert("该月份暂无物流记录可导出 / No logistics data to export");
+            return;
+        }
+
+        // Sheet 1: State Summary
+        const summaryRows = logisticsStats.stateList.map((s, index) => {
+            const tripShare = logisticsStats.totalTrips > 0 ? ((s.tripsCount / logisticsStats.totalTrips) * 105 / 1.05).toFixed(2) : '0.00';
+            const rollShare = logisticsStats.totalRolls > 0 ? ((s.rollsCount / logisticsStats.totalRolls) * 100).toFixed(2) : '0.00';
+            return {
+                'No': index + 1,
+                '州属 / State': s.state,
+                '出车趟数 / Trip Days': s.tripsCount,
+                '送货单数 / Delivery Orders (DOs)': s.dosCount,
+                '送货卷数 / Quantity (Rolls)': s.rollsCount,
+                '出车占比 / Trip Share (%)': tripShare + '%',
+                '送货量占比 / Roll Share (%)': rollShare + '%'
+            };
+        });
+
+        // Add Total Row
+        summaryRows.push({
+            'No': 'Total',
+            '州属 / State': '总计 / Total',
+            '出车趟数 / Trip Days': logisticsStats.totalTrips,
+            '送货单数 / Delivery Orders (DOs)': logisticsStats.totalDOs,
+            '送货卷数 / Quantity (Rolls)': logisticsStats.totalRolls,
+            '出车占比 / Trip Share (%)': '100.00%',
+            '送货量占比 / Roll Share (%)': '100.00%'
+        } as any);
+
+        // Sheet 2: Detailed Trip Log
+        const detailedRows: any[] = [];
+        logisticsStats.stateList.forEach(s => {
+            s.orders.forEach(order => {
+                let rolls = 0;
+                const items = order.items || [];
+                items.forEach((item: any) => { rolls += Number(item.quantity) || 0; });
+
+                const driverName = driversMap.get(order.driver_id) || '未分配 / Unassigned';
+                const date = order.order_date || order.deadline || 'N/A';
+
+                detailedRows.push({
+                    '州属 / State': s.state,
+                    '日期 / Date': date,
+                    '司机 / Driver': driverName,
+                    '送货单号 / DO Number': order.order_number || 'N/A',
+                    '客户名称 / Customer': order.customer || 'N/A',
+                    '送货地址 / Delivery Address': order.delivery_address || order.zone || 'N/A',
+                    '送货量 / Quantity (Rolls)': rolls
+                });
+            });
+        });
+
+        // Sort details by date descending
+        detailedRows.sort((a, b) => b['日期 / Date'].localeCompare(a['日期 / Date']));
+
+        const wb = XLSX.utils.book_new();
+        const wsSummary = XLSX.utils.json_to_sheet(summaryRows);
+        const wsDetail = XLSX.utils.json_to_sheet(detailedRows);
+
+        XLSX.utils.book_append_sheet(wb, wsSummary, '州属汇总 / State Summary');
+        XLSX.utils.book_append_sheet(wb, wsDetail, '出车明细 / Detailed Trips');
+
+        // Column Widths
+        wsSummary['!cols'] = [
+            { wch: 6 },  // No
+            { wch: 20 }, // State
+            { wch: 20 }, // Trip Days
+            { wch: 20 }, // DOs
+            { wch: 20 }, // Rolls
+            { wch: 22 }, // Trip Share
+            { wch: 22 }  // Roll Share
+        ];
+        wsDetail['!cols'] = [
+            { wch: 15 }, // State
+            { wch: 15 }, // Date
+            { wch: 20 }, // Driver
+            { wch: 22 }, // DO Number
+            { wch: 25 }, // Customer
+            { wch: 50 }, // Address
+            { wch: 15 }  // Rolls
+        ];
+
+        const fileName = `Laporan_Trip_Negeri_Packsecure_${selectedYear}_${String(selectedMonth).padStart(2, '0')}.xlsx`;
+        XLSX.writeFile(wb, fileName);
+    };
+
     // Search filter SKU table list
     const filteredSkuList = useMemo(() => {
         if (!searchTerm.trim()) return activeSkuList;
@@ -442,42 +624,72 @@ const ProductionReports: React.FC<ProductionReportsProps> = () => {
                 <div className="flex flex-col md:flex-row md:items-center justify-between gap-4">
                     <div>
                         <h1 className="text-2xl md:text-3xl font-black tracking-tight flex items-center gap-3">
-                            <BarChart2 className="text-blue-600 dark:text-blue-500" size={28} />
-                            生产报告与分析 / Production Analytics
+                            {activeReportTab === 'production' ? (
+                                <>
+                                    <BarChart2 className="text-blue-600 dark:text-blue-500" size={28} />
+                                    生产报告与分析 / Production Analytics
+                                </>
+                            ) : (
+                                <>
+                                    <Globe className="text-blue-600 dark:text-blue-500" size={28} />
+                                    物流出车报告 / Logistics Reports
+                                </>
+                            )}
                         </h1>
                         <p className="text-slate-500 dark:text-gray-500 text-xs font-mono flex items-center gap-2 mt-1">
                             <span className="w-1.5 h-1.5 rounded-full bg-blue-500 animate-pulse" />
-                            MONTHLY PRODUCTION DASHBOARD · 月度生产数据面板
+                            {activeReportTab === 'production' 
+                                ? 'MONTHLY PRODUCTION DASHBOARD · 月度生产数据面板' 
+                                : 'MONTHLY LOGISTICS DASHBOARD · 月度物流出车面板'}
                         </p>
                     </div>
 
-                    {/* Month Picker Controls */}
-                    <div className="flex items-center gap-3 bg-white dark:bg-[#121214] border border-slate-200 dark:border-white/10 rounded-2xl p-1 shadow-sm backdrop-blur-md">
-                        <button 
-                            onClick={() => changeMonth(-1)} 
-                            className="p-2 rounded-xl hover:bg-slate-100 dark:hover:bg-white/10 text-slate-500 dark:text-gray-400 hover:text-slate-800 dark:hover:text-white transition-all active:scale-95"
-                        >
-                            <ChevronLeft size={18} />
-                        </button>
-                        
-                        <div className="text-center min-w-[150px] font-sans">
-                            <div className="text-sm font-black text-slate-800 dark:text-white">
-                                {MONTH_NAMES_ZH[selectedMonth - 1]}
-                            </div>
-                            <div className="text-[10px] text-blue-600 dark:text-blue-400 tracking-wider font-bold uppercase">{selectedYear}</div>
+                    {/* Tab Switcher & Month Picker Controls */}
+                    <div className="flex flex-col sm:flex-row items-stretch sm:items-center gap-3">
+                        <div className="flex bg-slate-100 dark:bg-black/40 border border-slate-200 dark:border-white/10 rounded-2xl p-0.5 text-xs shadow-inner">
+                            <button 
+                                onClick={() => setActiveReportTab('production')}
+                                className={`px-4 py-2 rounded-xl font-bold transition-all flex items-center gap-2 ${activeReportTab === 'production' ? 'bg-white dark:bg-white/10 text-blue-600 dark:text-blue-400 shadow-sm font-black' : 'text-slate-500 dark:text-gray-400 hover:text-slate-800 dark:hover:text-white'}`}
+                            >
+                                <BarChart2 size={16} />
+                                生产报告 / Production
+                            </button>
+                            <button 
+                                onClick={() => setActiveReportTab('logistics')}
+                                className={`px-4 py-2 rounded-xl font-bold transition-all flex items-center gap-2 ${activeReportTab === 'logistics' ? 'bg-white dark:bg-white/10 text-blue-600 dark:text-blue-400 shadow-sm font-black' : 'text-slate-500 dark:text-gray-400 hover:text-slate-800 dark:hover:text-white'}`}
+                            >
+                                <Globe size={16} />
+                                物流报告 / Logistics
+                            </button>
                         </div>
 
-                        <button 
-                            onClick={() => changeMonth(1)} 
-                            disabled={selectedMonth === today.getMonth() + 1 && selectedYear === today.getFullYear()}
-                            className="p-2 rounded-xl hover:bg-slate-100 dark:hover:bg-white/10 text-slate-500 dark:text-gray-400 hover:text-slate-800 dark:hover:text-white transition-all disabled:opacity-20 disabled:hover:bg-transparent cursor-pointer active:scale-95"
-                        >
-                            <ChevronRight size={18} />
-                        </button>
+                        <div className="flex items-center gap-3 bg-white dark:bg-[#121214] border border-slate-200 dark:border-white/10 rounded-2xl p-1 shadow-sm backdrop-blur-md">
+                            <button 
+                                onClick={() => changeMonth(-1)} 
+                                className="p-2 rounded-xl hover:bg-slate-100 dark:hover:bg-white/10 text-slate-500 dark:text-gray-400 hover:text-slate-800 dark:hover:text-white transition-all active:scale-95"
+                            >
+                                <ChevronLeft size={18} />
+                            </button>
+                            
+                            <div className="text-center min-w-[150px] font-sans">
+                                <div className="text-sm font-black text-slate-800 dark:text-white">
+                                    {MONTH_NAMES_ZH[selectedMonth - 1]}
+                                </div>
+                                <div className="text-[10px] text-blue-600 dark:text-blue-400 tracking-wider font-bold uppercase">{selectedYear}</div>
+                            </div>
+
+                            <button 
+                                onClick={() => changeMonth(1)} 
+                                disabled={selectedMonth === today.getMonth() + 1 && selectedYear === today.getFullYear()}
+                                className="p-2 rounded-xl hover:bg-slate-100 dark:hover:bg-white/10 text-slate-500 dark:text-gray-400 hover:text-slate-800 dark:hover:text-white transition-all disabled:opacity-20 disabled:hover:bg-transparent cursor-pointer active:scale-95"
+                            >
+                                <ChevronRight size={18} />
+                            </button>
+                        </div>
                     </div>
                 </div>
 
-                {/* --- LOADING STATE --- */}
+                {/* --- CONTENT SECTION --- */}
                 {loading ? (
                     <div className="flex flex-col items-center justify-center py-32 space-y-4">
                         <Loader className="animate-spin text-blue-500" size={40} />
@@ -485,6 +697,216 @@ const ProductionReports: React.FC<ProductionReportsProps> = () => {
                             正在读取报告数据... / Loading Report Data...
                         </p>
                     </div>
+                ) : activeReportTab === 'logistics' ? (
+                    orders.length === 0 ? (
+                        <div className="text-center py-24 text-slate-400 dark:text-gray-600 border border-dashed border-slate-300 dark:border-white/5 rounded-3xl bg-white dark:bg-[#121214]">
+                            <Calendar size={48} className="mx-auto mb-4 opacity-20 text-slate-500" />
+                            <p className="font-bold text-lg text-slate-700 dark:text-slate-300">该月份暂无物流出车记录 / No logistics data found</p>
+                            <p className="text-sm text-slate-500 dark:text-gray-500 mt-1">请尝试切换其他月份查看物流数据。</p>
+                        </div>
+                    ) : (
+                        <div className="space-y-6 animate-in fade-in slide-in-from-bottom-4 duration-500">
+                            {/* KPI Metrics Cards */}
+                            <div className="grid grid-cols-2 lg:grid-cols-4 gap-4">
+                                <div className="bg-white dark:bg-[#121214] p-5 rounded-2xl border border-slate-200 dark:border-white/5 shadow-sm flex flex-col justify-between">
+                                    <div>
+                                        <div className="text-[10px] text-slate-500 dark:text-gray-500 font-black uppercase tracking-wider mb-1">
+                                            出车总趟数 / Total Trip Days
+                                        </div>
+                                        <div className="text-2xl md:text-3xl font-black text-blue-600 dark:text-blue-500 font-mono">
+                                            {logisticsStats.totalTrips.toLocaleString()}
+                                        </div>
+                                    </div>
+                                    <div className="text-[11px] text-slate-400 dark:text-gray-500 mt-2 font-semibold flex items-center gap-1">
+                                        <TrendingUp size={12} className="text-blue-500" /> 司机·日期·州属 唯一组合 / Unique Trips
+                                    </div>
+                                </div>
+
+                                <div className="bg-white dark:bg-[#121214] p-5 rounded-2xl border border-slate-200 dark:border-white/5 shadow-sm flex flex-col justify-between">
+                                    <div>
+                                        <div className="text-[10px] text-slate-500 dark:text-gray-500 font-black uppercase tracking-wider mb-1">
+                                            完成送货单数 / Delivery Orders (DOs)
+                                        </div>
+                                        <div className="text-2xl md:text-3xl font-black text-emerald-600 dark:text-emerald-400 font-mono">
+                                            {logisticsStats.totalDOs.toLocaleString()}
+                                        </div>
+                                    </div>
+                                    <div className="text-[11px] text-slate-400 dark:text-gray-500 mt-2 font-semibold flex items-center gap-1">
+                                        <Info size={12} className="text-emerald-500" /> 已配送的送货单总数 / Total DOs
+                                    </div>
+                                </div>
+
+                                <div className="bg-white dark:bg-[#121214] p-5 rounded-2xl border border-slate-200 dark:border-white/5 shadow-sm flex flex-col justify-between">
+                                    <div>
+                                        <div className="text-[10px] text-slate-500 dark:text-gray-500 font-black uppercase tracking-wider mb-1">
+                                            配送卷数总量 / Total Rolls Delivered
+                                        </div>
+                                        <div className="text-2xl md:text-3xl font-black text-indigo-600 dark:text-indigo-400 font-mono">
+                                            {logisticsStats.totalRolls.toLocaleString()}
+                                        </div>
+                                    </div>
+                                    <div className="text-[11px] text-slate-400 dark:text-gray-500 mt-2 font-semibold flex items-center gap-1">
+                                        <Activity size={12} className="text-indigo-500" /> 配送的总产品卷数 / Rolls
+                                    </div>
+                                </div>
+
+                                <div className="bg-white dark:bg-[#121214] p-5 rounded-2xl border border-slate-200 dark:border-white/5 shadow-sm flex flex-col justify-between">
+                                    <div>
+                                        <div className="text-[10px] text-slate-500 dark:text-gray-500 font-black uppercase tracking-wider mb-1">
+                                            覆盖州属数量 / States Covered
+                                        </div>
+                                        <div className="text-2xl md:text-3xl font-black text-amber-600 dark:text-amber-500 font-mono">
+                                            {logisticsStats.statesCount.toLocaleString()}
+                                        </div>
+                                    </div>
+                                    <div className="text-[11px] text-slate-400 dark:text-gray-500 mt-2 font-semibold flex items-center gap-1">
+                                        <Globe size={12} className="text-amber-500" /> 马来西亚覆盖州属 (不含Other) / Active States
+                                    </div>
+                                </div>
+                            </div>
+
+                            {/* Logistics Charts and State Table */}
+                            <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
+                                {/* Chart: Trips by State */}
+                                <div className="bg-white dark:bg-[#121214] p-5 rounded-2xl border border-slate-200 dark:border-white/5 shadow-sm flex flex-col h-[450px]">
+                                    <div className="flex items-center gap-2 mb-4 shrink-0">
+                                        <BarChart2 className="text-blue-500" size={18} />
+                                        <h3 className="font-bold text-slate-800 dark:text-white text-sm">州属出车分布图 / Trips & DOs by State</h3>
+                                    </div>
+                                    <div className="flex-1 min-h-0">
+                                        <ResponsiveContainer width="100%" height="100%">
+                                            <BarChart
+                                                data={logisticsStats.stateList.filter(s => s.tripsCount > 0)}
+                                                margin={{ top: 10, right: 10, left: -20, bottom: 0 }}
+                                            >
+                                                <CartesianGrid strokeDasharray="3 3" stroke="#374151" opacity={0.15} />
+                                                <XAxis dataKey="state" stroke="#94a3b8" fontSize={9} tickLine={false} />
+                                                <YAxis stroke="#94a3b8" fontSize={9} tickLine={false} />
+                                                <Tooltip
+                                                    contentStyle={{
+                                                        backgroundColor: '#1f2937',
+                                                        borderColor: '#374151',
+                                                        borderRadius: '8px',
+                                                        color: '#fff',
+                                                        fontSize: '11px',
+                                                    }}
+                                                />
+                                                <Legend wrapperStyle={{ fontSize: '10px' }} />
+                                                <Bar name="出车趟数 / Trips" dataKey="tripsCount" fill="#3b82f6" radius={[4, 4, 0, 0]} />
+                                                <Bar name="单数 / DOs" dataKey="dosCount" fill="#10b981" radius={[4, 4, 0, 0]} />
+                                            </BarChart>
+                                        </ResponsiveContainer>
+                                    </div>
+                                </div>
+
+                                {/* Collapsible State Table */}
+                                <div className="bg-white dark:bg-[#121214] p-5 rounded-2xl border border-slate-200 dark:border-white/5 shadow-sm lg:col-span-2 flex flex-col h-[450px]">
+                                    <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3 mb-4 shrink-0">
+                                        <div className="flex items-center gap-2">
+                                            <Globe className="text-blue-500" size={18} />
+                                            <h3 className="font-bold text-slate-800 dark:text-white text-sm">州属出车与送货明细 / State Log Summary</h3>
+                                        </div>
+                                        <button
+                                            onClick={handleExportLogistics}
+                                            className="flex items-center gap-1.5 px-3 py-1.5 bg-emerald-50 dark:bg-emerald-500/10 hover:bg-emerald-100 dark:hover:bg-emerald-500/20 border border-emerald-200 dark:border-emerald-500/20 rounded-lg text-xs font-bold text-emerald-700 dark:text-emerald-400 transition-all cursor-pointer"
+                                        >
+                                            <FileSpreadsheet size={14} /> 导出 Excel / Export Excel
+                                        </button>
+                                    </div>
+
+                                    <div className="flex-1 overflow-y-auto custom-scrollbar border border-slate-200 dark:border-white/5 rounded-xl">
+                                        <table className="w-full text-left border-collapse">
+                                            <thead>
+                                                <tr className="bg-slate-50 dark:bg-[#18181b] text-slate-500 dark:text-gray-400 text-[10px] uppercase tracking-wider border-b border-slate-200 dark:border-white/5 sticky top-0 z-10">
+                                                    <th className="p-3 font-bold w-10"></th>
+                                                    <th className="p-3 font-bold">州属 / State</th>
+                                                    <th className="p-3 font-bold text-right">出车趟数</th>
+                                                    <th className="p-3 font-bold text-right">送货单数 (DOs)</th>
+                                                    <th className="p-3 font-bold text-right">配送卷数 (Rolls)</th>
+                                                    <th className="p-3 font-bold text-right">出车占比</th>
+                                                </tr>
+                                            </thead>
+                                            <tbody className="divide-y divide-slate-100 dark:divide-white/5 text-xs">
+                                                {logisticsStats.stateList.map(s => {
+                                                    const isExpanded = !!expandedStates[s.state];
+                                                    const tripShare = logisticsStats.totalTrips > 0 ? (s.tripsCount / logisticsStats.totalTrips) * 100 : 0;
+                                                    return (
+                                                        <React.Fragment key={s.state}>
+                                                            <tr 
+                                                                onClick={() => setExpandedStates(prev => ({ ...prev, [s.state]: !prev[s.state] }))}
+                                                                className="hover:bg-slate-50 dark:hover:bg-white/[0.01] transition-colors cursor-pointer"
+                                                            >
+                                                                <td className="p-3 text-center text-slate-400">
+                                                                    <ChevronRight 
+                                                                        size={16} 
+                                                                        className={`transition-transform duration-200 ${isExpanded ? 'rotate-90 text-blue-500' : ''}`} 
+                                                                    />
+                                                                </td>
+                                                                <td className="p-3 font-bold text-slate-800 dark:text-white">
+                                                                    {s.state}
+                                                                </td>
+                                                                <td className="p-3 text-right font-mono font-bold text-slate-800 dark:text-white">
+                                                                    {s.tripsCount} 趟
+                                                                </td>
+                                                                <td className="p-3 text-right font-mono text-slate-600 dark:text-gray-400">
+                                                                    {s.dosCount} 单
+                                                                </td>
+                                                                <td className="p-3 text-right font-mono text-slate-600 dark:text-gray-400">
+                                                                    {s.rollsCount.toLocaleString()} 卷
+                                                                </td>
+                                                                <td className="p-3 text-right font-mono font-black text-blue-600 dark:text-blue-400">
+                                                                    {tripShare.toFixed(1)}%
+                                                                </td>
+                                                            </tr>
+                                                            {isExpanded && (
+                                                                <tr>
+                                                                    <td colSpan={6} className="bg-slate-50/50 dark:bg-black/20 p-4">
+                                                                        <div className="border border-slate-150 dark:border-white/5 rounded-lg overflow-hidden max-h-[300px] overflow-y-auto custom-scrollbar">
+                                                                            <table className="w-full text-left border-collapse text-[11px]">
+                                                                                <thead>
+                                                                                    <tr className="bg-slate-100 dark:bg-white/5 text-slate-500 dark:text-gray-400 font-bold border-b border-slate-200 dark:border-white/5 sticky top-0">
+                                                                                        <th className="p-2">日期</th>
+                                                                                        <th className="p-2">司机</th>
+                                                                                        <th className="p-2">送货单号</th>
+                                                                                        <th className="p-2">客户名称</th>
+                                                                                        <th className="p-2">详细送货地址</th>
+                                                                                        <th className="p-2 text-right">送货卷数</th>
+                                                                                    </tr>
+                                                                                </thead>
+                                                                                <tbody className="divide-y divide-slate-100 dark:divide-white/5">
+                                                                                    {s.orders.map(order => {
+                                                                                        let rolls = 0;
+                                                                                        const items = order.items || [];
+                                                                                        items.forEach((item: any) => { rolls += Number(item.quantity) || 0; });
+                                                                                        const driverName = driversMap.get(order.driver_id) || '未分配 / Unassigned';
+                                                                                        const date = (order.order_date || order.deadline || order.created_at || 'N/A').slice(0, 10);
+                                                                                        return (
+                                                                                            <tr key={order.id} className="hover:bg-slate-200/30 dark:hover:bg-white/[0.02] text-slate-700 dark:text-gray-300">
+                                                                                                <td className="p-2 font-mono whitespace-nowrap">{date}</td>
+                                                                                                <td className="p-2 font-medium">{driverName}</td>
+                                                                                                <td className="p-2 font-mono font-bold text-blue-600 dark:text-blue-400">{order.order_number || 'N/A'}</td>
+                                                                                                <td className="p-2 truncate max-w-[120px]" title={order.customer}>{order.customer || 'N/A'}</td>
+                                                                                                <td className="p-2 truncate max-w-[200px]" title={order.delivery_address}>{order.delivery_address || order.zone || 'N/A'}</td>
+                                                                                                <td className="p-2 text-right font-mono">{rolls}</td>
+                                                                                            </tr>
+                                                                                        );
+                                                                                    })}
+                                                                                </tbody>
+                                                                            </table>
+                                                                        </div>
+                                                                    </td>
+                                                                </tr>
+                                                            )}
+                                                        </React.Fragment>
+                                                    );
+                                                })}
+                                            </tbody>
+                                        </table>
+                                    </div>
+                                </div>
+                            </div>
+                        </div>
+                    )
                 ) : logs.length === 0 ? (
                     /* --- EMPTY STATE --- */
                     <div className="text-center py-24 text-slate-400 dark:text-gray-600 border border-dashed border-slate-300 dark:border-white/5 rounded-3xl bg-white dark:bg-[#121214]">
@@ -690,7 +1112,7 @@ const ProductionReports: React.FC<ProductionReportsProps> = () => {
                             <div>
                                 <h3 className="font-bold text-slate-800 dark:text-white text-md flex items-center gap-2">
                                     <Globe className="text-blue-500" size={20} />
-                                    地区与基地分析 / Regional & Factory Analysis
+                                    地区与基地 analysis / Regional & Factory Analysis
                                 </h3>
                                 <p className="text-[10px] text-slate-500 dark:text-gray-500 font-mono">
                                     PRODUCTION BY FACTORY LOCATION & DELIVERY QUANTITY BY DESTINATION ZONE

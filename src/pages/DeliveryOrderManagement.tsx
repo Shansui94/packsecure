@@ -49,6 +49,30 @@ const normalizeLoc = (locId: string): string => {
     return LOC_ALIASES[lower] || locId;
 };
 
+const getPercentColor = (percent: number): string => {
+    if (percent < 70) {
+        return 'text-red-400 font-bold';
+    } else if (percent >= 70 && percent < 90) {
+        return 'text-amber-400 font-bold';
+    } else if (percent >= 90 && percent <= 100) {
+        return 'text-emerald-400 font-bold';
+    } else {
+        return 'text-red-400 font-black';
+    }
+};
+
+const getPercentBarColor = (percent: number): string => {
+    if (percent < 70) {
+        return 'bg-red-500 shadow-md shadow-red-500/20';
+    } else if (percent >= 70 && percent < 90) {
+        return 'bg-amber-500';
+    } else if (percent >= 90 && percent <= 100) {
+        return 'bg-emerald-500 shadow-md shadow-emerald-500/30';
+    } else {
+        return 'bg-red-500 shadow-md shadow-red-500/30';
+    }
+};
+
 // Reusable Searchable Select Component (Ported from SimpleStock for consistency)
 interface SearchableSelectProps {
     label?: string;
@@ -484,6 +508,7 @@ const DeliveryOrderManagement: React.FC = () => {
 
     // New Order Form State
     const [selectedDriverId, setSelectedDriverId] = useState('');
+    const [selectedLorryId, setSelectedLorryId] = useState('');
     const getTodayStr = () => new Date().toLocaleDateString('en-CA'); // YYYY-MM-DD 本地时间
     const getTomorrowStr = () => { const d = new Date(); d.setDate(d.getDate() + 1); return d.toLocaleDateString('en-CA'); };
     const [newOrderDate, setNewOrderDate] = useState(getTodayStr); // 默认今天
@@ -1015,7 +1040,7 @@ const DeliveryOrderManagement: React.FC = () => {
 
     // APPROVE AMENDMENT
     const handleApproveAmendment = async (order: SalesOrder) => {
-        if (!window.confirm(`Approve changes for Order ${order.orderNumber}? \nThis will adjust stock for amendments and mark as Delivered.`)) return;
+        if (!window.confirm(`Approve changes for Order ${order.orderNumber}? \nThis will adjust stock for amendments and mark as Loaded.`)) return;
 
         try {
             // 1. Let V6 DB Trigger handle the stock deduction/adjustment automatically.
@@ -1023,8 +1048,7 @@ const DeliveryOrderManagement: React.FC = () => {
 
             // 2. Update Status
             const { error } = await supabase.from('sales_orders').update({
-                status: 'Delivered',
-                pod_timestamp: new Date().toISOString()
+                status: 'Loaded'
             }).eq('id', order.id);
 
             if (error) throw error;
@@ -1034,7 +1058,7 @@ const DeliveryOrderManagement: React.FC = () => {
             // Optimistic Update
             setOrders(prev => prev.map(o => {
                 if (o.id === order.id) {
-                    return { ...o, status: 'Delivered' };
+                    return { ...o, status: 'Loaded' };
                 }
                 return o;
             }));
@@ -2182,6 +2206,7 @@ const DeliveryOrderManagement: React.FC = () => {
         closeScanReview();
         setEditingOrderId(null); setNewOrderDate(getTodayStr());
         setSelectedDriverId('');
+        setSelectedLorryId('');
         setOrderCustomer('');
         setNewOrderAddress('');
         setNewOrderDeliveryDate(getTomorrowStr());
@@ -2246,6 +2271,19 @@ const DeliveryOrderManagement: React.FC = () => {
             ...l,
             driverName: drivers.find(d => d.uid === l.employee_id)?.name || 'Unknown Driver'
         }));
+
+    const filteredDriversForModal = drivers.filter(d => 
+        (d.base_location || 'Taiping').toUpperCase() === tripOrigin.toUpperCase()
+    );
+
+    const filteredLorriesForModal = lorries.filter(l => {
+        if (!l.driverUserId) return true;
+        const d = drivers.find(x => x.uid === l.driverUserId);
+        return d ? (d.base_location || 'Taiping').toUpperCase() === tripOrigin.toUpperCase() : true;
+    });
+
+    const modalLorry = lorries.find(l => l.id === selectedLorryId);
+    const modalLoad = calculateLoad(newOrderItems || [], modalLorry);
 
     return (
         <div className="min-h-screen bg-slate-950 text-slate-100 p-6 font-sans selection:bg-blue-500/30">
@@ -2933,6 +2971,8 @@ const DeliveryOrderManagement: React.FC = () => {
                                                             onClick={() => {
                                                                 setEditingOrderId(order.id); setNewOrderDate(order.orderDate || '');
                                                                 setSelectedDriverId(order.driverId || '');
+                                                                const initialLorry = lorries.find(l => l.driverUserId === order.driverId);
+                                                                setSelectedLorryId(initialLorry ? initialLorry.id : '');
                                                                 setOrderCustomer(order.customer);
                                                                 setNewOrderAddress(order.deliveryAddress || '');
                                                                 setNewOrderDeliveryDate(order.deadline || '');
@@ -3165,6 +3205,8 @@ const DeliveryOrderManagement: React.FC = () => {
                                             <tr key={order.id} className="hover:bg-slate-800/50 transition-colors group cursor-pointer" onClick={() => {
                                                 setEditingOrderId(order.id); setNewOrderDate(order.orderDate || '');
                                                 setSelectedDriverId(order.driverId || '');
+                                                const initialLorry = lorries.find(l => l.driverUserId === order.driverId);
+                                                setSelectedLorryId(initialLorry ? initialLorry.id : '');
                                                 setOrderCustomer(order.customer);
                                                 setNewOrderAddress(order.deliveryAddress || '');
                                                 setNewOrderDeliveryDate(order.deadline || '');
@@ -3360,73 +3402,94 @@ const DeliveryOrderManagement: React.FC = () => {
 
                                 {/* Section 1: Basic Info (Simpler) */}
                                 <div className="grid grid-cols-1 lg:grid-cols-2 gap-4">
-                                    <div>
-                                        <label className="block text-xs font-bold text-slate-500 uppercase mb-2">Assigned Driver</label>
-                                        <div className="relative">
-                                            <UserIcon className="absolute left-3 top-3.5 text-slate-600 z-10" size={16} />
-                                            <input
-                                                list="drivers-list"
-                                                className="w-full bg-slate-900 border border-slate-800 rounded-xl pl-10 pr-10 py-3 text-sm text-slate-200 focus:border-blue-500/50 outline-none"
-                                                placeholder="-- Type or Select Driver --"
-                                                value={drivers.find(d => d.uid === selectedDriverId)?.name || drivers.find(d => d.uid === selectedDriverId)?.email || selectedDriverId || ''}
-                                                onChange={e => {
-                                                    const val = e.target.value;
-                                                    // Robust case-insensitive matching to find the driver UID
-                                                    const matchedDriver = drivers.find(d => 
-                                                        (d.name || '').toLowerCase() === val.toLowerCase() || 
-                                                        (d.email || '').toLowerCase() === val.toLowerCase()
-                                                    );
-                                                    if (matchedDriver) {
-                                                        setSelectedDriverId(matchedDriver.uid);
-                                                    } else {
-                                                        setSelectedDriverId(val); // Fallback to raw string (will be caught by UUID check on save)
-                                                    }
-                                                }}
-                                                onBlur={e => {
-                                                    // Optional cleanup: If they empty it, set unassigned
-                                                    if (!e.target.value) setSelectedDriverId('');
-                                                }}
-                                            />
-                                            <datalist id="drivers-list">
-                                                {drivers.filter(d => (d.base_location || 'Taiping').toUpperCase() === tripOrigin).map(d => <option key={d.uid} value={d.name || d.email || ''} />)}
-                                            </datalist>
-                                        </div>
-                                    </div>
-                                    <div>
-                                        <div className="grid grid-cols-1 sm:grid-cols-2 gap-3 sm:gap-4">
-                                            <div>
-                                                <label className="block text-[10px] font-black text-slate-600 uppercase mb-2 tracking-widest flex items-center gap-2">
-                                                    <Calendar size={12} /> Trip Date
-                                                </label>
-                                                <div className="relative group">
-                                                    <input
-                                                        type="date"
-                                                        className="w-full bg-slate-900/50 border border-slate-800 rounded-xl px-4 py-2.5 text-xs text-slate-400 focus:border-blue-500/30 outline-none appearance-none cursor-pointer [color-scheme:dark] transition-all"
-                                                        value={newOrderDate}
-                                                        onChange={e => setNewOrderDate(e.target.value)}
-                                                    />
-                                                </div>
-                                            </div>
-                                            <div>
-                                                <label className="block text-[10px] font-black text-blue-500/80 uppercase mb-2 tracking-widest flex items-center gap-2">
-                                                    <Calendar size={12} /> Delivery Date
-                                                </label>
-                                                <div className="relative group">
-                                                    <input
-                                                        type="date"
-                                                        className="w-full bg-slate-900 border border-slate-800 rounded-xl px-4 py-2.5 text-xs text-slate-200 focus:border-blue-500/50 outline-none appearance-none cursor-pointer [color-scheme:dark] transition-all font-bold"
-                                                        value={newOrderDeliveryDate}
-                                                        onChange={e => setNewOrderDeliveryDate(e.target.value)}
-                                                    />
-                                                </div>
-                                            </div>
-                                        </div>
-                                        <div className="hidden lg:flex mt-1 justify-between px-1">
-                                            <div className="text-[9px] text-slate-700 font-bold uppercase">Ord: {formatDateDMY(newOrderDate) || "Today"}</div>
-                                            <div className="text-[9px] text-blue-500/60 font-black uppercase">Del: {formatDateDMY(newOrderDeliveryDate) || "Not Set"}</div>
-                                        </div>
-                                    </div>
-                                </div>
+                                     <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
+                                         <div>
+                                             <label className="block text-xs font-bold text-slate-500 uppercase mb-2">Assigned Lorry (车牌)</label>
+                                             <div className="relative">
+                                                 <Truck className="absolute left-3 top-3.5 text-slate-600 z-10" size={16} />
+                                                 <select
+                                                     className="w-full bg-slate-900 border border-slate-800 rounded-xl pl-10 pr-3 py-3 text-sm text-slate-200 focus:border-blue-500/50 outline-none appearance-none cursor-pointer"
+                                                     value={selectedLorryId}
+                                                     onChange={(e) => {
+                                                         const lorryId = e.target.value;
+                                                         setSelectedLorryId(lorryId);
+                                                         const l = lorries.find(x => x.id === lorryId);
+                                                         if (l && l.driverUserId && !selectedDriverId) {
+                                                             setSelectedDriverId(l.driverUserId);
+                                                         }
+                                                     }}
+                                                 >
+                                                     <option value="">-- Select Lorry --</option>
+                                                     {filteredLorriesForModal.map(l => (
+                                                         <option key={l.id} value={l.id}>
+                                                             {l.plateNumber} {l.driverName ? `(${l.driverName})` : ''}
+                                                         </option>
+                                                     ))}
+                                                 </select>
+                                             </div>
+                                         </div>
+                                         <div>
+                                             <label className="block text-xs font-bold text-slate-500 uppercase mb-2">Assigned Driver (司机)</label>
+                                             <div className="relative">
+                                                 <UserIcon className="absolute left-3 top-3.5 text-slate-600 z-10" size={16} />
+                                                 <select
+                                                     className="w-full bg-slate-900 border border-slate-800 rounded-xl pl-10 pr-3 py-3 text-sm text-slate-200 focus:border-blue-500/50 outline-none appearance-none cursor-pointer"
+                                                     value={selectedDriverId}
+                                                     onChange={(e) => {
+                                                          const driverId = e.target.value;
+                                                          setSelectedDriverId(driverId);
+                                                          const l = lorries.find(x => x.driverUserId === driverId);
+                                                          if (l && !selectedLorryId) {
+                                                              setSelectedLorryId(l.id);
+                                                          }
+                                                      }}
+                                                 >
+                                                     <option value="">-- Select Driver --</option>
+                                                     {filteredDriversForModal.map(d => (
+                                                         <option key={d.uid} value={d.uid}>
+                                                             {d.name || d.email}
+                                                         </option>
+                                                     ))}
+                                                 </select>
+                                             </div>
+                                         </div>
+                                     </div>
+
+                                     <div>
+                                         <div className="grid grid-cols-1 sm:grid-cols-2 gap-3 sm:gap-4">
+                                             <div>
+                                                 <label className="block text-[10px] font-black text-slate-600 uppercase mb-2 tracking-widest flex items-center gap-2">
+                                                     <Calendar size={12} /> Trip Date
+                                                 </label>
+                                                 <div className="relative group">
+                                                     <input
+                                                         type="date"
+                                                         className="w-full bg-slate-900/50 border border-slate-800 rounded-xl px-4 py-2.5 text-xs text-slate-400 focus:border-blue-500/30 outline-none appearance-none cursor-pointer [color-scheme:dark] transition-all"
+                                                         value={newOrderDate}
+                                                         onChange={e => setNewOrderDate(e.target.value)}
+                                                     />
+                                                 </div>
+                                             </div>
+                                             <div>
+                                                 <label className="block text-[10px] font-black text-blue-500/80 uppercase mb-2 tracking-widest flex items-center gap-2">
+                                                     <Calendar size={12} /> Delivery Date
+                                                 </label>
+                                                 <div className="relative group">
+                                                     <input
+                                                         type="date"
+                                                         className="w-full bg-slate-900 border border-slate-800 rounded-xl px-4 py-2.5 text-xs text-slate-200 focus:border-blue-500/50 outline-none appearance-none cursor-pointer [color-scheme:dark] transition-all font-bold"
+                                                         value={newOrderDeliveryDate}
+                                                         onChange={e => setNewOrderDeliveryDate(e.target.value)}
+                                                     />
+                                                 </div>
+                                             </div>
+                                         </div>
+                                         <div className="hidden lg:flex mt-1 justify-between px-1">
+                                             <div className="text-[9px] text-slate-700 font-bold uppercase">Ord: {formatDateDMY(newOrderDate) || "Today"}</div>
+                                             <div className="text-[9px] text-blue-500/60 font-black uppercase">Del: {formatDateDMY(newOrderDeliveryDate) || "Not Set"}</div>
+                                         </div>
+                                     </div>
+                                 </div>
 
                                 {/* CUSTOMER / CLIENT SELECTION */}
                                 <div>
@@ -3494,6 +3557,8 @@ const DeliveryOrderManagement: React.FC = () => {
                                                     const newOrigin = e.target.value;
                                                     setTripOrigin(newOrigin);
                                                     setCurrentItemLoc(newOrigin === 'NILAI' ? 'Nilai' : 'SPD');
+                                                    setSelectedLorryId('');
+                                                    setSelectedDriverId('');
                                                 }}
                                             >
                                                 <option value="TAIPING">Taiping</option>
@@ -3635,6 +3700,39 @@ const DeliveryOrderManagement: React.FC = () => {
                                     <h3 className="text-sm font-bold text-slate-400 uppercase tracking-wider mb-4 flex items-center gap-2">
                                         <Box size={16} /> Trip Items
                                     </h3>
+
+                                    {/* Volume & Weight Load Progress Bars for Modal */}
+                                    <div className="space-y-2 mb-4 bg-slate-900/50 p-3 rounded-xl border border-slate-800/80">
+                                        <div>
+                                            <div className="flex justify-between text-[10px] font-mono leading-none mb-1">
+                                                <span className="text-slate-400">体积 Vol ({modalLoad.totalVol}/{modalLoad.maxVol} m³)</span>
+                                                <span className={getPercentColor(Number(modalLoad.percentVol))}>
+                                                    {modalLoad.percentVol}%
+                                                </span>
+                                            </div>
+                                            <div className="w-full bg-slate-950 h-1.5 rounded-full overflow-hidden border border-slate-800">
+                                                <div
+                                                    className={`h-full rounded-full transition-all duration-300 ${getPercentBarColor(Number(modalLoad.percentVol))}`}
+                                                    style={{ width: `${Math.min(Number(modalLoad.percentVol), 100)}%` }}
+                                                />
+                                            </div>
+                                        </div>
+
+                                        <div>
+                                            <div className="flex justify-between text-[10px] font-mono leading-none mb-1">
+                                                <span className="text-slate-400">重量 Weight ({modalLoad.totalWeight}/{modalLoad.maxWeight} kg)</span>
+                                                <span className={getPercentColor(Number(modalLoad.percentWeight))}>
+                                                    {modalLoad.percentWeight}%
+                                                </span>
+                                            </div>
+                                            <div className="w-full bg-slate-950 h-1.5 rounded-full overflow-hidden border border-slate-800">
+                                                <div
+                                                    className={`h-full rounded-full transition-all duration-300 ${getPercentBarColor(Number(modalLoad.percentWeight))}`}
+                                                    style={{ width: `${Math.min(Number(modalLoad.percentWeight), 100)}%` }}
+                                                />
+                                            </div>
+                                        </div>
+                                    </div>
 
                                     {/* Item List Layout */}
                                     <div className="bg-slate-900/80 rounded-2xl border border-slate-800 shadow-lg flex flex-col flex-1 min-h-0 overflow-hidden">

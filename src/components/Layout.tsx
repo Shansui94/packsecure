@@ -31,6 +31,7 @@ import {
 } from 'lucide-react';
 import { supabase } from '../services/supabase';
 import { canAccessPage } from '../utils/pageAccess';
+import PageLogicDrawer from './PageLogicDrawer';
 
 interface LayoutProps {
     children: React.ReactNode;
@@ -50,6 +51,189 @@ const Layout: React.FC<LayoutProps> = ({ children, activePage, setActivePage, us
     const [theme, setTheme] = useState(localStorage.getItem('theme') || 'dark');
     // DB-driven page permissions: Set<page_id> of allowed pages for this role
     const [dbAllowedPages, setDbAllowedPages] = useState<Set<string> | null>(null);
+
+    // Languages Config
+    const languages = [
+        { code: 'zh-CN', label: '简体中文', flag: '🇨🇳' },
+        { code: 'zh-TW', label: '繁體中文', flag: '🇭🇰' },
+        { code: 'en', label: 'English', flag: '🇬🇧' },
+        { code: 'ms', label: 'Bahasa Melayu', flag: '🇲🇾' },
+        { code: 'my', label: 'မြန်မာဘာသာ', flag: '🇲🇲' },
+        { code: 'hi', label: 'हिन्दी', flag: '🇮🇳' },
+        { code: 'bn', label: 'বাংলা', flag: '🇧🇩' }
+    ];
+
+    const [currentLanguage, setCurrentLanguage] = useState(
+        () => localStorage.getItem('packsecure_lang') || 'zh-CN'
+    );
+
+    const translateUI = (text: string) => {
+        const savedLang = localStorage.getItem('packsecure_lang') || 'zh-CN';
+        if (savedLang !== 'zh-CN') {
+            return text;
+        }
+
+        const dict: { [key: string]: string } = {
+            'SuperAdmin': '超级管理员',
+            'Admin': '管理员',
+            'Manager': '经理',
+            'LogisticsCoordinator': '物流协调员',
+            'Driver': '司机',
+            'HR': '考勤/HR',
+            'Operator': '操作员',
+            'Guest': '访客',
+            'Logistics Workspace': '物流工作空间',
+            'Executive Suite': '管理决策仓',
+            'Operations': '车间作业',
+            'Inventory & BOM': '库存与物料',
+            'Logistics': '物流配送',
+            'Organization': '人事与系统',
+            'Productivity': '日常办公',
+            'Driver Workspace': '司机工作空间',
+            'HR Workspace': '人事工作空间',
+            'Production Floor': '生产作业空间',
+            'Inventory Audits': '库存审计',
+            'System v6.7 • Data Center Active': '系统 v6.7 • 数据中心运行中',
+            'Dark': '深色',
+            'Light': '浅色',
+            'Quit': '退出登录',
+            'System Language / 系统语言': '系统语言',
+            'Expand sidebar': '展开侧栏',
+            'Collapse sidebar': '折叠侧栏',
+            'PIN: ': '工号: ',
+            'Live Stock': '实时库存',
+            'Trip Management': '出车管理',
+            'Daily Prep': '每日准备',
+            'Product Library': '产品库',
+            'Maintenance Control': '设备维保',
+            'Driver Management': '司机管理',
+            'Factory Live OS': '车间看板',
+            'Data Command': '数据管理',
+            'Production Workspace': '生产工作区',
+            'Machine Schedule': '排产计划',
+            'Floor Plan': '车间布局图',
+            'Inventory': '库存管理',
+            'Stock Movement': '库存变动',
+            'Stock Audit': '库存盘点',
+            'Audit Report': '盘点报告',
+            'Lorry Fleet': '货车车队',
+            'Production Logs': '生产记录',
+            'Reports': '报表中心',
+            'Report History': '历史报表',
+            'Leave Center': '考勤请假',
+            'Staff Hub / HR Portal': '人事看板 / HR门户',
+            'EXECUTIVE REPORTS': '管理层报表',
+            'IOT SETTINGS': '物联网设置',
+            'Dev Log': '开发日志',
+            'Activity Logs': '操作日志',
+            'My Monthly Report': '我的月度报告',
+            'Monthly Report': '月度报告',
+            'SOP Center': 'SOP 中心',
+            '📸 Work Photos': '📸 工作照片',
+            'Notes': '备忘录',
+            'Tasks': '任务看板',
+            'My Deliveries': '我的配送',
+            'Delivery History': '出车历史',
+            'Staff Hub': '员工看板',
+            'Lorry Service': '车辆维修',
+            'HR Portal': 'HR 门户',
+            'Yield & AI Learning': '收率与 AI 学习',
+        };
+
+        return dict[text] || text;
+    };
+
+    const loadGoogleTranslateScript = () => {
+        if (document.querySelector('script[src*="translate.google.com"]')) {
+            return;
+        }
+
+        // Global initialization callback
+        (window as any).googleTranslateElementInit = () => {
+            new (window as any).google.translate.TranslateElement({
+                pageLanguage: 'zh-CN',
+                includedLanguages: 'zh-CN,zh-TW,en,ms,my,hi,bn',
+                autoDisplay: false
+            }, 'google_translate_element');
+        };
+
+        const script = document.createElement('script');
+        script.type = 'text/javascript';
+        script.src = 'https://translate.google.com/translate_a/element.js?cb=googleTranslateElementInit';
+        document.head.appendChild(script);
+    };
+
+    const clearGoogleTranslateCookies = () => {
+        const domains = [
+            "",
+            window.location.hostname,
+            "." + window.location.hostname,
+            window.location.hostname.split('.').slice(-2).join('.'),
+            "." + window.location.hostname.split('.').slice(-2).join('.')
+        ];
+        const paths = ["/", "/packsecure", "/src"];
+        
+        domains.forEach(domain => {
+            paths.forEach(path => {
+                let cookieString = "googtrans=; expires=Thu, 01 Jan 1970 00:00:00 UTC;";
+                if (path) cookieString += ` path=${path};`;
+                if (domain) cookieString += ` domain=${domain};`;
+                document.cookie = cookieString;
+            });
+        });
+    };
+
+    const handleLanguageChange = (langCode: string) => {
+        setCurrentLanguage(langCode);
+        localStorage.setItem('packsecure_lang', langCode);
+        document.documentElement.lang = langCode;
+
+        if (langCode === 'zh-CN') {
+            clearGoogleTranslateCookies();
+            window.location.reload();
+        } else {
+            loadGoogleTranslateScript();
+            // Ensure cookie is set for persistent translation
+            document.cookie = `googtrans=/zh-CN/${langCode}; path=/;`;
+            document.cookie = `googtrans=/zh-CN/${langCode}; path=/; domain=` + window.location.hostname;
+
+            const selectEl = document.querySelector('.goog-te-combo') as HTMLSelectElement;
+            if (selectEl) {
+                selectEl.value = langCode;
+                selectEl.dispatchEvent(new Event('change'));
+            } else {
+                window.location.reload();
+            }
+        }
+    };
+
+    useEffect(() => {
+        const savedLang = localStorage.getItem('packsecure_lang') || 'zh-CN';
+        document.documentElement.lang = savedLang;
+        
+        if (savedLang === 'zh-CN') {
+            clearGoogleTranslateCookies();
+            return;
+        }
+
+        // Load translate elements dynamically for foreign languages
+        loadGoogleTranslateScript();
+
+        let attempts = 0;
+        const interval = setInterval(() => {
+            const selectEl = document.querySelector('.goog-te-combo') as HTMLSelectElement;
+            if (selectEl) {
+                selectEl.value = savedLang;
+                selectEl.dispatchEvent(new Event('change'));
+                clearInterval(interval);
+            }
+            attempts++;
+            if (attempts > 30) {
+                clearInterval(interval);
+            }
+        }, 500);
+        return () => clearInterval(interval);
+    }, []);
 
     useEffect(() => {
         if (theme === 'dark') {
@@ -152,7 +336,7 @@ const Layout: React.FC<LayoutProps> = ({ children, activePage, setActivePage, us
     const NavGroup = ({ title, children }: { title: string, children: React.ReactNode }) => (
         <div className={useCollapsedNavLayout ? 'mb-3' : 'mb-6'}>
             {showNavLabels && (
-                <h3 className="px-4 text-[11px] font-black text-gray-500 uppercase tracking-[0.2em] mb-3 opacity-90">{title}</h3>
+                <h3 className="px-4 text-[11px] font-black text-gray-500 uppercase tracking-[0.2em] mb-3 opacity-90">{translateUI(title)}</h3>
             )}
             <div className="space-y-1">
                 {children}
@@ -178,7 +362,7 @@ const Layout: React.FC<LayoutProps> = ({ children, activePage, setActivePage, us
         return (
             <button
                 type="button"
-                title={showNavLabels ? undefined : label}
+                title={showNavLabels ? undefined : translateUI(label)}
                 onClick={() => {
                     setActivePage(id);
                     setIsMobileMenuOpen(false);
@@ -195,13 +379,13 @@ const Layout: React.FC<LayoutProps> = ({ children, activePage, setActivePage, us
 
                 {/* Icon */}
                 <div className={`relative z-10 transition-transform duration-300 ${isActive ? 'scale-110' : 'group-hover:scale-110'}`}>
-                    <Icon size={20} className={isActive ? 'text-blue-400 drop-shadow-[0_0_8px_rgba(96,165,250,0.5)]' : 'group-hover:text-gray-200'} />
+                    <Icon size={20} className={isActive ? 'text-blue-400 drop-shadow-[0_0_8px_rgba(233,113,50,0.5)]' : 'group-hover:text-gray-200'} />
                 </div>
 
                 {/* Label */}
                 {showNavLabels && (
                     <span className={`relative z-10 font-bold tracking-wide text-[15px] flex-1 text-left min-w-0 ${isActive ? 'text-white' : ''}`}>
-                        {label}
+                        {translateUI(label)}
                     </span>
                 )}
 
@@ -214,7 +398,7 @@ const Layout: React.FC<LayoutProps> = ({ children, activePage, setActivePage, us
 
                 {/* Active Indicator Dot */}
                 {isActive && !useCollapsedNavLayout && (
-                    <div className="absolute right-4 w-1.5 h-1.5 rounded-full bg-blue-500 shadow-[0_0_8px_rgba(59,130,246,0.8)]" />
+                    <div className="absolute right-4 w-1.5 h-1.5 rounded-full bg-blue-500 shadow-[0_0_8px_rgba(233,113,50,0.8)]" />
                 )}
             </button>
         );
@@ -224,22 +408,34 @@ const Layout: React.FC<LayoutProps> = ({ children, activePage, setActivePage, us
     const hideGlobalMobileHeader = ([] as string[]).includes(activePage);
 
     return (
-        <div className="min-h-screen bg-[#121215] text-gray-200 font-sans selection:bg-blue-500/30">
+        <div className="min-h-screen bg-apple-bg text-apple-textMain font-sans selection:bg-blue-500/30 transition-colors duration-300">
             {/* Mobile Header (Sticky Glass) */}
             {!hideGlobalMobileHeader && (
-                <div className="lg:hidden fixed top-0 left-0 right-0 h-16 bg-[#121215]/90 backdrop-blur-md border-b border-white/10 flex justify-between items-center px-4 z-50">
-                    <div className="flex items-center gap-3">
-                        <div className="w-8 h-8 rounded-lg bg-green-500/20 flex items-center justify-center text-green-500 font-bold shadow-lg shadow-green-900/40">
+                <div className="lg:hidden fixed top-0 left-0 right-0 h-16 bg-apple-bg/90 backdrop-blur-md border-b border-apple-border flex justify-between items-center px-3 z-50 transition-colors duration-300">
+                    <div className="flex items-center gap-2">
+                        <div className="w-7 h-7 rounded-lg bg-green-500/20 flex items-center justify-center text-green-500 font-bold shadow-lg shadow-green-900/40 text-sm">
                             P
                         </div>
-                        <span className="font-bold text-lg tracking-tight text-white dark:text-white">PackSecure</span>
+                        <span className="font-bold text-base tracking-tight text-white dark:text-white">PackSecure</span>
                     </div>
-                    <div className="flex items-center gap-2">
-                        <button onClick={toggleTheme} className="p-2 text-gray-400 hover:text-amber-400 transition-colors">
-                            {theme === 'dark' ? <Moon size={20} /> : <Sun size={20} className="text-amber-500" />}
+                    <div className="flex items-center gap-1">
+                        {/* Mobile Language Selector (Compact width on mobile) */}
+                        <select
+                            value={currentLanguage}
+                            onChange={(e) => handleLanguageChange(e.target.value)}
+                            className="bg-white/5 border border-white/10 rounded-lg text-xs font-bold text-gray-300 px-1.5 py-1.5 focus:outline-none focus:border-blue-500 transition-colors cursor-pointer w-14 max-w-[56px] sm:w-auto sm:max-w-none overflow-hidden"
+                        >
+                            {languages.map((lang) => (
+                                <option key={lang.code} value={lang.code} className="bg-[#121215] text-gray-300">
+                                    {lang.flag} &nbsp; {lang.label.split(' ')[0]}
+                                </option>
+                            ))}
+                        </select>
+                        <button onClick={toggleTheme} className="p-1.5 text-gray-400 hover:text-amber-400 transition-colors">
+                            {theme === 'dark' ? <Moon size={18} /> : <Sun size={18} className="text-amber-500" />}
                         </button>
-                        <button onClick={toggleMobileMenu} className="p-2 text-gray-400 active:text-white">
-                            {isMobileMenuOpen ? <X size={24} /> : <Menu size={24} />}
+                        <button onClick={toggleMobileMenu} className="p-1.5 text-gray-400 active:text-white">
+                            {isMobileMenuOpen ? <X size={20} /> : <Menu size={20} />}
                         </button>
                     </div>
                 </div>
@@ -248,7 +444,7 @@ const Layout: React.FC<LayoutProps> = ({ children, activePage, setActivePage, us
             <div className="flex h-screen overflow-hidden pt-16 lg:pt-0">
                 {/* Sidebar Navigation */}
                 <aside className={`
-                    fixed left-0 z-[60] shrink-0 bg-[#1a1a1e] border-r border-white/5 flex flex-col
+                    fixed left-0 z-[60] shrink-0 bg-apple-surface border-r border-apple-border flex flex-col transition-colors duration-300
                     top-16 bottom-0 lg:top-0 lg:inset-y-0
                     transform transition-all duration-300 lg:transform-none lg:relative lg:translate-x-0
                     ${isMobileMenuOpen ? 'translate-x-0 shadow-2xl shadow-black w-[280px]' : '-translate-x-full w-[280px]'}
@@ -266,7 +462,7 @@ const Layout: React.FC<LayoutProps> = ({ children, activePage, setActivePage, us
                         <button
                             type="button"
                             onClick={toggleSidebarCollapsed}
-                            title={isSidebarCollapsed ? 'Expand sidebar' : 'Collapse sidebar'}
+                            title={isSidebarCollapsed ? translateUI('Expand sidebar') : translateUI('Collapse sidebar')}
                             className="hidden lg:flex absolute top-4 right-2 p-2 text-slate-500 hover:text-white bg-white/5 hover:bg-white/10 rounded-lg transition-colors"
                         >
                             {isSidebarCollapsed ? <ChevronRight size={18} /> : <ChevronLeft size={18} />}
@@ -277,7 +473,7 @@ const Layout: React.FC<LayoutProps> = ({ children, activePage, setActivePage, us
                                 <div>
                                     <div className="flex items-center gap-1.5 mt-1">
                                         <span className="w-1.5 h-1.5 rounded-full bg-green-500 animate-pulse shadow-[0_0_8px_rgba(34,197,94,0.6)]"></span>
-                                        <p className="text-[10px] font-bold text-gray-400 uppercase tracking-widest">System v6.7 • Data Center Active</p>
+                                        <p className="text-[10px] font-bold text-gray-400 uppercase tracking-widest">{translateUI('System v6.7 • Data Center Active')}</p>
                                     </div>
                                 </div>
                             )}
@@ -296,6 +492,7 @@ const Layout: React.FC<LayoutProps> = ({ children, activePage, setActivePage, us
                                 <NavItem id="products" icon={Package} label="Product Library" roles={['LogisticsCoordinator']} />
                                 <NavItem id="maintenance" icon={Wrench} label="Maintenance Control" roles={['LogisticsCoordinator']} />
                                 <NavItem id="driver-management" icon={Users} label="Driver Management" roles={['LogisticsCoordinator']} />
+                                <NavItem id="reports" icon={FileBarChart} label="Reports" roles={['LogisticsCoordinator']} />
                             </NavGroup>
                         )}
 
@@ -308,8 +505,9 @@ const Layout: React.FC<LayoutProps> = ({ children, activePage, setActivePage, us
                                 </NavGroup>
 
                                 <NavGroup title="Operations">
-                                    <NavItem id="scanner" icon={Scan} label="Production Control" roles={['SuperAdmin', 'Admin']} />
+                                    <NavItem id="scanner" icon={Scan} label="Production Workspace" roles={['SuperAdmin', 'Admin', 'Manager']} />
                                     <NavItem id="livestock" icon={BarChart3} label="Live Stock" roles={['SuperAdmin', 'Admin', 'Manager']} />
+                                    <NavItem id="recipes" icon={Activity} label="Yield & AI Learning" roles={['SuperAdmin', 'Admin', 'Manager']} />
                                     <NavItem id="machine-schedule" icon={Calendar} label="Machine Schedule" roles={['SuperAdmin', 'Admin', 'Manager']} />
                                     <NavItem id="floor-plan" icon={LayoutDashboard} label="Floor Plan" roles={['SuperAdmin', 'Admin', 'Manager']} />
                                 </NavGroup>
@@ -328,13 +526,13 @@ const Layout: React.FC<LayoutProps> = ({ children, activePage, setActivePage, us
                                     <NavItem id="maintenance" icon={Wrench} label="Maintenance Control" roles={['SuperAdmin', 'Admin', 'Manager']} />
                                     <NavItem id="lorry-management" icon={Truck} label="Lorry Fleet" roles={['SuperAdmin', 'Admin', 'Manager']} />
                                     <NavItem id="production" icon={Database} label="Production Logs" roles={['SuperAdmin', 'Admin', 'Manager']} />
-                                    <NavItem id="report-history" icon={FileText} label="Reports" roles={['SuperAdmin', 'Admin', 'Manager']} />
+                                    <NavItem id="report-history" icon={FileText} label="Report History" roles={['SuperAdmin', 'Admin', 'Manager']} />
                                 </NavGroup>
 
                                 <NavGroup title="Organization">
                                     <NavItem id="leave-calendar" icon={Calendar} label="Leave Center" roles={['SuperAdmin', 'Admin', 'Manager', 'HR', 'Driver', 'Operator']} />
                                     <NavItem id="hr" icon={Users} label="Staff Hub / HR Portal" roles={['SuperAdmin', 'Admin', 'Manager']} />
-                                    <NavItem id="reports" icon={FileBarChart} label="EXECUTIVE REPORTS" roles={['SuperAdmin', 'Manager']} />
+                                    <NavItem id="reports" icon={FileBarChart} label="Reports" roles={['SuperAdmin', 'Admin', 'Manager']} />
                                     <NavItem id="iot" icon={Cpu} label="IOT SETTINGS" roles={['SuperAdmin', 'Admin', 'Manager']} />
                                     <NavItem id="dev-log" icon={Activity} label="Dev Log" roles={['SuperAdmin', 'Admin']} />
                                     <NavItem id="activity-logs" icon={Activity} label="Activity Logs" roles={['SuperAdmin', 'Admin', 'Manager']} />
@@ -344,8 +542,8 @@ const Layout: React.FC<LayoutProps> = ({ children, activePage, setActivePage, us
 
                                 {!isNeoson && (
                                     <NavGroup title="Productivity">
-                                        <NavItem id="sop-center" icon={BookOpen} label="SOP 指南" roles={['SuperAdmin', 'Admin', 'Manager']} />
-                                        <NavItem id="work-photos" icon={Camera} label="📸 工作记录" roles={['SuperAdmin', 'Admin', 'Manager']} />
+                                        <NavItem id="sop-center" icon={BookOpen} label="SOP Center" roles={['SuperAdmin', 'Admin', 'Manager']} />
+                                        <NavItem id="work-photos" icon={Camera} label="📸 Work Photos" roles={['SuperAdmin', 'Admin', 'Manager']} />
                                         <NavItem id="notes" icon={FileText} label="Notes" roles={['SuperAdmin', 'Admin', 'Manager']} />
                                         <NavItem id="tasks" icon={ClipboardList} label="Tasks" roles={['SuperAdmin', 'Admin', 'Manager']} badge={taskCount} />
                                     </NavGroup>
@@ -356,17 +554,17 @@ const Layout: React.FC<LayoutProps> = ({ children, activePage, setActivePage, us
                         {/* DRIVER VIEW */}
                         {(userRole === 'Driver' || isNeoson || user?.roleModules?.includes('delivery-driver') || user?.roleModules?.includes('delivery-history')) && (
                             <>
-                                <NavGroup title="Driver Workspace / Ruang Kerja Pemandu">
-                                    <NavItem id="delivery-driver" icon={Package} label="Penghantaran / My Delivery" roles={['Driver', 'Manager']} />
-                                    <NavItem id="delivery-history" icon={ClipboardList} label="Sejarah / My History" roles={['Driver', 'Manager']} />
-                                    <NavItem id="driver-leave" icon={Calendar} label="Urusan Staf / Staff Hub" roles={['Driver', 'Manager']} />
-                                    <NavItem id="lorry-service" icon={Truck} label="Servis Lori / Lorry Service" roles={['Driver', 'Manager']} />
-                                    <NavItem id="personal-report" icon={FileText} label="Laporan Bulanan / Monthly Report" roles={['Driver', 'Manager']} />
+                                <NavGroup title="Driver Workspace">
+                                    <NavItem id="delivery-driver" icon={Package} label="My Deliveries" roles={['Driver', 'Manager']} />
+                                    <NavItem id="delivery-history" icon={ClipboardList} label="Delivery History" roles={['Driver', 'Manager']} />
+                                    <NavItem id="driver-leave" icon={Calendar} label="Staff Hub" roles={['Driver', 'Manager']} />
+                                    <NavItem id="lorry-service" icon={Truck} label="Lorry Service" roles={['Driver', 'Manager']} />
+                                    <NavItem id="personal-report" icon={FileText} label="Monthly Report" roles={['Driver', 'Manager']} />
                                 </NavGroup>
 
                                 <NavGroup title="Productivity">
-                                    <NavItem id="sop-center" icon={BookOpen} label="SOP 指南" roles={['Driver', 'Manager']} />
-                                    <NavItem id="work-photos" icon={Camera} label="📸 工作记录" roles={['Driver', 'Manager']} />
+                                    <NavItem id="sop-center" icon={BookOpen} label="SOP Center" roles={['Driver', 'Manager']} />
+                                    <NavItem id="work-photos" icon={Camera} label="📸 Work Photos" roles={['Driver', 'Manager']} />
                                     <NavItem id="notes" icon={FileText} label="Notes" roles={['Driver', 'Manager']} />
                                     <NavItem id="tasks" icon={ClipboardList} label="Tasks" roles={['Driver', 'Manager']} badge={taskCount} />
                                     <NavItem id="activity-logs" icon={Activity} label="Activity Logs" roles={['Driver', 'Manager']} />
@@ -384,8 +582,8 @@ const Layout: React.FC<LayoutProps> = ({ children, activePage, setActivePage, us
                                 </NavGroup>
 
                                 <NavGroup title="Productivity">
-                                    <NavItem id="sop-center" icon={BookOpen} label="SOP 指南" roles={['HR']} />
-                                    <NavItem id="work-photos" icon={Camera} label="📸 工作记录" roles={['HR']} />
+                                    <NavItem id="sop-center" icon={BookOpen} label="SOP Center" roles={['HR']} />
+                                    <NavItem id="work-photos" icon={Camera} label="📸 Work Photos" roles={['HR']} />
                                     <NavItem id="notes" icon={FileText} label="Notes" roles={['HR']} />
                                     <NavItem id="tasks" icon={ClipboardList} label="Tasks" roles={['HR']} badge={taskCount} />
                                     <NavItem id="activity-logs" icon={Activity} label="Activity Logs" roles={['HR']} />
@@ -397,14 +595,14 @@ const Layout: React.FC<LayoutProps> = ({ children, activePage, setActivePage, us
                         {userRole === 'Operator' && user?.employeeId !== '009' && (
                             <>
                                 <NavGroup title="Production Floor">
-                                    <NavItem id="scanner" icon={Scan} label="Production Control" roles={['Operator']} />
+                                    <NavItem id="scanner" icon={Scan} label="Production Workspace" roles={['Operator']} />
                                     <NavItem id="order-summary" icon={FileBarChart} label="Daily Prep" roles={['Operator']} />
                                     <NavItem id="personal-report" icon={FileText} label="My Monthly Report" roles={['Operator']} />
                                 </NavGroup>
 
                                 <NavGroup title="Productivity">
-                                    <NavItem id="sop-center" icon={BookOpen} label="SOP 指南" roles={['Operator']} />
-                                    <NavItem id="work-photos" icon={Camera} label="📸 工作记录" roles={['Operator']} />
+                                    <NavItem id="sop-center" icon={BookOpen} label="SOP Center" roles={['Operator']} />
+                                    <NavItem id="work-photos" icon={Camera} label="📸 Work Photos" roles={['Operator']} />
                                     <NavItem id="notes" icon={FileText} label="Notes" roles={['Operator']} />
                                     <NavItem id="tasks" icon={ClipboardList} label="Tasks" roles={['Operator']} badge={taskCount} />
                                     <NavItem id="activity-logs" icon={Activity} label="Activity Logs" roles={['Operator']} />
@@ -421,7 +619,7 @@ const Layout: React.FC<LayoutProps> = ({ children, activePage, setActivePage, us
                     </nav>
 
                     {/* User Profile (Bottom) */}
-                    <div className={`border-t border-white/5 bg-[#0a0a0c] ${useCollapsedNavLayout ? 'p-2' : 'p-4'}`}>
+                    <div className={`border-t border-white/5 bg-[#050505] ${useCollapsedNavLayout ? 'p-2' : 'p-4'}`}>
                         <button
                             type="button"
                             title={showNavLabels ? undefined : (user?.name || 'Profile')}
@@ -437,49 +635,80 @@ const Layout: React.FC<LayoutProps> = ({ children, activePage, setActivePage, us
                                         <User size={18} className="text-gray-400" />
                                     )}
                                 </div>
-                                <div className="absolute bottom-0 right-0 w-3 h-3 bg-green-500 border-2 border-[#0a0a0c] rounded-full"></div>
+                                <div className="absolute bottom-0 right-0 w-3 h-3 bg-green-500 border-2 border-[#050505] rounded-full"></div>
                             </div>
 
                             {showNavLabels && (
                                 <div className="text-left flex-1 min-w-0">
                                     <p className="font-bold text-sm text-gray-200 truncate group-hover:text-white transition-colors">{user?.name || 'User'}</p>
                                     <p className="text-[10px] text-blue-400 font-bold uppercase tracking-wider">
-                                        {userRole || 'Guest'}
+                                        {translateUI(userRole || 'Guest')}
                                     </p>
                                     {user?.employeeId && (
                                         <p className="text-[10px] text-gray-600 font-mono tracking-widest mt-0.5">
-                                            PIN: {user.employeeId}
+                                            {translateUI('PIN: ')}{user.employeeId}
                                         </p>
                                     )}
                                 </div>
                             )}
                         </button>
 
+                        {/* PC Language Selector */}
+                        {showNavLabels ? (
+                            <div className="mt-3 px-1">
+                                <label className="block text-[9px] font-black text-gray-500 uppercase tracking-widest mb-1.5 opacity-90">{translateUI('System Language / 系统语言')}</label>
+                                <select
+                                    value={currentLanguage}
+                                    onChange={(e) => handleLanguageChange(e.target.value)}
+                                    className="bg-white/5 border border-white/10 rounded-lg text-xs font-bold text-gray-300 px-2.5 py-2 w-full focus:outline-none focus:border-blue-500 transition-colors cursor-pointer"
+                                >
+                                    {languages.map((lang) => (
+                                        <option key={lang.code} value={lang.code} className="bg-[#121215] text-gray-300">
+                                            {lang.flag} &nbsp; {lang.label}
+                                        </option>
+                                    ))}
+                                </select>
+                            </div>
+                        ) : (
+                            <button
+                                type="button"
+                                onClick={() => {
+                                    const currentIndex = languages.findIndex(l => l.code === currentLanguage);
+                                    const nextIndex = (currentIndex + 1) % languages.length;
+                                    handleLanguageChange(languages[nextIndex].code);
+                                }}
+                                title={`${translateUI('System Language / 系统语言')} (Current: ${languages.find(l => l.code === currentLanguage)?.label})`}
+                                className="w-full flex items-center justify-center p-2 mt-3 text-gray-400 hover:text-white bg-white/5 hover:bg-white/10 rounded-lg transition-colors text-xs font-bold font-mono"
+                            >
+                                {languages.find(l => l.code === currentLanguage)?.flag || '🌐'}
+                            </button>
+                        )}
+
                         <div className={`flex items-center mt-3 ${useCollapsedNavLayout ? 'flex-col gap-2' : 'gap-2'}`}>
                             <button
                                 type="button"
-                                title={useCollapsedNavLayout ? (theme === 'dark' ? 'Dark mode' : 'Light mode') : undefined}
+                                title={useCollapsedNavLayout ? (theme === 'dark' ? translateUI('Dark') : translateUI('Light')) : undefined}
                                 onClick={toggleTheme}
                                 className={`flex items-center justify-center p-2.5 text-gray-400 hover:text-amber-400 hover:bg-white/5 rounded-lg transition-all text-xs font-bold uppercase tracking-wider ${useCollapsedNavLayout ? 'w-full' : 'flex-1 gap-2'}`}
                             >
                                 {theme === 'dark' ? <Moon size={14} /> : <Sun size={14} className="text-amber-500" />}
-                                {showNavLabels && <span>{theme === 'dark' ? 'Dark' : 'Light'}</span>}
+                                {showNavLabels && <span>{translateUI(theme === 'dark' ? 'Dark' : 'Light')}</span>}
                             </button>
                             <button
                                 type="button"
-                                title="Quit"
+                                title={translateUI('Quit')}
                                 onClick={onLogout}
                                 className={`flex items-center justify-center p-2.5 text-gray-500 hover:text-red-400 hover:bg-red-500/10 rounded-lg transition-all text-xs font-bold uppercase tracking-wider ${useCollapsedNavLayout ? 'w-full' : 'flex-1 gap-2'}`}
                             >
                                 <LogOut size={14} />
-                                {showNavLabels && <span>Quit</span>}
+                                {showNavLabels && <span>{translateUI('Quit')}</span>}
                             </button>
                         </div>
                     </div>
                 </aside>
 
                 {/* Main Content Area */}
-                <main className="flex-1 overflow-y-auto bg-[#121215] relative scroll-smooth selection:bg-purple-500/30">
+                <main className="flex-1 overflow-y-auto bg-apple-bg relative scroll-smooth selection:bg-purple-500/30 transition-colors duration-300">
                     {/* Mobile Overlay */}
                     {isMobileMenuOpen && (
                         <div
@@ -491,6 +720,13 @@ const Layout: React.FC<LayoutProps> = ({ children, activePage, setActivePage, us
                     <div className="h-full w-full">
                         {children}
                     </div>
+
+                    <PageLogicDrawer 
+                        activePage={activePage} 
+                        userRole={userRole} 
+                        user={user} 
+                        setActivePage={setActivePage} 
+                    />
                 </main>
             </div>
         </div>
