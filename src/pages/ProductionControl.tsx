@@ -1774,7 +1774,7 @@ const ProductionControl: React.FC<ProductionControlProps> = ({ user, jobs = [] }
     };
     return (
         <>
-            <div className="min-h-screen text-apple-textMain dark:text-white font-sans selection:bg-apple-blue/30 overflow-x-hidden relative animate-fade-in notranslate" translate="no">
+            <div className="min-h-screen text-apple-textMain dark:text-white font-sans selection:bg-apple-blue/30 overflow-x-hidden relative animate-fade-in">
                 <div className="relative z-10 max-w-7xl mx-auto p-4 md:p-6 flex flex-col min-h-screen">
 
                 {/* HEADER */}
@@ -2405,10 +2405,9 @@ const ProductionControl: React.FC<ProductionControlProps> = ({ user, jobs = [] }
             {/* TAKEOVER WARNING MODAL */}
             <div 
                 key="takeover-warning-modal-overlay" 
-                className={`fixed inset-0 z-[300] bg-black/80 backdrop-blur-md flex items-center justify-center p-4 notranslate transition-all duration-200 ${
+                className={`fixed inset-0 z-[300] bg-black/80 backdrop-blur-md flex items-center justify-center p-4 transition-all duration-200 ${
                     takeoverWarningRecord ? 'visible opacity-100 pointer-events-auto' : 'invisible opacity-0 pointer-events-none'
-                }`} 
-                translate="no"
+                }`}
             >
                 {lastTakeoverWarning && (
                     <div className="bg-[#1c1c1f] border border-rose-500/30 p-6 rounded-3xl w-full max-w-sm shadow-2xl relative animate-scale-in">
@@ -2448,10 +2447,9 @@ const ProductionControl: React.FC<ProductionControlProps> = ({ user, jobs = [] }
             {/* PIN CONFIRMATION MODAL FOR MACHINE SWITCHING */}
             <div 
                 key="pin-confirmation-modal-overlay" 
-                className={`fixed inset-0 z-[400] bg-black/80 backdrop-blur-md flex items-center justify-center p-4 notranslate transition-all duration-200 ${
+                className={`fixed inset-0 z-[400] bg-black/80 backdrop-blur-md flex items-center justify-center p-4 transition-all duration-200 ${
                     isPinModalOpen ? 'visible opacity-100 pointer-events-auto' : 'invisible opacity-0 pointer-events-none'
-                }`} 
-                translate="no"
+                }`}
             >
                 <div className="bg-[#1c1c1f] border border-apple-blue/30 p-6 rounded-3xl w-full max-w-sm shadow-2xl relative animate-scale-in">
                     <div className="text-center mb-6">
@@ -2525,10 +2523,9 @@ const ProductionControl: React.FC<ProductionControlProps> = ({ user, jobs = [] }
             {/* OPERATOR SELECTION MODAL */}
             <div 
                 key="operator-selection-modal-overlay" 
-                className={`fixed inset-0 z-[400] bg-black/80 backdrop-blur-md flex items-center justify-center p-4 notranslate transition-all duration-200 ${
+                className={`fixed inset-0 z-[400] bg-black/80 backdrop-blur-md flex items-center justify-center p-4 transition-all duration-200 ${
                     isOperatorModalOpen ? 'visible opacity-100 pointer-events-auto' : 'invisible opacity-0 pointer-events-none'
-                }`} 
-                translate="no"
+                }`}
             >
                 <div className="bg-[#1c1c1f] border border-white/10 p-6 rounded-3xl w-full max-w-lg shadow-2xl relative flex flex-col max-h-[85vh] animate-scale-in">
                     <div className="text-center mb-4 shrink-0">
@@ -2627,10 +2624,9 @@ const ProductionControl: React.FC<ProductionControlProps> = ({ user, jobs = [] }
             {/* WEBCAM CAPTURE MODAL */}
             <div 
                 key="webcam-capture-modal-overlay" 
-                className={`fixed inset-0 z-[500] bg-black/95 flex flex-col items-center justify-center p-4 overflow-y-auto notranslate transition-all duration-200 ${
+                className={`fixed inset-0 z-[500] bg-black/95 flex flex-col items-center justify-center p-4 overflow-y-auto transition-all duration-200 ${
                     showWebcam ? 'visible opacity-100 pointer-events-auto' : 'invisible opacity-0 pointer-events-none'
-                }`} 
-                translate="no"
+                }`}
             >
                 <div className="bg-[#1c1c1f] border border-purple-500/30 p-6 rounded-3xl w-full max-w-md shadow-2xl flex flex-col gap-4">
                     <div className="flex justify-between items-center pb-2 border-b border-white/5">
