@@ -125,6 +125,7 @@ const DriverDelivery: React.FC<DriverDeliveryProps> = ({ user }) => {
     const [currentLorry, setCurrentLorry] = useState<any>(null);
     const [isScannerOpen, setIsScannerOpen] = useState(false);
     const [scannerMode, setScannerMode] = useState<'bind' | 'unbind'>('bind');
+    const hasScannedRef = useRef(false);
 
     // Lorry Mileage & Odometer State
     const [scannedLorryData, setScannedLorryData] = useState<any>(null);
@@ -880,6 +881,7 @@ const DriverDelivery: React.FC<DriverDeliveryProps> = ({ user }) => {
             
         } catch (err: any) {
             alert(`Scan Error: ${err.message || 'Invalid format'}`);
+            hasScannedRef.current = false; // Scan failed, unlock scan so driver can retry
         }
     };
 
@@ -1194,7 +1196,7 @@ const DriverDelivery: React.FC<DriverDeliveryProps> = ({ user }) => {
                             </div>
                         </div>
                         <button 
-                            onClick={() => { setScannerMode('unbind'); setIsScannerOpen(true); }}
+                            onClick={() => { setScannerMode('unbind'); hasScannedRef.current = false; setIsScannerOpen(true); }}
                             disabled={submitting}
                             className="px-4 py-2 bg-slate-900/50 hover:bg-slate-800 border border-slate-700 rounded-xl text-[10px] font-black uppercase text-slate-300 tracking-wider transition-all disabled:opacity-50"
                         >
@@ -1203,7 +1205,7 @@ const DriverDelivery: React.FC<DriverDeliveryProps> = ({ user }) => {
                     </div>
                 ) : (
                     <button 
-                        onClick={() => { setScannerMode('bind'); setIsScannerOpen(true); }}
+                        onClick={() => { setScannerMode('bind'); hasScannedRef.current = false; setIsScannerOpen(true); }}
                         className="w-full bg-slate-800/80 hover:bg-slate-700/80 border-2 border-dashed border-slate-600 rounded-2xl p-4 flex items-center justify-center gap-3 transition-all"
                     >
                         <QrCode className="text-blue-400" size={24} />
@@ -1938,11 +1940,11 @@ const DriverDelivery: React.FC<DriverDeliveryProps> = ({ user }) => {
                                 : "IMBAS QR LORI (PEMULANGAN) / SCAN LORRY QR (RETURN VEHICLE)"
                             }
                         </h2>
-                        <button onClick={() => setTimeout(() => setIsScannerOpen(false), 100)} className="p-2 bg-slate-800 rounded-full text-white"><X size={20} /></button>
+                        <button onClick={() => { hasScannedRef.current = true; setTimeout(() => setIsScannerOpen(false), 100); }} className="p-2 bg-slate-800 rounded-full text-white"><X size={20} /></button>
                     </div>
                     
                     <div className="flex-1 bg-black flex flex-col items-center justify-center p-8">
-                        <div className="w-full max-w-sm aspect-square bg-slate-900 rounded-[40px] overflow-hidden border-4 border-slate-800 relative shadow-2xl">
+                        <div key={isScannerOpen ? 'scanner-active' : 'scanner-inactive'} className="w-full max-w-sm aspect-square bg-slate-900 rounded-[40px] overflow-hidden border-4 border-slate-800 relative shadow-2xl">
                             {submitting ? (
                                 <div className="absolute inset-0 flex flex-col items-center justify-center bg-black/80 z-10 text-blue-400 gap-4">
                                     <div className="w-8 h-8 border-4 border-blue-500/30 border-t-blue-500 rounded-full animate-spin" />
@@ -1955,8 +1957,11 @@ const DriverDelivery: React.FC<DriverDeliveryProps> = ({ user }) => {
                                 </div>
                             ) : null}
                             <Scanner 
+                               key="driver-lorry-scanner"
                                onScan={(detectedCodes) => {
+                                   if (hasScannedRef.current) return;
                                    if (detectedCodes && detectedCodes.length > 0) {
+                                       hasScannedRef.current = true;
                                        handleScanComplete(detectedCodes[0].rawValue);
                                    }
                                }}
