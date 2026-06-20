@@ -857,7 +857,7 @@ const DriverDelivery: React.FC<DriverDeliveryProps> = ({ user }) => {
                     throw new Error("Kod QR tidak sah. Sila imbas QR Lori yang sedang anda gunakan untuk mengesahkan pemulangan. / Invalid QR Code. Please scan the QR of the lorry you are currently using.");
                 }
 
-                setIsScannerOpen(false);
+                setTimeout(() => setIsScannerOpen(false), 100);
                 setScannedLorryData({ id: lorryId, mode: 'unbind', plate_number: currentLorry?.plate_number || 'Lorry' });
                 setOdometerPhotoBase64(null);
                 setDetectedMileage(null);
@@ -871,7 +871,7 @@ const DriverDelivery: React.FC<DriverDeliveryProps> = ({ user }) => {
                 throw new Error("Kod QR tidak sah. Bukan QR Lori. / Invalid QR Code. Not a Lorry QR.");
             }
 
-            setIsScannerOpen(false);
+            setTimeout(() => setIsScannerOpen(false), 100);
             setScannedLorryData({ id: lorryId, mode: 'bind', plate_number: plate || 'Lorry' });
             setOdometerPhotoBase64(null);
             setDetectedMileage(null);
@@ -1938,7 +1938,7 @@ const DriverDelivery: React.FC<DriverDeliveryProps> = ({ user }) => {
                                 : "IMBAS QR LORI (PEMULANGAN) / SCAN LORRY QR (RETURN VEHICLE)"
                             }
                         </h2>
-                        <button onClick={() => setIsScannerOpen(false)} className="p-2 bg-slate-800 rounded-full text-white"><X size={20} /></button>
+                        <button onClick={() => setTimeout(() => setIsScannerOpen(false), 100)} className="p-2 bg-slate-800 rounded-full text-white"><X size={20} /></button>
                     </div>
                     
                     <div className="flex-1 bg-black flex flex-col items-center justify-center p-8">

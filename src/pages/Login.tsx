@@ -251,7 +251,11 @@ const Login: React.FC<LoginProps> = ({ onLogin, onNavigate }) => {
                                                     <span className="text-xs font-bold text-[#E97132] uppercase tracking-wider">Scan Machine QR Code</span>
                                                     <button 
                                                         type="button" 
-                                                        onClick={() => setIsScanning(false)}
+                                                        onClick={() => {
+                                                             setTimeout(() => {
+                                                                 setIsScanning(false);
+                                                             }, 100);
+                                                         }}
                                                         className="p-1 rounded-full bg-slate-800 text-slate-400 hover:text-white transition-colors"
                                                     >
                                                         <X size={14} />
@@ -259,23 +263,28 @@ const Login: React.FC<LoginProps> = ({ onLogin, onNavigate }) => {
                                                 </div>
                                                 <div className="w-full aspect-square max-w-[280px] mx-auto overflow-hidden rounded-2xl border-2 border-[#E97132] shadow-lg shadow-[#E97132]/10 relative">
                                                     <Scanner
-                                                        onResult={(text) => {
-                                                            if (text) {
-                                                                const cleanText = text.trim();
-                                                                const found = machines.find(m => m.machine_id === cleanText || m.name === cleanText);
-                                                                if (found) {
-                                                                    setSelectedMachine(found.machine_id);
-                                                                    setIsScanning(false);
-                                                                } else {
-                                                                    setError(`Unknown machine QR: ${cleanText}`);
-                                                                }
-                                                            }
-                                                        }}
-                                                        onError={(err) => {
-                                                            console.error("QR Scan Error:", err);
-                                                            setError("Failed to access camera for QR scanning.");
-                                                        }}
-                                                    />
+                                                         onScan={(detectedCodes) => {
+                                                             if (detectedCodes && detectedCodes.length > 0) {
+                                                                 const text = detectedCodes[0].rawValue;
+                                                                 if (text) {
+                                                                     const cleanText = text.trim();
+                                                                     const found = machines.find(m => m.machine_id === cleanText || m.name === cleanText);
+                                                                     if (found) {
+                                                                         setSelectedMachine(found.machine_id);
+                                                                         setTimeout(() => {
+                                                                             setIsScanning(false);
+                                                                         }, 100);
+                                                                     } else {
+                                                                         setError(`Unknown machine QR: ${cleanText}`);
+                                                                     }
+                                                                 }
+                                                             }
+                                                         }}
+                                                         onError={(err) => {
+                                                             console.error("QR Scan Error:", err);
+                                                             setError("Failed to access camera for QR scanning.");
+                                                         }}
+                                                     />
                                                 </div>
                                                 {error && (
                                                     <div className="text-red-400 text-xs text-center font-bold">

@@ -1857,7 +1857,11 @@ const ProductionControl: React.FC<ProductionControlProps> = ({ user, jobs = [] }
                                     <span className="text-xs font-bold text-gray-300 uppercase tracking-wider">Scan Machine QR Code</span>
                                     <button 
                                         type="button" 
-                                        onClick={() => setIsScanningMachine(false)}
+                                        onClick={() => {
+                                             setTimeout(() => {
+                                                 setIsScanningMachine(false);
+                                             }, 100);
+                                         }}
                                         className="p-1 rounded-full bg-white/10 text-gray-400 hover:text-white transition-colors"
                                     >
                                         <X size={14} />
@@ -1865,24 +1869,31 @@ const ProductionControl: React.FC<ProductionControlProps> = ({ user, jobs = [] }
                                 </div>
                                 <div className="w-full aspect-square overflow-hidden rounded-2xl border-2 border-[#E97132] shadow-lg shadow-[#E97132]/10 relative">
                                     <Scanner
-                                        onResult={(text) => {
-                                            if (text) {
-                                                const cleanText = text.trim();
-                                                const found = machines.find(m => m.machine_id === cleanText || m.name === cleanText);
-                                                if (found) {
-                                                    handleMachineTabClick(found.machine_id);
-                                                    setIsScanningMachine(false);
-                                                } else {
-                                                    alert(`⚠️ Unknown machine QR: ${cleanText}`);
-                                                }
-                                            }
-                                        }}
-                                        onError={(err) => {
-                                            console.error("QR Scan Error:", err);
-                                            alert("⚠️ Failed to access camera for QR scanning.");
-                                            setIsScanningMachine(false);
-                                        }}
-                                    />
+                                         onScan={(detectedCodes) => {
+                                             if (detectedCodes && detectedCodes.length > 0) {
+                                                 const text = detectedCodes[0].rawValue;
+                                                 if (text) {
+                                                     const cleanText = text.trim();
+                                                     const found = machines.find(m => m.machine_id === cleanText || m.name === cleanText);
+                                                     if (found) {
+                                                         handleMachineTabClick(found.machine_id);
+                                                         setTimeout(() => {
+                                                             setIsScanningMachine(false);
+                                                         }, 100);
+                                                     } else {
+                                                         alert(`⚠️ Unknown machine QR: ${cleanText}`);
+                                                     }
+                                                 }
+                                             }
+                                         }}
+                                         onError={(err) => {
+                                             console.error("QR Scan Error:", err);
+                                             alert("⚠️ Failed to access camera for QR scanning.");
+                                             setTimeout(() => {
+                                                 setIsScanningMachine(false);
+                                             }, 100);
+                                         }}
+                                     />
                                 </div>
                             </div>
                         ) : (
