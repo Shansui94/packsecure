@@ -21,6 +21,7 @@ const Login: React.FC<LoginProps> = ({ onLogin, onNavigate }) => {
     // Mode State: 'device' | 'staff'
     const [loginMode, setLoginMode] = useState<'device' | 'staff'>('staff');
     const [isScanning, setIsScanning] = useState<boolean>(false);
+    const hasScannedRef = React.useRef(false);
 
     // Forgot Password State
     const [isForgotPassword, setIsForgotPassword] = useState(false);
@@ -252,6 +253,7 @@ const Login: React.FC<LoginProps> = ({ onLogin, onNavigate }) => {
                                                     <button 
                                                         type="button" 
                                                         onClick={() => {
+                                                             hasScannedRef.current = true;
                                                              setTimeout(() => {
                                                                  setIsScanning(false);
                                                              }, 100);
@@ -261,15 +263,18 @@ const Login: React.FC<LoginProps> = ({ onLogin, onNavigate }) => {
                                                         <X size={14} />
                                                     </button>
                                                 </div>
-                                                <div className="w-full aspect-square max-w-[280px] mx-auto overflow-hidden rounded-2xl border-2 border-[#E97132] shadow-lg shadow-[#E97132]/10 relative">
+                                                <div key={isScanning ? 'scanner-active' : 'scanner-inactive'} className="w-full aspect-square max-w-[280px] mx-auto overflow-hidden rounded-2xl border-2 border-[#E97132] shadow-lg shadow-[#E97132]/10 relative">
                                                     <Scanner
+                                                         key="login-machine-scanner"
                                                          onScan={(detectedCodes) => {
+                                                             if (hasScannedRef.current) return;
                                                              if (detectedCodes && detectedCodes.length > 0) {
                                                                  const text = detectedCodes[0].rawValue;
                                                                  if (text) {
                                                                      const cleanText = text.trim();
                                                                      const found = machines.find(m => m.machine_id === cleanText || m.name === cleanText);
                                                                      if (found) {
+                                                                         hasScannedRef.current = true;
                                                                          setSelectedMachine(found.machine_id);
                                                                          setTimeout(() => {
                                                                              setIsScanning(false);
@@ -299,7 +304,7 @@ const Login: React.FC<LoginProps> = ({ onLogin, onNavigate }) => {
                                                 </label>
                                                 <button
                                                     type="button"
-                                                    onClick={() => { setIsScanning(true); setError(''); }}
+                                                    onClick={() => { hasScannedRef.current = false; setIsScanning(true); setError(''); }}
                                                     className="w-full py-4 mb-2 bg-[#E97132]/10 hover:bg-[#E97132]/20 border border-[#E97132]/30 rounded-2xl flex items-center justify-center gap-2 text-xs font-black text-[#E97132] transition-all hover:scale-[1.01] active:scale-95 shadow-md uppercase tracking-wider"
                                                 >
                                                     <Camera size={14} />

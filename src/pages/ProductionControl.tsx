@@ -682,6 +682,7 @@ const ProductionControl: React.FC<ProductionControlProps> = ({ user, jobs = [] }
     const [machines, setMachines] = useState<Machine[]>([]);
     const [machineMetadata, setMachineMetadata] = useState<Machine | null>(null);
     const [isScanningMachine, setIsScanningMachine] = useState<boolean>(false);
+    const hasScannedRef = useRef(false);
     const currentMachineName = machineMetadata?.name || selectedMachine || 'Unknown Machine';
 
 
@@ -1854,28 +1855,29 @@ const ProductionControl: React.FC<ProductionControlProps> = ({ user, jobs = [] }
                         {isScanningMachine ? (
                             <div className="w-full max-w-[320px] flex flex-col gap-4 animate-fade-in-up">
                                 <div className="flex justify-between items-center bg-white/5 border border-white/10 rounded-xl px-4 py-2.5">
-                                    <span className="text-xs font-bold text-gray-300 uppercase tracking-wider">Scan Machine QR Code</span>
                                     <button 
                                         type="button" 
                                         onClick={() => {
-                                             setTimeout(() => {
-                                                 setIsScanningMachine(false);
-                                             }, 100);
-                                         }}
+                                             hasScannedRef.current = true;
+                                             setIsScanningMachine(false);
+                                          }}
                                         className="p-1 rounded-full bg-white/10 text-gray-400 hover:text-white transition-colors"
                                     >
                                         <X size={14} />
                                     </button>
                                 </div>
-                                <div className="w-full aspect-square overflow-hidden rounded-2xl border-2 border-[#E97132] shadow-lg shadow-[#E97132]/10 relative">
+                                <div key={isScanningMachine ? 'scanner-active' : 'scanner-inactive'} className="w-full aspect-square overflow-hidden rounded-2xl border-2 border-[#E97132] shadow-lg shadow-[#E97132]/10 relative">
                                     <Scanner
+                                         key="prod-control-machine-scanner"
                                          onScan={(detectedCodes) => {
+                                             if (hasScannedRef.current) return;
                                              if (detectedCodes && detectedCodes.length > 0) {
                                                  const text = detectedCodes[0].rawValue;
                                                  if (text) {
                                                      const cleanText = text.trim();
                                                      const found = machines.find(m => m.machine_id === cleanText || m.name === cleanText);
                                                      if (found) {
+                                                         hasScannedRef.current = true;
                                                          handleMachineTabClick(found.machine_id);
                                                          setTimeout(() => {
                                                              setIsScanningMachine(false);
@@ -1889,6 +1891,7 @@ const ProductionControl: React.FC<ProductionControlProps> = ({ user, jobs = [] }
                                          onError={(err) => {
                                              console.error("QR Scan Error:", err);
                                              alert("⚠️ Failed to access camera for QR scanning.");
+                                             hasScannedRef.current = true;
                                              setTimeout(() => {
                                                  setIsScanningMachine(false);
                                              }, 100);
@@ -1906,7 +1909,7 @@ const ProductionControl: React.FC<ProductionControlProps> = ({ user, jobs = [] }
                                 
                                 <button
                                     type="button"
-                                    onClick={() => setIsScanningMachine(true)}
+                                    onClick={() => { hasScannedRef.current = false; setIsScanningMachine(true); }}
                                     className="px-6 py-3 bg-gradient-to-r from-[#E97132] to-[#FE4B13] hover:from-[#FE4B13] hover:to-[#E97132] text-white rounded-2xl flex items-center gap-2 text-xs font-black uppercase tracking-wider shadow-lg shadow-[#E97132]/10 active:scale-95 transition-all mt-2 cursor-pointer border border-[#E97132]/20"
                                 >
                                     <Camera size={14} />
