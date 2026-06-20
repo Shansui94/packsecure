@@ -4,6 +4,8 @@ import { Truck, CheckCircle, Package, ChevronRight, X, RefreshCw, Camera, Image 
 import { SalesOrder } from '../types';
 import { Scanner } from '@yudiel/react-qr-scanner';
 import { parsePrepPhotos } from '../utils/prepPhotos';
+import { dataURLtoBlob } from '../utils/imageCompress';
+
 
 
 interface DriverDeliveryProps {
@@ -265,7 +267,7 @@ const DriverDelivery: React.FC<DriverDeliveryProps> = ({ user }) => {
             // Upload Photo First
             try {
                 const fileName = `load_${selectedOrder.orderNumber}_${Date.now()}.jpg`;
-                const blob = await fetch(`data:image/jpeg;base64,${finalPhoto}`).then(r => r.blob());
+                const blob = dataURLtoBlob(`data:image/jpeg;base64,${finalPhoto}`);
 
                 const { error: uploadError } = await supabase.storage
                     .from('work-photos')
@@ -412,7 +414,7 @@ const DriverDelivery: React.FC<DriverDeliveryProps> = ({ user }) => {
         try {
             // Upload Photo
             const fileName = `pickup_${user?.employeeId}_${Date.now()}.jpg`;
-            const blob = await fetch(`data:image/jpeg;base64,${loadPhotoBase64}`).then(r => r.blob());
+            const blob = dataURLtoBlob(`data:image/jpeg;base64,${loadPhotoBase64}`);
 
             const { error: uploadError } = await supabase.storage
                 .from('work-photos')
@@ -544,6 +546,24 @@ const DriverDelivery: React.FC<DriverDeliveryProps> = ({ user }) => {
         }
     };
 
+    const extractDoNumberFromAi = async (base64Str: string): Promise<string> => {
+        try {
+            const response = await fetch('/api/agent/ai-photo', {
+                method: 'POST',
+                headers: {
+                    'Content-Type': 'application/json'
+                },
+                body: JSON.stringify({ imageBase64: base64Str, mode: 'do' })
+            });
+            if (!response.ok) throw new Error(`HTTP ${response.status}`);
+            const data = await response.json();
+            return data.do_number || '';
+        } catch (err) {
+            console.error("AI DO extraction failed:", err);
+            return '';
+        }
+    };
+
     const handleConfirmUnload = async () => {
         if (!selectedOrder) return;
 
@@ -563,13 +583,23 @@ const DriverDelivery: React.FC<DriverDeliveryProps> = ({ user }) => {
         setSubmitting(true);
         let doUrl = '';
         let prodUrl = '';
+        let extractedDoNumber = '';
 
         try {
+            // Extract DO Number with AI if DO photo is present
+            if (unloadDoPhotoBase64) {
+                try {
+                    extractedDoNumber = await extractDoNumberFromAi(unloadDoPhotoBase64);
+                } catch (err) {
+                    console.warn("AI DO extraction failed:", err);
+                }
+            }
+
             // 1. Upload DO Photo
             if (unloadDoPhotoBase64) {
                 try {
                     const doFileName = `unload_do_${selectedOrder.orderNumber}_${Date.now()}.jpg`;
-                    const doBlob = await fetch(`data:image/jpeg;base64,${unloadDoPhotoBase64}`).then(r => r.blob());
+                    const doBlob = dataURLtoBlob(`data:image/jpeg;base64,${unloadDoPhotoBase64}`);
                     const { error: doUploadError } = await supabase.storage
                         .from('work-photos')
                         .upload(doFileName, doBlob, { contentType: 'image/jpeg' });
@@ -586,7 +616,7 @@ const DriverDelivery: React.FC<DriverDeliveryProps> = ({ user }) => {
             if (unloadProductPhotoBase64) {
                 try {
                     const prodFileName = `unload_prod_${selectedOrder.orderNumber}_${Date.now()}.jpg`;
-                    const prodBlob = await fetch(`data:image/jpeg;base64,${unloadProductPhotoBase64}`).then(r => r.blob());
+                    const prodBlob = dataURLtoBlob(`data:image/jpeg;base64,${unloadProductPhotoBase64}`);
                     const { error: prodUploadError } = await supabase.storage
                         .from('work-photos')
                         .upload(prodFileName, prodBlob, { contentType: 'image/jpeg' });
@@ -629,13 +659,30 @@ const DriverDelivery: React.FC<DriverDeliveryProps> = ({ user }) => {
                 ? 'Pending Approval'
                 : (isFinalDrop ? 'Delivered' : 'Loaded');
 
-            // Update order status, set pod_photo_url, pod_timestamp, notes, etc.
-            const { data: updatedData, error: updateError } = await supabase.from('sales_orders').update({
+            // Check if column exists dynamically
+            const hasExtractedDoCol = tasks.length > 0 && ('extracted_do_number' in tasks[0]);
+
+            let updatedNotes = finalNote;
+            if (extractedDoNumber) {
+                const cleanNotes = (finalNote || '').replace(/\[AI DO:\s*.*?\]/g, '').trim();
+                updatedNotes = cleanNotes 
+                    ? `${cleanNotes}\n[AI DO: ${extractedDoNumber}]`
+                    : `[AI DO: ${extractedDoNumber}]`;
+            }
+
+            const updatePayload: any = {
                 status: nextStatus,
                 pod_timestamp: new Date().toISOString(),
                 pod_photo_url: podPhotoUrl,
-                notes: finalNote
-            }).eq('id', selectedOrder.id).select();
+                notes: updatedNotes
+            };
+
+            if (hasExtractedDoCol && extractedDoNumber) {
+                updatePayload.extracted_do_number = extractedDoNumber;
+            }
+
+            // Update order status, set pod_photo_url, pod_timestamp, notes, etc.
+            const { data: updatedData, error: updateError } = await supabase.from('sales_orders').update(updatePayload).eq('id', selectedOrder.id).select();
 
             if (updateError) throw updateError;
             if (!updatedData || updatedData.length === 0) {
@@ -645,13 +692,17 @@ const DriverDelivery: React.FC<DriverDeliveryProps> = ({ user }) => {
             // Optimistic Update locally
             setTasks(prev => prev.map(t => {
                 if (t.id === selectedOrder.id) {
-                    return { 
+                    const localUpdated: any = { 
                         ...t, 
                         status: nextStatus, 
                         pod_photo_url: podPhotoUrl, 
                         pod_timestamp: new Date().toISOString(), 
-                        notes: finalNote 
+                        notes: updatedNotes 
                     };
+                    if (hasExtractedDoCol && extractedDoNumber) {
+                        localUpdated.extracted_do_number = extractedDoNumber;
+                    }
+                    return localUpdated;
                 }
                 return t;
             }));
@@ -705,9 +756,17 @@ const DriverDelivery: React.FC<DriverDeliveryProps> = ({ user }) => {
 
             const watermarkedBase64 = await watermarkImage(base64Only, lines);
 
+            // Extract DO Number with AI
+            let extractedDoNumber = '';
+            try {
+                extractedDoNumber = await extractDoNumberFromAi(watermarkedBase64);
+            } catch (err) {
+                console.warn("AI DO extraction failed:", err);
+            }
+
             // Upload to Supabase Storage
             const fileName = `unload_do_later_${targetOrder.orderNumber}_${Date.now()}.jpg`;
-            const blob = await fetch(`data:image/jpeg;base64,${watermarkedBase64}`).then(r => r.blob());
+            const blob = dataURLtoBlob(`data:image/jpeg;base64,${watermarkedBase64}`);
 
             const { error: uploadError } = await supabase.storage
                 .from('work-photos')
@@ -721,11 +780,13 @@ const DriverDelivery: React.FC<DriverDeliveryProps> = ({ user }) => {
             // Fetch the current pod_photo_url from database to be accurate
             const { data: freshOrder, error: fetchErr } = await supabase
                 .from('sales_orders')
-                .select('pod_photo_url')
+                .select('pod_photo_url, notes, extracted_do_number')
                 .eq('id', laterUploadTarget.orderId)
                 .single();
 
             if (fetchErr) throw fetchErr;
+
+            const hasExtractedDoCol = ('extracted_do_number' in freshOrder);
 
             const currentPhotos = freshOrder.pod_photo_url ? freshOrder.pod_photo_url.split(',') : [];
             
@@ -736,10 +797,28 @@ const DriverDelivery: React.FC<DriverDeliveryProps> = ({ user }) => {
             currentPhotos[laterUploadTarget.photoIndex] = publicUrl;
             const updatedPodUrl = currentPhotos.join(',');
 
+            // Construct notes update (fallback)
+            let updatedNotes = freshOrder.notes || '';
+            if (extractedDoNumber) {
+                const cleanNotes = (freshOrder.notes || '').replace(/\[AI DO:\s*.*?\]/g, '').trim();
+                updatedNotes = cleanNotes 
+                    ? `${cleanNotes}\n[AI DO: ${extractedDoNumber}]`
+                    : `[AI DO: ${extractedDoNumber}]`;
+            }
+
+            const updatePayload: any = { 
+                pod_photo_url: updatedPodUrl,
+                notes: updatedNotes
+            };
+
+            if (hasExtractedDoCol && extractedDoNumber) {
+                updatePayload.extracted_do_number = extractedDoNumber;
+            }
+
             // Update database
             const { error: updateErr } = await supabase
                 .from('sales_orders')
-                .update({ pod_photo_url: updatedPodUrl })
+                .update(updatePayload)
                 .eq('id', laterUploadTarget.orderId);
 
             if (updateErr) throw updateErr;
@@ -878,7 +957,7 @@ const DriverDelivery: React.FC<DriverDeliveryProps> = ({ user }) => {
             
             // Upload to Supabase Storage
             const fileName = `odometer_${scannedLorryData.id}_${Date.now()}.jpg`;
-            const blob = await fetch(`data:image/jpeg;base64,${watermarkedBase64}`).then(r => r.blob());
+            const blob = dataURLtoBlob(`data:image/jpeg;base64,${watermarkedBase64}`);
 
             const { error: uploadError } = await supabase.storage
                 .from('work-photos')
@@ -974,15 +1053,10 @@ const DriverDelivery: React.FC<DriverDeliveryProps> = ({ user }) => {
 
                 if (unbindError) throw unbindError;
 
-                // Auto Tamat all Loaded orders today
-                const { error: orderError } = await supabase.from('sales_orders')
-                    .update({ status: 'Delivered' })
-                    .eq('driver_id', user.uid)
-                    .eq('status', 'Loaded');
+                // 取消自动完成 Loaded 订单的逻辑，防止未上传照片的任务被自动改为已送达。
+                // 司机如遇照片上传失败，该任务保持 Loaded，由管理人员在后台确认后手动完成。
 
-                if (orderError) throw orderError;
-
-                alert("✅ Syif Selesai & Lori dilepaskan! Semua hantaran telah dihantar. / Shift completed & Lorry unbound! All deliveries submitted.");
+                alert("✅ Syif Selesai & Lori dilepaskan! / Shift completed & Lorry unbound!");
                 setCurrentLorry(null);
                 setIsOdometerModalOpen(false);
                 fetchTasks(); // Refresh lorry status
@@ -996,25 +1070,25 @@ const DriverDelivery: React.FC<DriverDeliveryProps> = ({ user }) => {
     };
 
     // 7. Unbind Lorry (End Trip)
-    const handleUnbindLorry = async () => {
-        if (!currentLorry) return;
-        if (!window.confirm("Tamat Syif dan Lepaskan Lori? / End Shift and Unbind Lorry?")) return;
-        
-        try {
-            setSubmitting(true);
-            const { error } = await supabase.from('lorries')
-                .update({ driver_id: null, driver_name: null, status: 'Available' })
-                .eq('id', currentLorry.id);
-                
-            if (error) throw error;
-            setCurrentLorry(null);
-            alert("Lori berjaya dilepaskan. / Lorry unbound successfully.");
-        } catch (err: any) {
-            alert(err.message);
-        } finally {
-            setSubmitting(false);
-        }
-    };
+    // const handleUnbindLorry = async () => {
+    //     if (!currentLorry) return;
+    //     if (!window.confirm("Tamat Syif dan Lepaskan Lori? / End Shift and Unbind Lorry?")) return;
+    //     
+    //     try {
+    //         setSubmitting(true);
+    //         const { error } = await supabase.from('lorries')
+    //             .update({ driver_id: null, driver_name: null, status: 'Available' })
+    //             .eq('id', currentLorry.id);
+    //             
+    //         if (error) throw error;
+    //         setCurrentLorry(null);
+    //         alert("Lori berjaya dilepaskan. / Lorry unbound successfully.");
+    //     } catch (err: any) {
+    //         alert(err.message);
+    //     } finally {
+    //         setSubmitting(false);
+    //     }
+    // };
 
     // Real-time Subscription
     useEffect(() => {
@@ -1040,15 +1114,28 @@ const DriverDelivery: React.FC<DriverDeliveryProps> = ({ user }) => {
     }, [user]);
 
     // View Logic
-    // For 'Pending Approval' orders: they remain in the Todo list (todoList) until they are delivered (i.e. have pod_photo_url)
+    // For 'Pending Approval' orders: they remain in the Todo list (todoList) until all drops are delivered
+    const isPendingApprovalDone = (t: SalesOrder) => {
+        if (t.status !== 'Pending Approval') return false;
+        // If driver currently has a lorry bound, do not auto-complete/hide Pending Approval orders 
+        // to prevent premature completion before the driver ends their shift.
+        if (currentLorry) return false;
+
+        if (!t.pod_photo_url || t.pod_photo_url.trim() === '') return false;
+        const photoCount = t.pod_photo_url.split(',').length;
+        const completedDrops = Math.floor(photoCount / 2);
+        const totalDrops = t.trip_drop_count || 1;
+        return completedDrops >= totalDrops;
+    };
+
     const todoList = tasks.filter(t => 
         t.status !== 'Delivered' && 
         t.status !== 'Cancelled' && 
-        !(t.status === 'Pending Approval' && t.pod_photo_url && t.pod_photo_url.trim() !== '')
+        !isPendingApprovalDone(t)
     );
     const doneList = tasks.filter(t => 
         t.status === 'Delivered' || 
-        (t.status === 'Pending Approval' && t.pod_photo_url && t.pod_photo_url.trim() !== '')
+        isPendingApprovalDone(t)
     );
     const displayList = activeTab === 'todo' ? todoList : doneList;
 
@@ -1519,6 +1606,7 @@ const DriverDelivery: React.FC<DriverDeliveryProps> = ({ user }) => {
                                 ref={fileInputRef}
                                 type="file"
                                 accept="image/*"
+                                capture="environment"
                                 className="hidden"
                                 onChange={(e) => handleFileSelect(e, false)}
                             />
@@ -1533,7 +1621,14 @@ const DriverDelivery: React.FC<DriverDeliveryProps> = ({ user }) => {
                     {/* Header */}
                     <div className="p-4 border-b border-slate-800 flex justify-between items-center bg-slate-900 safe-top-padding">
                         <div>
-                            <h2 className="font-black text-white text-lg">SAHKAN HANTARAN / CONFIRM DELIVERY</h2>
+                            <h2 className="font-black text-white text-lg flex items-center gap-1.5">
+                                <span>SAHKAN HANTARAN / CONFIRM DELIVERY</span>
+                                {selectedOrder.trip_drop_count && selectedOrder.trip_drop_count > 1 && (
+                                    <span className="text-emerald-400 text-sm font-bold bg-emerald-500/10 px-2 py-0.5 rounded border border-emerald-500/20 font-mono">
+                                        ({Math.floor((selectedOrder.pod_photo_url ? selectedOrder.pod_photo_url.split(',').length : 0) / 2) + 1}/{selectedOrder.trip_drop_count})
+                                    </span>
+                                )}
+                            </h2>
                             <p className="text-[10px] text-slate-500 uppercase font-bold">{selectedOrder.orderNumber}</p>
                         </div>
                         <button onClick={() => setIsUnloadModalOpen(false)} className="p-2 bg-slate-800 rounded-full text-white"><X size={20} /></button>
