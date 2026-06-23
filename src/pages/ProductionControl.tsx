@@ -732,6 +732,8 @@ const ProductionControl: React.FC<ProductionControlProps> = ({ user, jobs = [] }
     const [analyzingPhoto, setAnalyzingPhoto] = useState(false);
     const [photoPreview, setPhotoPreview] = useState<string | null>(null);
     const [photoBase64, setPhotoBase64] = useState<string | null>(null);
+    const [selectedBlob, setSelectedBlob] = useState<Blob | null>(null);
+    const [selectedPhoto, setSelectedPhoto] = useState<any | null>(null);
     const [photoCategory, setPhotoCategory] = useState('qc');
     const [photoNote, setPhotoNote] = useState('');
     const [aiAnalysis, setAiAnalysis] = useState<string | null>(null);
@@ -1610,15 +1612,33 @@ const ProductionControl: React.FC<ProductionControlProps> = ({ user, jobs = [] }
 
         try {
             setUploadingPhoto(true);
-            const compressed = await compressImage(file);
-            setPhotoPreview(compressed);
-            const base64 = compressed.split(',')[1];
-            setPhotoBase64(base64);
+            const isVideo = file.type.startsWith('video/');
+            if (isVideo) {
+                setMediaType('video');
+                const videoUrl = URL.createObjectURL(file);
+                setPhotoPreview(videoUrl);
+                setSelectedBlob(file);
+                setPhotoBase64("video");
+                setAiAnalysis("工作视频记录 / Work Video Log");
+            } else {
+                setMediaType('image');
+                const compressed = await compressImage(file);
+                setPhotoPreview(compressed);
+                const base64 = compressed.split(',')[1];
+                setPhotoBase64(base64);
 
-            await runAIAnalysis(base64);
-        } catch (err) {
+                try {
+                    const imgBlob = await fetch(compressed).then(r => r.blob());
+                    setSelectedBlob(imgBlob);
+                } catch (err) {
+                    setSelectedBlob(file);
+                }
+
+                await runAIAnalysis(base64);
+            }
+        } catch (err: any) {
             console.error(err);
-            alert("Failed to process image.");
+            alert("Failed to process file: " + err.message);
         } finally {
             setUploadingPhoto(false);
         }
@@ -1651,12 +1671,22 @@ const ProductionControl: React.FC<ProductionControlProps> = ({ user, jobs = [] }
             const base64 = imageSrc.split(',')[1];
             setPhotoBase64(base64);
             setShowWebcam(false);
-            
+
+            fetch(imageSrc)
+                .then(r => r.blob())
+                .then(blob => setSelectedBlob(blob))
+                .catch(err => console.error("Failed to convert capture to blob", err));
+
             runAIAnalysis(base64);
         }
     }, [webcamRef]);
 
     const handleStartRecording = () => {
+        if (typeof MediaRecorder === 'undefined') {
+            alert("您的浏览器不支持视频录制功能，请使用'上传文件'功能并直接摄录/选择视频。");
+            return;
+        }
+
         const stream = webcamRef.current?.video?.srcObject as MediaStream;
         if (!stream) {
             alert("无法获取摄像头视频流");
@@ -1684,18 +1714,13 @@ const ProductionControl: React.FC<ProductionControlProps> = ({ user, jobs = [] }
         };
 
         recorder.onstop = () => {
-            const blob = new Blob(recordedChunks.current, { type: 'video/webm' });
+            const blob = new Blob(recordedChunks.current, { type: recorder.mimeType || 'video/webm' });
             const videoUrl = URL.createObjectURL(blob);
             setPhotoPreview(videoUrl);
             setMediaType('video');
-
-            const reader = new FileReader();
-            reader.onloadend = () => {
-                const base64 = reader.result as string;
-                setPhotoBase64(base64.split(',')[1]);
-                setAiAnalysis('工作视频记录 / Work Video Log');
-            };
-            reader.readAsDataURL(blob);
+            setSelectedBlob(blob);
+            setPhotoBase64("video");
+            setAiAnalysis('工作视频记录 / Work Video Log');
 
             setShowWebcam(false);
             setIsRecording(false);
@@ -1817,10 +1842,29 @@ const ProductionControl: React.FC<ProductionControlProps> = ({ user, jobs = [] }
 
         try {
             const isVideo = mediaType === 'video';
-            const fileExt = isVideo ? 'webm' : 'jpg';
-            const mimeType = isVideo ? 'video/webm' : 'image/jpeg';
+            let blob: Blob;
+            let mimeType: string;
+            let fileExt: string;
+
+            if (selectedBlob) {
+                blob = selectedBlob;
+                mimeType = selectedBlob.type || (isVideo ? 'video/webm' : 'image/jpeg');
+                if (mimeType.includes('mp4')) {
+                    fileExt = 'mp4';
+                } else if (mimeType.includes('quicktime') || mimeType.includes('mov')) {
+                    fileExt = 'mov';
+                } else if (mimeType.includes('webm')) {
+                    fileExt = 'webm';
+                } else {
+                    fileExt = isVideo ? 'mp4' : 'jpg';
+                }
+            } else {
+                mimeType = isVideo ? 'video/webm' : 'image/jpeg';
+                fileExt = isVideo ? 'webm' : 'jpg';
+                blob = await fetch(`data:${mimeType};base64,${photoBase64}`).then(r => r.blob());
+            }
+
             const fileName = `${operatorEmployeeId}_${Date.now()}.${fileExt}`;
-            const blob = await fetch(`data:${mimeType};base64,${photoBase64}`).then(r => r.blob());
 
             const { error: uploadError } = await supabase.storage
                 .from('work-photos')
@@ -1909,6 +1953,7 @@ const ProductionControl: React.FC<ProductionControlProps> = ({ user, jobs = [] }
             // Reset States
             setPhotoPreview(null);
             setPhotoBase64(null);
+            setSelectedBlob(null);
             setPhotoNote('');
             setAiAnalysis(null);
             setDefectWeight('');
@@ -1932,6 +1977,7 @@ const ProductionControl: React.FC<ProductionControlProps> = ({ user, jobs = [] }
     const cancelPhotoSelect = () => {
         setPhotoPreview(null);
         setPhotoBase64(null);
+        setSelectedBlob(null);
         setPhotoNote('');
         setAiAnalysis(null);
         setDefectWeight('');
@@ -2342,20 +2388,44 @@ const ProductionControl: React.FC<ProductionControlProps> = ({ user, jobs = [] }
                                             </div>
                                         ) : (
                                             <div className="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-4 gap-4">
-                                                {machinePhotos.map((p) => (
-                                                    <div key={p.id} className="group relative bg-black/40 border border-white/5 rounded-xl overflow-hidden shadow-md">
-                                                        <div className="aspect-video w-full bg-black overflow-hidden relative">
-                                                            <img src={p.photo_url} alt="" className="w-full h-full object-cover group-hover:scale-105 transition-all duration-300" />
-                                                            <div className="absolute bottom-1 right-1 bg-black/60 px-1.5 py-0.5 rounded text-[8px] text-gray-400 font-mono">
-                                                                {new Date(p.created_at).toLocaleTimeString('en-MY', { hour: '2-digit', minute: '2-digit' })}
+                                                {machinePhotos.map((p) => {
+                                                    const isVid = p.photo_url?.toLowerCase().endsWith('.webm') || 
+                                                                  p.photo_url?.toLowerCase().endsWith('.mp4') || 
+                                                                  p.photo_url?.toLowerCase().endsWith('.mov');
+                                                    return (
+                                                        <div 
+                                                            key={p.id} 
+                                                            onClick={() => setSelectedPhoto(p)}
+                                                            className="group relative bg-black/40 border border-white/5 rounded-xl overflow-hidden shadow-md cursor-pointer hover:border-purple-500/30 transition-all duration-300"
+                                                        >
+                                                            <div className="aspect-video w-full bg-black overflow-hidden relative flex items-center justify-center">
+                                                                {isVid ? (
+                                                                    <>
+                                                                        <video 
+                                                                            src={p.photo_url} 
+                                                                            className="w-full h-full object-cover group-hover:scale-105 transition-all duration-300" 
+                                                                            preload="metadata"
+                                                                        />
+                                                                        <div className="absolute inset-0 flex items-center justify-center bg-black/25 group-hover:bg-black/10 transition-colors">
+                                                                            <div className="w-8 h-8 rounded-full bg-purple-600/80 backdrop-blur-sm flex items-center justify-center text-white group-hover:scale-110 transition-transform">
+                                                                                <Video size={16} />
+                                                                            </div>
+                                                                        </div>
+                                                                    </>
+                                                                ) : (
+                                                                    <img src={p.photo_url} alt="" className="w-full h-full object-cover group-hover:scale-105 transition-all duration-300" />
+                                                                )}
+                                                                <div className="absolute bottom-1 right-1 bg-black/60 px-1.5 py-0.5 rounded text-[8px] text-gray-400 font-mono">
+                                                                    {new Date(p.created_at).toLocaleTimeString('en-MY', { hour: '2-digit', minute: '2-digit' })}
+                                                                </div>
+                                                            </div>
+                                                            <div className="p-2 space-y-1">
+                                                                <p className="text-[10px] font-bold text-gray-200 truncate">{p.user_note || p.ai_description || '工作照登记'}</p>
+                                                                <p className="text-[8px] text-gray-500 font-mono truncate">By {p.employee_name || 'Operator'}</p>
                                                             </div>
                                                         </div>
-                                                        <div className="p-2 space-y-1">
-                                                            <p className="text-[10px] font-bold text-gray-200 truncate">{p.user_note || p.ai_description || '工作照登记'}</p>
-                                                            <p className="text-[8px] text-gray-500 font-mono truncate">By {p.employee_name || 'Operator'}</p>
-                                                        </div>
-                                                    </div>
-                                                ))}
+                                                    );
+                                                })}
                                             </div>
                                         )}
                                     </div>
@@ -3126,6 +3196,65 @@ const ProductionControl: React.FC<ProductionControlProps> = ({ user, jobs = [] }
                     </div>
                 </div>
             </div>
+
+            {/* 🔍 最近登记照片详情弹窗 */}
+            {selectedPhoto && (
+                <div 
+                    key="photo-detail-modal-overlay" 
+                    className="fixed inset-0 z-[600] flex items-center justify-center bg-black/85 backdrop-blur-sm p-4"
+                    onClick={() => setSelectedPhoto(null)}
+                >
+                    <div 
+                        className="bg-[#1c1c1f] border border-white/10 rounded-3xl max-w-lg w-full overflow-hidden shadow-2xl flex flex-col animate-slide-up"
+                        onClick={e => e.stopPropagation()}
+                    >
+                        <div className="flex justify-between items-center p-4 border-b border-white/5">
+                            <h4 className="text-xs font-black tracking-widest text-purple-400 uppercase font-bold">
+                                工作记录详情 / Detail Log
+                            </h4>
+                            <button 
+                                onClick={() => setSelectedPhoto(null)}
+                                className="text-gray-400 hover:text-white text-xs font-bold px-2.5 py-1 bg-white/5 hover:bg-white/10 rounded-lg transition-all"
+                            >
+                                关闭
+                            </button>
+                        </div>
+                        
+                        <div className="relative aspect-video bg-black overflow-hidden flex items-center justify-center">
+                            {selectedPhoto.photo_url.toLowerCase().endsWith('.webm') || 
+                             selectedPhoto.photo_url.toLowerCase().endsWith('.mp4') ||
+                             selectedPhoto.photo_url.toLowerCase().endsWith('.mov') ? (
+                                <video src={selectedPhoto.photo_url} controls className="w-full h-full object-contain bg-black" autoPlay />
+                            ) : (
+                                <img src={selectedPhoto.photo_url} alt="" className="w-full h-full object-contain bg-black" />
+                            )}
+                        </div>
+                        
+                        <div className="p-5 space-y-3 text-left">
+                            <div className="flex justify-between text-[10px] text-gray-400 font-mono">
+                                <span>登记人: <strong className="text-white font-bold">{selectedPhoto.employee_name || 'Unknown'} ({selectedPhoto.employee_id})</strong></span>
+                                <span>时间: <strong className="text-white font-bold">{new Date(selectedPhoto.created_at).toLocaleString('en-MY')}</strong></span>
+                            </div>
+                            
+                            <div className="space-y-1">
+                                <span className="text-[10px] text-gray-500 uppercase tracking-widest font-black">记录备注 / Notes:</span>
+                                <p className="text-xs text-white bg-white/5 p-3 rounded-xl border border-white/5 font-medium leading-relaxed max-h-24 overflow-y-auto custom-scrollbar">
+                                    {selectedPhoto.user_note || '暂无备注'}
+                                </p>
+                            </div>
+
+                            {selectedPhoto.ai_description && (
+                                <div className="space-y-1">
+                                    <span className="text-[10px] text-gray-500 uppercase tracking-widest font-black">AI 分析描述 / AI Scan:</span>
+                                    <p className="text-xs text-purple-300 bg-purple-500/5 p-3 rounded-xl border border-purple-500/5 font-medium leading-relaxed">
+                                        {selectedPhoto.ai_description}
+                                    </p>
+                                </div>
+                            )}
+                        </div>
+                    </div>
+                </div>
+            )}
             
             <style>{`
                 .custom-scrollbar::-webkit-scrollbar { width: 4px; }
