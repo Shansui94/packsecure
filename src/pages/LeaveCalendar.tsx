@@ -380,6 +380,11 @@ const LeaveCalendar: React.FC<Props> = ({ user }) => {
             return;
         }
 
+        if (!reason.trim()) {
+            alert('Sila nyatakan sebab permohonan cuti. / Please provide a reason for the leave application.');
+            return;
+        }
+
         setSubmitting(true);
         try {
             const diffTime = Math.abs(end.getTime() - start.getTime());
@@ -972,9 +977,9 @@ const LeaveCalendar: React.FC<Props> = ({ user }) => {
                 </div>
                 <div>
                     <label className="block text-[10px] font-black text-slate-500 uppercase tracking-widest mb-2 px-1 flex items-center gap-1">
-                        <FileText size={10} /> Sebab (Pilihan) / Reason (Optional)
+                        <FileText size={10} /> Sebab (Wajib) / Reason (Required)
                     </label>
-                    <textarea value={reason} onChange={(e) => setReason(e.target.value)} rows={2}
+                    <textarea value={reason} onChange={(e) => setReason(e.target.value)} rows={2} required
                         placeholder="Contoh: Temujanji perubatan, urusan keluarga..."
                         className="w-full bg-black/40 border border-white/10 rounded-xl p-4 text-white font-bold focus:border-blue-500 outline-none transition-all resize-none text-sm" />
                 </div>

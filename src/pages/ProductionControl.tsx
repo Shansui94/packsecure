@@ -290,7 +290,7 @@ const ProductionLane: React.FC<ProductionLaneProps> = ({
     const toggleProductionRun = async () => {
         if (isLiveRun) {
             try {
-                const machineId = machineMetadata?.id || 'T1.2-M01';
+                const machineId = machineMetadata?.id || 'T2-M01';
                 await supabase.from('machine_active_products')
                     .delete()
                     .eq('machine_id', machineId)
@@ -313,7 +313,7 @@ const ProductionLane: React.FC<ProductionLaneProps> = ({
             const calculatedYield = Math.floor((machineBaseWidth / numericSize) / selectedRolls) || 1;
 
             try {
-                const machineId = machineMetadata?.id || 'T1.2-M01';
+                const machineId = machineMetadata?.id || 'T2-M01';
 
                 // --- AUTO-REGISTRATION OF UNKNOWN SKU ---
                 const { data: existingItem } = await supabase
@@ -360,7 +360,7 @@ const ProductionLane: React.FC<ProductionLaneProps> = ({
     useEffect(() => {
         if (!isLiveRun || !activeSku) return;
 
-        const machineId = machineMetadata?.id || 'T1.2-M01';
+        const machineId = machineMetadata?.id || 'T2-M01';
         const channelName = `prod-ctrl-${laneId}-${Date.now()}`;
 
         const channel = supabase.channel(channelName)
@@ -558,10 +558,11 @@ const ProductionLane: React.FC<ProductionLaneProps> = ({
                                     </div>
                                     <div className="flex gap-2 mt-1">
                                         <span className="text-[10px] bg-black/5 dark:bg-white/10 px-2 py-0.5 rounded text-apple-textMain dark:text-white">{selectedLayer}</span>
+                                        <span className="text-[10px] bg-black/5 dark:bg-white/10 px-2 py-0.5 rounded text-apple-textMain dark:text-white">{selectedMaterial}</span>
                                         <span className="text-[10px] bg-black/5 dark:bg-white/10 px-2 py-0.5 rounded text-apple-textMain dark:text-white">{selectedSize}</span>
                                     </div>
                                 </div>
-                                <button onClick={() => setStep(2)} className="relative z-10 px-3 py-1 bg-black/5 dark:bg-white/10 hover:bg-black/10 dark:hover:bg-white/20 rounded-lg text-xs text-apple-textMain dark:text-white">Change</button>
+                                <button onClick={() => setStep(1)} className="relative z-10 px-3 py-1 bg-black/5 dark:bg-white/10 hover:bg-black/10 dark:hover:bg-white/20 rounded-lg text-xs text-apple-textMain dark:text-white">Change</button>
                             </div>
 
                             {/* Note Input */}
@@ -689,6 +690,7 @@ const ProductionControl: React.FC<ProductionControlProps> = ({ user, jobs = [] }
     // Active Job State
     const [activeJob, setActiveJob] = useState<JobOrder | null>(null);
     const [recentLogs, setRecentLogs] = useState<ProductionLog[]>([]);
+    const [machinePhotos, setMachinePhotos] = useState<any[]>([]);
 
     // Operator ID State
     const [operatorId, setOperatorId] = useState<string | null>(localStorage.getItem('operatorId'));
@@ -699,8 +701,15 @@ const ProductionControl: React.FC<ProductionControlProps> = ({ user, jobs = [] }
     const [isControlMode, setIsControlMode] = useState<boolean>(false);
 
     // Shift Clock stopwatch
-    const [clockInTime, setClockInTime] = useState<string | null>(localStorage.getItem('operatorClockInTime'));
+    const [clockInTime, setClockInTime] = useState<string | null>(() => {
+        const empId = localStorage.getItem('operatorEmployeeId');
+        return empId ? localStorage.getItem(`operatorClockInTime_${empId}`) : null;
+    });
     const [durationText, setDurationText] = useState('00:00:00');
+
+    // Scan to clock out state
+    const [isScanningForClockOut, setIsScanningForClockOut] = useState<boolean>(false);
+    const hasScannedClockOutRef = useRef<boolean>(false);
 
     // Production Schedule State
     const [scheduleTasks, setScheduleTasks] = useState<ScheduleItem[]>([]);
@@ -811,6 +820,53 @@ const ProductionControl: React.FC<ProductionControlProps> = ({ user, jobs = [] }
             }
         }
     }, [user]);
+
+    // 监听操作员 ID 变化，同步最新的未退卡班次，防止 stale 本地存储和越权状态
+    useEffect(() => {
+        if (!operatorEmployeeId) {
+            setClockInTime(null);
+            return;
+        }
+
+        const fetchActiveShiftForOperator = async () => {
+            try {
+                const { data, error } = await supabase
+                    .from('operator_attendance')
+                    .select('id, clock_in, machine_id')
+                    .eq('operator_id', operatorEmployeeId)
+                    .is('clock_out', null)
+                    .order('clock_in', { ascending: false })
+                    .limit(1);
+
+                if (error) throw error;
+
+                if (data && data.length > 0) {
+                    const activeShift = data[0];
+                    sessionStorage.setItem('selectedMachine', activeShift.machine_id);
+                    localStorage.setItem('device_machine_id', activeShift.machine_id);
+                    localStorage.setItem(`operatorClockInTime_${operatorEmployeeId}`, activeShift.clock_in);
+                    
+                    setSelectedMachine(activeShift.machine_id);
+                    setClockInTime(activeShift.clock_in);
+                } else {
+                    localStorage.removeItem(`operatorClockInTime_${operatorEmployeeId}`);
+                    setClockInTime(null);
+
+                    // 只有 Operator 角色的用户，在没有活跃打卡时才清空 selectedMachine。
+                    // 管理员/经理（Monitor 模式）可以保持当前的所选机台。
+                    if (user && user.role === 'Operator') {
+                        sessionStorage.removeItem('selectedMachine');
+                        localStorage.removeItem('device_machine_id');
+                        setSelectedMachine(null);
+                    }
+                }
+            } catch (err) {
+                console.error("Error checking active shift for operator:", err);
+            }
+        };
+
+        fetchActiveShiftForOperator();
+    }, [operatorEmployeeId, user]);
 
     // Check Takeover Warning
     useEffect(() => {
@@ -1094,16 +1150,26 @@ const ProductionControl: React.FC<ProductionControlProps> = ({ user, jobs = [] }
                         if (shift.operator_id !== operatorEmployeeId) {
                             // Kick the other operator
                             const clockInTimeVal = new Date(shift.clock_in).getTime();
-                            const hoursWorked = Math.max(0, (now.getTime() - clockInTimeVal) / 3600000);
+                            const ageHours = (now.getTime() - clockInTimeVal) / 3600000;
                             
                             const kickerName = operatorName || 'System';
                             const kickerEmp = operatorEmployeeId || 'Unknown';
 
+                            let hoursWorked = Math.max(0, (now.getTime() - clockInTimeVal) / 3600000);
+                            let clockOutTime = clockEventTime;
+                            let noteMsg = `Auto-Logout: Kicked by ${kickerName} (${kickerEmp})`;
+
+                            if (ageHours > 16) {
+                                hoursWorked = 12;
+                                clockOutTime = new Date(clockInTimeVal + 12 * 3600000).toISOString();
+                                noteMsg = `Auto-Logout: Kicked by ${kickerName} (${kickerEmp}) (Capped 12h)`;
+                            }
+
                             await supabase.from('operator_attendance')
                                 .update({
-                                    clock_out: clockEventTime,
+                                    clock_out: clockOutTime,
                                     hours_worked: Math.round(hoursWorked * 100) / 100,
-                                    notes: `Auto-Logout: Kicked by ${kickerName} (${kickerEmp})`
+                                    notes: noteMsg
                                 })
                                 .eq('id', shift.id);
                         }
@@ -1121,8 +1187,43 @@ const ProductionControl: React.FC<ProductionControlProps> = ({ user, jobs = [] }
 
                 if (myShifts && myShifts.length > 0) {
                     const myShift = myShifts[0];
-                    localStorage.setItem('operatorClockInTime', myShift.clock_in);
-                    setClockInTime(myShift.clock_in);
+                    const clockInTimeVal = new Date(myShift.clock_in).getTime();
+                    const ageHours = (now.getTime() - clockInTimeVal) / 3600000;
+
+                    if (ageHours > 16) {
+                        // Old shift is too old (> 16 hours), close it at clock_in + 12h
+                        const autoClockOutTime = new Date(clockInTimeVal + 12 * 3600000).toISOString();
+                        await supabase.from('operator_attendance')
+                            .update({
+                                clock_out: autoClockOutTime,
+                                hours_worked: 12,
+                                notes: 'System Auto-Logout (Shift > 16h)'
+                            })
+                            .eq('id', myShift.id);
+
+                        // Start a brand new shift
+                        const { data: newShift } = await supabase
+                            .from('operator_attendance')
+                            .insert({
+                                operator_id: operatorEmployeeId,
+                                date: todayStr,
+                                clock_in: clockEventTime,
+                                machine_id: selectedMachine
+                            })
+                            .select('clock_in')
+                            .single();
+
+                        const newClockIn = newShift?.clock_in || clockEventTime;
+                        if (operatorEmployeeId) {
+                            localStorage.setItem(`operatorClockInTime_${operatorEmployeeId}`, newClockIn);
+                        }
+                        setClockInTime(newClockIn);
+                    } else {
+                        if (operatorEmployeeId) {
+                            localStorage.setItem(`operatorClockInTime_${operatorEmployeeId}`, myShift.clock_in);
+                        }
+                        setClockInTime(myShift.clock_in);
+                    }
                 } else {
                     // Not clocked in on this machine.
                     // First, close any active shifts the current operator has on OTHER machines
@@ -1135,12 +1236,23 @@ const ProductionControl: React.FC<ProductionControlProps> = ({ user, jobs = [] }
                     if (myOtherShifts && myOtherShifts.length > 0) {
                         for (const otherShift of myOtherShifts) {
                             const clockInTimeVal = new Date(otherShift.clock_in).getTime();
-                            const hoursWorked = Math.max(0, (now.getTime() - clockInTimeVal) / 3600000);
+                            const ageHours = (now.getTime() - clockInTimeVal) / 3600000;
+
+                            let hoursWorked = Math.max(0, (now.getTime() - clockInTimeVal) / 3600000);
+                            let clockOutTime = clockEventTime;
+                            let noteMsg = 'System Auto-Logout (Switched Machine)';
+
+                            if (ageHours > 16) {
+                                hoursWorked = 12;
+                                clockOutTime = new Date(clockInTimeVal + 12 * 3600000).toISOString();
+                                noteMsg = 'System Auto-Logout (Switched Machine) (Capped 12h)';
+                            }
+
                             await supabase.from('operator_attendance')
                                 .update({
-                                    clock_out: clockEventTime,
+                                    clock_out: clockOutTime,
                                     hours_worked: Math.round(hoursWorked * 100) / 100,
-                                    notes: 'System Auto-Logout (Switched Machine)'
+                                    notes: noteMsg
                                 })
                                 .eq('id', otherShift.id);
                         }
@@ -1159,8 +1271,17 @@ const ProductionControl: React.FC<ProductionControlProps> = ({ user, jobs = [] }
                         .single();
 
                     const newClockIn = newShift?.clock_in || clockEventTime;
-                    localStorage.setItem('operatorClockInTime', newClockIn);
+                    if (operatorEmployeeId) {
+                        localStorage.setItem(`operatorClockInTime_${operatorEmployeeId}`, newClockIn);
+                    }
                     setClockInTime(newClockIn);
+                }
+
+                // Force sync operator_id in machine_active_products to prevent ghost operators
+                if (operatorId && selectedMachine) {
+                    await supabase.from('machine_active_products')
+                        .update({ operator_id: operatorId })
+                        .eq('machine_id', selectedMachine);
                 }
             } catch (err) {
                 console.error("Failed to sync attendance:", err);
@@ -1197,7 +1318,14 @@ const ProductionControl: React.FC<ProductionControlProps> = ({ user, jobs = [] }
                 }
             }
 
-            localStorage.removeItem('operatorClockInTime');
+            // Clear operator_id from active products for this machine
+            await supabase.from('machine_active_products')
+                .update({ operator_id: null })
+                .eq('machine_id', selectedMachine);
+
+            if (operatorEmployeeId) {
+                localStorage.removeItem(`operatorClockInTime_${operatorEmployeeId}`);
+            }
             setClockInTime(null);
             
             sessionStorage.removeItem('selectedMachine');
@@ -1221,7 +1349,9 @@ const ProductionControl: React.FC<ProductionControlProps> = ({ user, jobs = [] }
             
             sessionStorage.removeItem('selectedMachine');
             localStorage.removeItem('device_machine_id');
-            localStorage.removeItem('operatorClockInTime');
+            if (operatorEmployeeId) {
+                localStorage.removeItem(`operatorClockInTime_${operatorEmployeeId}`);
+            }
             localStorage.removeItem('operatorId');
             localStorage.removeItem('operatorEmployeeId');
             localStorage.removeItem('operatorName');
@@ -1250,8 +1380,6 @@ const ProductionControl: React.FC<ProductionControlProps> = ({ user, jobs = [] }
 
     // Filter machines based on location (factoryId)
     const filteredMachines = machines.filter(m => {
-        if (m.type === 'Extruder' && m.base_width === 50) return false;
-        
         // Filter by user's factoryId if the user is an Operator and has a location bound
         if (user && user.role === 'Operator' && user.factoryId) {
             return m.factory_id === user.factoryId;
@@ -1365,6 +1493,37 @@ const ProductionControl: React.FC<ProductionControlProps> = ({ user, jobs = [] }
             return () => { supabase.removeChannel(sub); };
         } else {
             setRecentLogs([]);
+        }
+    }, [selectedMachine, machineMetadata]);
+
+    const fetchMachinePhotos = async () => {
+        const targetMachine = (machineMetadata?.id || selectedMachine)?.trim();
+        if (!targetMachine) return;
+        const { data } = await supabase
+            .from('work_photos')
+            .select('*')
+            .eq('machine_id', targetMachine)
+            .order('created_at', { ascending: false })
+            .limit(10);
+        if (data) {
+            setMachinePhotos(data);
+        }
+    };
+
+    useEffect(() => {
+        if (selectedMachine) {
+            fetchMachinePhotos();
+            const sub = supabase.channel(`machine-photos-${selectedMachine}`)
+                .on('postgres_changes', { event: '*', schema: 'public', table: 'work_photos' }, (payload) => {
+                    const targetMatch = (machineMetadata?.id || selectedMachine)?.trim();
+                    if (payload.new?.machine_id?.trim() === targetMatch || payload.old?.machine_id?.trim() === targetMatch) {
+                        fetchMachinePhotos();
+                    }
+                })
+                .subscribe();
+            return () => { supabase.removeChannel(sub); };
+        } else {
+            setMachinePhotos([]);
         }
     }, [selectedMachine, machineMetadata]);
 
@@ -1773,6 +1932,11 @@ const ProductionControl: React.FC<ProductionControlProps> = ({ user, jobs = [] }
         setCartonNetWeight('');
         setMediaType('image');
     };
+
+    const isSfOrRecycle = machineMetadata && (
+        machineMetadata.name.toLowerCase().includes('stretch film') || 
+        machineMetadata.name.toLowerCase().includes('recycle')
+    );
     return (
         <>
             <div className="min-h-screen text-apple-textMain dark:text-white font-sans selection:bg-apple-blue/30 overflow-x-hidden relative animate-fade-in">
@@ -1819,54 +1983,69 @@ const ProductionControl: React.FC<ProductionControlProps> = ({ user, jobs = [] }
 
                     <div className="flex items-center gap-2 ml-auto">
                         {clockInTime && (
-                            <button
-                                onClick={handleManualClockOut}
-                                className="bg-red-600 hover:bg-red-500 text-white font-bold py-2 px-4 rounded-lg shadow-lg border border-red-400/50 flex items-center gap-2 text-xs shrink-0"
-                            >
-                                <LogOut size={14} /> CLOCK OUT
-                            </button>
+                            user && user.role === 'Operator' ? (
+                                <button
+                                    onClick={() => {
+                                        hasScannedClockOutRef.current = false;
+                                        setIsScanningForClockOut(true);
+                                    }}
+                                    className="bg-red-600 hover:bg-red-500 text-white font-bold py-2 px-4 rounded-lg shadow-lg border border-red-400/50 flex items-center gap-2 text-xs shrink-0"
+                                >
+                                    <Camera size={14} /> 扫码登出 / Scan to Clock Out
+                                </button>
+                            ) : (
+                                <button
+                                    onClick={handleManualClockOut}
+                                    className="bg-red-600 hover:bg-red-500 text-white font-bold py-2 px-4 rounded-lg shadow-lg border border-red-400/50 flex items-center gap-2 text-xs shrink-0"
+                                >
+                                    <LogOut size={14} /> CLOCK OUT
+                                </button>
+                            )
                         )}
-
                     </div>
                 </header>
 
-                {/* MACHINE TABS SWITCHER */}
-                <div className="grid grid-cols-2 sm:flex sm:flex-wrap gap-2 mb-4">
-                    {filteredMachines.map(m => {
-                        const isSelected = selectedMachine === m.machine_id;
-                        return (
-                            <button
-                                key={m.machine_id}
-                                onClick={() => handleMachineTabClick(m.machine_id)}
-                                className={`px-2.5 py-2 rounded-xl text-[11px] sm:px-4 sm:py-2.5 sm:text-xs font-bold uppercase tracking-wider transition-all border text-center sm:shrink-0 ${
-                                    isSelected
-                                        ? 'bg-apple-blue text-white border-apple-blue shadow-lg shadow-apple-blue/20'
-                                        : 'bg-white/5 text-gray-400 border-white/10 hover:text-white hover:bg-white/10'
-                                }`}
-                            >
-                                {formatMachineName(m.name)}
-                            </button>
-                        );
-                    })}
-                </div>
+                {/* MACHINE TABS SWITCHER (Hidden for Operators) */}
+                {user && user.role !== 'Operator' && (
+                    <div className="grid grid-cols-2 sm:flex sm:flex-wrap gap-2 mb-4">
+                        {filteredMachines.map(m => {
+                            const isSelected = selectedMachine === m.machine_id;
+                            return (
+                                <button
+                                    key={m.machine_id}
+                                    onClick={() => handleMachineTabClick(m.machine_id)}
+                                    className={`px-2.5 py-2 rounded-xl text-[11px] sm:px-4 sm:py-2.5 sm:text-xs font-bold uppercase tracking-wider transition-all border text-center sm:shrink-0 ${
+                                        isSelected
+                                            ? 'bg-apple-blue text-white border-apple-blue shadow-lg shadow-apple-blue/20'
+                                            : 'bg-white/5 text-gray-400 border-white/10 hover:text-white hover:bg-white/10'
+                                    }`}
+                                >
+                                    {formatMachineName(m.name)}
+                                </button>
+                            );
+                        })}
+                    </div>
+                )}
 
                 {!selectedMachine ? (
                     <div className="flex-1 flex flex-col items-center justify-center p-8 bg-white/5 border border-white/10 rounded-3xl min-h-[40vh] text-center backdrop-blur-md gap-4">
-                        {isScanningMachine ? (
+                        {isScanningMachine || (user && user.role === 'Operator') ? (
                             <div className="w-full max-w-[320px] flex flex-col gap-4 animate-fade-in-up">
-                                <div className="flex justify-between items-center bg-white/5 border border-white/10 rounded-xl px-4 py-2.5">
-                                    <button 
-                                        type="button" 
-                                        onClick={() => {
-                                             hasScannedRef.current = true;
-                                             setIsScanningMachine(false);
-                                          }}
-                                        className="p-1 rounded-full bg-white/10 text-gray-400 hover:text-white transition-colors"
-                                    >
-                                        <X size={14} />
-                                    </button>
-                                </div>
-                                <div key={isScanningMachine ? 'scanner-active' : 'scanner-inactive'} className="w-full aspect-square overflow-hidden rounded-2xl border-2 border-[#E97132] shadow-lg shadow-[#E97132]/10 relative">
+                                {user && user.role !== 'Operator' && (
+                                    <div className="flex justify-between items-center bg-white/5 border border-white/10 rounded-xl px-4 py-2.5">
+                                        <button 
+                                            type="button" 
+                                            onClick={() => {
+                                                 hasScannedRef.current = true;
+                                                 setIsScanningMachine(false);
+                                              }}
+                                            className="p-1 rounded-full bg-white/10 text-gray-400 hover:text-white transition-colors"
+                                        >
+                                            <X size={14} />
+                                        </button>
+                                    </div>
+                                )}
+                                <div key="scanner-active" className="w-full aspect-square overflow-hidden rounded-2xl border-2 border-[#E97132] shadow-lg shadow-[#E97132]/10 relative">
                                     <Scanner
                                          key="prod-control-machine-scanner"
                                          onScan={(detectedCodes) => {
@@ -1883,20 +2062,26 @@ const ProductionControl: React.FC<ProductionControlProps> = ({ user, jobs = [] }
                                                              setIsScanningMachine(false);
                                                          }, 100);
                                                      } else {
-                                                         alert(`⚠️ Unknown machine QR: ${cleanText}`);
+                                                         alert(`⚠️ 未知的机台二维码 / Unknown machine QR: ${cleanText}`);
                                                      }
                                                  }
                                              }
                                          }}
                                          onError={(err) => {
                                              console.error("QR Scan Error:", err);
-                                             alert("⚠️ Failed to access camera for QR scanning.");
+                                             alert("⚠️ 无法获取摄像头权限进行扫码绑定。 Please check camera permissions.");
                                              hasScannedRef.current = true;
-                                             setTimeout(() => {
-                                                 setIsScanningMachine(false);
-                                             }, 100);
+                                             if (user?.role !== 'Operator') {
+                                                 setTimeout(() => {
+                                                     setIsScanningMachine(false);
+                                                 }, 100);
+                                             }
                                          }}
                                      />
+                                </div>
+                                <div className="text-center">
+                                     <p className="text-xs text-gray-300 font-bold">请对准机台二维码进行扫码绑定</p>
+                                     <p className="text-[10px] text-gray-500 mt-1">Please scan the machine QR code to bind</p>
                                 </div>
                             </div>
                         ) : (
@@ -2037,60 +2222,182 @@ const ProductionControl: React.FC<ProductionControlProps> = ({ user, jobs = [] }
                                 </div>
                             )}
 
-                            {/* LANE LAYOUT */}
-                            {selectedMachine === 'T1.2-M01' ? (
-                                <div className="flex flex-col gap-4">
-                                    <div className="flex-1 min-w-0">
-                                        <div className="text-center mb-2">
-                                            <span className="text-xs font-bold text-cyan-400 uppercase tracking-widest bg-cyan-500/10 px-3 py-1 rounded-full">Lane 1</span>
-                                        </div>
-                                        <ProductionLane
-                                            laneId="Lane1"
-                                            machineMetadata={machineMetadata}
-                                            user={user}
-                                            operatorId={operatorId}
-                                            activeJob={activeJob}
-                                            jobs={jobs}
-                                            onProductionComplete={fetchUserLogs}
-                                            onBeforeProduce={handleProductionAttempt}
-                                            presetSku={presetSku}
-                                            isControlMode={isControlMode}
-                                            onTakeoverClick={() => initiateTakeover(selectedMachine!)}
-                                        />
+                            {/* PRODUCTION VIEW: BUBBLE WRAP LANES OR PHOTO ONLY LOGGING */}
+                            {isSfOrRecycle ? (
+                                <div className="flex flex-col gap-6 animate-fade-in">
+                                    {/* 专属拍照录入板 */}
+                                    <div className="bg-white/5 border border-white/10 rounded-3xl p-6 backdrop-blur-md">
+                                        <h3 className="text-sm font-black tracking-widest text-purple-400 uppercase flex items-center gap-2 mb-4">
+                                            <Camera size={16} /> 拍照登记产量 / Production Photo Registration
+                                        </h3>
+                                        
+                                        {!photoPreview ? (
+                                            <div className="flex gap-4">
+                                                <button 
+                                                    onClick={() => setShowWebcam(true)} 
+                                                    className="flex-1 py-12 bg-purple-600/10 hover:bg-purple-600/20 border border-dashed border-purple-500/30 hover:border-purple-500/50 rounded-2xl flex flex-col items-center justify-center gap-2 transition-all text-center cursor-pointer active:scale-95"
+                                                >
+                                                    <div className="w-12 h-12 rounded-full bg-purple-500/20 flex items-center justify-center text-purple-400 border border-purple-500/30">
+                                                        <Camera size={20} />
+                                                    </div>
+                                                    <span className="text-sm font-bold text-purple-300">Live Camera / 开启相机</span>
+                                                    <span className="text-xs text-gray-500">使用设备相机实时拍摄</span>
+                                                </button>
+                                                
+                                                <button 
+                                                    onClick={triggerFileSelect} 
+                                                    className="flex-1 py-12 bg-white/[0.02] hover:bg-white/5 border border-dashed border-white/10 hover:border-white/20 rounded-2xl flex flex-col items-center justify-center gap-2 transition-all text-center cursor-pointer active:scale-95"
+                                                >
+                                                    <div className="w-12 h-12 rounded-full bg-white/5 flex items-center justify-center text-gray-400 border border-white/10">
+                                                        <ImageIcon size={20} />
+                                                    </div>
+                                                    <span className="text-sm font-bold text-gray-300">Upload File / 上传文件</span>
+                                                    <span className="text-xs text-gray-500">从相册选择照片或文件</span>
+                                                </button>
+                                            </div>
+                                        ) : (
+                                            <div className="space-y-4">
+                                                <div className="relative aspect-video max-w-xl mx-auto rounded-2xl bg-black overflow-hidden border border-white/10">
+                                                    {mediaType === 'video' ? (
+                                                        <video src={photoPreview} controls className="w-full h-full object-cover" />
+                                                    ) : (
+                                                        <img src={photoPreview} alt="Preview" className="w-full h-full object-cover" />
+                                                    )}
+                                                    {(uploadingPhoto || analyzingPhoto) && (
+                                                        <div className="absolute inset-0 bg-black/60 flex flex-col items-center justify-center gap-2">
+                                                            <Loader className="animate-spin text-purple-400" size={24} />
+                                                            <span className="text-xs text-purple-300 font-bold">AI Analyzing Scene...</span>
+                                                        </div>
+                                                    )}
+                                                </div>
+
+                                                {aiAnalysis && (
+                                                    <div className="p-4 bg-purple-500/5 border border-purple-500/10 rounded-xl max-w-xl mx-auto">
+                                                        <div className="text-[10px] text-purple-400 uppercase font-black tracking-widest flex items-center gap-1.5">
+                                                            <Sparkles size={11} /> AI Scene Analysis / AI 图像场景分析:
+                                                        </div>
+                                                        <p className="text-xs text-white mt-1 leading-normal font-medium">{aiAnalysis}</p>
+                                                    </div>
+                                                )}
+
+                                                {/* 备注与操作 */}
+                                                <div className="max-w-xl mx-auto space-y-4">
+                                                    <div className="space-y-1">
+                                                        <label className="text-[10px] text-gray-400 uppercase font-black tracking-wider">Note / 生产备注 (如规格、班次等)</label>
+                                                        <textarea 
+                                                            value={photoNote}
+                                                            onChange={e => setPhotoNote(e.target.value)}
+                                                            placeholder="Add any shift notes or specifications..."
+                                                            className="w-full bg-white/5 border border-white/10 text-xs px-3 py-2 rounded-xl focus:border-purple-500 focus:outline-none min-h-[60px] text-white"
+                                                        />
+                                                    </div>
+
+                                                    <div className="flex gap-2 justify-end">
+                                                        <button 
+                                                            onClick={cancelPhotoSelect} 
+                                                            className="px-4 py-2 text-xs font-bold text-gray-400 hover:text-white transition-all rounded-xl hover:bg-white/5 active:scale-95"
+                                                        >
+                                                            Cancel / 取消
+                                                        </button>
+                                                        <button 
+                                                            onClick={handlePhotoSubmit} 
+                                                            disabled={uploadingPhoto || !photoBase64}
+                                                            className="px-6 py-2 bg-purple-600 hover:bg-purple-500 disabled:bg-purple-600/50 disabled:cursor-not-allowed text-white font-bold text-xs rounded-xl flex items-center gap-1.5 transition-all active:scale-95 shadow-lg shadow-purple-500/10 border border-purple-500/20"
+                                                        >
+                                                            {uploadingPhoto ? <Loader className="animate-spin" size={12} /> : <Check size={12} />}
+                                                            <span>Upload Photo / 提交拍照</span>
+                                                        </button>
+                                                    </div>
+                                                </div>
+                                            </div>
+                                        )}
                                     </div>
-                                    <div className="flex-1 min-w-0">
-                                        <div className="text-center mb-2">
-                                            <span className="text-xs font-bold text-purple-400 uppercase tracking-widest bg-purple-500/10 px-3 py-1 rounded-full">Lane 2</span>
-                                        </div>
-                                        <ProductionLane
-                                            laneId="Lane2"
-                                            machineMetadata={machineMetadata}
-                                            user={user}
-                                            operatorId={operatorId}
-                                            activeJob={activeJob}
-                                            jobs={jobs}
-                                            onProductionComplete={fetchUserLogs}
-                                            onBeforeProduce={handleProductionAttempt}
-                                            presetSku={presetSku}
-                                            isControlMode={isControlMode}
-                                            onTakeoverClick={() => initiateTakeover(selectedMachine!)}
-                                        />
+
+                                    {/* 📷 最近上传的照片网格 - “显示拍照” */}
+                                    <div className="bg-white/5 border border-white/10 rounded-3xl p-6 backdrop-blur-md">
+                                        <h3 className="text-xs font-black tracking-widest text-gray-400 uppercase flex items-center gap-1.5 mb-4">
+                                            <ImageIcon size={14} /> 最近登记照片 / Recent Photos ({machinePhotos.length})
+                                        </h3>
+                                        
+                                        {machinePhotos.length === 0 ? (
+                                            <div className="py-12 text-center text-xs text-gray-500 font-mono">
+                                                No photos uploaded. / 暂无上传照片记录。
+                                            </div>
+                                        ) : (
+                                            <div className="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-4 gap-4">
+                                                {machinePhotos.map((p) => (
+                                                    <div key={p.id} className="group relative bg-black/40 border border-white/5 rounded-xl overflow-hidden shadow-md">
+                                                        <div className="aspect-video w-full bg-black overflow-hidden relative">
+                                                            <img src={p.photo_url} alt="" className="w-full h-full object-cover group-hover:scale-105 transition-all duration-300" />
+                                                            <div className="absolute bottom-1 right-1 bg-black/60 px-1.5 py-0.5 rounded text-[8px] text-gray-400 font-mono">
+                                                                {new Date(p.created_at).toLocaleTimeString('en-MY', { hour: '2-digit', minute: '2-digit' })}
+                                                            </div>
+                                                        </div>
+                                                        <div className="p-2 space-y-1">
+                                                            <p className="text-[10px] font-bold text-gray-200 truncate">{p.user_note || p.ai_description || '工作照登记'}</p>
+                                                            <p className="text-[8px] text-gray-500 font-mono truncate">By {p.employee_name || 'Operator'}</p>
+                                                        </div>
+                                                    </div>
+                                                ))}
+                                            </div>
+                                        )}
                                     </div>
                                 </div>
                             ) : (
-                                <ProductionLane
-                                    laneId="Single"
-                                    machineMetadata={machineMetadata}
-                                    user={user}
-                                    operatorId={operatorId}
-                                    activeJob={activeJob}
-                                    jobs={jobs}
-                                    onProductionComplete={fetchUserLogs}
-                                    onBeforeProduce={handleProductionAttempt}
-                                    presetSku={presetSku}
-                                    isControlMode={isControlMode}
-                                    onTakeoverClick={() => initiateTakeover(selectedMachine!)}
-                                />
+                                selectedMachine === 'T2-M01' || selectedMachine === 'J1-M01' ? (
+                                    <div className="flex flex-col gap-4">
+                                        <div className="flex-1 min-w-0">
+                                            <div className="text-center mb-2">
+                                                <span className="text-xs font-bold text-cyan-400 uppercase tracking-widest bg-cyan-500/10 px-3 py-1 rounded-full">Lane 1</span>
+                                            </div>
+                                            <ProductionLane
+                                                laneId="Lane1"
+                                                machineMetadata={machineMetadata}
+                                                user={user}
+                                                operatorId={operatorId}
+                                                activeJob={activeJob}
+                                                jobs={jobs}
+                                                onProductionComplete={fetchUserLogs}
+                                                onBeforeProduce={handleProductionAttempt}
+                                                presetSku={presetSku}
+                                                isControlMode={isControlMode}
+                                                onTakeoverClick={() => initiateTakeover(selectedMachine!)}
+                                            />
+                                        </div>
+                                        <div className="flex-1 min-w-0">
+                                            <div className="text-center mb-2">
+                                                <span className="text-xs font-bold text-purple-400 uppercase tracking-widest bg-purple-500/10 px-3 py-1 rounded-full">Lane 2</span>
+                                            </div>
+                                            <ProductionLane
+                                                laneId="Lane2"
+                                                machineMetadata={machineMetadata}
+                                                user={user}
+                                                operatorId={operatorId}
+                                                activeJob={activeJob}
+                                                jobs={jobs}
+                                                onProductionComplete={fetchUserLogs}
+                                                onBeforeProduce={handleProductionAttempt}
+                                                presetSku={presetSku}
+                                                isControlMode={isControlMode}
+                                                onTakeoverClick={() => initiateTakeover(selectedMachine!)}
+                                            />
+                                        </div>
+                                    </div>
+                                ) : (
+                                    <ProductionLane
+                                        laneId="Single"
+                                        machineMetadata={machineMetadata}
+                                        user={user}
+                                        operatorId={operatorId}
+                                        activeJob={activeJob}
+                                        jobs={jobs}
+                                        onProductionComplete={fetchUserLogs}
+                                        onBeforeProduce={handleProductionAttempt}
+                                        presetSku={presetSku}
+                                        isControlMode={isControlMode}
+                                        onTakeoverClick={() => initiateTakeover(selectedMachine!)}
+                                    />
+                                )
                             )}
                         </div>
 
@@ -2098,10 +2405,11 @@ const ProductionControl: React.FC<ProductionControlProps> = ({ user, jobs = [] }
                         <div className="lg:col-span-4 flex flex-col gap-6">
 
                             {/* 1. WORK PHOTO LOGGER */}
-                            <div className="bg-white/5 border border-white/10 rounded-3xl p-4 md:p-6 backdrop-blur-md">
-                                <h3 className="text-xs font-black tracking-widest text-purple-400 uppercase flex items-center gap-1.5 mb-3">
-                                    <Camera size={14} /> Work Photo Logger
-                                </h3>
+                            {!isSfOrRecycle && (
+                                <div className="bg-white/5 border border-white/10 rounded-3xl p-4 md:p-6 backdrop-blur-md">
+                                    <h3 className="text-xs font-black tracking-widest text-purple-400 uppercase flex items-center gap-1.5 mb-3">
+                                        <Camera size={14} /> Work Photo Logger
+                                    </h3>
 
                                 {!photoPreview ? (
                                     <div className="flex gap-2">
@@ -2349,8 +2657,9 @@ const ProductionControl: React.FC<ProductionControlProps> = ({ user, jobs = [] }
                                         </div>
                                     </div>
                                 )}
-                                <input ref={fileInputRef} type="file" accept="image/*,video/*" className="hidden" onChange={handlePhotoSelect} />
                             </div>
+                            )}
+                            <input ref={fileInputRef} type="file" accept="image/*,video/*" className="hidden" onChange={handlePhotoSelect} />
 
                             {/* 2. OPERATOR TASKS CHECKLIST */}
                             <div className="bg-white/5 border border-white/10 rounded-3xl p-4 md:p-6 backdrop-blur-md">
@@ -2520,6 +2829,65 @@ const ProductionControl: React.FC<ProductionControlProps> = ({ user, jobs = [] }
                             CLEAR
                         </button>
                     </div>
+                </div>
+            </div>
+
+            {/* SCAN TO CLOCK OUT MODAL */}
+            <div 
+                key="scan-to-clock-out-modal-overlay" 
+                className={`fixed inset-0 z-[400] bg-black/80 backdrop-blur-md flex items-center justify-center p-4 transition-all duration-200 ${
+                    isScanningForClockOut ? 'visible opacity-100 pointer-events-auto' : 'invisible opacity-0 pointer-events-none'
+                }`}
+            >
+                <div className="bg-[#1c1c1f] border border-red-500/30 p-6 rounded-3xl w-full max-w-sm shadow-2xl relative animate-scale-in">
+                    <div className="text-center mb-4">
+                        <div className="w-12 h-12 rounded-full bg-red-500/10 flex items-center justify-center text-red-500 mx-auto mb-3 border border-red-500/20">
+                            <Camera size={24} />
+                        </div>
+                        <h2 className="text-lg font-black tracking-wider text-white uppercase font-bold">扫码登出 / Scan to Clock Out</h2>
+                        <p className="text-[11px] text-gray-400 mt-1">
+                            请使用摄像头扫描当前绑定的机台 <strong className="text-cyan-400 font-mono">{currentMachineName}</strong> 的二维码进行登出。
+                        </p>
+                    </div>
+
+                    <div className="w-full aspect-square overflow-hidden rounded-2xl border-2 border-red-500 shadow-lg shadow-red-500/10 relative mb-4">
+                        {isScanningForClockOut && (
+                            <Scanner
+                                key="prod-control-logout-scanner"
+                                onScan={(detectedCodes) => {
+                                    if (hasScannedClockOutRef.current) return;
+                                    if (detectedCodes && detectedCodes.length > 0) {
+                                        const text = detectedCodes[0].rawValue;
+                                        if (text) {
+                                            const cleanText = text.trim();
+                                            if (cleanText === selectedMachine) {
+                                                hasScannedClockOutRef.current = true;
+                                                handleManualClockOut();
+                                                setIsScanningForClockOut(false);
+                                            } else {
+                                                alert(`⚠️ 扫码的机台 (${cleanText}) 与当前绑定的机台 (${selectedMachine}) 不匹配，无法登出！\nPlease scan the correct machine QR code.`);
+                                            }
+                                        }
+                                    }
+                                }}
+                                onError={(err) => {
+                                    console.error("QR Logout Scan Error:", err);
+                                    alert("⚠️ 无法获取摄像头权限。 Please check camera permissions.");
+                                    hasScannedClockOutRef.current = true;
+                                    setIsScanningForClockOut(false);
+                                }}
+                            />
+                        )}
+                    </div>
+
+                    <button
+                        onClick={() => {
+                            setIsScanningForClockOut(false);
+                        }}
+                        className="w-full py-3 bg-white/5 border border-white/10 hover:bg-white/10 text-xs text-gray-400 transition-all flex items-center justify-center font-bold rounded-xl"
+                    >
+                        取消 / CANCEL
+                    </button>
                 </div>
             </div>
 

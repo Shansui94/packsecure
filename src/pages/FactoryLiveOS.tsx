@@ -3,7 +3,7 @@ import { supabase } from '../services/supabase';
 import {
     Activity, Cpu, Zap, AlertTriangle, X, Wifi, WifiOff, ChevronRight, RefreshCw,
     Truck, Package, BarChart3, ArrowUpDown, FileBarChart,
-    Plus, Calendar, Check, Clock, Play, Trash2
+    Plus, Calendar, Check, Clock, Play, Trash2, Camera
 } from 'lucide-react';
 
 // ─── Types ───────────────────────────────────────────────────────────────────
@@ -340,6 +340,7 @@ const DetailPanel = ({ machine, onClose }: { machine: MachineCard; onClose: () =
 const MachineCardView = ({ machine, onClick }: { machine: MachineCard; onClick: () => void }) => {
     const c = getStatusColor(machine.status, machine.isProducing);
     const isDL = machine.name.includes('Double Layer');
+    const isNoIoT = machine.name.toLowerCase().includes('stretch film') || machine.name.toLowerCase().includes('recycle');
     const [pulse, setPulse] = useState(false);
     
     // Trigger ripple glow when pulse increases
@@ -369,9 +370,9 @@ const MachineCardView = ({ machine, onClick }: { machine: MachineCard; onClick: 
             <div className="flex items-start justify-between relative z-10">
                 <div>
                     <div className="flex items-center gap-2 mb-1">
-                        <span className={`w-2 h-2 rounded-full ${c.dot} ${machine.status === 'Online' ? 'animate-pulse' : ''}`} />
-                        <span className={`text-[10px] font-bold uppercase tracking-widest ${c.text}`}>
-                            {machine.status}{machine.isProducing ? ' · Producing' : ''}
+                        <span className={`w-2 h-2 rounded-full ${isNoIoT ? 'bg-purple-400' : c.dot} ${machine.status === 'Online' && !isNoIoT ? 'animate-pulse' : ''}`} />
+                        <span className={`text-[10px] font-bold uppercase tracking-widest ${isNoIoT ? 'text-purple-400' : c.text}`}>
+                            {isNoIoT ? 'Photo Mode' : machine.status}{machine.isProducing ? ' · Producing' : ''}
                         </span>
                         <span className="text-[10px] text-gray-600 font-mono">· {machine.factory_id}</span>
                     </div>
@@ -411,12 +412,22 @@ const MachineCardView = ({ machine, onClick }: { machine: MachineCard; onClick: 
             {/* Footer */}
             <div className="relative z-10 flex items-center justify-between">
                 <div className="flex items-center gap-1.5">
-                    {machine.status !== 'Offline' ? (
-                        <Wifi size={11} className={c.text} />
+                    {isNoIoT ? (
+                        <>
+                            <Camera size={11} className="text-purple-400" />
+                            <span className="text-[10px] text-gray-500 font-bold uppercase">Manual Upload</span>
+                        </>
+                    ) : machine.status !== 'Offline' ? (
+                        <>
+                            <Wifi size={11} className={c.text} />
+                            <span className="text-[10px] text-gray-500">{timeSince(machine.last_heartbeat)}</span>
+                        </>
                     ) : (
-                        <WifiOff size={11} className="text-red-500" />
+                        <>
+                            <WifiOff size={11} className="text-red-500" />
+                            <span className="text-[10px] text-gray-500">{timeSince(machine.last_heartbeat)}</span>
+                        </>
                     )}
-                    <span className="text-[10px] text-gray-500">{timeSince(machine.last_heartbeat)}</span>
                 </div>
                 <div className="flex items-center gap-2">
                     <span className={`text-[10px] font-bold ${machine.reboot_count > 0 ? 'text-orange-400' : 'text-gray-600'}`}>
@@ -528,7 +539,6 @@ const FactoryLiveOS: React.FC<FactoryLiveOSProps> = ({ onNavigate }) => {
             });
 
         const cards: MachineCard[] = (machinesRes.data || [])
-            .filter((m: any) => !(m.type === 'Extruder' && m.base_width === 50)) // exclude stretch film
             .map((m: any) => ({
                 machine_id: m.machine_id,
                 name: m.name,
@@ -809,9 +819,11 @@ const FactoryLiveOS: React.FC<FactoryLiveOSProps> = ({ onNavigate }) => {
                             </div>
                             
                             {[
-                                { region: '📍 Nilai Operations (N1 & N2)', list: machines.filter(m => m.factory_id === 'N1' || m.factory_id === 'N2') },
+                                { region: '📍 Nilai Operations (N1, N2 & N3)', list: machines.filter(m => m.factory_id === 'N1' || m.factory_id === 'N2' || m.factory_id === 'N3') },
                                 { region: '📍 Taiping Operations (T1)', list: machines.filter(m => m.factory_id === 'T1') },
-                                { region: '📍 Other Locations', list: machines.filter(m => m.factory_id !== 'N1' && m.factory_id !== 'N2' && m.factory_id !== 'T1') }
+                                { region: '📍 Kelantan Operations (K1)', list: machines.filter(m => m.factory_id === 'K1') },
+                                { region: '📍 Johor Operations (J1)', list: machines.filter(m => m.factory_id === 'J1') },
+                                { region: '📍 Other Locations', list: machines.filter(m => !['N1', 'N2', 'N3', 'T1', 'K1', 'J1'].includes(m.factory_id)) }
                             ].filter(group => group.list.length > 0).map(group => (
                                 <div key={group.region} className="bg-black/20 border border-white/5 rounded-3xl p-5 shadow-inner">
                                     <div className="flex items-center justify-between mb-5 border-b border-white/5 pb-3">

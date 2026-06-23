@@ -10,12 +10,20 @@ export const WAREHOUSES = [
 
 export const MACHINES: Machine[] = [
     // Taiping / OPM group
-    { id: 'T1.1-M03', name: 'Stretch Film (T1.1)', factory_id: 'OPM Lama', type: 'Extruder', status: 'Running' },
-    { id: 'T1.2-M01', name: '2M Double Layer (T1.2)', factory_id: 'OPM Lama', type: 'Extruder', status: 'Running' },
-    { id: 'T1.3-M02', name: '1M Single Layer (T1.3)', factory_id: 'OPM Lama', type: 'Extruder', status: 'Idle' },
+    { id: 'T1-M03', name: 'Stretch Film (T1)', factory_id: 'OPM Lama', type: 'Extruder', status: 'Running' },
+    { id: 'T2-M01', name: '2M Double Layer (T2)', factory_id: 'OPM Lama', type: 'Extruder', status: 'Running' },
+    { id: 'T3-M02', name: '1M Single Layer (T3)', factory_id: 'OPM Lama', type: 'Extruder', status: 'Idle' },
+    { id: 'T4-M04', name: 'Stretch Film (T4)', factory_id: 'OPM Lama', type: 'Extruder', status: 'Idle' },
+    { id: 'T5-M05', name: 'Recycle Machine (T5)', factory_id: 'OPM Lama', type: 'Recycle', status: 'Idle' },
 
-    // Nilai N1
+    // Nilai
     { id: 'N1-M01', name: '1M Double Layer (N1)', factory_id: 'Nilai', type: 'Extruder', status: 'Running' },
-
     { id: 'N2-M02', name: '1M Single Layer (N2)', factory_id: 'Nilai', type: 'Extruder', status: 'Idle' },
+    { id: 'N3-M03', name: 'Recycle Machine (N3)', factory_id: 'Nilai', type: 'Recycle', status: 'Idle' },
+
+    // Kelantan
+    { id: 'K1-M01', name: '1M Double Layer (K1)', factory_id: 'Kelantan', type: 'Extruder', status: 'Idle' },
+
+    // Johor
+    { id: 'J1-M01', name: '2M Double Layer (J1)', factory_id: 'Johor', type: 'Extruder', status: 'Idle' }
 ];

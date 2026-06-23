@@ -27,7 +27,8 @@ import {
     BookOpen,
     Camera,
     Sun,
-    Moon
+    Moon,
+    Printer
 } from 'lucide-react';
 import { supabase } from '../services/supabase';
 import { canAccessPage } from '../utils/pageAccess';
@@ -138,6 +139,7 @@ const Layout: React.FC<LayoutProps> = ({ children, activePage, setActivePage, us
             'Lorry Service': '车辆维修',
             'HR Portal': 'HR 门户',
             'Yield & AI Learning': '收率与 AI 学习',
+            'Machine QR Labels': '机器 QR 标签',
         };
 
         return dict[text] || text;
@@ -509,6 +511,7 @@ const Layout: React.FC<LayoutProps> = ({ children, activePage, setActivePage, us
                                     <NavItem id="livestock" icon={BarChart3} label="Live Stock" roles={['SuperAdmin', 'Admin', 'Manager']} />
                                     <NavItem id="recipes" icon={Activity} label="Yield & AI Learning" roles={['SuperAdmin', 'Admin', 'Manager']} />
                                     <NavItem id="machine-schedule" icon={Calendar} label="Machine Schedule" roles={['SuperAdmin', 'Admin', 'Manager']} />
+                                    <NavItem id="machine-labels" icon={Printer} label="Machine QR Labels" roles={['SuperAdmin', 'Admin', 'Manager']} />
                                     <NavItem id="floor-plan" icon={LayoutDashboard} label="Floor Plan" roles={['SuperAdmin', 'Admin', 'Manager']} />
                                 </NavGroup>
 

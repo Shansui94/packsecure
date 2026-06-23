@@ -223,8 +223,8 @@ function App() {
         // Define allowable pages per role
         const allowedPages: Record<string, string[]> = {
             'SuperAdmin': ['*'], // The Only One with Full Access
-            'Admin': ['profile', 'construction', 'factory-live-os', 'dashboard', 'data-v2', 'customer-import', 'universal-intake', 'scanner', 'jobs', 'livestock', 'inventory', 'recipes', 'products', 'delivery', 'order-summary', 'dispatch', 'production', 'report-history', 'users', 'hr', 'simple-stock', 'maintenance', 'lorry-management', 'iot', 'driver-management', 'operators', 'dev-log', 'leave-calendar', 'personal-report', 'machine-schedule', 'activity-logs', 'floor-plan', 'stock-movement', 'stock-audit', 'audit-report', 'reports', 'notes', 'tasks', 'sop-center', 'work-photos', 'executive-reports', 'driver-leave'],
-            'Manager': ['profile', 'construction', 'factory-live-os', 'dashboard', 'data-v2', 'customer-import', 'universal-intake', 'jobs', 'livestock', 'inventory', 'recipes', 'products', 'delivery', 'order-summary', 'dispatch', 'production', 'report-history', 'hr', 'simple-stock', 'maintenance', 'lorry-management', 'iot', 'driver-management', 'operators', 'leave-calendar', 'personal-report', 'machine-schedule', 'activity-logs', 'floor-plan', 'stock-movement', 'stock-audit', 'audit-report', 'reports', 'notes', 'tasks', 'sop-center', 'work-photos', 'executive-reports', 'driver-leave', 'scanner'],
+            'Admin': ['profile', 'construction', 'factory-live-os', 'dashboard', 'data-v2', 'customer-import', 'universal-intake', 'scanner', 'jobs', 'livestock', 'inventory', 'recipes', 'products', 'delivery', 'order-summary', 'dispatch', 'production', 'report-history', 'users', 'hr', 'simple-stock', 'maintenance', 'lorry-management', 'iot', 'driver-management', 'operators', 'dev-log', 'leave-calendar', 'personal-report', 'machine-schedule', 'machine-labels', 'activity-logs', 'floor-plan', 'stock-movement', 'stock-audit', 'audit-report', 'reports', 'notes', 'tasks', 'sop-center', 'work-photos', 'executive-reports', 'driver-leave'],
+            'Manager': ['profile', 'construction', 'factory-live-os', 'dashboard', 'data-v2', 'customer-import', 'universal-intake', 'jobs', 'livestock', 'inventory', 'recipes', 'products', 'delivery', 'order-summary', 'dispatch', 'production', 'report-history', 'hr', 'simple-stock', 'maintenance', 'lorry-management', 'iot', 'driver-management', 'operators', 'leave-calendar', 'personal-report', 'machine-schedule', 'machine-labels', 'activity-logs', 'floor-plan', 'stock-movement', 'stock-audit', 'audit-report', 'reports', 'notes', 'tasks', 'sop-center', 'work-photos', 'executive-reports', 'driver-leave', 'scanner'],
             'LogisticsCoordinator': ['profile', 'construction', 'dashboard', 'livestock', 'delivery', 'order-summary', 'products', 'maintenance', 'driver-management', 'leave-calendar', 'personal-report', 'activity-logs', 'notes', 'tasks', 'sop-center', 'work-photos', 'reports'],
             'Driver': ['delivery-driver', 'delivery-history', 'leave-calendar', 'lorry-service', 'profile', 'personal-report', 'activity-logs', 'notes', 'tasks', 'sop-center', 'work-photos', 'driver-leave'],
             'Operator': ['scanner', 'leave-calendar', 'profile', 'personal-report', 'activity-logs', 'notes', 'tasks', 'sop-center', 'work-photos', 'order-summary'],
@@ -767,6 +767,8 @@ function App() {
                 return <PersonalMonthlyReport user={user} />;
             case 'machine-schedule':
                 return <MachineSchedule user={user} />;
+            case 'machine-labels':
+                return <MachineLabels />;
             case 'activity-logs':
                 return <ActivityLogs user={user} />;
             case 'data':

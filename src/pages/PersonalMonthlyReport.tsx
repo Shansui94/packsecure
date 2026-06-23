@@ -33,6 +33,15 @@ interface DailyMetrics {
         items: any[];
         notes: string;
         displayString: string;
+        pod_photo_url?: string | null;
+        pod_signature_url?: string | null;
+        proof_of_load_url?: string | null;
+        driver_id?: string | null;
+        trip_origin?: string | null;
+        zone?: string | null;
+        trip_drop_count?: number;
+        delivery_address?: string | null;
+        earnings?: number;
     }[];
     photoCount: number;
     photos: any[];
@@ -515,7 +524,9 @@ const PersonalMonthlyReport: React.FC<Props> = ({ user }) => {
                         date: day.dateStr,
                         plateNumber: driverLorryPlate,
                         origin: trip.trip_origin || 'TAIPING',
-                        destination: trip.zone || 'Unknown',
+                        destinations: trip.delivery_address || 'Unknown',
+                        tripCategory: trip.zone || 'Unknown',
+                        totalDrops: trip.trip_drop_count || 1,
                         price: trip.earnings || 0
                     });
                 });
@@ -532,7 +543,9 @@ const PersonalMonthlyReport: React.FC<Props> = ({ user }) => {
             'Tarikh / Date': t.date,
             'No. Pendaftaran Lorry / Lorry Plate Number': t.plateNumber,
             'Tempat Asal / Origin': t.origin,
-            'Destinasi / Destination': t.destination,
+            'Destinasi / Destinations': t.destinations,
+            'Kategori Trip / Trip Category': t.tripCategory,
+            'Jumlah Drops / Total Drops': t.totalDrops,
             'Harga / Price (RM)': t.price
         }));
 
@@ -545,7 +558,9 @@ const PersonalMonthlyReport: React.FC<Props> = ({ user }) => {
             { wch: 15 }, // Date
             { wch: 25 }, // Lorry Plate Number
             { wch: 20 }, // Origin
-            { wch: 30 }, // Destination
+            { wch: 35 }, // Destinations
+            { wch: 20 }, // Trip Category
+            { wch: 15 }, // Total Drops
             { wch: 15 }  // Price
         ];
 
@@ -722,6 +737,7 @@ const PersonalMonthlyReport: React.FC<Props> = ({ user }) => {
                     trip_origin: t.trip_origin || null,
                     zone: t.zone || null,
                     trip_drop_count: t.trip_drop_count || 1,
+                    delivery_address: t.delivery_address || null,
                     earnings: tEarnings,
                     displayString: `${originRaw} ➞ ${displayZone} (${drops} Drop${drops > 1 ? 's' : ''})`
                 });

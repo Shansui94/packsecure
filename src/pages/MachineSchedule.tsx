@@ -1,7 +1,8 @@
 import React, { useState, useEffect, useMemo } from 'react';
 import { supabase } from '../services/supabase';
-import { Clock, Package, BarChart3, ShieldCheck, User, CalendarDays, Settings2, Calendar as CalendarIcon } from 'lucide-react';
+import { Clock, Package, BarChart3, ShieldCheck, User, CalendarDays, Settings2, Calendar as CalendarIcon, Download } from 'lucide-react';
 import { MACHINES } from '../data/factoryData';
+import { mytTodayYmd } from '../utils/mytDate';
 
 interface MachineRate {
     id: string;
@@ -20,8 +21,8 @@ interface UserData {
 
 const MachineSchedule: React.FC<{ user?: any }> = () => {
     const [viewMode, setViewMode] = useState<'daily' | 'monthly'>('daily');
-    const [selectedDate, setSelectedDate] = useState<string>(new Date().toISOString().split('T')[0]);
-    const [selectedMonth, setSelectedMonth] = useState<string>(new Date().toISOString().slice(0, 7)); // YYYY-MM
+    const [selectedDate, setSelectedDate] = useState<string>(mytTodayYmd());
+    const [selectedMonth, setSelectedMonth] = useState<string>(mytTodayYmd().slice(0, 7)); // YYYY-MM
     
     const [showRates, setShowRates] = useState(false);
     const [expandedCalendars, setExpandedCalendars] = useState<Record<string, boolean>>({});
@@ -58,13 +59,15 @@ const MachineSchedule: React.FC<{ user?: any }> = () => {
         let endIso = '';
 
         if (viewMode === 'daily') {
-            startIso = `${selectedDate}T00:00:00Z`;
-            endIso = `${selectedDate}T23:59:59Z`;
+            startIso = new Date(`${selectedDate}T00:00:00+08:00`).toISOString();
+            endIso = new Date(`${selectedDate}T23:59:59.999+08:00`).toISOString();
         } else {
             const startDate = `${selectedMonth}-01`;
-            const nextMonth = new Date(new Date(startDate).setMonth(new Date(startDate).getMonth() + 1)).toISOString().slice(0, 7);
-            startIso = `${startDate}T00:00:00Z`;
-            endIso = `${nextMonth}-01T00:00:00Z`;
+            const start = new Date(`${startDate}T00:00:00+08:00`);
+            const nextMonth = new Date(start.getTime());
+            nextMonth.setMonth(nextMonth.getMonth() + 1);
+            startIso = start.toISOString();
+            endIso = nextMonth.toISOString();
         }
 
         const fetchStartIso = new Date(new Date(startIso).getTime() - 14 * 3600000).toISOString();
@@ -121,20 +124,77 @@ const MachineSchedule: React.FC<{ user?: any }> = () => {
         setExpandedCalendars(prev => ({ ...prev, [machineId]: !prev[machineId] }));
     };
 
-    // ── CORE REPORT GENERATION ──
+    const handleExportCSV = () => {
+        if (!reportData || reportData.length === 0) {
+            alert("No data available to export.");
+            return;
+        }
+
+        const headers = [
+            'Machine ID',
+            'Machine Name',
+            'Operator Name',
+            'Role',
+            'Total Hours',
+            'Produced Rolls',
+            'Night Shifts',
+            'OT Hours',
+            'Rate',
+            'Earned Salary (RM)'
+        ];
+
+        const rows: any[] = [];
+        reportData.forEach(m => {
+            m.operators.forEach((op: any) => {
+                const rateText = op.calcMode === 'hourly' 
+                    ? `RM ${(op.rateInfo?.operator_hourly_rate || 0).toFixed(2)}/h` 
+                    : `RM ${(op.rateInfo?.manager_piece_rate || 0).toFixed(2)}/roll`;
+                rows.push([
+                    m.machine_id,
+                    m.machine_name,
+                    op.name,
+                    op.role,
+                    op.totalHours.toFixed(1),
+                    op.totalRolls,
+                    op.nightShifts,
+                    op.otHours.toFixed(1),
+                    rateText,
+                    op.finalWage.toFixed(2)
+                ]);
+            });
+        });
+
+        const csvContent = [
+            headers.join(','),
+            ...rows.map(row => row.map(val => `"${String(val).replace(/"/g, '""')}"`).join(','))
+        ].join('\n');
+
+        const blob = new Blob([new Uint8Array([0xEF, 0xBB, 0xBF]), csvContent], { type: 'text/csv;charset=utf-8;' });
+        const url = URL.createObjectURL(blob);
+        const link = document.createElement("a");
+        link.setAttribute("href", url);
+        const fileName = `Production_Wage_Report_${viewMode === 'daily' ? selectedDate : selectedMonth}.csv`;
+        link.setAttribute("download", fileName);
+        document.body.appendChild(link);
+        link.click();
+        document.body.removeChild(link);
+    };
+
     const reportData = useMemo(() => {
         const report: any[] = [];
         
         let windowStart = 0;
         let windowEnd = 0;
         if (viewMode === 'daily') {
-            windowStart = new Date(`${selectedDate}T00:00:00Z`).getTime();
-            windowEnd = new Date(`${selectedDate}T23:59:59Z`).getTime();
+            windowStart = new Date(`${selectedDate}T00:00:00+08:00`).getTime();
+            windowEnd = new Date(`${selectedDate}T23:59:59.999+08:00`).getTime();
         } else {
             const startDate = `${selectedMonth}-01`;
-            const nextMonth = new Date(new Date(startDate).setMonth(new Date(startDate).getMonth() + 1)).toISOString().slice(0, 7);
-            windowStart = new Date(`${startDate}T00:00:00Z`).getTime();
-            windowEnd = new Date(`${nextMonth}-01T00:00:00Z`).getTime();
+            const start = new Date(`${startDate}T00:00:00+08:00`);
+            const nextMonth = new Date(start.getTime());
+            nextMonth.setMonth(nextMonth.getMonth() + 1);
+            windowStart = start.getTime();
+            windowEnd = nextMonth.getTime();
         }
 
         MACHINES.forEach(machine => {
@@ -142,7 +202,16 @@ const MachineSchedule: React.FC<{ user?: any }> = () => {
             
             const opsOnMachine = new Set<string>();
             
-            attendance.filter(a => a.machine_id === machine.id).forEach(a => opsOnMachine.add(a.operator_id));
+            attendance.filter(a => a.machine_id === machine.id).forEach(a => {
+                if (!a.clock_in) return;
+                const shiftStart = new Date(a.clock_in).getTime();
+                const shiftEnd = a.clock_out ? new Date(a.clock_out).getTime() : Math.min(new Date().getTime(), shiftStart + 14 * 3600000);
+                const overlapStart = Math.max(windowStart, shiftStart);
+                const overlapEnd = Math.min(windowEnd, shiftEnd);
+                if (overlapEnd - overlapStart > 60000) {
+                    opsOnMachine.add(a.operator_id);
+                }
+            });
             
             logs.filter(l => l.machine_id === machine.id && l.operator_id).forEach(l => {
                 const logOpStr = String(l.operator_id).trim().toLowerCase();
@@ -180,9 +249,9 @@ const MachineSchedule: React.FC<{ user?: any }> = () => {
                     const overlapStart = Math.max(windowStart, shiftStart);
                     const overlapEnd = Math.min(windowEnd, shiftEnd);
                     
-                    if (overlapEnd > overlapStart) {
+                    if (overlapEnd - overlapStart > 60000) {
                         const formatTime = (ts: number) => {
-                            return new Date(ts).toLocaleTimeString('en-US', { hour: '2-digit', minute: '2-digit', hour12: true });
+                            return new Date(ts).toLocaleTimeString('en-US', { hour: '2-digit', minute: '2-digit', hour12: true, timeZone: 'Asia/Kuala_Lumpur' });
                         };
                         timeSlots.push(`${formatTime(overlapStart)} - ${formatTime(overlapEnd)}`);
                         return sum + (overlapEnd - overlapStart) / 3600000;
@@ -203,20 +272,21 @@ const MachineSchedule: React.FC<{ user?: any }> = () => {
                     const overlapStart = Math.max(windowStart, shiftStart);
                     const overlapEnd = Math.min(windowEnd, shiftEnd);
                     
-                    if (overlapEnd <= overlapStart) return; // Ignore shifts that don't overlap the view window
+                    if (overlapEnd - overlapStart <= 60000) return; // Ignore shifts that don't overlap the view window (ignore < 60s overlaps)
                     
                     let currentStart = overlapStart;
                     while (currentStart < overlapEnd) {
-                        const d = new Date(currentStart);
-                        const nextMidnight = new Date(d.getFullYear(), d.getMonth(), d.getDate() + 1).getTime();
-                        const chunkEnd = Math.min(overlapEnd, nextMidnight);
-                        
-                        const localY = d.getFullYear();
-                        const localM = String(d.getMonth() + 1).padStart(2, '0');
-                        const localD = String(d.getDate()).padStart(2, '0');
+                        const mytDate = new Date(currentStart + 8 * 3600000);
+                        const localY = mytDate.getUTCFullYear();
+                        const localM = String(mytDate.getUTCMonth() + 1).padStart(2, '0');
+                        const localD = String(mytDate.getUTCDate()).padStart(2, '0');
                         const dateKey = `${localY}-${localM}-${localD}`;
                         
-                        const hour = d.getHours();
+                        const nextMidnightMyt = Date.UTC(localY, mytDate.getUTCMonth(), mytDate.getUTCDate() + 1);
+                        const nextMidnight = nextMidnightMyt - 8 * 3600000;
+                        const chunkEnd = Math.min(overlapEnd, nextMidnight);
+                        
+                        const hour = mytDate.getUTCHours();
                         const isNight = hour >= 18 || hour < 6;
                         
                         if (!attByDate[dateKey]) {
@@ -330,7 +400,7 @@ const MachineSchedule: React.FC<{ user?: any }> = () => {
     }, [attendance, logs, rates, users, viewMode]);
 
     const totalPayout = reportData.reduce((sum, m) => sum + m.operators.reduce((opSum: number, op: any) => opSum + op.finalWage, 0), 0);
-    const totalRolls = reportData.reduce((sum, m) => sum + m.operators.reduce((opSum: number, op: any) => opSum + op.totalRolls, 0), 0);
+    const totalRolls = logs.reduce((sum, l) => sum + (Number(l.output_qty) || 0), 0);
 
     // Get days in selected month for calendar
     const daysInMonth = useMemo(() => {
@@ -376,6 +446,10 @@ const MachineSchedule: React.FC<{ user?: any }> = () => {
 
                         <button onClick={() => setShowRates(!showRates)} className={`flex items-center gap-2 px-4 py-2 rounded-xl font-bold text-sm transition-all duration-300 border ${showRates ? 'bg-purple-600/20 text-purple-400 border-purple-500/30' : 'bg-white/5 text-gray-400 border-white/10 hover:text-white'}`}>
                             <Settings2 size={16} /> Machine Rates
+                        </button>
+
+                        <button onClick={handleExportCSV} className="flex items-center gap-2 px-4 py-2 rounded-xl font-bold text-sm transition-all duration-300 bg-blue-600 text-white hover:bg-blue-700">
+                            <Download size={16} /> Export CSV
                         </button>
                     </div>
                 </div>
@@ -611,8 +685,8 @@ const MachineSchedule: React.FC<{ user?: any }> = () => {
                                                                                             {hasOverlap && <span className="text-red-400" title="Overlapping logs">🔗</span>}
                                                                                         </div>
                                                                                         {dayData.logs.map((l: any, i: number) => {
-                                                                                            const tIn = l.clock_in ? new Date(l.clock_in).toLocaleTimeString('en-MY', { hour: '2-digit', minute: '2-digit', hour12: false }) : '?';
-                                                                                            const tOut = l.clock_out ? new Date(l.clock_out).toLocaleTimeString('en-MY', { hour: '2-digit', minute: '2-digit', hour12: false }) : 'Active';
+                                                                                            const tIn = l.clock_in ? new Date(l.clock_in).toLocaleTimeString('en-MY', { hour: '2-digit', minute: '2-digit', hour12: false, timeZone: 'Asia/Kuala_Lumpur' }) : '?';
+                                                                                            const tOut = l.clock_out ? new Date(l.clock_out).toLocaleTimeString('en-MY', { hour: '2-digit', minute: '2-digit', hour12: false, timeZone: 'Asia/Kuala_Lumpur' }) : 'Active';
                                                                                             return <div key={i} className="font-mono text-gray-300 flex justify-between gap-4">
                                                                                                 <span className="text-gray-500">Log {i+1}:</span> 
                                                                                                 <span><span className="text-green-400">{tIn}</span> → <span className={l.clock_out ? "text-red-400" : "text-cyan-400 animate-pulse"}>{tOut}</span></span>

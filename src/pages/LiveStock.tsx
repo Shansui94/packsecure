@@ -210,10 +210,14 @@ const DetailPanel: React.FC<{ item: StockRow; locFilter: string; onClose: () => 
         });
     }, [item.sku, locFilter, timeFilter, selectedDate]);
 
-    const totalIn = ledger.filter(r => r.change_qty > 0).reduce((s, r) => s + r.change_qty, 0);
-    const totalOut = ledger.filter(r => r.change_qty < 0).reduce((s, r) => s + Math.abs(r.change_qty), 0);
+    const groupedData = groupLedgerAndSplit(ledger);
+    const ledgerIn = groupedData.in;
+    const ledgerOut = groupedData.out;
 
-    const groupLedgerAndSplit = (records: LedgerRow[]) => {
+    const totalIn = ledgerIn.reduce((s, r) => s + r.change_qty, 0);
+    const totalOut = ledgerOut.reduce((s, r) => s + Math.abs(r.change_qty), 0);
+
+    function groupLedgerAndSplit(records: LedgerRow[]) {
         const grouped: LedgerRow[] = [];
         records.forEach(r => {
             const dateStr = new Date(r.timestamp).toLocaleDateString('en-MY');
@@ -258,11 +262,9 @@ const DetailPanel: React.FC<{ item: StockRow; locFilter: string; onClose: () => 
             in: grouped.filter(r => r.change_qty > 0),
             out: grouped.filter(r => r.change_qty < 0)
         };
-    };
+    }
 
-    const groupedData = groupLedgerAndSplit(ledger);
-    const ledgerIn = groupedData.in;
-    const ledgerOut = groupedData.out;
+    // Already aggregated and declared above for totalIn/totalOut calculations
 
     const renderRow = (row: LedgerRow) => {
         const style = getEventStyle(row.event_type, row.change_qty);

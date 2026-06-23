@@ -7,7 +7,8 @@ import { generateDraftTripsWithDrivers, DraftTrip } from '../utils/autoRouting';
 import {
     Plus, Search, Calendar, FileText, X, Truck,
     User as UserIcon, Box, Zap, Trash2, Scissors, AlertTriangle, MapPin, Wrench, LayoutGrid, List, ArrowUp, ArrowDown,
-    CheckCircle, XCircle, Camera, Sparkles, ImagePlus, Download
+    CheckCircle, XCircle, Camera, Sparkles, ImagePlus, Download,
+    RotateCcw, RefreshCw
 } from 'lucide-react';
 import { WAREHOUSES } from '../data/factoryData';
 import {
@@ -955,7 +956,14 @@ const DeliveryOrderManagement: React.FC = () => {
         // 1. Get all orders for the DESTINATION driver
         const destinationOrders = filteredOrders
             .filter(o => o.driverId === newDriverId)
-            .sort((a, b) => (a.tripSequence || 0) - (b.tripSequence || 0));
+            .sort((a, b) => {
+                const dateA = a.deadline || '';
+                const dateB = b.deadline || '';
+                if (dateA !== dateB) {
+                    return dateA.localeCompare(dateB);
+                }
+                return (a.tripSequence || 0) - (b.tripSequence || 0);
+            });
 
         // 2. Insert the moved item into the new position
         const movedOrder = orders.find(o => o.id === orderId);
@@ -1035,6 +1043,54 @@ const DeliveryOrderManagement: React.FC = () => {
 
         } catch (err: any) {
             alert("Delete failed: " + err.message);
+        }
+    };
+
+    // Restore Cancelled/Delivered Order to Loaded Status
+    const handleRestoreToLoaded = async (order: SalesOrder) => {
+        if (!window.confirm(`Are you sure you want to restore Order ${order.orderNumber} to LOADED status?\nThis will make it active under the assigned driver.`)) return;
+
+        try {
+            const { error } = await supabase
+                .from('sales_orders')
+                .update({ status: 'Loaded' })
+                .eq('id', order.id);
+
+            if (error) throw error;
+
+            alert(`✅ Order ${order.orderNumber} restored to Loaded!`);
+
+            // Optimistic update
+            setOrders(prev => prev.map(o => o.id === order.id ? { ...o, status: 'Loaded' } : o));
+            await fetchData();
+        } catch (err: any) {
+            alert("Restore failed: " + err.message);
+        }
+    };
+
+    // Reset Order to New Status and clear driver
+    const handleResetToNew = async (order: SalesOrder) => {
+        if (!window.confirm(`Are you sure you want to reset Order ${order.orderNumber} to NEW status?\nThis will clear driver assignments and return it to the unassigned pool.`)) return;
+
+        try {
+            const { error } = await supabase
+                .from('sales_orders')
+                .update({ 
+                    status: 'New',
+                    driver_id: null,
+                    trip_sequence: 999
+                })
+                .eq('id', order.id);
+
+            if (error) throw error;
+
+            alert(`✅ Order ${order.orderNumber} reset to New status!`);
+
+            // Optimistic update
+            setOrders(prev => prev.map(o => o.id === order.id ? { ...o, status: 'New', driverId: undefined, driver_id: undefined } : o));
+            await fetchData();
+        } catch (err: any) {
+            alert("Reset failed: " + err.message);
         }
     };
 
@@ -1720,7 +1776,14 @@ const DeliveryOrderManagement: React.FC = () => {
         const driverId = orderToMove.driverId;
         const driverOrders = filteredOrders
             .filter(o => o.driverId === driverId)
-            .sort((a, b) => (a.tripSequence || 0) - (b.tripSequence || 0));
+            .sort((a, b) => {
+                const dateA = a.deadline || '';
+                const dateB = b.deadline || '';
+                if (dateA !== dateB) {
+                    return dateA.localeCompare(dateB);
+                }
+                return (a.tripSequence || 0) - (b.tripSequence || 0);
+            });
 
         const idx = driverOrders.findIndex(o => o.id === orderId);
         if (idx === -1) return;
@@ -1776,7 +1839,14 @@ const DeliveryOrderManagement: React.FC = () => {
             if (driverId) {
                 const remainingOrders = filteredOrders
                     .filter(o => o.driverId === driverId && o.id !== orderId)
-                    .sort((a, b) => (a.tripSequence || 0) - (b.tripSequence || 0));
+                    .sort((a, b) => {
+                        const dateA = a.deadline || '';
+                        const dateB = b.deadline || '';
+                        if (dateA !== dateB) {
+                            return dateA.localeCompare(dateB);
+                        }
+                        return (a.tripSequence || 0) - (b.tripSequence || 0);
+                    });
 
                 const updates = remainingOrders.map((o, index) =>
                     supabase.from('sales_orders').update({ trip_sequence: index + 1 }).eq('id', o.id)
@@ -2749,7 +2819,14 @@ const DeliveryOrderManagement: React.FC = () => {
                             .map(driver => {
                                 const driverOrders = filteredOrders
                                     .filter(o => o.driverId === driver.uid)
-                                    .sort((a, b) => (a.tripSequence || 0) - (b.tripSequence || 0));
+                                    .sort((a, b) => {
+                                        const dateA = a.deadline || '';
+                                        const dateB = b.deadline || '';
+                                        if (dateA !== dateB) {
+                                            return dateA.localeCompare(dateB);
+                                        }
+                                        return (a.tripSequence || 0) - (b.tripSequence || 0);
+                                    });
                                 
                                 const allItems = driverOrders.flatMap(o => o.items || []);
                                 const lorry = lorries.find(l => l.driverUserId === driver.uid);
@@ -2909,7 +2986,14 @@ const DeliveryOrderManagement: React.FC = () => {
                                 }
                                 return o.driverId === driver.uid;
                             })
-                            .sort((a, b) => (a.tripSequence || 0) - (b.tripSequence || 0)); // Ensure visual order matches logical order for DnD
+                            .sort((a, b) => {
+                                const dateA = a.deadline || '';
+                                const dateB = b.deadline || '';
+                                if (dateA !== dateB) {
+                                    return dateA.localeCompare(dateB);
+                                }
+                                return (a.tripSequence || 0) - (b.tripSequence || 0);
+                            }); // Ensure visual order matches logical order for DnD
 
                         if (driverOrders.length === 0 && hasActiveListFilters && driver.uid !== 'unassigned') return null;
                         // Always show Unassigned column if there are orders, or if we are in default view
@@ -3287,20 +3371,49 @@ const DeliveryOrderManagement: React.FC = () => {
                                                     <span className="text-xs bg-[#18181b] border border-[#27272a] text-slate-300 font-bold px-2 py-1.5 rounded-lg shadow-sm">{(order.items || []).length} items</span>
                                                 </td>
                                                 <td className="p-4 text-right">
-                                                    <div className="flex items-center justify-end gap-1.5 opacity-100 lg:opacity-0 group-hover:opacity-100 transition-opacity">
-                                                        <button onClick={(e) => { e.stopPropagation(); handleDeleteOrder(order.id, order.orderNumber); }} className="p-2 text-red-500 bg-red-500/10 hover:bg-red-500/20 rounded-md transition-colors" title="Cancel">
-                                                            <Trash2 size={16} />
-                                                        </button>
-                                                        <button onClick={(e) => { e.stopPropagation(); setReassignOrder(order); setIsReassignModalOpen(true); }} className="p-2 text-blue-400 bg-blue-500/10 hover:bg-blue-500/20 rounded-md transition-colors" title="Change Driver">
-                                                            <UserIcon size={16} />
-                                                        </button>
-                                                        <button onClick={(e) => { e.stopPropagation(); setSplitOrder(order); setSplitItems({}); setSplitTargetDriverId(''); setSplitTargetDate(''); setIsSplitModalOpen(true); }} className="p-2 text-orange-400 bg-orange-500/10 hover:bg-orange-500/20 rounded-md transition-colors" title="Split Order">
-                                                            <Scissors size={16} />
-                                                        </button>
-                                                        {order.status === 'Pending Approval' && (
-                                                            <button onClick={(e) => { e.stopPropagation(); handleApproveAmendment(order); }} className="p-2 text-white bg-red-600 hover:bg-red-500 shadow-md shadow-red-900/50 rounded-md transition-colors" title="Approve">
-                                                                <Zap size={16} />
+                                                    <div className={`flex items-center justify-end gap-1.5 ${['Cancelled', 'Delivered'].includes(order.status) ? '' : 'opacity-100 lg:opacity-0 group-hover:opacity-100 transition-opacity'}`}>
+                                                        {order.status === 'Cancelled' ? (
+                                                            <>
+                                                                <button
+                                                                    onClick={(e) => { e.stopPropagation(); handleRestoreToLoaded(order); }}
+                                                                    className="px-2.5 py-1.5 text-emerald-400 bg-emerald-500/10 hover:bg-emerald-500/20 hover:text-emerald-300 rounded-md transition-all text-[10px] font-bold uppercase tracking-wider flex items-center gap-1"
+                                                                    title="Restore to Loaded status under the assigned driver"
+                                                                >
+                                                                    <RotateCcw size={13} /> Re-Activate (Loaded)
+                                                                </button>
+                                                                <button
+                                                                    onClick={(e) => { e.stopPropagation(); handleResetToNew(order); }}
+                                                                    className="px-2.5 py-1.5 text-blue-400 bg-blue-500/10 hover:bg-blue-500/20 hover:text-blue-300 rounded-md transition-all text-[10px] font-bold uppercase tracking-wider flex items-center gap-1"
+                                                                    title="Reset to New status and clear driver"
+                                                                >
+                                                                    <RefreshCw size={13} /> Reset to New
+                                                                </button>
+                                                            </>
+                                                        ) : order.status === 'Delivered' ? (
+                                                            <button
+                                                                onClick={(e) => { e.stopPropagation(); handleRestoreToLoaded(order); }}
+                                                                className="px-2.5 py-1.5 text-amber-400 bg-amber-500/10 hover:bg-amber-500/20 hover:text-amber-300 rounded-md transition-all text-[10px] font-bold uppercase tracking-wider flex items-center gap-1"
+                                                                title="Revert back to Loaded status (Undeliver)"
+                                                            >
+                                                                <RotateCcw size={13} /> Revert to Loaded
                                                             </button>
+                                                        ) : (
+                                                            <>
+                                                                <button onClick={(e) => { e.stopPropagation(); handleDeleteOrder(order.id, order.orderNumber); }} className="p-2 text-red-500 bg-red-500/10 hover:bg-red-500/20 rounded-md transition-colors" title="Cancel">
+                                                                    <Trash2 size={16} />
+                                                                </button>
+                                                                <button onClick={(e) => { e.stopPropagation(); setReassignOrder(order); setIsReassignModalOpen(true); }} className="p-2 text-blue-400 bg-blue-500/10 hover:bg-blue-500/20 rounded-md transition-colors" title="Change Driver">
+                                                                    <UserIcon size={16} />
+                                                                </button>
+                                                                <button onClick={(e) => { e.stopPropagation(); setSplitOrder(order); setSplitItems({}); setSplitTargetDriverId(''); setSplitTargetDate(''); setIsSplitModalOpen(true); }} className="p-2 text-orange-400 bg-orange-500/10 hover:bg-orange-500/20 rounded-md transition-colors" title="Split Order">
+                                                                    <Scissors size={16} />
+                                                                </button>
+                                                                {order.status === 'Pending Approval' && (
+                                                                    <button onClick={(e) => { e.stopPropagation(); handleApproveAmendment(order); }} className="p-2 text-white bg-red-600 hover:bg-red-500 shadow-md shadow-red-900/50 rounded-md transition-colors" title="Approve">
+                                                                        <Zap size={16} />
+                                                                    </button>
+                                                                )}
+                                                            </>
                                                         )}
                                                     </div>
                                                 </td>
