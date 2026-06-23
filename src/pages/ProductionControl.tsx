@@ -2317,7 +2317,7 @@ const ProductionControl: React.FC<ProductionControlProps> = ({ user, jobs = [] }
                                                             Cancel / 取消
                                                         </button>
                                                         <button 
-                                                            onClick={handlePhotoSubmit} 
+                                                            onClick={submitPhotoLog} 
                                                             disabled={uploadingPhoto || !photoBase64}
                                                             className="px-6 py-2 bg-purple-600 hover:bg-purple-500 disabled:bg-purple-600/50 disabled:cursor-not-allowed text-white font-bold text-xs rounded-xl flex items-center gap-1.5 transition-all active:scale-95 shadow-lg shadow-purple-500/10 border border-purple-500/20"
                                                         >
