@@ -2140,12 +2140,14 @@ const ProductionControl: React.FC<ProductionControlProps> = ({ user, jobs = [] }
                                             </p>
                                         </div>
                                     </div>
-                                    <button
-                                        onClick={() => initiateTakeover(selectedMachine!)}
-                                        className="px-3 py-2 bg-green-500/10 hover:bg-green-500/20 text-green-400 rounded-xl text-[10px] font-black uppercase tracking-wider transition-all border border-green-500/20 active:scale-95 shrink-0 cursor-pointer"
-                                    >
-                                        🔄 切换人
-                                    </button>
+                                    {user && user.role !== 'Operator' && (
+                                        <button
+                                            onClick={() => initiateTakeover(selectedMachine!)}
+                                            className="px-3 py-2 bg-green-500/10 hover:bg-green-500/20 text-green-400 rounded-xl text-[10px] font-black uppercase tracking-wider transition-all border border-green-500/20 active:scale-95 shrink-0 cursor-pointer"
+                                        >
+                                            🔄 切换人
+                                        </button>
+                                    )}
                                 </div>
                             ) : (
                                 <div className="bg-amber-500/5 border border-amber-500/20 p-4 rounded-xl flex items-center justify-between gap-4">
@@ -2159,12 +2161,14 @@ const ProductionControl: React.FC<ProductionControlProps> = ({ user, jobs = [] }
                                             <p className="text-[10px] text-gray-500 mt-1 truncate">Please bind an operator to select and start production.</p>
                                         </div>
                                     </div>
-                                    <button
-                                        onClick={() => initiateTakeover(selectedMachine!)}
-                                        className="px-3 py-2 bg-amber-500/10 hover:bg-amber-500/20 text-amber-400 rounded-xl text-[10px] font-black uppercase tracking-wider transition-all border border-amber-500/20 active:scale-95 shrink-0 cursor-pointer"
-                                    >
-                                        🔑 绑定操作员
-                                    </button>
+                                    {user && user.role !== 'Operator' && (
+                                        <button
+                                            onClick={() => initiateTakeover(selectedMachine!)}
+                                            className="px-3 py-2 bg-amber-500/10 hover:bg-amber-500/20 text-amber-400 rounded-xl text-[10px] font-black uppercase tracking-wider transition-all border border-amber-500/20 active:scale-95 shrink-0 cursor-pointer"
+                                        >
+                                            🔑 绑定操作员
+                                        </button>
+                                    )}
                                 </div>
                             )}
 
