@@ -1280,6 +1280,7 @@ const ProductionControl: React.FC<ProductionControlProps> = ({ user, jobs = [] }
                         localStorage.setItem(`operatorClockInTime_${operatorEmployeeId}`, newClockIn);
                     }
                     setClockInTime(newClockIn);
+                    alert(`✅ 成功绑定并登录机台！\nSuccessfully bound to ${selectedMachine}!`);
                 }
 
                 // Force sync operator_id in machine_active_products to prevent ghost operators
@@ -1328,6 +1329,8 @@ const ProductionControl: React.FC<ProductionControlProps> = ({ user, jobs = [] }
                 .update({ operator_id: null })
                 .eq('machine_id', selectedMachine);
 
+            const prevMachine = selectedMachine;
+
             if (operatorEmployeeId) {
                 localStorage.removeItem(`operatorClockInTime_${operatorEmployeeId}`);
             }
@@ -1337,6 +1340,8 @@ const ProductionControl: React.FC<ProductionControlProps> = ({ user, jobs = [] }
             localStorage.removeItem('device_machine_id');
             setSelectedMachine(null);
             setMachineMetadata(null);
+
+            alert(`👋 登出成功！已退出机台 ${prevMachine}。\nClock out successful! Unbound from ${prevMachine}.`);
 
         } catch (err) {
             console.error("Failed to clock out:", err);
