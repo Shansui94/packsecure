@@ -1289,6 +1289,9 @@ const ProductionControl: React.FC<ProductionControlProps> = ({ user, jobs = [] }
                         .update({ operator_id: operatorId })
                         .eq('machine_id', selectedMachine);
                 }
+
+                // 确保打卡同步落库后，立即主动拉取当前机台的活动操作员，以刷新 UI 状态
+                await fetchMachineOperator();
             } catch (err) {
                 console.error("Failed to sync attendance:", err);
             }
