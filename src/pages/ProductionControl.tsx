@@ -969,8 +969,13 @@ const ProductionControl: React.FC<ProductionControlProps> = ({ user, jobs = [] }
     const handleMachineTabClick = (machineId: string) => {
         if (selectedMachine === machineId) return; // Already selected
         
-        // Reset control mode to false (Monitor Mode) when switching tabs to prevent auto-takeover on the new machine
-        setIsControlMode(false);
+        // Reset control mode to false (Monitor Mode) when switching tabs for managers,
+        // but Operators must always be in Control Mode.
+        if (user && user.role === 'Operator') {
+            setIsControlMode(true);
+        } else {
+            setIsControlMode(false);
+        }
         
         sessionStorage.setItem('selectedMachine', machineId);
         localStorage.setItem('device_machine_id', machineId);
