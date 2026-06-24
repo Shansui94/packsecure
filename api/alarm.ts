@@ -8,9 +8,11 @@ const supabase = createClient(supabaseUrl, supabaseKey);
 // ─── Machine Layout Config ────────────────────────────────────────────────────
 const MACHINE_LANES: Record<string, string[]> = {
     'T1.2-M01': ['Lane1', 'Lane2'],
+    'T2-M01': ['Lane1', 'Lane2'],
     'N1-M01': ['Single'],
     'N2-M02': ['Single'],
     'T1.3-M02': ['Single'],
+    'T3-M02': ['Single'],
 };
 const DEFAULT_LANES = ['Single'];
 
@@ -45,17 +47,51 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
             };
         });
 
+        // Resolve operator_id values to sys_users_v2.id (primary key)
+        // operator_id from frontend might be auth_user_id (which fails the FK on production_logs_v2.operator_id)
+        const opIds = Array.from(
+            new Set(
+                (activeProducts || [])
+                    .map((p: any) => p.operator_id)
+                    .filter((id): id is string => !!id)
+            )
+        );
+
+        const opIdMap: Record<string, string> = {};
+        if (opIds.length > 0) {
+            const idList = opIds.map(id => `"${id}"`).join(',');
+            const { data: resolvedOps } = await supabase
+                .from('sys_users_v2')
+                .select('id, auth_user_id')
+                .or(`id.in.(${idList}),auth_user_id.in.(${idList})`);
+
+            if (resolvedOps) {
+                resolvedOps.forEach((op: any) => {
+                    if (op.id) {
+                        opIdMap[op.id] = op.id;
+                    }
+                    if (op.auth_user_id) {
+                        opIdMap[op.auth_user_id] = op.id;
+                    }
+                });
+            }
+        }
+
         const isReboot = (alarm_count === 0);
         
         // --- 1. NATIVE V2 INSERTION ---
         const insertRowsV2 = lanes.map((laneId: string) => {
             const laneData = activeLaneMap[laneId] ?? activeLaneMap['Single'] ?? null;
             const resolvedSku = (laneData?.sku && laneData.sku !== 'UNKNOWN') ? laneData.sku : 'UNKNOWN-BUBBLEWRAP';
+            
+            const rawOpId = laneData?.operator_id;
+            const resolvedOpId = rawOpId ? (opIdMap[rawOpId] || null) : null;
+
             return {
                 machine_id,
                 output_qty: isReboot ? 0 : (laneData?.yield ?? 1),
                 sku: resolvedSku,
-                operator_id: laneData?.operator_id || null,
+                operator_id: resolvedOpId,
             };
         });
 

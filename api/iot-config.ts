@@ -70,7 +70,9 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
             'N1-M01': 100,
             'N2-M02': 100,
             'T1.3-M02': 100,
+            'T3-M02': 100,
             'T1.2-M01': 200,   // 2M double-layer machine → always yields 2x per signal
+            'T2-M01': 200,
             'T1.1-M03': 0
         };
 

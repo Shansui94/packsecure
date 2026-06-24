@@ -79,29 +79,41 @@ const Login: React.FC<LoginProps> = ({ onLogin, onNavigate }) => {
         try {
             let loginEmail = email.trim();
 
-            // 1. Resolve Employee ID to Email (4-digit ID — staff + drivers)
+            // 1. Resolve Employee ID to Email (support 2 to 4 digits with auto padding)
             if (!loginEmail.includes('@')) {
                 const empId = loginEmail.replace(/\D/g, '');
-                if (empId.length !== 4) {
-                    throw new Error('Employee ID must be 4 digits.');
+                if (empId.length < 2 || empId.length > 4) {
+                    throw new Error('Employee ID must be 2 to 4 digits.');
                 }
                 let resolvedEmail: string | null = null;
 
-                const { data: v2User } = await supabase
-                    .from('sys_users_v2')
-                    .select('email')
-                    .eq('employee_id', empId)
-                    .maybeSingle();
+                const resolveByField = async (idVal: string) => {
+                    const { data: v2 } = await supabase
+                        .from('sys_users_v2')
+                        .select('email')
+                        .eq('employee_id', idVal)
+                        .maybeSingle();
+                    if (v2?.email) return v2.email;
 
-                if (v2User?.email) {
-                    resolvedEmail = v2User.email;
-                } else {
-                    const { data: pubUser } = await supabase
+                    const { data: pub } = await supabase
                         .from('users_public')
                         .select('email')
-                        .eq('employee_id', empId)
+                        .eq('employee_id', idVal)
                         .maybeSingle();
-                    resolvedEmail = pubUser?.email ?? null;
+                    return pub?.email ?? null;
+                };
+
+                resolvedEmail = await resolveByField(empId);
+
+                // If not found and entered ID is shorter than 4 digits, try padding with leading zeros
+                if (!resolvedEmail && empId.length < 4) {
+                    const padded3 = empId.padStart(3, '0');
+                    const padded4 = empId.padStart(4, '0');
+
+                    resolvedEmail = await resolveByField(padded3);
+                    if (!resolvedEmail) {
+                        resolvedEmail = await resolveByField(padded4);
+                    }
                 }
 
                 if (!resolvedEmail) {

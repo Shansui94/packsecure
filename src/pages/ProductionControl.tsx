@@ -41,6 +41,15 @@ interface ParsedSku {
     color: PackagingColor;
 }
 
+interface GroupedProductionLog {
+    Log_ID: string;
+    Name: string;
+    SKU: string;
+    Output_Qty: number;
+    Start_Time: string;
+    End_Time: string;
+}
+
 interface ScheduleItem {
     id: string;
     machine_id: string;
@@ -689,7 +698,7 @@ const ProductionControl: React.FC<ProductionControlProps> = ({ user, jobs = [] }
 
     // Active Job State
     const [activeJob, setActiveJob] = useState<JobOrder | null>(null);
-    const [recentLogs, setRecentLogs] = useState<ProductionLog[]>([]);
+    const [recentLogs, setRecentLogs] = useState<GroupedProductionLog[]>([]);
     const [machinePhotos, setMachinePhotos] = useState<any[]>([]);
 
     // Operator ID State
@@ -1474,22 +1483,47 @@ const ProductionControl: React.FC<ProductionControlProps> = ({ user, jobs = [] }
         if (!targetMachine) return;
 
         const { data } = await supabase.from('production_logs_v2')
-            .select('log_id, sku, output_qty, created_at')
+            .select('log_id, sku, output_qty, created_at, master_items_v2(name)')
             .eq('machine_id', targetMachine)
             .not('sku', 'is', null)
             .order('created_at', { ascending: false })
-            .limit(10);
+            .limit(100);
 
         if (data) {
-            const mapped: ProductionLog[] = data.map((log: any) => ({
-                Log_ID: log.log_id,
-                Timestamp: log.created_at,
-                Job_ID: 'N/A',
-                Operator_Email: '',
-                Output_Qty: log.output_qty || 1,
-                Note: log.sku || 'Production Log',
-            }));
-            setRecentLogs(mapped);
+            const groupedMap = new Map<string, GroupedProductionLog>();
+            for (const log of data) {
+                const sku = log.sku;
+                const name = log.master_items_v2?.name || sku || 'Production Log';
+                const qty = Number(log.output_qty) || 1;
+                const time = log.created_at;
+
+                if (groupedMap.has(sku)) {
+                    const currentGroup = groupedMap.get(sku)!;
+                    currentGroup.Output_Qty += qty;
+                    // Since data is ordered descending (newest first), the first one we see is the newest (End_Time).
+                    // As we iterate, we see older ones, so we update Start_Time (earliest).
+                    if (new Date(time) < new Date(currentGroup.Start_Time)) {
+                        currentGroup.Start_Time = time;
+                    }
+                    if (new Date(time) > new Date(currentGroup.End_Time)) {
+                        currentGroup.End_Time = time;
+                    }
+                } else {
+                    groupedMap.set(sku, {
+                        Log_ID: log.log_id,
+                        Name: name,
+                        SKU: sku,
+                        Output_Qty: qty,
+                        Start_Time: time,
+                        End_Time: time,
+                    });
+                }
+            }
+            // Sort grouped logs by End_Time descending so the most recently active product is at the top
+            const sortedGrouped = Array.from(groupedMap.values()).sort((a, b) => 
+                new Date(b.End_Time).getTime() - new Date(a.End_Time).getTime()
+            );
+            setRecentLogs(sortedGrouped);
         }
     };
 
@@ -2782,17 +2816,33 @@ const ProductionControl: React.FC<ProductionControlProps> = ({ user, jobs = [] }
                                     <span className="text-[10px] text-apple-blue font-mono">{recentLogs.length} Records</span>
                                 </div>
                                 <div className="max-h-48 overflow-y-auto custom-scrollbar">
-                                    {recentLogs.map((log) => (
-                                        <div key={log.Log_ID} className="px-4 py-2 border-b border-black/5 dark:border-white/5 hover:bg-black/5 dark:hover:bg-white/5 flex justify-between items-center transition-colors">
-                                            <div>
-                                                <div className="text-xs font-bold text-apple-textMain dark:text-gray-200">
-                                                    {log.Note?.includes('V2 Production:') ? log.Note.replace('V2 Production: ', '') : log.Note}
+                                    {recentLogs.map((log) => {
+                                        const formatTime = (isoString: string) => {
+                                            return new Date(isoString).toLocaleTimeString([], { 
+                                                hour: '2-digit', 
+                                                minute: '2-digit',
+                                                second: '2-digit',
+                                                hour12: false 
+                                            });
+                                        };
+                                        const timeRangeText = log.Start_Time === log.End_Time 
+                                            ? formatTime(log.Start_Time)
+                                            : `${formatTime(log.Start_Time)} - ${formatTime(log.End_Time)}`;
+                                        
+                                        return (
+                                            <div key={log.Log_ID} className="px-4 py-2 border-b border-black/5 dark:border-white/5 hover:bg-black/5 dark:hover:bg-white/5 flex justify-between items-center transition-colors">
+                                                <div>
+                                                    <div className="text-xs font-bold text-apple-textMain dark:text-gray-200">
+                                                        {log.Name}
+                                                    </div>
+                                                    <div className="text-[10px] text-apple-textMuted font-mono">
+                                                        {timeRangeText}
+                                                    </div>
                                                 </div>
-                                                <div className="text-[10px] text-apple-textMuted">{new Date(log.Timestamp).toLocaleTimeString()}</div>
+                                                <div className="text-sm font-black text-apple-blue">+{log.Output_Qty}</div>
                                             </div>
-                                            <div className="text-sm font-black text-apple-blue">+{log.Output_Qty}</div>
-                                        </div>
-                                    ))}
+                                        );
+                                    })}
                                 </div>
                             </div>
                         </div>

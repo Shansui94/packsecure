@@ -960,7 +960,7 @@ const DeliveryOrderManagement: React.FC = () => {
                 const dateA = a.deadline || '';
                 const dateB = b.deadline || '';
                 if (dateA !== dateB) {
-                    return dateA.localeCompare(dateB);
+                    return dateB.localeCompare(dateA); // Date descending (newest on top)
                 }
                 return (a.tripSequence || 0) - (b.tripSequence || 0);
             });
@@ -1780,7 +1780,7 @@ const DeliveryOrderManagement: React.FC = () => {
                 const dateA = a.deadline || '';
                 const dateB = b.deadline || '';
                 if (dateA !== dateB) {
-                    return dateA.localeCompare(dateB);
+                    return dateB.localeCompare(dateA); // Date descending (newest on top)
                 }
                 return (a.tripSequence || 0) - (b.tripSequence || 0);
             });
@@ -1843,7 +1843,7 @@ const DeliveryOrderManagement: React.FC = () => {
                         const dateA = a.deadline || '';
                         const dateB = b.deadline || '';
                         if (dateA !== dateB) {
-                            return dateA.localeCompare(dateB);
+                            return dateB.localeCompare(dateA); // Date descending (newest on top)
                         }
                         return (a.tripSequence || 0) - (b.tripSequence || 0);
                     });
@@ -2823,7 +2823,7 @@ const DeliveryOrderManagement: React.FC = () => {
                                         const dateA = a.deadline || '';
                                         const dateB = b.deadline || '';
                                         if (dateA !== dateB) {
-                                            return dateA.localeCompare(dateB);
+                                            return dateB.localeCompare(dateA); // Date descending (newest on top)
                                         }
                                         return (a.tripSequence || 0) - (b.tripSequence || 0);
                                     });
@@ -2990,7 +2990,7 @@ const DeliveryOrderManagement: React.FC = () => {
                                 const dateA = a.deadline || '';
                                 const dateB = b.deadline || '';
                                 if (dateA !== dateB) {
-                                    return dateA.localeCompare(dateB);
+                                    return dateB.localeCompare(dateA); // Date descending (newest on top)
                                 }
                                 return (a.tripSequence || 0) - (b.tripSequence || 0);
                             }); // Ensure visual order matches logical order for DnD
