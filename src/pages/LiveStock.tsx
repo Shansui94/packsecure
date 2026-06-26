@@ -603,10 +603,12 @@ const LiveStock: React.FC = () => {
             const activeSkus = new Set((masterRes.data || []).map(i => i.sku));
             const activeInventory = (invRes.data || []).filter(r => activeSkus.has(r.sku)).map(r => {
                 const resQty = reservedMap.get(`${r.sku}|${r.loc_id || 'no location'}`) || 0;
+                const currentStockNum = Number(r.current_stock) || 0;
                 return {
                     ...r,
+                    current_stock: currentStockNum,
                     reserved_stock: resQty,
-                    available_stock: (r.current_stock || 0) - resQty
+                    available_stock: currentStockNum - resQty
                 };
             });
 
