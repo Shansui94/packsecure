@@ -209,26 +209,37 @@ const DriverDelivery: React.FC<DriverDeliveryProps> = ({ user }) => {
 
                 // Client-side sort
                 const sorted = mapped.sort((a: any, b: any) => {
-                    // "New" or "Assigned" first (Need Loading)
-                    // "Loaded" next
-                    // "Delivered" last (handled by tab filter)
-                    const statusA = a.status;
-                    const statusB = b.status;
-
-                    const getStatusPriority = (status: string) => {
-                        if (status === 'Assigned' || status === 'New') return 1;
-                        if (status === 'Loaded' || status === 'Pending Approval') return 2;
-                        return 3; // Other statuses, including 'Delivered'
+                    // 1. Get the logical sequence (prioritize trip_sequence, fallback to stop_sequence if valid)
+                    const getSeq = (o: any) => {
+                        if (o.trip_sequence !== undefined && o.trip_sequence !== null && o.trip_sequence !== 999) {
+                            return o.trip_sequence;
+                        }
+                        if (o.tripSequence !== undefined && o.tripSequence !== null && o.tripSequence !== 999) {
+                            return o.tripSequence;
+                        }
+                        if (o.stop_sequence !== undefined && o.stop_sequence !== null && o.stop_sequence !== 999) {
+                            return o.stop_sequence;
+                        }
+                        return 999;
                     };
 
-                    const priorityA = getStatusPriority(statusA);
-                    const priorityB = getStatusPriority(statusB);
-
-                    if (priorityA !== priorityB) {
-                        return priorityA - priorityB;
+                    const seqA = getSeq(a);
+                    const seqB = getSeq(b);
+                    if (seqA !== seqB) {
+                        return seqA - seqB;
                     }
 
-                    return (a.stop_sequence || 999) - (b.stop_sequence || 999);
+                    // 2. If sequence is same, sort by created_at descending (newest first, matches DOM line 585 logic)
+                    const timeA = a.created_at || '';
+                    const timeB = b.created_at || '';
+                    if (timeA !== timeB) {
+                        return timeB.localeCompare(timeA);
+                    }
+
+                    // 3. Fallback to order number descending if created_at is also empty
+                    const numA = a.orderNumber || a.order_number || '';
+                    const numB = b.orderNumber || b.order_number || '';
+                    return numB.localeCompare(numA);
                 });
                 setTasks(sorted);
             }
@@ -1252,8 +1263,10 @@ const DriverDelivery: React.FC<DriverDeliveryProps> = ({ user }) => {
                         <h3 className="font-bold text-slate-500">Tiada pesanan ditemui. / No orders found.</h3>
                     </div>
                 ) : (
-                    displayList.map((order) => (
-                        <div key={order.id} className="bg-slate-900 border border-slate-800 rounded-2xl overflow-hidden shadow-lg relative">
+                    displayList.map((order, index) => {
+                        const isHiddenUpcomingTrip = activeTab === 'todo' && index > 0;
+                        return (
+                            <div key={order.id} className="bg-slate-900 border border-slate-800 rounded-2xl overflow-hidden shadow-lg relative">
                             {/* Status Strip */}
                             <div className={`absolute left-0 top-0 bottom-0 w-1.5 ${order.status === 'Delivered' ? 'bg-green-500' :
                                 order.status === 'Pending Approval' ? 'bg-yellow-500' :
@@ -1285,7 +1298,22 @@ const DriverDelivery: React.FC<DriverDeliveryProps> = ({ user }) => {
                                 </div>
                             </div>
 
-                            {/* Order Notes */}
+                            {/* If it's a hidden upcoming trip, hide details & show a simple tip */}
+                            {isHiddenUpcomingTrip ? (
+                                <div className="px-5 pb-5">
+                                    {order.notes && (
+                                        <div className="mb-4 bg-slate-800/50 p-2.5 rounded-xl border border-slate-700/50">
+                                            <p className="text-[10px] text-slate-500 uppercase font-black mb-1">Nota / Notes</p>
+                                            <p className="text-sm text-slate-300 whitespace-pre-line">{order.notes}</p>
+                                        </div>
+                                    )}
+                                    <div className="p-5 pt-0 border-t border-white/5 bg-slate-950/20 text-center py-4 text-xs font-bold text-slate-500 uppercase tracking-wider flex items-center justify-center gap-2 rounded-xl">
+                                        🚗 TRIP LAIN AKAN DATANG / UPCOMING TRIP (Butiran item tidak dipaparkan / Details hidden)
+                                    </div>
+                                </div>
+                            ) : (
+                                <>
+                                    {/* Order Notes */}
                             {order.notes && (
                                 <div className="mb-4 bg-slate-800/50 p-2 rounded-lg border border-slate-700/50">
                                     <p className="text-[10px] text-slate-500 uppercase font-black mb-1">Nota / Notes</p>
@@ -1464,9 +1492,11 @@ const DriverDelivery: React.FC<DriverDeliveryProps> = ({ user }) => {
                                     )}
                                 </div>
                             )}
+                                </>
+                            )}
                         </div>
-
-                    ))
+                    )
+                })
                 )}
             </div>
 

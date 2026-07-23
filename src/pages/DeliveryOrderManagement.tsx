@@ -1006,22 +1006,35 @@ const DeliveryOrderManagement: React.FC = () => {
 
         // 4. Server Update (Batch)
         try {
+            console.log("onDragEnd: Starting database updates...");
             // A. Update the moved item's driver first (if changed)
             if (newDriverId !== oldDriverId) {
-                await supabase.from('sales_orders').update({ driver_id: newDriverId }).eq('id', orderId);
+                console.log(`onDragEnd: Updating driver_id of ${orderId} to ${newDriverId}`);
+                const { error: driverErr } = await supabase.from('sales_orders').update({ driver_id: newDriverId }).eq('id', orderId);
+                if (driverErr) {
+                    console.error("onDragEnd: Driver update error", driverErr);
+                    throw new Error(`Driver update failed: ${driverErr.message}`);
+                }
             }
 
             // B. Update Sequences for ALL affected items in the destination column
-            // (Naive approach: update all n items. For < 50 items this is fine)
-            const updates = destinationOrders.map((o, index) =>
-                supabase.from('sales_orders').update({ trip_sequence: index + 1 }).eq('id', o.id)
-            );
+            console.log(`onDragEnd: Resequencing ${destinationOrders.length} orders for destination...`);
+            const updates = destinationOrders.map(async (o, index) => {
+                const newSeq = index + 1;
+                console.log(`onDragEnd: Updating order ${o.orderNumber || o.id} to trip_sequence=${newSeq}`);
+                const { error: seqErr } = await supabase.from('sales_orders').update({ trip_sequence: newSeq }).eq('id', o.id);
+                if (seqErr) {
+                    console.error(`onDragEnd: Resequence error for order ${o.id}`, seqErr);
+                    throw new Error(`Resequence failed for order ${o.id}: ${seqErr.message}`);
+                }
+            });
 
             await Promise.all(updates);
+            console.log("onDragEnd: All database updates completed successfully!");
 
-        } catch (err) {
+        } catch (err: any) {
             console.error("Failed to resequence:", err);
-            alert("Sync error. Refreshing...");
+            alert(`Sync error: ${err.message || err}. Refreshing...`);
             fetchData();
         }
     };
@@ -2926,6 +2939,11 @@ const DeliveryOrderManagement: React.FC = () => {
 
                                                             <div className="text-xs text-white font-bold leading-tight mt-1 truncate">{order.customer}</div>
                                                             <div className="text-[10px] text-slate-500 line-clamp-1">{order.deliveryAddress}</div>
+                                                            {order.notes && (
+                                                                <div className="text-[10px] text-amber-500/80 bg-amber-500/5 px-2 py-1 rounded border border-amber-500/10 mt-1 break-all">
+                                                                    📝 {order.notes}
+                                                                </div>
+                                                            )}
 
                                                             <div className="flex gap-2 text-[9px] text-slate-400 font-mono mt-1">
                                                                 <div>V: {orderLoad.totalVol} m³</div>
@@ -3186,6 +3204,12 @@ const DeliveryOrderManagement: React.FC = () => {
                                                                 </div>
                                                             </div>
 
+                                                            {order.notes && (
+                                                                <div className="text-[10px] text-amber-500/80 bg-amber-500/5 px-2 py-1 rounded border border-amber-500/10 mb-3 break-all font-medium leading-relaxed">
+                                                                    📝 {order.notes}
+                                                                </div>
+                                                            )}
+
                                                             {/* Items Preview */}
                                                             <div className="space-y-1.5 bg-[#121214] p-3 rounded-lg border border-[#27272a]">
                                                                 {order.items?.length === 0 ? (
@@ -3327,6 +3351,11 @@ const DeliveryOrderManagement: React.FC = () => {
                                                 </td>
                                                 <td className="p-4 max-w-[200px] truncate">
                                                     <div className="text-sm text-slate-200 truncate">{order.deliveryAddress || '-'}</div>
+                                                    {order.notes && (
+                                                        <div className="text-[10px] text-amber-400 mt-0.5 truncate" title={order.notes}>
+                                                            📝 {order.notes}
+                                                        </div>
+                                                    )}
                                                     {order.deliveryAddress && (
                                                         <div className={`text-[9px] font-bold px-1.5 py-0.5 mt-1 rounded border uppercase tracking-wider inline-block ${getStateColor(determineState(order.deliveryAddress))}`}>
                                                             {determineState(order.deliveryAddress)}
