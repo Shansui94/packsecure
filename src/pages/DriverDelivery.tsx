@@ -1263,10 +1263,8 @@ const DriverDelivery: React.FC<DriverDeliveryProps> = ({ user }) => {
                         <h3 className="font-bold text-slate-500">Tiada pesanan ditemui. / No orders found.</h3>
                     </div>
                 ) : (
-                    displayList.map((order, index) => {
-                        const isHiddenUpcomingTrip = activeTab === 'todo' && index > 0;
-                        return (
-                            <div key={order.id} className="bg-slate-900 border border-slate-800 rounded-2xl overflow-hidden shadow-lg relative">
+                    displayList.map((order) => (
+                        <div key={order.id} className="bg-slate-900 border border-slate-800 rounded-2xl overflow-hidden shadow-lg relative">
                             {/* Status Strip */}
                             <div className={`absolute left-0 top-0 bottom-0 w-1.5 ${order.status === 'Delivered' ? 'bg-green-500' :
                                 order.status === 'Pending Approval' ? 'bg-yellow-500' :
@@ -1298,22 +1296,7 @@ const DriverDelivery: React.FC<DriverDeliveryProps> = ({ user }) => {
                                 </div>
                             </div>
 
-                            {/* If it's a hidden upcoming trip, hide details & show a simple tip */}
-                            {isHiddenUpcomingTrip ? (
-                                <div className="px-5 pb-5">
-                                    {order.notes && (
-                                        <div className="mb-4 bg-slate-800/50 p-2.5 rounded-xl border border-slate-700/50">
-                                            <p className="text-[10px] text-slate-500 uppercase font-black mb-1">Nota / Notes</p>
-                                            <p className="text-sm text-slate-300 whitespace-pre-line">{order.notes}</p>
-                                        </div>
-                                    )}
-                                    <div className="p-5 pt-0 border-t border-white/5 bg-slate-950/20 text-center py-4 text-xs font-bold text-slate-500 uppercase tracking-wider flex items-center justify-center gap-2 rounded-xl">
-                                        🚗 TRIP LAIN AKAN DATANG / UPCOMING TRIP (Butiran item tidak dipaparkan / Details hidden)
-                                    </div>
-                                </div>
-                            ) : (
-                                <>
-                                    {/* Order Notes */}
+                            {/* Order Notes */}
                             {order.notes && (
                                 <div className="mb-4 bg-slate-800/50 p-2 rounded-lg border border-slate-700/50">
                                     <p className="text-[10px] text-slate-500 uppercase font-black mb-1">Nota / Notes</p>
@@ -1492,11 +1475,8 @@ const DriverDelivery: React.FC<DriverDeliveryProps> = ({ user }) => {
                                     )}
                                 </div>
                             )}
-                                </>
-                            )}
                         </div>
-                    )
-                })
+                    ))
                 )}
             </div>
 
