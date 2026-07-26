@@ -24,26 +24,37 @@ const LorryService: React.FC<LorryServiceProps> = ({ user }) => {
     }, [user]);
 
     const fetchLorries = async () => {
-        const { data } = await supabase.from('lorries').select('*').eq('status', 'Available');
+        const { data } = await supabase.from('lorries').select('*').order('plate_number');
         if (data) setAvailableLorries(data);
     };
 
     const fetchDriverLorry = async () => {
-        // Try to fetch from a vehicles or metadata table if available
-        // For now, let's assume we can prompt or it's in user profile
-        const { data: profile } = await supabase.from('users_public').select('notes').eq('id', user.uid).single();
-        if (profile?.notes && profile.notes.includes('Plate:')) {
-            const match = profile.notes.match(/Plate:\s*([^\s,]+)/);
-            if (match) setPlateNumber(match[1]);
-        }
+        try {
+            // 1. First Priority: query directly from lorries table by driver_id
+            const { data: lorryData } = await supabase
+                .from('lorries')
+                .select('plate_number')
+                .eq('driver_id', user.uid)
+                .maybeSingle();
+            
+            if (lorryData?.plate_number) {
+                setPlateNumber(lorryData.plate_number);
+                return;
+            }
 
-        // Fallback: If not found, look at assigned orders
-        if (!plateNumber) {
-            const { data: orders } = await supabase.from('sales_orders').select('notes').eq('driver_id', user.uid).limit(1);
+            // 2. Second Priority (Fallback): Look at assigned orders notes
+            const { data: orders } = await supabase
+                .from('sales_orders')
+                .select('notes')
+                .eq('driver_id', user.uid)
+                .limit(1);
             if (orders && orders.length > 0 && orders[0].notes?.includes('Lorry:')) {
-                const match = orders[0].notes.match(/Lorry:\s*([^\s,]+)/);
+                // Support Malaysian plate numbers with spaces (e.g. PETRA 9821)
+                const match = orders[0].notes.match(/Lorry:\s*([A-Za-z0-9]+\s+[0-9]+|[^\s,]+)/);
                 if (match) setPlateNumber(match[1]);
             }
+        } catch (err) {
+            console.error("Error fetching driver lorry:", err);
         }
     };
 
