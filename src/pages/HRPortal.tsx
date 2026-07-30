@@ -3,7 +3,7 @@ import { supabase } from '../services/supabase';
 import {
     Users, Download, AlertCircle,
     Wallet, Plus, Edit2, Save, X, ToggleLeft, Trash2,
-    ToggleRight, Star, Award, MapPin, DollarSign, ChevronLeft, ChevronRight, ChevronDown, ChevronUp, Loader, Shield, Check, RefreshCw
+    ToggleRight, Star, Award, MapPin, DollarSign, ChevronLeft, ChevronRight, ChevronDown, ChevronUp, Loader, Shield, Check, RefreshCw, UserPlus, CheckCircle2, Settings
 } from 'lucide-react';
 import { getSalaryAdvances, updateSalaryAdvanceStatus } from '../services/apiV2';
 
@@ -173,6 +173,13 @@ const EmployeeModal: React.FC<{
         }
     }, [form.name, pin, form.role, isNew]);
 
+    // Automatically default pay_type to 'driver' when role is Driver
+    useEffect(() => {
+        if (form.role === 'Driver' && form.pay_type !== 'driver') {
+            setForm(f => ({ ...f, pay_type: 'driver' }));
+        }
+    }, [form.role]);
+
     const handleSave = async () => {
         const pin = (form as any).pin_input || '';
         if (isNew && pin.length !== 4) return setError('PIN must be exactly 4 digits.');
@@ -283,10 +290,13 @@ const EmployeeModal: React.FC<{
             }
         }
 
+        const rawStatus = form.status || 'Active';
+        const normalizedStatus = rawStatus.charAt(0).toUpperCase() + rawStatus.slice(1).toLowerCase();
+
         const payload: any = {
             auth_user_id: targetAuthId,
             name: form.name, email: validEmail, phone: form.phone || null,
-            role: form.role, status: form.status || 'active',
+            role: form.role, status: normalizedStatus === 'Active' ? 'Active' : normalizedStatus,
             role_modules: form.role_modules || []
         };
 
@@ -307,12 +317,18 @@ const EmployeeModal: React.FC<{
 
         if (err) setError(err.message);
         else {
-            // Sync base_location to users_public
-            if (targetAuthId && form.base_location) {
-                const { error: locErr } = await supabase.from('users_public')
-                    .update({ base_location: form.base_location })
-                    .eq('id', targetAuthId);
-                if (locErr) console.warn("Failed to sync base_location to users_public:", locErr.message);
+            // Dual-table sync to users_public (Status, Role, Employee ID, Location)
+            if (targetAuthId) {
+                const { error: pubErr } = await supabase.from('users_public').upsert({
+                    id: targetAuthId,
+                    email: validEmail,
+                    name: form.name,
+                    role: form.role,
+                    status: normalizedStatus === 'Active' ? 'Active' : normalizedStatus,
+                    employee_id: pin || form.employee_id || null,
+                    base_location: form.base_location || 'Taiping'
+                });
+                if (pubErr) console.warn("Failed to sync profile to users_public:", pubErr.message);
             }
             onSave();
             onClose();
@@ -525,16 +541,176 @@ const EmployeeModal: React.FC<{
     );
 };
 
+// ── PENDING REGISTRATION CARD ─────────────────────────────
+const PendingRegistrationCard: React.FC<{
+    emp: Employee;
+    onApprove: (emp: Employee, role: string, location: string, pin: string) => void;
+    onReject: (emp: Employee) => void;
+    isProcessing: boolean;
+}> = ({ emp, onApprove, onReject, isProcessing }) => {
+    const [selectedRole, setSelectedRole] = useState(emp.role || 'Operator');
+    const [selectedLocation, setSelectedLocation] = useState(emp.base_location || 'Taiping');
+    const [pinInput, setPinInput] = useState(emp.employee_id || '');
+
+    return (
+        <div className="bg-[#0d0d12] border border-orange-500/20 rounded-2xl p-5 shadow-xl space-y-4 hover:border-orange-500/40 transition-all">
+            <div className="flex justify-between items-start">
+                <div className="flex items-center gap-3">
+                    <div className="w-10 h-10 rounded-xl bg-orange-500/10 border border-orange-500/20 flex items-center justify-center text-orange-400 font-bold">
+                        <UserPlus size={18} />
+                    </div>
+                    <div>
+                        <h4 className="text-sm font-black text-white">{emp.name}</h4>
+                        <span className="text-xs text-gray-400 font-mono">{emp.email || 'No email provided'}</span>
+                    </div>
+                </div>
+                <span className="px-2.5 py-1 rounded-full text-[10px] font-bold uppercase tracking-wider bg-orange-500/10 border border-orange-500/30 text-orange-400">
+                    Pending Review
+                </span>
+            </div>
+
+            <div className="grid grid-cols-2 gap-3 pt-2 border-t border-white/5 text-xs">
+                <div>
+                    <label className="block text-[10px] text-gray-500 uppercase tracking-widest mb-1 font-bold">
+                        Assign Role / 分配岗位
+                    </label>
+                    <select
+                        value={selectedRole}
+                        onChange={e => setSelectedRole(e.target.value)}
+                        className="w-full bg-black/50 border border-white/10 rounded-xl px-3 py-2 text-xs text-white focus:outline-none focus:border-orange-500/50"
+                    >
+                        {ALL_ROLES.map(r => (
+                            <option key={r} value={r}>{r}</option>
+                        ))}
+                    </select>
+                </div>
+
+                <div>
+                    <label className="block text-[10px] text-gray-500 uppercase tracking-widest mb-1 font-bold">
+                        Base Location / 厂区驻地
+                    </label>
+                    <div className="grid grid-cols-2 gap-1">
+                        {['Taiping', 'Nilai'].map(loc => (
+                            <button
+                                key={loc}
+                                type="button"
+                                onClick={() => setSelectedLocation(loc)}
+                                className={`py-1.5 px-2 rounded-lg text-[11px] font-bold border transition-all ${
+                                    selectedLocation === loc
+                                        ? 'bg-orange-500/20 text-orange-400 border-orange-500/40'
+                                        : 'bg-white/5 text-gray-500 border-white/5 hover:text-white'
+                                }`}
+                            >
+                                {loc}
+                            </button>
+                        ))}
+                    </div>
+                </div>
+
+                <div className="col-span-2">
+                    <label className="block text-[10px] text-gray-500 uppercase tracking-widest mb-1 font-bold">
+                        Employee ID / 4位数工号 (PIN)
+                    </label>
+                    <input
+                        type="text"
+                        maxLength={4}
+                        value={pinInput}
+                        onChange={e => setPinInput(e.target.value.replace(/\D/g, '').slice(0, 4))}
+                        placeholder="e.g. 1045"
+                        className="w-full bg-black/50 border border-white/10 rounded-xl px-3 py-2 text-xs font-mono text-white placeholder-gray-600 focus:outline-none focus:border-orange-500/50 tracking-widest"
+                    />
+                </div>
+            </div>
+
+            <div className="flex gap-2 pt-2 border-t border-white/5">
+                <button
+                    type="button"
+                    onClick={() => onReject(emp)}
+                    disabled={isProcessing}
+                    className="flex-1 py-2.5 bg-red-500/10 hover:bg-red-500/20 border border-red-500/20 text-red-400 rounded-xl text-xs font-bold transition-all disabled:opacity-50"
+                >
+                    Reject / 驳回
+                </button>
+                <button
+                    type="button"
+                    onClick={() => onApprove(emp, selectedRole, selectedLocation, pinInput)}
+                    disabled={isProcessing}
+                    className="flex-2 py-2.5 bg-gradient-to-r from-emerald-600 to-teal-600 hover:from-emerald-500 hover:to-teal-500 text-white rounded-xl text-xs font-bold transition-all shadow-lg shadow-emerald-600/20 flex items-center justify-center gap-1.5 disabled:opacity-50"
+                >
+                    {isProcessing ? <Loader size={14} className="animate-spin" /> : <Check size={14} />}
+                    Approve & Activate / 批准并激活
+                </button>
+            </div>
+        </div>
+    );
+};
+
+// ── MACHINE RATE ITEM CARD ─────────────────────────────
+const MachineRateItemCard: React.FC<{
+    machine: { machine_id: string; name?: string; factory_id?: string; operator_hourly_rate: number };
+    onSave: (machine_id: string, rate: number) => void;
+    isSaving: boolean;
+}> = ({ machine, onSave, isSaving }) => {
+    const [rateInput, setRateInput] = useState(machine.operator_hourly_rate.toString());
+
+    useEffect(() => {
+        setRateInput(machine.operator_hourly_rate.toString());
+    }, [machine.operator_hourly_rate]);
+
+    const handleSave = () => {
+        const val = parseFloat(rateInput);
+        if (isNaN(val) || val < 0) return alert("请输入有效时薪数值");
+        onSave(machine.machine_id, val);
+    };
+
+    return (
+        <div className="bg-[#121218] border border-white/10 rounded-xl p-3.5 flex flex-col justify-between gap-3 shadow-md hover:border-blue-500/30 transition-all">
+            <div className="flex justify-between items-start">
+                <div>
+                    <h4 className="text-xs font-black text-white">{machine.name}</h4>
+                    <span className="text-[10px] font-mono text-gray-500 block">ID: {machine.machine_id} | 厂区: {machine.factory_id}</span>
+                </div>
+                <span className="px-2 py-0.5 rounded text-[10px] font-bold font-mono bg-blue-500/10 border border-blue-500/20 text-blue-400">
+                    RM {machine.operator_hourly_rate.toFixed(2)}/h
+                </span>
+            </div>
+
+            <div className="flex gap-2 items-center pt-2 border-t border-white/5">
+                <div className="relative flex-1">
+                    <span className="absolute left-2.5 top-1/2 -translate-y-1/2 text-xs text-gray-500 font-bold">RM</span>
+                    <input
+                        type="number"
+                        step="0.5"
+                        min="0"
+                        value={rateInput}
+                        onChange={e => setRateInput(e.target.value)}
+                        placeholder="0.00"
+                        className="w-full bg-black/50 border border-white/10 rounded-lg pl-8 pr-2 py-1.5 text-xs text-white font-mono focus:outline-none focus:border-blue-500/50"
+                    />
+                </div>
+                <button
+                    onClick={handleSave}
+                    disabled={isSaving}
+                    className="px-3 py-1.5 bg-blue-600 hover:bg-blue-500 disabled:opacity-50 text-white rounded-lg text-xs font-bold transition-all flex items-center gap-1 shadow"
+                >
+                    {isSaving ? <Loader size={12} className="animate-spin" /> : <Save size={12} />}
+                    Save
+                </button>
+            </div>
+        </div>
+    );
+};
+
 // ── MAIN COMPONENT ────────────────────────────────────────────
 interface HRPortalProps {
     user?: any;
-    initialTab?: 'personnel' | 'permissions' | 'payroll' | 'advances';
+    initialTab?: 'personnel' | 'permissions' | 'payroll' | 'advances' | 'approvals';
     initialRoleFilter?: string;
 }
 
 const HRPortal: React.FC<HRPortalProps> = ({ user, initialTab, initialRoleFilter }) => {
     const isSuperAdminOrHR = user?.role === 'SuperAdmin' || user?.role === 'HR';
-    const [activeTab, setActiveTab] = useState<'personnel' | 'permissions' | 'payroll' | 'advances'>(
+    const [activeTab, setActiveTab] = useState<'personnel' | 'permissions' | 'payroll' | 'advances' | 'approvals'>(
         (initialTab && (initialTab !== 'payroll' && initialTab !== 'advances' || isSuperAdminOrHR)) 
             ? initialTab 
             : 'personnel'
@@ -563,6 +739,9 @@ const HRPortal: React.FC<HRPortalProps> = ({ user, initialTab, initialRoleFilter
     const [empSearch, setEmpSearch] = useState('');
     const [deletingId, setDeletingId] = useState<string | null>(null);
 
+    // Approvals State
+    const [processingApprovalId, setProcessingApprovalId] = useState<string | null>(null);
+
     // Permissions
     const [permissions, setPermissions] = useState<Record<string, Record<string, boolean>>>({});
     const [loadingPerms, setLoadingPerms] = useState(true);
@@ -579,7 +758,7 @@ const HRPortal: React.FC<HRPortalProps> = ({ user, initialTab, initialRoleFilter
 
     // Delivery rates
     const [deliveryRates, setDeliveryRates] = useState<{ id: string; origin: string; location_name: string; base_rate: number; max_places: number; extra_rate_per_place: number; notes: string }[]>([]);
-    const [showZoneEditor, setShowZoneEditor] = useState(false);
+    const [showZoneEditor, setShowZoneEditor] = useState(true);
     const [showZoneForm, setShowZoneForm] = useState(false);
     const [newRateOrigin, setNewRateOrigin] = useState('TAIPING');
     const [newRateLocation, setNewRateLocation] = useState('');
@@ -590,6 +769,48 @@ const HRPortal: React.FC<HRPortalProps> = ({ user, initialTab, initialRoleFilter
     const [savingZone, setSavingZone] = useState(false);
     const [editingZoneId, setEditingZoneId] = useState<string | null>(null);
 
+    // Machine rates state & handlers
+    const [machineRatesList, setMachineRatesList] = useState<{ machine_id: string; name?: string; factory_id?: string; operator_hourly_rate: number }[]>([]);
+    const [showMachineRateEditor, setShowMachineRateEditor] = useState(true);
+    const [savingMachineRate, setSavingMachineRate] = useState<string | null>(null);
+
+    const fetchMachineRates = useCallback(async () => {
+        const { data: machines } = await supabase.from('sys_machines_v2').select('machine_id, name, factory_id');
+        const { data: mRates } = await supabase.from('machine_rates').select('*');
+
+        const rateMap = new Map((mRates || []).map((r: any) => [r.machine_id, Number(r.operator_hourly_rate) || 0]));
+
+        const list = (machines || []).map(m => ({
+            machine_id: m.machine_id,
+            name: m.name || m.machine_id,
+            factory_id: m.factory_id || 'Taiping',
+            operator_hourly_rate: rateMap.has(m.machine_id) ? rateMap.get(m.machine_id)! : 0
+        }));
+
+        setMachineRatesList(list);
+    }, []);
+
+    const handleSaveSingleMachineRate = async (machine_id: string, rate: number) => {
+        setSavingMachineRate(machine_id);
+        try {
+            const { error } = await supabase.from('machine_rates').upsert({
+                machine_id,
+                operator_hourly_rate: rate,
+                updated_at: new Date().toISOString()
+            }, { onConflict: 'machine_id' });
+
+            if (error) throw error;
+            alert(`✅ 机台「${machine_id}」的时薪标准已成功保存为 RM${rate.toFixed(2)} / hr`);
+            await fetchMachineRates();
+            fetchPayroll();
+        } catch (err: any) {
+            console.error("Save machine rate error:", err);
+            alert("❌ 保存失败: " + err.message);
+        } finally {
+            setSavingMachineRate(null);
+        }
+    };
+
     // ── Personnel ────────────────────────────────────────────
     const fetchEmployees = useCallback(async () => {
         setLoadingEmp(true);
@@ -598,22 +819,139 @@ const HRPortal: React.FC<HRPortalProps> = ({ user, initialTab, initialRoleFilter
             .select('id, auth_user_id, employee_id, pin_code, name, email, phone, role, status, pay_type, hourly_rate, base_salary, trip_allowance, attendance_bonus, attendance_bonus_threshold, role_modules')
             .order('name');
 
-        // Fetch base_location from users_public
+        // Fetch users_public for base_location and self-registrations fallback
         const { data: pubData } = await supabase.from('users_public')
-            .select('id, base_location');
+            .select('id, email, name, role, status, employee_id, base_location, created_at');
 
         if (v2Data) {
             const locationMap = new Map(pubData?.map(p => [p.id, p.base_location]) || []);
             const merged: Employee[] = v2Data.map(emp => ({
                 ...emp,
+                status: emp.status ? (emp.status.charAt(0).toUpperCase() + emp.status.slice(1).toLowerCase()) : 'Active',
                 base_location: locationMap.get(emp.auth_user_id) || 'Taiping'
             }));
+
+            // Fallback: Check if users_public has pending registrations not yet present in sys_users_v2
+            const v2AuthIds = new Set(v2Data.map(v => v.auth_user_id).filter(Boolean));
+            if (pubData) {
+                pubData.forEach(pub => {
+                    if (pub.id && !v2AuthIds.has(pub.id)) {
+                        const statusClean = pub.status ? (pub.status.charAt(0).toUpperCase() + pub.status.slice(1).toLowerCase()) : 'Pending';
+                        merged.push({
+                            id: `pub_${pub.id}`,
+                            auth_user_id: pub.id,
+                            employee_id: pub.employee_id || '',
+                            pin_code: pub.employee_id || '',
+                            name: pub.name || pub.email?.split('@')[0] || 'New Registration',
+                            email: pub.email || '',
+                            phone: '',
+                            role: pub.role || 'Operator',
+                            status: statusClean,
+                            pay_type: 'hourly',
+                            hourly_rate: 0,
+                            base_salary: 0,
+                            trip_allowance: 0,
+                            attendance_bonus: 0,
+                            attendance_bonus_threshold: 0,
+                            base_location: pub.base_location || 'Taiping'
+                        });
+                    }
+                });
+            }
+
             setEmployees(merged);
+        } else if (pubData) {
+            const synthesized: Employee[] = pubData.map(pub => ({
+                id: `pub_${pub.id}`,
+                auth_user_id: pub.id,
+                employee_id: pub.employee_id || '',
+                pin_code: pub.employee_id || '',
+                name: pub.name || pub.email?.split('@')[0] || 'New Registration',
+                email: pub.email || '',
+                phone: '',
+                role: pub.role || 'Operator',
+                status: pub.status ? (pub.status.charAt(0).toUpperCase() + pub.status.slice(1).toLowerCase()) : 'Pending',
+                pay_type: 'hourly',
+                hourly_rate: 0,
+                base_salary: 0,
+                trip_allowance: 0,
+                attendance_bonus: 0,
+                attendance_bonus_threshold: 0,
+                base_location: pub.base_location || 'Taiping'
+            }));
+            setEmployees(synthesized);
         } else {
             setEmployees([]);
         }
         setLoadingEmp(false);
     }, []);
+
+    // Registration Approval Handler
+    const handleApproveRegistration = async (emp: Employee, assignedRole: string, assignedLocation: string, assignedPin: string) => {
+        const targetAuthId = emp.auth_user_id || (emp.id.startsWith('pub_') ? emp.id.replace('pub_', '') : emp.id);
+        if (!targetAuthId) return;
+
+        const cleanPin = assignedPin.replace(/\D/g, '').slice(0, 4);
+        setProcessingApprovalId(emp.id);
+
+        try {
+            // 1. Dual Upsert into sys_users_v2
+            const { error: v2Err } = await supabase.from('sys_users_v2').upsert({
+                auth_user_id: targetAuthId,
+                email: emp.email,
+                name: emp.name,
+                role: assignedRole,
+                status: 'Active',
+                employee_id: cleanPin || emp.employee_id || null,
+                pin_code: cleanPin || emp.pin_code || null,
+                pay_type: assignedRole === 'Driver' ? 'driver' : (emp.pay_type || 'hourly'),
+                hourly_rate: emp.hourly_rate || 0,
+                base_salary: emp.base_salary || 0
+            }, { onConflict: 'auth_user_id' });
+
+            if (v2Err) console.warn("sys_users_v2 approval update warning:", v2Err.message);
+
+            // 2. Dual Upsert into users_public
+            const { error: pubErr } = await supabase.from('users_public').upsert({
+                id: targetAuthId,
+                email: emp.email,
+                name: emp.name,
+                role: assignedRole,
+                status: 'Active',
+                employee_id: cleanPin || emp.employee_id || null,
+                base_location: assignedLocation || 'Taiping'
+            });
+
+            if (pubErr) throw pubErr;
+
+            alert(`✅ 员工「${emp.name}」已成功批准并激活！\n角色: ${assignedRole}\n工号/PIN: ${cleanPin || emp.employee_id || 'N/A'}\n驻地: ${assignedLocation}`);
+            await fetchEmployees();
+        } catch (err: any) {
+            console.error("Approve Registration Error:", err);
+            alert(`❌ 审批激活失败: ${err.message}`);
+        } finally {
+            setProcessingApprovalId(null);
+        }
+    };
+
+    const handleRejectRegistration = async (emp: Employee) => {
+        if (!window.confirm(`确认要驳回员工「${emp.name}」的注册申请吗？`)) return;
+        const targetAuthId = emp.auth_user_id || (emp.id.startsWith('pub_') ? emp.id.replace('pub_', '') : emp.id);
+        if (!targetAuthId) return;
+
+        setProcessingApprovalId(emp.id);
+        try {
+            await supabase.from('sys_users_v2').update({ status: 'Rejected' }).eq('auth_user_id', targetAuthId);
+            await supabase.from('users_public').update({ status: 'Rejected' }).eq('id', targetAuthId);
+            alert(`❌ 已驳回员工「${emp.name}」的注册申请。`);
+            await fetchEmployees();
+        } catch (err: any) {
+            console.error("Reject Registration Error:", err);
+            alert(`❌ 驳回失败: ${err.message}`);
+        } finally {
+            setProcessingApprovalId(null);
+        }
+    };
 
     const handleDeleteEmployee = async (emp: Employee) => {
         if (!emp) return;
@@ -886,10 +1224,14 @@ const HRPortal: React.FC<HRPortalProps> = ({ user, initialTab, initialRoleFilter
             .select('id, auth_user_id, employee_id, name, role, pay_type, hourly_rate, base_salary, trip_allowance, attendance_bonus, attendance_bonus_threshold')
             .eq('status', 'Active').order('name');
 
-        // Attendance hours for operators
+        // Attendance hours for operators with machine_id
         const { data: attendance } = await supabase.from('operator_attendance')
-            .select('operator_id, hours_worked, date')
+            .select('operator_id, machine_id, hours_worked, date')
             .gte('date', firstDay).lte('date', lastDay);
+
+        // Machine rates lookup
+        const { data: mRatesData } = await supabase.from('machine_rates').select('machine_id, operator_hourly_rate');
+        const machineRateMap = new Map((mRatesData || []).map((m: any) => [m.machine_id, Number(m.operator_hourly_rate) || 0]));
 
         // Driver trips with zone info for zone-based allowance
         const { data: trips } = await supabase.from('sales_orders')
@@ -958,9 +1300,23 @@ const HRPortal: React.FC<HRPortalProps> = ({ user, initialTab, initialRoleFilter
             }
         });
 
-        // Build maps
+        // Build operator attendance map per machine
+        const operatorAttendanceMap: Record<string, { totalHours: number; breakdown: Map<string, number> }> = {};
         const hoursMap: Record<string, number> = {};
-        (attendance || []).forEach((a: any) => { hoursMap[a.operator_id] = (hoursMap[a.operator_id] || 0) + (Number(a.hours_worked) || 0); });
+        (attendance || []).forEach((a: any) => {
+            const opId = a.operator_id;
+            const hrs = Number(a.hours_worked) || 0;
+            const mId = a.machine_id || 'General';
+
+            hoursMap[opId] = (hoursMap[opId] || 0) + hrs;
+
+            if (!operatorAttendanceMap[opId]) {
+                operatorAttendanceMap[opId] = { totalHours: 0, breakdown: new Map() };
+            }
+            operatorAttendanceMap[opId].totalHours += hrs;
+            const currentM = operatorAttendanceMap[opId].breakdown.get(mId) || 0;
+            operatorAttendanceMap[opId].breakdown.set(mId, currentM + hrs);
+        });
 
         const leaveMap: Record<string, number> = {};
         (leaves || []).forEach((l: any) => { leaveMap[l.employee_id] = (leaveMap[l.employee_id] || 0) + l.count_days; });
@@ -979,8 +1335,28 @@ const HRPortal: React.FC<HRPortalProps> = ({ user, initialTab, initialRoleFilter
             const advanceDeduction = advanceData.total;
 
             if (emp.pay_type === 'hourly') {
-                gross = hoursWorked * (Number(emp.hourly_rate) || 0);
-                details = `${hoursWorked.toFixed(1)}h × RM${emp.hourly_rate}`;
+                const attInfo = operatorAttendanceMap[emp.employee_id] || { totalHours: 0, breakdown: new Map() };
+
+                if (attInfo.breakdown.size > 0) {
+                    let calculatedGross = 0;
+                    const detailSnippets: string[] = [];
+
+                    attInfo.breakdown.forEach((hrs, mId) => {
+                        const mRate = (mId !== 'General' && machineRateMap.has(mId) && machineRateMap.get(mId)! > 0)
+                            ? machineRateMap.get(mId)!
+                            : (Number(emp.hourly_rate) || 0);
+                        
+                        const subtotal = hrs * mRate;
+                        calculatedGross += subtotal;
+                        detailSnippets.push(`${hrs.toFixed(1)}h@${mId}(RM${mRate}/h)=RM${subtotal.toFixed(2)}`);
+                    });
+
+                    gross = calculatedGross;
+                    details = detailSnippets.join(' | ');
+                } else {
+                    gross = hoursWorked * (Number(emp.hourly_rate) || 0);
+                    details = `${hoursWorked.toFixed(1)}h × RM${emp.hourly_rate}`;
+                }
             } else if (emp.pay_type === 'driver') {
                 gross = Number(emp.base_salary) + tripData.total;
                 const basePart = emp.base_salary > 0 ? `Base RM${emp.base_salary} + ` : '';
@@ -1016,7 +1392,7 @@ const HRPortal: React.FC<HRPortalProps> = ({ user, initialTab, initialRoleFilter
     }, [payMonth, payYear]);
 
 
-    useEffect(() => { if (activeTab === 'payroll') { fetchPayroll(); fetchDeliveryRates(); } }, [activeTab, fetchPayroll, fetchDeliveryRates]);
+    useEffect(() => { if (activeTab === 'payroll') { fetchPayroll(); fetchDeliveryRates(); fetchMachineRates(); } }, [activeTab, fetchPayroll, fetchDeliveryRates, fetchMachineRates]);
 
     const handleGeneratePayroll = async () => {
         if (!window.confirm(`Generate payroll for ${MONTH_NAMES[payMonth - 1]} ${payYear}?`)) return;
@@ -1068,13 +1444,18 @@ const HRPortal: React.FC<HRPortalProps> = ({ user, initialTab, initialRoleFilter
         return acc;
     }, {} as Record<string, typeof ALL_PAGES>);
 
+    const pendingEmps = employees.filter(e => e.status?.toLowerCase() === 'pending');
+    const activeEmps = employees.filter(e => e.status?.toLowerCase() !== 'pending');
+    const pendingCount = pendingEmps.length;
+
     // ── TABS ──────────────────────────────────────────────────
     const TABS = [
-        { id: 'personnel', label: `👥 Personnel (${employees.length})` },
-        { id: 'permissions', label: '🔐 Page Permissions' },
-        { id: 'payroll', label: '💰 Payroll' },
-        { id: 'advances', label: '💸 Salary Advances' },
-    ] as const;
+        { id: 'personnel', label: `👥 Personnel (${activeEmps.length})`, count: 0 },
+        { id: 'approvals', label: `🔔 新注册待审批`, count: pendingCount },
+        { id: 'permissions', label: '🔐 Page Permissions', count: 0 },
+        { id: 'payroll', label: '💰 Payroll', count: 0 },
+        { id: 'advances', label: '💸 Salary Advances', count: 0 },
+    ];
 
     const visibleTabs = TABS.filter(tab => {
         if (isLogisticsCoordinator) {
@@ -1103,14 +1484,62 @@ const HRPortal: React.FC<HRPortalProps> = ({ user, initialTab, initialRoleFilter
             {/* Tabs */}
             <div className="flex gap-2 mb-6 flex-wrap">
                 {visibleTabs.map(tab => (
-                    <button key={tab.id} onClick={() => setActiveTab(tab.id)}
-                        className={`px-4 py-2.5 rounded-xl font-bold text-xs uppercase tracking-wider transition-all border ${activeTab === tab.id
+                    <button key={tab.id} onClick={() => setActiveTab(tab.id as any)}
+                        className={`px-4 py-2.5 rounded-xl font-bold text-xs uppercase tracking-wider transition-all border flex items-center gap-2 ${activeTab === tab.id
                             ? 'bg-blue-600/20 text-blue-400 border-blue-500/30'
                             : 'bg-white/5 text-gray-500 border-white/5 hover:text-white hover:border-white/10'}`}>
                         {tab.label}
+                        {tab.count > 0 && (
+                            <span className="px-2 py-0.5 rounded-full text-[10px] font-extrabold bg-orange-500 text-white animate-pulse">
+                                {tab.count}
+                            </span>
+                        )}
                     </button>
                 ))}
             </div>
+
+            {/* ── PENDING APPROVALS ── */}
+            {activeTab === 'approvals' && (
+                <div className="space-y-6">
+                    <div className="flex justify-between items-center bg-orange-500/10 border border-orange-500/20 rounded-2xl p-5 shadow-lg">
+                        <div className="flex items-center gap-4">
+                            <div className="w-12 h-12 rounded-2xl bg-gradient-to-tr from-orange-500 to-red-600 flex items-center justify-center text-white font-bold shadow-lg shadow-orange-500/20">
+                                <UserPlus size={24} />
+                            </div>
+                            <div>
+                                <h3 className="text-base font-black text-white">新注册账号待审批 / Pending Registration Approvals</h3>
+                                <p className="text-xs text-gray-400 mt-0.5">
+                                    审核员工自建账号申请。请为新员工指定岗位角色、驻地厂区及 4 位数字 PIN / 工号，点击“批准并激活”完成后该员工即可正常登录。
+                                </p>
+                            </div>
+                        </div>
+                        <div className="text-right pl-4">
+                            <div className="text-3xl font-black text-orange-400 font-mono">{pendingCount}</div>
+                            <div className="text-[10px] text-gray-500 uppercase tracking-widest">待审核申请</div>
+                        </div>
+                    </div>
+
+                    {pendingEmps.length === 0 ? (
+                        <div className="text-center py-20 text-gray-600 border border-dashed border-white/10 rounded-2xl bg-[#0d0d12]">
+                            <CheckCircle2 size={44} className="mx-auto mb-3 text-emerald-500/50" />
+                            <p className="text-sm font-bold text-gray-400">暂无待审批的新注册账号</p>
+                            <p className="text-xs text-gray-600 mt-1">所有员工注册申请均已完成审批或处于激活状态</p>
+                        </div>
+                    ) : (
+                        <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                            {pendingEmps.map(emp => (
+                                <PendingRegistrationCard
+                                    key={emp.id}
+                                    emp={emp}
+                                    onApprove={handleApproveRegistration}
+                                    onReject={handleRejectRegistration}
+                                    isProcessing={processingApprovalId === emp.id}
+                                />
+                            ))}
+                        </div>
+                    )}
+                </div>
+            )}
 
             {/* ── PERSONNEL ── */}
             {activeTab === 'personnel' && (
@@ -1320,6 +1749,44 @@ const HRPortal: React.FC<HRPortalProps> = ({ user, initialTab, initialRoleFilter
                         </div>
                     </div>
 
+
+                    {/* Machine Hourly Rates Manager */}
+                    <div className="mb-5 bg-[#0d0d12] border border-blue-500/20 rounded-2xl overflow-hidden shadow-lg">
+                        <div
+                            className="w-full px-4 py-3.5 flex items-center justify-between border-b border-white/5 bg-black/30 hover:bg-white/[0.02] cursor-pointer transition-colors"
+                            onClick={() => setShowMachineRateEditor(v => !v)}
+                        >
+                            <div className="flex items-center gap-2.5 text-blue-400 font-bold text-xs uppercase tracking-widest">
+                                <Settings size={16} /> 机台专属时薪配置 / Machine Hourly Rates Config
+                                <span className="px-2 py-0.5 rounded-full text-[10px] bg-blue-500/10 text-blue-400 border border-blue-500/20 font-mono">
+                                    {machineRatesList.length} 台机器
+                                </span>
+                            </div>
+                            <div className="flex items-center gap-2 text-xs text-gray-400 font-bold">
+                                {showMachineRateEditor ? <ChevronUp size={16} /> : <ChevronDown size={16} />}
+                            </div>
+                        </div>
+
+                        {showMachineRateEditor && (
+                            <div className="p-4 space-y-4 bg-black/20">
+                                <div className="text-xs text-gray-400 flex items-center gap-1.5 bg-blue-500/10 border border-blue-500/20 rounded-xl p-3">
+                                    <AlertCircle size={14} className="text-blue-400 flex-shrink-0" />
+                                    <span>为各个机台设置专属操作员时薪（RM/hr）。操作员在该机台打卡产生的工时将自动按机台时薪计算工资；若机台时薪为 RM 0，则按员工个人基础时薪计算。</span>
+                                </div>
+
+                                <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-3">
+                                    {machineRatesList.map(m => (
+                                        <MachineRateItemCard
+                                            key={m.machine_id}
+                                            machine={m}
+                                            onSave={handleSaveSingleMachineRate}
+                                            isSaving={savingMachineRate === m.machine_id}
+                                        />
+                                    ))}
+                                </div>
+                            </div>
+                        )}
+                    </div>
 
                     {/* Delivery Rates Manager */}
                     <div className="mb-5 bg-[#0d0d12] border border-amber-500/20 rounded-2xl overflow-hidden">

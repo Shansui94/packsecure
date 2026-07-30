@@ -73,6 +73,16 @@ function App() {
         return localStorage.getItem('lastActivePage') || 'factory-live-os';
     });
 
+    // Ensure default dark theme class on html tag
+    useEffect(() => {
+        const savedTheme = localStorage.getItem('theme') || 'dark';
+        if (savedTheme === 'dark') {
+            document.documentElement.classList.add('dark');
+        } else {
+            document.documentElement.classList.remove('dark');
+        }
+    }, []);
+
     // Persist activePage and Log Activity
     useEffect(() => {
         localStorage.setItem('lastActivePage', activePage);
