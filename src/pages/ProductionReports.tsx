@@ -45,7 +45,7 @@ const ProductionReports: React.FC<ProductionReportsProps> = () => {
     const [loading, setLoading] = useState(true);
     const [logs, setLogs] = useState<any[]>([]);
     const [orders, setOrders] = useState<any[]>([]);
-    const [tableLocation, setTableLocation] = useState<'all' | 'taiping' | 'nilai'>('all');
+    const [tableLocation, setTableLocation] = useState<'all' | 'taiping' | 'nilai' | 'kelantan' | 'johor'>('all');
     const [skuNameMap, setSkuNameMap] = useState<Map<string, string>>(new Map());
     const [searchTerm, setSearchTerm] = useState('');
     
@@ -196,6 +196,8 @@ const ProductionReports: React.FC<ProductionReportsProps> = () => {
         const skuMap = new Map<string, { sku: string; name: string; output: number; scrap: number }>();
         const taipingSkuMap = new Map<string, { sku: string; name: string; output: number; scrap: number }>();
         const nilaiSkuMap = new Map<string, { sku: string; name: string; output: number; scrap: number }>();
+        const kelantanSkuMap = new Map<string, { sku: string; name: string; output: number; scrap: number }>();
+        const johorSkuMap = new Map<string, { sku: string; name: string; output: number; scrap: number }>();
         const machineMap = new Map<string, number>();
         const dailyMap = new Map<string, number>();
         const factoryMap = new Map<string, number>();
@@ -231,7 +233,9 @@ const ProductionReports: React.FC<ProductionReportsProps> = () => {
                 // SKU Aggregation by Factory
                 const mach = MACHINES.find(m => m.id === l.machine_id);
                 const factoryId = mach ? mach.factory_id : 'OPM Lama';
-                const targetMap = factoryId === 'Nilai' ? nilaiSkuMap : taipingSkuMap;
+                const targetMap = (factoryId === 'Nilai' || factoryId === 'N1') ? nilaiSkuMap :
+                                  (factoryId === 'Kelantan' || factoryId === 'K1') ? kelantanSkuMap :
+                                  (factoryId === 'Johor' || factoryId === 'J1') ? johorSkuMap : taipingSkuMap;
                 
                 const existingFact = targetMap.get(l.sku);
                 if (existingFact) {
@@ -256,7 +260,10 @@ const ProductionReports: React.FC<ProductionReportsProps> = () => {
             if (l.machine_id) {
                 const mach = MACHINES.find(m => m.id === l.machine_id);
                 const factoryId = mach ? mach.factory_id : 'OPM Lama';
-                const displayName = factoryId === 'OPM Lama' ? '太平基地 / Taiping (OPM)' : factoryId === 'Nilai' ? '汝来基地 / Nilai' : factoryId;
+                const displayName = (factoryId === 'OPM Lama' || factoryId === 'T1' || factoryId === 'SPD') ? '太平基地 / Taiping (OPM)' :
+                                    (factoryId === 'Nilai' || factoryId === 'N1') ? '汝来基地 / Nilai' :
+                                    (factoryId === 'Kelantan' || factoryId === 'K1') ? '吉兰丹基地 / Kelantan' :
+                                    (factoryId === 'Johor' || factoryId === 'J1') ? '柔佛基地 / Johor' : factoryId;
                 factoryMap.set(displayName, (factoryMap.get(displayName) || 0) + out);
             }
 
@@ -279,6 +286,8 @@ const ProductionReports: React.FC<ProductionReportsProps> = () => {
         const skuList = Array.from(skuMap.values()).sort((a, b) => b.output - a.output);
         const taipingSkuList = Array.from(taipingSkuMap.values()).sort((a, b) => b.output - a.output);
         const nilaiSkuList = Array.from(nilaiSkuMap.values()).sort((a, b) => b.output - a.output);
+        const kelantanSkuList = Array.from(kelantanSkuMap.values()).sort((a, b) => b.output - a.output);
+        const johorSkuList = Array.from(johorSkuMap.values()).sort((a, b) => b.output - a.output);
         
         // Product proportion data for chart (PieChart)
         // Group items less than 2.5% of total production into "Others"
@@ -408,6 +417,8 @@ const ProductionReports: React.FC<ProductionReportsProps> = () => {
             skuList,
             taipingSkuList,
             nilaiSkuList,
+            kelantanSkuList,
+            johorSkuList,
             chartSkuData,
             trendData,
             machineData,
@@ -422,6 +433,8 @@ const ProductionReports: React.FC<ProductionReportsProps> = () => {
     const activeSkuList = useMemo(() => {
         if (tableLocation === 'taiping') return stats.taipingSkuList;
         if (tableLocation === 'nilai') return stats.nilaiSkuList;
+        if (tableLocation === 'kelantan') return stats.kelantanSkuList;
+        if (tableLocation === 'johor') return stats.johorSkuList;
         return stats.skuList;
     }, [stats, tableLocation]);
 
@@ -886,7 +899,18 @@ const ProductionReports: React.FC<ProductionReportsProps> = () => {
                                                                                                 <td className="p-2 font-medium">{driverName}</td>
                                                                                                 <td className="p-2 font-mono font-bold text-blue-600 dark:text-blue-400">{order.order_number || 'N/A'}</td>
                                                                                                 <td className="p-2 truncate max-w-[120px]" title={order.customer}>{order.customer || 'N/A'}</td>
-                                                                                                <td className="p-2 truncate max-w-[200px]" title={order.delivery_address}>{order.delivery_address || order.zone || 'N/A'}</td>
+                                                                                                <td className="p-2 max-w-[240px]">
+                                                                                                    <div className="truncate font-medium text-slate-800 dark:text-slate-200" title={order.delivery_address}>
+                                                                                                        {order.delivery_address || order.zone || 'N/A'}
+                                                                                                    </div>
+                                                                                                    <div className="flex flex-wrap gap-1 mt-1 text-[9px]">
+                                                                                                        {(order.items || []).map((item: any, idx: number) => (
+                                                                                                            <span key={idx} className="bg-slate-100 dark:bg-white/10 px-1 py-0.5 rounded text-slate-500 dark:text-gray-400 font-bold font-mono">
+                                                                                                                {item.product || item.sku || 'Unknown'}: <span className="text-blue-500 dark:text-blue-400">{item.quantity}</span>
+                                                                                                            </span>
+                                                                                                        ))}
+                                                                                                    </div>
+                                                                                                </td>
                                                                                                 <td className="p-2 text-right font-mono">{rolls}</td>
                                                                                             </tr>
                                                                                         );
@@ -1324,6 +1348,18 @@ const ProductionReports: React.FC<ProductionReportsProps> = () => {
                                                 className={`px-2.5 py-1 rounded-md font-bold transition-all ${tableLocation === 'nilai' ? 'bg-white dark:bg-white/10 text-blue-600 dark:text-blue-400 shadow-sm font-black' : 'text-slate-500 dark:text-gray-400 hover:text-slate-800 dark:hover:text-white'}`}
                                             >
                                                 汝来 / Nilai
+                                            </button>
+                                            <button 
+                                                onClick={() => setTableLocation('kelantan')}
+                                                className={`px-2.5 py-1 rounded-md font-bold transition-all ${tableLocation === 'kelantan' ? 'bg-white dark:bg-white/10 text-blue-600 dark:text-blue-400 shadow-sm font-black' : 'text-slate-500 dark:text-gray-400 hover:text-slate-800 dark:hover:text-white'}`}
+                                            >
+                                                吉兰丹 / Kelantan
+                                            </button>
+                                            <button 
+                                                onClick={() => setTableLocation('johor')}
+                                                className={`px-2.5 py-1 rounded-md font-bold transition-all ${tableLocation === 'johor' ? 'bg-white dark:bg-white/10 text-blue-600 dark:text-blue-400 shadow-sm font-black' : 'text-slate-500 dark:text-gray-400 hover:text-slate-800 dark:hover:text-white'}`}
+                                            >
+                                                柔佛 / Johor
                                             </button>
                                         </div>
                                     </div>
