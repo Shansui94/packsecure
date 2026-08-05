@@ -380,23 +380,6 @@ export default function AIAgentWidget({ user, onNavigate }: AIAgentWidgetProps) 
 
                 </div>
             )}
-
-            {/* Floating Toggle Button (Hidden on mobile to avoid blocking view) */}
-            {!isOpen && (
-                <button
-                    onClick={() => setIsOpen(true)}
-                    className="hidden lg:flex group pointer-events-auto items-center justify-center w-14 h-14 bg-gradient-to-br from-blue-600 to-indigo-700 text-white rounded-full shadow-xl hover:scale-105 active:scale-95 transition-all duration-300 hover:shadow-blue-500/30"
-                >
-                    <div className="absolute inset-0 rounded-full bg-white/20 animate-ping group-hover:block hidden opacity-20 duration-1000"></div>
-                    <MessageSquare size={26} className="relative z-10" />
-                    {user && (
-                        <span className="absolute -top-1 -right-1 flex h-3 w-3">
-                            <span className="animate-ping absolute inline-flex h-full w-full rounded-full bg-red-400 opacity-75"></span>
-                            <span className="relative inline-flex rounded-full h-3 w-3 bg-red-500 border-2 border-white dark:border-zinc-900"></span>
-                        </span>
-                    )}
-                </button>
-            )}
         </div>
     );
 }
