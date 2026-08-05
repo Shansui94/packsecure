@@ -343,15 +343,19 @@ const Layout: React.FC<LayoutProps> = ({ children, activePage, setActivePage, us
         localStorage.setItem('packsecure_lang', langCode);
         document.documentElement.lang = langCode;
 
+        if (langCode === 'zh-CN') {
+            clearGoogleTranslateCookies();
+            window.location.reload();
+            return;
+        }
+
         // 设置 Google Translate 全局 Cookie
         document.cookie = `googtrans=/zh-CN/${langCode}; path=/;`;
         document.cookie = `googtrans=/auto/${langCode}; path=/;`;
         document.cookie = `googtrans=/zh-CN/${langCode}; path=/; domain=` + window.location.hostname;
         document.cookie = `googtrans=/auto/${langCode}; path=/; domain=` + window.location.hostname;
 
-        if (langCode === 'zh-CN') {
-            clearGoogleTranslateCookies();
-        }
+        loadGoogleTranslateScript();
 
         const selectEl = document.querySelector('.goog-te-combo') as HTMLSelectElement;
         if (selectEl) {
@@ -576,7 +580,20 @@ const Layout: React.FC<LayoutProps> = ({ children, activePage, setActivePage, us
                         </div>
                         <span className="font-bold text-base tracking-tight text-white dark:text-white">PackSecure</span>
                     </div>
-                    <div className="flex items-center gap-1">
+                    <div className="flex items-center gap-1.5">
+                        {/* 👤 Click Avatar to open My Profile */}
+                        <button
+                            type="button"
+                            onClick={() => { setActivePage('profile'); setIsMobileMenuOpen(false); }}
+                            title="View My Profile / 个人主页"
+                            className="w-8 h-8 rounded-full bg-gray-800 border-2 border-orange-500/80 overflow-hidden flex items-center justify-center cursor-pointer shadow-md active:scale-95 transition-all mr-1"
+                        >
+                            {user?.photoURL ? (
+                                <img src={user.photoURL} alt="User Profile" className="w-full h-full object-cover" />
+                            ) : (
+                                <User size={16} className="text-orange-400" />
+                            )}
+                        </button>
                         {/* 📱 移动端触控语言切换按钮 */}
                         <button
                             type="button"
@@ -623,7 +640,7 @@ const Layout: React.FC<LayoutProps> = ({ children, activePage, setActivePage, us
                             {isSidebarCollapsed ? <ChevronRight size={18} /> : <ChevronLeft size={18} />}
                         </button>
                         <div className={`flex items-center mb-1 ${useCollapsedNavLayout ? 'justify-center' : 'gap-3'}`}>
-                            <img src="/packsecure-logo.jpg" alt="PackSecure" className={`rounded-lg ${useCollapsedNavLayout ? 'h-9 w-9 object-cover' : 'h-10'}`} />
+                            <img src="/packsecure-logo.png" alt="PackSecure" className={`object-contain filter drop-shadow-md ${useCollapsedNavLayout ? 'h-8 max-w-full' : 'h-9 max-w-full'}`} />
                             {showNavLabels && (
                                 <div>
                                     <div className="flex items-center gap-1.5 mt-1">
