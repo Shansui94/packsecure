@@ -207,54 +207,46 @@ export const MachineInspectionModal: React.FC<MachineInspectionModalProps> = ({
         }
     };
 
-    // 🔒 机台日志全兼容读取：优先精确匹配本机台，防止 SQL/PostgREST 括号与空格语法报错，保证日志 100% 完整可见
+    // 🔒 严格隔离：每台机器只读取并展示属于它自己的日志，绝不与其他机器混串
     const fetchMachineLogs = async () => {
-        try {
-            let logList: MobileInspectionLog[] = [];
+        if (!machineId && !machineName) {
+            setLogs([]);
+            return;
+        }
 
-            // 1. 优先按 machine_id 精确查询
+        try {
+            let data: any[] | null = null;
+            let error = null;
+
+            // 1. 优先按 machine_id 精确匹配
             if (machineId) {
-                const { data } = await supabase
+                const res = await supabase
                     .from('mobile_inspection_logs')
                     .select('*')
                     .eq('machine_id', machineId)
                     .order('created_at', { ascending: false })
                     .limit(50);
-
-                if (data && data.length > 0) {
-                    logList = data as MobileInspectionLog[];
-                }
+                data = res.data;
+                error = res.error;
             }
 
-            // 2. 如果按 machine_id 没找到，按 machine_name 模糊/精确查询
-            if (logList.length === 0 && machineName) {
-                const cleanName = machineName.split('(')[0].trim();
-                const { data } = await supabase
+            // 2. 若按 machine_id 无结果且存在 machineName，按 machine_name 精确匹配
+            if ((!data || data.length === 0) && machineName) {
+                const res = await supabase
                     .from('mobile_inspection_logs')
                     .select('*')
-                    .ilike('machine_name', `%${cleanName}%`)
+                    .eq('machine_name', machineName)
                     .order('created_at', { ascending: false })
                     .limit(50);
-
-                if (data && data.length > 0) {
-                    logList = data as MobileInspectionLog[];
-                }
+                data = res.data;
+                error = res.error;
             }
 
-            // 3. 托底保障：如果当前全新机台无专有日志，自动拉取车间最新 20 条日志展示
-            if (logList.length === 0) {
-                const { data } = await supabase
-                    .from('mobile_inspection_logs')
-                    .select('*')
-                    .order('created_at', { ascending: false })
-                    .limit(20);
-
-                if (data && data.length > 0) {
-                    logList = data as MobileInspectionLog[];
-                }
+            if (!error && data) {
+                setLogs(data as MobileInspectionLog[]);
+            } else {
+                setLogs([]);
             }
-
-            setLogs(logList);
         } catch (e) {
             console.error('Fetch machine logs error:', e);
             setLogs([]);
