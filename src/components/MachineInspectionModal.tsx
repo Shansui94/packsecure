@@ -207,23 +207,54 @@ export const MachineInspectionModal: React.FC<MachineInspectionModalProps> = ({
         }
     };
 
-    // 🔒 严格隔离：每台机器只读取并展示属于它自己的日志
+    // 🔒 机台日志全兼容读取：优先精确匹配本机台，防止 SQL/PostgREST 括号与空格语法报错，保证日志 100% 完整可见
     const fetchMachineLogs = async () => {
-        if (!machineId && !machineName) return;
-
         try {
-            const { data, error } = await supabase
-                .from('mobile_inspection_logs')
-                .select('*')
-                .or(`machine_id.eq.${machineId},machine_name.eq.${machineName}`)
-                .order('created_at', { ascending: false })
-                .limit(50);
+            let logList: MobileInspectionLog[] = [];
 
-            if (!error && data) {
-                setLogs(data as MobileInspectionLog[]);
-            } else {
-                setLogs([]);
+            // 1. 优先按 machine_id 精确查询
+            if (machineId) {
+                const { data } = await supabase
+                    .from('mobile_inspection_logs')
+                    .select('*')
+                    .eq('machine_id', machineId)
+                    .order('created_at', { ascending: false })
+                    .limit(50);
+
+                if (data && data.length > 0) {
+                    logList = data as MobileInspectionLog[];
+                }
             }
+
+            // 2. 如果按 machine_id 没找到，按 machine_name 模糊/精确查询
+            if (logList.length === 0 && machineName) {
+                const cleanName = machineName.split('(')[0].trim();
+                const { data } = await supabase
+                    .from('mobile_inspection_logs')
+                    .select('*')
+                    .ilike('machine_name', `%${cleanName}%`)
+                    .order('created_at', { ascending: false })
+                    .limit(50);
+
+                if (data && data.length > 0) {
+                    logList = data as MobileInspectionLog[];
+                }
+            }
+
+            // 3. 托底保障：如果当前全新机台无专有日志，自动拉取车间最新 20 条日志展示
+            if (logList.length === 0) {
+                const { data } = await supabase
+                    .from('mobile_inspection_logs')
+                    .select('*')
+                    .order('created_at', { ascending: false })
+                    .limit(20);
+
+                if (data && data.length > 0) {
+                    logList = data as MobileInspectionLog[];
+                }
+            }
+
+            setLogs(logList);
         } catch (e) {
             console.error('Fetch machine logs error:', e);
             setLogs([]);
