@@ -288,10 +288,10 @@ export const MachineInspectionModal: React.FC<MachineInspectionModalProps> = ({
                 machine_id: machineId,
                 machine_name: machineName,
                 screw_id: 'Screw_A',
-                screw_name: '螺杆 A (Screw A)',
-                material_name: `⚙️ [机台配方初始化] 机台 [${machineName}] 混料配方与监控节点已建立`,
+                screw_name: '螺杆 A',
+                material_name: `配方初始化建档`,
                 new_quantity: 1,
-                reaction_notes: `配方建档成功 | 检查人: ${operatorName}`,
+                reaction_notes: `初始化完成 | 检查人: ${operatorName}`,
                 photo_url: 'https://images.unsplash.com/photo-1581091226825-a6a2a5aee158?w=300&q=80',
                 operator_id: currentUser?.uid,
                 operator_name: operatorName,
@@ -349,7 +349,7 @@ export const MachineInspectionModal: React.FC<MachineInspectionModalProps> = ({
             machine_name: machineName,
             screw_id: selectedScrew,
             screw_name: currentScrewConfig.name,
-            material_name: `⚙️ [更改配方] ➕ 添加了新物料: ${name} (${newMatQty}${newMatUnit})`,
+            material_name: `添加物料: ${name} (${newMatQty}${newMatUnit})`,
             new_quantity: newMatQty,
             reaction_notes: `更改配方 | 操作人: ${operatorName}`,
             photo_url: currentHopperPhoto || 'https://images.unsplash.com/photo-1581091226825-a6a2a5aee158?w=300&q=80',
@@ -398,7 +398,7 @@ export const MachineInspectionModal: React.FC<MachineInspectionModalProps> = ({
             machine_name: machineName,
             screw_id: selectedScrew,
             screw_name: currentScrewConfig.name,
-            material_name: `⚙️ [更改配方] 🗑️ 删除了物料: ${matName}`,
+            material_name: `删除物料: ${matName}`,
             new_quantity: 0,
             reaction_notes: `更改配方 | 操作人: ${operatorName}`,
             photo_url: currentHopperPhoto || 'https://images.unsplash.com/photo-1581091226825-a6a2a5aee158?w=300&q=80',
@@ -447,7 +447,7 @@ export const MachineInspectionModal: React.FC<MachineInspectionModalProps> = ({
             machine_name: machineName,
             screw_id: selectedScrew,
             screw_name: currentScrewConfig.name,
-            material_name: `⚙️ [更改配方] ✏️ 调整 [${targetMat.name}] 数量: ${oldQty} ➔ ${validQty} ${targetMat.unit} (${delta > 0 ? '+' : ''}${delta}${targetMat.unit})`,
+            material_name: `调整数量: ${targetMat.name} (${oldQty} ➔ ${validQty} ${targetMat.unit})`,
             previous_quantity: oldQty,
             new_quantity: validQty,
             change_amount: delta,
@@ -533,8 +533,8 @@ export const MachineInspectionModal: React.FC<MachineInspectionModalProps> = ({
 
         const mixDetailsText = currentMaterials.map(m => {
             const kgVal = m.unit === '包' ? m.newQty * 25 : m.newQty;
-            return `${m.name}: ${m.newQty}${m.unit}${m.unit === '包' ? `(${kgVal}kg)` : ''}`;
-        }).join(' | ');
+            return `${m.name}: ${m.newQty}${m.unit}`;
+        }).join(', ');
 
         const newLog: MobileInspectionLog = {
             log_type: 'material',
@@ -542,7 +542,7 @@ export const MachineInspectionModal: React.FC<MachineInspectionModalProps> = ({
             machine_name: machineName,
             screw_id: selectedScrew,
             screw_name: currentScrewConfig.name,
-            material_name: `[📦 Mix料操作记录 - ${currentScrewConfig.name}] 实际 Mix 物料: ${mixDetailsText}`,
+            material_name: `完成 Mix 配方 (${mixDetailsText})`,
             new_quantity: currentMaterials.length,
             reaction_notes: `Mix料记录 | 操作员: ${operatorName} (${operatorIdStr}) | 共 ${currentMaterials.length} 项`,
             photo_url: currentHopperPhoto,
@@ -665,30 +665,30 @@ export const MachineInspectionModal: React.FC<MachineInspectionModalProps> = ({
                 
                 {/* Header 机台与标题 */}
                 <div className="flex items-center justify-between border-b border-gray-800 pb-3">
-                    <div className="flex items-center space-x-2">
-                        <div className="p-2.5 bg-gradient-to-br from-rose-500/20 to-indigo-500/20 border border-rose-500/30 text-rose-400 rounded-xl">
-                            <Layers size={20} className="animate-pulse" />
+                    <div className="flex items-center space-x-3">
+                        <div className="p-2 bg-indigo-500/10 border border-indigo-500/20 text-indigo-400 rounded-xl">
+                            <Layers size={20} />
                         </div>
                         <div>
-                            <h3 className="font-black text-white text-base flex items-center gap-2">
+                            <h3 className="font-semibold text-white text-base flex items-center gap-2">
                                 <span>{machineName}</span>
-                                <span className="text-[10px] bg-rose-500/20 text-rose-300 border border-rose-500/30 px-1.5 py-0.5 rounded-md font-mono">
+                                <span className="text-xs bg-gray-800 text-gray-300 px-2 py-0.5 rounded-md font-normal">
                                     多螺杆共挤配料
                                 </span>
                             </h3>
-                            <p className="text-[11px] text-gray-400">下拉选择或直接打字输入物料名称，下方记录操作员 Mix 料操作</p>
+                            <p className="text-xs text-gray-400">选择螺杆通道配置混料配方及巡检</p>
                         </div>
                     </div>
-                    <button onClick={onClose} className="text-gray-400 hover:text-white p-1 rounded-lg hover:bg-gray-800">
-                        <X size={20} />
+                    <button onClick={onClose} className="text-gray-400 hover:text-white p-1.5 rounded-lg hover:bg-gray-800 transition">
+                        <X size={18} />
                     </button>
                 </div>
 
-                {/* 🔴 🔵 🟢 螺杆 A / B / C 通道切换 Tabs */}
-                <div className="space-y-1">
-                    <label className="text-[11px] font-bold text-gray-400 uppercase tracking-wider flex items-center gap-1">
-                        <Layers size={12} className="text-rose-400" />
-                        选择目标螺杆通道 (Screw Channel)
+                {/* 螺杆 A / B / C 通道切换 */}
+                <div className="space-y-1.5">
+                    <label className="text-xs font-medium text-gray-400 flex items-center gap-1.5">
+                        <Layers size={13} className="text-indigo-400" />
+                        选择目标螺杆通道
                     </label>
                     <div className="grid grid-cols-3 gap-2">
                         {SCREW_CONFIGS.map((screw) => {
@@ -698,13 +698,13 @@ export const MachineInspectionModal: React.FC<MachineInspectionModalProps> = ({
                                 <button
                                     key={screw.id}
                                     onClick={() => setSelectedScrew(screw.id)}
-                                    className={`p-2.5 rounded-xl border text-center transition flex flex-col items-center justify-center relative overflow-hidden ${isSelected
-                                        ? `bg-gradient-to-br ${screw.color} text-white border-white/40 shadow-lg ring-2 ring-white/20`
+                                    className={`p-2.5 rounded-xl border text-center transition flex flex-col items-center justify-center ${isSelected
+                                        ? `bg-gradient-to-br ${screw.color} text-white border-white/30 shadow-md`
                                         : 'bg-gray-950 border-gray-800 text-gray-400 hover:text-gray-200 hover:border-gray-700'
                                         }`}
                                 >
-                                    <span className="font-extrabold text-xs tracking-wide">{screw.name.split(' ')[0]} {screw.name.split(' ')[1]}</span>
-                                    <span className="text-[9px] opacity-80 mt-0.5">{screw.tag}</span>
+                                    <span className="font-medium text-xs">{screw.name.split(' ')[0]} {screw.name.split(' ')[1]}</span>
+                                    <span className="text-[11px] opacity-75 mt-0.5">{screw.tag}</span>
                                 </button>
                             );
                         })}
@@ -712,28 +712,28 @@ export const MachineInspectionModal: React.FC<MachineInspectionModalProps> = ({
                 </div>
 
                 {/* 功能 Tab 导航 */}
-                <div className="grid grid-cols-4 gap-1.5 bg-gray-950 p-1 rounded-xl border border-gray-800 text-[11px] font-bold">
+                <div className="grid grid-cols-4 gap-1.5 bg-gray-950 p-1 rounded-xl border border-gray-800 text-xs font-medium">
                     <button
                         onClick={() => setActiveTab('materials')}
-                        className={`py-2 rounded-lg transition flex items-center justify-center gap-1 ${activeTab === 'materials' ? 'bg-gradient-to-r from-blue-600 to-indigo-600 text-white shadow' : 'text-gray-400 hover:text-gray-200'}`}
+                        className={`py-2 rounded-lg transition flex items-center justify-center gap-1.5 ${activeTab === 'materials' ? 'bg-indigo-600 text-white shadow-sm' : 'text-gray-400 hover:text-gray-200'}`}
                     >
                         <Package size={14} /> 配料与Mix料
                     </button>
                     <button
                         onClick={() => setActiveTab('adjustment')}
-                        className={`py-2 rounded-lg transition flex items-center justify-center gap-1 ${activeTab === 'adjustment' ? 'bg-gradient-to-r from-emerald-600 to-teal-600 text-white shadow' : 'text-gray-400 hover:text-gray-200'}`}
+                        className={`py-2 rounded-lg transition flex items-center justify-center gap-1.5 ${activeTab === 'adjustment' ? 'bg-teal-600 text-white shadow-sm' : 'text-gray-400 hover:text-gray-200'}`}
                     >
                         <Wrench size={14} /> 位置调整
                     </button>
                     <button
                         onClick={() => setActiveTab('temperature')}
-                        className={`py-2 rounded-lg transition flex items-center justify-center gap-1 ${activeTab === 'temperature' ? 'bg-gradient-to-r from-amber-600 to-orange-600 text-white shadow' : 'text-gray-400 hover:text-gray-200'}`}
+                        className={`py-2 rounded-lg transition flex items-center justify-center gap-1.5 ${activeTab === 'temperature' ? 'bg-amber-600 text-white shadow-sm' : 'text-gray-400 hover:text-gray-200'}`}
                     >
                         <Thermometer size={14} /> 温度照片
                     </button>
                     <button
                         onClick={() => setActiveTab('logs')}
-                        className={`py-2 rounded-lg transition flex items-center justify-center gap-1 ${activeTab === 'logs' ? 'bg-gradient-to-r from-purple-600 to-pink-600 text-white shadow' : 'text-gray-400 hover:text-gray-200'}`}
+                        className={`py-2 rounded-lg transition flex items-center justify-center gap-1.5 ${activeTab === 'logs' ? 'bg-purple-600 text-white shadow-sm' : 'text-gray-400 hover:text-gray-200'}`}
                     >
                         <History size={14} /> <span className="notranslate" translate="no">本机日志 ({logs.length})</span>
                     </button>
@@ -1172,17 +1172,17 @@ export const MachineInspectionModal: React.FC<MachineInspectionModalProps> = ({
                             logs.map((log, idx) => (
                                 <div key={log.id || idx} className="bg-gray-950 border border-gray-800 rounded-xl p-3 flex items-center justify-between text-xs space-x-2">
                                     <div className="space-y-1 flex-1 min-w-0">
-                                        <div className="font-bold text-white flex items-center gap-1.5 flex-wrap">
-                                            <span className="text-rose-400 font-mono text-[10px] bg-rose-950/60 border border-rose-500/30 px-1 py-0.5 rounded shrink-0">
-                                                {log.screw_name || log.screw_id || '螺杆 A'}
+                                        <div className="font-medium text-gray-200 flex items-center gap-2 flex-wrap">
+                                            <span className="text-gray-300 bg-gray-800 border border-gray-700 px-1.5 py-0.5 rounded text-[11px] font-normal shrink-0">
+                                                {log.screw_name?.split(' ')[0] || log.screw_id || '螺杆 A'}
                                             </span>
-                                            {log.log_type === 'material' && <span className="text-blue-400 font-semibold truncate">{log.material_name}</span>}
-                                            {log.log_type === 'machine_adjustment' && <span className="text-emerald-400">🔧 调整: {log.adjustment_position}</span>}
-                                            {log.log_type === 'temperature' && <span className="text-amber-400">🌡️ 模头温度: {log.temp_die_head}°C</span>}
+                                            {log.log_type === 'material' && <span className="text-gray-100 truncate">{log.material_name}</span>}
+                                            {log.log_type === 'machine_adjustment' && <span className="text-emerald-300">调整: {log.adjustment_position}</span>}
+                                            {log.log_type === 'temperature' && <span className="text-amber-300">模头温度: {log.temp_die_head}°C</span>}
                                         </div>
                                         <div className="text-[11px] text-gray-400 flex items-center gap-3">
-                                            <span className="text-emerald-300 font-bold flex items-center gap-1">
-                                                <UserCheck size={11} /> 操作员: {log.operator_name}
+                                            <span className="text-gray-400 flex items-center gap-1">
+                                                <UserCheck size={11} className="text-gray-500" /> 操作员: {log.operator_name}
                                             </span>
                                             <span>{new Date(log.created_at || '').toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })}</span>
                                         </div>
@@ -1192,7 +1192,7 @@ export const MachineInspectionModal: React.FC<MachineInspectionModalProps> = ({
                                             src={log.photo_url}
                                             alt="proof"
                                             onClick={() => setLightboxPhoto(log.photo_url)}
-                                            className="w-11 h-11 rounded-lg object-cover border border-gray-700 cursor-pointer hover:opacity-80 shrink-0"
+                                            className="w-10 h-10 rounded-lg object-cover border border-gray-800 cursor-pointer hover:opacity-80 shrink-0"
                                         />
                                     )}
                                 </div>
