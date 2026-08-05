@@ -182,12 +182,13 @@ export const MachineInspectionModal: React.FC<MachineInspectionModalProps> = ({
     const [lightboxPhoto, setLightboxPhoto] = useState<string | null>(null);
 
     // 初始加载数据库日志 & 原材料清单
+    // 初始加载数据库日志 & 原材料清单 (仅在打开 Modal 或切换机台时触发，切螺杆不再重复重置日志)
     useEffect(() => {
         if (isOpen) {
             fetchMachineLogs();
             fetchDbRawMaterials();
         }
-    }, [isOpen, machineId, machineName, selectedScrew]);
+    }, [isOpen, machineId, machineName]);
 
     // 从 Supabase `items` 表（type = 'raw'）拉取全厂原材料数据
     const fetchDbRawMaterials = async () => {
@@ -734,7 +735,7 @@ export const MachineInspectionModal: React.FC<MachineInspectionModalProps> = ({
                         onClick={() => setActiveTab('logs')}
                         className={`py-2 rounded-lg transition flex items-center justify-center gap-1 ${activeTab === 'logs' ? 'bg-gradient-to-r from-purple-600 to-pink-600 text-white shadow' : 'text-gray-400 hover:text-gray-200'}`}
                     >
-                        <History size={14} /> 本机日志 ({logs.length})
+                        <History size={14} /> <span className="notranslate" translate="no">本机日志 ({logs.length})</span>
                     </button>
                 </div>
 
