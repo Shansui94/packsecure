@@ -34,7 +34,7 @@ import {
 import { supabase } from '../services/supabase';
 import { canAccessPage } from '../utils/pageAccess';
 import PageLogicDrawer from './PageLogicDrawer';
-import { changeLanguage } from '../utils/i18n';
+import { changeLanguage, LANGUAGES } from '../utils/i18n';
 
 interface LayoutProps {
     children: React.ReactNode;
@@ -54,6 +54,7 @@ const Layout: React.FC<LayoutProps> = ({ children, activePage, setActivePage, us
     const [theme, setTheme] = useState(localStorage.getItem('theme') || 'dark');
     // DB-driven page permissions: Set<page_id> of allowed pages for this role
     const [dbAllowedPages, setDbAllowedPages] = useState<Set<string> | null>(null);
+    const [showLangModal, setShowLangModal] = useState(false);
 
     // Languages Config
     const languages = [
@@ -574,22 +575,15 @@ const Layout: React.FC<LayoutProps> = ({ children, activePage, setActivePage, us
                         <span className="font-bold text-base tracking-tight text-white dark:text-white">PackSecure</span>
                     </div>
                     <div className="flex items-center gap-1">
-                        {/* 移动端语言选择下拉框 (优化展开宽度与离线原生切换) */}
-                        <select
-                            value={currentLanguage}
-                            onChange={(e) => {
-                                const val = e.target.value as any;
-                                setCurrentLanguage(val);
-                                changeLanguage(val);
-                            }}
-                            className="bg-gray-800/90 border border-gray-700 rounded-xl text-xs font-bold text-amber-300 px-2.5 py-1.5 focus:outline-none focus:border-blue-500 transition-all cursor-pointer min-w-[96px] shadow-md"
+                        {/* 📱 移动端触控语言切换按钮 */}
+                        <button
+                            type="button"
+                            onClick={() => setShowLangModal(true)}
+                            className="bg-gray-800/90 border border-gray-700 rounded-xl text-xs font-bold text-amber-300 px-2.5 py-1.5 flex items-center gap-1 shadow-md active:scale-95 transition cursor-pointer"
                         >
-                            {languages.map((lang) => (
-                                <option key={lang.code} value={lang.code} className="bg-[#121215] text-gray-200 py-1">
-                                    {lang.flag} {lang.label}
-                                </option>
-                            ))}
-                        </select>
+                            <span>{LANGUAGES.find(l => l.code === currentLanguage)?.flag || '🌐'}</span>
+                            <span>{LANGUAGES.find(l => l.code === currentLanguage)?.label.split(' ')[0] || '语言'}</span>
+                        </button>
                         <button onClick={toggleTheme} className="p-1.5 text-gray-400 hover:text-amber-400 transition-colors">
                             {theme === 'dark' ? <Moon size={18} /> : <Sun size={18} className="text-amber-500" />}
                         </button>
@@ -891,6 +885,49 @@ const Layout: React.FC<LayoutProps> = ({ children, activePage, setActivePage, us
                     />
                 </main>
             </div>
+
+            {/* 📱 手机端专用大按钮多语言触控切换弹窗 (Mobile-Optimized Touch Language Modal) */}
+            {showLangModal && (
+                <div className="fixed inset-0 z-[100] bg-black/80 backdrop-blur-md flex items-center justify-center p-4">
+                    <div className="bg-gray-900 border border-gray-800 rounded-3xl p-5 w-full max-w-xs space-y-4 shadow-2xl animate-fade-in">
+                        <div className="flex items-center justify-between border-b border-gray-800 pb-3">
+                            <h3 className="font-extrabold text-white text-sm flex items-center gap-2">
+                                🌐 选择系统语言 (Language)
+                            </h3>
+                            <button onClick={() => setShowLangModal(false)} className="text-gray-400 hover:text-white p-1 rounded-lg">
+                                <X size={18} />
+                            </button>
+                        </div>
+
+                        <div className="grid grid-cols-1 gap-2.5">
+                            {LANGUAGES.map((lang) => {
+                                const isSelected = currentLanguage === lang.code;
+                                return (
+                                    <button
+                                        key={lang.code}
+                                        onClick={() => {
+                                            setCurrentLanguage(lang.code);
+                                            setShowLangModal(false);
+                                            changeLanguage(lang.code);
+                                        }}
+                                        className={`p-3.5 rounded-2xl border text-left flex items-center justify-between font-bold text-xs transition active:scale-95 cursor-pointer ${
+                                            isSelected
+                                                ? 'bg-amber-500/20 text-amber-300 border-amber-500/50 shadow-lg'
+                                                : 'bg-gray-950 border-gray-800 text-gray-300 hover:bg-gray-800'
+                                        }`}
+                                    >
+                                        <span className="flex items-center gap-2.5 text-sm">
+                                            <span className="text-base">{lang.flag}</span>
+                                            <span>{lang.label}</span>
+                                        </span>
+                                        {isSelected && <span className="text-amber-400 font-extrabold">✓ 当前</span>}
+                                    </button>
+                                );
+                            })}
+                        </div>
+                    </div>
+                </div>
+            )}
         </div>
     );
 };
