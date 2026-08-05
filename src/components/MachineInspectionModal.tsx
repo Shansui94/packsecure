@@ -531,10 +531,7 @@ export const MachineInspectionModal: React.FC<MachineInspectionModalProps> = ({
         const operatorName = currentUser?.name || currentUser?.email?.split('@')[0] || '现场操作员';
         const operatorIdStr = currentUser?.uid || localStorage.getItem('operatorId') || 'OP-UNKNOWN';
 
-        const mixDetailsText = currentMaterials.map(m => {
-            const kgVal = m.unit === '包' ? m.newQty * 25 : m.newQty;
-            return `${m.name}: ${m.newQty}${m.unit}`;
-        }).join(', ');
+        const mixDetailsText = currentMaterials.map(m => `${m.name}: ${m.newQty}${m.unit}`).join(', ');
 
         const newLog: MobileInspectionLog = {
             log_type: 'material',
