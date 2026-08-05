@@ -376,23 +376,23 @@ const DetailPanel: React.FC<{ item: StockRow; locFilter: string; onClose: () => 
                 <div className="grid grid-cols-2 sm:grid-cols-4 border-b border-slate-200 dark:border-white/5 shrink-0 bg-slate-50 dark:bg-[#0a0a0f]">
                     <div className="px-4 py-4 border-r border-slate-200 dark:border-white/5 text-center flex flex-col items-center justify-center">
                         <div className="text-[10px] text-slate-500 dark:text-gray-500 font-black uppercase tracking-widest mb-1 flex items-center gap-1">Available <span className="hidden sm:inline">Stock</span></div>
-                        <div className={`text-3xl font-black ${(item.available_stock || 0) < 0 ? 'text-red-500 dark:text-red-400' : (item.available_stock || 0) < LOW_STOCK_THRESHOLD ? 'text-amber-500 dark:text-amber-400' : 'text-slate-800 dark:text-white'}`}>
+                        <div className={`text-3xl font-black notranslate ${(item.available_stock || 0) < 0 ? 'text-red-500 dark:text-red-400' : (item.available_stock || 0) < LOW_STOCK_THRESHOLD ? 'text-amber-500 dark:text-amber-400' : 'text-slate-800 dark:text-white'}`} translate="no">
                             {Number(item.available_stock || item.current_stock).toLocaleString()}
                         </div>
                     </div>
                     <div className="px-4 py-4 border-r border-slate-200 dark:border-white/5 text-center flex flex-col items-center justify-center bg-slate-100/50 dark:bg-white/[0.02]">
                         <div className="text-[10px] text-slate-400 dark:text-gray-500 font-black uppercase tracking-widest mb-1 flex items-center gap-1">Physical <span className="hidden sm:inline">Stock</span></div>
-                        <div className="text-xl font-black text-slate-600 dark:text-gray-400">
+                        <div className="text-xl font-black text-slate-600 dark:text-gray-400 notranslate" translate="no">
                             {Number(item.current_stock).toLocaleString()}
                         </div>
                     </div>
                     <div className="px-4 py-4 sm:border-r border-slate-200 dark:border-white/5 text-center flex flex-col items-center justify-center bg-red-50/50 dark:bg-red-500/5">
                         <div className="text-[10px] text-red-600 dark:text-red-500/70 font-black uppercase tracking-widest mb-1">Total OUT</div>
-                        <div className="text-xl font-black text-red-600 dark:text-red-400">-{totalOut.toLocaleString()}</div>
+                        <div className="text-xl font-black text-red-600 dark:text-red-400 notranslate" translate="no">-{totalOut.toLocaleString()}</div>
                     </div>
                     <div className="px-4 py-4 text-center flex flex-col items-center justify-center">
                         <div className="text-[10px] text-green-600 dark:text-green-500/70 font-black uppercase tracking-widest mb-1">Total IN</div>
-                        <div className="text-xl font-black text-green-600 dark:text-green-400">+{totalIn.toLocaleString()}</div>
+                        <div className="text-xl font-black text-green-600 dark:text-green-400 notranslate" translate="no">+{totalIn.toLocaleString()}</div>
                     </div>
                 </div>
 
@@ -697,7 +697,7 @@ const LiveStock: React.FC = () => {
                 } else {
                     const item = skuMap.get(r.sku)!;
                     item.current_stock = Math.max(0, item.current_stock + Math.max(0, r.current_stock || 0));
-                    item.reserved_stock += (r.reserved_stock || 0);
+                    item.reserved_stock = (item.reserved_stock || 0) + (r.reserved_stock || 0);
                     item.available_stock = Math.max(0, item.current_stock - item.reserved_stock);
                     if (r.last_updated && (!item.last_updated || new Date(r.last_updated) > new Date(item.last_updated))) {
                         item.last_updated = r.last_updated;
@@ -884,10 +884,10 @@ const LiveStock: React.FC = () => {
                                                 {badge.label}
                                             </span>
                                             <div className="flex flex-col items-end">
-                                                <div className={`text-xl sm:text-2xl font-black tracking-tighter leading-none ${getStockColor(item.available_stock || 0)}`}>
+                                                <div className={`text-xl sm:text-2xl font-black tracking-tighter leading-none notranslate ${getStockColor(item.available_stock || 0)}`} translate="no">
                                                     {Number(item.available_stock || 0).toLocaleString()}
                                                 </div>
-                                                <div className="text-[9px] text-slate-400 dark:text-gray-500 mt-1 font-mono tracking-tight">
+                                                <div className="text-[9px] text-slate-400 dark:text-gray-500 mt-1 font-mono tracking-tight notranslate" translate="no">
                                                     Phy: {item.current_stock} | Res: {item.reserved_stock}
                                                 </div>
                                             </div>
@@ -992,10 +992,10 @@ const LiveStock: React.FC = () => {
                                         </div>
                                     </div>
                                     <div className="flex flex-col items-end shrink-0 pl-3 border-l border-slate-200 dark:border-white/10">
-                                        <div className={`text-lg sm:text-xl font-black tracking-tighter ${getStockColor(item.available_stock || 0)}`}>
+                                        <div className={`text-lg sm:text-xl font-black tracking-tighter notranslate ${getStockColor(item.available_stock || 0)}`} translate="no">
                                             {Number(item.available_stock || 0).toLocaleString()}
                                         </div>
-                                        <div className="text-[10px] text-slate-400 dark:text-gray-500 font-mono mt-0.5">
+                                        <div className="text-[10px] text-slate-400 dark:text-gray-500 font-mono mt-0.5 notranslate" translate="no">
                                             P:{item.current_stock} R:{item.reserved_stock}
                                         </div>
                                     </div>
