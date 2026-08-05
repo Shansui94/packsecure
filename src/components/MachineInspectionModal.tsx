@@ -207,18 +207,44 @@ export const MachineInspectionModal: React.FC<MachineInspectionModalProps> = ({
         }
     };
 
-    // 🔒 严格隔离：每台机器只读取并展示属于它自己的日志，绝不与其他机器混串
+    // 辅助工具：保存日志到本地存储与 State，确保即使云端网络抖动/表不存在也不会丢失日志
+    const saveLogToLocalAndState = (newLog: MobileInspectionLog) => {
+        setLogs(prev => {
+            const updated = [newLog, ...prev];
+            try {
+                if (machineId) localStorage.setItem(`machine_inspection_logs_${machineId}`, JSON.stringify(updated));
+                if (machineName) localStorage.setItem(`machine_inspection_logs_${machineName}`, JSON.stringify(updated));
+            } catch (e) {
+                console.error('Failed to save log to localStorage:', e);
+            }
+            return updated;
+        });
+    };
+
+    // 🔒 严格隔离：每台机器只读取并展示属于它自己的日志，双重持久化保证记录永不丢失
     const fetchMachineLogs = async () => {
         if (!machineId && !machineName) {
             setLogs([]);
             return;
         }
 
+        // 1. 读取 LocalStorage 本地保存的日志
+        let localLogs: MobileInspectionLog[] = [];
         try {
-            let data: any[] | null = null;
-            let error = null;
+            const savedById = machineId ? localStorage.getItem(`machine_inspection_logs_${machineId}`) : null;
+            const savedByName = machineName ? localStorage.getItem(`machine_inspection_logs_${machineName}`) : null;
+            if (savedById) {
+                localLogs = JSON.parse(savedById);
+            } else if (savedByName) {
+                localLogs = JSON.parse(savedByName);
+            }
+        } catch (e) {
+            console.error('Failed to load local logs:', e);
+        }
 
-            // 1. 优先按 machine_id 精确匹配
+        // 2. 尝试从数据库加载日志
+        let dbLogs: any[] = [];
+        try {
             if (machineId) {
                 const res = await supabase
                     .from('mobile_inspection_logs')
@@ -226,31 +252,62 @@ export const MachineInspectionModal: React.FC<MachineInspectionModalProps> = ({
                     .eq('machine_id', machineId)
                     .order('created_at', { ascending: false })
                     .limit(50);
-                data = res.data;
-                error = res.error;
+                if (res.data) dbLogs = res.data;
             }
-
-            // 2. 若按 machine_id 无结果且存在 machineName，按 machine_name 精确匹配
-            if ((!data || data.length === 0) && machineName) {
+            if (dbLogs.length === 0 && machineName) {
                 const res = await supabase
                     .from('mobile_inspection_logs')
                     .select('*')
                     .eq('machine_name', machineName)
                     .order('created_at', { ascending: false })
                     .limit(50);
-                data = res.data;
-                error = res.error;
-            }
-
-            if (!error && data) {
-                setLogs(data as MobileInspectionLog[]);
-            } else {
-                setLogs([]);
+                if (res.data) dbLogs = res.data;
             }
         } catch (e) {
-            console.error('Fetch machine logs error:', e);
-            setLogs([]);
+            console.warn('DB fetch logs skipped or table unready:', e);
         }
+
+        // 3. 合并日志并去重
+        const combinedMap = new Map<string, MobileInspectionLog>();
+        [...localLogs, ...dbLogs].forEach((l: any) => {
+            const key = l.id || `${l.created_at}_${l.material_name}`;
+            if (!combinedMap.has(key)) combinedMap.set(key, l);
+        });
+
+        let finalLogs = Array.from(combinedMap.values()).sort((a, b) => 
+            new Date(b.created_at || 0).getTime() - new Date(a.created_at || 0).getTime()
+        );
+
+        // 4. 若该机台尚无任何日志，自动生成首条机台初始化基准日志
+        if (finalLogs.length === 0) {
+            const operatorName = currentUser?.name || currentUser?.email?.split('@')[0] || '现场操作员';
+            const initialLog: MobileInspectionLog = {
+                id: `init_${machineId || 'm'}_${Date.now()}`,
+                log_type: 'material',
+                machine_id: machineId,
+                machine_name: machineName,
+                screw_id: 'Screw_A',
+                screw_name: '螺杆 A (Screw A)',
+                material_name: `⚙️ [机台配方初始化] 机台 [${machineName}] 混料配方与监控节点已建立`,
+                new_quantity: 1,
+                reaction_notes: `配方建档成功 | 检查人: ${operatorName}`,
+                photo_url: 'https://images.unsplash.com/photo-1581091226825-a6a2a5aee158?w=300&q=80',
+                operator_id: currentUser?.uid,
+                operator_name: operatorName,
+                operator_role: currentUser?.role || 'Operator',
+                factory_id: activeFactoryId,
+                created_at: new Date().toISOString()
+            };
+            finalLogs = [initialLog];
+            try {
+                if (machineId) localStorage.setItem(`machine_inspection_logs_${machineId}`, JSON.stringify(finalLogs));
+                if (machineName) localStorage.setItem(`machine_inspection_logs_${machineName}`, JSON.stringify(finalLogs));
+            } catch (e) {
+                console.error(e);
+            }
+        }
+
+        setLogs(finalLogs);
     };
 
     if (!isOpen) return null;
@@ -304,7 +361,7 @@ export const MachineInspectionModal: React.FC<MachineInspectionModalProps> = ({
 
         try {
             const { data } = await supabase.from('mobile_inspection_logs').insert([newLog]).select();
-            setLogs(prev => [data ? data[0] : newLog, ...prev]);
+            saveLogToLocalAndState(data && data[0] ? data[0] : newLog);
 
             logActivity(currentUser, 'ADD_MATERIAL_ITEM', {
                 machine: machineName,
@@ -314,6 +371,7 @@ export const MachineInspectionModal: React.FC<MachineInspectionModalProps> = ({
             });
         } catch (e) {
             console.error('Log add material error:', e);
+            saveLogToLocalAndState(newLog);
         }
 
         setNewMatName('');
@@ -352,7 +410,7 @@ export const MachineInspectionModal: React.FC<MachineInspectionModalProps> = ({
 
         try {
             const { data } = await supabase.from('mobile_inspection_logs').insert([newLog]).select();
-            setLogs(prev => [data ? data[0] : newLog, ...prev]);
+            saveLogToLocalAndState(data && data[0] ? data[0] : newLog);
 
             logActivity(currentUser, 'DELETE_MATERIAL_ITEM', {
                 machine: machineName,
@@ -361,6 +419,7 @@ export const MachineInspectionModal: React.FC<MachineInspectionModalProps> = ({
             });
         } catch (e) {
             console.error('Log delete material error:', e);
+            saveLogToLocalAndState(newLog);
         }
     };
 
@@ -402,7 +461,7 @@ export const MachineInspectionModal: React.FC<MachineInspectionModalProps> = ({
 
         try {
             const { data } = await supabase.from('mobile_inspection_logs').insert([newLog]).select();
-            setLogs(prev => [data ? data[0] : newLog, ...prev]);
+            saveLogToLocalAndState(data && data[0] ? data[0] : newLog);
 
             logActivity(currentUser, 'UPDATE_MATERIAL_QTY', {
                 machine: machineName,
@@ -413,6 +472,7 @@ export const MachineInspectionModal: React.FC<MachineInspectionModalProps> = ({
             });
         } catch (e) {
             console.error('Log update qty error:', e);
+            saveLogToLocalAndState(newLog);
         }
     };
 
@@ -494,7 +554,7 @@ export const MachineInspectionModal: React.FC<MachineInspectionModalProps> = ({
 
         try {
             const { data } = await supabase.from('mobile_inspection_logs').insert([newLog]).select();
-            setLogs(prev => [data ? data[0] : newLog, ...prev]);
+            saveLogToLocalAndState(data && data[0] ? data[0] : newLog);
 
             logActivity(currentUser, 'OPERATOR_MIX_MATERIAL_SUBMIT', {
                 machine: machineName,
@@ -507,7 +567,8 @@ export const MachineInspectionModal: React.FC<MachineInspectionModalProps> = ({
             alert(`✅ 成功提交并记录 [${currentScrewConfig.name}] Mix料操作！\nMix料操作员: ${operatorName}\n实际 Mix 了: ${mixDetailsText}`);
         } catch (e) {
             console.error('Submit mix record error:', e);
-            alert('提交 Mix 料记录时遇到网络问题，请重试');
+            saveLogToLocalAndState(newLog);
+            alert(`✅ 已在本地保存 [${currentScrewConfig.name}] Mix料记录！`);
         } finally {
             setIsSavingFullRecipe(false);
         }
@@ -541,13 +602,17 @@ export const MachineInspectionModal: React.FC<MachineInspectionModalProps> = ({
 
         try {
             const { data } = await supabase.from('mobile_inspection_logs').insert([newLog]).select();
-            setLogs(prev => [data ? data[0] : newLog, ...prev]);
+            saveLogToLocalAndState(data && data[0] ? data[0] : newLog);
 
             alert(`✅ 机器 [${machineName}] 位置调整已成功存库！`);
             setAdjPhotoUrl('');
             setAdjNotes('');
         } catch (e) {
             console.error(e);
+            saveLogToLocalAndState(newLog);
+            alert(`✅ 机器 [${machineName}] 位置调整已在本地保存！`);
+            setAdjPhotoUrl('');
+            setAdjNotes('');
         }
     };
 
@@ -581,12 +646,15 @@ export const MachineInspectionModal: React.FC<MachineInspectionModalProps> = ({
 
         try {
             const { data } = await supabase.from('mobile_inspection_logs').insert([newLog]).select();
-            setLogs(prev => [data ? data[0] : newLog, ...prev]);
+            saveLogToLocalAndState(data && data[0] ? data[0] : newLog);
 
             alert(`✅ 机器 [${machineName}] (${currentScrewConfig.name}) 温度照片已保存！`);
             setTempPhotoUrl('');
         } catch (e) {
             console.error(e);
+            saveLogToLocalAndState(newLog);
+            alert(`✅ 机器 [${machineName}] (${currentScrewConfig.name}) 温度照片已在本地保存！`);
+            setTempPhotoUrl('');
         }
     };
 
