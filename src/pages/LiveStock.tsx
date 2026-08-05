@@ -594,19 +594,24 @@ const LiveStock: React.FC = () => {
                 return loc.trim();
             };
 
-            // 1. 优先按 (SKU + 归一化仓库) 聚合物理库存
+            const activeSkus = new Set((masterRes.data || []).map(i => i.sku.trim()));
+
+            // 1. 优先按 (SKU + 归一化仓库) 聚合物理库存 (仅包含 master_items_v2 中 Status = Active 的活动产品)
             const physMap = new Map<string, StockRow>();
 
             (invRes.data || []).forEach(r => {
                 if (!r.sku) return;
+                const trimmedSku = r.sku.trim();
+                if (!activeSkus.has(trimmedSku)) return; // 🔒 过滤失效/测试废弃 SKU
+
                 const normLoc = normalizeLoc(r.loc_id);
-                const key = `${r.sku.trim()}|${normLoc}`;
+                const key = `${trimmedSku}|${normLoc}`;
                 const rawQty = Number(r.current_stock) || 0;
 
                 if (!physMap.has(key)) {
                     physMap.set(key, {
-                        sku: r.sku.trim(),
-                        name: r.name || r.sku,
+                        sku: trimmedSku,
+                        name: r.name || trimmedSku,
                         type: r.type || 'FG',
                         uom: r.uom || 'ROL',
                         loc_id: normLoc,
@@ -635,7 +640,7 @@ const LiveStock: React.FC = () => {
                         const qty = Number(item.quantity) || 0;
                         const rawLoc = item.sourceLocation || (order as any).sourceLocation || (order as any).factory_id;
                         const loc = normalizeLoc(rawLoc);
-                        if (sku && qty > 0) {
+                        if (sku && activeSkus.has(sku) && qty > 0) {
                             const key = `${sku}|${loc}`;
                             reservedMap.set(key, (reservedMap.get(key) || 0) + qty);
                         }
@@ -708,10 +713,10 @@ const LiveStock: React.FC = () => {
             }
         });
 
-        // 剔除无物理库存且无预留的非关联行
+        // 🔒 剔除物理库存为 0 且无订单预留的无用/空占位记录
         const mergedArray = Array.from(skuMap.values());
         return mergedArray.filter(r => {
-            if (locationFilter !== 'All' && r.current_stock === 0 && (r.reserved_stock || 0) === 0) {
+            if (r.current_stock === 0 && (r.reserved_stock || 0) === 0) {
                 return false;
             }
             const matchType = typeFilter === 'All' || r.type === typeFilter;
