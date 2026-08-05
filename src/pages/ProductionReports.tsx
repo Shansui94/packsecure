@@ -481,7 +481,17 @@ const ProductionReports: React.FC<ProductionReportsProps> = () => {
             let orderRolls = 0;
             const items = order.items || [];
             items.forEach((item: any) => {
-                orderRolls += Number(item.quantity) || 0;
+                const sku = (item.sku || '').toUpperCase();
+                const prd = (item.product || item.name || '').toUpperCase();
+                // 🔒 仅统计实际交付的生产卷材 (Bubble Wrap 泡膜卷数及标准卷材)，剔除胶带 (Tape)、快递袋 (AWB)、气柱 (AirTube) 等杂项辅料
+                const isNonRollSupply = sku.includes('TAPE') || prd.includes('TAPE') || 
+                                        sku.startsWith('AWB-') || prd.includes('AWB') || 
+                                        sku.includes('CUKUPP-') || prd.includes('CUKUPP-') || 
+                                        sku.startsWith('AIRTUBE') || prd.includes('AIRTUBE');
+                
+                if (!isNonRollSupply) {
+                    orderRolls += Number(item.quantity) || 0;
+                }
             });
             stateMap[state].totalRolls += orderRolls;
             totalRolls += orderRolls;
