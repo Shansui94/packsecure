@@ -583,19 +583,50 @@ const LiveStock: React.FC = () => {
             if (masterRes.error) throw masterRes.error;
             if (ordersRes.error) throw ordersRes.error;
 
-            // 仓库位置名称归一化对齐（防止 OPM Lama / opm_lama / T1 位置不匹配导致预留量错扣为负数）
+            // 仓库位置名称归一化对齐（合并 OPM Lama / opm_lama / T1 / T2 / T3 等历史别名）
             const normalizeLoc = (loc?: string) => {
-                if (!loc) return 'no location';
+                if (!loc) return 'OPM Lama';
                 const l = loc.toLowerCase().trim();
-                if (l === 'opm lama' || l === 'opm_lama' || l === 't1' || l === 't2' || l === 't3') return 'OPM Lama';
+                if (l === 'opm lama' || l === 'opm_lama' || l === 't1' || l === 't2' || l === 't3' || l === 't4' || l === 't5' || l === 'taiping') return 'OPM Lama';
                 if (l === 'spd') return 'SPD';
                 if (l === 'opm corner' || l === 'opm_corner') return 'OPM Corner';
                 if (l === 'opm ali' || l === 'opm_ali') return 'OPM Ali';
                 return loc.trim();
             };
 
-            // Calculate Reserved Stock from pending orders
-            const reservedMap = new Map<string, number>(); // format: "SKU|LOC" -> qty
+            // 1. 优先按 (SKU + 归一化仓库) 聚合物理库存
+            const physMap = new Map<string, StockRow>();
+
+            (invRes.data || []).forEach(r => {
+                if (!r.sku) return;
+                const normLoc = normalizeLoc(r.loc_id);
+                const key = `${r.sku.trim()}|${normLoc}`;
+                const rawQty = Number(r.current_stock) || 0;
+
+                if (!physMap.has(key)) {
+                    physMap.set(key, {
+                        sku: r.sku.trim(),
+                        name: r.name || r.sku,
+                        type: r.type || 'FG',
+                        uom: r.uom || 'ROL',
+                        loc_id: normLoc,
+                        current_stock: Math.max(0, rawQty),
+                        reserved_stock: 0,
+                        available_stock: Math.max(0, rawQty),
+                        last_updated: r.last_updated || ''
+                    });
+                } else {
+                    const existing = physMap.get(key)!;
+                    existing.current_stock = Math.max(0, existing.current_stock + Math.max(0, rawQty));
+                    existing.available_stock = existing.current_stock;
+                    if (r.last_updated && (!existing.last_updated || new Date(r.last_updated) > new Date(existing.last_updated))) {
+                        existing.last_updated = r.last_updated;
+                    }
+                }
+            });
+
+            // 2. 统计待出货订单预留量 (SKU + 归一化仓库)
+            const reservedMap = new Map<string, number>();
             const pendingOrders = ordersRes.data || [];
             pendingOrders.forEach(order => {
                 if (order.items && Array.isArray(order.items)) {
@@ -612,18 +643,18 @@ const LiveStock: React.FC = () => {
                 }
             });
 
-            const activeSkus = new Set((masterRes.data || []).map(i => i.sku));
-            const activeInventory = (invRes.data || []).filter(r => activeSkus.has(r.sku)).map(r => {
-                const normLoc = normalizeLoc(r.loc_id);
-                const resQty = reservedMap.get(`${r.sku}|${normLoc}`) || 0;
-                const currentStockNum = Number(r.current_stock) || 0;
-                return {
-                    ...r,
-                    loc_id: normLoc,
-                    current_stock: currentStockNum,
+            // 3. 合并计算最终物理库存、预留量与可用库存
+            const activeInventory: StockRow[] = [];
+            physMap.forEach((item, key) => {
+                const resQty = reservedMap.get(key) || 0;
+                const phyStock = Math.max(0, item.current_stock);
+                const availStock = Math.max(0, phyStock - resQty);
+                activeInventory.push({
+                    ...item,
+                    current_stock: phyStock,
                     reserved_stock: resQty,
-                    available_stock: Math.max(0, currentStockNum - resQty)
-                };
+                    available_stock: availStock
+                });
             });
 
             setRows(activeInventory);
@@ -649,32 +680,35 @@ const LiveStock: React.FC = () => {
     const filtered = useMemo(() => {
         const searchTerms = search.toLowerCase().trim().split(/[\s-]+/).filter(Boolean);
         
-        // 1. Build a map of all unique active SKUs with baseline 0 stock
         const skuMap = new Map<string, StockRow>();
-        rows.forEach(r => {
-            if (!skuMap.has(r.sku)) {
-                skuMap.set(r.sku, { ...r, loc_id: locationFilter === 'All' ? undefined : locationFilter, current_stock: 0, reserved_stock: 0, available_stock: 0, last_updated: '' });
-            }
-        });
 
-        // 2. Aggregate stock dependent on locationFilter
         rows.forEach(r => {
-            const isMatchLoc = locationFilter === 'All' || r.loc_id === locationFilter || (locationFilter === 'OPM Lama' && (r.loc_id === 'OPM Lama' || r.loc_id === 'opm_lama'));
+            const isMatchLoc = locationFilter === 'All' || r.loc_id === locationFilter;
             if (isMatchLoc) {
-                const item = skuMap.get(r.sku)!;
-                item.current_stock += (r.current_stock || 0);
-                item.reserved_stock = (item.reserved_stock || 0) + (r.reserved_stock || 0);
-                item.available_stock = (item.available_stock || 0) + (r.available_stock || 0);
-                if (r.last_updated && (!item.last_updated || new Date(r.last_updated) > new Date(item.last_updated))) {
-                    item.last_updated = r.last_updated;
+                if (!skuMap.has(r.sku)) {
+                    skuMap.set(r.sku, {
+                        ...r,
+                        loc_id: locationFilter === 'All' ? undefined : locationFilter,
+                        current_stock: Math.max(0, r.current_stock || 0),
+                        reserved_stock: r.reserved_stock || 0,
+                        available_stock: Math.max(0, (r.current_stock || 0) - (r.reserved_stock || 0)),
+                        last_updated: r.last_updated || ''
+                    });
+                } else {
+                    const item = skuMap.get(r.sku)!;
+                    item.current_stock = Math.max(0, item.current_stock + Math.max(0, r.current_stock || 0));
+                    item.reserved_stock += (r.reserved_stock || 0);
+                    item.available_stock = Math.max(0, item.current_stock - item.reserved_stock);
+                    if (r.last_updated && (!item.last_updated || new Date(r.last_updated) > new Date(item.last_updated))) {
+                        item.last_updated = r.last_updated;
+                    }
                 }
             }
         });
-        
-        // 3. Convert to array and apply text/type filters
+
+        // 剔除无物理库存且无预留的非关联行
         const mergedArray = Array.from(skuMap.values());
         return mergedArray.filter(r => {
-            // 当筛选指定仓库（如 OPM Lama）时，剔除在该仓库物理库存与预留量均为 0 的 SKU
             if (locationFilter !== 'All' && r.current_stock === 0 && (r.reserved_stock || 0) === 0) {
                 return false;
             }
