@@ -2102,15 +2102,16 @@ const ProductionControl: React.FC<ProductionControlProps> = ({ user, jobs = [], 
                         </button>
                     )}
 
-                    <div className="flex items-center gap-2 ml-auto">
+                    <div className="flex items-center gap-2 ml-auto flex-wrap sm:flex-nowrap">
                         <button
                             type="button"
                             onClick={() => setShowInspectionModal(true)}
-                            className="bg-gradient-to-r from-amber-600 to-orange-600 hover:from-amber-500 hover:to-orange-500 text-white font-bold px-3 py-2 rounded-xl text-xs flex items-center gap-1.5 shadow-lg active:scale-95 transition cursor-pointer border border-amber-400/30 shrink-0"
+                            className="bg-gradient-to-r from-amber-600 to-orange-600 hover:from-amber-500 hover:to-orange-500 text-white font-bold px-2.5 sm:px-3 py-2 rounded-xl text-xs flex items-center gap-1.5 shadow-lg active:scale-95 transition cursor-pointer border border-amber-400/30 shrink-0"
                             title="打开当前机台的原材料、位置与温度巡检快记"
                         >
                             <FlaskConical size={15} />
-                            <span>📸 机台巡检与配料快记</span>
+                            <span className="hidden sm:inline">📸 机台巡检与配料快记</span>
+                            <span className="sm:hidden">📸 配料巡检</span>
                         </button>
 
                         {clockInTime && (
@@ -2120,16 +2121,20 @@ const ProductionControl: React.FC<ProductionControlProps> = ({ user, jobs = [], 
                                         hasScannedClockOutRef.current = false;
                                         setIsScanningForClockOut(true);
                                     }}
-                                    className="bg-red-600 hover:bg-red-500 text-white font-bold py-2 px-4 rounded-lg shadow-lg border border-red-400/50 flex items-center gap-2 text-xs shrink-0"
+                                    className="bg-red-600 hover:bg-red-500 text-white font-bold py-2 px-3 sm:px-4 rounded-xl shadow-lg border border-red-400/50 flex items-center gap-1.5 text-xs shrink-0"
                                 >
-                                    <Camera size={14} /> 扫码登出 / Scan to Clock Out
+                                    <Camera size={14} />
+                                    <span className="hidden sm:inline">扫码登出 / Scan to Clock Out</span>
+                                    <span className="sm:hidden">扫码登出</span>
                                 </button>
                             ) : (
                                 <button
                                     onClick={handleManualClockOut}
-                                    className="bg-red-600 hover:bg-red-500 text-white font-bold py-2 px-4 rounded-lg shadow-lg border border-red-400/50 flex items-center gap-2 text-xs shrink-0"
+                                    className="bg-red-600 hover:bg-red-500 text-white font-bold py-2 px-3 sm:px-4 rounded-xl shadow-lg border border-red-400/50 flex items-center gap-1.5 text-xs shrink-0"
                                 >
-                                    <LogOut size={14} /> CLOCK OUT
+                                    <LogOut size={14} />
+                                    <span className="hidden sm:inline">登出 / Clock Out</span>
+                                    <span className="sm:hidden">登出</span>
                                 </button>
                             )
                         )}
