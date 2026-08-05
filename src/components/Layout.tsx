@@ -29,7 +29,9 @@ import {
     Sun,
     Moon,
     Printer,
-    FlaskConical
+    FlaskConical,
+    Bot,
+    Lightbulb
 } from 'lucide-react';
 import { supabase } from '../services/supabase';
 import { canAccessPage } from '../utils/pageAccess';
@@ -772,6 +774,34 @@ const Layout: React.FC<LayoutProps> = ({ children, activePage, setActivePage, us
                                 <NavItem id="stock-audit" icon={ClipboardCheck} label="Stock Audit" roles={['Operator', 'Driver', 'SuperAdmin', 'Admin', 'Manager', 'HR']} />
                             </NavGroup>
                         )}
+                        {/* 🤖 AI 助理与 💡 本页逻辑说明 专用按钮 (移至左侧菜单) */}
+                        <div className="px-3 pt-3 pb-2 border-t border-white/5 space-y-2 shrink-0">
+                            <button
+                                type="button"
+                                onClick={() => {
+                                    setIsMobileMenuOpen(false);
+                                    window.dispatchEvent(new CustomEvent('packsecure:open-ai-chat'));
+                                }}
+                                className={`w-full flex items-center gap-3 px-3.5 py-2.5 rounded-xl bg-gradient-to-r from-blue-900/40 to-indigo-900/40 border border-blue-500/30 text-blue-300 font-bold text-xs hover:from-blue-800/50 hover:to-indigo-800/50 transition shadow-sm active:scale-95 cursor-pointer ${useCollapsedNavLayout ? 'justify-center px-0' : ''}`}
+                                title="🤖 AI 智能助理"
+                            >
+                                <Bot size={18} className="text-blue-400 shrink-0" />
+                                {showNavLabels && <span>🤖 AI 智能助理</span>}
+                            </button>
+
+                            <button
+                                type="button"
+                                onClick={() => {
+                                    setIsMobileMenuOpen(false);
+                                    window.dispatchEvent(new CustomEvent('packsecure:open-page-logic'));
+                                }}
+                                className={`w-full flex items-center gap-3 px-3.5 py-2.5 rounded-xl bg-gradient-to-r from-purple-900/40 to-indigo-900/40 border border-purple-500/30 text-purple-300 font-bold text-xs hover:from-purple-800/50 hover:to-indigo-800/50 transition shadow-sm active:scale-95 cursor-pointer ${useCollapsedNavLayout ? 'justify-center px-0' : ''}`}
+                                title="💡 本页逻辑说明"
+                            >
+                                <Lightbulb size={18} className="text-amber-400 shrink-0 animate-pulse" />
+                                {showNavLabels && <span>💡 本页逻辑说明</span>}
+                            </button>
+                        </div>
                     </nav>
 
                     {/* User Profile (Bottom) */}

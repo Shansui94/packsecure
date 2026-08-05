@@ -40,6 +40,13 @@ export default function PageLogicDrawer({ activePage, userRole, user, setActiveP
     // Don't show on login/register/password update pages
     const isAuthPage = ['login', 'register', 'update-password'].includes(activePage);
 
+    // 监听左侧菜单触发打开 本页逻辑 弹窗
+    useEffect(() => {
+        const handleOpen = () => setIsOpen(true);
+        window.addEventListener('packsecure:open-page-logic', handleOpen);
+        return () => window.removeEventListener('packsecure:open-page-logic', handleOpen);
+    }, []);
+
     useEffect(() => {
         if (!isOpen || !activePage || isAuthPage) return;
 
@@ -135,11 +142,11 @@ export default function PageLogicDrawer({ activePage, userRole, user, setActiveP
 
     return (
         <>
-            {/* Floating Toggle Button (Positions perfectly above AIAgentWidget) */}
-            {!isOpen && (
+            {/* Floating Toggle Button (Hidden on mobile to prevent blocking view) */}
+            {!isOpen && !isAuthPage && (
                 <button
                     onClick={() => setIsOpen(true)}
-                    className="fixed bottom-[88px] right-6 z-50 group flex items-center justify-center gap-2 px-4 h-12 bg-gradient-to-r from-indigo-600 to-purple-600 hover:from-indigo-500 hover:to-purple-500 text-white rounded-full shadow-lg shadow-indigo-500/20 hover:scale-105 active:scale-95 transition-all duration-300 border border-indigo-400/20 cursor-pointer pointer-events-auto"
+                    className="hidden lg:flex fixed bottom-[88px] right-6 z-50 group items-center justify-center gap-2 px-4 h-12 bg-gradient-to-r from-indigo-600 to-purple-600 hover:from-indigo-500 hover:to-purple-500 text-white rounded-full shadow-lg shadow-indigo-500/20 hover:scale-105 active:scale-95 transition-all duration-300 border border-indigo-400/20 cursor-pointer pointer-events-auto"
                     title="查看本页面背后的业务逻辑与操作规范"
                 >
                     <Lightbulb size={18} className="text-yellow-300 animate-pulse" />
