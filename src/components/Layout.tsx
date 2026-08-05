@@ -28,7 +28,8 @@ import {
     Camera,
     Sun,
     Moon,
-    Printer
+    Printer,
+    FlaskConical
 } from 'lucide-react';
 import { supabase } from '../services/supabase';
 import { canAccessPage } from '../utils/pageAccess';
@@ -508,6 +509,7 @@ const Layout: React.FC<LayoutProps> = ({ children, activePage, setActivePage, us
 
                                 <NavGroup title="Operations">
                                     <NavItem id="scanner" icon={Scan} label="Production Workspace" roles={['SuperAdmin', 'Admin', 'Manager']} />
+                                    <NavItem id="raw_material_mobile" icon={FlaskConical} label="多螺杆配料与Mix料" roles={['SuperAdmin', 'Admin', 'Manager']} />
                                     <NavItem id="livestock" icon={BarChart3} label="Live Stock" roles={['SuperAdmin', 'Admin', 'Manager']} />
                                     <NavItem id="recipes" icon={Activity} label="Yield & AI Learning" roles={['SuperAdmin', 'Admin', 'Manager']} />
                                     <NavItem id="machine-schedule" icon={Calendar} label="Machine Schedule" roles={['SuperAdmin', 'Admin', 'Manager']} />
@@ -599,6 +601,7 @@ const Layout: React.FC<LayoutProps> = ({ children, activePage, setActivePage, us
                             <>
                                 <NavGroup title="Production Floor">
                                     <NavItem id="scanner" icon={Scan} label="Production Workspace" roles={['Operator']} />
+                                    <NavItem id="raw_material_mobile" icon={FlaskConical} label="多螺杆配料与Mix料" roles={['Operator']} />
                                     <NavItem id="order-summary" icon={FileBarChart} label="Daily Prep" roles={['Operator']} />
                                     <NavItem id="personal-report" icon={FileText} label="My Monthly Report" roles={['Operator']} />
                                 </NavGroup>

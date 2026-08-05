@@ -16,11 +16,12 @@ import { getBubbleWrapSku } from '../utils/skuMapper';
 import { 
     Box, Settings, Clock, Layers, LogOut, Calendar, Package,
     Camera, Check, AlertTriangle, User as UserIcon, RefreshCw, Play, Loader, Send, Sparkles, Image as ImageIcon,
-    Video, Square, X
+    Video, Square, X, FlaskConical
 } from 'lucide-react';
 import { supabase } from '../services/supabase';
 import { getMachineByCode, getMachineById } from '../services/productionService';
 import { Scanner } from '@yudiel/react-qr-scanner';
+import MachineInspectionModal from '../components/MachineInspectionModal';
 
 
 // --- TYPE DEFINITIONS ---
@@ -110,7 +111,7 @@ const parseBubbleWrapSku = (sku: string): ParsedSku | null => {
     }
 };
 
-const compressImage = (file: File, maxWidth = 1200, quality = 0.7): Promise<string> => {
+const compressImage = (file: File, maxWidth = 2048, quality = 0.85): Promise<string> => {
     return new Promise((resolve, reject) => {
         const reader = new FileReader();
         reader.onload = (e) => {
@@ -682,9 +683,10 @@ const formatMachineName = (name: string) => {
 interface ProductionControlProps {
     user: User | null;
     jobs?: JobOrder[];
+    onNavigate?: (page: string) => void;
 }
 
-const ProductionControl: React.FC<ProductionControlProps> = ({ user, jobs = [] }) => {
+const ProductionControl: React.FC<ProductionControlProps> = ({ user, jobs = [], onNavigate }) => {
     // Machine Selection State
     const [selectedMachine, setSelectedMachine] = useState<string | null>(
         sessionStorage.getItem('selectedMachine') || localStorage.getItem('device_machine_id')
@@ -694,6 +696,7 @@ const ProductionControl: React.FC<ProductionControlProps> = ({ user, jobs = [] }
     const [isScanningMachine, setIsScanningMachine] = useState<boolean>(false);
     const hasScannedRef = useRef(false);
     const currentMachineName = machineMetadata?.name || selectedMachine || 'Unknown Machine';
+    const [showInspectionModal, setShowInspectionModal] = useState(false);
 
 
     // Active Job State
@@ -743,6 +746,11 @@ const ProductionControl: React.FC<ProductionControlProps> = ({ user, jobs = [] }
     const [photoBase64, setPhotoBase64] = useState<string | null>(null);
     const [selectedBlob, setSelectedBlob] = useState<Blob | null>(null);
     const [selectedPhoto, setSelectedPhoto] = useState<any | null>(null);
+    const [isZoomed, setIsZoomed] = useState<boolean>(false);
+
+    useEffect(() => {
+        setIsZoomed(false);
+    }, [selectedPhoto]);
     const [photoCategory, setPhotoCategory] = useState('qc');
     const [photoNote, setPhotoNote] = useState('');
     const [aiAnalysis, setAiAnalysis] = useState<string | null>(null);
@@ -933,11 +941,11 @@ const ProductionControl: React.FC<ProductionControlProps> = ({ user, jobs = [] }
                 .from('operator_attendance')
                 .select('clock_in, operator_id')
                 .eq('machine_id', selectedMachine)
-                .is('clock_out', null)
-                .limit(1);
+                .is('clock_out', null);
 
             if (data && data.length > 0) {
-                const activeShift = data[0];
+                // Prioritize the current operator if they are on duty on this machine
+                const activeShift = data.find(s => s.operator_id === operatorEmployeeId) || data[0];
                 const { data: operatorUser } = await supabase
                     .from('sys_users_v2')
                     .select('name')
@@ -1154,7 +1162,8 @@ const ProductionControl: React.FC<ProductionControlProps> = ({ user, jobs = [] }
                 const todayStr = `${now.getFullYear()}-${String(now.getMonth() + 1).padStart(2, '0')}-${String(now.getDate()).padStart(2, '0')}`;
                 const clockEventTime = now.toISOString();
 
-                // 1. CHECK AND HANDLE TAKEOVER FOR THIS MACHINE
+                // 1. CHECK AND HANDLE TAKEOVER FOR THIS MACHINE (Commented out: Allow multiple operator logins per machine)
+                /*
                 const { data: activeShifts } = await supabase
                     .from('operator_attendance')
                     .select('id, clock_in, operator_id')
@@ -1191,6 +1200,7 @@ const ProductionControl: React.FC<ProductionControlProps> = ({ user, jobs = [] }
                         }
                     }
                 }
+                */
 
                 // 2. CHECK IF CURRENT OPERATOR ALREADY HAS AN ACTIVE SHIFT ON THIS MACHINE
                 const { data: myShifts } = await supabase
@@ -1661,12 +1671,8 @@ const ProductionControl: React.FC<ProductionControlProps> = ({ user, jobs = [] }
                 const base64 = compressed.split(',')[1];
                 setPhotoBase64(base64);
 
-                try {
-                    const imgBlob = await fetch(compressed).then(r => r.blob());
-                    setSelectedBlob(imgBlob);
-                } catch (err) {
-                    setSelectedBlob(file);
-                }
+                // ALWAYS upload the original uncompressed file for maximum clarity!
+                setSelectedBlob(file);
 
                 await runAIAnalysis(base64);
             }
@@ -1871,7 +1877,22 @@ const ProductionControl: React.FC<ProductionControlProps> = ({ user, jobs = [] }
 
     // Submit Photo Log
     const submitPhotoLog = async () => {
-        if (!photoBase64 || !operatorEmployeeId) return;
+        console.log("submitPhotoLog clicked. photoBase64:", !!photoBase64, "operatorEmployeeId:", operatorEmployeeId, "user:", user);
+        if (!photoBase64) {
+            alert("请先选择或拍摄照片！ / Please take or select a photo first!");
+            return;
+        }
+
+        // Determine operator/uploader details (fallback to logged-in user if no operator clocked in)
+        const uploaderId = operatorId || user?.uid || 'unknown';
+        const uploaderEmployeeId = operatorEmployeeId || user?.employeeId || user?.uid || 'unknown';
+        const uploaderName = operatorName || user?.name || user?.email || 'Unknown Staff';
+
+        if (!uploaderEmployeeId) {
+            alert("未检测到登录身份，无法上传！ / No login identity detected, cannot upload!");
+            return;
+        }
+
         setUploadingPhoto(true);
 
         try {
@@ -1898,7 +1919,7 @@ const ProductionControl: React.FC<ProductionControlProps> = ({ user, jobs = [] }
                 blob = await fetch(`data:${mimeType};base64,${photoBase64}`).then(r => r.blob());
             }
 
-            const fileName = `${operatorEmployeeId}_${Date.now()}.${fileExt}`;
+            const fileName = `${uploaderEmployeeId}_${Date.now()}.${fileExt}`;
 
             const { error: uploadError } = await supabase.storage
                 .from('work-photos')
@@ -1922,8 +1943,8 @@ const ProductionControl: React.FC<ProductionControlProps> = ({ user, jobs = [] }
                 const netWeightCalc = Number(defectWeight) - (selectedRolls * 0.35); // deduct paper core weight
                 await supabase.from('production_metrics_calibration').insert({
                     machine_id: selectedMachine || 'unknown',
-                    operator_id: operatorId || null,
-                    operator_name: operatorName || 'Unknown Operator',
+                    operator_id: uploaderId,
+                    operator_name: uploaderName,
                     sku: activeSku || 'unknown',
                     set_length: 150, 
                     producing_speed: 65, 
@@ -1941,8 +1962,8 @@ const ProductionControl: React.FC<ProductionControlProps> = ({ user, jobs = [] }
                 // Insert into production_material_inputs
                 await supabase.from('production_material_inputs').insert({
                     machine_id: selectedMachine || 'unknown',
-                    operator_id: operatorId || null,
-                    operator_name: operatorName || 'Unknown Operator',
+                    operator_id: uploaderId,
+                    operator_name: uploaderName,
                     recipe_name: recipeName || 'unknown',
                     materials: recipeMaterials,
                     total_weight: Number(recipeTotalWeight) || 0,
@@ -1955,8 +1976,8 @@ const ProductionControl: React.FC<ProductionControlProps> = ({ user, jobs = [] }
                 // Insert into production_metrics_calibration
                 await supabase.from('production_metrics_calibration').insert({
                     machine_id: selectedMachine || 'unknown',
-                    operator_id: operatorId || null,
-                    operator_name: operatorName || 'Unknown Operator',
+                    operator_id: uploaderId,
+                    operator_name: uploaderName,
                     sku: cartonSku || activeSku || 'unknown',
                     set_length: 150, 
                     producing_speed: 70, 
@@ -1971,8 +1992,8 @@ const ProductionControl: React.FC<ProductionControlProps> = ({ user, jobs = [] }
             }
 
             const { error: dbError } = await supabase.from('work_photos').insert({
-                employee_id: operatorEmployeeId,
-                employee_name: operatorName || 'Unknown Operator',
+                employee_id: uploaderEmployeeId,
+                employee_name: uploaderName,
                 photo_url: photoUrl,
                 ai_description: aiAnalysis || (photoCategory === 'defect' ? 'Defect product photo' : 'Work scene logged'),
                 user_note: finalNote,
@@ -2075,6 +2096,16 @@ const ProductionControl: React.FC<ProductionControlProps> = ({ user, jobs = [] }
                     )}
 
                     <div className="flex items-center gap-2 ml-auto">
+                        <button
+                            type="button"
+                            onClick={() => setShowInspectionModal(true)}
+                            className="bg-gradient-to-r from-amber-600 to-orange-600 hover:from-amber-500 hover:to-orange-500 text-white font-bold px-3 py-2 rounded-xl text-xs flex items-center gap-1.5 shadow-lg active:scale-95 transition cursor-pointer border border-amber-400/30 shrink-0"
+                            title="打开当前机台的原材料、位置与温度巡检快记"
+                        >
+                            <FlaskConical size={15} />
+                            <span>📸 机台巡检与配料快记</span>
+                        </button>
+
                         {clockInTime && (
                             user && user.role === 'Operator' ? (
                                 <button
@@ -2220,14 +2251,24 @@ const ProductionControl: React.FC<ProductionControlProps> = ({ user, jobs = [] }
                                             </p>
                                         </div>
                                     </div>
-                                    {user && user.role !== 'Operator' && (
+                                    <div className="flex items-center gap-2 shrink-0">
                                         <button
-                                            onClick={() => initiateTakeover(selectedMachine!)}
-                                            className="px-3 py-2 bg-green-500/10 hover:bg-green-500/20 text-green-400 rounded-xl text-[10px] font-black uppercase tracking-wider transition-all border border-green-500/20 active:scale-95 shrink-0 cursor-pointer"
+                                            type="button"
+                                            onClick={() => setShowInspectionModal(true)}
+                                            className="px-3.5 py-2.5 bg-gradient-to-r from-amber-500 via-orange-600 to-rose-600 hover:from-amber-400 hover:to-rose-500 text-white font-extrabold rounded-xl text-xs flex items-center gap-1.5 shadow-lg shadow-orange-500/20 active:scale-95 transition cursor-pointer border border-amber-300/40"
                                         >
-                                            🔄 切换人
+                                            <FlaskConical size={16} />
+                                            <span>🧪 机台配料 & Mix料操作</span>
                                         </button>
-                                    )}
+                                        {user && user.role !== 'Operator' && (
+                                            <button
+                                                onClick={() => initiateTakeover(selectedMachine!)}
+                                                className="px-3 py-2 bg-green-500/10 hover:bg-green-500/20 text-green-400 rounded-xl text-[10px] font-black uppercase tracking-wider transition-all border border-green-500/20 active:scale-95 shrink-0 cursor-pointer"
+                                            >
+                                                🔄 切换人
+                                            </button>
+                                        )}
+                                    </div>
                                 </div>
                             ) : (
                                 <div className="bg-amber-500/5 border border-amber-500/20 p-4 rounded-xl flex items-center justify-between gap-4">
@@ -2241,14 +2282,24 @@ const ProductionControl: React.FC<ProductionControlProps> = ({ user, jobs = [] }
                                             <p className="text-[10px] text-gray-500 mt-1 truncate">Please bind an operator to select and start production.</p>
                                         </div>
                                     </div>
-                                    {user && user.role !== 'Operator' && (
+                                    <div className="flex items-center gap-2 shrink-0">
                                         <button
-                                            onClick={() => initiateTakeover(selectedMachine!)}
-                                            className="px-3 py-2 bg-amber-500/10 hover:bg-amber-500/20 text-amber-400 rounded-xl text-[10px] font-black uppercase tracking-wider transition-all border border-amber-500/20 active:scale-95 shrink-0 cursor-pointer"
+                                            type="button"
+                                            onClick={() => setShowInspectionModal(true)}
+                                            className="px-3.5 py-2.5 bg-gradient-to-r from-amber-500 via-orange-600 to-rose-600 hover:from-amber-400 hover:to-rose-500 text-white font-extrabold rounded-xl text-xs flex items-center gap-1.5 shadow-lg shadow-orange-500/20 active:scale-95 transition cursor-pointer border border-amber-300/40"
                                         >
-                                            🔑 绑定操作员
+                                            <FlaskConical size={16} />
+                                            <span>🧪 机台配料 & Mix料操作</span>
                                         </button>
-                                    )}
+                                        {user && user.role !== 'Operator' && (
+                                            <button
+                                                onClick={() => initiateTakeover(selectedMachine!)}
+                                                className="px-3 py-2 bg-amber-500/10 hover:bg-amber-500/20 text-amber-400 rounded-xl text-[10px] font-black uppercase tracking-wider transition-all border border-amber-500/20 active:scale-95 shrink-0 cursor-pointer"
+                                            >
+                                                🔑 绑定操作员
+                                            </button>
+                                        )}
+                                    </div>
                                 </div>
                             )}
 
@@ -3255,30 +3306,52 @@ const ProductionControl: React.FC<ProductionControlProps> = ({ user, jobs = [] }
                     onClick={() => setSelectedPhoto(null)}
                 >
                     <div 
-                        className="bg-[#1c1c1f] border border-white/10 rounded-3xl max-w-lg w-full overflow-hidden shadow-2xl flex flex-col animate-slide-up"
+                        className="bg-[#1c1c1f] border border-white/10 rounded-3xl max-w-3xl w-full max-h-[90vh] overflow-hidden shadow-2xl flex flex-col animate-slide-up"
                         onClick={e => e.stopPropagation()}
                     >
                         <div className="flex justify-between items-center p-4 border-b border-white/5">
                             <h4 className="text-xs font-black tracking-widest text-purple-400 uppercase font-bold">
                                 工作记录详情 / Detail Log
                             </h4>
-                            <button 
-                                onClick={() => setSelectedPhoto(null)}
-                                className="text-gray-400 hover:text-white text-xs font-bold px-2.5 py-1 bg-white/5 hover:bg-white/10 rounded-lg transition-all"
-                            >
-                                关闭
-                            </button>
+                            <div className="flex items-center gap-2">
+                                {selectedPhoto.photo_url && selectedPhoto.photo_url.startsWith('http') && (
+                                    <a 
+                                        href={selectedPhoto.photo_url} 
+                                        target="_blank" 
+                                        rel="noreferrer"
+                                        className="text-xs text-purple-400 hover:underline font-bold px-3 py-1.5 bg-purple-500/10 hover:bg-purple-500/20 rounded-lg transition-all"
+                                    >
+                                        查看原图 / Open Original ↗
+                                    </a>
+                                )}
+                                <button 
+                                    onClick={() => setSelectedPhoto(null)}
+                                    className="text-gray-400 hover:text-white text-xs font-bold px-2.5 py-1 bg-white/5 hover:bg-white/10 rounded-lg transition-all"
+                                >
+                                    关闭
+                                </button>
+                            </div>
                         </div>
                         
-                        <div className="relative aspect-video bg-black overflow-hidden flex items-center justify-center">
-                            {selectedPhoto.photo_url.toLowerCase().endsWith('.webm') || 
-                             selectedPhoto.photo_url.toLowerCase().endsWith('.mp4') ||
-                             selectedPhoto.photo_url.toLowerCase().endsWith('.mov') ? (
-                                <video src={selectedPhoto.photo_url} controls className="w-full h-full object-contain bg-black" autoPlay />
-                            ) : (
-                                <img src={selectedPhoto.photo_url} alt="" className="w-full h-full object-contain bg-black" />
-                            )}
-                        </div>
+                        <div className="flex-1 overflow-y-auto p-5 space-y-4">
+                            <div className={`relative bg-black rounded-xl border border-white/5 flex items-center justify-center max-h-[50vh] ${isZoomed ? 'overflow-auto cursor-zoom-out' : 'overflow-hidden'}`} onClick={isZoomed ? () => setIsZoomed(false) : undefined}>
+                                {selectedPhoto.photo_url.toLowerCase().endsWith('.webm') || 
+                                 selectedPhoto.photo_url.toLowerCase().endsWith('.mp4') ||
+                                 selectedPhoto.photo_url.toLowerCase().endsWith('.mov') ? (
+                                    <video src={selectedPhoto.photo_url} controls className="w-full max-h-[50vh] object-contain bg-black" autoPlay />
+                                ) : (
+                                    <img 
+                                        src={selectedPhoto.photo_url} 
+                                        alt="Click to zoom" 
+                                        onClick={(e) => { e.stopPropagation(); setIsZoomed(!isZoomed); }}
+                                        className={`transition-all duration-200 ${
+                                            isZoomed 
+                                                ? 'w-[250%] h-auto max-w-none max-h-none cursor-zoom-out' 
+                                                : 'w-full max-h-[50vh] object-contain cursor-zoom-in'
+                                        }`} 
+                                    />
+                                )}
+                            </div>
                         
                         <div className="p-5 space-y-3 text-left">
                             <div className="flex justify-between text-[10px] text-gray-400 font-mono">
@@ -3302,9 +3375,20 @@ const ProductionControl: React.FC<ProductionControlProps> = ({ user, jobs = [] }
                                 </div>
                             )}
                         </div>
+                        </div>
                     </div>
                 </div>
             )}
+            
+            {/* 机台专属巡检与配料模态框 */}
+            <MachineInspectionModal
+                isOpen={showInspectionModal}
+                onClose={() => setShowInspectionModal(false)}
+                machineId={selectedMachine || 'T-01'}
+                machineName={currentMachineName || selectedMachine || 'T-01 吹膜机'}
+                currentUser={user}
+                activeFactoryId={user?.factoryId}
+            />
             
             <style>{`
                 .custom-scrollbar::-webkit-scrollbar { width: 4px; }
