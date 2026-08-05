@@ -643,12 +643,12 @@ const LiveStock: React.FC = () => {
                 }
             });
 
-            // 3. 合并计算最终物理库存、预留量与可用库存
+            // 3. 合并计算最终物理库存、预留量与可用库存 (可用库存 = 物理库存 - 预留量，允许负数表达缺货量)
             const activeInventory: StockRow[] = [];
             physMap.forEach((item, key) => {
                 const resQty = reservedMap.get(key) || 0;
                 const phyStock = Math.max(0, item.current_stock);
-                const availStock = Math.max(0, phyStock - resQty);
+                const availStock = phyStock - resQty;
                 activeInventory.push({
                     ...item,
                     current_stock: phyStock,
@@ -686,19 +686,21 @@ const LiveStock: React.FC = () => {
             const isMatchLoc = locationFilter === 'All' || r.loc_id === locationFilter;
             if (isMatchLoc) {
                 if (!skuMap.has(r.sku)) {
+                    const phy = Math.max(0, r.current_stock || 0);
+                    const res = r.reserved_stock || 0;
                     skuMap.set(r.sku, {
                         ...r,
                         loc_id: locationFilter === 'All' ? undefined : locationFilter,
-                        current_stock: Math.max(0, r.current_stock || 0),
-                        reserved_stock: r.reserved_stock || 0,
-                        available_stock: Math.max(0, (r.current_stock || 0) - (r.reserved_stock || 0)),
+                        current_stock: phy,
+                        reserved_stock: res,
+                        available_stock: phy - res,
                         last_updated: r.last_updated || ''
                     });
                 } else {
                     const item = skuMap.get(r.sku)!;
                     item.current_stock = Math.max(0, item.current_stock + Math.max(0, r.current_stock || 0));
                     item.reserved_stock = (item.reserved_stock || 0) + (r.reserved_stock || 0);
-                    item.available_stock = Math.max(0, item.current_stock - item.reserved_stock);
+                    item.available_stock = item.current_stock - item.reserved_stock;
                     if (r.last_updated && (!item.last_updated || new Date(r.last_updated) > new Date(item.last_updated))) {
                         item.last_updated = r.last_updated;
                     }
