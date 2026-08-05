@@ -34,6 +34,7 @@ import {
 import { supabase } from '../services/supabase';
 import { canAccessPage } from '../utils/pageAccess';
 import PageLogicDrawer from './PageLogicDrawer';
+import { changeLanguage } from '../utils/i18n';
 
 interface LayoutProps {
     children: React.ReactNode;
@@ -573,15 +574,19 @@ const Layout: React.FC<LayoutProps> = ({ children, activePage, setActivePage, us
                         <span className="font-bold text-base tracking-tight text-white dark:text-white">PackSecure</span>
                     </div>
                     <div className="flex items-center gap-1">
-                        {/* Mobile Language Selector (Compact width on mobile) */}
+                        {/* 移动端语言选择下拉框 (优化展开宽度与离线原生切换) */}
                         <select
                             value={currentLanguage}
-                            onChange={(e) => handleLanguageChange(e.target.value)}
-                            className="bg-white/5 border border-white/10 rounded-lg text-xs font-bold text-gray-300 px-1.5 py-1.5 focus:outline-none focus:border-blue-500 transition-colors cursor-pointer w-14 max-w-[56px] sm:w-auto sm:max-w-none overflow-hidden"
+                            onChange={(e) => {
+                                const val = e.target.value as any;
+                                setCurrentLanguage(val);
+                                changeLanguage(val);
+                            }}
+                            className="bg-gray-800/90 border border-gray-700 rounded-xl text-xs font-bold text-amber-300 px-2.5 py-1.5 focus:outline-none focus:border-blue-500 transition-all cursor-pointer min-w-[96px] shadow-md"
                         >
                             {languages.map((lang) => (
-                                <option key={lang.code} value={lang.code} className="bg-[#121215] text-gray-300">
-                                    {lang.flag} &nbsp; {lang.label.split(' ')[0]}
+                                <option key={lang.code} value={lang.code} className="bg-[#121215] text-gray-200 py-1">
+                                    {lang.flag} {lang.label}
                                 </option>
                             ))}
                         </select>
