@@ -36,6 +36,7 @@ interface MaterialItemState {
     unit: '包' | 'kg'; // 1 包 = 25kg
     prevQty: number;
     newQty: number;
+    photoUrl?: string; // 📷 物料包装外袋/实物照片
 }
 
 // 螺杆配置信息
@@ -405,6 +406,21 @@ export const MachineInspectionModal: React.FC<MachineInspectionModalProps> = ({
         }));
     };
 
+    // 📷 拍摄或上传单项物料包装/外袋照片
+    const handleItemPhotoUpload = async (id: string, e: React.ChangeEvent<HTMLInputElement>) => {
+        if (e.target.files?.[0]) {
+            try {
+                const compressed = await compressImage(e.target.files[0], 1024, 0.7);
+                setScrewMaterials(prev => ({
+                    ...prev,
+                    [selectedScrew]: (prev[selectedScrew] || []).map(m => m.id === id ? { ...m, photoUrl: compressed } : m)
+                }));
+            } catch (err) {
+                console.error('Item photo upload error:', err);
+            }
+        }
+    };
+
     // 📸 底部上传料斗实物 Mix 料照片凭证
     const handleHopperPhotoUpload = async (e: React.ChangeEvent<HTMLInputElement>) => {
         if (e.target.files?.[0]) {
@@ -727,17 +743,57 @@ export const MachineInspectionModal: React.FC<MachineInspectionModalProps> = ({
                                     return (
                                         <div key={mat.id} className="bg-gray-950 border border-gray-800 rounded-xl p-3 space-y-1.5 shadow-sm">
                                             <div className="flex items-center justify-between">
-                                                <div className="flex items-center space-x-2">
-                                                    <span className="font-extrabold text-white text-sm">{mat.name}</span>
-                                                    <span className="text-[10px] text-gray-500 font-mono">({mat.sku})</span>
+                                                <div className="flex items-center space-x-2.5 flex-wrap">
+                                                    {/* 📷 物料包装图片预览或【添加图片】按钮 */}
+                                                    {mat.photoUrl ? (
+                                                        <img
+                                                            src={mat.photoUrl}
+                                                            alt={mat.name}
+                                                            onClick={() => setLightboxPhoto(mat.photoUrl || null)}
+                                                            className="w-10 h-10 rounded-lg object-cover border border-indigo-500/50 shadow-md cursor-pointer hover:opacity-80 shrink-0"
+                                                            title="点击放大预览物料包装图"
+                                                        />
+                                                    ) : (
+                                                        <label className="text-[11px] bg-indigo-950/80 text-indigo-300 border border-indigo-500/40 px-2 py-1 rounded-lg flex items-center gap-1 cursor-pointer font-bold hover:bg-indigo-900/80 shrink-0 transition" title="上传/拍摄该物料外袋照片">
+                                                            <Camera size={13} className="text-indigo-400" />
+                                                            <span>📷 添加图片</span>
+                                                            <input
+                                                                type="file"
+                                                                accept="image/*"
+                                                                capture="environment"
+                                                                className="hidden"
+                                                                onChange={(e) => handleItemPhotoUpload(mat.id, e)}
+                                                            />
+                                                        </label>
+                                                    )}
+
+                                                    <div>
+                                                        <span className="font-extrabold text-white text-sm block">{mat.name}</span>
+                                                        <span className="text-[10px] text-gray-500 font-mono block">({mat.sku})</span>
+                                                    </div>
                                                 </div>
-                                                <button
-                                                    onClick={() => handleRemoveMaterial(mat.id)}
-                                                    className="text-gray-500 hover:text-rose-400 p-1 transition"
-                                                    title="删除物料 (将记录删除审计日志)"
-                                                >
-                                                    <Trash2 size={14} />
-                                                </button>
+
+                                                <div className="flex items-center gap-2">
+                                                    {mat.photoUrl && (
+                                                        <label className="text-[10px] text-gray-400 hover:text-indigo-300 underline cursor-pointer">
+                                                            更换
+                                                            <input
+                                                                type="file"
+                                                                accept="image/*"
+                                                                capture="environment"
+                                                                className="hidden"
+                                                                onChange={(e) => handleItemPhotoUpload(mat.id, e)}
+                                                            />
+                                                        </label>
+                                                    )}
+                                                    <button
+                                                        onClick={() => handleRemoveMaterial(mat.id)}
+                                                        className="text-gray-500 hover:text-rose-400 p-1 transition"
+                                                        title="删除物料 (将记录删除审计日志)"
+                                                    >
+                                                        <Trash2 size={14} />
+                                                    </button>
+                                                </div>
                                             </div>
 
                                             <div className="flex items-center justify-between gap-2">

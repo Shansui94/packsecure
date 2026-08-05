@@ -2251,56 +2251,36 @@ const ProductionControl: React.FC<ProductionControlProps> = ({ user, jobs = [], 
                                             </p>
                                         </div>
                                     </div>
-                                    <div className="flex items-center gap-2 shrink-0">
-                                        <button
-                                            type="button"
-                                            onClick={() => setShowInspectionModal(true)}
-                                            className="px-3.5 py-2.5 bg-gradient-to-r from-amber-500 via-orange-600 to-rose-600 hover:from-amber-400 hover:to-rose-500 text-white font-extrabold rounded-xl text-xs flex items-center gap-1.5 shadow-lg shadow-orange-500/20 active:scale-95 transition cursor-pointer border border-amber-300/40"
-                                        >
-                                            <FlaskConical size={16} />
-                                            <span>🧪 机台配料 & Mix料操作</span>
-                                        </button>
-                                        {user && user.role !== 'Operator' && (
-                                            <button
-                                                onClick={() => initiateTakeover(selectedMachine!)}
-                                                className="px-3 py-2 bg-green-500/10 hover:bg-green-500/20 text-green-400 rounded-xl text-[10px] font-black uppercase tracking-wider transition-all border border-green-500/20 active:scale-95 shrink-0 cursor-pointer"
-                                            >
-                                                🔄 切换人
-                                            </button>
-                                        )}
-                                    </div>
-                                </div>
-                            ) : (
-                                <div className="bg-amber-500/5 border border-amber-500/20 p-4 rounded-xl flex items-center justify-between gap-4">
-                                    <div className="flex items-center gap-3 min-w-0">
-                                        <div className="w-10 h-10 rounded-full bg-amber-500/20 flex items-center justify-center text-amber-400 shrink-0">
-                                            <AlertTriangle size={20} />
-                                        </div>
-                                        <div className="min-w-0">
-                                            <p className="text-amber-400 text-xs font-bold uppercase tracking-wider">No Operator Duty</p>
-                                            <p className="text-white font-bold text-sm leading-none truncate">No active operator is currently bound to this machine.</p>
-                                            <p className="text-[10px] text-gray-500 mt-1 truncate">Please bind an operator to select and start production.</p>
-                                        </div>
-                                    </div>
-                                    <div className="flex items-center gap-2 shrink-0">
-                                        <button
-                                            type="button"
-                                            onClick={() => setShowInspectionModal(true)}
-                                            className="px-3.5 py-2.5 bg-gradient-to-r from-amber-500 via-orange-600 to-rose-600 hover:from-amber-400 hover:to-rose-500 text-white font-extrabold rounded-xl text-xs flex items-center gap-1.5 shadow-lg shadow-orange-500/20 active:scale-95 transition cursor-pointer border border-amber-300/40"
-                                        >
-                                            <FlaskConical size={16} />
-                                            <span>🧪 机台配料 & Mix料操作</span>
-                                        </button>
-                                        {user && user.role !== 'Operator' && (
-                                            <button
-                                                onClick={() => initiateTakeover(selectedMachine!)}
-                                                className="px-3 py-2 bg-amber-500/10 hover:bg-amber-500/20 text-amber-400 rounded-xl text-[10px] font-black uppercase tracking-wider transition-all border border-amber-500/20 active:scale-95 shrink-0 cursor-pointer"
-                                            >
-                                                🔑 绑定操作员
-                                            </button>
-                                        )}
-                                    </div>
-                                </div>
+                                     {user && user.role !== 'Operator' && (
+                                         <button
+                                             onClick={() => initiateTakeover(selectedMachine!)}
+                                             className="px-3 py-2 bg-green-500/10 hover:bg-green-500/20 text-green-400 rounded-xl text-[10px] font-black uppercase tracking-wider transition-all border border-green-500/20 active:scale-95 shrink-0 cursor-pointer"
+                                         >
+                                             🔄 切换人
+                                         </button>
+                                     )}
+                                 </div>
+                             ) : (
+                                 <div className="bg-amber-500/5 border border-amber-500/20 p-4 rounded-xl flex items-center justify-between gap-4">
+                                     <div className="flex items-center gap-3 min-w-0">
+                                         <div className="w-10 h-10 rounded-full bg-amber-500/20 flex items-center justify-center text-amber-400 shrink-0">
+                                             <AlertTriangle size={20} />
+                                         </div>
+                                         <div className="min-w-0">
+                                             <p className="text-amber-400 text-xs font-bold uppercase tracking-wider">No Operator Duty</p>
+                                             <p className="text-white font-bold text-sm leading-none truncate">No active operator is currently bound to this machine.</p>
+                                             <p className="text-[10px] text-gray-500 mt-1 truncate">Please bind an operator to select and start production.</p>
+                                         </div>
+                                     </div>
+                                     {user && user.role !== 'Operator' && (
+                                         <button
+                                             onClick={() => initiateTakeover(selectedMachine!)}
+                                             className="px-3 py-2 bg-amber-500/10 hover:bg-amber-500/20 text-amber-400 rounded-xl text-[10px] font-black uppercase tracking-wider transition-all border border-amber-500/20 active:scale-95 shrink-0 cursor-pointer"
+                                         >
+                                             🔑 绑定操作员
+                                         </button>
+                                     )}
+                                 </div>
                             )}
 
                             {/* MANAGER ASSIGNED TASKS BANNER */}
