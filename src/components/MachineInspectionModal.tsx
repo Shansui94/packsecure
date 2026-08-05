@@ -206,7 +206,7 @@ export const MachineInspectionModal: React.FC<MachineInspectionModalProps> = ({
         }
     };
 
-    // 🔒 严格隔离：每台机器只读取并展示属于它自己的日志 (绝不混入其他机器日志)
+    // 🔒 严格隔离：每台机器只读取并展示属于它自己的日志
     const fetchMachineLogs = async () => {
         if (!machineId && !machineName) return;
 
@@ -553,7 +553,7 @@ export const MachineInspectionModal: React.FC<MachineInspectionModalProps> = ({
 
     return (
         <div className="fixed inset-0 z-50 bg-black/80 backdrop-blur-md flex items-end sm:items-center justify-center p-0 sm:p-4 select-none">
-            <div className="bg-gray-900 border border-gray-800 rounded-t-3xl sm:rounded-2xl w-full max-w-xl p-4 sm:p-5 space-y-4 max-h-[92vh] overflow-y-auto shadow-2xl">
+            <div className="bg-gray-900 border border-gray-800 rounded-t-3xl sm:rounded-2xl w-full max-w-xl p-4 sm:p-5 space-y-4 max-h-[92vh] overflow-y-auto shadow-2xl relative pb-20 sm:pb-20">
                 
                 {/* Header 机台与标题 */}
                 <div className="flex items-center justify-between border-b border-gray-800 pb-3">
@@ -782,7 +782,7 @@ export const MachineInspectionModal: React.FC<MachineInspectionModalProps> = ({
                         </div>
 
                         {/* 📸 最下方：拍摄/上传操作员实际 Mix 料后的料斗实物照片凭证 */}
-                        <div className="space-y-2 pt-3 border-t border-gray-800">
+                        <div className="space-y-2 pt-3 border-t border-gray-800 mb-4">
                             <label className="text-xs font-bold text-gray-300 flex items-center justify-between">
                                 <span className="flex items-center gap-1.5">
                                     <Camera size={14} className="text-blue-400" />
@@ -811,8 +811,8 @@ export const MachineInspectionModal: React.FC<MachineInspectionModalProps> = ({
                             </label>
                         </div>
 
-                        {/* 💾 提交保存操作员 Mix 料记录 */}
-                        <div className="space-y-1.5">
+                        {/* 💾 粘性常显底部提交按钮 (Sticky Bottom submit bar) */}
+                        <div className="sticky bottom-0 z-30 bg-gray-900/95 backdrop-blur-md p-3 border-t border-gray-800 space-y-1.5 shadow-2xl rounded-b-2xl">
                             <div className="flex items-center justify-between text-[11px] text-gray-400 px-1">
                                 <span className="flex items-center gap-1 text-emerald-400 font-bold">
                                     <UserCheck size={12} />
@@ -824,7 +824,7 @@ export const MachineInspectionModal: React.FC<MachineInspectionModalProps> = ({
                             <button
                                 onClick={handleSubmitFullScrewRecipe}
                                 disabled={isSavingFullRecipe}
-                                className="w-full py-3.5 bg-gradient-to-r from-blue-600 via-indigo-600 to-purple-600 hover:from-blue-500 text-white font-extrabold rounded-xl shadow-xl flex items-center justify-center space-x-2 text-sm transition active:scale-95 disabled:opacity-50"
+                                className="w-full py-3 bg-gradient-to-r from-blue-600 via-indigo-600 to-purple-600 hover:from-blue-500 text-white font-extrabold rounded-xl shadow-xl flex items-center justify-center space-x-2 text-sm transition active:scale-95 disabled:opacity-50"
                             >
                                 {isSavingFullRecipe ? <Loader size={18} className="animate-spin" /> : <CheckCircle2 size={18} />}
                                 <span>记录提交【{currentScrewConfig.name}】Mix料操作与照片</span>
