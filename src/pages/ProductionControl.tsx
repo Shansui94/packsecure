@@ -861,12 +861,19 @@ const ProductionControl: React.FC<ProductionControlProps> = ({ user, jobs = [], 
 
                 if (data && data.length > 0) {
                     const activeShift = data[0];
-                    sessionStorage.setItem('selectedMachine', activeShift.machine_id);
-                    localStorage.setItem('device_machine_id', activeShift.machine_id);
                     localStorage.setItem(`operatorClockInTime_${operatorEmployeeId}`, activeShift.clock_in);
-                    
-                    setSelectedMachine(activeShift.machine_id);
                     setClockInTime(activeShift.clock_in);
+                    
+                    // 🔒 只有在当前尚未选择机台时，才默认定位到打卡机台；
+                    // 如果用户已手动选择了 J1 或其他机台，切切标签页/重新聚焦页面时保留用户选中的机台，绝对不强行切走！
+                    setSelectedMachine(prev => {
+                        if (!prev && activeShift.machine_id) {
+                            sessionStorage.setItem('selectedMachine', activeShift.machine_id);
+                            localStorage.setItem('device_machine_id', activeShift.machine_id);
+                            return activeShift.machine_id;
+                        }
+                        return prev;
+                    });
                 } else {
                     localStorage.removeItem(`operatorClockInTime_${operatorEmployeeId}`);
                     setClockInTime(null);
