@@ -43,6 +43,7 @@ import DevLog from './pages/DevLog';
 import LeaveCalendar from './pages/LeaveCalendar';
 import SOPCenter from './pages/SOPCenter';
 import WorkPhotoLog from './pages/WorkPhotoLog';
+import RawMaterialMobilePortal from './pages/RawMaterialMobilePortal';
 import YieldControl from './pages/YieldControl';
 import PersonalMonthlyReport from './pages/PersonalMonthlyReport';
 import MachineSchedule from './pages/MachineSchedule';
@@ -738,7 +739,7 @@ function App() {
             case 'admin-data':
                 return <DataManagement />;
             case 'scanner':
-                return <ProductionControl user={user as any} jobs={jobs} />;
+                return <ProductionControl user={user as any} jobs={jobs} onNavigate={setActivePage} />;
             case 'report-history':
                 return <ReportHistory user={user as any} />;
             case 'reports':
@@ -773,6 +774,8 @@ function App() {
                 return <SOPCenter userRole={user?.role} user={user} />;
             case 'work-photos':
                 return <WorkPhotoLog user={user} />;
+            case 'raw_material_mobile':
+                return <RawMaterialMobilePortal currentUser={user} activeFactoryId={user?.factoryId} />;
             case 'personal-report':
                 return <PersonalMonthlyReport user={user} />;
             case 'machine-schedule':

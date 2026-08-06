@@ -12,6 +12,8 @@ const getItemLocation = (item: any, order: any): string => {
         if (src.includes('opm corner')) return 'OPM Corner';
         if (src.includes('opm ali')) return 'OPM Ali';
         if (src.includes('nilai')) return 'Nilai';
+        if (src.includes('kelantan')) return 'Kelantan';
+        if (src.includes('johor')) return 'Johor';
         if (src.includes('spd')) return 'SPD';
     }
     if (item.remark) {
@@ -20,12 +22,16 @@ const getItemLocation = (item: any, order: any): string => {
         if (r.includes('opm corner')) return 'OPM Corner';
         if (r.includes('opm ali')) return 'OPM Ali';
         if (r.includes('nilai')) return 'Nilai';
+        if (r.includes('kelantan')) return 'Kelantan';
+        if (r.includes('johor')) return 'Johor';
         if (r.includes('spd')) return 'SPD';
     }
     if (order.trip_origin) {
         const origin = order.trip_origin.toUpperCase();
-        if (origin === 'NILAI') return 'Nilai';
-        if (origin === 'TAIPING' || origin === 'SPD') return 'SPD';
+        if (origin === 'NILAI' || origin === 'N1') return 'Nilai';
+        if (origin === 'KELANTAN' || origin === 'K1') return 'Kelantan';
+        if (origin === 'JOHOR' || origin === 'J1') return 'Johor';
+        if (origin === 'TAIPING' || origin === 'SPD' || origin === 'T1') return 'SPD';
     }
     return 'SPD';
 };
@@ -36,7 +42,7 @@ interface DriverInfo {
     email: string;
 }
 
-const compressImage = (file: File, maxWidth = 1200, quality = 0.75): Promise<string> => {
+const compressImage = (file: File, maxWidth = 2048, quality = 0.85): Promise<string> => {
     return new Promise((resolve, reject) => {
         const reader = new FileReader();
         reader.onload = (e) => {
@@ -73,7 +79,7 @@ const TripPrep: React.FC = () => {
     const [drivers, setDrivers] = useState<Record<string, DriverInfo>>({});
     const [loading, setLoading] = useState(true);
     const [uploadingId, setUploadingId] = useState<string | null>(null);
-    const [activeLocationFilter, setActiveLocationFilter] = useState<'All' | 'Taiping' | 'Nilai'>('All');
+    const [activeLocationFilter, setActiveLocationFilter] = useState<'All' | 'Taiping' | 'Nilai' | 'Kelantan' | 'Johor'>('All');
     const [searchQuery, setSearchQuery] = useState('');
     const fileInputRef = useRef<HTMLInputElement>(null);
     const [selectedTripIdForUpload, setSelectedTripIdForUpload] = useState<string | null>(null);
@@ -196,6 +202,33 @@ const TripPrep: React.FC = () => {
 
             if (updateError) throw updateError;
 
+            // 同步记录到 work_photos 表，以便在 Monthly Report (月度报告) 中能展示对应员工的备货照片
+            try {
+                const { data: { user: authUser } } = await supabase.auth.getUser();
+                if (authUser) {
+                    const { data: publicUser } = await supabase
+                        .from('users_public')
+                        .select('name, employee_id')
+                        .eq('id', authUser.id)
+                        .single();
+                    
+                    const empId = publicUser?.employee_id || 'unknown';
+                    const empName = publicUser?.name || authUser.email?.split('@')[0] || 'Unknown';
+
+                    await supabase.from('work_photos').insert({
+                        employee_id: empId,
+                        employee_name: empName,
+                        photo_url: publicUrl,
+                        category: 'Cargo Prep / 备货照片',
+                        user_note: `Trip Prep 备货位置图 - 订单: ${currentTrip?.orderNumber || 'Unknown'} - 库位: ${uploadLoc}`,
+                        location: uploadLoc,
+                        risk_flag: false
+                    });
+                }
+            } catch (syncErr) {
+                console.error("Failed to sync to work_photos log:", syncErr);
+            }
+
             // Update local state optimistically
             setTrips(prev => prev.map(t => t.id === tripId ? { ...t, preparation_photo_url: updatedPhotoUrlField } as any : t));
             
@@ -239,14 +272,22 @@ const TripPrep: React.FC = () => {
 
     // Filters
     const filteredTrips = trips.filter(t => {
-        // Location filter (Taiping vs Nilai)
+        // Location filter (Taiping vs Nilai vs Kelantan vs Johor)
         let location = 'Taiping';
         if (t.trip_origin) {
-            location = t.trip_origin.toLowerCase() === 'nilai' ? 'Nilai' : 'Taiping';
+            const o = t.trip_origin.toLowerCase();
+            if (o === 'nilai' || o === 'n1') location = 'Nilai';
+            else if (o === 'kelantan' || o === 'k1') location = 'Kelantan';
+            else if (o === 'johor' || o === 'j1') location = 'Johor';
+            else location = 'Taiping';
         } else if (t.deliveryAddress) {
             // heuristic
             const addr = t.deliveryAddress.toLowerCase();
-            if (addr.includes('nilai') || addr.includes('kl') || addr.includes('selangor') || addr.includes('kuala lumpur')) {
+            if (addr.includes('kelantan') || addr.includes('kota bharu')) {
+                location = 'Kelantan';
+            } else if (addr.includes('johor') || addr.includes('jb') || addr.includes('skudai') || addr.includes('pasir gudang')) {
+                location = 'Johor';
+            } else if (addr.includes('nilai') || addr.includes('kl') || addr.includes('selangor') || addr.includes('kuala lumpur')) {
                 location = 'Nilai';
             }
         }
@@ -308,8 +349,8 @@ const TripPrep: React.FC = () => {
                     className="flex-1 bg-white/5 border border-white/10 rounded-xl px-4 py-2.5 text-sm text-white placeholder-gray-600 focus:outline-none focus:border-blue-500/50 transition-colors"
                 />
                 
-                <div className="flex gap-1.5 bg-[#0d0d12] p-1 border border-white/5 rounded-xl self-start">
-                    {(['All', 'Taiping', 'Nilai'] as const).map(loc => (
+                <div className="flex gap-1.5 bg-[#0d0d12] p-1 border border-white/5 rounded-xl self-start flex-wrap">
+                    {(['All', 'Taiping', 'Nilai', 'Kelantan', 'Johor'] as const).map(loc => (
                         <button
                             key={loc}
                             onClick={() => setActiveLocationFilter(loc)}

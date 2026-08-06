@@ -24,7 +24,9 @@ const WAREHOUSE_COORDS = [
     { id: 'Nilai', name: 'Nilai', lat: 2.8167, lng: 101.7958 },
     { id: 'OPM Lama', name: 'OPM Lama', lat: 4.8500, lng: 100.7333 },
     { id: 'OPM Corner', name: 'OPM Corner', lat: 4.8505, lng: 100.7340 },
-    { id: 'SPD', name: 'SPD', lat: 4.8510, lng: 100.7350 }
+    { id: 'SPD', name: 'SPD', lat: 4.8510, lng: 100.7350 },
+    { id: 'Kelantan', name: 'Kelantan', lat: 6.1256, lng: 102.2381 },
+    { id: 'Johor', name: 'Johor', lat: 1.4927, lng: 103.7414 }
 ];
 
 export const findNearestFactory = (targetLat: number, targetLng: number) => {
@@ -199,7 +201,7 @@ export const calculateLoad = (items: any[], vehicle: any) => {
 export const determineState = (address: string): string => {
     const lowerAddr = address.toLowerCase();
 
-    if (lowerAddr.includes('johor') || lowerAddr.includes('jb') || lowerAddr.includes('skudai') || lowerAddr.includes('pasir gudang')) return 'Johor';
+    if (lowerAddr.includes('johor') || lowerAddr.includes('jb') || lowerAddr.includes('skudai') || lowerAddr.includes('pasir gudang') || lowerAddr.includes('kulai') || lowerAddr.includes('kota tinggi') || lowerAddr.includes('pontian') || lowerAddr.includes('batu pahat') || lowerAddr.includes('kluang') || lowerAddr.includes('muar') || lowerAddr.includes('tangkak') || lowerAddr.includes('segamat') || lowerAddr.includes('mersing') || lowerAddr.includes('weheng')) return 'Johor';
     if (lowerAddr.includes('penang') || lowerAddr.includes('pulau pinang') || lowerAddr.includes('georgetown') || lowerAddr.includes('butterworth')) return 'Penang';
     if (lowerAddr.includes('kuala lumpur') || lowerAddr.includes('kl ') || lowerAddr.includes('klang valley') || lowerAddr.includes('wilayah persekutuan') || lowerAddr.endsWith(' kl') || lowerAddr.includes(',kl') || lowerAddr.includes(' kl,')) return 'K. Lumpur';
     if (lowerAddr.includes('selangor') || lowerAddr.includes('shah alam') || lowerAddr.includes('petaling jaya') || lowerAddr.includes('klang') || lowerAddr.includes('kajang') || lowerAddr.includes('rawang') || lowerAddr.includes('semenyih')) return 'Selangor';
@@ -209,7 +211,7 @@ export const determineState = (address: string): string => {
     if (lowerAddr.includes('kedah') || lowerAddr.includes('kulim') || lowerAddr.includes('sungai petani')) return 'Kedah';
     if (lowerAddr.includes('pahang') || lowerAddr.includes('kuantan')) return 'Pahang';
     if (lowerAddr.includes('terengganu')) return 'Terengganu';
-    if (lowerAddr.includes('kelantan') || lowerAddr.includes('kota bharu') || lowerAddr.includes('rantau panjang')) return 'Kelantan';
+    if (lowerAddr.includes('kelantan') || lowerAddr.includes('kota bharu') || lowerAddr.includes('pasir mas') || lowerAddr.includes('tumpat') || lowerAddr.includes('pasir puteh') || lowerAddr.includes('bachok') || lowerAddr.includes('machang') || lowerAddr.includes('tanah merah') || lowerAddr.includes('kuala krai') || lowerAddr.includes('jeli') || lowerAddr.includes('gua musang') || lowerAddr.includes('rantau panjang')) return 'Kelantan';
     if (lowerAddr.includes('perlis')) return 'Perlis';
     if (lowerAddr.includes('sabah')) return 'Sabah';
     if (lowerAddr.includes('sarawak')) return 'Sarawak';
@@ -229,16 +231,28 @@ const getZoneDistanceScore = (zone: string, factoryId: string): number => {
     // Basic heuristics: if the zone text includes North/Penang, favor North factories.
     const lowerZone = (zone || '').toLowerCase();
     
-    if (factoryId.includes('OPM') || factoryId === 'SPD') { // North
-        if (lowerZone.includes('north') || lowerZone.includes('penang') || lowerZone.includes('perak')) return 100;
+    if (factoryId.includes('OPM') || factoryId === 'SPD' || factoryId === 'T1') { // North
+        if (lowerZone.includes('north') || lowerZone.includes('penang') || lowerZone.includes('perak') || lowerZone.includes('kedah')) return 100;
         if (lowerZone.includes('kl') || lowerZone.includes('selangor')) return 40;
         return 10;
     }
-    if (factoryId === 'Nilai') { // Nilai (Central/South)
-        if (lowerZone.includes('kl') || lowerZone.includes('selangor')) return 100;
-        if (lowerZone.includes('south') || lowerZone.includes('johor')) return 90;
-        if (lowerZone.includes('east') || lowerZone.includes('pahang')) return 80;
+    if (factoryId === 'Nilai' || factoryId === 'N1') { // Nilai (Central)
+        if (lowerZone.includes('kl') || lowerZone.includes('selangor') || lowerZone.includes('n. sembilan')) return 100;
+        if (lowerZone.includes('south') || lowerZone.includes('johor') || lowerZone.includes('melaka')) return 80;
+        if (lowerZone.includes('east') || lowerZone.includes('pahang')) return 70;
         if (lowerZone.includes('north') || lowerZone.includes('penang')) return 30;
+    }
+    if (factoryId === 'Kelantan' || factoryId === 'K1') { // Kelantan (East Coast)
+        if (lowerZone.includes('kelantan') || lowerZone.includes('terengganu') || lowerZone.includes('east')) return 100;
+        if (lowerZone.includes('pahang')) return 80;
+        if (lowerZone.includes('perak') || lowerZone.includes('kedah')) return 50;
+        return 20;
+    }
+    if (factoryId === 'Johor' || factoryId === 'J1') { // Johor (South)
+        if (lowerZone.includes('johor') || lowerZone.includes('south')) return 100;
+        if (lowerZone.includes('melaka') || lowerZone.includes('n. sembilan')) return 85;
+        if (lowerZone.includes('kl') || lowerZone.includes('selangor')) return 60;
+        return 20;
     }
     return 50; // Default flat score
 };

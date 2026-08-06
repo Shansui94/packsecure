@@ -445,9 +445,9 @@ const ProductionLane: React.FC<ProductionLaneProps> = ({
             {/* PROGRESS BAR */}
             <div className="flex border-b border-black/5 dark:border-white/10 bg-black/[0.02] dark:bg-white/[0.02]">
                 {[
-                    { id: 1, label: "01. TYPE", icon: Layers },
-                    { id: 2, label: "02. SIZE", icon: Box },
-                    { id: 3, label: "03. PRODUCE", icon: Settings }
+                    { id: 1, label: "类型", icon: Layers },
+                    { id: 2, label: "规格", icon: Box },
+                    { id: 3, label: "生产", icon: Settings }
                 ].map((s) => {
                     const isActive = step === s.id;
                     const isPast = step > s.id;
@@ -2064,21 +2064,23 @@ const ProductionControl: React.FC<ProductionControlProps> = ({ user, jobs = [], 
                 <div className="relative z-10 max-w-7xl mx-auto p-4 md:p-6 flex flex-col min-h-screen">
 
                 {/* HEADER */}
-                <header className="flex justify-between items-center mb-6 apple-glass px-6 py-4 rounded-3xl shadow-xl sticky top-4 z-50 border border-black/5 dark:border-white/10 gap-4 flex-wrap md:flex-nowrap">
-                    <div>
-                        <h2 className="text-lg md:text-xl font-black text-apple-textMain dark:text-white flex items-center gap-2">
-                            <Settings className="text-apple-blue animate-spin-slow shrink-0" size={20} />
-                            <span>PRODUCTION WORKSPACE</span>
-                        </h2>
-                        {selectedMachine && (
-                            <div className="flex items-center gap-2 mt-1">
-                                <span className="text-apple-green font-mono text-[10px] uppercase tracking-widest flex items-center gap-1">
-                                    <div className="h-1.5 w-1.5 rounded-full bg-apple-green animate-pulse"></div>
-                                    Standard Mode
-                                </span>
-                                <span className="text-apple-textMuted text-xs">| {currentMachineName}</span>
-                            </div>
-                        )}
+                <header className="flex justify-between items-center mb-5 apple-glass px-5 py-3.5 rounded-2xl shadow-lg sticky top-4 z-50 border border-white/10 gap-3 flex-wrap md:flex-nowrap">
+                    <div className="flex items-center gap-3">
+                        <div className="p-2 bg-blue-500/10 border border-blue-500/20 text-blue-400 rounded-xl">
+                            <Settings size={18} />
+                        </div>
+                        <div>
+                            <h2 className="text-base font-semibold text-white flex items-center gap-2">
+                                <span>生产控制工作台</span>
+                                <span className="text-xs text-gray-400 font-normal">Production Workspace</span>
+                            </h2>
+                            {selectedMachine && (
+                                <p className="text-xs text-gray-400 flex items-center gap-1.5 mt-0.5">
+                                    <span className="w-1.5 h-1.5 rounded-full bg-emerald-400"></span>
+                                    <span>当前机台: <strong className="text-gray-200 font-medium">{currentMachineName}</strong></span>
+                                </p>
+                            )}
+                        </div>
                     </div>
 
                     {/* CONTROL MODE TOGGLE FOR ADMINS/MANAGERS */}
@@ -2091,14 +2093,14 @@ const ProductionControl: React.FC<ProductionControlProps> = ({ user, jobs = [], 
                                     setIsControlMode(false);
                                 }
                             }}
-                            className={`px-3 py-1.5 rounded-lg text-[10px] font-black uppercase tracking-wider transition-all border flex items-center gap-1.5 shrink-0 ${
+                            className={`px-3 py-1.5 rounded-lg text-xs font-medium transition-all border flex items-center gap-1.5 shrink-0 ${
                                 isControlMode
-                                    ? 'bg-rose-500/10 text-rose-400 border-rose-500/30 shadow-lg shadow-rose-500/5'
+                                    ? 'bg-rose-500/10 text-rose-400 border-rose-500/30'
                                     : 'bg-blue-500/10 text-blue-400 border-blue-500/30'
                             }`}
                         >
                             <div className={`w-2 h-2 rounded-full ${isControlMode ? 'bg-rose-400 animate-pulse' : 'bg-blue-400'}`}></div>
-                            {isControlMode ? 'Takeover Mode Active' : 'Monitor Mode Active'}
+                            {isControlMode ? '接管控制模式' : '监控模式'}
                         </button>
                     )}
 
@@ -2106,12 +2108,12 @@ const ProductionControl: React.FC<ProductionControlProps> = ({ user, jobs = [], 
                         <button
                             type="button"
                             onClick={() => setShowInspectionModal(true)}
-                            className="bg-gradient-to-r from-amber-600 to-orange-600 hover:from-amber-500 hover:to-orange-500 text-white font-bold px-2.5 sm:px-3 py-2 rounded-xl text-xs flex items-center gap-1.5 shadow-lg active:scale-95 transition cursor-pointer border border-amber-400/30 shrink-0"
+                            className="bg-amber-600/20 hover:bg-amber-600/30 text-amber-300 border border-amber-500/40 font-medium px-3 py-1.5 rounded-xl text-xs flex items-center gap-1.5 transition cursor-pointer shrink-0"
                             title="打开当前机台的原材料、位置与温度巡检快记"
                         >
-                            <FlaskConical size={15} />
-                            <span className="hidden sm:inline">📸 机台巡检与配料快记</span>
-                            <span className="sm:hidden">📸 配料巡检</span>
+                            <FlaskConical size={14} />
+                            <span className="hidden sm:inline">机台巡检与配料快记</span>
+                            <span className="sm:hidden">配料巡检</span>
                         </button>
 
                         {clockInTime && (
@@ -2121,20 +2123,19 @@ const ProductionControl: React.FC<ProductionControlProps> = ({ user, jobs = [], 
                                         hasScannedClockOutRef.current = false;
                                         setIsScanningForClockOut(true);
                                     }}
-                                    className="bg-red-600 hover:bg-red-500 text-white font-bold py-2 px-3 sm:px-4 rounded-xl shadow-lg border border-red-400/50 flex items-center gap-1.5 text-xs shrink-0"
+                                    className="bg-rose-600/80 hover:bg-rose-600 text-white font-medium py-1.5 px-3 rounded-xl shadow border border-rose-400/40 flex items-center gap-1.5 text-xs shrink-0"
                                 >
                                     <Camera size={14} />
-                                    <span className="hidden sm:inline">扫码登出 / Scan to Clock Out</span>
+                                    <span className="hidden sm:inline">扫码登出</span>
                                     <span className="sm:hidden">扫码登出</span>
                                 </button>
                             ) : (
                                 <button
                                     onClick={handleManualClockOut}
-                                    className="bg-red-600 hover:bg-red-500 text-white font-bold py-2 px-3 sm:px-4 rounded-xl shadow-lg border border-red-400/50 flex items-center gap-1.5 text-xs shrink-0"
+                                    className="bg-rose-600/80 hover:bg-rose-600 text-white font-medium py-1.5 px-3 rounded-xl shadow border border-rose-400/40 flex items-center gap-1.5 text-xs shrink-0"
                                 >
                                     <LogOut size={14} />
-                                    <span className="hidden sm:inline">登出 / Clock Out</span>
-                                    <span className="sm:hidden">登出</span>
+                                    <span>登出</span>
                                 </button>
                             )
                         )}
@@ -2150,9 +2151,9 @@ const ProductionControl: React.FC<ProductionControlProps> = ({ user, jobs = [], 
                                 <button
                                     key={m.machine_id}
                                     onClick={() => handleMachineTabClick(m.machine_id)}
-                                    className={`px-2.5 py-2 rounded-xl text-[11px] sm:px-4 sm:py-2.5 sm:text-xs font-bold uppercase tracking-wider transition-all border text-center sm:shrink-0 ${
+                                    className={`px-3 py-2 rounded-xl text-xs font-medium transition-all border text-center sm:shrink-0 ${
                                         isSelected
-                                            ? 'bg-apple-blue text-white border-apple-blue shadow-lg shadow-apple-blue/20'
+                                            ? 'bg-blue-600 text-white border-blue-500 shadow-sm'
                                             : 'bg-white/5 text-gray-400 border-white/10 hover:text-white hover:bg-white/10'
                                     }`}
                                 >
@@ -2246,50 +2247,48 @@ const ProductionControl: React.FC<ProductionControlProps> = ({ user, jobs = [], 
 
                             {/* OPERATOR STATUS BANNER */}
                             {machineOperator ? (
-                                <div className="bg-green-500/10 border border-green-500/20 p-4 rounded-xl flex items-center justify-between gap-4">
+                                <div className="bg-emerald-500/10 border border-emerald-500/20 p-3 rounded-2xl flex items-center justify-between gap-3">
                                     <div className="flex items-center gap-3 min-w-0">
-                                        <div className="w-10 h-10 rounded-full bg-green-500/20 flex items-center justify-center text-green-400 shrink-0">
-                                            <UserIcon size={20} />
+                                        <div className="w-8 h-8 rounded-xl bg-emerald-500/20 flex items-center justify-center text-emerald-400 shrink-0">
+                                            <UserIcon size={16} />
                                         </div>
                                         <div className="min-w-0">
-                                            <p className="text-green-400 text-xs font-bold uppercase tracking-wider">Active Operator On duty</p>
-                                            <p className="text-white font-bold text-base leading-none truncate">
-                                                {machineOperator.name} (Employee ID: {machineOperator.employeeId})
-                                                {operatorEmployeeId === machineOperator.employeeId && " — You"}
+                                            <p className="text-white font-medium text-xs truncate">
+                                                当前值班操作员: <span className="font-semibold">{machineOperator.name}</span> (工号: {machineOperator.employeeId})
+                                                {operatorEmployeeId === machineOperator.employeeId && " (当前为您)"}
                                             </p>
-                                            <p className="text-[10px] text-gray-500 mt-1 truncate">
-                                                Clock In Time: {new Date(machineOperator.clockIn).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })}
-                                                {operatorEmployeeId === machineOperator.employeeId && ` | Duration: ${durationText}`}
+                                            <p className="text-[11px] text-gray-400 mt-0.5 truncate">
+                                                打卡时间: {new Date(machineOperator.clockIn).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })}
+                                                {operatorEmployeeId === machineOperator.employeeId && ` · 已值班 ${durationText}`}
                                             </p>
                                         </div>
                                     </div>
                                      {user && user.role !== 'Operator' && (
                                          <button
                                              onClick={() => initiateTakeover(selectedMachine!)}
-                                             className="px-3 py-2 bg-green-500/10 hover:bg-green-500/20 text-green-400 rounded-xl text-[10px] font-black uppercase tracking-wider transition-all border border-green-500/20 active:scale-95 shrink-0 cursor-pointer"
+                                             className="px-3 py-1.5 bg-emerald-500/10 hover:bg-emerald-500/20 text-emerald-300 rounded-xl text-xs font-medium transition border border-emerald-500/30 shrink-0 cursor-pointer"
                                          >
-                                             🔄 切换人
+                                             切换人员
                                          </button>
                                      )}
                                  </div>
                              ) : (
-                                 <div className="bg-amber-500/5 border border-amber-500/20 p-4 rounded-xl flex items-center justify-between gap-4">
+                                 <div className="bg-amber-500/10 border border-amber-500/20 p-3 rounded-2xl flex items-center justify-between gap-3">
                                      <div className="flex items-center gap-3 min-w-0">
-                                         <div className="w-10 h-10 rounded-full bg-amber-500/20 flex items-center justify-center text-amber-400 shrink-0">
-                                             <AlertTriangle size={20} />
+                                         <div className="w-8 h-8 rounded-xl bg-amber-500/20 flex items-center justify-center text-amber-400 shrink-0">
+                                             <AlertTriangle size={16} />
                                          </div>
                                          <div className="min-w-0">
-                                             <p className="text-amber-400 text-xs font-bold uppercase tracking-wider">No Operator Duty</p>
-                                             <p className="text-white font-bold text-sm leading-none truncate">No active operator is currently bound to this machine.</p>
-                                             <p className="text-[10px] text-gray-500 mt-1 truncate">Please bind an operator to select and start production.</p>
+                                             <p className="text-amber-300 text-xs font-medium">该机台暂未绑定值班操作员</p>
+                                             <p className="text-[11px] text-gray-400 mt-0.5 truncate">请先绑定操作员以开启生产记录</p>
                                          </div>
                                      </div>
                                      {user && user.role !== 'Operator' && (
                                          <button
                                              onClick={() => initiateTakeover(selectedMachine!)}
-                                             className="px-3 py-2 bg-amber-500/10 hover:bg-amber-500/20 text-amber-400 rounded-xl text-[10px] font-black uppercase tracking-wider transition-all border border-amber-500/20 active:scale-95 shrink-0 cursor-pointer"
+                                             className="px-3 py-1.5 bg-amber-500/20 hover:bg-amber-500/30 text-amber-300 rounded-xl text-xs font-medium transition border border-amber-500/30 shrink-0 cursor-pointer"
                                          >
-                                             🔑 绑定操作员
+                                             绑定操作员
                                          </button>
                                      )}
                                  </div>
@@ -2570,33 +2569,31 @@ const ProductionControl: React.FC<ProductionControlProps> = ({ user, jobs = [], 
 
                             {/* 1. WORK PHOTO LOGGER */}
                             {!isSfOrRecycle && (
-                                <div className="bg-white/5 border border-white/10 rounded-3xl p-4 md:p-6 backdrop-blur-md">
-                                    <h3 className="text-xs font-black tracking-widest text-purple-400 uppercase flex items-center gap-1.5 mb-3">
-                                        <Camera size={14} /> Work Photo Logger
+                                <div className="bg-white/5 border border-white/10 rounded-2xl p-4 backdrop-blur-md">
+                                    <h3 className="text-xs font-semibold text-purple-400 flex items-center gap-1.5 mb-3">
+                                        <Camera size={14} /> 现场拍照登记
                                     </h3>
 
                                 {!photoPreview ? (
                                     <div className="flex gap-2">
                                         <button 
                                             onClick={() => setShowWebcam(true)} 
-                                            className="flex-1 py-8 bg-purple-600/10 hover:bg-purple-600/20 border border-dashed border-purple-500/20 hover:border-purple-500/40 rounded-2xl flex flex-col items-center justify-center gap-1.5 transition-all text-center cursor-pointer"
+                                            className="flex-1 py-6 bg-purple-600/10 hover:bg-purple-600/20 border border-dashed border-purple-500/20 rounded-xl flex flex-col items-center justify-center gap-1 transition-all text-center cursor-pointer"
                                         >
-                                            <div className="w-9 h-9 rounded-full bg-purple-500/20 flex items-center justify-center text-purple-400 border border-purple-500/30">
-                                                <Camera size={16} />
+                                            <div className="w-8 h-8 rounded-full bg-purple-500/20 flex items-center justify-center text-purple-400">
+                                                <Camera size={15} />
                                             </div>
-                                            <span className="text-xs font-bold text-purple-300">Live Camera</span>
-                                            <span className="text-[8px] text-gray-500">使用系统相机拍照</span>
+                                            <span className="text-xs font-medium text-purple-300">相机拍照</span>
                                         </button>
                                         
                                         <button 
                                             onClick={triggerFileSelect} 
-                                            className="flex-1 py-8 bg-white/[0.02] hover:bg-white/5 border border-dashed border-white/10 hover:border-white/20 rounded-2xl flex flex-col items-center justify-center gap-1.5 transition-all text-center cursor-pointer"
+                                            className="flex-1 py-6 bg-white/[0.02] hover:bg-white/5 border border-dashed border-white/10 rounded-xl flex flex-col items-center justify-center gap-1 transition-all text-center cursor-pointer"
                                         >
-                                            <div className="w-9 h-9 rounded-full bg-white/5 flex items-center justify-center text-gray-400 border border-white/10">
-                                                <ImageIcon size={16} />
+                                            <div className="w-8 h-8 rounded-full bg-white/5 flex items-center justify-center text-gray-400">
+                                                <ImageIcon size={15} />
                                             </div>
-                                            <span className="text-xs font-bold text-gray-300">Upload File</span>
-                                            <span className="text-[8px] text-gray-500">从相册选择图片</span>
+                                            <span className="text-xs font-medium text-gray-300">上传图片</span>
                                         </button>
                                     </div>
                                 ) : (
@@ -2610,17 +2607,17 @@ const ProductionControl: React.FC<ProductionControlProps> = ({ user, jobs = [], 
                                             {(uploadingPhoto || analyzingPhoto) && (
                                                 <div className="absolute inset-0 bg-black/60 flex flex-col items-center justify-center gap-2">
                                                     <Loader className="animate-spin text-purple-400" size={20} />
-                                                    <span className="text-[10px] text-purple-300 font-bold">AI Processing...</span>
+                                                    <span className="text-xs text-purple-300 font-medium">AI 识别中...</span>
                                                 </div>
                                             )}
                                         </div>
 
                                         {aiAnalysis && (
-                                            <div className="p-3 bg-purple-500/5 border border-purple-500/10 rounded-xl">
-                                                <div className="text-[9px] text-purple-400 uppercase font-black tracking-widest flex items-center gap-1">
-                                                    <Sparkles size={10} /> AI Scene Analysis:
+                                            <div className="p-2.5 bg-purple-500/5 border border-purple-500/10 rounded-xl">
+                                                <div className="text-[10px] text-purple-400 font-semibold flex items-center gap-1">
+                                                    <Sparkles size={10} /> AI 图像分析:
                                                 </div>
-                                                <p className="text-xs text-white mt-1 leading-tight font-bold">{aiAnalysis}</p>
+                                                <p className="text-xs text-white mt-0.5 leading-tight">{aiAnalysis}</p>
                                             </div>
                                         )}
 
@@ -2630,7 +2627,7 @@ const ProductionControl: React.FC<ProductionControlProps> = ({ user, jobs = [], 
                                                 <button 
                                                     key={key} 
                                                     onClick={() => setPhotoCategory(key)} 
-                                                    className={`px-2 py-1 border text-[9px] rounded-lg font-bold transition-all truncate ${
+                                                    className={`px-2 py-1 border text-[10px] rounded-lg font-medium transition-all truncate ${
                                                         photoCategory === key ? cat.color : 'border-white/5 text-gray-500 hover:text-gray-300'
                                                     }`}
                                                 >
@@ -2641,15 +2638,15 @@ const ProductionControl: React.FC<ProductionControlProps> = ({ user, jobs = [], 
 
                                         {/* DEFECT SPECIFIC INPUTS */}
                                         {photoCategory === 'defect' && (
-                                            <div className="p-3 bg-rose-500/5 border border-rose-500/10 rounded-xl space-y-3">
-                                                <div className="text-[10px] uppercase font-bold text-rose-400 tracking-wider">Defect Logging Details</div>
+                                            <div className="p-3 bg-rose-500/5 border border-rose-500/10 rounded-xl space-y-2.5">
+                                                <div className="text-[10px] font-semibold text-rose-400">次品明细记录</div>
                                                 
                                                 <div className="space-y-1">
-                                                    <label className="text-[9px] text-gray-400 font-bold">Weight (KG)</label>
+                                                    <label className="text-[10px] text-gray-400">重量 (KG)</label>
                                                     <div className="flex gap-2">
                                                         <input
                                                             type="text"
-                                                            placeholder="e.g. 10.90"
+                                                            placeholder="例: 10.90"
                                                             value={defectWeight}
                                                             onChange={e => setDefectWeight(e.target.value)}
                                                             className="flex-1 bg-white/5 border border-white/10 text-xs px-2.5 py-1.5 rounded-lg focus:border-rose-500 focus:outline-none"
@@ -2658,147 +2655,27 @@ const ProductionControl: React.FC<ProductionControlProps> = ({ user, jobs = [], 
                                                             type="button"
                                                             onClick={runAIDefectScan}
                                                             disabled={analyzingPhoto || !photoBase64}
-                                                            className="px-3 bg-rose-500/20 hover:bg-rose-500/30 text-rose-300 font-bold text-[11px] rounded-lg border border-rose-500/30 flex items-center gap-1 transition-all"
+                                                            className="px-3 bg-rose-500/20 hover:bg-rose-500/30 text-rose-300 font-medium text-xs rounded-lg border border-rose-500/30 flex items-center gap-1 transition-all"
                                                         >
                                                             {analyzingPhoto ? <Loader className="animate-spin" size={10} /> : <Sparkles size={10} />}
-                                                            <span>AI Scan</span>
+                                                            <span>AI 识别</span>
                                                         </button>
                                                     </div>
                                                 </div>
 
                                                 <div className="space-y-1">
-                                                    <label className="text-[9px] text-gray-400 font-bold">Defect Reason</label>
+                                                    <label className="text-[10px] text-gray-400">次品原因</label>
                                                     <select
                                                         value={defectReason}
                                                         onChange={e => setDefectReason(e.target.value)}
                                                         className="w-full bg-white/5 border border-white/10 text-xs px-2.5 py-1.5 rounded-lg focus:border-rose-500 focus:outline-none text-white [&>option]:bg-zinc-900"
                                                     >
-                                                        <option value="">Select Reason...</option>
-                                                        <option value="underweight">Underweight (克重不足)</option>
-                                                        <option value="deformation">Deformation (变形)</option>
-                                                        <option value="damage">Damage (破损)</option>
-                                                        <option value="other">Other</option>
+                                                        <option value="">选择原因...</option>
+                                                        <option value="underweight">克重不足</option>
+                                                        <option value="deformation">变形</option>
+                                                        <option value="damage">破损</option>
+                                                        <option value="other">其他</option>
                                                     </select>
-                                                </div>
-                                            </div>
-                                        )}
-
-                                        {/* RECIPE SPECIFIC INPUTS */}
-                                        {photoCategory === 'recipe' && (
-                                            <div className="p-3 bg-amber-500/5 border border-amber-500/10 rounded-xl space-y-3">
-                                                <div className="text-[10px] uppercase font-bold text-amber-400 tracking-wider">原料配方详情 / Recipe Details</div>
-                                                
-                                                <div className="space-y-2">
-                                                    <div className="flex gap-2">
-                                                        <div className="flex-1 space-y-1">
-                                                            <label className="text-[9px] text-gray-400 font-bold">配方名称 / Recipe Name</label>
-                                                            <input
-                                                                type="text"
-                                                                placeholder="e.g. Sf(clear)"
-                                                                value={recipeName}
-                                                                onChange={e => setRecipeName(e.target.value)}
-                                                                className="w-full bg-white/5 border border-white/10 text-xs px-2.5 py-1.5 rounded-lg focus:border-amber-500 focus:outline-none"
-                                                            />
-                                                        </div>
-                                                        <div className="flex items-end">
-                                                            <button
-                                                                type="button"
-                                                                onClick={runAIRecipeScan}
-                                                                disabled={analyzingPhoto || !photoBase64}
-                                                                className="h-[34px] px-3 bg-amber-600/20 hover:bg-amber-600/30 text-amber-300 font-bold text-[11px] rounded-lg border border-amber-600/30 flex items-center gap-1 transition-all disabled:opacity-50"
-                                                            >
-                                                                {analyzingPhoto ? <Loader className="animate-spin" size={10} /> : <Sparkles size={10} />} AI 识别
-                                                            </button>
-                                                        </div>
-                                                    </div>
-
-                                                    <div className="space-y-1">
-                                                        <label className="text-[9px] text-gray-400 font-bold">投料明细 (JSON 数组) / Ingredients</label>
-                                                        <textarea
-                                                            placeholder='[{"code": "C1802", "quantity": 10, "unit": "bag"}]'
-                                                            value={recipeMaterials.length > 0 ? JSON.stringify(recipeMaterials, null, 2) : ''}
-                                                            onChange={e => {
-                                                                try {
-                                                                    setRecipeMaterials(JSON.parse(e.target.value));
-                                                                } catch(err) {}
-                                                            }}
-                                                            rows={3}
-                                                            className="w-full bg-white/5 border border-white/10 text-[10px] font-mono p-2 rounded-lg focus:border-amber-500 focus:outline-none"
-                                                        />
-                                                    </div>
-
-                                                    <div className="space-y-1">
-                                                        <label className="text-[9px] text-gray-400 font-bold">投入总重 (kg) / Total Weight (kg)</label>
-                                                        <input
-                                                            type="text"
-                                                            placeholder="e.g. 376.5"
-                                                            value={recipeTotalWeight}
-                                                            onChange={e => setRecipeTotalWeight(e.target.value)}
-                                                            className="w-full bg-white/5 border border-white/10 text-xs px-2.5 py-1.5 rounded-lg focus:border-amber-500 focus:outline-none"
-                                                        />
-                                                    </div>
-                                                </div>
-                                            </div>
-                                        )}
-
-                                        {/* CARTON SPECIFIC INPUTS */}
-                                        {photoCategory === 'carton' && (
-                                            <div className="p-3 bg-emerald-500/5 border border-emerald-500/10 rounded-xl space-y-3">
-                                                <div className="text-[10px] uppercase font-bold text-emerald-400 tracking-wider">成品纸箱详情 / Carton Details</div>
-                                                
-                                                <div className="space-y-2">
-                                                    <div className="flex gap-2">
-                                                        <div className="flex-1 space-y-1">
-                                                            <label className="text-[9px] text-gray-400 font-bold">规格 SKU / Product SKU</label>
-                                                            <input
-                                                                type="text"
-                                                                placeholder="e.g. SF-500-150-18-CLR"
-                                                                value={cartonSku}
-                                                                onChange={e => setCartonSku(e.target.value)}
-                                                                className="w-full bg-white/5 border border-white/10 text-xs px-2.5 py-1.5 rounded-lg focus:border-emerald-500 focus:outline-none"
-                                                            />
-                                                        </div>
-                                                        <div className="flex items-end">
-                                                            <button
-                                                                type="button"
-                                                                onClick={runAICartonScan}
-                                                                disabled={analyzingPhoto || !photoBase64}
-                                                                className="h-[34px] px-3 bg-emerald-600/20 hover:bg-emerald-600/30 text-emerald-300 font-bold text-[11px] rounded-lg border border-emerald-600/30 flex items-center gap-1 transition-all disabled:opacity-50"
-                                                            >
-                                                                {analyzingPhoto ? <Loader className="animate-spin" size={10} /> : <Sparkles size={10} />} AI 识别
-                                                            </button>
-                                                        </div>
-                                                    </div>
-
-                                                    <div className="grid grid-cols-3 gap-2">
-                                                        <div className="space-y-1">
-                                                            <label className="text-[9px] text-gray-400 font-bold">每箱卷数 / Rolls</label>
-                                                            <input
-                                                                type="text"
-                                                                value={cartonRolls}
-                                                                onChange={e => setCartonRolls(e.target.value)}
-                                                                className="w-full bg-white/5 border border-white/10 text-xs px-2 py-1.5 rounded-lg focus:outline-none focus:border-emerald-500"
-                                                            />
-                                                        </div>
-                                                        <div className="space-y-1">
-                                                            <label className="text-[9px] text-gray-400 font-bold">毛重 (kg) / Gross</label>
-                                                            <input
-                                                                type="text"
-                                                                value={cartonGrossWeight}
-                                                                onChange={e => setCartonGrossWeight(e.target.value)}
-                                                                className="w-full bg-white/5 border border-white/10 text-xs px-2 py-1.5 rounded-lg focus:outline-none focus:border-emerald-500"
-                                                            />
-                                                        </div>
-                                                        <div className="space-y-1">
-                                                            <label className="text-[9px] text-gray-400 font-bold">净重 (kg) / Net</label>
-                                                            <input
-                                                                type="text"
-                                                                value={cartonNetWeight}
-                                                                onChange={e => setCartonNetWeight(e.target.value)}
-                                                                className="w-full bg-white/5 border border-white/10 text-xs px-2 py-1.5 rounded-lg focus:outline-none focus:border-emerald-500"
-                                                            />
-                                                        </div>
-                                                    </div>
                                                 </div>
                                             </div>
                                         )}
@@ -2808,15 +2685,15 @@ const ProductionControl: React.FC<ProductionControlProps> = ({ user, jobs = [], 
                                             type="text" 
                                             value={photoNote} 
                                             onChange={e => setPhotoNote(e.target.value)} 
-                                            placeholder="Add notes..."
-                                            className="w-full bg-white/5 border border-white/10 text-xs p-2.5 rounded-xl focus:border-purple-500 focus:outline-none"
+                                            placeholder="备注信息..."
+                                            className="w-full bg-white/5 border border-white/10 text-xs p-2 rounded-xl focus:border-purple-500 focus:outline-none"
                                         />
 
                                         <div className="flex gap-2">
-                                            <button onClick={cancelPhotoSelect} className="flex-1 py-2 bg-white/5 hover:bg-white/10 text-gray-400 font-bold text-xs rounded-xl border border-white/5 transition-all">Cancel</button>
-                                            <button onClick={submitPhotoLog} disabled={uploadingPhoto || analyzingPhoto} className="flex-1 py-2 bg-purple-600 hover:bg-purple-500 text-white font-bold text-xs rounded-xl flex items-center justify-center gap-1 transition-all active:scale-95 shadow-md shadow-purple-500/20">
+                                            <button onClick={cancelPhotoSelect} className="flex-1 py-1.5 bg-white/5 hover:bg-white/10 text-gray-400 font-medium text-xs rounded-xl border border-white/5 transition-all">取消</button>
+                                            <button onClick={submitPhotoLog} disabled={uploadingPhoto || analyzingPhoto} className="flex-1 py-1.5 bg-purple-600 hover:bg-purple-500 text-white font-medium text-xs rounded-xl flex items-center justify-center gap-1 transition-all active:scale-95 shadow-md">
                                                 <Send size={12} />
-                                                <span>Upload</span>
+                                                <span>提交</span>
                                             </button>
                                         </div>
                                     </div>
@@ -2826,19 +2703,19 @@ const ProductionControl: React.FC<ProductionControlProps> = ({ user, jobs = [], 
                             <input ref={fileInputRef} type="file" accept="image/*,video/*" className="hidden" onChange={handlePhotoSelect} />
 
                             {/* 2. OPERATOR TASKS CHECKLIST */}
-                            <div className="bg-white/5 border border-white/10 rounded-3xl p-4 md:p-6 backdrop-blur-md">
-                                <h3 className="text-xs font-black tracking-widest text-amber-400 uppercase flex items-center gap-1.5 mb-3">
-                                    <Check size={14} /> Assigned Tasks Checklist
+                            <div className="bg-white/5 border border-white/10 rounded-2xl p-4 backdrop-blur-md">
+                                <h3 className="text-xs font-semibold text-amber-400 flex items-center gap-1.5 mb-2.5">
+                                    <Check size={14} /> 待办任务
                                 </h3>
 
                                 {operatorTasks.length === 0 ? (
-                                    <p className="text-center py-4 text-xs text-gray-500 font-bold">No pending tasks 👍</p>
+                                    <p className="text-center py-3 text-xs text-gray-500">暂无待办任务 👍</p>
                                 ) : (
                                     <div className="flex flex-col gap-2 max-h-48 overflow-y-auto custom-scrollbar">
                                         {operatorTasks.map(task => (
-                                            <div key={task.id} className="p-3 bg-white/[0.02] border border-white/5 rounded-xl flex justify-between items-center group">
+                                            <div key={task.id} className="p-2.5 bg-white/[0.02] border border-white/5 rounded-xl flex justify-between items-center group">
                                                 <div className="min-w-0 pr-2">
-                                                    <p className="text-xs font-bold text-white truncate">{task.title}</p>
+                                                    <p className="text-xs font-medium text-white truncate">{task.title}</p>
                                                     {task.description && <p className="text-[10px] text-gray-500 truncate mt-0.5">{task.description}</p>}
                                                 </div>
                                                 <button onClick={() => toggleTaskComplete(task.id)} className="w-5 h-5 rounded-lg border border-amber-500/30 group-hover:border-amber-500 flex items-center justify-center text-transparent hover:text-amber-400 hover:bg-amber-500/10 transition-all shrink-0">
@@ -2851,12 +2728,12 @@ const ProductionControl: React.FC<ProductionControlProps> = ({ user, jobs = [], 
                             </div>
 
                             {/* 3. RECENT COMPLETED RUNS */}
-                            <div className="apple-card p-0 rounded-2xl overflow-hidden border border-black/5 dark:border-white/10">
-                                <div className="px-4 py-3 border-b border-black/5 dark:border-white/10 bg-black/[0.02] dark:bg-white/[0.02] flex justify-between items-center">
-                                    <h4 className="text-xs font-bold text-apple-textMuted uppercase tracking-widest">
-                                        Recent Activity
+                            <div className="apple-card p-0 rounded-2xl overflow-hidden border border-white/10">
+                                <div className="px-4 py-2.5 border-b border-white/10 bg-white/[0.02] flex justify-between items-center">
+                                    <h4 className="text-xs font-semibold text-gray-300">
+                                        最近生产产出记录
                                     </h4>
-                                    <span className="text-[10px] text-apple-blue font-mono">{recentLogs.length} Records</span>
+                                    <span className="text-[10px] text-blue-400 font-mono">{recentLogs.length} 条</span>
                                 </div>
                                 <div className="max-h-48 overflow-y-auto custom-scrollbar">
                                     {recentLogs.map((log) => {

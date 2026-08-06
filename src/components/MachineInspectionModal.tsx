@@ -125,33 +125,72 @@ export const MachineInspectionModal: React.FC<MachineInspectionModalProps> = ({
     // 各螺杆动态配方 State
     const [screwMaterials, setScrewMaterials] = useState<Record<ScrewType, MaterialItemState[]>>(INITIAL_PRESET_MATERIALS);
 
-    // 🔑 当 Modal 打开或 machineId 切换时，重新加载该机台专属的 Recipe
+    // 🔑 当 Modal 打开或 machineId 切换时，从本地和云端 Supabase (audit_logs) 同步加载配方
     useEffect(() => {
-        if (isOpen && machineId) {
+        if (!isOpen || (!machineId && !machineName)) return;
+        const targetId = machineId || machineName;
+
+        const loadFormula = async () => {
+            // 1. 先从本地 LocalStorage 秒级渲染
             try {
-                const saved = localStorage.getItem(`active_screw_materials_${machineId}`);
+                const saved = localStorage.getItem(`active_screw_materials_${targetId}`);
                 if (saved) {
                     setScrewMaterials(JSON.parse(saved));
                 } else {
                     setScrewMaterials(INITIAL_PRESET_MATERIALS);
                 }
             } catch (e) {
-                console.error('Failed to load saved materials for machine:', machineId, e);
+                console.error('Failed to load saved materials for machine:', targetId, e);
                 setScrewMaterials(INITIAL_PRESET_MATERIALS);
             }
-        }
-    }, [isOpen, machineId]);
 
-    // 每次修改配方自动写到该具体机台的 localStorage
-    useEffect(() => {
-        if (isOpen && machineId) {
+            // 2. 从云端 audit_logs 拉取最新跨端同步配方
             try {
-                localStorage.setItem(`active_screw_materials_${machineId}`, JSON.stringify(screwMaterials));
+                const { data } = await supabase
+                    .from('audit_logs')
+                    .select('new_data')
+                    .eq('table_name', 'machine_screw_formulas')
+                    .eq('record_id', targetId)
+                    .order('created_at', { ascending: false })
+                    .limit(1);
+
+                if (data && data.length > 0 && data[0].new_data) {
+                    setScrewMaterials(data[0].new_data);
+                    localStorage.setItem(`active_screw_materials_${targetId}`, JSON.stringify(data[0].new_data));
+                }
             } catch (e) {
-                console.error('Failed to save materials:', e);
+                console.warn('Cloud formula load skipped:', e);
             }
+        };
+
+        loadFormula();
+    }, [isOpen, machineId, machineName]);
+
+    // 每次修改配方，自动写入 LocalStorage 并同步写到云端 audit_logs
+    const syncScrewMaterialsToCloud = async (newMaterials: Record<ScrewType, MaterialItemState[]>) => {
+        setScrewMaterials(newMaterials);
+        const targetId = machineId || machineName;
+        if (!targetId) return;
+
+        try {
+            localStorage.setItem(`active_screw_materials_${targetId}`, JSON.stringify(newMaterials));
+        } catch (e) {
+            console.error('Failed to save materials locally:', e);
         }
-    }, [screwMaterials, machineId, isOpen]);
+
+        try {
+            await supabase.from('audit_logs').insert([{
+                table_name: 'machine_screw_formulas',
+                action: 'UPDATE_FORMULA',
+                record_id: targetId,
+                new_data: newMaterials,
+                changed_by_email: currentUser?.email || 'operator@packsecure.com',
+                changed_by_uid: currentUser?.uid || ''
+            }]);
+        } catch (e) {
+            console.warn('Cloud formula save skipped:', e);
+        }
+    };
 
     const masterHopperPhotoInputRef = useRef<HTMLInputElement>(null);
 
@@ -182,7 +221,6 @@ export const MachineInspectionModal: React.FC<MachineInspectionModalProps> = ({
     const [lightboxPhoto, setLightboxPhoto] = useState<string | null>(null);
 
     // 初始加载数据库日志 & 原材料清单
-    // 初始加载数据库日志 & 原材料清单 (仅在打开 Modal 或切换机台时触发，切螺杆不再重复重置日志)
     useEffect(() => {
         if (isOpen) {
             fetchMachineLogs();
@@ -208,8 +246,8 @@ export const MachineInspectionModal: React.FC<MachineInspectionModalProps> = ({
         }
     };
 
-    // 辅助工具：保存日志到本地存储与 State，确保即使云端网络抖动/表不存在也不会丢失日志
-    const saveLogToLocalAndState = (newLog: MobileInspectionLog) => {
+    // 辅助工具：保存日志到本地存储与 State，同时同步到 Supabase audit_logs
+    const saveLogToLocalAndState = async (newLog: MobileInspectionLog) => {
         setLogs(prev => {
             const updated = [newLog, ...prev];
             try {
@@ -220,14 +258,31 @@ export const MachineInspectionModal: React.FC<MachineInspectionModalProps> = ({
             }
             return updated;
         });
+
+        // 云端全同步：写一份到 audit_logs 确保任何端均能拉取
+        try {
+            const targetId = machineId || machineName || 'GLOBAL';
+            await supabase.from('audit_logs').insert([{
+                table_name: 'mobile_inspection_logs',
+                action: newLog.log_type || 'material',
+                record_id: targetId,
+                new_data: newLog,
+                changed_by_email: currentUser?.email || 'operator@packsecure.com',
+                changed_by_uid: currentUser?.uid || ''
+            }]);
+        } catch (e) {
+            console.warn('Cloud audit log save skipped:', e);
+        }
     };
 
-    // 🔒 严格隔离：每台机器只读取并展示属于它自己的日志，双重持久化保证记录永不丢失
+    // 🔒 严格隔离：每台机器只读取并展示属于它自己的日志
     const fetchMachineLogs = async () => {
         if (!machineId && !machineName) {
             setLogs([]);
             return;
         }
+
+        const targetId = machineId || machineName;
 
         // 1. 读取 LocalStorage 本地保存的日志
         let localLogs: MobileInspectionLog[] = [];
@@ -243,7 +298,7 @@ export const MachineInspectionModal: React.FC<MachineInspectionModalProps> = ({
             console.error('Failed to load local logs:', e);
         }
 
-        // 2. 尝试从数据库加载日志
+        // 2. 从数据库 (mobile_inspection_logs & audit_logs) 加载日志
         let dbLogs: any[] = [];
         try {
             if (machineId) {
@@ -263,6 +318,23 @@ export const MachineInspectionModal: React.FC<MachineInspectionModalProps> = ({
                     .order('created_at', { ascending: false })
                     .limit(50);
                 if (res.data) dbLogs = res.data;
+            }
+
+            // 补充：拉取 audit_logs 中的全端同步日志
+            const auditRes = await supabase
+                .from('audit_logs')
+                .select('new_data, created_at')
+                .eq('table_name', 'mobile_inspection_logs')
+                .eq('record_id', targetId)
+                .order('created_at', { ascending: false })
+                .limit(50);
+
+            if (auditRes.data && auditRes.data.length > 0) {
+                const auditMapped = auditRes.data.map((item: any) => ({
+                    ...item.new_data,
+                    created_at: item.new_data?.created_at || item.created_at
+                })).filter(Boolean);
+                dbLogs = [...dbLogs, ...auditMapped];
             }
         } catch (e) {
             console.warn('DB fetch logs skipped or table unready:', e);
@@ -335,10 +407,11 @@ export const MachineInspectionModal: React.FC<MachineInspectionModalProps> = ({
             newQty: newMatQty
         };
 
-        setScrewMaterials(prev => ({
-            ...prev,
-            [selectedScrew]: [...(prev[selectedScrew] || []), newItem]
-        }));
+        const updatedMaterials = {
+            ...screwMaterials,
+            [selectedScrew]: [...(screwMaterials[selectedScrew] || []), newItem]
+        };
+        syncScrewMaterialsToCloud(updatedMaterials);
 
         const operatorName = currentUser?.name || currentUser?.email?.split('@')[0] || '现场操作员';
 
@@ -384,10 +457,11 @@ export const MachineInspectionModal: React.FC<MachineInspectionModalProps> = ({
         const targetMat = currentMaterials.find(m => m.id === id);
         const matName = targetMat ? targetMat.name : '物料';
 
-        setScrewMaterials(prev => ({
-            ...prev,
-            [selectedScrew]: (prev[selectedScrew] || []).filter(m => m.id !== id)
-        }));
+        const updatedMaterials = {
+            ...screwMaterials,
+            [selectedScrew]: (screwMaterials[selectedScrew] || []).filter(m => m.id !== id)
+        };
+        syncScrewMaterialsToCloud(updatedMaterials);
 
         const operatorName = currentUser?.name || currentUser?.email?.split('@')[0] || '现场操作员';
 
@@ -433,10 +507,11 @@ export const MachineInspectionModal: React.FC<MachineInspectionModalProps> = ({
         const oldQty = targetMat.newQty;
         if (oldQty === validQty) return;
 
-        setScrewMaterials(prev => ({
-            ...prev,
-            [selectedScrew]: (prev[selectedScrew] || []).map(m => m.id === id ? { ...m, prevQty: oldQty, newQty: validQty } : m)
-        }));
+        const updatedMaterials = {
+            ...screwMaterials,
+            [selectedScrew]: (screwMaterials[selectedScrew] || []).map(m => m.id === id ? { ...m, prevQty: oldQty, newQty: validQty } : m)
+        };
+        syncScrewMaterialsToCloud(updatedMaterials);
 
         const operatorName = currentUser?.name || currentUser?.email?.split('@')[0] || '现场操作员';
         const delta = validQty - oldQty;
@@ -669,9 +744,6 @@ export const MachineInspectionModal: React.FC<MachineInspectionModalProps> = ({
                         <div>
                             <h3 className="font-semibold text-white text-base flex items-center gap-2">
                                 <span>{machineName}</span>
-                                <span className="text-xs bg-gray-800 text-gray-300 px-2 py-0.5 rounded-md font-normal">
-                                    多螺杆共挤配料
-                                </span>
                             </h3>
                             <p className="text-xs text-gray-400">选择螺杆通道配置混料配方及巡检</p>
                         </div>
@@ -701,7 +773,6 @@ export const MachineInspectionModal: React.FC<MachineInspectionModalProps> = ({
                                         }`}
                                 >
                                     <span className="font-medium text-xs">{screw.name.split(' ')[0]} {screw.name.split(' ')[1]}</span>
-                                    <span className="text-[11px] opacity-75 mt-0.5">{screw.tag}</span>
                                 </button>
                             );
                         })}
@@ -858,7 +929,6 @@ export const MachineInspectionModal: React.FC<MachineInspectionModalProps> = ({
 
                                                     <div>
                                                         <span className="font-extrabold text-white text-sm block">{mat.name}</span>
-                                                        <span className="text-[10px] text-gray-500 font-mono block">({mat.sku})</span>
                                                     </div>
                                                 </div>
 

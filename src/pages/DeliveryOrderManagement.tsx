@@ -39,16 +39,38 @@ type ScanSheetReview = {
     trips: ScannedTripDraft[];
 };
 
-const normalizeLoc = (locId: string): string => {
-    const lower = (locId || '').toLowerCase().trim();
-    const LOC_ALIASES: Record<string, string> = {
-        'spd': 'SPD', 'opm lama': 'OPM Lama', 'opm_lama': 'OPM Lama',
-        'opm corner': 'OPM Corner', 'opm_corner': 'OPM Corner',
-        'opm ali': 'OPM Ali', 'opm_ali': 'OPM Ali',
-        'nilai': 'Nilai',
-    };
-    return LOC_ALIASES[lower] || locId;
+const normalizeWarehouseName = (loc: string): string => {
+    if (!loc) return 'SPD';
+    const lower = loc.trim().toLowerCase();
+    if (lower === 'johor' || lower === 'j1') return 'Johor';
+    if (lower === 'kelantan' || lower === 'k1') return 'Kelantan';
+    if (lower === 'nilai' || lower === 'n1') return 'Nilai';
+    if (lower === 'spd' || lower === 'taiping' || lower === 't1') return 'SPD';
+    if (lower === 'opm lama' || lower === 'opm_lama') return 'OPM Lama';
+    if (lower === 'opm corner' || lower === 'opm_corner') return 'OPM Corner';
+    if (lower === 'opm ali' || lower === 'opm_ali') return 'OPM Ali';
+    return loc;
 };
+
+const normalizeLoc = (locId: string): string => {
+    return normalizeWarehouseName(locId);
+};
+
+const getDefaultLocForOrigin = (origin: string): string => {
+    return normalizeWarehouseName(origin);
+};
+
+const getAvailableWarehousesForOrigin = (origin: string): string[] => {
+    const u = (origin || '').toUpperCase().trim();
+    if (u === 'NILAI') return ['Nilai'];
+    if (u === 'KELANTAN') return ['Kelantan'];
+    if (u === 'JOHOR') return ['Johor'];
+    if (u === 'TAIPING' || u === 'SPD' || u === 'T1') {
+        return ['SPD', 'OPM Lama', 'OPM Corner', 'OPM Ali'];
+    }
+    return ['SPD', 'OPM Lama', 'OPM Corner', 'OPM Ali'];
+};
+
 
 const getPercentColor = (percent: number): string => {
     if (percent < 70) {
@@ -489,7 +511,7 @@ const DeliveryOrderManagement: React.FC = () => {
         localStorage.setItem('tripActiveLocation', activeLocation);
         const origin = activeLocation.toUpperCase();
         setTripOrigin(origin);
-        setCurrentItemLoc(origin === 'NILAI' ? 'Nilai' : 'SPD');
+        setCurrentItemLoc(origin === 'NILAI' ? 'Nilai' : origin === 'KELANTAN' ? 'Kelantan' : origin === 'JOHOR' ? 'Johor' : 'SPD');
         setSelectedOrderIds([]); // Clear selection when location changes
     }, [activeLocation]);
 
@@ -521,7 +543,7 @@ const DeliveryOrderManagement: React.FC = () => {
     const [currentItemQty, setCurrentItemQty] = useState<number>(0);
     const [currentItemRemark, setCurrentItemRemark] = useState('');
     const [selectedV2Item, setSelectedV2Item] = useState<V2Item | null>(null);
-    const [currentItemLoc, setCurrentItemLoc] = useState(() => activeLocation.toUpperCase() === 'NILAI' ? 'Nilai' : 'SPD'); // New Location state
+    const [currentItemLoc, setCurrentItemLoc] = useState(() => getDefaultLocForOrigin(activeLocation)); // New Location state
 
     // --- Driver Payroll Rate State ---
     const [deliveryRates, setDeliveryRates] = useState<any[]>([]);
@@ -1281,7 +1303,7 @@ const DeliveryOrderManagement: React.FC = () => {
             }
 
             const data = (await response.json()) as Record<string, unknown>;
-            const defaultLoc = tripOrigin === 'NILAI' ? 'Nilai' : 'SPD';
+            const defaultLoc = getDefaultLocForOrigin(tripOrigin);
             const rawTrips = Array.isArray(data.trips) ? data.trips : [];
 
             const findDriverIdByName = (name?: string): string => {
@@ -1366,7 +1388,7 @@ const DeliveryOrderManagement: React.FC = () => {
                 throw new Error('Excel sheet is empty.');
             }
 
-            const defaultLoc = tripOrigin === 'NILAI' ? 'Nilai' : 'SPD';
+            const defaultLoc = getDefaultLocForOrigin(tripOrigin);
 
             // Helper to match column headers dynamically (case-insensitive, ignores spaces and punctuation)
             const findValue = (row: any, keys: string[]) => {
@@ -1590,7 +1612,7 @@ const DeliveryOrderManagement: React.FC = () => {
         setTripDropCount(t.tripDropCount);
         const notes = [scanReview.sheetNotes, t.notes].filter(Boolean).join(' | ');
         setNewOrderNotes(notes);
-        const defaultLoc = tripOrigin === 'NILAI' ? 'Nilai' : 'SPD';
+        const defaultLoc = getDefaultLocForOrigin(tripOrigin);
         const itemsWithLoc = (t.items || []).map(item => ({
             ...item,
             sourceLocation: item.sourceLocation || defaultLoc
@@ -2098,7 +2120,7 @@ const DeliveryOrderManagement: React.FC = () => {
         }
 
         // Force assign default location if somehow blank
-        const defaultLoc = tripOrigin === 'NILAI' ? 'Nilai' : 'SPD';
+        const defaultLoc = getDefaultLocForOrigin(tripOrigin);
         const finalizedItems = newOrderItems.map(item => ({
             ...item,
             sourceLocation: (item.sourceLocation && item.sourceLocation.trim() !== '') ? item.sourceLocation.trim() : defaultLoc
@@ -2296,7 +2318,7 @@ const DeliveryOrderManagement: React.FC = () => {
         setNewOrderItems([]);
         setNewOrderNotes(''); // Reset Notes
         setTripOrigin(activeLocation.toUpperCase());
-        setCurrentItemLoc(activeLocation.toUpperCase() === 'NILAI' ? 'Nilai' : 'SPD');
+        setCurrentItemLoc(getDefaultLocForOrigin(activeLocation));
         setTripCategory('');
         setTripDropCount(1);
         setToast(null); // Clear toast on close
@@ -2520,71 +2542,29 @@ const DeliveryOrderManagement: React.FC = () => {
                         </div>
                     )}
                 </div>
-            </div>            <div className="flex flex-col xl:flex-row xl:items-center justify-between gap-4 mb-8">
-                {/* Search Bar & Location Split Toggle */}
-                <div className="flex flex-col md:flex-row items-stretch md:items-center gap-4 flex-1">
-                    {/* Search Bar */}
-                    <div className="relative flex-1">
-                        <div className="absolute inset-y-0 left-0 pl-3 flex items-center pointer-events-none text-slate-500">
-                            <Search size={18} />
-                        </div>
-                        <input
-                            type="text"
-                            placeholder="Area, date (20/05/2026), or month (2026-05, may)..."
-                            value={searchTerm}
-                            onChange={(e) => setSearchTerm(e.target.value)}
-                            className="w-full bg-slate-900/50 backdrop-blur-sm border border-slate-800 text-slate-200 text-sm rounded-xl pl-10 pr-4 py-3 focus:ring-2 focus:ring-blue-500/50 focus:border-blue-500/50 outline-none transition-all placeholder:text-slate-600"
-                        />
-                    </div>
-
-                    {/* Location Split Toggle */}
-                    <div className="flex bg-slate-900 p-1 rounded-xl border border-slate-800 self-start md:self-center max-w-fit shrink-0">
-                        {['Taiping', 'Nilai'].map(loc => (
+            </div>            {/* Control Bar: Location Tabs, View Mode, Search & Status Filters */}
+            <div className="flex flex-col gap-4 mb-6">
+                {/* Row 1: Location Tabs & View Toggle */}
+                <div className="flex flex-col md:flex-row items-stretch md:items-center justify-between gap-4">
+                    {/* Location Split Toggle (Taiping, Nilai, Kelantan, Johor) - ALWAYS FLEX-NOWRAP */}
+                    <div className="flex bg-slate-900/90 p-1.5 rounded-2xl border border-slate-800 self-start md:self-center shrink-0 flex-nowrap overflow-x-auto custom-scrollbar gap-1 shadow-lg shadow-black/40">
+                        {['Taiping', 'Nilai', 'Kelantan', 'Johor'].map(loc => (
                             <button
                                 key={loc}
                                 onClick={() => setActiveLocation(loc)}
-                                className={`px-4 py-2 rounded-lg text-xs font-bold uppercase tracking-wider transition-all flex items-center gap-1
-                                    ${activeLocation === loc
-                                        ? 'bg-emerald-600 text-white shadow-lg shadow-emerald-900/50'
+                                className={`px-4 py-2 rounded-xl text-xs font-black uppercase tracking-wider transition-all flex items-center gap-1.5 shrink-0 ${
+                                    activeLocation === loc
+                                        ? 'bg-emerald-600 text-white shadow-lg shadow-emerald-950/50 scale-[1.02]'
                                         : 'text-slate-400 hover:bg-slate-800 hover:text-white'
-                                    }`}
+                                }`}
                             >
-                                <MapPin size={14} /> {loc}
+                                <MapPin size={14} className={activeLocation === loc ? 'text-emerald-200' : 'text-slate-500'} /> {loc}
                             </button>
                         ))}
                     </div>
-                </div>
 
-                {/* Status Tabs & View Toggle */}
-                <div className="flex bg-slate-900 p-1 rounded-xl border border-slate-800 justify-between shrink-0 self-start xl:self-center">
-                    <div className="flex">
-                        {/* Filter Tabs */}
-                        {['All', 'Loaded', 'Pending Approval', 'Delivered', 'Cancelled'].map(status => (
-                            <button
-                                key={status}
-                                onClick={() => setStatusFilter(status)}
-                                className={`px-4 py-2 rounded-lg text-xs font-bold uppercase tracking-wider transition-all
-                                    ${statusFilter === status
-                                        ? 'bg-blue-600 text-white shadow-lg shadow-blue-900/50'
-                                        : 'bg-slate-800 text-slate-400 hover:bg-slate-700'
-                                    }`}
-                            >
-                                {status === 'Delivered' ? 'Delivered' : (status === 'Loaded' ? 'Loaded' : (status === 'Pending Approval' ? (
-                                    <span className="flex items-center gap-2">
-                                        Pending
-                                        {orders.filter(o => o.status === 'Pending Approval').length > 0 && (
-                                            <span className="bg-red-500 text-white text-[10px] px-1.5 rounded-full animate-pulse">
-                                                {orders.filter(o => o.status === 'Pending Approval').length}
-                                            </span>
-                                        )}
-                                    </span>
-                                ) : status === 'All' ? 'Active' : status))}
-                            </button>
-                        ))}
-                    </div>
-                    
                     {/* View Mode Toggle */}
-                    <div className="flex ml-4 border-l border-slate-700 pl-4 gap-1.5 items-center">
+                    <div className="flex bg-slate-900 p-1 rounded-xl border border-slate-800 shrink-0 self-start md:self-center gap-1">
                         <button
                             onClick={() => setViewMode('dispatch')}
                             className={`px-3 py-2 rounded-lg text-xs font-bold uppercase transition-all flex items-center gap-1.5 ${viewMode === 'dispatch' ? 'bg-blue-600 text-white shadow-lg shadow-blue-900/50' : 'text-slate-400 hover:bg-slate-800'}`}
@@ -2606,6 +2586,49 @@ const DeliveryOrderManagement: React.FC = () => {
                         >
                             <List size={18} />
                         </button>
+                    </div>
+                </div>
+
+                {/* Row 2: Search Bar & Status Filter Tabs */}
+                <div className="flex flex-col lg:flex-row items-stretch lg:items-center justify-between gap-4">
+                    {/* Search Bar */}
+                    <div className="relative flex-1">
+                        <div className="absolute inset-y-0 left-0 pl-3 flex items-center pointer-events-none text-slate-500">
+                            <Search size={18} />
+                        </div>
+                        <input
+                            type="text"
+                            placeholder="Area, date (20/05/2026), or month (2026-05, may)..."
+                            value={searchTerm}
+                            onChange={(e) => setSearchTerm(e.target.value)}
+                            className="w-full bg-slate-900/50 backdrop-blur-sm border border-slate-800 text-slate-200 text-sm rounded-xl pl-10 pr-4 py-3 focus:ring-2 focus:ring-blue-500/50 focus:border-blue-500/50 outline-none transition-all placeholder:text-slate-600"
+                        />
+                    </div>
+
+                    {/* Filter Tabs */}
+                    <div className="flex bg-slate-900 p-1 rounded-xl border border-slate-800 shrink-0 self-start lg:self-center overflow-x-auto max-w-full">
+                        {['All', 'Loaded', 'Pending Approval', 'Delivered', 'Cancelled'].map(status => (
+                            <button
+                                key={status}
+                                onClick={() => setStatusFilter(status)}
+                                className={`px-4 py-2 rounded-lg text-xs font-bold uppercase tracking-wider transition-all whitespace-nowrap ${
+                                    statusFilter === status
+                                        ? 'bg-blue-600 text-white shadow-lg shadow-blue-900/50'
+                                        : 'bg-slate-800 text-slate-400 hover:bg-slate-700'
+                                }`}
+                            >
+                                {status === 'Delivered' ? 'Delivered' : (status === 'Loaded' ? 'Loaded' : (status === 'Pending Approval' ? (
+                                    <span className="flex items-center gap-2">
+                                        Pending
+                                        {orders.filter(o => o.status === 'Pending Approval').length > 0 && (
+                                            <span className="bg-red-500 text-white text-[10px] px-1.5 rounded-full animate-pulse">
+                                                {orders.filter(o => o.status === 'Pending Approval').length}
+                                            </span>
+                                        )}
+                                    </span>
+                                ) : status === 'All' ? 'Active' : status))}
+                            </button>
+                        ))}
                     </div>
                 </div>
             </div>
@@ -3081,12 +3104,12 @@ const DeliveryOrderManagement: React.FC = () => {
                                                                 setNewOrderNotes(order.notes || '');
                                                                 const orderOrigin = order.trip_origin || 'TAIPING';
                                                                 setTripOrigin(orderOrigin);
-                                                                setCurrentItemLoc(orderOrigin === 'NILAI' ? 'Nilai' : 'SPD');
+                                                                setCurrentItemLoc(getDefaultLocForOrigin(orderOrigin));
                                                                 setTripCategory(order.zone || '');
                                                                 setTripDropCount(order.trip_drop_count || 1);
 
                                                                 // Extract legacy location from remark if sourceLocation is missing, fallback to default
-                                                                const defaultLoc = orderOrigin === 'NILAI' ? 'Nilai' : 'SPD';
+                                                                const defaultLoc = getDefaultLocForOrigin(orderOrigin);
                                                                 const itemsWithExtractedLoc = (order.items || []).map(item => {
                                                                     let loc = item.sourceLocation;
                                                                     if (!loc && item.remark && item.remark.includes('(Loc:')) {
@@ -3321,11 +3344,11 @@ const DeliveryOrderManagement: React.FC = () => {
                                                 setNewOrderNotes(order.notes || '');
                                                 const orderOrigin = order.trip_origin || 'TAIPING';
                                                 setTripOrigin(orderOrigin);
-                                                setCurrentItemLoc(orderOrigin === 'NILAI' ? 'Nilai' : 'SPD');
+                                                setCurrentItemLoc(getDefaultLocForOrigin(orderOrigin));
                                                 setTripCategory(order.zone || '');
                                                 setTripDropCount(order.trip_drop_count || 1);
 
-                                                const defaultLoc = orderOrigin === 'NILAI' ? 'Nilai' : 'SPD';
+                                                const defaultLoc = getDefaultLocForOrigin(orderOrigin);
                                                 const itemsWithExtractedLoc = (order.items || []).map(item => {
                                                     let loc = item.sourceLocation;
                                                     if (!loc && item.remark && item.remark.includes('(Loc:')) {
@@ -3691,20 +3714,48 @@ const DeliveryOrderManagement: React.FC = () => {
                                     {/* DRIVER PAYROLL RATES: Origin, Category, Drops */}
                                     <div className="grid grid-cols-1 max-lg:gap-3 lg:grid-cols-3 gap-4 bg-slate-900/50 p-4 border border-slate-800 rounded-xl">
                                         <div>
-                                            <label className="block text-[10px] font-bold text-blue-500/80 uppercase tracking-widest mb-2">Origin</label>
+                                            <label className="block text-[10px] font-bold text-blue-500/80 uppercase tracking-widest mb-2">Origin (行程出发地)</label>
+                                            <div className="flex flex-wrap gap-1.5 mb-2">
+                                                {[
+                                                    { id: 'TAIPING', label: 'Taiping' },
+                                                    { id: 'NILAI', label: 'Nilai' },
+                                                    { id: 'KELANTAN', label: 'Kelantan' },
+                                                    { id: 'JOHOR', label: 'Johor' }
+                                                ].map(loc => (
+                                                    <button
+                                                        type="button"
+                                                        key={loc.id}
+                                                        onClick={() => {
+                                                            setTripOrigin(loc.id);
+                                                            setCurrentItemLoc(getDefaultLocForOrigin(loc.id));
+                                                            setSelectedLorryId('');
+                                                            setSelectedDriverId('');
+                                                        }}
+                                                        className={`px-3 py-1.5 rounded-lg text-xs font-bold transition-all flex items-center gap-1 ${
+                                                            tripOrigin === loc.id
+                                                                ? 'bg-blue-600 text-white shadow-md shadow-blue-900/50'
+                                                                : 'bg-slate-950 text-slate-400 border border-slate-800 hover:border-slate-700'
+                                                        }`}
+                                                    >
+                                                        <MapPin size={12} /> {loc.label}
+                                                    </button>
+                                                ))}
+                                            </div>
                                             <select
-                                                className="w-full bg-slate-950 border border-slate-800 rounded-lg px-3 py-2 text-xs text-white focus:border-blue-500/50 outline-none"
+                                                className="w-full bg-slate-950 border border-slate-800 rounded-lg px-3 py-2 text-xs text-white focus:border-blue-500/50 outline-none cursor-pointer"
                                                 value={tripOrigin}
                                                 onChange={e => {
                                                     const newOrigin = e.target.value;
                                                     setTripOrigin(newOrigin);
-                                                    setCurrentItemLoc(newOrigin === 'NILAI' ? 'Nilai' : 'SPD');
+                                                    setCurrentItemLoc(getDefaultLocForOrigin(newOrigin));
                                                     setSelectedLorryId('');
                                                     setSelectedDriverId('');
                                                 }}
                                             >
                                                 <option value="TAIPING">Taiping</option>
                                                 <option value="NILAI">Nilai</option>
+                                                <option value="KELANTAN">Kelantan</option>
+                                                <option value="JOHOR">Johor</option>
                                             </select>
                                         </div>
                                         <div>
@@ -3910,10 +3961,10 @@ const DeliveryOrderManagement: React.FC = () => {
                                             <div className="flex flex-wrap gap-2">
                                                 <select
                                                     className="min-w-[5rem] bg-slate-950 border border-slate-700 rounded-xl px-3 py-3 text-slate-300 outline-none focus:border-blue-500 text-xs font-bold uppercase"
-                                                    value={currentItemLoc}
+                                                    value={normalizeWarehouseName(currentItemLoc)}
                                                     onChange={e => setCurrentItemLoc(e.target.value)}
                                                 >
-                                                    {WAREHOUSES.filter(w => tripOrigin === 'NILAI' ? w === 'Nilai' : w !== 'Nilai').map(loc => (
+                                                    {getAvailableWarehousesForOrigin(tripOrigin).map(loc => (
                                                         <option key={loc} value={loc}>{loc}</option>
                                                     ))}
                                                 </select>
@@ -3987,7 +4038,7 @@ const DeliveryOrderManagement: React.FC = () => {
                                                                 <div className="text-[10px] font-bold text-slate-600 uppercase w-16">Pickup:</div>
                                                                 <select
                                                                     className="flex-1 bg-slate-900 border border-slate-800 rounded px-2 py-1 text-xs text-blue-400 font-bold focus:border-blue-500 outline-none"
-                                                                    value={item.sourceLocation || (tripOrigin === 'NILAI' ? 'Nilai' : 'SPD')}
+                                                                    value={normalizeWarehouseName(item.sourceLocation || getDefaultLocForOrigin(tripOrigin))}
                                                                     onChange={(e) => {
                                                                         const val = e.target.value;
                                                                         const updated = [...newOrderItems];
@@ -3995,7 +4046,7 @@ const DeliveryOrderManagement: React.FC = () => {
                                                                         setNewOrderItems(updated);
                                                                     }}
                                                                 >
-                                                                    {WAREHOUSES.filter(w => tripOrigin === 'NILAI' ? w === 'Nilai' : w !== 'Nilai').map(loc => <option key={loc} value={loc}>{loc}</option>)}
+                                                                    {getAvailableWarehousesForOrigin(tripOrigin).map(loc => <option key={loc} value={loc}>{loc}</option>)}
                                                                 </select>
                                                             </div>
                                                             <div className="flex items-center gap-2">

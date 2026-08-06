@@ -1,8 +1,9 @@
 import React, { useState, useEffect, useMemo } from 'react';
+import { createPortal } from 'react-dom';
 import {
     CalendarDays, Award, AlertTriangle, Camera,
     DollarSign, Clock, ChevronLeft, ChevronRight, Activity, Users, Truck, X,
-    FileSpreadsheet
+    FileSpreadsheet, Printer
 } from 'lucide-react';
 import { supabase } from '../services/supabase';
 import * as XLSX from 'xlsx';
@@ -54,12 +55,20 @@ interface DailyMetrics {
 
 const PersonalMonthlyReport: React.FC<Props> = ({ user }) => {
     const today = new Date();
-    const [selectedMonth, setSelectedMonth] = useState(today.getMonth() + 1); // 1-12
-    const [selectedYear, setSelectedYear] = useState(today.getFullYear());
+    const [selectedMonth, setSelectedMonth] = useState(() => {
+        const saved = sessionStorage.getItem('pmr_selectedMonth');
+        return saved ? parseInt(saved, 10) : today.getMonth() + 1;
+    });
+    const [selectedYear, setSelectedYear] = useState(() => {
+        const saved = sessionStorage.getItem('pmr_selectedYear');
+        return saved ? parseInt(saved, 10) : today.getFullYear();
+    });
     const [loading, setLoading] = useState(true);
 
     // HR/Admin Selector States
-    const [selectedEmployeeId, setSelectedEmployeeId] = useState<string>(user?.uid || user?.id || '');
+    const [selectedEmployeeId, setSelectedEmployeeId] = useState<string>(() => {
+        return sessionStorage.getItem('pmr_selectedEmployeeId') || '';
+    });
     const [employeesList, setEmployeesList] = useState<any[]>([]);
     
     // Viewed Profile (could be self or someone else)
@@ -89,6 +98,10 @@ const PersonalMonthlyReport: React.FC<Props> = ({ user }) => {
     const [deliveryRates, setDeliveryRates] = useState<any[]>([]);
     const [driverLorryPlate, setDriverLorryPlate] = useState<string>('N/A');
     
+    // Batch & Single Print States
+    const [isPreparingBatchPrint, setIsPreparingBatchPrint] = useState(false);
+    const [batchPrintData, setBatchPrintData] = useState<any[]>([]);
+    
     // Modal / selection states
     const [selectedTrip, setSelectedTrip] = useState<any | null>(null);
     const [selectedPhotoDay, setSelectedPhotoDay] = useState<any | null>(null);
@@ -99,12 +112,37 @@ const PersonalMonthlyReport: React.FC<Props> = ({ user }) => {
     const isAdminOrHR = ['SuperAdmin', 'Admin', 'HR'].includes(currentUserRole);
     const daysInMonth = new Date(selectedYear, selectedMonth, 0).getDate();
 
-    // Sync selectedEmployeeId when user loads
+    // Sync selectedEmployeeId when user loads and handle session storage restoration safely
     useEffect(() => {
         if (user) {
-            setSelectedEmployeeId(user.uid || user.id);
+            const loggedInUid = user.uid || user.id;
+            const savedUserUid = sessionStorage.getItem('pmr_loggedInUserUid');
+            const savedEmployeeId = sessionStorage.getItem('pmr_selectedEmployeeId');
+            
+            if (savedUserUid === loggedInUid && savedEmployeeId) {
+                setSelectedEmployeeId(savedEmployeeId);
+            } else {
+                setSelectedEmployeeId(loggedInUid);
+                sessionStorage.setItem('pmr_loggedInUserUid', loggedInUid);
+                sessionStorage.setItem('pmr_selectedEmployeeId', loggedInUid);
+            }
         }
     }, [user]);
+
+    // Keep sessionStorage synced when filters change
+    useEffect(() => {
+        if (selectedEmployeeId) {
+            sessionStorage.setItem('pmr_selectedEmployeeId', selectedEmployeeId);
+        }
+    }, [selectedEmployeeId]);
+
+    useEffect(() => {
+        sessionStorage.setItem('pmr_selectedMonth', String(selectedMonth));
+    }, [selectedMonth]);
+
+    useEffect(() => {
+        sessionStorage.setItem('pmr_selectedYear', String(selectedYear));
+    }, [selectedYear]);
 
     // Sync Attendance Edit Form when day selected
     useEffect(() => {
@@ -372,14 +410,18 @@ const PersonalMonthlyReport: React.FC<Props> = ({ user }) => {
                 const { data: dr } = await supabase.from('delivery_rates').select('*');
                 setDeliveryRates(dr || []);
 
-                const { data: deliveryData } = await supabase
+                const { data: rawDeliveryData } = await supabase
                     .from('sales_orders')
                     .select('id, order_number, customer, items, notes, order_date, pod_timestamp, deadline, zone, delivery_address, created_at, trip_origin, trip_drop_count, pod_photo_url, pod_signature_url, proof_of_load_url, driver_id')
                     .eq('driver_id', selectedEmployeeId) 
-                    .eq('status', 'Delivered')
-                    .gte('deadline', startDateTs.split('T')[0])
-                    .lte('deadline', endDateTs.split('T')[0]);
-                setDeliveries(deliveryData || []);
+                    .eq('status', 'Delivered');
+
+                const monthlyDeliveries = (rawDeliveryData || []).filter(d => {
+                    const rawDate = d.deadline || (d.pod_timestamp ? d.pod_timestamp.split('T')[0] : (d.created_at ? d.created_at.split('T')[0] : null));
+                    if (!rawDate) return false;
+                    return rawDate >= firstDay && rawDate <= lastDayStr;
+                });
+                setDeliveries(monthlyDeliveries);
 
                 // Fetch tied lorry for driver / Dapatkan lorry yang terikat untuk pemandu
                 const { data: lorryData } = await supabase
@@ -567,6 +609,168 @@ const PersonalMonthlyReport: React.FC<Props> = ({ user }) => {
         const driverName = viewedProfile?.name || user?.name || 'Driver';
         const fileName = `Laporan_Trip_Pemandu_${driverName.replace(/\s+/g, '_')}_${selectedYear}_${String(selectedMonth).padStart(2, '0')}.xlsx`;
         XLSX.writeFile(wb, fileName);
+    };
+
+    const handlePrintSingleDriver = () => {
+        const allTrips: any[] = [];
+        dailyMetrics.forEach(day => {
+            if (day.tripDetails && day.tripDetails.length > 0) {
+                day.tripDetails.forEach(trip => {
+                    allTrips.push({
+                        date: day.dateStr,
+                        orderNumber: trip.order_number || 'N/A',
+                        customer: trip.customer || 'N/A',
+                        origin: trip.trip_origin || 'TAIPING',
+                        destination: trip.zone || trip.delivery_address || 'Unknown',
+                        drops: trip.trip_drop_count || 1,
+                        earnings: trip.earnings || 0
+                    });
+                });
+            }
+        });
+
+        allTrips.sort((a, b) => a.date.localeCompare(b.date));
+        const totalEarnings = allTrips.reduce((sum, t) => sum + (t.earnings || 0), 0);
+
+        const singleReport = {
+            driverName: viewedProfile?.name || user?.name || 'Driver',
+            employeeId: viewedProfile?.employee_id || user?.employeeId || 'N/A',
+            baseLocation: viewedProfile?.base_location || 'Taiping',
+            plateNumber: driverLorryPlate || 'N/A',
+            totalTrips: allTrips.length,
+            totalEarnings,
+            tripRows: allTrips
+        };
+
+        setBatchPrintData([singleReport]);
+        setTimeout(() => {
+            window.print();
+        }, 400);
+    };
+
+    const handlePrintAllDrivers = async () => {
+        setIsPreparingBatchPrint(true);
+        try {
+            const firstDay = `${selectedYear}-${String(selectedMonth).padStart(2, '0')}-01`;
+            const lastDayObj = new Date(selectedYear, selectedMonth, 0);
+            const lastDayStr = `${lastDayObj.getFullYear()}-${String(lastDayObj.getMonth() + 1).padStart(2, '0')}-${String(lastDayObj.getDate()).padStart(2, '0')}`;
+
+            // Fetch drivers from both tables
+            const [v2Res, pubRes] = await Promise.all([
+                supabase.from('sys_users_v2').select('auth_user_id, name, employee_id, role, base_location').eq('role', 'Driver').in('status', ['Active', 'active']),
+                supabase.from('users_public').select('id, name, employee_id, role, base_location').eq('role', 'Driver').in('status', ['Active', 'active'])
+            ]);
+
+            let mergedDrivers: any[] = [];
+            if (v2Res.data) {
+                mergedDrivers = [...v2Res.data.filter(e => e.auth_user_id).map(e => ({ ...e, uid: e.auth_user_id }))];
+            }
+            if (pubRes.data) {
+                pubRes.data.forEach(p => {
+                    if (!mergedDrivers.find(m => m.uid === p.id)) {
+                        mergedDrivers.push({ ...p, uid: p.id, auth_user_id: p.id });
+                    }
+                });
+            }
+
+            let driversList = mergedDrivers;
+
+            if (driversList.length === 0) {
+                alert("Tiada pemandu dijumpai untuk dicetak. / No drivers found to print.");
+                setIsPreparingBatchPrint(false);
+                return;
+            }
+
+            const { data: dr } = await supabase.from('delivery_rates').select('*');
+            const rates = dr || [];
+            const rateMap: Record<string, any> = {};
+            rates.forEach(r => { rateMap[`${r.origin}-${r.location_name}`.toLowerCase()] = r; });
+
+            const { data: lorryData } = await supabase.from('lorries').select('driver_id, plate_number');
+            const lorryMap: Record<string, string> = {};
+            (lorryData || []).forEach(l => {
+                if (l.driver_id) lorryMap[l.driver_id] = l.plate_number;
+            });
+
+            const driverIds = driversList.map(d => d.uid || d.auth_user_id || d.id).filter(Boolean);
+            const { data: rawDeliveryData } = await supabase
+                .from('sales_orders')
+                .select('id, order_number, customer, items, notes, order_date, pod_timestamp, deadline, zone, delivery_address, created_at, trip_origin, trip_drop_count, driver_id')
+                .in('driver_id', driverIds)
+                .eq('status', 'Delivered');
+
+            const allDeliveries = (rawDeliveryData || []).filter(order => {
+                const rawDate = order.deadline || (order.pod_timestamp ? order.pod_timestamp.split('T')[0] : (order.created_at ? order.created_at.split('T')[0] : null));
+                if (!rawDate) return false;
+                return rawDate >= firstDay && rawDate <= lastDayStr;
+            });
+
+            const batchReports = driversList.map(driver => {
+                const driverUid = driver.uid || driver.auth_user_id || driver.id;
+                const driverDeliveries = allDeliveries.filter(d => d.driver_id === driverUid);
+                const plate = lorryMap[driverUid] || 'N/A';
+
+                let totalEarnings = 0;
+                const tripRows: any[] = [];
+
+                driverDeliveries.forEach(t => {
+                    const originRaw = t.trip_origin || 'TAIPING';
+                    const origin = originRaw.toLowerCase();
+                    const zoneRaw = t.zone || t.delivery_address || 'Unknown';
+                    let calcZone = zoneRaw.toLowerCase();
+                    const key = `${origin}-${calcZone}`;
+                    const rateInfo = rateMap[key];
+                    const drops = Math.max(1, t.trip_drop_count || 1);
+
+                    let tEarnings = 0;
+                    if (rateInfo) {
+                        const base = Number(rateInfo.base_rate) || 0;
+                        const maxPlaces = Number(rateInfo.max_places) || 0;
+                        const extraPlaces = Math.max(0, drops - maxPlaces);
+                        const extraRate = extraPlaces * (Number(rateInfo.extra_rate_per_place) || 0);
+                        tEarnings = base + extraRate;
+                    }
+
+                    totalEarnings += tEarnings;
+
+                    const dateStr = t.deadline || (t.pod_timestamp ? t.pod_timestamp.split('T')[0] : t.created_at.split('T')[0]);
+
+                    tripRows.push({
+                        date: dateStr,
+                        orderNumber: t.order_number || 'N/A',
+                        customer: t.customer || 'N/A',
+                        origin: originRaw,
+                        destination: zoneRaw,
+                        drops,
+                        earnings: tEarnings
+                    });
+                });
+
+                tripRows.sort((a, b) => a.date.localeCompare(b.date));
+
+                return {
+                    driverName: driver.name || driver.employee_id || 'Pemandu',
+                    employeeId: driver.employee_id || 'N/A',
+                    baseLocation: driver.base_location || 'Taiping',
+                    plateNumber: plate,
+                    totalTrips: tripRows.length,
+                    totalEarnings,
+                    tripRows
+                };
+            });
+
+            setBatchPrintData(batchReports);
+
+            setTimeout(() => {
+                window.print();
+                setIsPreparingBatchPrint(false);
+            }, 500);
+
+        } catch (err: any) {
+            console.error("Batch print error:", err);
+            alert("Ralat menyediakan laporan cetakan: " + err.message);
+            setIsPreparingBatchPrint(false);
+        }
     };
 
     const changeMonth = (offset: number) => {
@@ -776,7 +980,7 @@ const PersonalMonthlyReport: React.FC<Props> = ({ user }) => {
 
     const canSelectEmployee = employeesList.length > 0;
     return (
-        <div className="min-h-screen bg-[#07070a] text-white p-4 md:p-6 font-sans">
+        <div className="min-h-screen bg-[#07070a] text-white p-4 md:p-6 font-sans pmr-no-print">
             {/* Header Area / Kawasan Kepala Halaman */}
             <div className="max-w-6xl mx-auto flex flex-col md:flex-row justify-between items-start md:items-center gap-6 mb-6">
                 <div className="flex flex-col gap-2">
@@ -816,14 +1020,37 @@ const PersonalMonthlyReport: React.FC<Props> = ({ user }) => {
                     </div>
                 </div>
 
-                <div className="flex items-center gap-3">
+                <div className="flex flex-wrap items-center gap-3">
                     {isDriver && (
                         <button
                             onClick={handleDownloadExcel}
-                            className="flex items-center gap-2 bg-gradient-to-r from-emerald-500/80 to-teal-600/80 hover:from-emerald-500 hover:to-teal-600 text-white border border-emerald-500/30 px-5 py-3 rounded-2xl font-black uppercase text-xs tracking-widest transition-all shadow-lg shadow-emerald-950/20 active:scale-95 cursor-pointer"
+                            className="flex items-center gap-2 bg-gradient-to-r from-emerald-500/80 to-teal-600/80 hover:from-emerald-500 hover:to-teal-600 text-white border border-emerald-500/30 px-4 py-2.5 rounded-2xl font-black uppercase text-xs tracking-widest transition-all shadow-lg shadow-emerald-950/20 active:scale-95 cursor-pointer"
                         >
                             <FileSpreadsheet size={16} className="text-emerald-400" />
-                            <span>Download Excel</span>
+                            <span>Excel</span>
+                        </button>
+                    )}
+
+                    {(isDriver || viewedProfile?.role === 'Driver') && (
+                        <button
+                            onClick={handlePrintSingleDriver}
+                            className="flex items-center gap-2 bg-gradient-to-r from-blue-500/80 to-indigo-600/80 hover:from-blue-500 hover:to-indigo-600 text-white border border-blue-500/30 px-4 py-2.5 rounded-2xl font-black uppercase text-xs tracking-widest transition-all shadow-lg shadow-blue-950/20 active:scale-95 cursor-pointer"
+                            title="Cetak Laporan Pemandu Ini / Print Current Driver Report"
+                        >
+                            <Printer size={16} className="text-blue-300" />
+                            <span>Cetak Driver</span>
+                        </button>
+                    )}
+
+                    {(isAdminOrHR || canSelectEmployee) && (
+                        <button
+                            onClick={handlePrintAllDrivers}
+                            disabled={isPreparingBatchPrint}
+                            className="flex items-center gap-2 bg-gradient-to-r from-purple-600/80 to-pink-600/80 hover:from-purple-600 hover:to-pink-600 text-white border border-purple-500/30 px-4 py-2.5 rounded-2xl font-black uppercase text-xs tracking-widest transition-all shadow-lg shadow-purple-950/20 active:scale-95 cursor-pointer disabled:opacity-50"
+                            title="Cetak Laporan Semua Pemandu / Print All Drivers Reports"
+                        >
+                            <Printer size={16} className="text-purple-300" />
+                            <span>{isPreparingBatchPrint ? 'Menyedia...' : 'Cetak Semua Driver (Batch)'}</span>
                         </button>
                     )}
 
@@ -1490,8 +1717,24 @@ const PersonalMonthlyReport: React.FC<Props> = ({ user }) => {
                                                 value={editOrigin}
                                                 onChange={(e) => setEditOrigin(e.target.value)}
                                                 className="w-full px-3 py-2 bg-[#0d0d12] border border-white/10 rounded-lg text-sm text-white focus:outline-none focus:border-blue-500 uppercase font-bold"
-                                                placeholder="TAIPING"
+                                                placeholder="TAIPING / NILAI / KELANTAN / JOHOR"
                                             />
+                                            <div className="flex gap-1 mt-1.5 flex-wrap">
+                                                {['TAIPING', 'NILAI', 'KELANTAN', 'JOHOR'].map(loc => (
+                                                    <button
+                                                        key={loc}
+                                                        type="button"
+                                                        onClick={() => setEditOrigin(loc)}
+                                                        className={`px-2 py-0.5 rounded text-[10px] font-bold border transition-all ${
+                                                            editOrigin.toUpperCase() === loc
+                                                                ? 'bg-blue-500/20 text-blue-400 border-blue-500/30'
+                                                                : 'bg-white/5 text-gray-400 border-white/5 hover:text-white'
+                                                        }`}
+                                                    >
+                                                        {loc}
+                                                    </button>
+                                                ))}
+                                            </div>
                                         </div>
                                         <div>
                                             <label className="block text-[10px] text-gray-400 font-bold uppercase tracking-widest mb-1.5">
@@ -1880,6 +2123,196 @@ const PersonalMonthlyReport: React.FC<Props> = ({ user }) => {
                         </div>
                     </div>
                 </div>
+            )}
+
+            {/* PRINTABLE BATCH / SINGLE DRIVER REPORTS PORTAL (DIRECTLY ATTACHED TO BODY TO BYPASS LAYOUT OVERFLOW) */}
+            {batchPrintData.length > 0 && createPortal(
+                <div className="hidden print:block driver-print-wrapper">
+                    <style>{`
+                        @media print {
+                            @page {
+                                size: A4 portrait;
+                                margin: 10mm 12mm;
+                            }
+                            html, body {
+                                height: auto !important;
+                                overflow: visible !important;
+                                background: white !important;
+                                color: black !important;
+                                margin: 0 !important;
+                                padding: 0 !important;
+                                -webkit-print-color-adjust: exact !important;
+                                print-color-adjust: exact !important;
+                            }
+                            body > *:not(.driver-print-wrapper) {
+                                display: none !important;
+                            }
+                            .driver-print-wrapper {
+                                display: block !important;
+                                position: absolute !important;
+                                left: 0 !important;
+                                top: 0 !important;
+                                width: 100% !important;
+                                height: auto !important;
+                                overflow: visible !important;
+                                background: white !important;
+                                color: black !important;
+                                margin: 0 !important;
+                                padding: 0 !important;
+                            }
+                            .driver-print-sheet {
+                                display: block !important;
+                                page-break-before: always !important;
+                                break-before: page !important;
+                                page-break-after: always !important;
+                                break-after: page !important;
+                                page-break-inside: avoid !important;
+                                break-inside: avoid !important;
+                                padding: 10mm 12mm !important;
+                                margin: 0 !important;
+                                background: white !important;
+                                color: black !important;
+                                box-sizing: border-box !important;
+                                width: 100% !important;
+                            }
+                            .driver-print-sheet:first-child {
+                                page-break-before: auto !important;
+                                break-before: auto !important;
+                            }
+                            .driver-print-sheet:last-child {
+                                page-break-after: auto !important;
+                                break-after: auto !important;
+                            }
+                            table {
+                                width: 100%;
+                                border-collapse: collapse;
+                                margin-top: 10px;
+                                margin-bottom: 12px;
+                            }
+                            th, td {
+                                border: 1px solid #333;
+                                padding: 5px 8px;
+                                font-size: 10px;
+                                text-align: left;
+                            }
+                            th {
+                                background-color: #f0f0f0 !important;
+                                font-weight: bold;
+                                -webkit-print-color-adjust: exact;
+                            }
+                        }
+                    `}</style>
+
+                    {batchPrintData.map((report, idx) => (
+                        <div key={idx} className="driver-print-sheet">
+                            {/* Header */}
+                            <div className="flex justify-between items-start border-b-2 border-black pb-2 mb-3">
+                                <div>
+                                    <h1 className="text-xl font-bold uppercase tracking-wider text-black">PACKSECURE OS</h1>
+                                    <h2 className="text-xs font-semibold text-gray-700 uppercase">Laporan Elaun Trip Pemandu Bulanan</h2>
+                                    <p className="text-[10px] text-gray-600">Monthly Driver Trip Allowance Report</p>
+                                </div>
+                                <div className="text-right">
+                                    <p className="text-xs font-bold uppercase">Bulan / Month: {MONTH_NAMES[selectedMonth - 1]} {selectedYear}</p>
+                                    <p className="text-[10px] text-gray-500">Tarikh Cetak: {new Date().toLocaleDateString('en-GB')}</p>
+                                </div>
+                            </div>
+
+                            {/* Driver Information Bar */}
+                            <div className="grid grid-cols-4 gap-3 p-2 bg-gray-100 border border-gray-300 rounded mb-3 text-xs">
+                                <div>
+                                    <span className="text-gray-500 block text-[9px] uppercase font-bold">Nama Pemandu / Driver</span>
+                                    <span className="font-bold text-xs text-black">{report.driverName}</span>
+                                </div>
+                                <div>
+                                    <span className="text-gray-500 block text-[9px] uppercase font-bold">No. Pekerja / ID</span>
+                                    <span className="font-bold text-xs text-black">{report.employeeId}</span>
+                                </div>
+                                <div>
+                                    <span className="text-gray-500 block text-[9px] uppercase font-bold">No. Lorry / Vehicle</span>
+                                    <span className="font-bold text-xs text-black">{report.plateNumber}</span>
+                                </div>
+                                <div>
+                                    <span className="text-gray-500 block text-[9px] uppercase font-bold">Pusat / Base Location</span>
+                                    <span className="font-bold text-xs text-black">{report.baseLocation}</span>
+                                </div>
+                            </div>
+
+                            {/* Summary Metrics */}
+                            <div className="flex justify-between items-center mb-3 p-2 border-2 border-black bg-gray-50">
+                                <div>
+                                    <span className="text-xs font-bold uppercase text-gray-700">Jumlah Perjalanan / Total Trips: </span>
+                                    <span className="text-sm font-extrabold text-black ml-2">{report.totalTrips} Trips</span>
+                                </div>
+                                <div>
+                                    <span className="text-xs font-bold uppercase text-gray-700">Jumlah Elaun Trip / Total Earnings: </span>
+                                    <span className="text-base font-extrabold text-black ml-2">RM {report.totalEarnings.toFixed(2)}</span>
+                                </div>
+                            </div>
+
+                            {/* Trips Table */}
+                            {report.tripRows.length === 0 ? (
+                                <div className="p-6 text-center border border-dashed border-gray-400 text-gray-500 text-xs italic">
+                                    Tiada rekod perjalanan hantaran untuk bulan ini. / No trip records found for this month.
+                                </div>
+                            ) : (
+                                <table>
+                                    <thead>
+                                        <tr>
+                                            <th style={{ width: '5%' }}>Bil</th>
+                                            <th style={{ width: '12%' }}>Tarikh / Date</th>
+                                            <th style={{ width: '18%' }}>No. DO / Order</th>
+                                            <th style={{ width: '22%' }}>Pelanggan / Customer</th>
+                                            <th style={{ width: '25%' }}>Laluan / Route</th>
+                                            <th style={{ width: '8%', textAlign: 'center' }}>Drops</th>
+                                            <th style={{ width: '10%', textAlign: 'right' }}>Elaun (RM)</th>
+                                        </tr>
+                                    </thead>
+                                    <tbody>
+                                        {report.tripRows.map((row: any, rIdx: number) => (
+                                            <tr key={rIdx}>
+                                                <td>{rIdx + 1}</td>
+                                                <td>{row.date}</td>
+                                                <td className="font-mono font-bold">{row.orderNumber}</td>
+                                                <td>{row.customer}</td>
+                                                <td>{row.origin} ➞ {row.destination}</td>
+                                                <td style={{ textAlign: 'center' }}>{row.drops}</td>
+                                                <td style={{ textAlign: 'right', fontWeight: 'bold' }}>
+                                                    {row.earnings > 0 ? row.earnings.toFixed(2) : '-'}
+                                                </td>
+                                            </tr>
+                                        ))}
+                                    </tbody>
+                                    <tfoot>
+                                        <tr style={{ background: '#f5f5f5', fontWeight: 'bold' }}>
+                                            <td colSpan={6} style={{ textAlign: 'right' }}>JUMLAH ELAUN / TOTAL ALLOWANCE (RM):</td>
+                                            <td style={{ textAlign: 'right', fontSize: '11px' }}>RM {report.totalEarnings.toFixed(2)}</td>
+                                        </tr>
+                                    </tfoot>
+                                </table>
+                            )}
+
+                            {/* Signatures Footer */}
+                            <div className="grid grid-cols-2 gap-8 mt-8 pt-4 border-t border-gray-300 text-xs">
+                                <div>
+                                    <p className="font-bold mb-8 text-[11px]">Tandatangan Pemandu / Driver Signature:</p>
+                                    <div className="border-t border-black pt-1 w-3/4">
+                                        <p className="font-semibold">{report.driverName}</p>
+                                        <p className="text-[9px] text-gray-500">Tarikh / Date: ___________________</p>
+                                    </div>
+                                </div>
+                                <div>
+                                    <p className="font-bold mb-8 text-[11px]">Pengesahan HR / Pengurus (HR / Manager Approval):</p>
+                                    <div className="border-t border-black pt-1 w-3/4">
+                                        <p className="font-semibold">Nama & Jawatan / Name & Stamp</p>
+                                        <p className="text-[9px] text-gray-500">Tarikh / Date: ___________________</p>
+                                    </div>
+                                </div>
+                            </div>
+                        </div>
+                    ))}
+                </div>,
+                document.body
             )}
         </div>
     );

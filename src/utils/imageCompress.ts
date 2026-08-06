@@ -1,5 +1,5 @@
 /** Resize and compress a photo for vision API upload (keeps under Vercel body limits). */
-export function compressImage(file: File, maxWidth = 1200, quality = 0.7): Promise<string> {
+export function compressImage(file: File, maxWidth = 2048, quality = 0.85): Promise<string> {
     return new Promise((resolve, reject) => {
         const reader = new FileReader();
         reader.onload = (e) => {

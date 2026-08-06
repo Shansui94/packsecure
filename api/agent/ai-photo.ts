@@ -32,7 +32,7 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
         const targetMode = mode || 'default';
 
         try {
-            const { data, error } = await supabase
+            const { data } = await supabase
                 .from('ai_prompt_configs')
                 .select('prompt_template')
                 .eq('mode', targetMode)
@@ -74,16 +74,32 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
             } else if (targetMode === 'do') {
                 prompt = `你是物流系统的 AI 助手。请分析这张司机上传的送货单（DO / Consignment Note / Invoice）照片。
             
-你的任务是识别并提取出照片中的送货单号码（DO Number / Consignment Note Number / Invoice Number 等）。
-通常，这个号码在页面顶部或右上角，旁边常有 "DO", "Invoice No", "Consignment Note No", "No.", "DO号码" 等标识。
-请尽最大努力识别该号码（如果包含字母和数字，请全部保留。如果是手写号码，也请尽力识别）。
-
-返回严格的 JSON 格式（不要包含 markdown 标记）：
-{
-  "do_number": "提取出的送货单号码（如果没找到，请返回空字符串）"
-}
-
-只返回 JSON，不要有其他任何文字。`;
+                你的任务是识别并提取出照片中的送货单号码（DO Number / Consignment Note Number / Invoice Number 等）。
+                通常，这个号码在页面顶部或右上角，旁边常有 "DO", "Invoice No", "Consignment Note No", "No.", "DO号码" 等标识。
+                请尽最大努力识别该号码（如果包含字母和数字，请全部保留。如果是手写号码，也请尽力识别）。
+                
+                返回严格的 JSON 格式（不要包含 markdown 标记）：
+                {
+                  "do_number": "提取出的送货单号码（如果没找到，请返回空字符串）"
+                }
+                
+                只返回 JSON，不要有其他任何文字。`;
+            } else if (targetMode === 'sales_order') {
+                prompt = `你是物流系统的 AI 助手。请分析这张包含送货订单信息、WhatsApp 聊天截图、送货单或者是手写单子的照片。
+            
+                你需要识别并从中提取出送货订单（Sales Orders）。
+                返回一个严格的 JSON 数组（不要包含 markdown 标记），数组中的每个对象代表一个提取出的订单，必须包含以下字段：
+                - "customer": 客户名称（如果未提及，可以根据上下文推断或返回空字符串）
+                - "deliveryAddress": 详细送货地址
+                - "deadline": 送货截止日期（格式 YYYY-MM-DD，如果未提及，默认写明天）
+                - "notes": 任何特别备注、包装标记、或者是附加说明
+                - "items": 包含的产品清单数组，每个产品对象包含：
+                  - "product": 产品名称（如 stretch film / 缠绕膜 / bubble wrap / 气泡膜 等）
+                  - "quantity": 产品数量（必须是纯数字，不要带单位）
+                  - "remark": 产品规格描述（如 2 layer, sl, 20cm, 黑 等）
+                
+                如果包含多个订单或送往不同地址，请在 JSON 数组中返回多个对象。
+                只返回 JSON，不要有其他任何文字。`;
             } else if (targetMode === 'recipe') {
                 prompt = `你是工厂管理系统的 AI 助手。请分析这张拉伸膜原料配方照片，或解析下面输入的配方文本。
             

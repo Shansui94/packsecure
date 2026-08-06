@@ -128,7 +128,7 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
     }
 
     try {
-        const { query, userContext } = req.body;
+        const { query, userContext, history, canvas_document, canvas_tasks, imageBase64, mimeType } = req.body;
         if (!query) return res.status(400).json({ error: 'Query required' });
 
         // Default role to Operator if user context is missing
@@ -231,6 +231,16 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
         // --- CONSTRUCT SYSTEM PROMPTS AND TEMPLATES ---
         const systemPersona = SYSTEM_PROMPTS[role] || SYSTEM_PROMPTS.Operator;
 
+        let historyText = "None (This is the start of the conversation).";
+        if (history && Array.isArray(history) && history.length > 0) {
+            historyText = history.map((msg: any) => `[${msg.sender_name} (${msg.sender_role})]: ${msg.content}${msg.image_url ? ` [Attached Image URL: ${msg.image_url}]` : ''}`).join('\n');
+        }
+
+        let canvasTasksText = "None.";
+        if (canvas_tasks && Array.isArray(canvas_tasks) && canvas_tasks.length > 0) {
+            canvasTasksText = canvas_tasks.map((t: any) => `- [${t.status}] ${t.title}${t.assigned_name ? ` (Assigned to: ${t.assigned_name})` : ''}`).join('\n');
+        }
+
         const prompt = `
 ${systemPersona}
 
@@ -244,6 +254,15 @@ ${systemPersona}
 - Time: ${sgNow.toLocaleTimeString("en-US", { timeZone: "Asia/Singapore" })}
 - Date: ${sgNow.toLocaleDateString("en-CA", { timeZone: "Asia/Singapore" })} (Singapore Time)
 
+**CHAT HISTORY IN THIS THREAD (CONTEXT):**
+${historyText}
+
+**CURRENT CANVAS DOCUMENT:**
+${canvas_document || "Empty"}
+
+**CURRENT CANVAS TASKS:**
+${canvasTasksText}
+
 **STATIC CONTEXT DATA (STATICALLY LOADED):**
 ${JSON.stringify(contextData)}
 
@@ -252,11 +271,16 @@ ${sopArticles.length > 0 ? sopArticles.map(a => `Title: ${a.title}\nDesc: ${a.de
 
 **USER QUESTION:** "${query}"
 
-**INSTRUCTIONS FOR ANSWERING:**
-1. **Direct Answer**: Address the query immediately. Explain facts using tools. If no results returned from tools, state so.
+**INSTRUCTIONS FOR ANSWERING & CANVAS MANIPULATION:**
+1. **Direct Answer**: Address the query immediately.
 2. **Language Matching**: Always reply in the **SAME LANGUAGE** as the user asked (Chinese if Chinese, English if English).
-3. **Structured Navigation Actions**: Append routing code strictly at the end of the text if the user needs to visit a specific page.
-   - Action code format: \`[ACTION:navigate:page_id]\` where page_id can be: 'scanner', 'delivery-driver', 'leave-calendar', 'hr', 'personal-report', 'lorry-service', 'order-summary', 'data-v2', 'activity-logs'.
+3. **Modify Canvas Document**: If the user requests to write, update, draft, or refine a document (like a test record, safety guidelines, SOP, or report), you can write the full content of the document. To update the canvas document, you MUST wrap the complete document inside XML-style tags at the end of your response:
+   "[update_doc]\n   (full markdown document content here)\n   [/update_doc]"
+   This will overwrite the canvas document with the new content. Make sure to output the complete document inside these tags, not just the changes. Do not repeat the entire document outside these tags in the chat response; simply provide a brief confirmation to the user.
+4. **Manage Tasks**: If the user asks to assign a task (e.g. "指派张三去洗厕所", "让 Winnie 讨论 marketing"), or if a task is explicitly mentioned in the conversation, you can add a task. To add a task, wrap it in a special XML-style tag:
+   "[add_task]任务标题:指派员工姓名或工号或unassigned[/add_task]"
+   For example: "[add_task]洗厕所:张三[/add_task]" or "[add_task]讨论营销进展:Winnie[/add_task]". You can include multiple task tags if needed.
+5. **Structured Navigation Actions**: Append routing code strictly at the end of the text if the user needs to visit a specific page: '[ACTION:navigate:page_id]' where page_id can be: 'scanner', 'delivery-driver', 'leave-calendar', 'hr', 'personal-report', 'lorry-service', 'order-summary', 'data-v2', 'activity-logs'.
         `;
 
         // Initialize Gemini model with tools
@@ -279,7 +303,15 @@ ${sopArticles.length > 0 ? sopArticles.map(a => `Title: ${a.title}\nDesc: ${a.de
                     }]
                 });
                 
-                const result = await model.generateContent(prompt);
+                let result;
+                if (imageBase64) {
+                    result = await model.generateContent([
+                        prompt,
+                        { inlineData: { mimeType: mimeType || "image/jpeg", data: imageBase64 } }
+                    ]);
+                } else {
+                    result = await model.generateContent(prompt);
+                }
                 const response = await result.response;
                 const calls = response.functionCalls();
 
@@ -358,9 +390,13 @@ ${sopArticles.length > 0 ? sopArticles.map(a => `Title: ${a.title}\nDesc: ${a.de
                     }
 
                     // Feed results back into a chat thread to get final parsed text
+                    const userParts: any[] = [{ text: prompt }];
+                    if (imageBase64) {
+                        userParts.push({ inlineData: { mimeType: mimeType || "image/jpeg", data: imageBase64 } });
+                    }
                     const chat = model.startChat({
                         history: [
-                            { role: "user", parts: [{ text: prompt }] },
+                            { role: "user", parts: userParts },
                             { role: "model", parts: [{ functionCall: call }] }
                         ]
                     });

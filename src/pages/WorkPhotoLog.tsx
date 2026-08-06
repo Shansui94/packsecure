@@ -40,7 +40,7 @@ interface Props {
 }
 
 // Image compression utility
-const compressImage = (file: File, maxWidth = 1200, quality = 0.7): Promise<string> => {
+const compressImage = (file: File, maxWidth = 2048, quality = 0.85): Promise<string> => {
     return new Promise((resolve, reject) => {
         const reader = new FileReader();
         reader.onload = (e) => {
@@ -75,6 +75,12 @@ const WorkPhotoLog: React.FC<Props> = ({ user }) => {
     const [userNote, setUserNote] = useState('');
     const [filterCategory, setFilterCategory] = useState<string>('all');
     const [selectedPhoto, setSelectedPhoto] = useState<WorkPhoto | null>(null);
+    const [isZoomed, setIsZoomed] = useState<boolean>(false);
+    const [selectedFile, setSelectedFile] = useState<File | null>(null);
+
+    useEffect(() => {
+        setIsZoomed(false);
+    }, [selectedPhoto]);
     const fileInputRef = useRef<HTMLInputElement>(null);
     const [showWebcam, setShowWebcam] = useState(false);
     const [webcamError, setWebcamError] = useState<any>(null);
@@ -134,6 +140,7 @@ const WorkPhotoLog: React.FC<Props> = ({ user }) => {
 
         try {
             setUploading(true);
+            setSelectedFile(file); // Save uncompressed original file
             const isVideoFile = file.type.startsWith('video/');
             setMediaType(isVideoFile ? 'video' : 'image');
 
@@ -333,7 +340,15 @@ const WorkPhotoLog: React.FC<Props> = ({ user }) => {
 
     // Submit photo
     const handleSubmit = async () => {
-        if (!previewBase64 || !aiResult || !user) return;
+        console.log("handleSubmit clicked. previewBase64:", !!previewBase64, "aiResult:", !!aiResult, "user:", user);
+        if (!previewBase64) {
+            alert("请选择或拍摄照片！ / Please select or take a photo first!");
+            return;
+        }
+        if (!user) {
+            alert("用户未登录，无法提交！ / User not logged in, cannot submit!");
+            return;
+        }
         setUploading(true);
 
         try {
@@ -341,11 +356,13 @@ const WorkPhotoLog: React.FC<Props> = ({ user }) => {
             const extension = mediaType === 'video' ? 'webm' : 'jpg';
             const contentType = mediaType === 'video' ? 'video/webm' : 'image/jpeg';
             const fileName = `${user.employeeId || 'unknown'}_${Date.now()}.${extension}`;
-            const blob = await fetch(`data:${contentType};base64,${previewBase64}`).then(r => r.blob());
+            
+            // Prioritize original file if available (for maximum clarity)
+            const blob = selectedFile || await fetch(`data:${contentType};base64,${previewBase64}`).then(r => r.blob());
 
             const { error: uploadError } = await supabase.storage
                 .from('work-photos')
-                .upload(fileName, blob, { contentType });
+                .upload(fileName, blob, { contentType: blob.type || contentType });
 
             if (uploadError) throw uploadError;
 
@@ -410,7 +427,7 @@ const WorkPhotoLog: React.FC<Props> = ({ user }) => {
 
     return (
         <>
-            <div className="min-h-screen bg-[#09090b] text-white notranslate" translate="no">
+            <div className="min-h-screen bg-[#09090b] text-white">
             {/* Header */}
             <div className="bg-gradient-to-r from-violet-900/30 via-[#09090b] to-fuchsia-900/30 border-b border-white/5">
                 <div className="max-w-5xl mx-auto px-4 py-6">
@@ -718,38 +735,72 @@ const WorkPhotoLog: React.FC<Props> = ({ user }) => {
 
             {/* Photo Detail Modal */}
             {selectedPhoto && (
-                <div key="photo-detail-modal-overlay" className="fixed inset-0 z-50 flex items-center justify-center bg-black/80 backdrop-blur-sm p-4 notranslate" translate="no" onClick={() => setSelectedPhoto(null)}>
-                    <div className="bg-[#0c0c0e] border border-white/10 rounded-2xl max-w-lg w-full max-h-[90vh] overflow-y-auto" onClick={e => e.stopPropagation()}>
-                        {selectedPhoto.photo_url.toLowerCase().endsWith('.webm') || selectedPhoto.photo_url.toLowerCase().endsWith('.mp4') ? (
-                            <video src={selectedPhoto.photo_url} controls className="w-full max-h-96 bg-black" autoPlay />
-                        ) : (
-                            <img src={selectedPhoto.photo_url} alt="" className="w-full max-h-96 object-contain bg-black" />
-                        )}
-                        <div className="p-5 space-y-3">
-                            {selectedPhoto.risk_flag && (
-                                <div className="flex items-start gap-2 p-3 rounded-xl bg-red-500/10 border border-red-500/30">
-                                    <AlertTriangle size={16} className="text-red-400 mt-0.5" />
-                                    <div>
-                                        <p className="text-xs font-bold text-red-300">安全隐患</p>
-                                        <p className="text-xs text-red-400/80 mt-0.5">{selectedPhoto.risk_reason}</p>
-                                    </div>
-                                </div>
-                            )}
-                            <p className="text-white font-bold">{selectedPhoto.ai_description}</p>
-                            {selectedPhoto.user_note && <p className="text-gray-400 text-sm">📝 {selectedPhoto.user_note}</p>}
-                            {selectedPhoto.machine_id && (
-                                <div className="inline-flex items-center gap-1.5 px-2.5 py-1 rounded-lg bg-violet-500/10 border border-violet-500/20 text-xs text-violet-300 font-bold">
-                                    🤖 关联机器: {selectedPhoto.machine_id}
-                                </div>
-                            )}
-                            <div className="flex flex-wrap gap-2">
-                                {selectedPhoto.ai_tags?.map((tag, i) => (
-                                    <span key={i} className="px-2 py-1 rounded-full bg-white/5 border border-white/10 text-xs text-gray-300">#{tag}</span>
-                                ))}
+                <div key="photo-detail-modal-overlay" className="fixed inset-0 z-50 flex items-center justify-center bg-black/85 backdrop-blur-sm p-4" onClick={() => setSelectedPhoto(null)}>
+                    <div className="bg-[#0c0c0e] border border-white/10 rounded-2xl max-w-3xl w-full max-h-[90vh] flex flex-col overflow-hidden" onClick={e => e.stopPropagation()}>
+                        <div className="flex justify-between items-center p-4 border-b border-white/5 bg-[#09090b]">
+                            <h3 className="text-sm font-bold text-gray-300">照片详情 / Photo Detail</h3>
+                            <div className="flex items-center gap-2">
+                                {selectedPhoto.photo_url && selectedPhoto.photo_url.startsWith('http') && (
+                                    <a 
+                                        href={selectedPhoto.photo_url} 
+                                        target="_blank" 
+                                        rel="noreferrer"
+                                        className="text-xs text-violet-400 hover:underline font-bold px-3 py-1.5 bg-violet-500/10 hover:bg-violet-500/20 rounded-lg transition-all"
+                                    >
+                                        查看原图 / Open Original ↗
+                                    </a>
+                                )}
+                                <button 
+                                    onClick={() => setSelectedPhoto(null)}
+                                    className="text-gray-400 hover:text-white text-xs font-bold px-3 py-1.5 bg-white/5 hover:bg-white/10 rounded-lg transition-all"
+                                >
+                                    关闭
+                                </button>
                             </div>
-                            <div className="flex justify-between items-center pt-3 border-t border-white/5 text-xs text-gray-500">
-                                <span>{selectedPhoto.employee_name}</span>
-                                <span>{new Date(selectedPhoto.created_at).toLocaleString('zh-CN')}</span>
+                        </div>
+                        <div className="flex-1 overflow-y-auto p-5 space-y-4">
+                            <div className={`relative bg-black rounded-xl border border-white/5 flex items-center justify-center max-h-[60vh] ${isZoomed ? 'overflow-auto cursor-zoom-out' : 'overflow-hidden'}`} onClick={isZoomed ? () => setIsZoomed(false) : undefined}>
+                                {selectedPhoto.photo_url.toLowerCase().endsWith('.webm') || selectedPhoto.photo_url.toLowerCase().endsWith('.mp4') ? (
+                                    <video src={selectedPhoto.photo_url} controls className="w-full max-h-[60vh] object-contain bg-black" autoPlay />
+                                ) : (
+                                    <img 
+                                        src={selectedPhoto.photo_url} 
+                                        alt="Click to zoom" 
+                                        onClick={(e) => { e.stopPropagation(); setIsZoomed(!isZoomed); }}
+                                        className={`transition-all duration-200 ${
+                                            isZoomed 
+                                                ? 'w-[250%] h-auto max-w-none max-h-none cursor-zoom-out' 
+                                                : 'w-full max-h-[60vh] object-contain cursor-zoom-in'
+                                        }`} 
+                                    />
+                                )}
+                            </div>
+                            <div className="p-1 space-y-3 text-left">
+                                {selectedPhoto.risk_flag && (
+                                    <div className="flex items-start gap-2 p-3 rounded-xl bg-red-500/10 border border-red-500/30">
+                                        <AlertTriangle size={16} className="text-red-400 mt-0.5" />
+                                        <div>
+                                            <p className="text-xs font-bold text-red-300">安全隐患</p>
+                                            <p className="text-xs text-red-400/80 mt-0.5">{selectedPhoto.risk_reason}</p>
+                                        </div>
+                                    </div>
+                                )}
+                                <p className="text-white font-bold">{selectedPhoto.ai_description}</p>
+                                {selectedPhoto.user_note && <p className="text-gray-400 text-sm">📝 {selectedPhoto.user_note}</p>}
+                                {selectedPhoto.machine_id && (
+                                    <div className="inline-flex items-center gap-1.5 px-2.5 py-1 rounded-lg bg-violet-500/10 border border-violet-500/20 text-xs text-violet-300 font-bold">
+                                        🤖 关联机器: {selectedPhoto.machine_id}
+                                    </div>
+                                )}
+                                <div className="flex flex-wrap gap-2">
+                                    {selectedPhoto.ai_tags?.map((tag, i) => (
+                                        <span key={i} className="px-2 py-1 rounded-full bg-white/5 border border-white/10 text-xs text-gray-300">#{tag}</span>
+                                    ))}
+                                </div>
+                                <div className="flex justify-between items-center pt-3 border-t border-white/5 text-xs text-gray-500">
+                                    <span>{selectedPhoto.employee_name}</span>
+                                    <span>{new Date(selectedPhoto.created_at).toLocaleString('zh-CN')}</span>
+                                </div>
                             </div>
                         </div>
                     </div>
@@ -758,7 +809,7 @@ const WorkPhotoLog: React.FC<Props> = ({ user }) => {
 
             {/* WEBCAM CAPTURE MODAL */}
             {showWebcam && (
-                <div key="webcam-capture-modal-overlay" className="fixed inset-0 z-[500] bg-black/95 flex flex-col items-center justify-center p-4 overflow-y-auto notranslate" translate="no">
+                <div key="webcam-capture-modal-overlay" className="fixed inset-0 z-[500] bg-black/95 flex flex-col items-center justify-center p-4 overflow-y-auto">
                     <div className="bg-[#1c1c1f] border border-violet-500/30 p-6 rounded-3xl w-full max-w-md shadow-2xl flex flex-col gap-4">
                         <div className="flex justify-between items-center pb-2 border-b border-white/5">
                             <h3 className="text-sm font-black text-violet-400 uppercase tracking-wider flex items-center gap-1.5 font-bold font-sans">

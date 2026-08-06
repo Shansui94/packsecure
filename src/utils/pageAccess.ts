@@ -1,7 +1,7 @@
 import type { UserRole } from '../types';
 
 /** Always reachable when authenticated */
-export const ESSENTIAL_PAGE_IDS = ['profile', 'login', 'construction', 'dashboard'] as const;
+export const ESSENTIAL_PAGE_IDS = ['profile', 'login', 'construction', 'dashboard', 'raw_material_mobile'] as const;
 
 export function mergeAllowedPages(
     role: UserRole,

@@ -42,10 +42,21 @@ const MachineLabels: React.FC = () => {
         );
     }
 
+    const factoryStationLabels: Machine[] = [
+        { machine_id: 'FACTORY-TAIPING', name: '太平工厂打卡站 (Taiping Station)', factory_id: 'T1', type: 'FactoryStation', status: 'Active' },
+        { machine_id: 'FACTORY-NILAI', name: 'Nilai 工厂打卡站 (Nilai Station)', factory_id: 'N1', type: 'FactoryStation', status: 'Active' },
+        { machine_id: 'FACTORY-JOHOR', name: 'Johor 工厂打卡站 (Johor Station)', factory_id: 'J1', type: 'FactoryStation', status: 'Active' },
+        { machine_id: 'FACTORY-KELANTAN', name: 'Kelantan 工厂打卡站 (Kelantan Station)', factory_id: 'K1', type: 'FactoryStation', status: 'Active' },
+        { machine_id: 'FACTORY_MODE_1', name: '工厂打卡 (计算方式一 班次拆分)', factory_id: 'General', type: 'FactoryStation', status: 'Active' },
+        { machine_id: 'FACTORY_MODE_2', name: '工厂打卡 (计算方式二 RM10固定)', factory_id: 'General', type: 'FactoryStation', status: 'Active' },
+    ];
+
+    const allItemsToPrint = [...factoryStationLabels, ...machines];
+
     return (
         <div id="print-labels-container" className="bg-gray-100 min-h-screen p-8 print:p-0 print:bg-white overflow-x-auto">
             <div className="min-w-[190mm] print:min-w-0 space-y-12 print:space-y-0">
-                {machines.map((machine) => (
+                {allItemsToPrint.map((machine) => (
                     <div
                         key={machine.machine_id}
                         className="page-break-after-always flex items-center justify-center bg-transparent w-[190mm] h-[268.6mm] mx-auto mb-12 print:mb-0 print:w-[210mm] print:h-[297mm] print:p-0 print:m-0"
@@ -61,9 +72,9 @@ const MachineLabels: React.FC = () => {
                                 <div className="h-1.5 w-full bg-blue-600 rounded-full mb-8"></div>
 
                                 <h2 className="text-4xl font-bold text-gray-800 mb-2">
-                                    MACHINE STATION
+                                    {machine.type === 'FactoryStation' ? 'FACTORY CHECK-IN STATION' : 'MACHINE STATION'}
                                 </h2>
-                                <p className="text-7xl font-black text-gray-900 uppercase">
+                                <p className="text-6xl font-black text-gray-900 uppercase">
                                     {machine.name}
                                 </p>
                             </div>
@@ -87,12 +98,12 @@ const MachineLabels: React.FC = () => {
                                         SCAN FOR CHECK-IN / CHECK-OUT
                                     </p>
                                     <p className="text-xl opacity-90 uppercase font-mono">
-                                        Device ID: {machine.machine_id}
+                                        ID: {machine.machine_id}
                                     </p>
                                 </div>
 
                                 <div className="flex justify-between items-center text-gray-400 text-sm font-bold uppercase tracking-widest">
-                                    <span>Taiping / Nilai Production Line</span>
+                                    <span>All Factory Production Operations</span>
                                     <div className="flex gap-4">
                                         <span>v4.0</span>
                                         <span>PackSecure Standard</span>

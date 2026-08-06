@@ -55,17 +55,23 @@ const getItemLocation = (item: SalesOrderItem, order: SalesOrder): string => {
         if (r.includes('opm corner')) return 'OPM Corner';
         if (r.includes('opm ali')) return 'OPM Ali';
         if (r.includes('nilai')) return 'Nilai';
+        if (r.includes('kelantan')) return 'Kelantan';
+        if (r.includes('johor')) return 'Johor';
         if (r.includes('spd')) return 'SPD';
     }
     // 3. Order-level trip_origin
     if (order.trip_origin) {
         const origin = order.trip_origin.toUpperCase();
         if (origin === 'NILAI') return 'Nilai';
+        if (origin === 'KELANTAN') return 'Kelantan';
+        if (origin === 'JOHOR') return 'Johor';
         if (origin === 'TAIPING' || origin === 'SPD') return 'SPD';
     }
     // 4. Zone / address text matching
     const text = `${order.zone || ''} ${order.deliveryAddress || ''}`.toLowerCase();
     if (text.includes('nilai') || text.includes('seremban')) return 'Nilai';
+    if (text.includes('kelantan') || text.includes('kota bharu')) return 'Kelantan';
+    if (text.includes('johor') || text.includes('skudai') || text.includes('senai')) return 'Johor';
     return LOCATIONS[0] || 'SPD';
 };
 
@@ -128,6 +134,33 @@ const OrderSummary: React.FC<OrderSummaryProps> = ({ user }) => {
                 .eq('id', orderId);
 
             if (updateError) throw updateError;
+
+            // 同步记录到 work_photos 表，以便在 Monthly Report (月度报告) 中能展示对应员工的备货照片
+            if (user) {
+                try {
+                    const uid = user.uid || user.id;
+                    const { data: pubUser } = await supabase
+                        .from('users_public')
+                        .select('employee_id, name')
+                        .eq('id', uid)
+                        .single();
+                        
+                    const empId = pubUser?.employee_id || user.employeeId || 'unknown';
+                    const empName = pubUser?.name || user.name || user.email?.split('@')[0] || 'Unknown';
+                    
+                    await supabase.from('work_photos').insert({
+                        employee_id: empId,
+                        employee_name: empName,
+                        photo_url: publicUrl,
+                        category: 'Cargo Prep / 备货照片',
+                        user_note: `Daily Prep 备货位置图 - 订单: ${currentOrder?.orderNumber || 'Unknown'} - 库位: ${activeTab}`,
+                        location: activeTab,
+                        risk_flag: false
+                    });
+                } catch (dbErr) {
+                    console.error("Failed to insert cargo prep photo log:", dbErr);
+                }
+            }
 
             setOrders(prev => prev.map(o => o.id === orderId ? { ...o, preparation_photo_url: updatedPhotoUrlField } : o));
             alert(`✅ ${activeTab} 备货图片上传成功！ / Cargo photo uploaded successfully!`);
@@ -293,7 +326,8 @@ const OrderSummary: React.FC<OrderSummaryProps> = ({ user }) => {
         const seenLocs = new Set<string>();
         if (o.items.length === 0) {
             // No items: use order-level fallback
-            const fallbackLoc = o.trip_origin?.toUpperCase() === 'NILAI' ? 'Nilai' : (LOCATIONS[0] || 'SPD');
+            const origin = o.trip_origin?.toUpperCase();
+            const fallbackLoc = origin === 'NILAI' ? 'Nilai' : (origin === 'KELANTAN' ? 'Kelantan' : (origin === 'JOHOR' ? 'Johor' : (LOCATIONS[0] || 'SPD')));
             seenLocs.add(fallbackLoc);
         } else {
             o.items.forEach(item => {

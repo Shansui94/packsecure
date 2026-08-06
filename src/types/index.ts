@@ -435,3 +435,37 @@ export interface Task {
     assignee_name?: string;
     creator_name?: string;
 }
+
+// 16. Mobile Inspection Logs (Raw Materials, Machine Adjustments & Temperature)
+export type InspectionLogType = 'material' | 'machine_adjustment' | 'temperature';
+export type RawMaterialReactionTag = 'normal' | 'moist' | 'clumped' | 'color_dev' | 'impurities';
+
+export interface MobileInspectionLog {
+    id?: string;
+    log_type: InspectionLogType;
+    material_id?: string;
+    material_name?: string;
+    previous_quantity?: number;
+    new_quantity?: number;
+    change_amount?: number;
+    reaction_tag?: RawMaterialReactionTag;
+    reaction_notes?: string;
+    machine_id?: string;
+    machine_name?: string;
+    screw_id?: 'Screw_A' | 'Screw_B' | 'Screw_C';
+    screw_name?: string;
+    adjustment_position?: string;
+    adjustment_notes?: string;
+    temp_zone_1?: number;
+    temp_zone_2?: number;
+    temp_zone_3?: number;
+    temp_die_head?: number;
+    temp_status?: 'normal' | 'overheat' | 'too_low';
+    photo_url: string;
+    operator_id?: string;
+    operator_name: string;
+    operator_role?: string;
+    factory_id?: string;
+    created_at?: string;
+}
+

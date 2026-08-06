@@ -539,6 +539,77 @@ const ProductLibrary: React.FC = () => {
     const [isEditModalOpen, setIsEditModalOpen] = useState(false);
     const [editingItem, setEditingItem] = useState<V2Item | null>(null);
 
+    // AI Mapping state
+    const [activeTab, setActiveTab] = useState<'blueprints' | 'ai-mappings'>('blueprints');
+    const [mappings, setMappings] = useState<any[]>([]);
+    const [mappingsLoading, setMappingsLoading] = useState(false);
+    const [mappingSearch, setMappingSearch] = useState('');
+    const [showMappingModal, setShowMappingModal] = useState(false);
+    const [modalCustomer, setModalCustomer] = useState('');
+    const [modalRawName, setModalRawName] = useState('');
+    const [modalSelectedSku, setModalSelectedSku] = useState('');
+
+    const fetchMappings = async () => {
+        setMappingsLoading(true);
+        try {
+            const { data, error } = await supabase
+                .from('customer_sku_mappings')
+                .select('*')
+                .order('updated_at', { ascending: false });
+            if (error) throw error;
+            setMappings(data || []);
+        } catch (err) {
+            console.error("Error fetching mappings:", err);
+        } finally {
+            setMappingsLoading(false);
+        }
+    };
+
+    useEffect(() => {
+        if (activeTab === 'ai-mappings') {
+            fetchMappings();
+        }
+    }, [activeTab]);
+
+    const handleSaveMapping = async () => {
+        if (!modalCustomer.trim() || !modalRawName.trim() || !modalSelectedSku) {
+            alert('⚠️ Please fill in all fields!');
+            return;
+        }
+        const matchedProd = items.find(x => x.sku === modalSelectedSku);
+        if (!matchedProd) return;
+        try {
+            const { error } = await supabase.from('customer_sku_mappings').upsert({
+                customer_name: modalCustomer.trim(),
+                raw_product_name: modalRawName.trim(),
+                mapped_sku: modalSelectedSku,
+                mapped_product_name: matchedProd.name,
+                updated_at: new Date().toISOString()
+            }, {
+                onConflict: 'customer_name,raw_product_name'
+            });
+            if (error) throw error;
+            setShowMappingModal(false);
+            setModalCustomer('');
+            setModalRawName('');
+            setModalSelectedSku('');
+            await fetchMappings();
+        } catch (err: any) {
+            alert('Error: ' + err.message);
+        }
+    };
+
+    const handleDeleteMapping = async (id: string) => {
+        if (!confirm('Are you sure you want to delete this mapping memory?')) return;
+        try {
+            const { error } = await supabase.from('customer_sku_mappings').delete().eq('id', id);
+            if (error) throw error;
+            await fetchMappings();
+        } catch (err: any) {
+            alert('Error: ' + err.message);
+        }
+    };
+
     useEffect(() => {
         loadItems();
     }, []);
@@ -746,25 +817,142 @@ const ProductLibrary: React.FC = () => {
                         </div>
                     </header>
 
-                    {/* GRID CONTENT */}
-                    <div className="flex-1 overflow-y-auto p-6">
-                        {loading ? (
-                            <div className="flex items-center justify-center h-64 text-gray-500 animate-pulse">
-                                Loading Blueprints...
-                            </div>
-                        ) : (
-                            <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 2xl:grid-cols-5 gap-4">
-                                {filteredItems.map(item => (
-                                    <HoloCard
-                                        key={item.sku}
-                                        item={item}
-                                        stock={stockMap[item.sku]}
-                                        onClick={() => handleItemClick(item)}
-                                    />
-                                ))}
-                            </div>
-                        )}
+                    {/* TABS SELECTION */}
+                    <div className="flex border-b border-gray-800 bg-gray-950 px-6 shrink-0 z-10 font-bold">
+                        <button
+                            onClick={() => {
+                                setActiveTab('blueprints');
+                                setSelectedItem(null);
+                            }}
+                            className={`py-3.5 px-6 text-xs uppercase tracking-wider font-black border-b-2 transition-all cursor-pointer ${
+                                activeTab === 'blueprints'
+                                    ? 'border-cyan-500 text-cyan-400'
+                                    : 'border-transparent text-gray-500 hover:text-gray-300'
+                            }`}
+                        >
+                            📦 Standard Blueprints (标准商品库)
+                        </button>
+                        <button
+                            onClick={() => {
+                                setActiveTab('ai-mappings');
+                                setSelectedItem(null);
+                            }}
+                            className={`py-3.5 px-6 text-xs uppercase tracking-wider font-black border-b-2 transition-all cursor-pointer ${
+                                activeTab === 'ai-mappings'
+                                    ? 'border-cyan-500 text-cyan-400'
+                                    : 'border-transparent text-gray-500 hover:text-gray-300'
+                            }`}
+                        >
+                            🤖 AI Alias Mappings (AI 别名映射)
+                        </button>
                     </div>
+
+                    {/* TABS CONTENT */}
+                    {activeTab === 'ai-mappings' ? (
+                        <div className="flex-1 overflow-y-auto p-6 space-y-6">
+                            {/* Header / Actions */}
+                            <div className="flex justify-between items-center gap-4 bg-gray-900/40 p-4 border border-gray-800 rounded-xl">
+                                <div className="relative flex-1 max-w-md">
+                                    <Search className="absolute left-3 top-2.5 text-gray-500" size={18} />
+                                    <input
+                                        type="text"
+                                        placeholder="Search by Customer or Raw Name..."
+                                        value={mappingSearch}
+                                        onChange={(e) => setMappingSearch(e.target.value)}
+                                        className="w-full bg-gray-950 border border-gray-800 rounded-lg py-2 pl-10 pr-4 text-gray-200 placeholder-gray-600 focus:ring-1 focus:ring-cyan-500 outline-none text-xs"
+                                    />
+                                </div>
+                                <button
+                                    onClick={() => {
+                                        setModalCustomer('');
+                                        setModalRawName('');
+                                        setModalSelectedSku('');
+                                        setShowMappingModal(true);
+                                    }}
+                                    className="px-4 py-2 bg-cyan-600 hover:bg-cyan-500 text-xs font-bold rounded-lg text-white transition-all flex items-center gap-1.5 cursor-pointer shadow-[0_0_12px_rgba(6,182,212,0.2)]"
+                                >
+                                    + Add New Mapping
+                                </button>
+                            </div>
+
+                            {/* Data Table */}
+                            <div className="bg-gray-900 border border-gray-800 rounded-xl overflow-hidden shadow-2xl">
+                                <table className="w-full text-left border-collapse text-xs">
+                                    <thead>
+                                        <tr className="bg-gray-950/60 border-b border-gray-800 text-gray-400 font-bold uppercase tracking-wider">
+                                            <th className="p-4">Customer (客户)</th>
+                                            <th className="p-4">Raw Name in WhatsApp (单据原始名称)</th>
+                                            <th className="p-4">Mapped Standard Item (对应系统商品)</th>
+                                            <th className="p-4">Standard SKU (标准料号)</th>
+                                            <th className="p-4">Last Updated (记忆时间)</th>
+                                            <th className="p-4 text-center">Actions</th>
+                                        </tr>
+                                    </thead>
+                                    <tbody className="divide-y divide-gray-800/60 font-medium">
+                                        {mappingsLoading ? (
+                                            <tr>
+                                                <td colSpan={6} className="p-8 text-center text-gray-500 animate-pulse">
+                                                    Loading mapping history...
+                                                </td>
+                                            </tr>
+                                        ) : mappings.length === 0 ? (
+                                            <tr>
+                                                <td colSpan={6} className="p-8 text-center text-gray-500">
+                                                    No mapping records found. Use AI Order Import to build mappings automatically!
+                                                </td>
+                                            </tr>
+                                        ) : (
+                                            mappings
+                                                .filter(m => {
+                                                    const query = mappingSearch.toLowerCase();
+                                                    return (m.customer_name || '').toLowerCase().includes(query) ||
+                                                           (m.raw_product_name || '').toLowerCase().includes(query) ||
+                                                           (m.mapped_product_name || '').toLowerCase().includes(query) ||
+                                                           (m.mapped_sku || '').toLowerCase().includes(query);
+                                                })
+                                                .map((m) => (
+                                                    <tr key={m.id} className="hover:bg-gray-850/40 transition-colors">
+                                                        <td className="p-4 text-white font-semibold">{m.customer_name}</td>
+                                                        <td className="p-4"><span className="bg-red-950/45 text-red-400 px-2 py-0.5 rounded border border-red-500/10 font-bold font-mono">{m.raw_product_name}</span></td>
+                                                        <td className="p-4 text-gray-300 font-semibold">{m.mapped_product_name}</td>
+                                                        <td className="p-4"><span className="bg-cyan-950/30 text-cyan-400 px-2 py-0.5 rounded border border-cyan-500/15 font-mono">{m.mapped_sku}</span></td>
+                                                        <td className="p-4 text-gray-500 font-mono">{new Date(m.updated_at).toLocaleString('zh-CN')}</td>
+                                                        <td className="p-4 text-center">
+                                                            <button
+                                                                onClick={() => handleDeleteMapping(m.id)}
+                                                                className="text-red-500 hover:text-red-400 hover:bg-red-500/10 px-2.5 py-1 rounded transition-colors font-bold cursor-pointer"
+                                                            >
+                                                                Delete
+                                                            </button>
+                                                        </td>
+                                                    </tr>
+                                                ))
+                                        )}
+                                    </tbody>
+                                </table>
+                            </div>
+                        </div>
+                    ) : (
+                        /* GRID CONTENT */
+                        <div className="flex-1 overflow-y-auto p-6">
+                            {loading ? (
+                                <div className="flex items-center justify-center h-64 text-gray-500 animate-pulse">
+                                    Loading Blueprints...
+                                </div>
+                            ) : (
+                                <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 2xl:grid-cols-5 gap-4">
+                                    {filteredItems.map(item => (
+                                        <HoloCard
+                                            key={item.sku}
+                                            item={item}
+                                            stock={stockMap[item.sku]}
+                                            onClick={() => handleItemClick(item)}
+                                        />
+                                    ))}
+                                </div>
+                            )}
+                        </div>
+                    )}
                 </div>
 
                 {/* --- RIGHT: BLUEPRINT DETAIL PANEL --- */}
@@ -910,6 +1098,67 @@ const ProductLibrary: React.FC = () => {
                 initialData={editingItem}
                 onSave={handleSaveItem}
             />
+
+            {/* --- ADD/EDIT MAPPING MODAL --- */}
+            {showMappingModal && (
+                <div className="fixed inset-0 bg-slate-950/80 backdrop-blur-sm flex items-center justify-center z-50 p-4 font-bold">
+                    <div className="bg-slate-900 border border-slate-800 rounded-2xl max-w-md w-full flex flex-col shadow-2xl animate-in fade-in zoom-in-95 duration-200">
+                        <div className="p-5 border-b border-slate-800 flex justify-between items-center bg-slate-900/60">
+                            <h3 className="text-sm font-bold text-white flex items-center gap-2">
+                                <Zap className="text-cyan-400" size={16} /> Add Product Name Mapping
+                            </h3>
+                            <button onClick={() => setShowMappingModal(false)} className="text-slate-400 hover:text-white p-1 rounded-lg hover:bg-slate-800 cursor-pointer">
+                                &times;
+                            </button>
+                        </div>
+                        <div className="p-5 space-y-4 text-xs font-semibold">
+                            <div>
+                                <label className="text-[10px] uppercase font-bold text-gray-500 tracking-wider mb-2 block">Customer Name (客户名称)</label>
+                                <input
+                                    type="text"
+                                    placeholder="e.g. DIY"
+                                    value={modalCustomer}
+                                    onChange={e => setModalCustomer(e.target.value)}
+                                    className="w-full bg-gray-950 border border-gray-800 rounded-lg p-2.5 text-white outline-none focus:border-cyan-500"
+                                />
+                            </div>
+                            <div>
+                                <label className="text-[10px] uppercase font-bold text-gray-500 tracking-wider mb-2 block">Raw Name in WhatsApp (单据上的原始商品称呼)</label>
+                                <input
+                                    type="text"
+                                    placeholder="e.g. oren"
+                                    value={modalRawName}
+                                    onChange={e => setModalRawName(e.target.value)}
+                                    className="w-full bg-gray-950 border border-gray-800 rounded-lg p-2.5 text-white outline-none focus:border-cyan-500"
+                                />
+                            </div>
+                            <div>
+                                <label className="text-[10px] uppercase font-bold text-gray-500 tracking-wider mb-2 block">Mapped System Product (对应的系统标准产品)</label>
+                                <select
+                                    value={modalSelectedSku}
+                                    onChange={e => setModalSelectedSku(e.target.value)}
+                                    className="w-full bg-gray-950 border border-gray-800 rounded-lg p-2.5 text-amber-400 font-mono outline-none cursor-pointer focus:border-cyan-500"
+                                >
+                                    <option value="">-- Choose Standard Product --</option>
+                                    {items.map(prod => (
+                                        <option key={prod.sku} value={prod.sku}>
+                                            {prod.name} ({prod.sku})
+                                        </option>
+                                    ))}
+                                </select>
+                            </div>
+                        </div>
+                        <div className="p-4 border-t border-slate-800 bg-slate-900/60 flex justify-end gap-3 font-bold">
+                            <button onClick={() => setShowMappingModal(false)} className="bg-slate-800 hover:bg-slate-700 text-slate-300 text-xs py-1.5 px-4 rounded-lg border border-slate-700 transition-colors cursor-pointer">
+                                Cancel
+                            </button>
+                            <button onClick={handleSaveMapping} className="bg-cyan-600 hover:bg-cyan-500 text-white text-xs py-1.5 px-4 rounded-lg shadow-lg transition-all cursor-pointer">
+                                Save Mapping
+                            </button>
+                        </div>
+                    </div>
+                </div>
+            )}
         </div>
     );
 };

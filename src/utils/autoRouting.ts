@@ -78,7 +78,7 @@ export const generateDraftTrips = (orders: any[]): DraftTrip[] => {
         bins.forEach((bin, idx) => {
             drafts.push({
                 id: `draft-${factory}-${zone}-${idx + 1}`,
-                name: `${factory === 'T1' ? 'Taiping' : 'Nilai'}: ${zone} #${idx + 1}`,
+                name: `${factory === 'T1' || factory === 'OPM' ? 'Taiping' : factory === 'N1' || factory === 'Nilai' ? 'Nilai' : factory === 'K1' || factory === 'Kelantan' ? 'Kelantan' : factory === 'J1' || factory === 'Johor' ? 'Johor' : factory}: ${zone} #${idx + 1}`,
                 factoryId: factory,
                 zone: zone,
                 orders: bin.orders,

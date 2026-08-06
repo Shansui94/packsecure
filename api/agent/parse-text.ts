@@ -27,6 +27,19 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
             Each object must have: "name", "phone", "address".
             Infer the "zone" (North/South/Central/East Malaysia) from address if possible.
             If multiple records exist, return multiple objects.`;
+        } else if (type === 'sales_order') {
+            prompt += `
+            The output must represent a list of sales orders parsed from the text.
+            Each object in the JSON array must have EXACTLY the following fields:
+            - "customer": string (inferred customer name)
+            - "deliveryAddress": string (delivery address)
+            - "deadline": string (format YYYY-MM-DD, default to tomorrow if not specified)
+            - "notes": string (any special instructions, shipping marks, or remarks)
+            - "items": array of objects, each containing:
+              - "product": string (name of product, e.g. stretch film, bubble wrap, tape, etc.)
+              - "quantity": number (quantity ordered, must be a number)
+              - "remark": string (e.g. size/color/type details like "2 layer", "sl", "dl", "20cm", "hitam")
+            If multiple orders or different delivery locations are mentioned, return multiple objects in the array.`;
         } else {
             prompt += `
             Extract meaningful fields based on the text structure (e.g. Header1, Header2).

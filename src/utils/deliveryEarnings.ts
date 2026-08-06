@@ -14,10 +14,20 @@ export interface TripForEarnings {
     trip_drop_count?: number | null;
 }
 
+function normalizeOrigin(originRaw?: string | null): string {
+    if (!originRaw) return 'taiping';
+    const o = originRaw.trim().toLowerCase();
+    if (o === 'k1' || o === 'kelantan') return 'kelantan';
+    if (o === 'j1' || o === 'johor') return 'johor';
+    if (o === 'n1' || o === 'nilai') return 'nilai';
+    if (o === 't1' || o.includes('opm') || o === 'spd') return 'taiping';
+    return o;
+}
+
 export function buildDeliveryRateMap(rates: DeliveryRateRow[]): Record<string, DeliveryRateRow> {
     const map: Record<string, DeliveryRateRow> = {};
     rates.forEach((r) => {
-        const origin = (r.origin || 'TAIPING').toLowerCase();
+        const origin = normalizeOrigin(r.origin);
         const loc = (r.location_name || '').toLowerCase();
         map[`${origin}-${loc}`] = r;
     });
@@ -25,7 +35,7 @@ export function buildDeliveryRateMap(rates: DeliveryRateRow[]): Record<string, D
 }
 
 export function calcTripEarnings(trip: TripForEarnings, rateMap: Record<string, DeliveryRateRow>): number {
-    const origin = (trip.trip_origin || 'TAIPING').toLowerCase();
+    const origin = normalizeOrigin(trip.trip_origin);
     const zoneRaw = trip.zone || trip.delivery_zone || trip.delivery_address || '';
     const calcZone = zoneRaw.toLowerCase();
     const rateInfo = rateMap[`${origin}-${calcZone}`];

@@ -6,6 +6,7 @@ import {
     ToggleRight, Star, Award, MapPin, DollarSign, ChevronLeft, ChevronRight, ChevronDown, ChevronUp, Loader, Shield, Check, RefreshCw, UserPlus, CheckCircle2, Settings
 } from 'lucide-react';
 import { getSalaryAdvances, updateSalaryAdvanceStatus } from '../services/apiV2';
+import { calculateShiftSplit, getRatesForTarget } from '../utils/rateCalculator';
 
 const formatYYYYMMDD = (dateStr: string | null | undefined): string => {
     if (!dateStr) return '';
@@ -293,11 +294,13 @@ const EmployeeModal: React.FC<{
         const rawStatus = form.status || 'Active';
         const normalizedStatus = rawStatus.charAt(0).toUpperCase() + rawStatus.slice(1).toLowerCase();
 
+        const defaultDriverModules = ['work-photos', 'delivery-driver', 'delivery-history', 'leave-calendar', 'lorry-service'];
         const payload: any = {
             auth_user_id: targetAuthId,
             name: form.name, email: validEmail, phone: form.phone || null,
             role: form.role, status: normalizedStatus === 'Active' ? 'Active' : normalizedStatus,
-            role_modules: form.role_modules || []
+            role_modules: (form.role_modules && form.role_modules.length > 0) ? form.role_modules : (form.role === 'Driver' ? defaultDriverModules : []),
+            factory_id: form.base_location === 'Johor' ? 'J1' : form.base_location === 'Kelantan' ? 'K1' : form.base_location === 'Nilai' ? 'N1' : 'T1'
         };
 
         if (isSuperAdminOrHR) {
@@ -406,13 +409,13 @@ const EmployeeModal: React.FC<{
                         </div>
                         <div>
                             <label className="block text-[10px] text-gray-500 uppercase tracking-widest mb-1.5">Base Location (📍 Origin)</label>
-                            <div className="grid grid-cols-2 gap-2">
-                                {['Taiping', 'Nilai'].map(loc => (
+                            <div className="grid grid-cols-4 gap-2">
+                                {['Taiping', 'Nilai', 'Kelantan', 'Johor'].map(loc => (
                                     <button
                                         key={loc}
                                         type="button"
                                         onClick={() => setForm(f => ({ ...f, base_location: loc }))}
-                                        className={`py-2 px-3 rounded-xl text-xs font-bold border transition-all ${
+                                        className={`py-2 px-2 rounded-xl text-[11px] font-bold border transition-all ${
                                             form.base_location === loc
                                                 ? 'bg-blue-500/20 text-blue-400 border-blue-500/30'
                                                 : 'bg-white/5 text-gray-500 border-white/5 hover:text-white'
@@ -589,13 +592,13 @@ const PendingRegistrationCard: React.FC<{
                     <label className="block text-[10px] text-gray-500 uppercase tracking-widest mb-1 font-bold">
                         Base Location / 厂区驻地
                     </label>
-                    <div className="grid grid-cols-2 gap-1">
-                        {['Taiping', 'Nilai'].map(loc => (
+                    <div className="grid grid-cols-4 gap-1">
+                        {['Taiping', 'Nilai', 'Kelantan', 'Johor'].map(loc => (
                             <button
                                 key={loc}
                                 type="button"
                                 onClick={() => setSelectedLocation(loc)}
-                                className={`py-1.5 px-2 rounded-lg text-[11px] font-bold border transition-all ${
+                                className={`py-1.5 px-1 rounded-lg text-[10px] font-bold border transition-all ${
                                     selectedLocation === loc
                                         ? 'bg-orange-500/20 text-orange-400 border-orange-500/40'
                                         : 'bg-white/5 text-gray-500 border-white/5 hover:text-white'
@@ -647,20 +650,23 @@ const PendingRegistrationCard: React.FC<{
 
 // ── MACHINE RATE ITEM CARD ─────────────────────────────
 const MachineRateItemCard: React.FC<{
-    machine: { machine_id: string; name?: string; factory_id?: string; operator_hourly_rate: number };
-    onSave: (machine_id: string, rate: number) => void;
+    machine: { machine_id: string; name?: string; factory_id?: string; day_rate: number; night_rate: number };
+    onSave: (machine_id: string, day_rate: number, night_rate: number) => void;
     isSaving: boolean;
 }> = ({ machine, onSave, isSaving }) => {
-    const [rateInput, setRateInput] = useState(machine.operator_hourly_rate.toString());
+    const [dayInput, setDayInput] = useState(machine.day_rate.toString());
+    const [nightInput, setNightInput] = useState(machine.night_rate.toString());
 
     useEffect(() => {
-        setRateInput(machine.operator_hourly_rate.toString());
-    }, [machine.operator_hourly_rate]);
+        setDayInput(machine.day_rate.toString());
+        setNightInput(machine.night_rate.toString());
+    }, [machine.day_rate, machine.night_rate]);
 
     const handleSave = () => {
-        const val = parseFloat(rateInput);
-        if (isNaN(val) || val < 0) return alert("请输入有效时薪数值");
-        onSave(machine.machine_id, val);
+        const dVal = parseFloat(dayInput);
+        const nVal = parseFloat(nightInput);
+        if (isNaN(dVal) || dVal < 0 || isNaN(nVal) || nVal < 0) return alert("请输入有效的白班与夜班时薪数额");
+        onSave(machine.machine_id, dVal, nVal);
     };
 
     return (
@@ -670,33 +676,55 @@ const MachineRateItemCard: React.FC<{
                     <h4 className="text-xs font-black text-white">{machine.name}</h4>
                     <span className="text-[10px] font-mono text-gray-500 block">ID: {machine.machine_id} | 厂区: {machine.factory_id}</span>
                 </div>
-                <span className="px-2 py-0.5 rounded text-[10px] font-bold font-mono bg-blue-500/10 border border-blue-500/20 text-blue-400">
-                    RM {machine.operator_hourly_rate.toFixed(2)}/h
-                </span>
+                <div className="flex flex-col items-end gap-1">
+                    <span className="px-2 py-0.5 rounded text-[9px] font-bold font-mono bg-amber-500/10 border border-amber-500/20 text-amber-400">
+                        ☀️ 8am-12am: RM {machine.day_rate.toFixed(2)}/h
+                    </span>
+                    <span className="px-2 py-0.5 rounded text-[9px] font-bold font-mono bg-purple-500/10 border border-purple-500/20 text-purple-400">
+                        🌙 12am-8am: RM {machine.night_rate.toFixed(2)}/h
+                    </span>
+                </div>
             </div>
 
-            <div className="flex gap-2 items-center pt-2 border-t border-white/5">
-                <div className="relative flex-1">
-                    <span className="absolute left-2.5 top-1/2 -translate-y-1/2 text-xs text-gray-500 font-bold">RM</span>
-                    <input
-                        type="number"
-                        step="0.5"
-                        min="0"
-                        value={rateInput}
-                        onChange={e => setRateInput(e.target.value)}
-                        placeholder="0.00"
-                        className="w-full bg-black/50 border border-white/10 rounded-lg pl-8 pr-2 py-1.5 text-xs text-white font-mono focus:outline-none focus:border-blue-500/50"
-                    />
+            <div className="grid grid-cols-2 gap-2 pt-2 border-t border-white/5">
+                <div>
+                    <label className="text-[9px] text-amber-400 font-bold block mb-1">☀️ 白班 8am-12am</label>
+                    <div className="relative">
+                        <span className="absolute left-2 top-1/2 -translate-y-1/2 text-[10px] text-gray-500 font-bold">RM</span>
+                        <input
+                            type="number"
+                            step="0.5"
+                            min="0"
+                            value={dayInput}
+                            onChange={e => setDayInput(e.target.value)}
+                            className="w-full bg-black/50 border border-white/10 rounded-lg pl-7 pr-2 py-1 text-xs text-white font-mono focus:outline-none focus:border-amber-500/50"
+                        />
+                    </div>
                 </div>
-                <button
-                    onClick={handleSave}
-                    disabled={isSaving}
-                    className="px-3 py-1.5 bg-blue-600 hover:bg-blue-500 disabled:opacity-50 text-white rounded-lg text-xs font-bold transition-all flex items-center gap-1 shadow"
-                >
-                    {isSaving ? <Loader size={12} className="animate-spin" /> : <Save size={12} />}
-                    Save
-                </button>
+                <div>
+                    <label className="text-[9px] text-purple-400 font-bold block mb-1">🌙 夜班 12am-8am</label>
+                    <div className="relative">
+                        <span className="absolute left-2 top-1/2 -translate-y-1/2 text-[10px] text-gray-500 font-bold">RM</span>
+                        <input
+                            type="number"
+                            step="0.5"
+                            min="0"
+                            value={nightInput}
+                            onChange={e => setNightInput(e.target.value)}
+                            className="w-full bg-black/50 border border-white/10 rounded-lg pl-7 pr-2 py-1 text-xs text-white font-mono focus:outline-none focus:border-purple-500/50"
+                        />
+                    </div>
+                </div>
             </div>
+
+            <button
+                onClick={handleSave}
+                disabled={isSaving}
+                className="w-full py-1.5 bg-blue-600 hover:bg-blue-500 disabled:opacity-50 text-white rounded-lg text-xs font-bold transition-all flex items-center justify-center gap-1 shadow mt-1"
+            >
+                {isSaving ? <Loader size={12} className="animate-spin" /> : <Save size={12} />}
+                保存费率 / Save Rate
+            </button>
         </div>
     );
 };
@@ -760,6 +788,7 @@ const HRPortal: React.FC<HRPortalProps> = ({ user, initialTab, initialRoleFilter
     const [deliveryRates, setDeliveryRates] = useState<{ id: string; origin: string; location_name: string; base_rate: number; max_places: number; extra_rate_per_place: number; notes: string }[]>([]);
     const [showZoneEditor, setShowZoneEditor] = useState(true);
     const [showZoneForm, setShowZoneForm] = useState(false);
+    const [rateOriginFilter, setRateOriginFilter] = useState<'ALL' | 'TAIPING' | 'NILAI' | 'KELANTAN' | 'JOHOR'>('ALL');
     const [newRateOrigin, setNewRateOrigin] = useState('TAIPING');
     const [newRateLocation, setNewRateLocation] = useState('');
     const [newRateBase, setNewRateBase] = useState('');
@@ -770,7 +799,7 @@ const HRPortal: React.FC<HRPortalProps> = ({ user, initialTab, initialRoleFilter
     const [editingZoneId, setEditingZoneId] = useState<string | null>(null);
 
     // Machine rates state & handlers
-    const [machineRatesList, setMachineRatesList] = useState<{ machine_id: string; name?: string; factory_id?: string; operator_hourly_rate: number }[]>([]);
+    const [machineRatesList, setMachineRatesList] = useState<{ machine_id: string; name?: string; factory_id?: string; day_rate: number; night_rate: number }[]>([]);
     const [showMachineRateEditor, setShowMachineRateEditor] = useState(true);
     const [savingMachineRate, setSavingMachineRate] = useState<string | null>(null);
 
@@ -778,29 +807,59 @@ const HRPortal: React.FC<HRPortalProps> = ({ user, initialTab, initialRoleFilter
         const { data: machines } = await supabase.from('sys_machines_v2').select('machine_id, name, factory_id');
         const { data: mRates } = await supabase.from('machine_rates').select('*');
 
-        const rateMap = new Map((mRates || []).map((r: any) => [r.machine_id, Number(r.operator_hourly_rate) || 0]));
+        const dbMap = new Map<string, { day_rate: number; night_rate: number }>();
+        (mRates || []).forEach((r: any) => {
+            dbMap.set(r.machine_id, {
+                day_rate: Number(r.operator_hourly_rate) || 0,
+                night_rate: Number(r.manager_piece_rate) || 0
+            });
+        });
 
-        const list = (machines || []).map(m => ({
-            machine_id: m.machine_id,
-            name: m.name || m.machine_id,
-            factory_id: m.factory_id || 'Taiping',
-            operator_hourly_rate: rateMap.has(m.machine_id) ? rateMap.get(m.machine_id)! : 0
-        }));
+        // Special Factory Login Entries
+        const factoryEntries = [
+            { machine_id: 'FACTORY_MODE_1', name: '登录工厂 (计算方式一: 12am-8am RM12 / 8am-12am RM8)', factory_id: 'All Factories' },
+            { machine_id: 'FACTORY_MODE_2', name: '登录工厂 (计算方式二: RM10固定时薪)', factory_id: 'All Factories' },
+            { machine_id: 'FACTORY-TAIPING', name: '太平工厂入口打卡站 (Taiping Factory Station)', factory_id: 'T1' },
+            { machine_id: 'FACTORY-NILAI', name: 'Nilai 工厂入口打卡站 (Nilai Factory Station)', factory_id: 'N1' },
+            { machine_id: 'FACTORY-JOHOR', name: 'Johor 工厂入口打卡站 (Johor Factory Station)', factory_id: 'J1' },
+            { machine_id: 'FACTORY-KELANTAN', name: 'Kelantan 工厂入口打卡站 (Kelantan Factory Station)', factory_id: 'K1' },
+        ];
+
+        const allTargetList = [
+            ...factoryEntries,
+            ...(machines || []).map(m => ({
+                machine_id: m.machine_id,
+                name: m.name || m.machine_id,
+                factory_id: m.factory_id || 'Taiping'
+            }))
+        ];
+
+        const list = allTargetList.map(item => {
+            const rates = getRatesForTarget(item.machine_id, dbMap);
+            return {
+                machine_id: item.machine_id,
+                name: item.name,
+                factory_id: item.factory_id,
+                day_rate: rates.day_rate,
+                night_rate: rates.night_rate
+            };
+        });
 
         setMachineRatesList(list);
     }, []);
 
-    const handleSaveSingleMachineRate = async (machine_id: string, rate: number) => {
+    const handleSaveSingleMachineRate = async (machine_id: string, day_rate: number, night_rate: number) => {
         setSavingMachineRate(machine_id);
         try {
             const { error } = await supabase.from('machine_rates').upsert({
                 machine_id,
-                operator_hourly_rate: rate,
+                operator_hourly_rate: day_rate,
+                manager_piece_rate: night_rate,
                 updated_at: new Date().toISOString()
             }, { onConflict: 'machine_id' });
 
             if (error) throw error;
-            alert(`✅ 机台「${machine_id}」的时薪标准已成功保存为 RM${rate.toFixed(2)} / hr`);
+            alert(`✅ 「${machine_id}」的时薪标准已成功保存！\n☀️ 白班 (8am-12am): RM${day_rate.toFixed(2)}/h | 🌙 夜班 (12am-8am): RM${night_rate.toFixed(2)}/h`);
             await fetchMachineRates();
             fetchPayroll();
         } catch (err: any) {
@@ -896,6 +955,8 @@ const HRPortal: React.FC<HRPortalProps> = ({ user, initialTab, initialRoleFilter
 
         try {
             // 1. Dual Upsert into sys_users_v2
+            const defaultDriverModules = ['work-photos', 'delivery-driver', 'delivery-history', 'leave-calendar', 'lorry-service'];
+            const resolvedFactoryId = assignedLocation === 'Johor' ? 'J1' : assignedLocation === 'Kelantan' ? 'K1' : assignedLocation === 'Nilai' ? 'N1' : 'T1';
             const { error: v2Err } = await supabase.from('sys_users_v2').upsert({
                 auth_user_id: targetAuthId,
                 email: emp.email,
@@ -906,7 +967,9 @@ const HRPortal: React.FC<HRPortalProps> = ({ user, initialTab, initialRoleFilter
                 pin_code: cleanPin || emp.pin_code || null,
                 pay_type: assignedRole === 'Driver' ? 'driver' : (emp.pay_type || 'hourly'),
                 hourly_rate: emp.hourly_rate || 0,
-                base_salary: emp.base_salary || 0
+                base_salary: emp.base_salary || 0,
+                role_modules: assignedRole === 'Driver' ? defaultDriverModules : [],
+                factory_id: resolvedFactoryId
             }, { onConflict: 'auth_user_id' });
 
             if (v2Err) console.warn("sys_users_v2 approval update warning:", v2Err.message);
@@ -919,7 +982,8 @@ const HRPortal: React.FC<HRPortalProps> = ({ user, initialTab, initialRoleFilter
                 role: assignedRole,
                 status: 'Active',
                 employee_id: cleanPin || emp.employee_id || null,
-                base_location: assignedLocation || 'Taiping'
+                base_location: assignedLocation || 'Taiping',
+                factory_id: resolvedFactoryId
             });
 
             if (pubErr) throw pubErr;
@@ -1224,14 +1288,20 @@ const HRPortal: React.FC<HRPortalProps> = ({ user, initialTab, initialRoleFilter
             .select('id, auth_user_id, employee_id, name, role, pay_type, hourly_rate, base_salary, trip_allowance, attendance_bonus, attendance_bonus_threshold')
             .eq('status', 'Active').order('name');
 
-        // Attendance hours for operators with machine_id
+        // Attendance hours for operators with machine_id, clock_in, clock_out
         const { data: attendance } = await supabase.from('operator_attendance')
-            .select('operator_id, machine_id, hours_worked, date')
+            .select('operator_id, machine_id, hours_worked, date, clock_in, clock_out')
             .gte('date', firstDay).lte('date', lastDay);
 
-        // Machine rates lookup
-        const { data: mRatesData } = await supabase.from('machine_rates').select('machine_id, operator_hourly_rate');
-        const machineRateMap = new Map((mRatesData || []).map((m: any) => [m.machine_id, Number(m.operator_hourly_rate) || 0]));
+        // Machine rates lookup (day_rate = operator_hourly_rate, night_rate = manager_piece_rate)
+        const { data: mRatesData } = await supabase.from('machine_rates').select('machine_id, operator_hourly_rate, manager_piece_rate');
+        const machineRateMap = new Map<string, { day_rate: number; night_rate: number }>();
+        (mRatesData || []).forEach((m: any) => {
+            machineRateMap.set(m.machine_id, {
+                day_rate: Number(m.operator_hourly_rate) || 0,
+                night_rate: Number(m.manager_piece_rate) || 0
+            });
+        });
 
         // Driver trips with zone info for zone-based allowance
         const { data: trips } = await supabase.from('sales_orders')
@@ -1300,22 +1370,19 @@ const HRPortal: React.FC<HRPortalProps> = ({ user, initialTab, initialRoleFilter
             }
         });
 
-        // Build operator attendance map per machine
-        const operatorAttendanceMap: Record<string, { totalHours: number; breakdown: Map<string, number> }> = {};
+        // Build operator attendance shifts map per employee
+        const operatorAttendanceShifts: Record<string, any[]> = {};
         const hoursMap: Record<string, number> = {};
         (attendance || []).forEach((a: any) => {
             const opId = a.operator_id;
             const hrs = Number(a.hours_worked) || 0;
-            const mId = a.machine_id || 'General';
 
             hoursMap[opId] = (hoursMap[opId] || 0) + hrs;
 
-            if (!operatorAttendanceMap[opId]) {
-                operatorAttendanceMap[opId] = { totalHours: 0, breakdown: new Map() };
+            if (!operatorAttendanceShifts[opId]) {
+                operatorAttendanceShifts[opId] = [];
             }
-            operatorAttendanceMap[opId].totalHours += hrs;
-            const currentM = operatorAttendanceMap[opId].breakdown.get(mId) || 0;
-            operatorAttendanceMap[opId].breakdown.set(mId, currentM + hrs);
+            operatorAttendanceShifts[opId].push(a);
         });
 
         const leaveMap: Record<string, number> = {};
@@ -1335,20 +1402,31 @@ const HRPortal: React.FC<HRPortalProps> = ({ user, initialTab, initialRoleFilter
             const advanceDeduction = advanceData.total;
 
             if (emp.pay_type === 'hourly') {
-                const attInfo = operatorAttendanceMap[emp.employee_id] || { totalHours: 0, breakdown: new Map() };
+                const shifts = operatorAttendanceShifts[emp.employee_id] || [];
 
-                if (attInfo.breakdown.size > 0) {
+                if (shifts.length > 0) {
                     let calculatedGross = 0;
                     const detailSnippets: string[] = [];
 
-                    attInfo.breakdown.forEach((hrs, mId) => {
-                        const mRate = (mId !== 'General' && machineRateMap.has(mId) && machineRateMap.get(mId)! > 0)
-                            ? machineRateMap.get(mId)!
-                            : (Number(emp.hourly_rate) || 0);
-                        
-                        const subtotal = hrs * mRate;
-                        calculatedGross += subtotal;
-                        detailSnippets.push(`${hrs.toFixed(1)}h@${mId}(RM${mRate}/h)=RM${subtotal.toFixed(2)}`);
+                    shifts.forEach((s: any) => {
+                        const hrs = Number(s.hours_worked) || 0;
+                        const targetId = s.machine_id || 'FACTORY_MODE_1';
+                        const split = calculateShiftSplit(s.clock_in, s.clock_out, hrs);
+                        const rates = getRatesForTarget(targetId, machineRateMap);
+
+                        const nightPay = split.nightHours * rates.night_rate;
+                        const dayPay = split.dayHours * rates.day_rate;
+                        const shiftTotal = nightPay + dayPay;
+                        calculatedGross += shiftTotal;
+
+                        const nameTag = targetId.startsWith('FACTORY') ? '工厂打卡' : targetId;
+                        if (split.nightHours > 0 && split.dayHours > 0) {
+                            detailSnippets.push(`${nameTag}: 白班 ${split.dayHours.toFixed(1)}h@RM${rates.day_rate} + 夜班 ${split.nightHours.toFixed(1)}h@RM${rates.night_rate} = RM${shiftTotal.toFixed(2)}`);
+                        } else if (split.nightHours > 0) {
+                            detailSnippets.push(`${nameTag}: 夜班 ${split.nightHours.toFixed(1)}h@RM${rates.night_rate} = RM${shiftTotal.toFixed(2)}`);
+                        } else {
+                            detailSnippets.push(`${nameTag}: 白班 ${split.dayHours.toFixed(1)}h@RM${rates.day_rate} = RM${shiftTotal.toFixed(2)}`);
+                        }
                     });
 
                     gross = calculatedGross;
@@ -1809,21 +1887,42 @@ const HRPortal: React.FC<HRPortalProps> = ({ user, initialTab, initialRoleFilter
                             <div className="border-t border-white/5 p-4 space-y-3">
                                 {/* Existing zones */}
                                 {deliveryRates.length > 0 && (
-                                    <div className="mb-3 max-h-[500px] overflow-auto custom-scrollbar rounded-xl border border-white/5 relative">
-                                        <table className="w-full text-sm text-left border-collapse">
-                                            <thead className="sticky top-0 bg-[#0d0d12] shadow-sm z-10 backdrop-blur-xl">
-                                                <tr className="text-[10px] text-zinc-500 uppercase tracking-widest border-b border-white/10">
-                                                    <th className="px-4 py-3 font-bold">Origin</th>
-                                                    <th className="px-4 py-3 font-bold">Destination</th>
-                                                    <th className="px-4 py-3 font-bold">Base (RM)</th>
-                                                    <th className="px-4 py-3 font-bold">Max Drops</th>
-                                                    <th className="px-4 py-3 font-bold">+Rate / Drop</th>
-                                                    <th className="px-4 py-3 font-bold">Notes</th>
-                                                    <th className="px-4 py-3"></th>
-                                                </tr>
-                                            </thead>
-                                            <tbody className="divide-y divide-white/[0.03] bg-black/20">
-                                                {deliveryRates.map(z => (
+                                    <div className="space-y-3 mb-3">
+                                        {/* Origin Filter Tabs */}
+                                        <div className="flex items-center gap-1.5 bg-black/40 p-1 rounded-xl border border-white/5 w-fit flex-wrap">
+                                            <span className="text-[10px] text-zinc-500 font-bold uppercase px-2">Origin:</span>
+                                            {['ALL', 'TAIPING', 'NILAI', 'KELANTAN', 'JOHOR'].map(loc => (
+                                                <button
+                                                    key={loc}
+                                                    type="button"
+                                                    onClick={() => setRateOriginFilter(loc as any)}
+                                                    className={`px-3 py-1 rounded-lg text-[10px] font-bold uppercase transition-all ${
+                                                        rateOriginFilter === loc
+                                                            ? 'bg-amber-500 text-black shadow-md shadow-amber-500/20'
+                                                            : 'text-zinc-400 hover:text-white hover:bg-white/5'
+                                                    }`}
+                                                >
+                                                    {loc}
+                                                </button>
+                                            ))}
+                                        </div>
+                                        <div className="max-h-[500px] overflow-auto custom-scrollbar rounded-xl border border-white/5 relative">
+                                            <table className="w-full text-sm text-left border-collapse">
+                                                <thead className="sticky top-0 bg-[#0d0d12] shadow-sm z-10 backdrop-blur-xl">
+                                                    <tr className="text-[10px] text-zinc-500 uppercase tracking-widest border-b border-white/10">
+                                                        <th className="px-4 py-3 font-bold">Origin</th>
+                                                        <th className="px-4 py-3 font-bold">Destination</th>
+                                                        <th className="px-4 py-3 font-bold">Base (RM)</th>
+                                                        <th className="px-4 py-3 font-bold">Max Drops</th>
+                                                        <th className="px-4 py-3 font-bold">+Rate / Drop</th>
+                                                        <th className="px-4 py-3 font-bold">Notes</th>
+                                                        <th className="px-4 py-3"></th>
+                                                    </tr>
+                                                </thead>
+                                                <tbody className="divide-y divide-white/[0.03] bg-black/20">
+                                                    {deliveryRates
+                                                        .filter(z => rateOriginFilter === 'ALL' || z.origin?.toUpperCase() === rateOriginFilter)
+                                                        .map(z => (
                                                     <tr key={z.id} className="hover:bg-white/[0.03] group transition-colors">
                                                         <td className="px-4 py-2.5 w-24">
                                                             <span className="text-[9px] bg-blue-500/10 border border-blue-500/20 text-blue-400 px-1.5 py-0.5 rounded uppercase font-black">{z.origin}</span>
@@ -1853,6 +1952,7 @@ const HRPortal: React.FC<HRPortalProps> = ({ user, initialTab, initialRoleFilter
                                                 ))}
                                             </tbody>
                                         </table>
+                                     </div>
                                     </div>
                                 )}
 
@@ -2129,11 +2229,29 @@ const HRPortal: React.FC<HRPortalProps> = ({ user, initialTab, initialRoleFilter
                             </div>
 
                             <div className="grid grid-cols-2 gap-4">
-                                <div>
-                                    <label className="block text-[10px] text-amber-500/70 font-bold uppercase tracking-widest mb-1.5">Origin</label>
+                                <div className="col-span-2">
+                                    <label className="block text-[10px] text-amber-500/70 font-bold uppercase tracking-widest mb-1.5">Origin (行程出发地)</label>
+                                    <div className="flex flex-wrap gap-1.5 mb-2">
+                                        {['TAIPING', 'NILAI', 'KELANTAN', 'JOHOR'].map(loc => (
+                                            <button
+                                                type="button"
+                                                key={loc}
+                                                onClick={() => setNewRateOrigin(loc)}
+                                                className={`px-3 py-1.5 rounded-lg text-xs font-bold transition-all ${
+                                                    newRateOrigin === loc
+                                                        ? 'bg-amber-500 text-black shadow-md shadow-amber-500/30 font-black'
+                                                        : 'bg-black/60 text-zinc-400 border border-white/10 hover:border-amber-500/40'
+                                                }`}
+                                            >
+                                                {loc}
+                                            </button>
+                                        ))}
+                                    </div>
                                     <select value={newRateOrigin} onChange={e => setNewRateOrigin(e.target.value)} className="w-full bg-black/40 border border-amber-500/20 rounded-xl px-4 py-3 text-sm font-bold text-white focus:outline-none focus:border-amber-400 transition-colors">
                                         <option value="TAIPING">TAIPING</option>
                                         <option value="NILAI">NILAI</option>
+                                        <option value="KELANTAN">KELANTAN</option>
+                                        <option value="JOHOR">JOHOR</option>
                                     </select>
                                 </div>
                                 <div className="col-span-2">
