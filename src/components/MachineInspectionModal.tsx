@@ -251,20 +251,11 @@ export const MachineInspectionModal: React.FC<MachineInspectionModalProps> = ({
         }
     };
 
-    // 辅助工具：保存日志到本地存储与 State，同时同步到 Supabase audit_logs
+    // 辅助工具：保存日志到 State，同时全量同步写入 Supabase audit_logs 审计表
     const saveLogToLocalAndState = async (newLog: MobileInspectionLog) => {
-        setLogs(prev => {
-            const updated = [newLog, ...prev];
-            try {
-                if (machineId) localStorage.setItem(`machine_inspection_logs_${machineId}`, JSON.stringify(updated));
-                if (machineName) localStorage.setItem(`machine_inspection_logs_${machineName}`, JSON.stringify(updated));
-            } catch (e) {
-                console.error('Failed to save log to localStorage:', e);
-            }
-            return updated;
-        });
+        setLogs(prev => [newLog, ...prev]);
 
-        // 云端全同步：写一份到 audit_logs 确保任何端均能拉取
+        // 云端全同步：写一份到 audit_logs 确保任何端（电脑与手机）均能拉取
         try {
             const targetId = machineId || machineName || 'GLOBAL';
             await supabase.from('audit_logs').insert([{
@@ -280,7 +271,7 @@ export const MachineInspectionModal: React.FC<MachineInspectionModalProps> = ({
         }
     };
 
-    // 🔒 严格隔离：每台机器只读取并展示属于它自己的日志
+    // 🔒 严格隔离：从 Supabase 云端表全量读取该机台的日志，保证多设备（电脑与手机）百分之百绝对同步
     const fetchMachineLogs = async () => {
         if (!machineId && !machineName) {
             setLogs([]);
@@ -289,43 +280,9 @@ export const MachineInspectionModal: React.FC<MachineInspectionModalProps> = ({
 
         const targetId = machineId || machineName;
 
-        // 1. 读取 LocalStorage 本地保存的日志
-        let localLogs: MobileInspectionLog[] = [];
+        let cloudLogs: MobileInspectionLog[] = [];
         try {
-            const savedById = machineId ? localStorage.getItem(`machine_inspection_logs_${machineId}`) : null;
-            const savedByName = machineName ? localStorage.getItem(`machine_inspection_logs_${machineName}`) : null;
-            if (savedById) {
-                localLogs = JSON.parse(savedById);
-            } else if (savedByName) {
-                localLogs = JSON.parse(savedByName);
-            }
-        } catch (e) {
-            console.error('Failed to load local logs:', e);
-        }
-
-        // 2. 从数据库 (mobile_inspection_logs & audit_logs) 加载日志
-        let dbLogs: any[] = [];
-        try {
-            if (machineId) {
-                const res = await supabase
-                    .from('mobile_inspection_logs')
-                    .select('*')
-                    .eq('machine_id', machineId)
-                    .order('created_at', { ascending: false })
-                    .limit(50);
-                if (res.data) dbLogs = res.data;
-            }
-            if (dbLogs.length === 0 && machineName) {
-                const res = await supabase
-                    .from('mobile_inspection_logs')
-                    .select('*')
-                    .eq('machine_name', machineName)
-                    .order('created_at', { ascending: false })
-                    .limit(50);
-                if (res.data) dbLogs = res.data;
-            }
-
-            // 补充：拉取 audit_logs 中的全端同步日志
+            // 从 Supabase audit_logs 审计日志表拉取跨端统一日志
             const auditRes = await supabase
                 .from('audit_logs')
                 .select('new_data, created_at')
@@ -335,38 +292,18 @@ export const MachineInspectionModal: React.FC<MachineInspectionModalProps> = ({
                 .limit(50);
 
             if (auditRes.data && auditRes.data.length > 0) {
-                const auditMapped = auditRes.data.map((item: any) => ({
+                cloudLogs = auditRes.data.map((item: any) => ({
                     ...item.new_data,
                     created_at: item.new_data?.created_at || item.created_at
                 })).filter(Boolean);
-                dbLogs = [...dbLogs, ...auditMapped];
-            }
-
-            // 自动回填：若本地有历史产生的 LocalStorage 日志未包含在云端，自动推流上传至 Supabase
-            if (localLogs.length > 0) {
-                const cloudLogIds = new Set(dbLogs.map((l: any) => l.id || l.created_at));
-                const missingLocalLogs = localLogs.filter(l => !cloudLogIds.has(l.id) && !cloudLogIds.has(l.created_at));
-                
-                if (missingLocalLogs.length > 0) {
-                    const insertRows = missingLocalLogs.map(l => ({
-                        table_name: 'mobile_inspection_logs',
-                        action: l.log_type || 'material',
-                        record_id: targetId,
-                        new_data: l,
-                        changed_by_email: currentUser?.email || 'operator@packsecure.com',
-                        changed_by_uid: currentUser?.uid || ''
-                    }));
-                    await supabase.from('audit_logs').insert(insertRows);
-                    dbLogs = [...dbLogs, ...missingLocalLogs];
-                }
             }
         } catch (e) {
-            console.warn('DB fetch logs skipped or table unready:', e);
+            console.warn('DB fetch logs skipped:', e);
         }
 
-        // 3. 合并日志并去重
+        // 去重并按最新时间倒序排列
         const combinedMap = new Map<string, MobileInspectionLog>();
-        [...localLogs, ...dbLogs].forEach((l: any) => {
+        cloudLogs.forEach((l: any) => {
             const key = l.id || `${l.created_at}_${l.material_name}`;
             if (!combinedMap.has(key)) combinedMap.set(key, l);
         });
