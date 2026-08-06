@@ -131,11 +131,13 @@ export const MachineInspectionModal: React.FC<MachineInspectionModalProps> = ({
         const targetId = machineId || machineName;
 
         const loadFormula = async () => {
+            let localMat: any = null;
             // 1. 先从本地 LocalStorage 秒级渲染
             try {
                 const saved = localStorage.getItem(`active_screw_materials_${targetId}`);
                 if (saved) {
-                    setScrewMaterials(JSON.parse(saved));
+                    localMat = JSON.parse(saved);
+                    setScrewMaterials(localMat);
                 } else {
                     setScrewMaterials(INITIAL_PRESET_MATERIALS);
                 }
@@ -157,6 +159,9 @@ export const MachineInspectionModal: React.FC<MachineInspectionModalProps> = ({
                 if (data && data.length > 0 && data[0].new_data) {
                     setScrewMaterials(data[0].new_data);
                     localStorage.setItem(`active_screw_materials_${targetId}`, JSON.stringify(data[0].new_data));
+                } else if (localMat) {
+                    // 若云端尚无配方记录，自动将当前电脑本地配方上云推流
+                    syncScrewMaterialsToCloud(localMat);
                 }
             } catch (e) {
                 console.warn('Cloud formula load skipped:', e);
@@ -335,6 +340,25 @@ export const MachineInspectionModal: React.FC<MachineInspectionModalProps> = ({
                     created_at: item.new_data?.created_at || item.created_at
                 })).filter(Boolean);
                 dbLogs = [...dbLogs, ...auditMapped];
+            }
+
+            // 自动回填：若本地有历史产生的 LocalStorage 日志未包含在云端，自动推流上传至 Supabase
+            if (localLogs.length > 0) {
+                const cloudLogIds = new Set(dbLogs.map((l: any) => l.id || l.created_at));
+                const missingLocalLogs = localLogs.filter(l => !cloudLogIds.has(l.id) && !cloudLogIds.has(l.created_at));
+                
+                if (missingLocalLogs.length > 0) {
+                    const insertRows = missingLocalLogs.map(l => ({
+                        table_name: 'mobile_inspection_logs',
+                        action: l.log_type || 'material',
+                        record_id: targetId,
+                        new_data: l,
+                        changed_by_email: currentUser?.email || 'operator@packsecure.com',
+                        changed_by_uid: currentUser?.uid || ''
+                    }));
+                    await supabase.from('audit_logs').insert(insertRows);
+                    dbLogs = [...dbLogs, ...missingLocalLogs];
+                }
             }
         } catch (e) {
             console.warn('DB fetch logs skipped or table unready:', e);
