@@ -343,35 +343,35 @@ const LorryManagement: React.FC = () => {
                 <div>
                     <h1 className="text-2xl sm:text-3xl font-black text-white italic flex items-center gap-3 uppercase tracking-tighter">
                         <Truck className="text-blue-500" size={28} />
-                        货车车队管理 / Lorry Fleet Management
+                        {t('货车车队管理')}
                     </h1>
                     <p className="text-slate-400 mt-1 uppercase text-[10px] font-bold tracking-[0.15em]">
-                        管理车队车辆、分配司机与里程日志 / Manage your delivery vehicles and assignments.
+                        {t('管理车队车辆、分配司机与里程日志')}
                     </p>
                 </div>
                 <div className="grid grid-cols-2 sm:flex items-center gap-2 sm:gap-3 w-full lg:w-auto">
                     <button
                         onClick={() => setIsMonthlyOdoModalOpen(true)}
                         className="bg-indigo-600 hover:bg-indigo-500 active:scale-95 text-white px-2.5 py-2.5 sm:px-5 sm:py-3 rounded-xl sm:rounded-2xl font-black uppercase text-[11px] sm:text-xs tracking-wider transition-all flex items-center justify-center gap-1.5 shadow-lg shadow-indigo-950/40 min-h-[44px]"
-                        title="Monthly Odometer Summary & Text Format"
+                        title={t('月度总结')}
                     >
                         <FileText size={16} className="shrink-0" />
-                        <span className="truncate">月度总结 / Summary</span>
+                        <span className="truncate">{t('月度总结')}</span>
                     </button>
                     <button
                         onClick={handleExportExcel}
                         className="bg-emerald-600 hover:bg-emerald-500 active:scale-95 text-white px-2.5 py-2.5 sm:px-5 sm:py-3 rounded-xl sm:rounded-2xl font-black uppercase text-[11px] sm:text-xs tracking-wider transition-all flex items-center justify-center gap-1.5 shadow-lg shadow-emerald-950/40 min-h-[44px]"
-                        title="Export All Odometer Logs as Excel Sheet"
+                        title={t('导出日志')}
                     >
                         <FileSpreadsheet size={16} className="shrink-0" />
-                        <span className="truncate">导出 / Export Excel</span>
+                        <span className="truncate">{t('导出日志')}</span>
                     </button>
                     <button
                         onClick={() => handleOpenModal()}
                         className="col-span-2 sm:col-span-1 bg-blue-600 hover:bg-blue-500 active:scale-95 text-white px-4 py-2.5 sm:px-6 sm:py-3 rounded-xl sm:rounded-2xl font-black uppercase text-[11px] sm:text-xs tracking-wider transition-all flex items-center justify-center gap-1.5 shadow-lg shadow-blue-900/20 min-h-[44px]"
                     >
                         <Plus size={18} className="shrink-0" />
-                        <span className="whitespace-nowrap">添加新车 / Add New Lorry</span>
+                        <span className="whitespace-nowrap">{t('添加新车')}</span>
                     </button>
                 </div>
             </header>
@@ -384,7 +384,7 @@ const LorryManagement: React.FC = () => {
                 >
                     <div className="flex items-center gap-2">
                         <Truck size={14} />
-                        车队列表 / Lorry Fleet
+                        {t('车队列表')}
                     </div>
                     {activeTab === 'fleet' && <span className="absolute bottom-0 left-0 right-0 h-0.5 bg-blue-500 rounded-full" />}
                 </button>
@@ -394,7 +394,7 @@ const LorryManagement: React.FC = () => {
                 >
                     <div className="flex items-center gap-2">
                         <FileText size={14} />
-                        里程日志与预警 / Odometer Logs & Alerts
+                        {t('里程日志与预警')}
                         {mileageAlerts.filter(a => !a.resolved).length > 0 && (
                             <span className="bg-red-500 text-white text-[9px] font-black px-2 py-0.5 rounded-full animate-pulse">
                                 {mileageAlerts.filter(a => !a.resolved).length}
@@ -413,7 +413,7 @@ const LorryManagement: React.FC = () => {
                             <Search className="absolute left-4 top-1/2 -translate-y-1/2 text-slate-500" size={18} />
                             <input
                                 type="text"
-                                placeholder="搜索车牌号或司机 / Search by plate or driver..."
+                                placeholder={t('搜索车牌号或司机')}
                                 className="w-full bg-slate-900/50 border border-slate-800 rounded-2xl py-3 sm:py-4 pl-12 pr-4 text-xs sm:text-sm focus:border-blue-500 outline-none transition-all"
                                 value={searchTerm}
                                 onChange={(e) => setSearchTerm(e.target.value)}
@@ -428,10 +428,10 @@ const LorryManagement: React.FC = () => {
                                         ? 'bg-blue-600 text-white shadow-md'
                                         : 'text-slate-400 hover:text-slate-200'
                                 }`}
-                                title="Card View / 卡片视图"
+                                title={t('卡片')}
                             >
                                 <LayoutGrid size={16} />
-                                <span className="hidden sm:inline">卡片 / Grid</span>
+                                <span className="hidden sm:inline">{t('卡片')}</span>
                             </button>
                             <button
                                 onClick={() => setViewMode('table')}

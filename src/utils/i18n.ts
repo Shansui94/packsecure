@@ -521,41 +521,79 @@ const zhTWDict: Record<string, string> = {
 };
 
 const myDict: Record<string, string> = {
-    '超级管理员': 'မန်နေဂျာချုပ်',
-    '管理员': 'အက်ဒမင်',
-    '经理': 'မန်နေဂျာ',
-    '操作员': 'စက်မောင်းသူ',
-    '司机': 'ယာဉ်မောင်း',
+    'SuperAdmin': 'မန်နေဂျာချုပ်',
+    'Admin': 'အက်ဒမင်',
+    'Manager': 'မန်နေဂျာ',
+    'Operator': 'စက်မောင်းသူ',
+    'Driver': 'ယာဉ်မောင်း',
+    'HR / Attendance': 'ဝန်ထမ်းရေးရာ',
     '考勤/HR': 'ဝန်ထမ်းရေးရာ',
     '车间作业': 'လုပ်ငန်းစဉ်များ',
     '库存与物料': 'ကုန်ပစ္စည်းစာရင်း',
     '物流配送': 'ပို့ဆောင်ရေး',
     '货车车队管理': 'ယာဉ်မောင်းစီမံခန့်ခွဲမှု',
-    '退出登录': 'ထွက်ရန်'
+    '货车车队': 'ယာဉ်မောင်းစီမံခန့်ခွဲမှု',
+    'Lorry Fleet Management': 'ယာဉ်မောင်းစီမံခန့်ခွဲမှု',
+    'Lorry Fleet': 'ယာဉ်မောင်းစီမံခန့်ခွဲမှု',
+    'Factory Live OS': 'စက်ရုံအော်ပရေးရှင်း',
+    'Data Command': 'ဒေတာစင်တာ',
+    'Live Stock': 'လက်ရှိကုန်ပစ္စည်း',
+    'Production Workspace': 'ထုတ်လုပ်မှုလုပ်ငန်းခွင်',
+    'Inventory': 'ကုန်ပစ္စည်းစာရင်း',
+    'Trip Management': 'ခရီးစဉ်စီမံခန့်ခွဲမှု',
+    'Daily Prep': 'နေ့စဉ်ပြင်ဆင်မှု',
+    'Product Library': 'ထုတ်ကုန်စာရင်း',
+    'Maintenance Control': 'စက်ပြင်ဆင်ရေး',
+    'Leave Center': 'ခွင့်ရက်များ',
+    'Staff Hub / HR Portal': 'ဝန်ထမ်းရေးရာ',
+    'Reports': 'အစီရင်ခံစာများ',
+    'SOP Center': 'SOP ဗဟိုဌာန',
+    'Notes': 'မှတ်စုများ',
+    'Tasks': 'လုပ်ငန်းတာဝန်များ',
+    'Sign Out': 'ထွက်ရန်',
+    'Quit': 'ထွက်ရန်',
+    'Dark': 'အမှောင်',
+    'Light': 'အလင်း'
 };
 
 const hiDict: Record<string, string> = {
-    '超级管理员': 'सुपर एडमिन',
-    '管理员': 'एडमिन',
-    '经理': 'मैनेजर',
-    '操作员': 'ऑपरेटर',
-    '司机': 'ड्राइवर',
+    'SuperAdmin': 'सुपर एडमिन',
+    'Admin': 'एडमिन',
+    'Manager': 'मैनेजर',
+    'Operator': 'ऑपरेटर',
+    'Driver': 'ड्राइवर',
     '考勤/HR': 'एचआर',
     '车间作业': 'ऑपरेशन्स',
     '货车车队管理': 'ट्रक बेड़ा प्रबंधन',
-    '退出登录': 'साइन आउट'
+    'Lorry Fleet Management': 'ट्रक बेड़ा प्रबंधन',
+    'Lorry Fleet': 'ट्रक बेड़ा प्रबंधन',
+    'Factory Live OS': 'फ़ैक्टरी लाइव OS',
+    'Data Command': 'डेटा कमांड',
+    'Live Stock': 'लाइव स्टॉक',
+    'Production Workspace': 'उत्पादन कार्यक्षेत्र',
+    'Inventory': 'इन्वेंट्री',
+    'Trip Management': 'ट्रिप प्रबंधन',
+    'Daily Prep': 'दैनिक तैयारी',
+    'Sign Out': 'साइन आउट',
+    'Quit': 'साइन आउट'
 };
 
 const bnDict: Record<string, string> = {
-    '超级管理员': 'সুপার অ্যাডমিন',
-    '管理员': 'অ্যাডমিন',
-    '经理': 'ম্যানেজার',
-    '操作员': 'অপারেটর',
-    '司机': 'ড্রাইভার',
+    'SuperAdmin': 'সুপার অ্যাডমিন',
+    'Admin': 'অ্যাডমিন',
+    'Manager': 'ম্যানেজার',
+    'Operator': 'অপারেটর',
+    'Driver': 'ড্রাইভার',
     '考勤/HR': 'এইচআর',
     '车间作业': 'অপারেশনস',
     '货车车队管理': 'ট্রাক বহর ব্যবস্থাপনা',
-    '退出登录': 'সাইন আউট'
+    'Lorry Fleet Management': 'ট্রাক বহর ব্যবস্থাপনা',
+    'Lorry Fleet': 'ট্রাক বহর ব্যবস্থাপনা',
+    'Factory Live OS': 'ফ্যাক্টরি লাইভ OS',
+    'Data Command': 'ডাটা কমান্ড',
+    'Live Stock': 'লাইভ স্টক',
+    'Sign Out': 'সাইন আউট',
+    'Quit': 'সাইন আউট'
 };
 
 const resources = {
@@ -573,7 +611,7 @@ const savedLang = (localStorage.getItem('packsecure_lang') as SupportedLanguage)
 i18n.use(initReactI18next).init({
     resources,
     lng: savedLang,
-    fallbackLng: 'zh-CN',
+    fallbackLng: 'en',
     interpolation: {
         escapeValue: false
     }
