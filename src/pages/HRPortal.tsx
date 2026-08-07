@@ -738,6 +738,7 @@ interface HRPortalProps {
 }
 
 const HRPortal: React.FC<HRPortalProps> = ({ user, initialTab, initialRoleFilter }) => {
+    const { t } = useTranslation();
     const isSuperAdminOrHR = user?.role === 'SuperAdmin' || user?.role === 'HR';
     const [activeTab, setActiveTab] = useState<'personnel' | 'permissions' | 'payroll' | 'advances' | 'approvals'>(
         (initialTab && (initialTab !== 'payroll' && initialTab !== 'advances' || isSuperAdminOrHR)) 

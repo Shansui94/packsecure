@@ -2463,14 +2463,6 @@ const ProductionControl: React.FC<ProductionControlProps> = ({ user, jobs = [], 
                                             </div>
                                         )}
                                     </div>
-                                                                <p className="text-[8px] text-gray-500 font-mono truncate">By {p.employee_name || 'Operator'}</p>
-                                                            </div>
-                                                        </div>
-                                                    );
-                                                })}
-                                            </div>
-                                        )}
-                                    </div>
                                 </div>
                             ) : (
                                 selectedMachine === 'T2-M01' || selectedMachine === 'J1-M01' ? (
