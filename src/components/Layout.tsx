@@ -93,29 +93,6 @@ const Layout: React.FC<LayoutProps> = ({ children, activePage, setActivePage, us
     useEffect(() => {
         const savedLang = localStorage.getItem('packsecure_lang') || 'zh-CN';
         document.documentElement.lang = savedLang;
-        
-        if (savedLang === 'zh-CN') {
-            clearGoogleTranslateCookies();
-            return;
-        }
-
-        // Load translate elements dynamically for foreign languages
-        loadGoogleTranslateScript();
-
-        let attempts = 0;
-        const interval = setInterval(() => {
-            const selectEl = document.querySelector('.goog-te-combo') as HTMLSelectElement;
-            if (selectEl) {
-                selectEl.value = savedLang;
-                selectEl.dispatchEvent(new Event('change'));
-                clearInterval(interval);
-            }
-            attempts++;
-            if (attempts > 30) {
-                clearInterval(interval);
-            }
-        }, 500);
-        return () => clearInterval(interval);
     }, []);
 
     useEffect(() => {
