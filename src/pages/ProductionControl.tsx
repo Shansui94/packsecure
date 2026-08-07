@@ -2463,6 +2463,15 @@ const ProductionControl: React.FC<ProductionControlProps> = ({ user, jobs = [], 
                                             </div>
                                         )}
                                     </div>
+                                </div>
+                            ) : (
+                                selectedMachine === 'T2-M01' || selectedMachine === 'J1-M01' ? (
+                                    <div className="flex flex-col lg:flex-row gap-6">
+                                        <div className="flex-1 min-w-0">
+                                            <div className="text-center mb-2">
+                                                <span className="text-xs font-bold text-cyan-400 uppercase tracking-widest bg-cyan-500/10 px-3 py-1 rounded-full">Lane 1</span>
+                                            </div>
+                                            <ProductionLane
                                                 laneId="Lane1"
                                                 machineMetadata={machineMetadata}
                                                 user={user}
