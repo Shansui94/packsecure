@@ -165,7 +165,7 @@ export const MachineInspectionModal: React.FC<MachineInspectionModalProps> = ({
                     .from('work_photos')
                     .select('user_note')
                     .eq('category', 'MACHINE_SCREW_FORMULA')
-                    .eq('machine_id', normKey)
+                    .or(`machine_id.eq.${normKey},machine_id.ilike.${normKey}-%`)
                     .order('created_at', { ascending: false })
                     .limit(1);
 
@@ -294,11 +294,12 @@ export const MachineInspectionModal: React.FC<MachineInspectionModalProps> = ({
 
         let cloudLogs: MobileInspectionLog[] = [];
         try {
+            // 支持精准格式 ('T2') 与完整数据库格式 ('T2-M01') 的复合查询
             const { data } = await supabase
                 .from('work_photos')
                 .select('user_note, created_at')
                 .eq('category', 'MACHINE_INSPECTION_LOG')
-                .eq('machine_id', normKey)
+                .or(`machine_id.eq.${normKey},machine_id.ilike.${normKey}-%`)
                 .order('created_at', { ascending: false })
                 .limit(50);
 
@@ -326,38 +327,9 @@ export const MachineInspectionModal: React.FC<MachineInspectionModalProps> = ({
             if (!combinedMap.has(key)) combinedMap.set(key, l);
         });
 
-        let finalLogs = Array.from(combinedMap.values()).sort((a, b) => 
+        const finalLogs = Array.from(combinedMap.values()).sort((a, b) => 
             new Date(b.created_at || 0).getTime() - new Date(a.created_at || 0).getTime()
         );
-
-        // 4. 若该机台尚无任何日志，自动生成首条机台初始化基准日志
-        if (finalLogs.length === 0) {
-            const operatorName = currentUser?.name || currentUser?.email?.split('@')[0] || '现场操作员';
-            const initialLog: MobileInspectionLog = {
-                id: `init_${machineId || 'm'}_${Date.now()}`,
-                log_type: 'material',
-                machine_id: machineId,
-                machine_name: machineName,
-                screw_id: 'Screw_A',
-                screw_name: '螺杆 A',
-                material_name: `配方初始化建档`,
-                new_quantity: 1,
-                reaction_notes: `初始化完成 | 检查人: ${operatorName}`,
-                photo_url: 'https://images.unsplash.com/photo-1581091226825-a6a2a5aee158?w=300&q=80',
-                operator_id: currentUser?.uid,
-                operator_name: operatorName,
-                operator_role: currentUser?.role || 'Operator',
-                factory_id: activeFactoryId,
-                created_at: new Date().toISOString()
-            };
-            finalLogs = [initialLog];
-            try {
-                if (machineId) localStorage.setItem(`machine_inspection_logs_${machineId}`, JSON.stringify(finalLogs));
-                if (machineName) localStorage.setItem(`machine_inspection_logs_${machineName}`, JSON.stringify(finalLogs));
-            } catch (e) {
-                console.error(e);
-            }
-        }
 
         setLogs(finalLogs);
     };
