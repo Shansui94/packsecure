@@ -1567,12 +1567,15 @@ const ProductionControl: React.FC<ProductionControlProps> = ({ user, jobs = [], 
     const fetchMachinePhotos = async () => {
         const targetMachine = (machineMetadata?.id || selectedMachine)?.trim();
         if (!targetMachine) return;
+        const shortKey = targetMachine.split('-')[0].trim();
+
         const { data } = await supabase
             .from('work_photos')
             .select('*')
-            .eq('machine_id', targetMachine)
+            .or(`machine_id.eq.${targetMachine},machine_id.eq.${shortKey},machine_id.ilike.${shortKey}-%`)
             .order('created_at', { ascending: false })
-            .limit(10);
+            .limit(20);
+
         if (data) {
             setMachinePhotos(data);
         }
@@ -1582,11 +1585,8 @@ const ProductionControl: React.FC<ProductionControlProps> = ({ user, jobs = [], 
         if (selectedMachine) {
             fetchMachinePhotos();
             const sub = supabase.channel(`machine-photos-${selectedMachine}`)
-                .on('postgres_changes', { event: '*', schema: 'public', table: 'work_photos' }, (payload) => {
-                    const targetMatch = (machineMetadata?.id || selectedMachine)?.trim();
-                    if (payload.new?.machine_id?.trim() === targetMatch || payload.old?.machine_id?.trim() === targetMatch) {
-                        fetchMachinePhotos();
-                    }
+                .on('postgres_changes', { event: '*', schema: 'public', table: 'work_photos' }, () => {
+                    fetchMachinePhotos();
                 })
                 .subscribe();
             return () => { supabase.removeChannel(sub); };
