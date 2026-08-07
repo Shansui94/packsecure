@@ -2463,52 +2463,6 @@ const ProductionControl: React.FC<ProductionControlProps> = ({ user, jobs = [], 
                                             </div>
                                         )}
                                     </div>
-
-                                    {/* 📷 最近上传的照片网格 - “显示拍照” */}
-                                    <div className="bg-white/5 border border-white/10 rounded-3xl p-6 backdrop-blur-md">
-                                        <h3 className="text-xs font-black tracking-widest text-gray-400 uppercase flex items-center gap-1.5 mb-4">
-                                            <ImageIcon size={14} /> 最近登记照片 / Recent Photos ({machinePhotos.length})
-                                        </h3>
-                                        
-                                        {machinePhotos.length === 0 ? (
-                                            <div className="py-12 text-center text-xs text-gray-500 font-mono">
-                                                No photos uploaded. / 暂无上传照片记录。
-                                            </div>
-                                        ) : (
-                                            <div className="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-4 gap-4">
-                                                {machinePhotos.map((p) => {
-                                                    const isVid = p.photo_url?.toLowerCase().endsWith('.webm') || 
-                                                                  p.photo_url?.toLowerCase().endsWith('.mp4') || 
-                                                                  p.photo_url?.toLowerCase().endsWith('.mov');
-                                                    return (
-                                                        <div 
-                                                            key={p.id} 
-                                                            onClick={() => setSelectedPhoto(p)}
-                                                            className="group relative bg-black/40 border border-white/5 rounded-xl overflow-hidden shadow-md cursor-pointer hover:border-purple-500/30 transition-all duration-300"
-                                                        >
-                                                            <div className="aspect-video w-full bg-black overflow-hidden relative flex items-center justify-center">
-                                                                {isVid ? (
-                                                                    <>
-                                                                        <video 
-                                                                            src={p.photo_url} 
-                                                                            className="w-full h-full object-cover group-hover:scale-105 transition-all duration-300" 
-                                                                            preload="metadata"
-                                                                        />
-                                                                        <div className="absolute inset-0 flex items-center justify-center bg-black/25 group-hover:bg-black/10 transition-colors">
-                                                                            <div className="w-8 h-8 rounded-full bg-purple-600/80 backdrop-blur-sm flex items-center justify-center text-white group-hover:scale-110 transition-transform">
-                                                                                <Video size={16} />
-                                                                            </div>
-                                                                        </div>
-                                                                    </>
-                                                                ) : (
-                                                                    <img src={p.photo_url} alt="" className="w-full h-full object-cover group-hover:scale-105 transition-all duration-300" />
-                                                                )}
-                                                                <div className="absolute bottom-1 right-1 bg-black/60 px-1.5 py-0.5 rounded text-[8px] text-gray-400 font-mono">
-                                                                    {new Date(p.created_at).toLocaleTimeString('en-MY', { hour: '2-digit', minute: '2-digit' })}
-                                                                </div>
-                                                            </div>
-                                                            <div className="p-2 space-y-1">
-                                                                <p className="text-[10px] font-bold text-gray-200 truncate">{p.user_note || p.ai_description || '工作照登记'}</p>
                                                                 <p className="text-[8px] text-gray-500 font-mono truncate">By {p.employee_name || 'Operator'}</p>
                                                             </div>
                                                         </div>
@@ -2576,15 +2530,14 @@ const ProductionControl: React.FC<ProductionControlProps> = ({ user, jobs = [], 
                             )}
                         </div>
 
-                        {/* RIGHT COLUMN: WORK PHOTO LOGGER, TASKS, ACTIVITY LOGS (4 cols) */}
+                        {/* RIGHT COLUMN: WORK PHOTO LOGGER, RECENT PHOTOS, TASKS, ACTIVITY LOGS (4 cols) */}
                         <div className="lg:col-span-4 flex flex-col gap-6">
 
                             {/* 1. WORK PHOTO LOGGER */}
-                            {!isSfOrRecycle && (
-                                <div className="bg-white/5 border border-white/10 rounded-2xl p-4 backdrop-blur-md">
-                                    <h3 className="text-xs font-semibold text-purple-400 flex items-center gap-1.5 mb-3">
-                                        <Camera size={14} /> {t('现场拍照登记')}
-                                    </h3>
+                            <div className="bg-white/5 border border-white/10 rounded-2xl p-4 backdrop-blur-md">
+                                <h3 className="text-xs font-semibold text-purple-400 flex items-center gap-1.5 mb-3">
+                                    <Camera size={14} /> {t('现场拍照登记')}
+                                </h3>
 
                                 {!photoPreview ? (
                                     <div className="flex gap-2">
@@ -2711,7 +2664,58 @@ const ProductionControl: React.FC<ProductionControlProps> = ({ user, jobs = [], 
                                     </div>
                                 )}
                             </div>
-                            )}
+
+                            {/* 📷 2. RECENT PHOTOS GRID (最近登记照片 - 全机台通用跨端呈现) */}
+                            <div className="bg-white/5 border border-white/10 rounded-2xl p-4 backdrop-blur-md">
+                                <h3 className="text-xs font-semibold text-gray-300 uppercase tracking-wider flex items-center gap-1.5 mb-3">
+                                    <ImageIcon size={14} className="text-purple-400" /> 最近登记照片 ({machinePhotos.length})
+                                </h3>
+
+                                {machinePhotos.length === 0 ? (
+                                    <p className="text-center py-4 text-xs text-gray-500 font-mono">暂无现场照片记录</p>
+                                ) : (
+                                    <div className="grid grid-cols-2 gap-2.5 max-h-64 overflow-y-auto custom-scrollbar p-1">
+                                        {machinePhotos.map((p) => {
+                                            const isVid = p.photo_url?.toLowerCase().endsWith('.webm') || 
+                                                          p.photo_url?.toLowerCase().endsWith('.mp4') || 
+                                                          p.photo_url?.toLowerCase().endsWith('.mov');
+                                            return (
+                                                <div 
+                                                    key={p.id} 
+                                                    onClick={() => setSelectedPhoto(p)}
+                                                    className="group relative bg-black/40 border border-white/5 rounded-xl overflow-hidden shadow-md cursor-pointer hover:border-purple-500/40 transition-all duration-300"
+                                                >
+                                                    <div className="aspect-video w-full bg-black overflow-hidden relative flex items-center justify-center">
+                                                        {isVid ? (
+                                                            <>
+                                                                <video 
+                                                                    src={p.photo_url} 
+                                                                    className="w-full h-full object-cover group-hover:scale-105 transition-all duration-300" 
+                                                                    preload="metadata"
+                                                                />
+                                                                <div className="absolute inset-0 flex items-center justify-center bg-black/25 group-hover:bg-black/10 transition-colors">
+                                                                    <div className="w-6 h-6 rounded-full bg-purple-600/80 backdrop-blur-sm flex items-center justify-center text-white group-hover:scale-110 transition-transform">
+                                                                        <Video size={12} />
+                                                                    </div>
+                                                                </div>
+                                                            </>
+                                                        ) : (
+                                                            <img src={p.photo_url} alt="" className="w-full h-full object-cover group-hover:scale-105 transition-all duration-300" />
+                                                        )}
+                                                        <div className="absolute bottom-1 right-1 bg-black/60 px-1.5 py-0.5 rounded text-[8px] text-gray-300 font-mono">
+                                                            {new Date(p.created_at).toLocaleTimeString('en-MY', { hour: '2-digit', minute: '2-digit' })}
+                                                        </div>
+                                                    </div>
+                                                    <div className="p-1.5 space-y-0.5">
+                                                        <p className="text-[10px] font-bold text-gray-200 truncate">{p.user_note || p.ai_description || '现场图片'}</p>
+                                                        <p className="text-[8px] text-gray-400 font-mono truncate">By {p.employee_name || 'Operator'}</p>
+                                                    </div>
+                                                </div>
+                                            );
+                                        })}
+                                    </div>
+                                )}
+                            </div>
                             <input ref={fileInputRef} type="file" accept="image/*,video/*" className="hidden" onChange={handlePhotoSelect} />
 
                             {/* 2. OPERATOR TASKS CHECKLIST */}

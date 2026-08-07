@@ -7,6 +7,7 @@ import {
 import {
     Bar, XAxis, YAxis, Tooltip, ResponsiveContainer, CartesianGrid, ReferenceLine, ComposedChart, Line
 } from 'recharts';
+import { useTranslation } from 'react-i18next';
 
 interface Props {
     user?: any;
@@ -48,6 +49,7 @@ interface AuditSession {
 }
 
 const AuditReport: React.FC<Props> = ({ user }) => {
+    const { t } = useTranslation();
     const [sessions, setSessions] = useState<AuditSession[]>([]);
     const [loading, setLoading] = useState(true);
     const [expandedSession, setExpandedSession] = useState<string | null>(null);
@@ -241,18 +243,18 @@ const AuditReport: React.FC<Props> = ({ user }) => {
                 <div className="mb-8">
                     <h1 className="text-4xl font-black tracking-tighter text-transparent bg-clip-text bg-gradient-to-r from-purple-400 to-indigo-400 mb-2 flex items-center gap-3">
                         <ClipboardCheck className="text-purple-400" size={36} />
-                        Audit Analytics & Verification
+                        {t('盘点分析与核销')}
                     </h1>
-                    <p className="text-gray-400 font-medium">Historical stock adjustments, variance analysis, and managerial review log.</p>
+                    <p className="text-gray-400 font-medium">{t('历史库存盘点调整、差异分析与管理审核日志')}</p>
                 </div>
 
                 {/* Premium Summary Cards */}
                 <div className="grid grid-cols-2 md:grid-cols-4 gap-4 mb-6">
                     {[
-                        { label: 'Total Audits', value: filteredSessions.length, icon: ClipboardCheck, color: 'text-purple-400', bg: 'bg-purple-500/10', border: 'border-purple-500/20 shadow-[0_0_20px_-10px_rgba(168,85,247,0.4)]' },
-                        { label: 'SKUs Checked', value: filteredSessions.reduce((s, x) => s + x.items.length, 0), icon: PackageSearch, color: 'text-indigo-400', bg: 'bg-indigo-500/10', border: 'border-indigo-500/20 shadow-[0_0_20px_-10px_rgba(99,102,241,0.4)]' },
-                        { label: 'Total Net Variance', value: `${totalNetVariance > 0 ? '+' : ''}${totalNetVariance}`, icon: Activity, color: totalNetVariance >= 0 ? 'text-green-400' : 'text-red-400', bg: totalNetVariance >= 0 ? 'bg-green-500/10' : 'bg-red-500/10', border: totalNetVariance >= 0 ? 'border-green-500/20 shadow-[0_0_20px_-10px_rgba(34,197,94,0.4)]' : 'border-red-500/20 shadow-[0_0_20px_-10px_rgba(239,68,68,0.4)]' },
-                        { label: 'Pending Reviews', value: filteredSessions.filter(s => !s.reviewed_by).length, icon: ShieldCheck, color: 'text-amber-400', bg: 'bg-amber-500/10', border: 'border-amber-500/20 shadow-[0_0_20px_-10px_rgba(251,191,36,0.4)]' },
+                        { label: t('总盘点次数'), value: filteredSessions.length, icon: ClipboardCheck, color: 'text-purple-400', bg: 'bg-purple-500/10', border: 'border-purple-500/20 shadow-[0_0_20px_-10px_rgba(168,85,247,0.4)]' },
+                        { label: t('已核对 SKU 数'), value: filteredSessions.reduce((s, x) => s + x.items.length, 0), icon: PackageSearch, color: 'text-indigo-400', bg: 'bg-indigo-500/10', border: 'border-indigo-500/20 shadow-[0_0_20px_-10px_rgba(99,102,241,0.4)]' },
+                        { label: t('总净差异'), value: `${totalNetVariance > 0 ? '+' : ''}${totalNetVariance}`, icon: Activity, color: totalNetVariance >= 0 ? 'text-green-400' : 'text-red-400', bg: totalNetVariance >= 0 ? 'bg-green-500/10' : 'bg-red-500/10', border: totalNetVariance >= 0 ? 'border-green-500/20 shadow-[0_0_20px_-10px_rgba(34,197,94,0.4)]' : 'border-red-500/20 shadow-[0_0_20px_-10px_rgba(239,68,68,0.4)]' },
+                        { label: t('待审核数'), value: filteredSessions.filter(s => !s.reviewed_by).length, icon: ShieldCheck, color: 'text-amber-400', bg: 'bg-amber-500/10', border: 'border-amber-500/20 shadow-[0_0_20px_-10px_rgba(251,191,36,0.4)]' },
                     ].map(card => (
                         <div key={card.label} className={`${card.bg} ${card.border} backdrop-blur-xl border rounded-3xl p-6 flex flex-col gap-3 group relative overflow-hidden transition-all hover:scale-[1.02]`}>
                             <div className="absolute top-0 right-0 w-32 h-32 bg-white/5 rounded-full blur-3xl -translate-y-1/2 translate-x-1/2 pointer-events-none group-hover:bg-white/10 transition-colors" />
@@ -268,41 +270,41 @@ const AuditReport: React.FC<Props> = ({ user }) => {
                 {/* Filters */}
                 <div className="bg-[#0d0d12]/80 backdrop-blur-xl border border-white/10 shadow-2xl rounded-3xl p-5 mb-8 flex flex-wrap gap-4 items-end relative z-20">
                     <div className="flex-1 min-w-48">
-                        <label className="block text-[10px] text-gray-400 font-bold uppercase tracking-widest mb-1.5 ml-1">Search Database</label>
+                        <label className="block text-[10px] text-gray-400 font-bold uppercase tracking-widest mb-1.5 ml-1">{t('搜索数据库')}</label>
                         <div className="relative">
                             <Search size={16} className="absolute left-4 top-1/2 -translate-y-1/2 text-gray-500" />
                             <input
                                 type="text"
                                 value={search}
                                 onChange={e => setSearch(e.target.value)}
-                                placeholder="Ref, Location, SKU, Auditor..."
+                                placeholder={t('单号、库位、SKU、盘点员...')}
                                 className="w-full bg-black/50 border border-white/10 rounded-2xl pl-12 pr-4 py-3 text-sm text-white placeholder-gray-600 focus:outline-none focus:border-purple-500/50 focus:ring-1 focus:ring-purple-500/50 transition-all font-medium"
                             />
                         </div>
                     </div>
                     <div className="min-w-40">
-                        <label className="block text-[10px] text-gray-400 font-bold uppercase tracking-widest mb-1.5 ml-1">Location Filter</label>
+                        <label className="block text-[10px] text-gray-400 font-bold uppercase tracking-widest mb-1.5 ml-1">{t('库位筛选')}</label>
                         <select
                             value={locFilter}
                             onChange={e => setLocFilter(e.target.value)}
                             className="w-full bg-black/50 border border-white/10 rounded-2xl px-4 py-3 text-sm font-bold text-white focus:outline-none focus:border-purple-500/50 transition-all appearance-none cursor-pointer"
                         >
-                            <option value="">All Locations</option>
+                            <option value="">{t('所有库位')}</option>
                             {locations.map(l => <option key={l} value={l}>{l}</option>)}
                         </select>
                     </div>
                     <div className="min-w-36">
-                        <label className="block text-[10px] text-gray-400 font-bold uppercase tracking-widest mb-1.5 ml-1">Date From</label>
+                        <label className="block text-[10px] text-gray-400 font-bold uppercase tracking-widest mb-1.5 ml-1">{t('起始日期')}</label>
                         <input type="date" value={dateFrom} onChange={e => setDateFrom(e.target.value)}
                             className="w-full bg-black/50 border border-white/10 rounded-2xl px-4 py-3 text-sm font-bold text-white focus:outline-none focus:border-purple-500/50 transition-all [color-scheme:dark]" />
                     </div>
                     <div className="min-w-36">
-                        <label className="block text-[10px] text-gray-400 font-bold uppercase tracking-widest mb-1.5 ml-1">Date To</label>
+                        <label className="block text-[10px] text-gray-400 font-bold uppercase tracking-widest mb-1.5 ml-1">{t('截止日期')}</label>
                         <input type="date" value={dateTo} onChange={e => setDateTo(e.target.value)}
                             className="w-full bg-black/50 border border-white/10 rounded-2xl px-4 py-3 text-sm font-bold text-white focus:outline-none focus:border-purple-500/50 transition-all [color-scheme:dark]" />
                     </div>
                     <button onClick={fetchAudits} className="flex items-center justify-center gap-2 px-6 py-3 bg-purple-600 hover:bg-purple-500 border border-purple-500/50 shadow-lg shadow-purple-500/20 rounded-2xl text-sm font-bold text-white transition-all active:scale-95">
-                        <RefreshCw size={16} /> Fetch
+                        <RefreshCw size={16} /> {t('查询')}
                     </button>
                 </div>
 
@@ -315,9 +317,9 @@ const AuditReport: React.FC<Props> = ({ user }) => {
                             <div>
                                 <h2 className="text-xl font-black text-white flex items-center gap-2">
                                     <Activity className="text-blue-400" size={20} />
-                                    Daily Analytics & Accuracy
+                                    {t('每日分析与准确率')}
                                 </h2>
-                                <p className="text-xs font-bold text-gray-500 mt-1">Multi-dimensional view of Surpluses, Deficits, and Perfect Match Ratio (Accuracy %).</p>
+                                <p className="text-xs font-bold text-gray-500 mt-1">{t('盘盈、盘亏与完全匹配率多维透视')}</p>
                             </div>
                             <div className="flex gap-2 text-[10px] font-black uppercase tracking-widest">
                                 <span className="text-green-400 bg-green-500/10 px-2 py-1 rounded">Surplus</span>

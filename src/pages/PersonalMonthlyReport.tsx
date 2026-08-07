@@ -3,7 +3,7 @@ import { createPortal } from 'react-dom';
 import {
     CalendarDays, Award, AlertTriangle, Camera,
     DollarSign, Clock, ChevronLeft, ChevronRight, Activity, Users, Truck, X,
-    FileSpreadsheet, Printer
+    FileSpreadsheet, Printer, FileText, CheckCircle2, Percent, Layers
 } from 'lucide-react';
 import { supabase } from '../services/supabase';
 import * as XLSX from 'xlsx';
@@ -23,7 +23,9 @@ interface DailyMetrics {
     isWeekend: boolean;
     isSunday: boolean;
     hasAttendance: boolean;
+    hoursWorked: number;
     outputQty: number;
+    rejectQty: number;
     alarmCount: number;
     tripCount: number;
     tripEarnings: number;
@@ -43,14 +45,20 @@ interface DailyMetrics {
         trip_drop_count?: number;
         delivery_address?: string | null;
         earnings?: number;
+        deadline?: string | null;
+        pod_timestamp?: string | null;
     }[];
     photoCount: number;
     photos: any[];
     leaveStatus: string | null;
+    leaveType: string | null;
+    leaveReason: string | null;
     shiftStart: string | null;
     shiftEnd: string | null;
     notes: string | null;
     machinesOperated: string[];
+    jobDetails: { jobId: string; sku?: string; output: number; reject: number }[];
+    approvedClaims: number;
 }
 
 const PersonalMonthlyReport: React.FC<Props> = ({ user }) => {
@@ -94,6 +102,7 @@ const PersonalMonthlyReport: React.FC<Props> = ({ user }) => {
     const [leaves, setLeaves] = useState<any[]>([]);
     const [plannedMachines, setPlannedMachines] = useState<any[]>([]);
     const [payroll, setPayroll] = useState<any | null>(null);
+    const [claims, setClaims] = useState<any[]>([]);
     const [deliveries, setDeliveries] = useState<any[]>([]);
     const [deliveryRates, setDeliveryRates] = useState<any[]>([]);
     const [driverLorryPlate, setDriverLorryPlate] = useState<string>('N/A');
@@ -106,6 +115,7 @@ const PersonalMonthlyReport: React.FC<Props> = ({ user }) => {
     const [selectedTrip, setSelectedTrip] = useState<any | null>(null);
     const [selectedPhotoDay, setSelectedPhotoDay] = useState<any | null>(null);
     const [selectedAttendanceDay, setSelectedAttendanceDay] = useState<any | null>(null);
+    const [showPayrollModal, setShowPayrollModal] = useState<boolean>(false);
     const [currentUserRole, setCurrentUserRole] = useState<string>('');
 
     const isDriver = viewedProfile?.role === 'Driver' || (!viewedProfile && user?.role === 'Driver');
@@ -270,7 +280,32 @@ const PersonalMonthlyReport: React.FC<Props> = ({ user }) => {
                 attendanceData = data || [];
             }
             setAttendanceShifts(attendanceData);
-            setPlannedMachines([]);
+
+            // Fetch Planned Schedules / Machines
+            try {
+                const { data: schedData } = await supabase
+                    .from('operator_schedules')
+                    .select('*')
+                    .gte('shift_date', firstDay)
+                    .lte('shift_date', lastDayStr);
+
+                if (schedData && schedData.length > 0) {
+                    const myScheds = schedData.filter((s: any) => 
+                        (activeEmpId && s.operator_id === activeEmpId) || s.employee_id === selectedEmployeeId || s.operator_id === selectedEmployeeId
+                    );
+                    setPlannedMachines(myScheds);
+                } else {
+                    const { data: mSchedData } = await supabase
+                        .from('machine_schedule')
+                        .select('*')
+                        .gte('scheduled_date', firstDay)
+                        .lte('scheduled_date', lastDayStr);
+                    setPlannedMachines(mSchedData || []);
+                }
+            } catch (sErr) {
+                console.warn("Schedule query fallback:", sErr);
+                setPlannedMachines([]);
+            }
 
             // B. Fetch Production Logs based on Time-matching & Explicit ID
             let prodData: any[] = [];
@@ -286,7 +321,7 @@ const PersonalMonthlyReport: React.FC<Props> = ({ user }) => {
                     while (hasMore) {
                         const { data } = await supabase
                             .from('production_logs_v2')
-                            .select('log_id, created_at, output_qty, reject_qty, machine_id, job_id, operator_id')
+                            .select('log_id, created_at, output_qty, reject_qty, machine_id, job_id, operator_id, sku')
                             .in('machine_id', machinesTouched)
                             .gte('created_at', startDateTs)
                             .lte('created_at', endDateTs)
@@ -314,7 +349,7 @@ const PersonalMonthlyReport: React.FC<Props> = ({ user }) => {
                     while (hasMoreExplicit) {
                         const { data } = await supabase
                             .from('production_logs_v2')
-                            .select('log_id, created_at, output_qty, reject_qty, machine_id, job_id, operator_id')
+                            .select('log_id, created_at, output_qty, reject_qty, machine_id, job_id, operator_id, sku')
                             .or(orStr)
                             .gte('created_at', startDateTs)
                             .lte('created_at', endDateTs)
@@ -384,7 +419,7 @@ const PersonalMonthlyReport: React.FC<Props> = ({ user }) => {
             // E. Leaves
             const { data: leaveData } = await supabase
                 .from('employee_leave')
-                .select('start_date, end_date, status, reason')
+                .select('start_date, end_date, status, reason, leave_type, type')
                 .eq('employee_id', selectedEmployeeId)
                 .eq('status', 'Approved')
                 .lte('start_date', lastDayStr) 
@@ -403,6 +438,24 @@ const PersonalMonthlyReport: React.FC<Props> = ({ user }) => {
                 setPayroll(payrollData || null);
             } else {
                 setPayroll(null);
+            }
+
+            // H. Claims
+            try {
+                const { data: claimsData } = await supabase
+                    .from('claims')
+                    .select('*')
+                    .or(`userId.eq.${selectedEmployeeId},userId.eq.${dbUserId || ''}`);
+
+                const monthlyClaims = (claimsData || []).filter((c: any) => {
+                    const cDate = c.date || (c.timestamp ? c.timestamp.split('T')[0] : (c.created_at ? c.created_at.split('T')[0] : null));
+                    const isAppr = c.status === 'Approved' || c.status === 'approved';
+                    return cDate && cDate >= firstDay && cDate <= lastDayStr && isAppr;
+                });
+                setClaims(monthlyClaims);
+            } catch (cErr) {
+                console.warn("Claims query failed:", cErr);
+                setClaims([]);
             }
 
             // G. Deliveries (For Drivers)
@@ -557,58 +610,91 @@ const PersonalMonthlyReport: React.FC<Props> = ({ user }) => {
     };
 
     const handleDownloadExcel = () => {
-        // Collect all tripDetails from dailyMetrics
-        const allTrips: any[] = [];
-        dailyMetrics.forEach(day => {
-            if (day.tripDetails && day.tripDetails.length > 0) {
-                day.tripDetails.forEach(trip => {
-                    allTrips.push({
-                        date: day.dateStr,
-                        plateNumber: driverLorryPlate,
-                        origin: trip.trip_origin || 'TAIPING',
-                        destinations: trip.delivery_address || 'Unknown',
-                        tripCategory: trip.zone || 'Unknown',
-                        totalDrops: trip.trip_drop_count || 1,
-                        price: trip.earnings || 0
+        if (isDriver) {
+            // Collect all tripDetails from dailyMetrics
+            const allTrips: any[] = [];
+            dailyMetrics.forEach(day => {
+                if (day.tripDetails && day.tripDetails.length > 0) {
+                    day.tripDetails.forEach(trip => {
+                        allTrips.push({
+                            date: day.dateStr,
+                            plateNumber: driverLorryPlate,
+                            origin: trip.trip_origin || 'TAIPING',
+                            destinations: trip.delivery_address || 'Unknown',
+                            tripCategory: trip.zone || 'Unknown',
+                            totalDrops: trip.trip_drop_count || 1,
+                            price: trip.earnings || 0
+                        });
                     });
-                });
+                }
+            });
+
+            if (allTrips.length === 0) {
+                alert("Tiada data perjalanan untuk dieksport. / No trip data to export.");
+                return;
             }
-        });
 
-        if (allTrips.length === 0) {
-            alert("Tiada data perjalanan untuk dieksport. / No trip data to export.");
-            return;
+            // Format data for sheet
+            const excelRows = allTrips.map(t => ({
+                'Tarikh / Date': t.date,
+                'No. Pendaftaran Lorry / Lorry Plate Number': t.plateNumber,
+                'Tempat Asal / Origin': t.origin,
+                'Destinasi / Destinations': t.destinations,
+                'Kategori Trip / Trip Category': t.tripCategory,
+                'Jumlah Drops / Total Drops': t.totalDrops,
+                'Harga / Price (RM)': t.price
+            }));
+
+            const ws = XLSX.utils.json_to_sheet(excelRows);
+            const wb = XLSX.utils.book_new();
+            XLSX.utils.book_append_sheet(wb, ws, 'Trip Logs');
+
+            // Set column widths for better layout
+            ws['!cols'] = [
+                { wch: 15 }, // Date
+                { wch: 25 }, // Lorry Plate Number
+                { wch: 20 }, // Origin
+                { wch: 35 }, // Destinations
+                { wch: 20 }, // Trip Category
+                { wch: 15 }, // Total Drops
+                { wch: 15 }  // Price
+            ];
+
+            const driverName = viewedProfile?.name || user?.name || 'Driver';
+            const fileName = `Laporan_Trip_Pemandu_${driverName.replace(/\s+/g, '_')}_${selectedYear}_${String(selectedMonth).padStart(2, '0')}.xlsx`;
+            XLSX.writeFile(wb, fileName);
+        } else {
+            // Export Operator / General Staff Monthly Log
+            const excelRows = dailyMetrics.map(day => ({
+                'Tarikh / Date': day.dateStr,
+                'Hari / Day': new Date(day.dateStr.replace(/-/g, '/')).toLocaleDateString('ms-MY', { weekday: 'long' }),
+                'Status Kehadiran / Attendance': day.leaveStatus ? `Cuti / Leave (${day.leaveType || ''})` : (day.hasAttendance ? 'Hadir / Present' : 'Tiada Log / No Log'),
+                'Masa Masuk / Clock In': day.shiftStart || '-',
+                'Masa Keluar / Clock Out': day.shiftEnd || '-',
+                'Jam Kerja / Hours Worked': day.hoursWorked.toFixed(1),
+                'Jumlah Output / Total Output': day.outputQty,
+                'Jumlah Defect / Reject Qty': day.rejectQty,
+                'Mesin Dilesenkan / Machines': day.machinesOperated.join(', ') || '-',
+                'Produk SKU / Job Orders': day.jobDetails.map(j => `${j.jobId} (${j.sku || 'SKU'}: ${j.output})`).join('; ') || '-',
+                'Gambar Kerja / Photo Count': day.photoCount,
+                'Tuntutan / Approved Claims (RM)': day.approvedClaims.toFixed(2),
+                'Nota / Remarks': day.notes || ''
+            }));
+
+            const ws = XLSX.utils.json_to_sheet(excelRows);
+            const wb = XLSX.utils.book_new();
+            XLSX.utils.book_append_sheet(wb, ws, 'Operator Monthly Report');
+
+            ws['!cols'] = [
+                { wch: 14 }, { wch: 14 }, { wch: 22 }, { wch: 15 }, { wch: 15 },
+                { wch: 18 }, { wch: 18 }, { wch: 18 }, { wch: 20 }, { wch: 35 },
+                { wch: 16 }, { wch: 22 }, { wch: 25 }
+            ];
+
+            const empName = viewedProfile?.name || user?.name || 'Employee';
+            const fileName = `Laporan_Bulanan_${empName.replace(/\s+/g, '_')}_${selectedYear}_${String(selectedMonth).padStart(2, '0')}.xlsx`;
+            XLSX.writeFile(wb, fileName);
         }
-
-        // Format data for sheet
-        const excelRows = allTrips.map(t => ({
-            'Tarikh / Date': t.date,
-            'No. Pendaftaran Lorry / Lorry Plate Number': t.plateNumber,
-            'Tempat Asal / Origin': t.origin,
-            'Destinasi / Destinations': t.destinations,
-            'Kategori Trip / Trip Category': t.tripCategory,
-            'Jumlah Drops / Total Drops': t.totalDrops,
-            'Harga / Price (RM)': t.price
-        }));
-
-        const ws = XLSX.utils.json_to_sheet(excelRows);
-        const wb = XLSX.utils.book_new();
-        XLSX.utils.book_append_sheet(wb, ws, 'Trip Logs');
-
-        // Set column widths for better layout
-        ws['!cols'] = [
-            { wch: 15 }, // Date
-            { wch: 25 }, // Lorry Plate Number
-            { wch: 20 }, // Origin
-            { wch: 35 }, // Destinations
-            { wch: 20 }, // Trip Category
-            { wch: 15 }, // Total Drops
-            { wch: 15 }  // Price
-        ];
-
-        const driverName = viewedProfile?.name || user?.name || 'Driver';
-        const fileName = `Laporan_Trip_Pemandu_${driverName.replace(/\s+/g, '_')}_${selectedYear}_${String(selectedMonth).padStart(2, '0')}.xlsx`;
-        XLSX.writeFile(wb, fileName);
     };
 
     const handlePrintSingleDriver = () => {
@@ -845,7 +931,21 @@ const PersonalMonthlyReport: React.FC<Props> = ({ user }) => {
                 return matchDate(p.created_at, dateStr);
             });
             const outputQty = dayProd.reduce((sum, p) => sum + (Number(p.output_qty) || 0), 0);
+            const rejectQty = dayProd.reduce((sum, p) => sum + (Number(p.reject_qty) || 0), 0);
             const alarmCount = dayProd.reduce((sum, p) => sum + (Number(p.alarm_count) || Number(p.reject_qty) || 0), 0);
+
+            // Job Details
+            const jobMap = new Map();
+            dayProd.forEach(p => {
+                const jKey = p.job_id || p.sku || 'PROD';
+                if (!jobMap.has(jKey)) {
+                    jobMap.set(jKey, { jobId: p.job_id || 'PROD', sku: p.sku || null, output: 0, reject: 0 });
+                }
+                const item = jobMap.get(jKey);
+                item.output += Number(p.output_qty) || 0;
+                item.reject += Number(p.reject_qty) || 0;
+            });
+            const jobDetails = Array.from(jobMap.values());
 
             // Photos
             const dayPhotos = [...photoLogs.filter(p => matchDate(p.created_at, dateStr))];
@@ -883,9 +983,20 @@ const PersonalMonthlyReport: React.FC<Props> = ({ user }) => {
                 });
             }
 
-            // Shift
+            // Shift & Working Hours
             const dayShift = attendanceShifts.find(s => s.date === dateStr);
-            const dayPlans = plannedMachines.filter(s => s.shift_date === dateStr);
+            let hoursWorked = 0;
+            if (dayShift) {
+                if (dayShift.hours_worked && Number(dayShift.hours_worked) > 0) {
+                    hoursWorked = Number(dayShift.hours_worked);
+                } else if (dayShift.clock_in && dayShift.clock_out) {
+                    const inT = new Date(dayShift.clock_in).getTime();
+                    const outT = new Date(dayShift.clock_out).getTime();
+                    if (outT > inT) hoursWorked = Math.round(((outT - inT) / 3600000) * 10) / 10;
+                }
+            }
+
+            const dayPlans = plannedMachines.filter(s => s.shift_date === dateStr || s.scheduled_date === dateStr);
 
             const machinesOperated = Array.from(new Set([
                 ...dayPlans.map(p => p.machine_id),
@@ -898,6 +1009,15 @@ const PersonalMonthlyReport: React.FC<Props> = ({ user }) => {
 
             // Leave
             const dayLeave = leaves.find(l => dateStr >= l.start_date && dateStr <= l.end_date);
+            const leaveType = dayLeave ? (dayLeave.leave_type || dayLeave.type || 'Leave') : null;
+            const leaveReason = dayLeave ? dayLeave.reason : null;
+
+            // Claims
+            const dayClaims = claims.filter(c => {
+                const cDate = c.date || (c.timestamp ? c.timestamp.split('T')[0] : (c.created_at ? c.created_at.split('T')[0] : null));
+                return cDate === dateStr;
+            });
+            const approvedClaims = dayClaims.reduce((sum, c) => sum + (Number(c.amount) || 0), 0);
 
             const tripCount = dayDeliveries.length;
             const tripDetails: any[] = [];
@@ -943,6 +1063,8 @@ const PersonalMonthlyReport: React.FC<Props> = ({ user }) => {
                     trip_drop_count: t.trip_drop_count || 1,
                     delivery_address: t.delivery_address || null,
                     earnings: tEarnings,
+                    deadline: t.deadline || null,
+                    pod_timestamp: t.pod_timestamp || null,
                     displayString: `${originRaw} ➞ ${displayZone} (${drops} Drop${drops > 1 ? 's' : ''})`
                 });
             });
@@ -953,10 +1075,12 @@ const PersonalMonthlyReport: React.FC<Props> = ({ user }) => {
                 isWeekend,
                 isSunday,
                 hasAttendance: !!dayShift,
+                hoursWorked,
                 shiftStart: (dayShift && dayShift.clock_in) ? new Date(dayShift.clock_in).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' }) : null,
                 shiftEnd: (dayShift && dayShift.clock_out) ? new Date(dayShift.clock_out).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' }) : null,
                 notes: dayShift?.notes || null,
                 outputQty,
+                rejectQty,
                 alarmCount,
                 tripCount,
                 tripEarnings,
@@ -964,19 +1088,32 @@ const PersonalMonthlyReport: React.FC<Props> = ({ user }) => {
                 photoCount: dayPhotos.length,
                 photos: dayPhotos,
                 leaveStatus: dayLeave ? dayLeave.status : null,
-                machinesOperated
+                leaveType,
+                leaveReason,
+                machinesOperated,
+                jobDetails,
+                approvedClaims
             });
         }
         return matrix;
-    }, [productionLogs, attendanceShifts, photoLogs, leaves, plannedMachines, deliveries, deliveryRates, daysInMonth, selectedYear, selectedMonth, isDriver]);
+    }, [productionLogs, attendanceShifts, photoLogs, leaves, plannedMachines, claims, deliveries, deliveryRates, daysInMonth, selectedYear, selectedMonth, isDriver]);
 
     // Summary Aggregates
     const totalOutput = dailyMetrics.reduce((sum, d) => sum + d.outputQty, 0);
+    const totalRejects = dailyMetrics.reduce((sum, d) => sum + d.rejectQty, 0);
+    const yieldRate = (totalOutput + totalRejects) > 0 ? (((totalOutput) / (totalOutput + totalRejects)) * 100).toFixed(1) : '100.0';
     const totalAlarms = dailyMetrics.reduce((sum, d) => sum + d.alarmCount, 0);
     const totalTrips = dailyMetrics.reduce((sum, d) => sum + d.tripCount, 0);
     const presentDays = dailyMetrics.filter(d => d.hasAttendance).length;
     const leaveDays = dailyMetrics.filter(d => d.leaveStatus).length;
     const totalPhotos = dailyMetrics.reduce((sum, d) => sum + d.photoCount, 0);
+    const totalHoursWorked = dailyMetrics.reduce((sum, d) => sum + d.hoursWorked, 0);
+    const otHours = dailyMetrics.reduce((sum, d) => sum + (d.hasAttendance ? Math.max(0, d.hoursWorked - 8) : 0), 0);
+    const totalClaimsAmount = claims.reduce((sum, c) => sum + (Number(c.amount) || 0), 0);
+    const riskPhotoCount = dailyMetrics.reduce((sum, d) => sum + d.photos.filter((p: any) => p.risk_flag).length, 0);
+    const totalDropCount = dailyMetrics.reduce((sum, d) => sum + d.tripDetails.reduce((ts: number, t: any) => ts + (t.trip_drop_count || 1), 0), 0);
+    const onTimeTripsCount = dailyMetrics.reduce((sum, d) => sum + d.tripDetails.filter((t: any) => !t.deadline || !t.pod_timestamp || t.pod_timestamp.split('T')[0] <= t.deadline).length, 0);
+    const onTimeRate = totalTrips > 0 ? Math.round((onTimeTripsCount / totalTrips) * 100) : 100;
 
     const canSelectEmployee = employeesList.length > 0;
     return (
@@ -1164,7 +1301,8 @@ const PersonalMonthlyReport: React.FC<Props> = ({ user }) => {
                                 <div>
                                     <p className="text-[10px] text-emerald-400 uppercase tracking-widest font-black mb-1">Kehadiran / Attendance</p>
                                     <h3 className="text-3xl font-black text-white">{presentDays} <span className="text-xs font-normal text-gray-500">hari / days</span></h3>
-                                    <p className="text-[10px] text-gray-400 mt-2">{leaveDays} Cuti diluluskan / Approved leaves</p>
+                                    <p className="text-[10px] text-emerald-400/90 font-mono mt-1.5 font-bold">{totalHoursWorked.toFixed(1)} hrs total ({otHours.toFixed(1)}h OT)</p>
+                                    <p className="text-[10px] text-gray-400 mt-1">{leaveDays} Cuti diluluskan / Approved leaves</p>
                                 </div>
                                 <div className="p-3 bg-emerald-500/10 rounded-2xl text-emerald-400 border border-emerald-500/20">
                                     <CalendarDays size={20} />
@@ -1181,7 +1319,10 @@ const PersonalMonthlyReport: React.FC<Props> = ({ user }) => {
                                         {isDriver ? 'Penghantaran / Deliveries' : 'Jumlah Output / Total Output'}
                                     </p>
                                     <h3 className="text-3xl font-black text-white">{isDriver ? totalTrips : totalOutput.toLocaleString()}</h3>
-                                    <p className="text-[10px] text-gray-400 mt-2">{isDriver ? 'Selesai / Completed trips' : 'Unit dikesan / Units produced'}</p>
+                                    <p className="text-[10px] text-gray-400 mt-1">{isDriver ? `${totalDropCount} Total Drops` : `Unit Dihasilkan / Produced`}</p>
+                                    {!isDriver && (
+                                        <p className="text-[10px] text-blue-400 font-mono mt-1 font-bold">Yield: {yieldRate}% ({totalRejects} Reject)</p>
+                                    )}
                                 </div>
                                 <div className={`p-3 rounded-2xl border ${isDriver ? 'bg-amber-500/10 text-amber-500 border-amber-500/20' : 'bg-blue-500/10 text-blue-400 border-blue-500/20'}`}>
                                     {isDriver ? <Truck size={20} /> : <Award size={20} />}
@@ -1195,12 +1336,12 @@ const PersonalMonthlyReport: React.FC<Props> = ({ user }) => {
                             <div className="flex items-start justify-between">
                                 <div>
                                     <p className={`text-[10px] uppercase tracking-widest font-black mb-1 ${isDriver ? 'text-cyan-400' : 'text-red-400'}`}>
-                                        {isDriver ? 'Destinasi / Zones' : 'Anomali / Anomalies'}
+                                        {isDriver ? 'Destinasi & Performance' : 'Anomali & Defect'}
                                     </p>
                                     <h3 className="text-3xl font-black text-white">
-                                        {isDriver ? Array.from(new Set(deliveries.map(d => d.zone).filter(Boolean))).length : totalAlarms}
+                                        {isDriver ? Array.from(new Set(deliveries.map(d => d.zone).filter(Boolean))).length : (totalAlarms + totalRejects)}
                                     </h3>
-                                    <p className="text-[10px] text-gray-400 mt-2">{isDriver ? 'Zon dihantar / Regions covered' : 'Ralat & amaran / Alarms & rejects'}</p>
+                                    <p className="text-[10px] text-gray-400 mt-1">{isDriver ? `On-time Delivery: ${onTimeRate}%` : `Alarms: ${totalAlarms} | Defect: ${totalRejects}`}</p>
                                 </div>
                                 <div className={`p-3 rounded-2xl border ${isDriver ? 'bg-cyan-500/10 text-cyan-400 border-cyan-500/20' : 'bg-red-500/10 text-red-500 border-red-500/20'}`}>
                                     {isDriver ? <Truck size={20} /> : <AlertTriangle size={20} />}
@@ -1214,8 +1355,8 @@ const PersonalMonthlyReport: React.FC<Props> = ({ user }) => {
                             <div className="flex items-start justify-between">
                                 <div>
                                     <p className="text-[10px] text-violet-400 uppercase tracking-widest font-black mb-1">Rekod Bergambar / Photo Logs</p>
-                                    <h3 className="text-3xl font-black text-white">{totalPhotos} <span className="text-xs font-normal text-gray-500">fail / logs</span></h3>
-                                    <p className="text-[10px] text-gray-400 mt-2">Gambar tugasan / Visual job proofs</p>
+                                    <h3 className="text-3xl font-black text-white">{totalPhotos} <span className="text-xs font-normal text-gray-500">fail</span></h3>
+                                    <p className="text-[10px] text-gray-400 mt-1">{riskPhotoCount > 0 ? <span className="text-red-400 font-bold">⚠️ {riskPhotoCount} Risiko / Risk</span> : 'Gambar Tugasan / Proofs'}</p>
                                 </div>
                                 <div className="p-3 bg-violet-500/10 rounded-2xl text-violet-400 border border-violet-500/20">
                                     <Camera size={20} />
@@ -1224,24 +1365,33 @@ const PersonalMonthlyReport: React.FC<Props> = ({ user }) => {
                         </div>
 
                         {/* Payroll Estimate Card */}
-                        <div className="bg-gradient-to-br from-green-950/30 to-black border border-green-500/20 rounded-3xl p-5 shadow-2xl relative overflow-hidden group hover:border-green-500/40 transition-all duration-300">
+                        <div 
+                            onClick={() => setShowPayrollModal(true)}
+                            className="bg-gradient-to-br from-green-950/30 to-black border border-green-500/20 rounded-3xl p-5 shadow-2xl relative overflow-hidden group hover:border-green-500/40 transition-all duration-300 cursor-pointer"
+                        >
                             <div className="absolute -left-4 -bottom-4 w-32 h-32 bg-green-500/10 rounded-full blur-3xl"></div>
                             <div className="flex items-start justify-between relative z-10">
                                 <div>
-                                    <p className="text-[10px] text-green-400 uppercase tracking-widest font-black mb-1">Gaji Diproses / Processed Wallet</p>
+                                    <p className="text-[10px] text-green-400 uppercase tracking-widest font-black mb-1 flex items-center gap-1">
+                                        Gaji / Wallet <span className="text-[8px] bg-green-500/20 px-1 py-0.5 rounded border border-green-500/30 text-green-300">Detail 🔍</span>
+                                    </p>
                                     {payroll ? (
                                         <>
                                             <h3 className="text-2xl font-black text-green-300">RM {Number(payroll.net_salary).toLocaleString('en-MY', { minimumFractionDigits: 2 })}</h3>
-                                            <p className="text-[9px] text-green-500/80 mt-2 uppercase font-bold tracking-wider">Telah Disahkan HR / Confirmed by HR</p>
+                                            {totalClaimsAmount > 0 && (
+                                                <p className="text-[9px] text-teal-400 mt-1 font-bold">+ Claims: RM {totalClaimsAmount.toFixed(2)}</p>
+                                            )}
+                                            <p className="text-[9px] text-green-500/80 mt-1 uppercase font-bold tracking-wider">Telah Disahkan / Confirmed</p>
                                         </>
                                     ) : (
                                         <>
-                                            <h3 className="text-lg font-black text-gray-400 italic mt-2">Belum Dikira / Pending</h3>
-                                            <p className="text-[9px] text-gray-500 mt-2 uppercase">Menunggu akhir bulan / Subject to HR review</p>
+                                            <h3 className="text-lg font-black text-gray-400 italic mt-1">RM {totalClaimsAmount > 0 ? totalClaimsAmount.toFixed(2) : '0.00'}</h3>
+                                            <p className="text-[9px] text-teal-400 font-bold mt-1">+ Claims: RM {totalClaimsAmount.toFixed(2)}</p>
+                                            <p className="text-[9px] text-gray-500 mt-1 uppercase">Klik perincian / Breakdown 🔍</p>
                                         </>
                                     )}
                                 </div>
-                                <div className="p-3 bg-green-500/10 rounded-2xl text-green-400 border border-green-500/30">
+                                <div className="p-3 bg-green-500/10 rounded-2xl text-green-400 border border-green-500/30 group-hover:scale-110 transition-transform">
                                     <DollarSign size={20} />
                                 </div>
                             </div>
@@ -1506,9 +1656,16 @@ const PersonalMonthlyReport: React.FC<Props> = ({ user }) => {
                                             </td>
                                             <td className="px-5 py-4 whitespace-nowrap">
                                                 {day.leaveStatus ? (
-                                                    <span className="inline-flex items-center px-2 py-1 rounded bg-amber-500/10 border border-amber-500/20 text-amber-500 text-[10px] font-black uppercase tracking-wider animate-pulse">
-                                                        Cuti / Leave ({day.leaveStatus === 'Approved' ? 'Lulus' : day.leaveStatus})
-                                                    </span>
+                                                    <div className="flex flex-col items-start gap-0.5">
+                                                        <span className="inline-flex items-center px-2 py-0.5 rounded bg-amber-500/10 border border-amber-500/20 text-amber-400 text-[10px] font-black uppercase tracking-wider">
+                                                            Cuti / {day.leaveType || 'Leave'}
+                                                        </span>
+                                                        {day.leaveReason && (
+                                                            <span className="text-[9px] text-gray-400 max-w-[140px] truncate" title={day.leaveReason}>
+                                                                {day.leaveReason}
+                                                            </span>
+                                                        )}
+                                                    </div>
                                                 ) : day.hasAttendance ? (
                                                     <span className="inline-flex items-center px-2 py-1 rounded bg-emerald-500/10 border border-emerald-500/20 text-emerald-400 text-[10px] font-black uppercase tracking-wider">
                                                         Hadir / Present
@@ -1531,11 +1688,16 @@ const PersonalMonthlyReport: React.FC<Props> = ({ user }) => {
                                                             <span className="text-gray-600">→</span>
                                                             <span className="text-orange-400">{day.shiftEnd || 'Aktif / Active'}</span>
                                                         </div>
-                                                        {day.notes === 'System Auto-Logout' && (
-                                                            <span className="text-[9px] uppercase font-bold text-red-500/80 bg-red-500/10 px-1.5 py-0.5 rounded w-fit border border-red-500/20">
-                                                                Log Keluar Automatik / Auto-Logout
+                                                        <div className="flex items-center gap-2">
+                                                            <span className="text-[10px] text-emerald-400 font-mono font-bold bg-emerald-500/10 px-1.5 py-0.5 rounded border border-emerald-500/20">
+                                                                {day.hoursWorked.toFixed(1)} hrs
                                                             </span>
-                                                        )}
+                                                            {day.notes === 'System Auto-Logout' && (
+                                                                <span className="text-[9px] uppercase font-bold text-red-500/80 bg-red-500/10 px-1.5 py-0.5 rounded border border-red-500/20">
+                                                                    Auto-Logout
+                                                                </span>
+                                                            )}
+                                                        </div>
                                                     </div>
                                                 ) : (
                                                     <span className="text-gray-700 text-xs">—</span>
@@ -1553,7 +1715,18 @@ const PersonalMonthlyReport: React.FC<Props> = ({ user }) => {
                                                     ) : <span className="text-gray-700 font-mono">—</span>
                                                 ) : (
                                                     day.outputQty > 0 ? (
-                                                        <span className="font-mono text-blue-400 font-bold">{day.outputQty.toLocaleString()}</span>
+                                                        <div className="flex flex-col items-end gap-0.5">
+                                                            <span className="font-mono text-blue-400 font-bold text-base">{day.outputQty.toLocaleString()}</span>
+                                                            {day.jobDetails.length > 0 && (
+                                                                <div className="flex flex-col items-end text-[9px] text-gray-400 font-mono">
+                                                                    {day.jobDetails.slice(0, 2).map((j, jidx) => (
+                                                                        <span key={jidx} className="text-gray-400" title={`Job: ${j.jobId}, SKU: ${j.sku || 'N/A'}`}>
+                                                                            {j.sku ? j.sku.split('-').slice(0, 3).join('-') : j.jobId}
+                                                                        </span>
+                                                                    ))}
+                                                                </div>
+                                                            )}
+                                                        </div>
                                                     ) : <span className="text-gray-700 font-mono">—</span>
                                                 )}
                                             </td>
@@ -1583,12 +1756,24 @@ const PersonalMonthlyReport: React.FC<Props> = ({ user }) => {
                                                                 ))}
                                                             </div>
                                                         )}
-                                                        {day.alarmCount > 0 && (
-                                                            <span className="inline-flex items-center justify-center px-1.5 py-0.5 rounded bg-red-500/10 text-red-500 text-[10px] font-bold border border-red-500/20" title={`${day.alarmCount} anomalies recorded`}>
-                                                                {day.alarmCount} Amaran / Alarms
-                                                            </span>
-                                                        )}
-                                                        {day.machinesOperated.length === 0 && day.alarmCount === 0 && (
+                                                        <div className="flex flex-wrap justify-center gap-1">
+                                                            {day.rejectQty > 0 && (
+                                                                <span className="inline-flex items-center justify-center px-1.5 py-0.5 rounded bg-amber-500/10 text-amber-400 text-[9px] font-bold border border-amber-500/20">
+                                                                    {day.rejectQty} Defect
+                                                                </span>
+                                                            )}
+                                                            {day.alarmCount > 0 && (
+                                                                <span className="inline-flex items-center justify-center px-1.5 py-0.5 rounded bg-red-500/10 text-red-500 text-[9px] font-bold border border-red-500/20">
+                                                                    {day.alarmCount} Amaran
+                                                                </span>
+                                                            )}
+                                                            {day.approvedClaims > 0 && (
+                                                                <span className="inline-flex items-center justify-center px-1.5 py-0.5 rounded bg-teal-500/10 text-teal-400 text-[9px] font-bold border border-teal-500/20">
+                                                                    +RM{day.approvedClaims.toFixed(2)} Claim
+                                                                </span>
+                                                            )}
+                                                        </div>
+                                                        {day.machinesOperated.length === 0 && day.alarmCount === 0 && day.rejectQty === 0 && day.approvedClaims === 0 && (
                                                             <span className="text-gray-700 font-mono">—</span>
                                                         )}
                                                     </div>
@@ -2119,6 +2304,104 @@ const PersonalMonthlyReport: React.FC<Props> = ({ user }) => {
                                         Simpan / Save
                                     </button>
                                 </div>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+            )}
+
+            {/* Payroll Breakdown Modal / Paparan Perincian Gaji & Claims */}
+            {showPayrollModal && (
+                <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/75 backdrop-blur-sm animate-in fade-in duration-200">
+                    <div className="bg-[#09090b] border border-slate-800 rounded-2xl w-full max-w-md shadow-2xl shadow-black relative overflow-hidden">
+                        {/* Header */}
+                        <div className="p-5 border-b border-white/5 bg-slate-900/50 flex justify-between items-start">
+                            <div className="flex items-center gap-3">
+                                <div className="p-2.5 rounded-xl bg-green-500/10 text-green-400 border border-green-500/20">
+                                    <DollarSign size={20} />
+                                </div>
+                                <div>
+                                    <h2 className="text-lg font-black text-white">
+                                        Perincian Gaji & Claims / Payroll & Claims Breakdown
+                                    </h2>
+                                    <p className="text-[10px] uppercase font-bold text-gray-400 tracking-widest mt-0.5">
+                                        Bulan / Month: {selectedMonth}/{selectedYear} • {viewedProfile?.name || viewedProfile?.employee_id}
+                                    </p>
+                                </div>
+                            </div>
+                            <button 
+                                onClick={() => setShowPayrollModal(false)}
+                                className="p-2 -mr-2 -mt-2 text-gray-500 hover:text-white hover:bg-white/5 rounded-xl transition-colors cursor-pointer"
+                            >
+                                <X size={20} />
+                            </button>
+                        </div>
+
+                        {/* Body */}
+                        <div className="p-5 space-y-4 bg-slate-950 font-sans text-sm">
+                            <div className="bg-[#0d0d12] border border-white/5 p-4 rounded-xl space-y-3">
+                                <div className="flex justify-between items-center text-xs">
+                                    <span className="text-gray-400 font-bold uppercase tracking-wider text-[10px]">Gaji Asas / Basic Salary</span>
+                                    <span className="font-mono font-bold text-white">
+                                        RM {payroll?.basic_salary ? Number(payroll.basic_salary).toFixed(2) : (payroll?.base_salary ? Number(payroll.base_salary).toFixed(2) : '0.00')}
+                                    </span>
+                                </div>
+                                <div className="flex justify-between items-center text-xs">
+                                    <span className="text-gray-400 font-bold uppercase tracking-wider text-[10px]">Elaun / Allowances & Overtime</span>
+                                    <span className="font-mono font-bold text-emerald-400">
+                                        + RM {payroll?.ot_pay ? (Number(payroll.ot_pay) + Number(payroll.allowances || 0)).toFixed(2) : (payroll?.allowances ? Number(payroll.allowances).toFixed(2) : '0.00')}
+                                    </span>
+                                </div>
+                                <div className="flex justify-between items-center text-xs">
+                                    <span className="text-gray-400 font-bold uppercase tracking-wider text-[10px]">Tuntutan / Approved Claims</span>
+                                    <span className="font-mono font-bold text-teal-400">
+                                        + RM {totalClaimsAmount.toFixed(2)}
+                                    </span>
+                                </div>
+                                {payroll && (payroll.epf || payroll.socso || payroll.deductions) && (
+                                    <div className="flex justify-between items-center text-xs border-t border-white/5 pt-2">
+                                        <span className="text-gray-400 font-bold uppercase tracking-wider text-[10px]">Potongan / Deductions (EPF/SOCSO/PCB)</span>
+                                        <span className="font-mono font-bold text-rose-400">
+                                            - RM {(Number(payroll.epf || 0) + Number(payroll.socso || 0) + Number(payroll.deductions || 0)).toFixed(2)}
+                                        </span>
+                                    </div>
+                                )}
+                            </div>
+
+                            <div className="bg-green-950/20 border border-green-500/30 p-4 rounded-xl flex justify-between items-center">
+                                <div>
+                                    <div className="text-[10px] text-green-400 uppercase font-black tracking-widest">Jumlah Bersih / Net Earnings</div>
+                                    <div className="text-xs text-gray-400">Termasuk Gaji & Claims Disahkan</div>
+                                </div>
+                                <div className="text-xl font-black text-green-300 font-mono">
+                                    RM {(Number(payroll?.net_salary || 0) + totalClaimsAmount).toFixed(2)}
+                                </div>
+                            </div>
+
+                            {claims.length > 0 && (
+                                <div className="space-y-2">
+                                    <div className="text-[10px] text-gray-400 font-bold uppercase tracking-widest">Senarai Claims Disahkan ({claims.length})</div>
+                                    <div className="max-h-36 overflow-y-auto space-y-1.5 custom-scrollbar pr-1">
+                                        {claims.map((c, cidx) => (
+                                            <div key={cidx} className="flex justify-between items-center bg-white/5 p-2 rounded-lg text-xs">
+                                                <div>
+                                                    <div className="font-bold text-white">{c.type || c.category || 'Claim'}</div>
+                                                    <div className="text-[9px] text-gray-500">{c.date || c.timestamp?.split('T')[0] || '-'} {c.description ? `• ${c.description}` : ''}</div>
+                                                </div>
+                                                <div className="font-mono font-bold text-teal-300">RM {Number(c.amount).toFixed(2)}</div>
+                                            </div>
+                                        ))}
+                                    </div>
+                                </div>
+                            )}
+
+                            <div className="flex justify-end pt-2">
+                                <button
+                                    onClick={() => setShowPayrollModal(false)}
+                                    className="px-4 py-2 bg-white/10 hover:bg-white/20 rounded-xl text-xs font-bold text-white transition-colors cursor-pointer"
+                                >
+                                    Tutup / Close
+                                </button>
                             </div>
                         </div>
                     </div>
