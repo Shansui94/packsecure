@@ -17,6 +17,7 @@ import { supabase } from '../services/supabase';
 import { User, MobileInspectionLog } from '../types';
 import { logActivity } from '../utils/logger';
 import { compressImage } from '../utils/imageCompress';
+import { useTranslation } from 'react-i18next';
 
 interface MachineInspectionModalProps {
     isOpen: boolean;
@@ -107,6 +108,7 @@ export const MachineInspectionModal: React.FC<MachineInspectionModalProps> = ({
     currentUser,
     activeFactoryId
 }) => {
+    const { t } = useTranslation();
     // 螺杆选择状态
     const [selectedScrew, setSelectedScrew] = useState<ScrewType>('Screw_A');
     const [activeTab, setActiveTab] = useState<'materials' | 'adjustment' | 'temperature' | 'logs'>('materials');
@@ -696,7 +698,7 @@ export const MachineInspectionModal: React.FC<MachineInspectionModalProps> = ({
                             <h3 className="font-semibold text-white text-base flex items-center gap-2">
                                 <span>{machineName}</span>
                             </h3>
-                            <p className="text-xs text-gray-400">选择螺杆通道配置混料配方及巡检</p>
+                            <p className="text-xs text-gray-400">{t('选择螺杆通道配置混料配方及巡检')}</p>
                         </div>
                     </div>
                     <button onClick={onClose} className="text-gray-400 hover:text-white p-1.5 rounded-lg hover:bg-gray-800 transition">
@@ -708,7 +710,7 @@ export const MachineInspectionModal: React.FC<MachineInspectionModalProps> = ({
                 <div className="space-y-1.5">
                     <label className="text-xs font-medium text-gray-400 flex items-center gap-1.5">
                         <Layers size={13} className="text-indigo-400" />
-                        选择目标螺杆通道
+                        {t('选择目标螺杆通道')}
                     </label>
                     <div className="grid grid-cols-3 gap-2">
                         {SCREW_CONFIGS.map((screw) => {
@@ -736,25 +738,25 @@ export const MachineInspectionModal: React.FC<MachineInspectionModalProps> = ({
                         onClick={() => setActiveTab('materials')}
                         className={`py-2 rounded-lg transition flex items-center justify-center gap-1.5 ${activeTab === 'materials' ? 'bg-indigo-600 text-white shadow-sm' : 'text-gray-400 hover:text-gray-200'}`}
                     >
-                        <Package size={14} /> 配料与Mix料
+                        <Package size={14} /> {t('配料与Mix料')}
                     </button>
                     <button
                         onClick={() => setActiveTab('adjustment')}
                         className={`py-2 rounded-lg transition flex items-center justify-center gap-1.5 ${activeTab === 'adjustment' ? 'bg-teal-600 text-white shadow-sm' : 'text-gray-400 hover:text-gray-200'}`}
                     >
-                        <Wrench size={14} /> 位置调整
+                        <Wrench size={14} /> {t('位置调整')}
                     </button>
                     <button
                         onClick={() => setActiveTab('temperature')}
                         className={`py-2 rounded-lg transition flex items-center justify-center gap-1.5 ${activeTab === 'temperature' ? 'bg-amber-600 text-white shadow-sm' : 'text-gray-400 hover:text-gray-200'}`}
                     >
-                        <Thermometer size={14} /> 温度照片
+                        <Thermometer size={14} /> {t('温度照片')}
                     </button>
                     <button
                         onClick={() => setActiveTab('logs')}
                         className={`py-2 rounded-lg transition flex items-center justify-center gap-1.5 ${activeTab === 'logs' ? 'bg-purple-600 text-white shadow-sm' : 'text-gray-400 hover:text-gray-200'}`}
                     >
-                        <History size={14} /> <span className="notranslate" translate="no">本机日志 ({logs.length})</span>
+                        <History size={14} /> <span>{t('本机日志')} ({logs.length})</span>
                     </button>
                 </div>
 

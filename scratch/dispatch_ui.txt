@@ -1,0 +1,618 @@
+{viewMode === 'dispatch' ? (
+                <DragDropContext onDragEnd={onDragEnd}>
+                    <div className="grid grid-cols-1 xl:grid-cols-3 gap-6 items-start animate-in fade-in duration-300">
+                        {/* LEFT COLUMN: Pending Orders Pool */}
+                        <div className="xl:col-span-1 bg-slate-900/40 border border-slate-800 rounded-2xl p-5 flex flex-col gap-4 min-h-[600px]">
+                            <div className="flex items-center justify-between pb-3 border-b border-slate-800/80">
+                                <div>
+                                    <h2 className="text-base font-bold text-white flex items-center gap-2">
+                                        <Box size={18} className="text-blue-500" />
+                                        待分配订单池 (Pending Pool)
+                                    </h2>
+                                    <p className="text-[11px] text-slate-500 mt-0.5">未分车出行的有效订单，按地区归类</p>
+                                </div>
+                            </div>
+
+                            {/* WhatsApp Quick Scan Pad */}
+                            <div className="bg-slate-950 p-4 rounded-xl border border-slate-800 flex flex-col gap-3">
+                                <div className="text-[10px] font-bold text-slate-400 uppercase tracking-wider flex items-center gap-1.5">
+                                    <ImagePlus size={14} className="text-green-400" /> WhatsApp Quick Import
+                                </div>
+                                <textarea
+                                    className="w-full h-20 bg-slate-900 border border-slate-800 rounded-lg p-2.5 text-xs text-white focus:border-green-500 outline-none resize-none placeholder:text-slate-700 font-mono"
+                                    placeholder="Paste WhatsApp text order here..."
+                                    value={whatsappText}
+                                    onChange={e => setWhatsappText(e.target.value)}
+                                />
+                                <button
+                                    onClick={handleParseWhatsAppText}
+                                    disabled={isParsingText}
+                                    className="bg-green-600 hover:bg-green-500 disabled:opacity-50 text-white font-bold text-xs py-2 px-3 rounded-lg flex items-center justify-center gap-1.5 transition-all cursor-pointer"
+                                >
+                                    {isParsingText ? <RefreshCw className="animate-spin" size={12} /> : <Sparkles size={12} />}
+                                    AI Parse & Add to Pending
+                                </button>
+                            </div>
+
+                            {/* Auto Dispatch Trigger */}
+                            <button
+                                onClick={handleTriggerAutoDispatchV2}
+                                className="w-full bg-gradient-to-r from-violet-600 to-indigo-600 hover:from-violet-500 hover:to-indigo-500 text-white font-bold text-xs py-2.5 px-4 rounded-xl flex items-center justify-center gap-2 shadow-lg shadow-violet-950/20 transition-all cursor-pointer"
+                            >
+                                <Sparkles size={14} className="animate-pulse" /> 一键智能排单 (Auto-Dispatch All)
+                            </button>
+
+                            {/* Region Collapsible List */}
+                            {(() => {
+                                const pendingOrders = filteredOrders.filter(o => {
+                                    const hasStop = tripsV2.some(t => {
+                                        const tDate = t.created_at ? t.created_at.split('T')[0] : '';
+                                        const branchMatch = activeLocation.toUpperCase() === 'NILAI' ? t.trip_number?.includes('-NL-') : t.trip_number?.includes('-TP-');
+                                        return tDate === selectedDate && branchMatch && t.trip_stops_v2?.some((s: any) => s.sales_order_id === o.id);
+                                    });
+                                    return !hasStop && (o.trip_origin || 'TAIPING').toUpperCase() === activeLocation.toUpperCase() && o.status !== 'Delivered';
+                                });
+
+                                const zones = ['Selangor', 'K. Lumpur', 'Penang', 'Perak', 'Johor', 'Melaka', 'Negeri Sembilan', 'Others'];
+                                const ordersByZone: Record<string, typeof pendingOrders> = {};
+                                zones.forEach(z => { ordersByZone[z] = []; });
+
+                                pendingOrders.forEach(o => {
+                                    const state = determineState(o.deliveryAddress || '');
+                                    let matchedZone = 'Others';
+                                    if (state === 'Selangor') matchedZone = 'Selangor';
+                                    else if (state === 'K. Lumpur') matchedZone = 'K. Lumpur';
+                                    else if (state === 'Penang') matchedZone = 'Penang';
+                                    else if (state === 'Perak') matchedZone = 'Perak';
+                                    else if (state === 'Johor') matchedZone = 'Johor';
+                                    else if (state === 'Melaka') matchedZone = 'Melaka';
+                                    else if (state === 'Negeri Sembilan') matchedZone = 'Negeri Sembilan';
+                                    ordersByZone[matchedZone].push(o);
+                                });
+
+                                return (
+                                    <Droppable droppableId="pending-pool">
+                                        {(provided) => (
+                                            <div ref={provided.innerRef} {...provided.droppableProps} className="space-y-3 min-h-[400px]">
+                                                {zones.map(zone => {
+                                                    const zoneOrders = ordersByZone[zone];
+                                                    if (zoneOrders.length === 0) return null;
+                                                    return (
+                                                        <details key={zone} open className="bg-slate-950/60 rounded-xl border border-slate-800/80 overflow-hidden group">
+                                                            <summary className="bg-slate-900/60 px-4 py-2.5 text-xs font-bold text-slate-300 flex items-center justify-between cursor-pointer hover:bg-slate-800/50 transition-colors select-none">
+                                                                <span className="flex items-center gap-2">
+                                                                    <MapPin size={12} className="text-blue-500" />
+                                                                    {zone}
+                                                                </span>
+                                                                <span className="bg-slate-800 border border-slate-700 text-[10px] font-bold px-2 py-0.5 rounded-full text-slate-400 font-mono">
+                                                                    {zoneOrders.length} 单
+                                                                </span>
+                                                            </summary>
+                                                            <div className="p-3 space-y-2.5 bg-slate-950/20 border-t border-slate-800/50">
+                                                                {zoneOrders.map((order, idx) => {
+                                                                    const orderLoad = calculateLoad(order.items || [], { max_volume_m3: 20, max_weight_kg: 3000 });
+                                                                    return (
+                                                                        <Draggable key={order.id} draggableId={order.id} index={idx}>
+                                                                            {(providedDraggable) => (
+                                                                                <div
+                                                                                    ref={providedDraggable.innerRef}
+                                                                                    {...providedDraggable.draggableProps}
+                                                                                    {...providedDraggable.dragHandleProps}
+                                                                                    className="bg-slate-900/80 border border-slate-800 p-3.5 rounded-xl hover:border-slate-755 transition-all flex flex-col gap-2 relative"
+                                                                                >
+                                                                                    <div className="flex justify-between items-start">
+                                                                                        <span className="font-mono text-[10px] font-black text-blue-400 bg-blue-500/10 px-2 py-0.5 rounded border border-blue-500/20">
+                                                                                            {order.orderNumber}
+                                                                                        </span>
+                                                                                        <select
+                                                                                            className="bg-slate-950 border border-slate-800 rounded px-1 text-[9px] font-bold text-slate-400 outline-none focus:border-blue-500/50 h-5 cursor-pointer"
+                                                                                            value=""
+                                                                                            onChange={async (e) => {
+                                                                                                const tId = e.target.value;
+                                                                                                if (tId) {
+                                                                                                    const targetTrip = tripsV2.find(t => t.id === tId);
+                                                                                                    await supabase.from('trip_stops_v2').insert({
+                                                                                                        trip_id: tId,
+                                                                                                        sales_order_id: order.id,
+                                                                                                        stop_sequence: (targetTrip?.trip_stops_v2?.length || 0) + 1
+                                                                                                    });
+                                                                                                    await supabase.from('sales_orders').update({ driver_id: targetTrip?.driver_id || null }).eq('id', order.id);
+                                                                                                    await fetchData();
+                                                                                                }
+                                                                                            }}
+                                                                                        >
+                                                                                            <option value="">+ Add to Trip...</option>
+                                                                                            {tripsV2
+                                                                                                .filter(t => {
+                                                                                                    const tDate = t.created_at ? t.created_at.split('T')[0] : '';
+                                                                                                    const branchMatch = activeLocation.toUpperCase() === 'NILAI' ? t.trip_number?.includes('-NL-') : t.trip_number?.includes('-TP-');
+                                                                                                    return tDate === selectedDate && branchMatch;
+                                                                                                })
+                                                                                                .map(t => {
+                                                                                                    const lorry = lorries.find(l => l.id === t.lorry_id);
+                                                                                                    return (
+                                                                                                        <option key={t.id} value={t.id}>
+                                                                                                            {lorry?.plateNumber || t.trip_number}
+                                                                                                        </option>
+                                                                                                    );
+                                                                                                })
+                                                                                            }
+                                                                                        </select>
+                                                                                    </div>
+                                                                                    <div className="text-xs text-white font-bold truncate">{order.customer}</div>
+                                                                                    <div className="text-[10px] text-slate-500 line-clamp-1">{order.deliveryAddress}</div>
+
+                                                                                    <div className="flex gap-2.5 text-[9px] text-slate-400 font-mono mt-0.5 bg-slate-950 px-2 py-1 rounded border border-slate-800/40">
+                                                                                        <div>Vol: <span className="text-slate-200 font-bold">{orderLoad.totalVol} m³</span></div>
+                                                                                        <div className="text-slate-800">|</div>
+                                                                                        <div>Wt: <span className="text-slate-200 font-bold">{orderLoad.totalWeight} kg</span></div>
+                                                                                    </div>
+                                                                                </div>
+                                                                            )}
+                                                                        </Draggable>
+                                                                    );
+                                                                })}
+                                                            </div>
+                                                        </details>
+                                                    );
+                                                })}
+                                                {provided.placeholder}
+                                            </div>
+                                        )}
+                                    </Droppable>
+                                );
+                            })()}
+                        </div>
+
+                        {/* RIGHT COLUMN: Trips Planner Grid */}
+                        <div className="xl:col-span-2 bg-slate-900/40 border border-slate-800 rounded-2xl p-5 flex flex-col gap-4 min-h-[600px]">
+                            <div className="flex items-center justify-between border-b border-slate-800/80 pb-3">
+                                <div>
+                                    <h2 className="text-base font-bold text-white flex items-center gap-2">
+                                        <Truck size={18} className="text-blue-500" />
+                                        车次规划板 (Lorry Trips Board)
+                                    </h2>
+                                    <p className="text-[11px] text-slate-500 mt-0.5">多单拼罗里、车辆与司机指派、路线与负重计算</p>
+                                </div>
+                                <div className="flex items-center gap-3">
+                                    <div className="flex items-center gap-2">
+                                        <span className="text-[10px] text-slate-400 font-bold uppercase tracking-wider">Plan Date:</span>
+                                        <input
+                                            type="date"
+                                            className="bg-slate-950 border border-slate-800 rounded-lg px-2.5 py-1 text-xs text-white outline-none focus:border-blue-500/50 cursor-pointer font-bold font-mono [color-scheme:dark]"
+                                            value={selectedDate}
+                                            onChange={e => setSelectedDate(e.target.value)}
+                                        />
+                                    </div>
+                                    <button
+                                        onClick={() => setIsNewTripModalOpen(true)}
+                                        className="bg-blue-600 hover:bg-blue-500 text-white font-bold text-xs py-1.5 px-3 rounded-lg flex items-center gap-1.5 transition-all shadow-lg shadow-blue-900/30 cursor-pointer"
+                                    >
+                                        <Plus size={14} /> 新建车次 (Create Trip)
+                                    </button>
+                                </div>
+                            </div>
+
+                            {/* Trips List Render */}
+                            {(() => {
+                                const tripsForDate = tripsV2.filter(t => {
+                                    const tDate = t.created_at ? t.created_at.split('T')[0] : '';
+                                    const branchMatch = activeLocation.toUpperCase() === 'NILAI' ? t.trip_number?.includes('-NL-') : t.trip_number?.includes('-TP-');
+                                    return tDate === selectedDate && branchMatch;
+                                });
+
+                                if (tripsForDate.length === 0) {
+                                    return (
+                                        <div className="h-96 flex flex-col items-center justify-center text-slate-700 opacity-40 border-2 border-dashed border-slate-800 rounded-2xl bg-slate-950/10">
+                                            <Truck size={48} className="mb-2" />
+                                            <span className="text-sm font-bold uppercase tracking-wider">今日尚无行程规划 (No Trips Planned)</span>
+                                            <button onClick={() => setIsNewTripModalOpen(true)} className="mt-4 bg-slate-800 hover:bg-slate-700 text-slate-300 font-bold text-xs py-2 px-4 rounded-xl border border-slate-700 transition-colors cursor-pointer">
+                                                + 新建车次以开始排单
+                                            </button>
+                                        </div>
+                                    );
+                                }
+
+                                return (
+                                    <div className="grid grid-cols-1 md:grid-cols-2 gap-5 items-start">
+                                        {tripsForDate.map(trip => {
+                                            const stops = (trip.trip_stops_v2 || []).sort((a: any, b: any) => a.stop_sequence - b.stop_sequence);
+                                            const assignedLorry = lorries.find(l => l.id === trip.lorry_id);
+
+                                            const loadedOrders = stops.map((s: any) => s.sales_orders).filter(Boolean);
+                                            const allLoadedItems = loadedOrders.flatMap((o: any) => o.items || []);
+
+                                            const lorryCapacity = {
+                                                max_volume_m3: assignedLorry?.maxVolumeM3 || 20,
+                                                max_weight_kg: assignedLorry?.maxWeightKg || 3000
+                                            };
+
+                                            const loadStats = calculateLoad(allLoadedItems, lorryCapacity);
+                                            const distanceKm = trip.est_distance_km || 50;
+                                            const costInfo = getEstimatedTripCost(distanceKm, assignedLorry?.plateNumber || '');
+                                            const showFatigueWarning = stops.length > 6 || distanceKm > 250;
+
+                                            return (
+                                                <div key={trip.id} className="bg-slate-950 border border-slate-800/80 rounded-2xl p-4 flex flex-col gap-3 relative shadow-md hover:border-slate-750 transition-colors">
+                                                    {/* Card Header */}
+                                                    <div className="flex justify-between items-start border-b border-slate-850 pb-2.5">
+                                                        <div>
+                                                            <div className="font-mono text-xs font-black text-blue-400 bg-blue-500/10 px-2 py-0.5 rounded border border-blue-500/20 inline-block font-bold">
+                                                                {trip.trip_number}
+                                                            </div>
+                                                            <div className="text-[10px] text-slate-500 mt-1 uppercase font-bold tracking-wider font-mono">
+                                                                Status: <span className="text-slate-300 font-mono">{trip.status}</span>
+                                                            </div>
+                                                        </div>
+                                                        <button onClick={() => handleDeleteTrip(trip.id)} className="text-slate-600 hover:text-red-500 p-1.5 rounded-lg hover:bg-slate-900 transition-colors cursor-pointer">
+                                                            <Trash2 size={15} />
+                                                        </button>
+                                                    </div>
+
+                                                    {/* Vehicle & Driver Assignments */}
+                                                    <div className="grid grid-cols-2 gap-2">
+                                                        <div>
+                                                            <label className="block text-[9px] font-bold text-slate-500 uppercase mb-1">Assigned Lorry</label>
+                                                            <select
+                                                                className="w-full bg-slate-900 border border-slate-800 rounded-lg px-2 py-1.5 text-xs text-white outline-none focus:border-blue-500/50 cursor-pointer"
+                                                                value={trip.lorry_id || ''}
+                                                                onChange={e => handleUpdateTripLorry(trip.id, e.target.value)}
+                                                            >
+                                                                <option value="">Select Lorry...</option>
+                                                                {filteredLorriesForModal.map(l => (
+                                                                    <option key={l.id} value={l.id}>
+                                                                        {l.plateNumber} ({l.maxWeightKg}kg)
+                                                                    </option>
+                                                                ))}
+                                                            </select>
+                                                        </div>
+
+                                                        <div>
+                                                            <label className="block text-[9px] font-bold text-slate-500 uppercase mb-1">Assigned Driver</label>
+                                                            <select
+                                                                className="w-full bg-slate-900 border border-slate-800 rounded-lg px-2 py-1.5 text-xs text-white outline-none focus:border-blue-500/50 cursor-pointer"
+                                                                value={trip.driver_id || ''}
+                                                                onChange={e => handleUpdateTripDriver(trip.id, e.target.value)}
+                                                            >
+                                                                <option value="">Select Driver...</option>
+                                                                {filteredDriversForModal.map(d => (
+                                                                    <option key={d.uid} value={d.uid}>
+                                                                        {d.name}
+                                                                    </option>
+                                                                ))}
+                                                            </select>
+                                                        </div>
+                                                    </div>
+
+                                                    {/* Lorry Load Bars */}
+                                                    <div className="bg-slate-900/60 p-2.5 rounded-xl border border-slate-800/40 space-y-2">
+                                                        <div>
+                                                            <div className="flex justify-between items-center text-[9px] font-mono mb-0.5">
+                                                                <span className="text-slate-400">Vol: {loadStats.totalVol} / {lorryCapacity.max_volume_m3} m³</span>
+                                                                <span className={`font-bold ${Number(loadStats.percentVol) >= 100 ? 'text-red-400 font-black animate-pulse' : 'text-slate-300'}`}>{loadStats.percentVol}%</span>
+                                                            </div>
+                                                            <div className="w-full bg-slate-850 h-1.5 rounded-full overflow-hidden">
+                                                                <div className={`h-full rounded-full transition-all ${Number(loadStats.percentVol) >= 100 ? 'bg-red-500' : 'bg-emerald-500'}`} style={{ width: `${Math.min(Number(loadStats.percentVol), 100)}%` }} />
+                                                            </div>
+                                                        </div>
+
+                                                        <div>
+                                                            <div className="flex justify-between items-center text-[9px] font-mono mb-0.5">
+                                                                <span className="text-slate-400">Weight: {loadStats.totalWeight} / {lorryCapacity.max_weight_kg} kg</span>
+                                                                <span className={`font-bold ${Number(loadStats.percentWeight) >= 100 ? 'text-red-400 font-black animate-pulse' : 'text-slate-300'}`}>{loadStats.percentWeight}%</span>
+                                                            </div>
+                                                            <div className="w-full bg-slate-850 h-1.5 rounded-full overflow-hidden">
+                                                                <div className={`h-full rounded-full transition-all ${Number(loadStats.percentWeight) >= 100 ? 'bg-red-500' : 'bg-emerald-500'}`} style={{ width: `${Math.min(Number(loadStats.percentWeight), 100)}%` }} />
+                                                            </div>
+                                                        </div>
+                                                    </div>
+
+                                                    {/* Stops List */}
+                                                    <Droppable droppableId={trip.id}>
+                                                        {(provided) => (
+                                                            <div ref={provided.innerRef} {...provided.droppableProps} className="space-y-2 min-h-[120px] border border-dashed border-slate-800 rounded-xl p-2 bg-slate-900/10">
+                                                                {stops.length === 0 ? (
+                                                                    <div className="h-24 flex items-center justify-center text-slate-700 text-[10px] italic select-none">
+                                                                        拖动左侧订单到这里 (Drop orders here)
+                                                                    </div>
+                                                                ) : (
+                                                                    stops.map((stop: any, idx: number) => {
+                                                                        const order = stop.sales_orders;
+                                                                        if (!order) return null;
+                                                                        const isRecycle = order.orderNumber?.startsWith('REC-');
+
+                                                                        return (
+                                                                            <Draggable key={order.id} draggableId={order.id} index={idx}>
+                                                                                {(providedDraggable) => (
+                                                                                    <div
+                                                                                        ref={providedDraggable.innerRef}
+                                                                                        {...providedDraggable.draggableProps}
+                                                                                        {...providedDraggable.dragHandleProps}
+                                                                                        className={`p-2.5 rounded-xl border flex flex-col gap-1 relative bg-slate-900 group/item ${isRecycle ? 'border-green-900/60 bg-green-950/5' : 'border-slate-800/80 hover:border-slate-700'}`}
+                                                                                    >
+                                                                                        <div className="flex justify-between items-center">
+                                                                                            <div className="flex items-center gap-1.5">
+                                                                                                <span className="text-[9px] bg-blue-600 text-white font-bold px-1.5 py-0.5 rounded-full font-mono">
+                                                                                                    {idx + 1}
+                                                                                                </span>
+                                                                                                <span className={`font-mono text-[9px] font-bold px-1.5 py-0.5 rounded ${isRecycle ? 'bg-green-500/10 text-green-400' : 'bg-blue-500/10 text-blue-400'}`}>
+                                                                                                    {order.orderNumber}
+                                                                                                </span>
+                                                                                            </div>
+                                                                                            <button onClick={() => handleUnassignOrder(order.id)} className="text-slate-600 hover:text-red-400 p-0.5 rounded opacity-0 group-hover/item:opacity-100 transition-opacity cursor-pointer">
+                                                                                                <X size={12} />
+                                                                                            </button>
+                                                                                        </div>
+                                                                                        <div className="text-xs text-white font-bold leading-tight truncate">{order.customer}</div>
+                                                                                        <div className="text-[9px] text-slate-500 line-clamp-1">{order.deliveryAddress}</div>
+                                                                                    </div>
+                                                                                )}
+                                                                            </Draggable>
+                                                                        );
+                                                                    })
+                                                                )}
+                                                                {provided.placeholder}
+                                                            </div>
+                                                        )}
+                                                    </Droppable>
+
+                                                    {/* Cost & Optimizer Actions */}
+                                                    <div className="flex justify-between items-center border-t border-slate-850 pt-2.5 mt-1 text-[10px]">
+                                                        <div className="text-slate-400 font-mono">
+                                                            Cost: <span className="text-orange-400 font-bold font-mono">RM {costInfo.totalCost.toFixed(2)}</span>
+                                                            <span className="text-[9px] text-slate-600 block font-mono">({distanceKm.toFixed(1)} km)</span>
+                                                        </div>
+                                                        <div className="flex gap-1.5">
+                                                            <button
+                                                                onClick={() => {
+                                                                    setMapTripStops(stops);
+                                                                    setMapTripOrigin(activeLocation);
+                                                                    setMapModalOpen(true);
+                                                                }}
+                                                                className="bg-slate-900 hover:bg-slate-850 text-slate-300 font-bold px-2 py-1 rounded-lg border border-slate-800 hover:border-slate-700 transition-all flex items-center gap-1 cursor-pointer"
+                                                                title="Map Preview"
+                                                            >
+                                                                <MapPin size={10} className="text-blue-400" /> Map
+                                                            </button>
+
+                                                            <button
+                                                                onClick={async () => {
+                                                                    const coordsList: [number, number][] = [];
+                                                                    const origin: [number, number] = activeLocation.toUpperCase() === 'NILAI' ? [2.81, 101.81] : [4.85, 100.74];
+                                                                    coordsList.push(origin);
+                                                                    for (const stop of stops) {
+                                                                        const address = stop.sales_orders?.deliveryAddress || '';
+                                                                        if (address) {
+                                                                            const coords = await getCoordinatesForAddress(address);
+                                                                            coordsList.push(coords || origin);
+                                                                        }
+                                                                    }
+                                                                    if (coordsList.length >= 2) {
+                                                                        const routeStats = await getOSRMRoute(coordsList);
+                                                                        if (routeStats) {
+                                                                            await supabase.from('trips_v2').update({ est_distance_km: routeStats.distanceKm }).eq('id', trip.id);
+                                                                        }
+                                                                    }
+                                                                    await handleOptimizeTripRoute(trip.id, activeLocation, stops);
+                                                                }}
+                                                                className="bg-slate-900 hover:bg-slate-850 text-slate-300 font-bold px-2 py-1 rounded-lg border border-slate-800 hover:border-slate-700 transition-all flex items-center gap-1 cursor-pointer"
+                                                                title="Optimize Stop Order"
+                                                            >
+                                                                <Sparkles size={10} className="text-violet-400" /> Optimize
+                                                            </button>
+
+                                                            <button
+                                                                onClick={() => {
+                                                                    const cust = window.prompt("Enter collection point / client name (e.g. OPM Corner Pallet Recycle):");
+                                                                    if (!cust) return;
+                                                                    const addr = window.prompt("Enter address to pick up from:", "OPM Lama");
+                                                                    if (!addr) return;
+                                                                    const note = window.prompt("Enter instructions/items (e.g. Collect 50pcs Paper Cores):");
+                                                                    handleAddCollectionStop(trip.id, cust, addr, note || "");
+                                                                }}
+                                                                className="bg-slate-900 hover:bg-slate-850 text-slate-300 font-bold px-2 py-1 rounded-lg border border-slate-800 hover:border-slate-700 transition-all flex items-center gap-1 cursor-pointer"
+                                                                title="Add Recycle Stop"
+                                                            >
+                                                                <RotateCcw size={10} className="text-green-400" /> Recycle
+                                                            </button>
+                                                        </div>
+                                                    </div>
+
+                                                    {/* Fatigue Warning */}
+                                                    {showFatigueWarning && (
+                                                        <div className="bg-yellow-500/10 border border-yellow-500/20 text-yellow-400 text-[9px] font-bold p-1 rounded-lg text-center animate-pulse flex items-center justify-center gap-1.5 font-bold">
+                                                            ⚠️ Driver fatigue warning: long distance or high drop count!
+                                                        </div>
+                                                    )}
+                                                </div>
+                                            );
+                                        })}
+                                    </div>
+                                );
+                            })()}
+                        </div>
+                    </div>
+                    
+                    {/* Modals & Dialogs */}
+                    {showReviewModal && (
+                        <div className="fixed inset-0 bg-slate-950/80 backdrop-blur-sm flex items-center justify-center z-50 p-4">
+                            <div className="bg-slate-900 border border-slate-800 rounded-2xl max-w-2xl w-full flex flex-col max-h-[85vh] shadow-2xl">
+                                <div className="p-5 border-b border-slate-800 flex justify-between items-center bg-slate-900/60">
+                                    <h3 className="text-base font-bold text-white flex items-center gap-2">
+                                        <Sparkles className="text-green-400" size={18} /> Review AI Extracted Orders ({parsedOrdersReview.length})
+                                    </h3>
+                                    <button onClick={() => setShowReviewModal(false)} className="text-slate-400 hover:text-white p-1 rounded-lg hover:bg-slate-850 cursor-pointer">
+                                        <X size={18} />
+                                    </button>
+                                </div>
+                                <div className="p-5 overflow-y-auto space-y-4 flex-1">
+                                    {parsedOrdersReview.map((order: any, idx: number) => (
+                                        <div key={idx} className="bg-slate-950 border border-slate-800 p-4 rounded-xl space-y-2">
+                                            <div className="flex justify-between items-start gap-2">
+                                                <input
+                                                    type="text"
+                                                    className="bg-slate-900 border border-slate-800 rounded px-2 py-1 text-sm font-bold text-white w-2/3"
+                                                    value={order.customer}
+                                                    onChange={e => {
+                                                        const updated = [...parsedOrdersReview];
+                                                        updated[idx].customer = e.target.value;
+                                                        setParsedOrdersReview(updated);
+                                                    }}
+                                                />
+                                                <input
+                                                    type="date"
+                                                    className="bg-slate-900 border border-slate-800 rounded px-2 py-1 text-xs text-slate-300 font-mono"
+                                                    value={order.deadline}
+                                                    onChange={e => {
+                                                        const updated = [...parsedOrdersReview];
+                                                        updated[idx].deadline = e.target.value;
+                                                        setParsedOrdersReview(updated);
+                                                    }}
+                                                />
+                                            </div>
+                                            <textarea
+                                                className="w-full bg-slate-900 border border-slate-800 rounded-lg p-2 text-xs text-slate-350 outline-none focus:border-blue-500"
+                                                value={order.deliveryAddress}
+                                                onChange={e => {
+                                                    const updated = [...parsedOrdersReview];
+                                                    updated[idx].deliveryAddress = e.target.value;
+                                                    setParsedOrdersReview(updated);
+                                                }}
+                                            />
+                                            <div className="space-y-1.5">
+                                                <div className="text-[10px] font-bold text-slate-500 uppercase">Items:</div>
+                                                {order.items?.map((item: any, i: number) => (
+                                                    <div key={i} className="flex gap-2 items-center">
+                                                        <input
+                                                            type="text"
+                                                            className="flex-1 bg-slate-900 border border-slate-800 rounded px-2 py-0.5 text-xs text-slate-300"
+                                                            value={item.product}
+                                                            onChange={e => {
+                                                                const updated = [...parsedOrdersReview];
+                                                                updated[idx].items[i].product = e.target.value;
+                                                                setParsedOrdersReview(updated);
+                                                            }}
+                                                        />
+                                                        <input
+                                                            type="number"
+                                                            className="w-16 bg-slate-900 border border-slate-800 rounded px-2 py-0.5 text-xs text-white text-right font-bold font-mono"
+                                                            value={item.quantity}
+                                                            onChange={e => {
+                                                                const updated = [...parsedOrdersReview];
+                                                                updated[idx].items[i].quantity = Number(e.target.value);
+                                                                setParsedOrdersReview(updated);
+                                                            }}
+                                                        />
+                                                    </div>
+                                                ))}
+                                            </div>
+                                        </div>
+                                    ))}
+                                </div>
+                                <div className="p-4 border-t border-slate-800 bg-slate-900/60 flex justify-end gap-3 font-bold">
+                                    <button onClick={() => setShowReviewModal(false)} className="bg-slate-800 hover:bg-slate-700 text-slate-300 text-xs py-2 px-4 rounded-xl border border-slate-700 transition-colors cursor-pointer">
+                                        Cancel
+                                    </button>
+                                    <button onClick={handleSaveParsedOrders} className="bg-green-600 hover:bg-green-500 text-white text-xs py-2 px-5 rounded-xl shadow-lg shadow-green-950/30 transition-all flex items-center gap-1.5 cursor-pointer">
+                                        <CheckCircle size={14} /> Import All ({parsedOrdersReview.length} Orders)
+                                    </button>
+                                </div>
+                            </div>
+                        </div>
+                    )}
+
+                    {isNewTripModalOpen && (
+                        <div className="fixed inset-0 bg-slate-950/80 backdrop-blur-sm flex items-center justify-center z-50 p-4">
+                            <div className="bg-slate-900 border border-slate-800 rounded-2xl max-w-sm w-full flex flex-col shadow-2xl">
+                                <div className="p-4 border-b border-slate-800 flex justify-between items-center">
+                                    <h3 className="text-sm font-bold text-white uppercase tracking-wider flex items-center gap-2">
+                                        <Truck className="text-blue-500" size={16} /> Create Lorry Trip (新建车次)
+                                    </h3>
+                                    <button onClick={() => setIsNewTripModalOpen(false)} className="text-slate-400 hover:text-white p-1 rounded-lg cursor-pointer">
+                                        <X size={16} />
+                                    </button>
+                                </div>
+                                <div className="p-5 space-y-4">
+                                    <div>
+                                        <label className="block text-xs font-bold text-slate-500 uppercase mb-2">Select Lorry (可选罗里)</label>
+                                        <select
+                                            className="w-full bg-slate-950 border border-slate-850 rounded-xl px-3 py-2 text-sm text-white outline-none focus:border-blue-500/50 cursor-pointer"
+                                            value={newTripLorryId}
+                                            onChange={e => {
+                                                const val = e.target.value;
+                                                setNewTripLorryId(val);
+                                                const selectedLorry = lorries.find(l => l.id === val);
+                                                if (selectedLorry?.driverUserId) {
+                                                    setNewTripDriverId(selectedLorry.driverUserId);
+                                                }
+                                            }}
+                                        >
+                                            <option value="">-- Select Lorry --</option>
+                                            {filteredLorriesForModal.map(l => (
+                                                <option key={l.id} value={l.id}>
+                                                    {l.plateNumber} {l.driverName ? `(\${l.driverName})` : ''}
+                                                </option>
+                                            ))}
+                                        </select>
+                                    </div>
+
+                                    <div>
+                                        <label className="block text-xs font-bold text-slate-500 uppercase mb-2">Select Driver (可选司机)</label>
+                                        <select
+                                            className="w-full bg-slate-950 border border-slate-850 rounded-xl px-3 py-2 text-sm text-white outline-none focus:border-blue-500/50 cursor-pointer"
+                                            value={newTripDriverId}
+                                            onChange={e => setNewTripDriverId(e.target.value)}
+                                        >
+                                            <option value="">-- Select Driver --</option>
+                                            {filteredDriversForModal.map(d => (
+                                                <option key={d.uid} value={d.uid}>
+                                                    {d.name || d.email}
+                                                </option>
+                                            ))}
+                                        </select>
+                                    </div>
+                                </div>
+                                <div className="p-4 border-t border-slate-800 bg-slate-900/60 flex justify-end gap-3 font-bold">
+                                    <button onClick={() => setIsNewTripModalOpen(false)} className="bg-slate-800 hover:bg-slate-700 text-slate-300 text-xs py-2 px-4 rounded-xl border border-slate-700 transition-colors cursor-pointer">
+                                        Cancel
+                                    </button>
+                                    <button
+                                        onClick={async () => {
+                                            await handleCreateTrip(newTripLorryId, newTripDriverId);
+                                            setNewTripLorryId('');
+                                            setNewTripDriverId('');
+                                            setIsNewTripModalOpen(false);
+                                        }}
+                                        className="bg-blue-600 hover:bg-blue-500 text-white text-xs py-2 px-5 rounded-xl shadow-lg shadow-blue-900/30 transition-all flex items-center gap-1.5 cursor-pointer"
+                                    >
+                                        <CheckCircle size={14} /> Create Trip
+                                    </button>
+                                </div>
+                            </div>
+                        </div>
+                    )}
+
+                    {mapModalOpen && (
+                        <div className="fixed inset-0 bg-slate-950/80 backdrop-blur-sm flex items-center justify-center z-50 p-4 font-bold">
+                            <div className="bg-slate-900 border border-slate-800 rounded-2xl max-w-4xl w-full flex flex-col shadow-2xl">
+                                <div className="p-4 border-b border-slate-800 flex justify-between items-center bg-slate-900/60">
+                                    <h3 className="text-sm font-bold text-white uppercase tracking-wider flex items-center gap-2">
+                                        <MapPin className="text-blue-500" size={16} /> Route Map Preview (行车路线预览)
+                                    </h3>
+                                    <button onClick={() => setMapModalOpen(false)} className="text-slate-400 hover:text-white p-1 rounded-lg cursor-pointer">
+                                        <X size={16} />
+                                    </button>
+                                </div>
+                                <div className="p-4 bg-slate-950">
+                                    <div id="leaflet-map-container" className="h-[480px] w-full rounded-xl border border-slate-800 overflow-hidden shadow-inner bg-slate-950"></div>
+                                </div>
+                                <div className="p-4 border-t border-slate-800 bg-slate-900/60 flex justify-between items-center text-xs text-slate-400">
+                                    <span>路线基于 OpenStreetMap 实时网络渲染，站点数字表示配送顺序</span>
+                                    <button onClick={() => setMapModalOpen(false)} className="bg-slate-850 hover:bg-slate-800 text-slate-350 py-1.5 px-4 rounded-lg border border-slate-700 transition-colors cursor-pointer">
+                                        关闭 (Close)
+                                    </button>
+                                </div>
+                            </div>
+                        </div>
+                    )}
+                </DragDropContext>

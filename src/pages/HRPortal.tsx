@@ -7,6 +7,7 @@ import {
 } from 'lucide-react';
 import { getSalaryAdvances, updateSalaryAdvanceStatus } from '../services/apiV2';
 import { calculateShiftSplit, getRatesForTarget } from '../utils/rateCalculator';
+import { useTranslation } from 'react-i18next';
 
 const formatYYYYMMDD = (dateStr: string | null | undefined): string => {
     if (!dateStr) return '';
@@ -1529,7 +1530,7 @@ const HRPortal: React.FC<HRPortalProps> = ({ user, initialTab, initialRoleFilter
     // ── TABS ──────────────────────────────────────────────────
     const TABS = [
         { id: 'personnel', label: `👥 Personnel (${activeEmps.length})`, count: 0 },
-        { id: 'approvals', label: `🔔 新注册待审批`, count: pendingCount },
+        { id: 'approvals', label: `🔔 ${t('新注册待审批')}`, count: pendingCount },
         { id: 'permissions', label: '🔐 Page Permissions', count: 0 },
         { id: 'payroll', label: '💰 Payroll', count: 0 },
         { id: 'advances', label: '💸 Salary Advances', count: 0 },

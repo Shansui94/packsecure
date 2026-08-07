@@ -12,6 +12,7 @@ import {
 import { MACHINES } from '../data/factoryData';
 import { determineState } from '../utils/logistics';
 import * as XLSX from 'xlsx';
+import { useTranslation } from 'react-i18next';
 
 interface ProductionReportsProps {
     user: any;
@@ -39,6 +40,7 @@ const CHART_COLORS = [
 ];
 
 const ProductionReports: React.FC<ProductionReportsProps> = () => {
+    const { t } = useTranslation();
     const today = new Date();
     const [selectedMonth, setSelectedMonth] = useState(today.getMonth() + 1); // 1-12
     const [selectedYear, setSelectedYear] = useState(today.getFullYear());
@@ -652,20 +654,20 @@ const ProductionReports: React.FC<ProductionReportsProps> = () => {
                             {activeReportTab === 'production' ? (
                                 <>
                                     <BarChart2 className="text-blue-600 dark:text-blue-500" size={28} />
-                                    生产报告与分析 / Production Analytics
+                                    {t('生产报告与分析')}
                                 </>
                             ) : (
                                 <>
                                     <Globe className="text-blue-600 dark:text-blue-500" size={28} />
-                                    物流出车报告 / Logistics Reports
+                                    {t('物流出车报告')}
                                 </>
                             )}
                         </h1>
                         <p className="text-slate-500 dark:text-gray-500 text-xs font-mono flex items-center gap-2 mt-1">
                             <span className="w-1.5 h-1.5 rounded-full bg-blue-500 animate-pulse" />
                             {activeReportTab === 'production' 
-                                ? 'MONTHLY PRODUCTION DASHBOARD · 月度生产数据面板' 
-                                : 'MONTHLY LOGISTICS DASHBOARD · 月度物流出车面板'}
+                                ? 'MONTHLY PRODUCTION DASHBOARD' 
+                                : 'MONTHLY LOGISTICS DASHBOARD'}
                         </p>
                     </div>
 
@@ -677,14 +679,14 @@ const ProductionReports: React.FC<ProductionReportsProps> = () => {
                                 className={`px-4 py-2 rounded-xl font-bold transition-all flex items-center gap-2 ${activeReportTab === 'production' ? 'bg-white dark:bg-white/10 text-blue-600 dark:text-blue-400 shadow-sm font-black' : 'text-slate-500 dark:text-gray-400 hover:text-slate-800 dark:hover:text-white'}`}
                             >
                                 <BarChart2 size={16} />
-                                生产报告 / Production
+                                {t('生产报告')}
                             </button>
                             <button 
                                 onClick={() => setActiveReportTab('logistics')}
                                 className={`px-4 py-2 rounded-xl font-bold transition-all flex items-center gap-2 ${activeReportTab === 'logistics' ? 'bg-white dark:bg-white/10 text-blue-600 dark:text-blue-400 shadow-sm font-black' : 'text-slate-500 dark:text-gray-400 hover:text-slate-800 dark:hover:text-white'}`}
                             >
                                 <Globe size={16} />
-                                物流报告 / Logistics
+                                {t('物流报告')}
                             </button>
                         </div>
 
