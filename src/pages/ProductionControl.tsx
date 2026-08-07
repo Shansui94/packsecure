@@ -22,6 +22,7 @@ import { supabase } from '../services/supabase';
 import { getMachineByCode, getMachineById } from '../services/productionService';
 import { Scanner } from '@yudiel/react-qr-scanner';
 import MachineInspectionModal from '../components/MachineInspectionModal';
+import { useTranslation } from 'react-i18next';
 
 
 // --- TYPE DEFINITIONS ---
@@ -687,6 +688,7 @@ interface ProductionControlProps {
 }
 
 const ProductionControl: React.FC<ProductionControlProps> = ({ user, jobs = [], onNavigate }) => {
+    const { t } = useTranslation();
     // Machine Selection State
     const [selectedMachine, setSelectedMachine] = useState<string | null>(
         sessionStorage.getItem('selectedMachine') || localStorage.getItem('device_machine_id')
@@ -2071,13 +2073,13 @@ const ProductionControl: React.FC<ProductionControlProps> = ({ user, jobs = [], 
                         </div>
                         <div>
                             <h2 className="text-base font-semibold text-white flex items-center gap-2">
-                                <span>生产控制工作台</span>
+                                <span>{t('生产控制工作台')}</span>
                                 <span className="text-xs text-gray-400 font-normal">Production Workspace</span>
                             </h2>
                             {selectedMachine && (
                                 <p className="text-xs text-gray-400 flex items-center gap-1.5 mt-0.5">
                                     <span className="w-1.5 h-1.5 rounded-full bg-emerald-400"></span>
-                                    <span>当前机台: <strong className="text-gray-200 font-medium">{currentMachineName}</strong></span>
+                                    <span>{t('当前机台')}: <strong className="text-gray-200 font-medium">{currentMachineName}</strong></span>
                                 </p>
                             )}
                         </div>
@@ -2100,7 +2102,7 @@ const ProductionControl: React.FC<ProductionControlProps> = ({ user, jobs = [], 
                             }`}
                         >
                             <div className={`w-2 h-2 rounded-full ${isControlMode ? 'bg-rose-400 animate-pulse' : 'bg-blue-400'}`}></div>
-                            {isControlMode ? '接管控制模式' : '监控模式'}
+                            {isControlMode ? t('接管控制模式') : t('监控模式')}
                         </button>
                     )}
 
@@ -2109,11 +2111,11 @@ const ProductionControl: React.FC<ProductionControlProps> = ({ user, jobs = [], 
                             type="button"
                             onClick={() => setShowInspectionModal(true)}
                             className="bg-amber-600/20 hover:bg-amber-600/30 text-amber-300 border border-amber-500/40 font-medium px-3 py-1.5 rounded-xl text-xs flex items-center gap-1.5 transition cursor-pointer shrink-0"
-                            title="打开当前机台的原材料、位置与温度巡检快记"
+                            title={t('机台巡检与配料快记')}
                         >
                             <FlaskConical size={14} />
-                            <span className="hidden sm:inline">机台巡检与配料快记</span>
-                            <span className="sm:hidden">配料巡检</span>
+                            <span className="hidden sm:inline">{t('机台巡检与配料快记')}</span>
+                            <span className="sm:hidden">{t('配料巡检')}</span>
                         </button>
 
                         {clockInTime && (
@@ -2126,8 +2128,8 @@ const ProductionControl: React.FC<ProductionControlProps> = ({ user, jobs = [], 
                                     className="bg-rose-600/80 hover:bg-rose-600 text-white font-medium py-1.5 px-3 rounded-xl shadow border border-rose-400/40 flex items-center gap-1.5 text-xs shrink-0"
                                 >
                                     <Camera size={14} />
-                                    <span className="hidden sm:inline">扫码登出</span>
-                                    <span className="sm:hidden">扫码登出</span>
+                                    <span className="hidden sm:inline">{t('扫码登出')}</span>
+                                    <span className="sm:hidden">{t('扫码登出')}</span>
                                 </button>
                             ) : (
                                 <button
@@ -2135,7 +2137,7 @@ const ProductionControl: React.FC<ProductionControlProps> = ({ user, jobs = [], 
                                     className="bg-rose-600/80 hover:bg-rose-600 text-white font-medium py-1.5 px-3 rounded-xl shadow border border-rose-400/40 flex items-center gap-1.5 text-xs shrink-0"
                                 >
                                     <LogOut size={14} />
-                                    <span>登出</span>
+                                    <span>{t('登出')}</span>
                                 </button>
                             )
                         )}
@@ -2254,12 +2256,12 @@ const ProductionControl: React.FC<ProductionControlProps> = ({ user, jobs = [], 
                                         </div>
                                         <div className="min-w-0">
                                             <p className="text-white font-medium text-xs truncate">
-                                                当前值班操作员: <span className="font-semibold">{machineOperator.name}</span> (工号: {machineOperator.employeeId})
-                                                {operatorEmployeeId === machineOperator.employeeId && " (当前为您)"}
+                                                {t('当前值班操作员')}: <span className="font-semibold">{machineOperator.name}</span> ({t('PIN: ')}{machineOperator.employeeId})
+                                                {operatorEmployeeId === machineOperator.employeeId && ` (${t('当前为您')})`}
                                             </p>
                                             <p className="text-[11px] text-gray-400 mt-0.5 truncate">
-                                                打卡时间: {new Date(machineOperator.clockIn).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })}
-                                                {operatorEmployeeId === machineOperator.employeeId && ` · 已值班 ${durationText}`}
+                                                {t('打卡时间')}: {new Date(machineOperator.clockIn).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })}
+                                                {operatorEmployeeId === machineOperator.employeeId && ` · ${t('已值班')} ${durationText}`}
                                             </p>
                                         </div>
                                     </div>
@@ -2268,7 +2270,7 @@ const ProductionControl: React.FC<ProductionControlProps> = ({ user, jobs = [], 
                                              onClick={() => initiateTakeover(selectedMachine!)}
                                              className="px-3 py-1.5 bg-emerald-500/10 hover:bg-emerald-500/20 text-emerald-300 rounded-xl text-xs font-medium transition border border-emerald-500/30 shrink-0 cursor-pointer"
                                          >
-                                             切换人员
+                                             {t('切换人员')}
                                          </button>
                                      )}
                                  </div>
@@ -2279,8 +2281,8 @@ const ProductionControl: React.FC<ProductionControlProps> = ({ user, jobs = [], 
                                              <AlertTriangle size={16} />
                                          </div>
                                          <div className="min-w-0">
-                                             <p className="text-amber-300 text-xs font-medium">该机台暂未绑定值班操作员</p>
-                                             <p className="text-[11px] text-gray-400 mt-0.5 truncate">请先绑定操作员以开启生产记录</p>
+                                             <p className="text-amber-300 text-xs font-medium">{t('该机台暂未绑定值班操作员')}</p>
+                                             <p className="text-[11px] text-gray-400 mt-0.5 truncate">{t('请先绑定操作员以开启生产记录')}</p>
                                          </div>
                                      </div>
                                      {user && user.role !== 'Operator' && (
@@ -2288,7 +2290,7 @@ const ProductionControl: React.FC<ProductionControlProps> = ({ user, jobs = [], 
                                              onClick={() => initiateTakeover(selectedMachine!)}
                                              className="px-3 py-1.5 bg-amber-500/20 hover:bg-amber-500/30 text-amber-300 rounded-xl text-xs font-medium transition border border-amber-500/30 shrink-0 cursor-pointer"
                                          >
-                                             绑定操作员
+                                             {t('绑定操作员')}
                                          </button>
                                      )}
                                  </div>
@@ -2571,7 +2573,7 @@ const ProductionControl: React.FC<ProductionControlProps> = ({ user, jobs = [], 
                             {!isSfOrRecycle && (
                                 <div className="bg-white/5 border border-white/10 rounded-2xl p-4 backdrop-blur-md">
                                     <h3 className="text-xs font-semibold text-purple-400 flex items-center gap-1.5 mb-3">
-                                        <Camera size={14} /> 现场拍照登记
+                                        <Camera size={14} /> {t('现场拍照登记')}
                                     </h3>
 
                                 {!photoPreview ? (
@@ -2583,7 +2585,7 @@ const ProductionControl: React.FC<ProductionControlProps> = ({ user, jobs = [], 
                                             <div className="w-8 h-8 rounded-full bg-purple-500/20 flex items-center justify-center text-purple-400">
                                                 <Camera size={15} />
                                             </div>
-                                            <span className="text-xs font-medium text-purple-300">相机拍照</span>
+                                            <span className="text-xs font-medium text-purple-300">{t('相机拍照')}</span>
                                         </button>
                                         
                                         <button 
@@ -2593,7 +2595,7 @@ const ProductionControl: React.FC<ProductionControlProps> = ({ user, jobs = [], 
                                             <div className="w-8 h-8 rounded-full bg-white/5 flex items-center justify-center text-gray-400">
                                                 <ImageIcon size={15} />
                                             </div>
-                                            <span className="text-xs font-medium text-gray-300">上传图片</span>
+                                            <span className="text-xs font-medium text-gray-300">{t('上传图片')}</span>
                                         </button>
                                     </div>
                                 ) : (
@@ -2705,7 +2707,7 @@ const ProductionControl: React.FC<ProductionControlProps> = ({ user, jobs = [], 
                             {/* 2. OPERATOR TASKS CHECKLIST */}
                             <div className="bg-white/5 border border-white/10 rounded-2xl p-4 backdrop-blur-md">
                                 <h3 className="text-xs font-semibold text-amber-400 flex items-center gap-1.5 mb-2.5">
-                                    <Check size={14} /> 待办任务
+                                    <Check size={14} /> {t('待办任务')}
                                 </h3>
 
                                 {operatorTasks.length === 0 ? (
@@ -2731,7 +2733,7 @@ const ProductionControl: React.FC<ProductionControlProps> = ({ user, jobs = [], 
                             <div className="apple-card p-0 rounded-2xl overflow-hidden border border-white/10">
                                 <div className="px-4 py-2.5 border-b border-white/10 bg-white/[0.02] flex justify-between items-center">
                                     <h4 className="text-xs font-semibold text-gray-300">
-                                        最近生产产出记录
+                                        {t('最近生产产出记录')}
                                     </h4>
                                     <span className="text-[10px] text-blue-400 font-mono">{recentLogs.length} 条</span>
                                 </div>
