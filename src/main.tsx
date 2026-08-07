@@ -50,6 +50,7 @@ if (typeof window !== 'undefined' && typeof Node !== 'undefined' && Node.prototy
     };
 }
 import './index.css';
+import './utils/i18n';
 import App from './App';
 import ErrorBoundary from './components/ErrorBoundary';
 

@@ -1,4 +1,5 @@
-// 全局离线/原生多语言翻译工具 (支持 100% 离线、移动端 PWA、无需依赖 Google Translate 网络)
+import i18n from 'i18next';
+import { initReactI18next } from 'react-i18next';
 
 export type SupportedLanguage = 'zh-CN' | 'zh-TW' | 'en' | 'ms' | 'my' | 'hi' | 'bn';
 
@@ -12,201 +13,291 @@ export const LANGUAGES: { code: SupportedLanguage; label: string; flag: string }
     { code: 'bn', label: 'বাংলা', flag: '🇧🇩' }
 ];
 
-// 核心通用字典
-const TRANSLATION_DICTIONARY: Record<SupportedLanguage, Record<string, string>> = {
-    'zh-CN': {
-        'SuperAdmin': '超级管理员',
-        'Admin': '管理员',
-        'Manager': '经理',
-        'Operator': '操作员',
-        'Driver': '司机',
-        'HR': '考勤/HR',
-        'Operations': '车间作业',
-        'Inventory & BOM': '库存与物料',
-        'Logistics': '物流配送',
-        'Organization': '人事与系统',
-        'Productivity': '日常办公',
-        'Production Floor': '生产作业空间',
-        'Production Workspace': '生产工作区',
-        'Multi-Screw Recipe & Mix': '多螺杆配料与Mix料',
-        'Machine Inspection': '机台巡检与配料快记',
-        'Submit Mix Record': '记录提交 Mix料操作与照片',
-        'Screw Channel': '螺杆通道',
-        'Screw A': '螺杆 A (Screw A)',
-        'Screw B': '螺杆 B (Screw B)',
-        'Screw C': '螺杆 C (Screw C)',
-        'Add Material': '➕ 更改/增加物料',
-        'Machine Logs': '本机日志',
-        'Position Adjustment': '位置调整',
-        'Temperature Photo': '温度照片',
-        'Bag': '包 (25kg)',
-        'Operator Duty': '在岗操作员',
-        'No Operator': '未绑定操作员',
-        'Sign Out': '退出登录',
-        'Language': '语言选择'
-    },
-    'zh-TW': {
-        'SuperAdmin': '超級管理員',
-        'Admin': '管理員',
-        'Manager': '經理',
-        'Operator': '操作員',
-        'Driver': '司機',
-        'HR': '考勤/HR',
-        'Operations': '車間作業',
-        'Inventory & BOM': '庫存與物料',
-        'Logistics': '物流配送',
-        'Organization': '人事與系統',
-        'Productivity': '日常辦公',
-        'Production Floor': '生產作業空間',
-        'Production Workspace': '生產工作區',
-        'Multi-Screw Recipe & Mix': '多螺杆配料與Mix料',
-        'Machine Inspection': '機台巡檢與配料快記',
-        'Submit Mix Record': '記錄提交 Mix料操作與照片',
-        'Screw Channel': '螺桿通道',
-        'Screw A': '螺桿 A (Screw A)',
-        'Screw B': '螺桿 B (Screw B)',
-        'Screw C': '螺桿 C (Screw C)',
-        'Add Material': '➕ 更改/增加物料',
-        'Machine Logs': '本機日誌',
-        'Position Adjustment': '位置調整',
-        'Temperature Photo': '溫度照片',
-        'Bag': '包 (25kg)',
-        'Operator Duty': '在崗操作員',
-        'No Operator': '未綁定操作員',
-        'Sign Out': '退出登錄',
-        'Language': '語言選擇'
-    },
-    'en': {
-        'SuperAdmin': 'Super Admin',
-        'Admin': 'Admin',
-        'Manager': 'Manager',
-        'Operator': 'Operator',
-        'Driver': 'Driver',
-        'HR': 'HR / Attendance',
-        'Operations': 'Operations',
-        'Inventory & BOM': 'Inventory & BOM',
-        'Logistics': 'Logistics',
-        'Organization': 'Organization & HR',
-        'Productivity': 'Productivity',
-        'Production Floor': 'Production Floor',
-        'Production Workspace': 'Production Workspace',
-        'Multi-Screw Recipe & Mix': 'Multi-Screw Recipe & Mix',
-        'Machine Inspection': 'Machine Inspection & Mix Log',
-        'Submit Mix Record': 'Submit Mix Record & Photo',
-        'Screw Channel': 'Screw Channel',
-        'Screw A': 'Screw A (Main)',
-        'Screw B': 'Screw B (Middle)',
-        'Screw C': 'Screw C (Inner)',
-        'Add Material': '➕ Add/Change Material',
-        'Machine Logs': 'Machine Logs',
-        'Position Adjustment': 'Machine Adjustment',
-        'Temperature Photo': 'Temperature Photo',
-        'Bag': 'Bag (25kg)',
-        'Operator Duty': 'Active Operator',
-        'No Operator': 'No Active Operator',
-        'Sign Out': 'Sign Out',
-        'Language': 'Language'
-    },
-    'ms': {
-        'SuperAdmin': 'Pentadbir Utama',
-        'Admin': 'Pentadbir',
-        'Manager': 'Pengurus',
-        'Operator': 'Operator Kilang',
-        'Driver': 'Pemandu',
-        'HR': 'HR / Kehadiran',
-        'Operations': 'Operasi Pengeluaran',
-        'Inventory & BOM': 'Inventori & Stok',
-        'Logistics': 'Logistik & Penghantaran',
-        'Organization': 'Organisasi & HR',
-        'Productivity': 'Produktiviti',
-        'Production Floor': 'Lantai Pengeluaran',
-        'Production Workspace': 'Ruang Kerja Pengeluaran',
-        'Multi-Screw Recipe & Mix': 'Resipi Skru & Campuran Bahan',
-        'Machine Inspection': 'Pemeriksaan Mesin & Campuran',
-        'Submit Mix Record': 'Hantar Rekod Campuran & Foto',
-        'Screw Channel': 'Saluran Skru',
-        'Screw A': 'Skru A (Utama)',
-        'Screw B': 'Skru B (Tengah)',
-        'Screw C': 'Skru C (Dalam)',
-        'Add Material': '➕ Tambah Bahan',
-        'Machine Logs': 'Log Mesin',
-        'Position Adjustment': 'Pelarasan Mesin',
-        'Temperature Photo': 'Foto Suhu',
-        'Bag': 'Beg (25kg)',
-        'Operator Duty': 'Operator Bertugas',
-        'No Operator': 'Tiada Operator',
-        'Sign Out': 'Log Keluar',
-        'Language': 'Pilih Bahasa'
-    },
-    'my': {
-        'SuperAdmin': 'မန်နေဂျာချုပ်',
-        'Admin': 'အက်ဒမင်',
-        'Manager': 'မန်နေဂျာ',
-        'Operator': 'စက်မောင်းသူ',
-        'Driver': 'ယာဉ်မောင်း',
-        'HR': 'ဝန်ထမ်းရေးရာ',
-        'Operations': 'လုပ်ငန်းစဉ်များ',
-        'Inventory & BOM': 'ကုန်ပစ္စည်းစာရင်း',
-        'Logistics': 'ပို့ဆောင်ရေး',
-        'Production Floor': 'ထုတ်လုပ်မှုဧရိယာ',
-        'Multi-Screw Recipe & Mix': 'စက်ကုန်ကြမ်းစပ်နည်း',
-        'Sign Out': 'ထွက်ရန်'
-    },
-    'hi': {
-        'SuperAdmin': 'सुपर एडमिन',
-        'Admin': 'एडमिन',
-        'Manager': 'मैनेजर',
-        'Operator': 'ऑपरेटर',
-        'Driver': 'ड्राइवर',
-        'HR': 'एचआर',
-        'Operations': 'ऑपरेशन्स',
-        'Multi-Screw Recipe & Mix': 'मशीन सामग्री मिश्रण',
-        'Sign Out': 'साइन आउट'
-    },
-    'bn': {
-        'SuperAdmin': 'সুপার অ্যাডমিন',
-        'Admin': 'অ্যাডমিন',
-        'Manager': 'ম্যানেজার',
-        'Operator': 'অপারেটর',
-        'Driver': 'ড্রাইভার',
-        'HR': 'এইচআর',
-        'Operations': 'অপারেশনস',
-        'Multi-Screw Recipe & Mix': 'মেশিন উপাদান মিশ্রণ',
-        'Sign Out': 'সাইন আউট'
-    }
+const zhCNDict: Record<string, string> = {
+    'SuperAdmin': '超级管理员',
+    'Admin': '管理员',
+    'Manager': '经理',
+    'Logistics Coordinator': '物流协调员',
+    'Driver': '司机',
+    'HR / Attendance': '考勤/HR',
+    'Operator': '操作员',
+    'Guest': '访客',
+    'Operations': '车间作业',
+    'Inventory & BOM': '库存与物料',
+    'Logistics': '物流配送',
+    'Organization': '人事与系统',
+    'Productivity': '日常办公',
+    'Production Floor': '生产作业空间',
+    'Live Stock': '实时库存',
+    'Trip Management': '出车管理',
+    'Daily Prep': '每日准备',
+    'Product Library': '产品库',
+    'Maintenance Control': '设备维保',
+    'Factory Live OS': '车间看板',
+    'Data Command': '数据管理',
+    'Production Workspace': '生产工作区',
+    'Machine Schedule': '排产计划',
+    'Floor Plan': '车间布局图',
+    'Inventory': '库存管理',
+    'Stock Movement': '库存变动',
+    'Stock Audit': '库存盘点',
+    'Audit Report': '盘点报告',
+    'Lorry Fleet': '货车车队',
+    'Lorry Fleet Management': '货车车队管理',
+    'Production Logs': '生产记录',
+    'Reports': '报表中心',
+    'Report History': '历史报表',
+    'Leave Center': '考勤请假',
+    'Staff Hub / HR Portal': '人事看板 / HR门户',
+    'IoT Settings': '物联网设置',
+    'Dev Log': '开发日志',
+    'Activity Logs': '操作日志',
+    'My Monthly Report': '我的月度报告',
+    'SOP Center': 'SOP 中心',
+    'Work Photos': '📸 工作照片',
+    'Notes': '备忘录',
+    'Tasks': '任务看板',
+    'My Deliveries': '我的配送',
+    'Delivery History': '出车历史',
+    'Staff Hub': '员工看板',
+    'Lorry Service': '车辆维修',
+    'HR Portal': 'HR 门户',
+    'Yield & AI Learning': '收率与 AI 学习',
+    'Machine QR Labels': '机器 QR 标签',
+    'Sign Out': '退出登录',
+    'System Language': '系统语言',
+    'Search plate or driver': '搜索车牌号或司机...',
+    'Grid View': '卡片视图',
+    'Table View': '表格视图',
+    'Lorry Plate': '车牌号',
+    'Primary Driver': '主司机',
+    'Zone': '出车区域',
+    'Status': '状态',
+    'Max Volume': '最大体积',
+    'Max Weight': '最大载重',
+    'Actions': '操作',
+    'Edit': '编辑',
+    'Unassigned': '未分配',
+    'Resolve Discrepancy': '处理此异常',
+    'Resolve Alert': '确认解决',
+    'Prev Page': '上一页',
+    'Next Page': '下一页'
 };
 
-// 全局 获取当前语言
+const zhTWDict: Record<string, string> = {
+    ...zhCNDict,
+    'SuperAdmin': '超級管理員',
+    'Admin': '管理員',
+    'Manager': '經理',
+    'Driver': '司機',
+    'Operator': '操作員',
+    'Sign Out': '退出登錄',
+    'Lorry Fleet Management': '貨車車隊管理',
+    'Grid View': '卡片視圖',
+    'Table View': '表格視圖'
+};
+
+const enDict: Record<string, string> = {
+    '超级管理员': 'Super Admin',
+    '管理员': 'Admin',
+    '经理': 'Manager',
+    '物流协调员': 'Logistics Coordinator',
+    '司机': 'Driver',
+    '考勤/HR': 'HR / Attendance',
+    '操作员': 'Operator',
+    '访客': 'Guest',
+    '多螺杆配料与Mix料': 'Multi-Screw Recipe & Mix',
+    '车间作业': 'Operations',
+    '库存与物料': 'Inventory & BOM',
+    '物流配送': 'Logistics',
+    '人事与系统': 'Organization & HR',
+    '日常办公': 'Productivity',
+    '生产作业空间': 'Production Floor',
+    '实时库存': 'Live Stock',
+    '出车管理': 'Trip Management',
+    '每日准备': 'Daily Prep',
+    '产品库': 'Product Library',
+    '设备维保': 'Maintenance Control',
+    '车间看板': 'Factory Live OS',
+    '数据管理': 'Data Command',
+    '生产工作区': 'Production Workspace',
+    '排产计划': 'Machine Schedule',
+    '车间布局图': 'Floor Plan',
+    '库存管理': 'Inventory',
+    '库存变动': 'Stock Movement',
+    '库存盘点': 'Stock Audit',
+    '盘点报告': 'Audit Report',
+    '货车车队': 'Lorry Fleet Management',
+    '货车车队管理': 'Lorry Fleet Management',
+    '生产记录': 'Production Logs',
+    '报表中心': 'Reports',
+    '历史报表': 'Report History',
+    '考勤请假': 'Leave Center',
+    '人事看板 / HR门户': 'Staff Hub / HR Portal',
+    '物联网设置': 'IoT Settings',
+    '开发日志': 'Dev Log',
+    '操作日志': 'Activity Logs',
+    '我的月度报告': 'My Monthly Report',
+    'SOP 中心': 'SOP Center',
+    '📸 工作照片': '📸 Work Photos',
+    '备忘录': 'Notes',
+    '任务看板': 'Tasks',
+    '我的配送': 'My Deliveries',
+    '出车历史': 'Delivery History',
+    '员工看板': 'Staff Hub',
+    '车辆维修': 'Lorry Service',
+    'HR 门户': 'HR Portal',
+    '收率与 AI 学习': 'Yield & AI Learning',
+    '机器 QR 标签': 'Machine QR Labels',
+    '退出登录': 'Sign Out',
+    '系统语言': 'System Language',
+    '车队列表': 'Lorry Fleet',
+    '里程日志与预警': 'Odometer Logs & Alerts',
+    '月度里程总结': 'Monthly ODO Summary',
+    '导出日志': 'Export Sheet (.xlsx)',
+    '添加新车': 'Add New Lorry',
+    '搜索车牌号或司机': 'Search plate or driver...',
+    '卡片': 'Grid',
+    '表格': 'Table',
+    '车牌号': 'Lorry Plate',
+    '主司机': 'Driver',
+    '出车区域': 'Zone',
+    '状态': 'Status',
+    '最大体积': 'Max Volume',
+    '最大载重': 'Max Weight',
+    '操作': 'Actions',
+    '编辑': 'Edit',
+    '未分配': 'Unassigned',
+    '处理此异常': 'Resolve Alert',
+    '确认解决': 'Resolve',
+    '上一页': 'Prev',
+    '下一页': 'Next'
+};
+
+const msDict: Record<string, string> = {
+    '超级管理员': 'Pentadbir Utama',
+    '管理员': 'Pentadbir',
+    '经理': 'Pengurus',
+    '物流协调员': 'Koor. Logistik',
+    '司机': 'Pemandu',
+    '考勤/HR': 'HR / Kehadiran',
+    '操作员': 'Operator Kilang',
+    '车间作业': 'Operasi Pengeluaran',
+    '库存与物料': 'Inventori & Stok',
+    '物流配送': 'Logistik & Penghantaran',
+    '人事与系统': 'Organisasi & HR',
+    '日常办公': 'Produktiviti',
+    '实时库存': 'Stok Semasa',
+    '出车管理': 'Pengurusan Trip',
+    '每日准备': 'Persediaan Harian',
+    '产品库': 'Perpustakaan Produk',
+    '设备维保': 'Penyelenggaraan Mesin',
+    '货车车队': 'Pengurusan Lori',
+    '货车车队管理': 'Pengurusan Armada Lori',
+    '退出登录': 'Log Keluar',
+    '车队列表': 'Senarai Lori',
+    '里程日志与预警': 'Log Odometer & Amaran',
+    '月度里程总结': 'Ringkasan Odometer Bulanan',
+    '导出日志': 'Eksport Log (.xlsx)',
+    '添加新车': 'Tambah Lori Baru',
+    '搜索车牌号或司机': 'Cari nombor pendaftaran / pemandu...',
+    '卡片': 'Kad',
+    '表格': 'Jadual',
+    '车牌号': 'No. Pendaftaran',
+    '主司机': 'Pemandu Utama',
+    '出车区域': 'Zon',
+    '状态': 'Status',
+    '最大体积': 'Isipadu Maksimum (m³)',
+    '最大载重': 'Berat Maksimum (kg)',
+    '操作': 'Tindakan',
+    '编辑': 'Edit',
+    '未分配': 'Belum Diperuntukkan',
+    '处理此异常': 'Selesaikan Amaran',
+    '确认解决': 'Sahkan Penyelesaian',
+    '上一页': 'Sebelumnya',
+    '下一页': 'Seterusnya'
+};
+
+const myDict: Record<string, string> = {
+    '超级管理员': 'မန်နေဂျာချုပ်',
+    '管理员': 'အက်ဒမင်',
+    '经理': 'မန်နေဂျာ',
+    '操作员': 'စက်မောင်းသူ',
+    '司机': 'ယာဉ်မောင်း',
+    '考勤/HR': 'ဝန်ထမ်းရေးရာ',
+    '车间作业': 'လုပ်ငန်းစဉ်များ',
+    '库存与物料': 'ကုန်ပစ္စည်းစာရင်း',
+    '物流配送': 'ပို့ဆောင်ရေး',
+    '货车车队管理': 'ယာဉ်မောင်းစီမံခန့်ခွဲမှု',
+    '退出登录': 'ထွက်ရန်'
+};
+
+const hiDict: Record<string, string> = {
+    '超级管理员': 'सुपर एडमिन',
+    '管理员': 'एडमिन',
+    '经理': 'मैनेजर',
+    '操作员': 'ऑपरेटर',
+    '司机': 'ड्राइवर',
+    '考勤/HR': 'एचआर',
+    '车间作业': 'ऑपरेशन्स',
+    '货车车队管理': 'ट्रक बेड़ा प्रबंधन',
+    '退出登录': 'साइन आउट'
+};
+
+const bnDict: Record<string, string> = {
+    '超级管理员': 'সুপার অ্যাডমিন',
+    '管理员': 'অ্যাডমিন',
+    '经理': 'ম্যানেজার',
+    '操作员': 'অপারেটর',
+    '司机': 'ড্রাইভার',
+    '考勤/HR': 'এইচআর',
+    '车间作业': 'অপারেশনস',
+    '货车车队管理': 'ট্রাক বহর ব্যবস্থাপনা',
+    '退出登录': 'সাইন আউট'
+};
+
+const resources = {
+    'zh-CN': { translation: zhCNDict },
+    'zh-TW': { translation: zhTWDict },
+    'en': { translation: enDict },
+    'ms': { translation: msDict },
+    'my': { translation: myDict },
+    'hi': { translation: hiDict },
+    'bn': { translation: bnDict }
+};
+
+const savedLang = (localStorage.getItem('packsecure_lang') as SupportedLanguage) || 'zh-CN';
+
+i18n.use(initReactI18next).init({
+    resources,
+    lng: savedLang,
+    fallbackLng: 'zh-CN',
+    interpolation: {
+        escapeValue: false
+    }
+});
+
 export const getCurrentLanguage = (): SupportedLanguage => {
     return (localStorage.getItem('packsecure_lang') as SupportedLanguage) || 'zh-CN';
 };
 
-// 全局 动态翻译函数
 export const t = (text: string): string => {
-    const lang = getCurrentLanguage();
-    const dict = TRANSLATION_DICTIONARY[lang];
-    if (dict && dict[text]) {
-        return dict[text];
-    }
-    return text;
+    if (!text) return '';
+    return i18n.t(text, { defaultValue: text });
 };
 
-// 全局 切换语言函数 (写入 localStorage 并更新 DOM)
 export const changeLanguage = (langCode: SupportedLanguage) => {
     localStorage.setItem('packsecure_lang', langCode);
     document.documentElement.lang = langCode;
 
-    // 触发页面事件让所有组件感知
-    window.dispatchEvent(new CustomEvent('packsecure:lang-change', { detail: langCode }));
-    
-    // 设置 Google Translate 全局 Cookie
-    document.cookie = `googtrans=/zh-CN/${langCode}; path=/;`;
-    document.cookie = `googtrans=/auto/${langCode}; path=/;`;
-    document.cookie = `googtrans=/zh-CN/${langCode}; path=/; domain=` + window.location.hostname;
-    document.cookie = `googtrans=/auto/${langCode}; path=/; domain=` + window.location.hostname;
+    // 清除所有 googtrans cookie
+    document.cookie = "googtrans=; expires=Thu, 01 Jan 1970 00:00:00 UTC; path=/;";
+    document.cookie = "googtrans=; expires=Thu, 01 Jan 1970 00:00:00 UTC; path=/; domain=" + window.location.hostname;
 
-    // 即时刷新页面生效
-    setTimeout(() => {
-        window.location.reload();
-    }, 100);
+    i18n.changeLanguage(langCode);
+
+    // 触发页面事件让订阅组件平滑更新
+    window.dispatchEvent(new CustomEvent('packsecure:lang-change', { detail: langCode }));
 };
+
+export default i18n;

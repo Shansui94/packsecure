@@ -4,6 +4,7 @@ import { supabase } from '../services/supabase';
 import { Truck, Plus, Trash2, Edit2, Search, User, MapPin, QrCode as QrIcon, Printer, X, AlertTriangle, Check, FileText, Image as ImageIcon, FileSpreadsheet, LayoutGrid, Table as TableIcon, ChevronLeft, ChevronRight } from 'lucide-react';
 import QRCode from 'react-qr-code';
 import * as XLSX from 'xlsx';
+import { t } from '../utils/i18n';
 
 const LorryManagement: React.FC = () => {
     const [lorries, setLorries] = useState<any[]>([]);
@@ -26,6 +27,13 @@ const LorryManagement: React.FC = () => {
     const [alertsPage, setAlertsPage] = useState<number>(1);
     const ALERTS_PER_PAGE = 6;
     const [odoSubTab, setOdoSubTab] = useState<'alerts' | 'logs'>('alerts');
+
+    const [, setLangTick] = useState(0);
+    useEffect(() => {
+        const handleLang = () => setLangTick(v => v + 1);
+        window.addEventListener('packsecure:lang-change', handleLang);
+        return () => window.removeEventListener('packsecure:lang-change', handleLang);
+    }, []);
 
     // Monthly Odometer Summary Modal State
     const [isMonthlyOdoModalOpen, setIsMonthlyOdoModalOpen] = useState(false);
