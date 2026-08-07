@@ -35,6 +35,7 @@ import {
 } from 'lucide-react';
 import { supabase } from '../services/supabase';
 import { canAccessPage } from '../utils/pageAccess';
+import { useTranslation } from 'react-i18next';
 import PageLogicDrawer from './PageLogicDrawer';
 import { changeLanguage, LANGUAGES, t } from '../utils/i18n';
 
@@ -73,6 +74,8 @@ const Layout: React.FC<LayoutProps> = ({ children, activePage, setActivePage, us
         () => localStorage.getItem('packsecure_lang') || 'zh-CN'
     );
 
+    const { t: translate } = useTranslation();
+
     useEffect(() => {
         const handleLangChange = (e: any) => {
             setCurrentLanguage(e.detail || localStorage.getItem('packsecure_lang') || 'zh-CN');
@@ -82,7 +85,7 @@ const Layout: React.FC<LayoutProps> = ({ children, activePage, setActivePage, us
     }, []);
 
     const translateUI = (text: string) => {
-        return t(text);
+        return translate(text, { defaultValue: text });
     };
 
     const handleLanguageChange = (langCode: string) => {

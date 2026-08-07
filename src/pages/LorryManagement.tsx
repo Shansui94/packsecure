@@ -4,9 +4,10 @@ import { supabase } from '../services/supabase';
 import { Truck, Plus, Trash2, Edit2, Search, User, MapPin, QrCode as QrIcon, Printer, X, AlertTriangle, Check, FileText, Image as ImageIcon, FileSpreadsheet, LayoutGrid, Table as TableIcon, ChevronLeft, ChevronRight } from 'lucide-react';
 import QRCode from 'react-qr-code';
 import * as XLSX from 'xlsx';
-import { t } from '../utils/i18n';
+import { useTranslation } from 'react-i18next';
 
 const LorryManagement: React.FC = () => {
+    const { t } = useTranslation();
     const [lorries, setLorries] = useState<any[]>([]);
     const [drivers, setDrivers] = useState<any[]>([]);
     const [loading, setLoading] = useState(true);
