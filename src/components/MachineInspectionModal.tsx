@@ -518,15 +518,39 @@ export const MachineInspectionModal: React.FC<MachineInspectionModalProps> = ({
         }));
     };
 
+    // 辅助工具：上传照片 DataURL 到 Supabase work-photos 存储桶，获取跨端永久访问的 URL
+    const uploadPhotoBlobToSupabase = async (compressedDataUrl: string): Promise<string> => {
+        try {
+            if (!compressedDataUrl || !compressedDataUrl.startsWith('data:')) return compressedDataUrl;
+            const res = await fetch(compressedDataUrl);
+            const blob = await res.blob();
+            const uploaderId = currentUser?.employeeId || currentUser?.uid || 'OP';
+            const fileName = `item_photo_${uploaderId}_${Date.now()}_${Math.random().toString(36).substring(2, 6)}.jpg`;
+            const { error } = await supabase.storage
+                .from('work-photos')
+                .upload(fileName, blob, { contentType: blob.type || 'image/jpeg' });
+
+            if (!error) {
+                const { data } = supabase.storage.from('work-photos').getPublicUrl(fileName);
+                if (data?.publicUrl) return data.publicUrl;
+            }
+        } catch (e) {
+            console.warn('Supabase storage photo upload fallback:', e);
+        }
+        return compressedDataUrl;
+    };
+
     // 📷 拍摄或上传单项物料包装/外袋照片
     const handleItemPhotoUpload = async (id: string, e: React.ChangeEvent<HTMLInputElement>) => {
         if (e.target.files?.[0]) {
             try {
                 const compressed = await compressImage(e.target.files[0], 1024, 0.7);
-                setScrewMaterials(prev => ({
-                    ...prev,
-                    [selectedScrew]: (prev[selectedScrew] || []).map(m => m.id === id ? { ...m, photoUrl: compressed } : m)
-                }));
+                const cloudUrl = await uploadPhotoBlobToSupabase(compressed);
+                const updated = {
+                    ...screwMaterials,
+                    [selectedScrew]: (screwMaterials[selectedScrew] || []).map(m => m.id === id ? { ...m, photoUrl: cloudUrl } : m)
+                };
+                syncScrewMaterialsToCloud(updated);
             } catch (err) {
                 console.error('Item photo upload error:', err);
             }
@@ -538,9 +562,10 @@ export const MachineInspectionModal: React.FC<MachineInspectionModalProps> = ({
         if (e.target.files?.[0]) {
             try {
                 const compressed = await compressImage(e.target.files[0], 1024, 0.7);
+                const cloudUrl = await uploadPhotoBlobToSupabase(compressed);
                 setScrewHopperPhotos(prev => ({
                     ...prev,
-                    [selectedScrew]: compressed
+                    [selectedScrew]: cloudUrl
                 }));
             } catch (err) {
                 console.error(err);
