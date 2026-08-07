@@ -945,11 +945,12 @@ const ProductionControl: React.FC<ProductionControlProps> = ({ user, jobs = [], 
             setMachineOperator(null);
             return;
         }
+        const shortKey = selectedMachine.split('-')[0].trim();
         try {
             const { data } = await supabase
                 .from('operator_attendance')
                 .select('clock_in, operator_id')
-                .eq('machine_id', selectedMachine)
+                .or(`machine_id.eq.${selectedMachine},machine_id.eq.${shortKey},machine_id.ilike.${shortKey}-%`)
                 .is('clock_out', null);
 
             if (data && data.length > 0) {
@@ -966,6 +967,12 @@ const ProductionControl: React.FC<ProductionControlProps> = ({ user, jobs = [], 
                     employeeId: activeShift.operator_id,
                     clockIn: activeShift.clock_in
                 });
+
+                // 强制同步底层打卡时间戳，确保电脑与手机显示完全相同的已值班时长
+                if (operatorEmployeeId === activeShift.operator_id) {
+                    setClockInTime(activeShift.clock_in);
+                    localStorage.setItem(`operatorClockInTime_${operatorEmployeeId}`, activeShift.clock_in);
+                }
             } else {
                 setMachineOperator(null);
             }
