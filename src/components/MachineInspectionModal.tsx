@@ -125,16 +125,29 @@ export const MachineInspectionModal: React.FC<MachineInspectionModalProps> = ({
     // 各螺杆动态配方 State
     const [screwMaterials, setScrewMaterials] = useState<Record<ScrewType, MaterialItemState[]>>(INITIAL_PRESET_MATERIALS);
 
-    // 🔑 当 Modal 打开或 machineId 切换时，从本地和云端 Supabase (audit_logs) 同步加载配方
+    // 归一化机台 KEY，防止电脑端 (如 'J1-M01' / '2M Double Layer (J1)') 与 手机端 (如 'J1') 命名差异导致的隔离
+    const getNormalizedMachineKey = (mId?: string, mName?: string): string => {
+        const raw = mId || mName || 'J1';
+        const matchParen = raw.match(/\(([^)]+)\)/);
+        let key = raw;
+        if (matchParen && matchParen[1]) {
+            key = matchParen[1].trim();
+        }
+        if (key.includes('-')) {
+            key = key.split('-')[0];
+        }
+        return key.toUpperCase().trim();
+    };
+
+    // 🔑 当 Modal 打开或 machineId 切换时，从云端 Supabase (work_photos: MACHINE_SCREW_FORMULA) 同步加载配方
     useEffect(() => {
         if (!isOpen || (!machineId && !machineName)) return;
-        const targetId = machineId || machineName;
+        const normKey = getNormalizedMachineKey(machineId, machineName);
 
         const loadFormula = async () => {
             let localMat: any = null;
-            // 1. 先从本地 LocalStorage 秒级渲染
             try {
-                const saved = localStorage.getItem(`active_screw_materials_${targetId}`);
+                const saved = localStorage.getItem(`active_screw_materials_${normKey}`);
                 if (saved) {
                     localMat = JSON.parse(saved);
                     setScrewMaterials(localMat);
@@ -142,25 +155,25 @@ export const MachineInspectionModal: React.FC<MachineInspectionModalProps> = ({
                     setScrewMaterials(INITIAL_PRESET_MATERIALS);
                 }
             } catch (e) {
-                console.error('Failed to load saved materials for machine:', targetId, e);
+                console.error('Failed to load saved materials locally:', normKey, e);
                 setScrewMaterials(INITIAL_PRESET_MATERIALS);
             }
 
-            // 2. 从云端 audit_logs 拉取最新跨端同步配方
+            // 从云端 work_photos 表拉取最新跨端同步配方
             try {
                 const { data } = await supabase
-                    .from('audit_logs')
-                    .select('new_data')
-                    .eq('table_name', 'machine_screw_formulas')
-                    .eq('record_id', targetId)
+                    .from('work_photos')
+                    .select('user_note')
+                    .eq('category', 'MACHINE_SCREW_FORMULA')
+                    .eq('machine_id', normKey)
                     .order('created_at', { ascending: false })
                     .limit(1);
 
-                if (data && data.length > 0 && data[0].new_data) {
-                    setScrewMaterials(data[0].new_data);
-                    localStorage.setItem(`active_screw_materials_${targetId}`, JSON.stringify(data[0].new_data));
+                if (data && data.length > 0 && data[0].user_note) {
+                    const cloudMaterials = JSON.parse(data[0].user_note);
+                    setScrewMaterials(cloudMaterials);
+                    localStorage.setItem(`active_screw_materials_${normKey}`, JSON.stringify(cloudMaterials));
                 } else if (localMat) {
-                    // 若云端尚无配方记录，自动将当前电脑本地配方上云推流
                     syncScrewMaterialsToCloud(localMat);
                 }
             } catch (e) {
@@ -171,26 +184,25 @@ export const MachineInspectionModal: React.FC<MachineInspectionModalProps> = ({
         loadFormula();
     }, [isOpen, machineId, machineName]);
 
-    // 每次修改配方，自动写入 LocalStorage 并同步写到云端 audit_logs
+    // 每次修改配方，同步写入云端 work_photos
     const syncScrewMaterialsToCloud = async (newMaterials: Record<ScrewType, MaterialItemState[]>) => {
         setScrewMaterials(newMaterials);
-        const targetId = machineId || machineName;
-        if (!targetId) return;
+        const normKey = getNormalizedMachineKey(machineId, machineName);
 
         try {
-            localStorage.setItem(`active_screw_materials_${targetId}`, JSON.stringify(newMaterials));
+            localStorage.setItem(`active_screw_materials_${normKey}`, JSON.stringify(newMaterials));
         } catch (e) {
             console.error('Failed to save materials locally:', e);
         }
 
         try {
-            await supabase.from('audit_logs').insert([{
-                table_name: 'machine_screw_formulas',
-                action: 'UPDATE_FORMULA',
-                record_id: targetId,
-                new_data: newMaterials,
-                changed_by_email: currentUser?.email || 'operator@packsecure.com',
-                changed_by_uid: currentUser?.uid || ''
+            await supabase.from('work_photos').insert([{
+                employee_id: currentUser?.uid || 'OP-001',
+                employee_name: currentUser?.name || currentUser?.email?.split('@')[0] || '现场操作员',
+                machine_id: normKey,
+                category: 'MACHINE_SCREW_FORMULA',
+                user_note: JSON.stringify(newMaterials),
+                photo_url: 'https://images.unsplash.com/photo-1581091226825-a6a2a5aee158?w=300&q=80'
             }]);
         } catch (e) {
             console.warn('Cloud formula save skipped:', e);
@@ -251,51 +263,57 @@ export const MachineInspectionModal: React.FC<MachineInspectionModalProps> = ({
         }
     };
 
-    // 辅助工具：保存日志到 State，同时全量同步写入 Supabase audit_logs 审计表
+    // 辅助工具：保存日志到 State，同时全量同步写入 Supabase work_photos 表
     const saveLogToLocalAndState = async (newLog: MobileInspectionLog) => {
         setLogs(prev => [newLog, ...prev]);
 
-        // 云端全同步：写一份到 audit_logs 确保任何端（电脑与手机）均能拉取
+        // 云端全同步：写一份到 work_photos 确保任何端（电脑与手机）均能拉取
         try {
-            const targetId = machineId || machineName || 'GLOBAL';
-            await supabase.from('audit_logs').insert([{
-                table_name: 'mobile_inspection_logs',
-                action: newLog.log_type || 'material',
-                record_id: targetId,
-                new_data: newLog,
-                changed_by_email: currentUser?.email || 'operator@packsecure.com',
-                changed_by_uid: currentUser?.uid || ''
+            const normKey = getNormalizedMachineKey(machineId, machineName);
+            await supabase.from('work_photos').insert([{
+                employee_id: currentUser?.uid || 'OP-001',
+                employee_name: currentUser?.name || currentUser?.email?.split('@')[0] || '现场操作员',
+                machine_id: normKey,
+                category: 'MACHINE_INSPECTION_LOG',
+                user_note: JSON.stringify(newLog),
+                photo_url: newLog.photo_url || 'https://images.unsplash.com/photo-1581091226825-a6a2a5aee158?w=300&q=80'
             }]);
         } catch (e) {
-            console.warn('Cloud audit log save skipped:', e);
+            console.warn('Cloud log save skipped:', e);
         }
     };
 
-    // 🔒 严格隔离：从 Supabase 云端表全量读取该机台的日志，保证多设备（电脑与手机）百分之百绝对同步
+    // 🔒 严格隔离：从 Supabase 云端 work_photos 表全量读取该机台的日志，保证多设备（电脑与手机）百分之百绝对同步
     const fetchMachineLogs = async () => {
         if (!machineId && !machineName) {
             setLogs([]);
             return;
         }
 
-        const targetId = machineId || machineName;
+        const normKey = getNormalizedMachineKey(machineId, machineName);
 
         let cloudLogs: MobileInspectionLog[] = [];
         try {
-            // 从 Supabase audit_logs 审计日志表拉取跨端统一日志
-            const auditRes = await supabase
-                .from('audit_logs')
-                .select('new_data, created_at')
-                .eq('table_name', 'mobile_inspection_logs')
-                .eq('record_id', targetId)
+            const { data } = await supabase
+                .from('work_photos')
+                .select('user_note, created_at')
+                .eq('category', 'MACHINE_INSPECTION_LOG')
+                .eq('machine_id', normKey)
                 .order('created_at', { ascending: false })
                 .limit(50);
 
-            if (auditRes.data && auditRes.data.length > 0) {
-                cloudLogs = auditRes.data.map((item: any) => ({
-                    ...item.new_data,
-                    created_at: item.new_data?.created_at || item.created_at
-                })).filter(Boolean);
+            if (data && data.length > 0) {
+                cloudLogs = data.map((item: any) => {
+                    try {
+                        const parsed = JSON.parse(item.user_note);
+                        return {
+                            ...parsed,
+                            created_at: parsed.created_at || item.created_at
+                        };
+                    } catch (e) {
+                        return null;
+                    }
+                }).filter(Boolean);
             }
         } catch (e) {
             console.warn('DB fetch logs skipped:', e);

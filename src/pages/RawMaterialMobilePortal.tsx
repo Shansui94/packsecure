@@ -25,19 +25,23 @@ export const RawMaterialMobilePortal: React.FC<RawMaterialMobilePortalProps> = (
     const fetchMachines = async () => {
         try {
             const { data } = await supabase
-                .from('machines')
-                .select('id, name')
+                .from('sys_machines_v2')
+                .select('machine_id, name')
                 .order('name');
 
             if (data && data.length > 0) {
-                setMachines(data);
-                setSelectedMachineId(data[0].id);
-                setSelectedMachineName(data[0].name);
+                const list = data.map((m: any) => ({
+                    id: m.machine_id,
+                    name: m.name || m.machine_id
+                }));
+                setMachines(list);
+                setSelectedMachineId(list[0].id);
+                setSelectedMachineName(list[0].name);
             } else {
                 const defaultMacs = [
-                    { id: 'm1', name: '1号 吹膜机 (Extruder 1)' },
-                    { id: 'm2', name: '2M Double Layer (T2)' },
-                    { id: 'm3', name: '3号 大型吹膜机 (Extruder 3)' }
+                    { id: 'J1-M01', name: '2M Double Layer (J1)' },
+                    { id: 'T2-M01', name: '2M Double Layer (T2)' },
+                    { id: 'T1-M03', name: 'Stretch Film (T1)' }
                 ];
                 setMachines(defaultMacs);
                 setSelectedMachineId(defaultMacs[0].id);
