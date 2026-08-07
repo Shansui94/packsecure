@@ -372,27 +372,35 @@ const Register: React.FC<RegisterProps> = ({ onNavigate }) => {
             const registeredUid = signUpData.user?.id;
             if (registeredUid) {
                 // Insert Pending user record to users_public for HR Portal approval
-                await supabase.from('users_public').upsert({
-                    id: registeredUid,
-                    email: finalEmail,
-                    name: finalName,
-                    employee_id: pinDigits,
-                    role: appliedRole,
-                    status: 'Pending',
-                    base_location: baseLocation
-                }).catch(err => console.warn("users_public pending insert warning:", err));
+                try {
+                    await supabase.from('users_public').upsert({
+                        id: registeredUid,
+                        email: finalEmail,
+                        name: finalName,
+                        employee_id: pinDigits,
+                        role: appliedRole,
+                        status: 'Pending',
+                        base_location: baseLocation
+                    });
+                } catch (err) {
+                    console.warn("users_public pending insert warning:", err);
+                }
 
                 // Insert Pending user record to sys_users_v2
-                await supabase.from('sys_users_v2').upsert({
-                    auth_user_id: registeredUid,
-                    email: finalEmail,
-                    name: finalName,
-                    employee_id: pinDigits,
-                    pin_code: pinDigits,
-                    phone: finalPhone,
-                    role: appliedRole,
-                    status: 'Pending'
-                }, { onConflict: 'auth_user_id' }).catch(err => console.warn("sys_users_v2 pending insert warning:", err));
+                try {
+                    await supabase.from('sys_users_v2').upsert({
+                        auth_user_id: registeredUid,
+                        email: finalEmail,
+                        name: finalName,
+                        employee_id: pinDigits,
+                        pin_code: pinDigits,
+                        phone: finalPhone,
+                        role: appliedRole,
+                        status: 'Pending'
+                    }, { onConflict: 'auth_user_id' });
+                } catch (err) {
+                    console.warn("sys_users_v2 pending insert warning:", err);
+                }
             }
 
             setStatus('success');

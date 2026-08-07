@@ -97,13 +97,15 @@ export default function Customer360Console() {
         }
 
         async function fetchCustomerDetails() {
+            if (!selectedCustomer) return;
+            const targetCustomerName = selectedCustomer.name;
             setIsLoading(true);
             try {
                 // 1. Fetch alias mappings
                 const { data: mappingData, error: mappingErr } = await supabase
                     .from('customer_sku_mappings')
                     .select('*')
-                    .eq('customer_name', selectedCustomer.name);
+                    .eq('customer_name', targetCustomerName);
                 
                 if (mappingErr) throw mappingErr;
                 setMappings(mappingData || []);
@@ -112,7 +114,7 @@ export default function Customer360Console() {
                 const { data: orderData, error: orderErr } = await supabase
                     .from('sales_orders')
                     .select('*')
-                    .eq('customer', selectedCustomer.name)
+                    .eq('customer', targetCustomerName)
                     .order('order_date', { ascending: false })
                     .limit(5);
 

@@ -359,6 +359,7 @@ const WorkPhotoLog: React.FC<Props> = ({ user }) => {
             
             // Prioritize original file if available (for maximum clarity)
             const blob = selectedFile || await fetch(`data:${contentType};base64,${previewBase64}`).then(r => r.blob());
+            if (!blob) throw new Error("No image blob available");
 
             const { error: uploadError } = await supabase.storage
                 .from('work-photos')
@@ -375,12 +376,12 @@ const WorkPhotoLog: React.FC<Props> = ({ user }) => {
                 employee_id: user.employeeId || 'unknown',
                 employee_name: user.name || 'Unknown',
                 photo_url: photoUrl,
-                ai_description: aiResult.description,
+                ai_description: aiResult?.description || null,
                 user_note: userNote,
-                category: aiResult.category,
-                ai_tags: aiResult.tags,
-                risk_flag: aiResult.risk_flag,
-                risk_reason: aiResult.risk_reason,
+                category: aiResult?.category || 'General',
+                ai_tags: aiResult?.tags || [],
+                risk_flag: aiResult?.risk_flag || false,
+                risk_reason: aiResult?.risk_reason || null,
                 machine_id: selectedMachineId || null,
             });
 

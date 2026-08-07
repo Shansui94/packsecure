@@ -2,7 +2,7 @@ import React, { useState, useEffect } from 'react';
 import { supabase } from '../services/supabase';
 import { 
     Activity, FlaskConical, Box, Sparkles, Check, Edit2, Trash2, 
-    XOctagon, RefreshCw, Sliders, Info, LineChart as ChartIcon, FileText, ChevronRight, Save, Database
+    XOctagon, RefreshCw, Sliders, Info, LineChart as ChartIcon, FileText, ChevronRight, Save, Database, Loader
 } from 'lucide-react';
 import { ResponsiveContainer, LineChart, Line, XAxis, YAxis, CartesianGrid, Tooltip, Legend } from 'recharts';
 

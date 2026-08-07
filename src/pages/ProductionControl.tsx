@@ -84,7 +84,7 @@ const parseBubbleWrapSku = (sku: string): ParsedSku | null => {
         let material: ProductMaterial = 'Clear';
         if (parts[2] === 'CLR') material = 'Clear';
         else if (parts[2] === 'BLK') material = 'Black';
-        else if (parts[2] === 'YLW') material = 'Yellow';
+        else if (parts[2] === 'YLW') material = 'Yellow' as ProductMaterial;
         
         const specPart = parts[3]; // e.g. 100Mx50CMx2ROLL
         const match = specPart.match(/100Mx(\d+)CMx(\d+)ROLL/i);
@@ -243,7 +243,7 @@ const ProductionLane: React.FC<ProductionLaneProps> = ({
                             const activeLanesCount = siblingLanes && siblingLanes.length > 0 ? siblingLanes.length : 1;
 
                             const total = logsData.reduce((sum, log) => {
-                                const logLane = log.Source_Lane || log.source_lane;
+                                const logLane = (log as any).Source_Lane || (log as any).source_lane;
                                 if (logLane && logLane !== 'Unknown' && logLane !== laneId) {
                                     return sum;
                                 }
@@ -730,6 +730,8 @@ const ProductionControl: React.FC<ProductionControlProps> = ({ user, jobs = [], 
     // Operator Tasks State
     const [operatorTasks, setOperatorTasks] = useState<OperatorTask[]>([]);
     const [presetSku, setPresetSku] = useState<string | null>(null);
+    const [selectedRolls, setSelectedRolls] = useState<number>(1);
+    const [activeSku, setActiveSku] = useState<string | null>(null);
 
     // Takeover Warning Modal State
     const [takeoverWarningRecord, setTakeoverWarningRecord] = useState<any>(null);
@@ -1485,8 +1487,8 @@ const ProductionControl: React.FC<ProductionControlProps> = ({ user, jobs = [], 
             }
             if (machine) {
                 setMachineMetadata(machine);
-                if (machine.rolls_per_alarm) {
-                    setSelectedRolls(machine.rolls_per_alarm);
+                if ((machine as any).rolls_per_alarm) {
+                    setSelectedRolls((machine as any).rolls_per_alarm);
                 }
             }
         };
@@ -1519,7 +1521,7 @@ const ProductionControl: React.FC<ProductionControlProps> = ({ user, jobs = [], 
             const groupedMap = new Map<string, GroupedProductionLog>();
             for (const log of data) {
                 const sku = log.sku;
-                const name = log.master_items_v2?.name || sku || 'Production Log';
+                const name = (log as any).master_items_v2?.name || sku || 'Production Log';
                 const qty = Number(log.output_qty) || 1;
                 const time = log.created_at;
 
@@ -2155,11 +2157,12 @@ const ProductionControl: React.FC<ProductionControlProps> = ({ user, jobs = [], 
                 {user && user.role !== 'Operator' && (
                     <div className="grid grid-cols-2 sm:flex sm:flex-wrap gap-2 mb-4">
                         {filteredMachines.map(m => {
-                            const isSelected = selectedMachine === m.machine_id;
+                            const mId = (m as any).machine_id || m.id;
+                            const isSelected = selectedMachine === mId;
                             return (
                                 <button
-                                    key={m.machine_id}
-                                    onClick={() => handleMachineTabClick(m.machine_id)}
+                                    key={mId}
+                                    onClick={() => handleMachineTabClick(mId)}
                                     className={`px-3 py-2 rounded-xl text-xs font-medium transition-all border text-center sm:shrink-0 ${
                                         isSelected
                                             ? 'bg-blue-600 text-white border-blue-500 shadow-sm'
@@ -2200,10 +2203,10 @@ const ProductionControl: React.FC<ProductionControlProps> = ({ user, jobs = [], 
                                                  const text = detectedCodes[0].rawValue;
                                                  if (text) {
                                                      const cleanText = text.trim();
-                                                     const found = machines.find(m => m.machine_id === cleanText || m.name === cleanText);
+                                                     const found = machines.find(m => ((m as any).machine_id || m.id) === cleanText || m.name === cleanText);
                                                      if (found) {
                                                          hasScannedRef.current = true;
-                                                         handleMachineTabClick(found.machine_id);
+                                                         handleMachineTabClick((found as any).machine_id || found.id);
                                                          setTimeout(() => {
                                                              setIsScanningMachine(false);
                                                          }, 100);
