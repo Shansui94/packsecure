@@ -140,8 +140,15 @@ const zhCNDict: Record<string, string> = {
     '上一页': '上一页',
     'Prev Page': '上一页',
     '下一页': '下一页',
-    // Production Workspace Page
-    '生产控制工作台': '生产控制工作台',
+    // Customer 360 Console
+    '一站式客户资料与配送单据全景透视工作台': '一站式客户资料与配送单据全景透视工作台',
+    '选择要查看的客户': '选择要查看的客户',
+    '正在载入客户列表...': '正在载入客户列表...',
+    '搜索客户名字...': '搜索客户名字...',
+    '清除': '清除',
+    '未找到匹配客户': '未找到匹配客户',
+    '暂无数据': '暂无数据',
+    '请在上方选择或搜索客户': '请在上方选择或搜索客户',
     '当前机台': '当前机台',
     '接管控制模式': '接管控制模式',
     '监控模式': '监控模式',
@@ -368,9 +375,15 @@ const enDict: Record<string, string> = {
     '待办任务': 'Pending Tasks',
     '暂无待办任务': 'No Pending Tasks',
     '最近生产产出记录': 'Recent Production Logs',
-    '类型': 'Type',
-    '规格': 'Size',
-    '生产': 'Production',
+    // Customer 360 Console
+    '一站式客户资料与配送单据全景透视工作台': 'One-stop customer profile & delivery console',
+    '选择要查看的客户': 'Select a Customer',
+    '正在载入客户列表...': 'Loading customer list...',
+    '搜索客户名字...': 'Search customer name...',
+    '清除': 'Clear',
+    '未找到匹配客户': 'No matching customers found',
+    '暂无数据': 'No Data Available',
+    '请在上方选择或搜索客户': 'Please select or search for a customer above',
 };
 
 const msDict: Record<string, string> = {
