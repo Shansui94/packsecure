@@ -2470,8 +2470,13 @@ const DeliveryOrderManagement: React.FC = () => {
                                 </div>
                                 <div>
                                     <div className="text-sm font-black text-amber-400 uppercase tracking-widest leading-none mb-1">Upcoming Holidays (Next 30 Days)</div>
-                                    <div className="text-xs font-bold text-amber-500/80">
-                                        {upcomingLeaves.map(l => `${l.driverName} (${l.start_date}${l.start_date !== l.end_date ? ' ➔ ' + l.end_date : ''})`).join(', ')}
+                                    <div className="text-xs font-bold text-amber-500/80 flex flex-col gap-1 mt-1">
+                                        {upcomingLeaves.map(l => (
+                                            <div key={l.id} className="flex items-baseline gap-2">
+                                                <span>{l.driverName} ({l.start_date}{l.start_date !== l.end_date ? ' ➔ ' + l.end_date : ''})</span>
+                                                <span className="text-[9px] text-amber-500/60 uppercase tracking-widest break-all">"{l.reason || 'No Reason'}"</span>
+                                            </div>
+                                        ))}
                                     </div>
                                 </div>
                             </div>
