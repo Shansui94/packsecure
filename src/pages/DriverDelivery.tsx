@@ -1064,15 +1064,17 @@ const DriverDelivery: React.FC<DriverDeliveryProps> = ({ user }) => {
                 const lastLog = await getLatestMileage(scannedLorryData.id);
 
                 if (lastLog && lastLog.mileage !== mileageVal) {
-                    // HARD BLOCK if discrepancy is > 2000 km (impossible jump, prevents DB corruption)
-                    if (Math.abs(mileageVal - lastLog.mileage) > 2000) {
-                        alert(`Ralat! Perbezaan perbatuan terlalu besar (+${mileageVal - lastLog.mileage} km).\nSila hubungi Admin. / Error! Mileage jump is too large. Please contact Admin.`);
-                        setSubmittingOdometer(false);
-                        return;
+                    const diff = mileageVal - lastLog.mileage;
+                    // If discrepancy is > 2000 km, warn driver with a confirm dialog so legitimate handovers are not permanently blocked
+                    if (Math.abs(diff) > 2000) {
+                        const proceed = window.confirm(`⚠️ PERBEZAAN PERBATUAN BESAR / LARGE MILEAGE DIFFERENCE\n\nRekod terdahulu / Previous record: ${lastLog.mileage} km\nBacaan semasa / Current reading: ${mileageVal} km\nPerbezaan / Difference: ${diff > 0 ? '+' : ''}${diff} km\n\nAdakah anda pasti bacaan meter ini betul? Rekod amaran akan dihantar kepada Admin.\n(Are you sure this odometer reading is correct? An alert will be recorded for Admin.)\n\nTeruskan? / Proceed?`);
+                        if (!proceed) {
+                            setSubmittingOdometer(false);
+                            return;
+                        }
                     }
 
                     // Create discrepancy alert!
-                    const diff = mileageVal - lastLog.mileage;
                     const { error: alertErr } = await supabase
                         .from('lorry_mileage_alerts')
                         .insert({
@@ -1126,15 +1128,17 @@ const DriverDelivery: React.FC<DriverDeliveryProps> = ({ user }) => {
                 const lastLog = await getLatestMileage(scannedLorryData.id);
 
                 if (lastLog && lastLog.mileage !== mileageVal) {
-                    // HARD BLOCK if discrepancy is > 2000 km (impossible jump, prevents DB corruption)
-                    if (Math.abs(mileageVal - lastLog.mileage) > 2000) {
-                        alert(`Ralat! Perbezaan perbatuan terlalu besar (+${mileageVal - lastLog.mileage} km).\nSila hubungi Admin. / Error! Mileage jump is too large. Please contact Admin.`);
-                        setSubmittingOdometer(false);
-                        return;
+                    const diff = mileageVal - lastLog.mileage;
+                    // If discrepancy is > 2000 km, warn driver with a confirm dialog so legitimate handovers are not permanently blocked
+                    if (Math.abs(diff) > 2000) {
+                        const proceed = window.confirm(`⚠️ PERBEZAAN PERBATUAN BESAR / LARGE MILEAGE DIFFERENCE\n\nRekod terdahulu / Previous record: ${lastLog.mileage} km\nBacaan semasa / Current reading: ${mileageVal} km\nPerbezaan / Difference: ${diff > 0 ? '+' : ''}${diff} km\n\nAdakah anda pasti bacaan meter ini betul? Rekod amaran akan dihantar kepada Admin.\n(Are you sure this odometer reading is correct? An alert will be recorded for Admin.)\n\nTeruskan? / Proceed?`);
+                        if (!proceed) {
+                            setSubmittingOdometer(false);
+                            return;
+                        }
                     }
 
                     // Create discrepancy alert!
-                    const diff = mileageVal - lastLog.mileage;
                     const { error: alertErr } = await supabase
                         .from('lorry_mileage_alerts')
                         .insert({

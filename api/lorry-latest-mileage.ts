@@ -1,12 +1,6 @@
 import type { VercelRequest, VercelResponse } from '@vercel/node';
 import { createClient } from '@supabase/supabase-js';
 
-const supabaseUrl = process.env.VITE_SUPABASE_URL!;
-const supabaseKey = (process.env.SUPABASE_SERVICE_ROLE_KEY || process.env.VITE_SUPABASE_SERVICE_ROLE_KEY || process.env.VITE_SUPABASE_ANON_KEY)!;
-const supabase = createClient(supabaseUrl, supabaseKey, {
-    auth: { autoRefreshToken: false, persistSession: false }
-});
-
 export default async function handler(req: VercelRequest, res: VercelResponse) {
     res.setHeader('Access-Control-Allow-Origin', '*');
     res.setHeader('Access-Control-Allow-Methods', 'GET, POST, OPTIONS');
@@ -17,6 +11,17 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
     }
 
     try {
+        const url = process.env.SUPABASE_URL || process.env.VITE_SUPABASE_URL;
+        const key = process.env.SUPABASE_SERVICE_ROLE_KEY || process.env.VITE_SUPABASE_SERVICE_ROLE_KEY || process.env.VITE_SUPABASE_ANON_KEY;
+
+        if (!url || !key) {
+            return res.status(500).json({ error: 'Supabase credentials missing on server' });
+        }
+
+        const supabase = createClient(url, key, {
+            auth: { autoRefreshToken: false, persistSession: false }
+        });
+
         const lorryId = (req.query.lorry_id || req.body?.lorry_id) as string;
         if (!lorryId) {
             return res.status(400).json({ error: 'lorry_id is required' });
