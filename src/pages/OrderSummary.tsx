@@ -7,7 +7,7 @@ import { SalesOrder, SalesOrderItem, User } from '../types';
 import { Calendar, User as UserIcon, Truck, MapPin, Package, Camera, Trash2, X } from 'lucide-react';
 import { parsePrepPhotos, stringifyPrepPhotos, PrepPhoto } from '../utils/prepPhotos';
 import { compressImage, dataURLtoBlob } from '../utils/imageCompress';
-
+import { useTranslation } from "react-i18next";
 
 const LOCATIONS = WAREHOUSES;
 type Location = string;
@@ -80,6 +80,7 @@ interface OrderSummaryProps {
 }
 
 const OrderSummary: React.FC<OrderSummaryProps> = ({ user }) => {
+    const { t } = useTranslation();
     const [orders, setOrders] = useState<SalesOrder[]>([]);
     const [previewImageUrl, setPreviewImageUrl] = useState<string | null>(null);
     const [drivers, setDrivers] = useState<User[]>([]);
@@ -152,8 +153,8 @@ const OrderSummary: React.FC<OrderSummaryProps> = ({ user }) => {
                         employee_id: empId,
                         employee_name: empName,
                         photo_url: publicUrl,
-                        category: 'Cargo Prep / 备货照片',
-                        user_note: `Daily Prep 备货位置图 - 订单: ${currentOrder?.orderNumber || 'Unknown'} - 库位: ${activeTab}`,
+                        category: t('Cargo Prep / Stocking Photos'),
+                        user_note: t('Daily Prep Stocking Location Map - Order: {{var0}} - Location: {{var1}}', { var0: currentOrder?.orderNumber || 'Unknown', var1: activeTab }),
                         location: activeTab,
                         risk_flag: false
                     });
@@ -163,7 +164,7 @@ const OrderSummary: React.FC<OrderSummaryProps> = ({ user }) => {
             }
 
             setOrders(prev => prev.map(o => o.id === orderId ? { ...o, preparation_photo_url: updatedPhotoUrlField } : o));
-            alert(`✅ ${activeTab} 备货图片上传成功！ / Cargo photo uploaded successfully!`);
+            alert(t('✅ {{var0}} stocking pictures uploaded successfully! / Cargo photo uploaded successfully!', { var0: activeTab }));
         } catch (err: any) {
             console.error("Failed to upload photo:", err);
             alert("Upload failed: " + err.message);
@@ -175,7 +176,7 @@ const OrderSummary: React.FC<OrderSummaryProps> = ({ user }) => {
 
 
     const handleDeletePhoto = async (orderId: string, photoIndex: number) => {
-        if (!window.confirm("确定要删除这张备货照片吗？ / Are you sure you want to delete this photo?")) return;
+        if (!window.confirm(t('Are you sure you want to delete this stocking photo? / Are you sure you want to delete this photo?'))) return;
         
         try {
             const currentOrder = orders.find(o => o.id === orderId);
@@ -193,7 +194,7 @@ const OrderSummary: React.FC<OrderSummaryProps> = ({ user }) => {
             if (error) throw error;
             
             setOrders(prev => prev.map(o => o.id === orderId ? { ...o, preparation_photo_url: updatedPhotoUrlField } : o));
-            alert("✅ 照片已成功删除！ / Photo deleted successfully!");
+            alert(t('✅ The photo has been successfully deleted! / Photo deleted successfully!'));
         } catch (err: any) {
             console.error("Failed to delete photo:", err);
             alert("Delete failed: " + err.message);
@@ -411,8 +412,8 @@ const OrderSummary: React.FC<OrderSummaryProps> = ({ user }) => {
 
     // Production summary — only count items belonging to the active tab
     const productSummary = activeTabOrders.reduce((acc, order) => {
-        // Exclude orders that have already been loaded or delivered
-        if (order.status === 'Loaded' || order.status === 'Delivered') return acc;
+        // Exclude orders that have already been loaded, delivered, or are pending amendment approval
+        if (order.status === 'Loaded' || order.status === 'Delivered' || order.status === 'Pending Approval') return acc;
 
         order.items.forEach(item => {
             if (getItemLocation(item, order) !== activeTab) return;

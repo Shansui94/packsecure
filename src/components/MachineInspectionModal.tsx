@@ -34,70 +34,71 @@ interface MaterialItemState {
     id: string;
     name: string;
     sku: string;
-    unit: '包' | 'kg'; // 1 包 = 25kg
+    unit: string; // 1 包 = 25kg
     prevQty: number;
     newQty: number;
     photoUrl?: string; // 📷 物料包装外袋/实物照片
 }
 
 // 螺杆配置信息
-const SCREW_CONFIGS: { id: ScrewType; name: string; tag: string; color: string }[] = [
-    { id: 'Screw_A', name: '螺杆 A (Screw A)', tag: '外层/主螺杆', color: 'from-rose-600 to-red-700' },
-    { id: 'Screw_B', name: '螺杆 B (Screw B)', tag: '中层/辅螺杆', color: 'from-blue-600 to-cyan-700' },
-    { id: 'Screw_C', name: '螺杆 C (Screw C)', tag: '内层 (2m大机器)', color: 'from-emerald-600 to-teal-700' },
+const getScrewConfigs = (t: any): { id: ScrewType; name: string; tag: string; color: string }[] => [
+    { id: 'Screw_A', name: t('Screw A'), tag: t('Outer layer/main screw'), color: 'from-rose-600 to-red-700' },
+    { id: 'Screw_B', name: t('Screw B'), tag: t('Middle layer/auxiliary screw'), color: 'from-blue-600 to-cyan-700' },
+    { id: 'Screw_C', name: t('Screw C'), tag: t('Inner layer (2m large machine)'), color: 'from-emerald-600 to-teal-700' },
 ];
 
 // 工厂系统默认常用原材料预设库
-const MASTER_RAW_MATERIAL_PRESETS = [
+const getMasterRawMaterialPresets = (t: any) => [
     'LDPE 2426H',
     'LDPE 6238',
     'HDPE / GC 7260',
-    'HDPE 聚乙烯料',
+    t('HDPE polyethylene material'),
     'C1802 / 7042',
     'L1220F / 1218WJ',
     '2192J / 18020SA / L1220F',
-    'Recycle (碎料/回料)',
-    'Black (黑母粒)',
-    'Plastic (透明塑料料)',
-    'White (白母粒)',
-    'Anti-static (防静电剂)',
+    t('Recycle (scrap/recycling)'),
+    t('Black (black masterbatch)'),
+    t('Plastic (transparent plastic material)'),
+    t('White (white masterbatch)'),
+    t('Anti-static (anti-static agent)'),
 ];
 
 // 工厂现场手写纸初始预设（1包 = 25kg）
-const INITIAL_PRESET_MATERIALS: Record<ScrewType, MaterialItemState[]> = {
+const getInitialPresetMaterials = (t: any): Record<ScrewType, MaterialItemState[]> => ({
+
     Screw_A: [
-        { id: 'a1', name: 'LDPE 2426H', sku: 'RM-LDPE-2426H', unit: '包', prevQty: 3, newQty: 3 },
-        { id: 'a2', name: 'LDPE 6238', sku: 'RM-LDPE-6238', unit: '包', prevQty: 1, newQty: 1 },
-        { id: 'a3', name: 'HDPE / GC 7260', sku: 'RM-HDPE-7260', unit: '包', prevQty: 5, newQty: 5 },
-        { id: 'a4', name: 'C1802 / 7042', sku: 'RM-C1802', unit: '包', prevQty: 8, newQty: 8 },
-        { id: 'a5', name: 'L1220F / 1218WJ', sku: 'RM-L1220F', unit: '包', prevQty: 5, newQty: 5 },
-        { id: 'a6', name: 'Recycle (碎料/回料)', sku: 'RM-RECYCLE', unit: 'kg', prevQty: 10, newQty: 10 },
-        { id: 'a7', name: 'Black (黑母粒)', sku: 'RM-MB-BLACK', unit: 'kg', prevQty: 16, newQty: 16 },
+        { id: 'a1', name: 'LDPE 2426H', sku: 'RM-LDPE-2426H', unit: t('Bag'), prevQty: 3, newQty: 3 },
+        { id: 'a2', name: 'LDPE 6238', sku: 'RM-LDPE-6238', unit: t('Bag'), prevQty: 1, newQty: 1 },
+        { id: 'a3', name: 'HDPE / GC 7260', sku: 'RM-HDPE-7260', unit: t('Bag'), prevQty: 5, newQty: 5 },
+        { id: 'a4', name: 'C1802 / 7042', sku: 'RM-C1802', unit: t('Bag'), prevQty: 8, newQty: 8 },
+        { id: 'a5', name: 'L1220F / 1218WJ', sku: 'RM-L1220F', unit: t('Bag'), prevQty: 5, newQty: 5 },
+        { id: 'a6', name: t('Recycle (scrap/recycling)'), sku: 'RM-RECYCLE', unit: 'kg', prevQty: 10, newQty: 10 },
+        { id: 'a7', name: t('Black (black masterbatch)'), sku: 'RM-MB-BLACK', unit: 'kg', prevQty: 16, newQty: 16 },
     ],
     Screw_B: [
-        { id: 'b1', name: 'LDPE 2426H', sku: 'RM-LDPE-2426H', unit: '包', prevQty: 3, newQty: 3 },
-        { id: 'b2', name: 'HDPE 聚乙烯料', sku: 'RM-HDPE-BASE', unit: '包', prevQty: 6, newQty: 6 },
-        { id: 'b3', name: '2192J / 18020SA / L1220F', sku: 'RM-MIX-2192J', unit: '包', prevQty: 4, newQty: 4 },
-        { id: 'b4', name: 'C1802 / 7042', sku: 'RM-C1802', unit: '包', prevQty: 11, newQty: 11 },
-        { id: 'b5', name: 'Recycle (碎料/回料)', sku: 'RM-RECYCLE', unit: 'kg', prevQty: 20, newQty: 20 },
-        { id: 'b6', name: 'Plastic (透明塑料料)', sku: 'RM-PLASTIC', unit: 'kg', prevQty: 10, newQty: 10 },
+        { id: 'b1', name: 'LDPE 2426H', sku: 'RM-LDPE-2426H', unit: t('Bag'), prevQty: 3, newQty: 3 },
+        { id: 'b2', name: t('HDPE polyethylene material'), sku: 'RM-HDPE-BASE', unit: t('Bag'), prevQty: 6, newQty: 6 },
+        { id: 'b3', name: '2192J / 18020SA / L1220F', sku: 'RM-MIX-2192J', unit: t('Bag'), prevQty: 4, newQty: 4 },
+        { id: 'b4', name: 'C1802 / 7042', sku: 'RM-C1802', unit: t('Bag'), prevQty: 11, newQty: 11 },
+        { id: 'b5', name: t('Recycle (scrap/recycling)'), sku: 'RM-RECYCLE', unit: 'kg', prevQty: 20, newQty: 20 },
+        { id: 'b6', name: t('Plastic (transparent plastic material)'), sku: 'RM-PLASTIC', unit: 'kg', prevQty: 10, newQty: 10 },
     ],
     Screw_C: [
-        { id: 'c1', name: 'LDPE 2426H', sku: 'RM-LDPE-2426H', unit: '包', prevQty: 3, newQty: 3 },
-        { id: 'c2', name: 'HDPE / GC 7260', sku: 'RM-HDPE-7260', unit: '包', prevQty: 5, newQty: 5 },
-        { id: 'c3', name: 'C1802 / 7042', sku: 'RM-C1802', unit: '包', prevQty: 8, newQty: 8 },
-        { id: 'c4', name: 'Recycle (碎料/回料)', sku: 'RM-RECYCLE', unit: 'kg', prevQty: 15, newQty: 15 },
+        { id: 'c1', name: 'LDPE 2426H', sku: 'RM-LDPE-2426H', unit: t('Bag'), prevQty: 3, newQty: 3 },
+        { id: 'c2', name: 'HDPE / GC 7260', sku: 'RM-HDPE-7260', unit: t('Bag'), prevQty: 5, newQty: 5 },
+        { id: 'c3', name: 'C1802 / 7042', sku: 'RM-C1802', unit: t('Bag'), prevQty: 8, newQty: 8 },
+        { id: 'c4', name: t('Recycle (scrap/recycling)'), sku: 'RM-RECYCLE', unit: 'kg', prevQty: 15, newQty: 15 },
     ]
-};
+});
 
 // 预设机器调整位置
-const PRESET_POSITIONS = [
-    '风环高度 (Air Ring Height)',
-    '模头间隙 (Die Head Gap)',
-    '牵引刀位置 (Nip Roller / Cutter)',
-    '纠偏感应轴 (Web Guide Sensor)',
-    '气胀轴 / 收卷位置 (Air Shaft / Winder)',
-    '自定义位置 (Custom Location)'
+const getPresetPositions = (t: any) => [
+    t('Air Ring Height'),
+    t('Die Head Gap'),
+    t('Traction knife position (Nip Roller / Cutter)'),
+    t('Web Guide Sensor'),
+    t('Air Shaft / Winder'),
+    t('Custom Location')
 ];
 
 export const MachineInspectionModal: React.FC<MachineInspectionModalProps> = ({
@@ -115,7 +116,7 @@ export const MachineInspectionModal: React.FC<MachineInspectionModalProps> = ({
     const [logs, setLogs] = useState<MobileInspectionLog[]>([]);
 
     // 云端数据库中的标准原材料列表
-    const [dbRawMaterials, setDbRawMaterials] = useState<string[]>(MASTER_RAW_MATERIAL_PRESETS);
+    const [dbRawMaterials, setDbRawMaterials] = useState<string[]>(() => getMasterRawMaterialPresets(t));
 
     // 螺杆整组 Mix 料照片凭证
     const [screwHopperPhotos, setScrewHopperPhotos] = useState<Record<ScrewType, string>>({
@@ -125,7 +126,7 @@ export const MachineInspectionModal: React.FC<MachineInspectionModalProps> = ({
     });
 
     // 各螺杆动态配方 State
-    const [screwMaterials, setScrewMaterials] = useState<Record<ScrewType, MaterialItemState[]>>(INITIAL_PRESET_MATERIALS);
+    const [screwMaterials, setScrewMaterials] = useState<Record<ScrewType, MaterialItemState[]>>(() => getInitialPresetMaterials(t));
 
     // 归一化机台 KEY，防止电脑端 (如 'J1-M01' / '2M Double Layer (J1)') 与 手机端 (如 'J1') 命名差异导致的隔离
     const getNormalizedMachineKey = (mId?: string, mName?: string): string => {
@@ -154,11 +155,11 @@ export const MachineInspectionModal: React.FC<MachineInspectionModalProps> = ({
                     localMat = JSON.parse(saved);
                     setScrewMaterials(localMat);
                 } else {
-                    setScrewMaterials(INITIAL_PRESET_MATERIALS);
+                    setScrewMaterials(getInitialPresetMaterials(t));
                 }
             } catch (e) {
                 console.error('Failed to load saved materials locally:', normKey, e);
-                setScrewMaterials(INITIAL_PRESET_MATERIALS);
+                setScrewMaterials(getInitialPresetMaterials(t));
             }
 
             // 从云端 work_photos 表拉取最新跨端同步配方
@@ -200,7 +201,7 @@ export const MachineInspectionModal: React.FC<MachineInspectionModalProps> = ({
         try {
             await supabase.from('work_photos').insert([{
                 employee_id: currentUser?.uid || 'OP-001',
-                employee_name: currentUser?.name || currentUser?.email?.split('@')[0] || '现场操作员',
+                employee_name: currentUser?.name || currentUser?.email?.split('@')[0] || t('field operator'),
                 machine_id: normKey,
                 category: 'MACHINE_SCREW_FORMULA',
                 user_note: JSON.stringify(newMaterials),
@@ -217,13 +218,13 @@ export const MachineInspectionModal: React.FC<MachineInspectionModalProps> = ({
     const [showAddMatForm, setShowAddMatForm] = useState(false);
     const [newMatName, setNewMatName] = useState('');
     const [newMatQty, setNewMatQty] = useState<number>(3);
-    const [newMatUnit, setNewMatUnit] = useState<'包' | 'kg'>('包');
+    const [newMatUnit, setNewMatUnit] = useState<string>(t('包'));
 
     // 提交保存状态
     const [isSavingFullRecipe, setIsSavingFullRecipe] = useState(false);
 
     // 机器调整表单
-    const [adjPosition, setAdjPosition] = useState(PRESET_POSITIONS[0]);
+    const [adjPosition, setAdjPosition] = useState(() => getPresetPositions(t)[0]);
     const [adjCustomPos, setAdjCustomPos] = useState('');
     const [adjNotes, setAdjNotes] = useState('');
     const [adjPhotoUrl, setAdjPhotoUrl] = useState('');
@@ -257,7 +258,7 @@ export const MachineInspectionModal: React.FC<MachineInspectionModalProps> = ({
 
             if (data && data.length > 0) {
                 const namesFromDb = data.map(i => i.name).filter(Boolean);
-                const merged = Array.from(new Set([...namesFromDb, ...MASTER_RAW_MATERIAL_PRESETS]));
+                const merged = Array.from(new Set([...namesFromDb, ...getMasterRawMaterialPresets(t)]));
                 setDbRawMaterials(merged);
             }
         } catch (e) {
@@ -274,7 +275,7 @@ export const MachineInspectionModal: React.FC<MachineInspectionModalProps> = ({
             const normKey = getNormalizedMachineKey(machineId, machineName);
             await supabase.from('work_photos').insert([{
                 employee_id: currentUser?.uid || 'OP-001',
-                employee_name: currentUser?.name || currentUser?.email?.split('@')[0] || '现场操作员',
+                employee_name: currentUser?.name || currentUser?.email?.split('@')[0] || t('field operator'),
                 machine_id: normKey,
                 category: 'MACHINE_INSPECTION_LOG',
                 user_note: JSON.stringify(newLog),
@@ -338,7 +339,7 @@ export const MachineInspectionModal: React.FC<MachineInspectionModalProps> = ({
 
     if (!isOpen) return null;
 
-    const currentScrewConfig = SCREW_CONFIGS.find(s => s.id === selectedScrew) || SCREW_CONFIGS[0];
+    const currentScrewConfig = getScrewConfigs(t).find(s => s.id === selectedScrew) || getScrewConfigs(t)[0];
     const currentMaterials = screwMaterials[selectedScrew] || [];
     const currentHopperPhoto = screwHopperPhotos[selectedScrew];
 
@@ -346,7 +347,7 @@ export const MachineInspectionModal: React.FC<MachineInspectionModalProps> = ({
     const handleAddMaterial = async () => {
         const name = newMatName.trim();
         if (!name) {
-            alert('请选择或打字输入物料名称！');
+            alert(t('Please select or type to enter the material name!'));
             return;
         }
 
@@ -366,7 +367,7 @@ export const MachineInspectionModal: React.FC<MachineInspectionModalProps> = ({
         };
         syncScrewMaterialsToCloud(updatedMaterials);
 
-        const operatorName = currentUser?.name || currentUser?.email?.split('@')[0] || '现场操作员';
+        const operatorName = currentUser?.name || currentUser?.email?.split('@')[0] || t('field operator');
 
         // 写入 [更改配方 - 新增物料] 日志存库
         const newLog: MobileInspectionLog = {
@@ -375,9 +376,9 @@ export const MachineInspectionModal: React.FC<MachineInspectionModalProps> = ({
             machine_name: machineName,
             screw_id: selectedScrew,
             screw_name: currentScrewConfig.name,
-            material_name: `添加物料: ${name} (${newMatQty}${newMatUnit})`,
+            material_name: t('Add material: {{var0}} ({{var1}}{{var2}})', { var0: name, var1: newMatQty, var2: newMatUnit }),
             new_quantity: newMatQty,
-            reaction_notes: `更改配方 | 操作人: ${operatorName}`,
+            reaction_notes: t('Change recipe | Operator: {{var0}}', { var0: operatorName }),
             photo_url: currentHopperPhoto || 'https://images.unsplash.com/photo-1581091226825-a6a2a5aee158?w=300&q=80',
             operator_id: currentUser?.uid,
             operator_name: operatorName,
@@ -408,7 +409,7 @@ export const MachineInspectionModal: React.FC<MachineInspectionModalProps> = ({
     // 🗑️ 手动在上方删减物料
     const handleRemoveMaterial = async (id: string) => {
         const targetMat = currentMaterials.find(m => m.id === id);
-        const matName = targetMat ? targetMat.name : '物料';
+        const matName = targetMat ? targetMat.name : t('materials');
 
         const updatedMaterials = {
             ...screwMaterials,
@@ -416,7 +417,7 @@ export const MachineInspectionModal: React.FC<MachineInspectionModalProps> = ({
         };
         syncScrewMaterialsToCloud(updatedMaterials);
 
-        const operatorName = currentUser?.name || currentUser?.email?.split('@')[0] || '现场操作员';
+        const operatorName = currentUser?.name || currentUser?.email?.split('@')[0] || t('field operator');
 
         // 写入 [更改配方 - 删除物料] 日志存库
         const newLog: MobileInspectionLog = {
@@ -425,9 +426,9 @@ export const MachineInspectionModal: React.FC<MachineInspectionModalProps> = ({
             machine_name: machineName,
             screw_id: selectedScrew,
             screw_name: currentScrewConfig.name,
-            material_name: `删除物料: ${matName}`,
+            material_name: t('Delete material: {{var0}}', { var0: matName }),
             new_quantity: 0,
-            reaction_notes: `更改配方 | 操作人: ${operatorName}`,
+            reaction_notes: t('Change recipe | Operator: {{var0}}', { var0: operatorName }),
             photo_url: currentHopperPhoto || 'https://images.unsplash.com/photo-1581091226825-a6a2a5aee158?w=300&q=80',
             operator_id: currentUser?.uid,
             operator_name: operatorName,
@@ -466,7 +467,7 @@ export const MachineInspectionModal: React.FC<MachineInspectionModalProps> = ({
         };
         syncScrewMaterialsToCloud(updatedMaterials);
 
-        const operatorName = currentUser?.name || currentUser?.email?.split('@')[0] || '现场操作员';
+        const operatorName = currentUser?.name || currentUser?.email?.split('@')[0] || t('field operator');
         const delta = validQty - oldQty;
 
         const newLog: MobileInspectionLog = {
@@ -475,11 +476,11 @@ export const MachineInspectionModal: React.FC<MachineInspectionModalProps> = ({
             machine_name: machineName,
             screw_id: selectedScrew,
             screw_name: currentScrewConfig.name,
-            material_name: `调整数量: ${targetMat.name} (${oldQty} ➔ ${validQty} ${targetMat.unit})`,
+            material_name: t('Adjust quantity: {{var0}} ({{var1}} ➔ {{var2}} {{var3}})', { var0: targetMat.name, var1: oldQty, var2: validQty, var3: targetMat.unit }),
             previous_quantity: oldQty,
             new_quantity: validQty,
             change_amount: delta,
-            reaction_notes: `更改配方数量 | 操作人: ${operatorName}`,
+            reaction_notes: t('Change recipe quantity | Operator: {{var0}}', { var0: operatorName }),
             photo_url: currentHopperPhoto || 'https://images.unsplash.com/photo-1581091226825-a6a2a5aee158?w=300&q=80',
             operator_id: currentUser?.uid,
             operator_name: operatorName,
@@ -511,7 +512,7 @@ export const MachineInspectionModal: React.FC<MachineInspectionModalProps> = ({
             ...prev,
             [selectedScrew]: (prev[selectedScrew] || []).map(m => {
                 if (m.id === id) {
-                    return { ...m, unit: m.unit === '包' ? 'kg' : '包' };
+                    return { ...m, unit: m.unit === t('Bag') ? 'kg' : t('Bag') };
                 }
                 return m;
             })
@@ -576,12 +577,12 @@ export const MachineInspectionModal: React.FC<MachineInspectionModalProps> = ({
     // 💾 【底部：操作员 Mix 料混料操作记录提交】
     const handleSubmitFullScrewRecipe = async () => {
         if (!currentHopperPhoto) {
-            alert(`📸 请先在下方拍摄/上传 [${currentScrewConfig.name}] Mix料完成后的料斗实物或照片凭证！`);
+            alert(t('📸 Please take a photo/upload below [{{var0}}] the actual hopper or photo voucher after the Mix material is completed!', { var0: currentScrewConfig.name }));
             return;
         }
 
         setIsSavingFullRecipe(true);
-        const operatorName = currentUser?.name || currentUser?.email?.split('@')[0] || '现场操作员';
+        const operatorName = currentUser?.name || currentUser?.email?.split('@')[0] || t('field operator');
         const operatorIdStr = currentUser?.uid || localStorage.getItem('operatorId') || 'OP-UNKNOWN';
 
         const mixDetailsText = currentMaterials.map(m => `${m.name}: ${m.newQty}${m.unit}`).join(', ');
@@ -592,9 +593,9 @@ export const MachineInspectionModal: React.FC<MachineInspectionModalProps> = ({
             machine_name: machineName,
             screw_id: selectedScrew,
             screw_name: currentScrewConfig.name,
-            material_name: `完成 Mix 配方 (${mixDetailsText})`,
+            material_name: t('Complete Mix recipe ({{var0}})', { var0: mixDetailsText }),
             new_quantity: currentMaterials.length,
-            reaction_notes: `Mix料记录 | 操作员: ${operatorName} (${operatorIdStr}) | 共 ${currentMaterials.length} 项`,
+            reaction_notes: t('Mix records | Operator: {{var0}} ({{var1}}) | Total {{var2}} items', { var0: operatorName, var1: operatorIdStr, var2: currentMaterials.length }),
             photo_url: currentHopperPhoto,
             operator_id: currentUser?.uid,
             operator_name: operatorName,
@@ -615,11 +616,11 @@ export const MachineInspectionModal: React.FC<MachineInspectionModalProps> = ({
                 materialsCount: currentMaterials.length
             });
 
-            alert(`✅ 成功提交并记录 [${currentScrewConfig.name}] Mix料操作！\nMix料操作员: ${operatorName}\n实际 Mix 了: ${mixDetailsText}`);
+            alert(t('✅ Successfully submitted and recorded [{{var0}}] Mix operation!\nMix Operator: {{var1}}\nActual Mix: {{var2}}', { var0: currentScrewConfig.name, var1: operatorName, var2: mixDetailsText }));
         } catch (e) {
             console.error('Submit mix record error:', e);
             saveLogToLocalAndState(newLog);
-            alert(`✅ 已在本地保存 [${currentScrewConfig.name}] Mix料记录！`);
+            alert(t('✅ [{{var0}}] Mix material record has been saved locally!', { var0: currentScrewConfig.name }));
         } finally {
             setIsSavingFullRecipe(false);
         }
@@ -628,12 +629,12 @@ export const MachineInspectionModal: React.FC<MachineInspectionModalProps> = ({
     // 提交位置调整
     const handleSubmitAdjustment = async () => {
         if (!adjPhotoUrl) {
-            alert('📸 请拍摄机器位置调整现场证明照片！');
+            alert(t('📸 Please take photos of on-site proof of machine position adjustment!'));
             return;
         }
 
-        const operatorName = currentUser?.name || currentUser?.email?.split('@')[0] || '现场操作员';
-        const targetPos = adjPosition === '自定义位置 (Custom Location)' ? adjCustomPos : adjPosition;
+        const operatorName = currentUser?.name || currentUser?.email?.split('@')[0] || t('field operator');
+        const targetPos = adjPosition === t('Custom Location') ? adjCustomPos : adjPosition;
 
         const newLog: MobileInspectionLog = {
             log_type: 'machine_adjustment',
@@ -655,13 +656,13 @@ export const MachineInspectionModal: React.FC<MachineInspectionModalProps> = ({
             const { data } = await supabase.from('mobile_inspection_logs').insert([newLog]).select();
             saveLogToLocalAndState(data && data[0] ? data[0] : newLog);
 
-            alert(`✅ 机器 [${machineName}] 位置调整已成功存库！`);
+            alert(t('✅ The position adjustment of the machine [{{var0}}] has been successfully saved!', { var0: machineName }));
             setAdjPhotoUrl('');
             setAdjNotes('');
         } catch (e) {
             console.error(e);
             saveLogToLocalAndState(newLog);
-            alert(`✅ 机器 [${machineName}] 位置调整已在本地保存！`);
+            alert(t('✅ Machine [{{var0}}] position adjustment has been saved locally!', { var0: machineName }));
             setAdjPhotoUrl('');
             setAdjNotes('');
         }
@@ -670,11 +671,11 @@ export const MachineInspectionModal: React.FC<MachineInspectionModalProps> = ({
     // 提交温度
     const handleSubmitTemperature = async () => {
         if (!tempPhotoUrl) {
-            alert('📸 请拍摄温度控制面板/仪表照片！');
+            alert(t('📸 Please take photos of the temperature control panel/instrument!'));
             return;
         }
 
-        const operatorName = currentUser?.name || currentUser?.email?.split('@')[0] || '现场操作员';
+        const operatorName = currentUser?.name || currentUser?.email?.split('@')[0] || t('field operator');
 
         const newLog: MobileInspectionLog = {
             log_type: 'temperature',
@@ -699,12 +700,12 @@ export const MachineInspectionModal: React.FC<MachineInspectionModalProps> = ({
             const { data } = await supabase.from('mobile_inspection_logs').insert([newLog]).select();
             saveLogToLocalAndState(data && data[0] ? data[0] : newLog);
 
-            alert(`✅ 机器 [${machineName}] (${currentScrewConfig.name}) 温度照片已保存！`);
+            alert(t('✅ Machine [{{var0}}] ({{var1}}) temperature photo saved!', { var0: machineName, var1: currentScrewConfig.name }));
             setTempPhotoUrl('');
         } catch (e) {
             console.error(e);
             saveLogToLocalAndState(newLog);
-            alert(`✅ 机器 [${machineName}] (${currentScrewConfig.name}) 温度照片已在本地保存！`);
+            alert(t('✅ Machine [{{var0}}] ({{var1}}) temperature photo has been saved locally!', { var0: machineName, var1: currentScrewConfig.name }));
             setTempPhotoUrl('');
         }
     };
@@ -738,7 +739,7 @@ export const MachineInspectionModal: React.FC<MachineInspectionModalProps> = ({
                         {t('选择目标螺杆通道')}
                     </label>
                     <div className="grid grid-cols-3 gap-2">
-                        {SCREW_CONFIGS.map((screw) => {
+                        {getScrewConfigs(t).map((screw) => {
                             const isSelected = selectedScrew === screw.id;
 
                             return (
@@ -792,22 +793,22 @@ export const MachineInspectionModal: React.FC<MachineInspectionModalProps> = ({
                         {/* 配料表头部：直接在此更改 Recipe */}
                         <div className="flex items-center justify-between">
                             <span className="text-xs font-bold text-gray-300 flex items-center gap-1">
-                                📦 {currentScrewConfig.name} 当前配方 ({currentMaterials.length} 项)
-                            </span>
+                                📦 {currentScrewConfig.name}  {t('current recipe (')}{currentMaterials.length}  {t('item)')}
+                                                            </span>
 
                             <button
                                 onClick={() => setShowAddMatForm(true)}
                                 className="text-xs bg-indigo-600/30 hover:bg-indigo-600/50 border border-indigo-500/40 text-indigo-300 px-2.5 py-1 rounded-lg font-bold flex items-center gap-1 transition"
                             >
-                                <PlusCircle size={14} /> ➕ 更改/增加物料
-                            </button>
+                                <PlusCircle size={14} />  {t('➕ Change/add materials')}
+                                                            </button>
                         </div>
 
                         {/* 支持【下拉选择 + 直接打字输入】双重合一的输入框 */}
                         {showAddMatForm && (
                             <div className="bg-gray-950 p-3.5 border border-indigo-500/40 rounded-xl space-y-3 animate-fade-in shadow-xl">
                                 <div className="flex items-center justify-between text-xs font-bold text-indigo-300">
-                                    <span>添加物料到 [{currentScrewConfig.name}]：</span>
+                                    <span>{t('Add items to [')}{currentScrewConfig.name}]：</span>
                                     <button onClick={() => setShowAddMatForm(false)} className="text-gray-400 hover:text-white">
                                         <X size={14} />
                                     </button>
@@ -815,14 +816,14 @@ export const MachineInspectionModal: React.FC<MachineInspectionModalProps> = ({
 
                                 {/* 下拉 + 自由打字二合一输入框 */}
                                 <div className="space-y-1">
-                                    <label className="text-[10px] text-gray-400 font-bold">物料名称 (点击可下拉选择，也可直接手动写字输入)：</label>
+                                    <label className="text-[10px] text-gray-400 font-bold">{t('Material name (click to pull down the selection, or directly enter it manually):')}</label>
                                     <div className="relative">
                                         <input
                                             type="text"
                                             list="raw-materials-datalist"
                                             value={newMatName}
                                             onChange={(e) => setNewMatName(e.target.value)}
-                                            placeholder="下拉选择或打字输入 (如: LDPE 2426H)..."
+                                            placeholder={t('Drop down to select or type (eg: LDPE 2426H)...')}
                                             className="w-full bg-gray-900 border border-gray-700 text-xs px-3 py-2.5 rounded-lg text-amber-300 font-bold focus:outline-none focus:border-indigo-500"
                                         />
                                         <datalist id="raw-materials-datalist">
@@ -836,23 +837,23 @@ export const MachineInspectionModal: React.FC<MachineInspectionModalProps> = ({
                                 {/* 数量与单位 */}
                                 <div className="grid grid-cols-4 gap-2 pt-1 border-t border-gray-800">
                                     <div className="col-span-2 space-y-0.5">
-                                        <label className="text-[10px] text-gray-400">数量</label>
+                                        <label className="text-[10px] text-gray-400">{t('quantity')}</label>
                                         <input
                                             type="number"
-                                            placeholder="数量"
+                                            placeholder={t('quantity')}
                                             value={newMatQty}
                                             onChange={(e) => setNewMatQty(Number(e.target.value))}
                                             className="w-full bg-gray-900 border border-gray-800 text-xs px-2.5 py-1.5 rounded-lg text-white font-mono text-center font-bold"
                                         />
                                     </div>
                                     <div className="col-span-2 space-y-0.5">
-                                        <label className="text-[10px] text-gray-400">单位 (1包=25kg)</label>
+                                        <label className="text-[10px] text-gray-400">{t('Unit (1 pack=25kg)')}</label>
                                         <select
                                             value={newMatUnit}
                                             onChange={(e) => setNewMatUnit(e.target.value as any)}
                                             className="w-full bg-gray-900 border border-gray-800 text-xs px-2 py-1.5 rounded-lg text-amber-300 font-bold"
                                         >
-                                            <option value="包">包 (25kg)</option>
+                                            <option value={t('Bag')}>{t('Bag (25kg)')}</option>
                                             <option value="kg">kg</option>
                                         </select>
                                     </div>
@@ -861,8 +862,9 @@ export const MachineInspectionModal: React.FC<MachineInspectionModalProps> = ({
                                         onClick={handleAddMaterial}
                                         className="col-span-4 py-2 bg-gradient-to-r from-indigo-600 to-blue-600 hover:from-indigo-500 text-white font-extrabold text-xs rounded-lg shadow-lg transition mt-1"
                                     >
-                                        确认添加
-                                    </button>
+                                        
+                                                                                {t('Confirm to add')}
+                                                                            </button>
                                 </div>
                             </div>
                         )}
@@ -871,11 +873,12 @@ export const MachineInspectionModal: React.FC<MachineInspectionModalProps> = ({
                         <div className="space-y-2">
                             {currentMaterials.length === 0 ? (
                                 <div className="text-center py-6 bg-gray-950 border border-gray-800 rounded-xl text-gray-500 text-xs">
-                                    此螺杆配方列表为空，点击 [➕ 更改/增加物料] 添加
-                                </div>
+                                    
+                                                                        {t('This screw formula list is empty, click [➕ Change/Add Material] to add')}
+                                                                    </div>
                             ) : (
                                 currentMaterials.map((mat) => {
-                                    const isBags = mat.unit === '包';
+                                    const isBags = mat.unit === t('Bag');
                                     const calculatedKg = isBags ? mat.newQty * 25 : mat.newQty;
 
                                     return (
@@ -889,12 +892,12 @@ export const MachineInspectionModal: React.FC<MachineInspectionModalProps> = ({
                                                             alt={mat.name}
                                                             onClick={() => setLightboxPhoto(mat.photoUrl || null)}
                                                             className="w-10 h-10 rounded-lg object-cover border border-indigo-500/50 shadow-md cursor-pointer hover:opacity-80 shrink-0"
-                                                            title="点击放大预览物料包装图"
+                                                            title={t('Click to enlarge and preview the material packaging diagram')}
                                                         />
                                                     ) : (
-                                                        <label className="text-[11px] bg-indigo-950/80 text-indigo-300 border border-indigo-500/40 px-2 py-1 rounded-lg flex items-center gap-1 cursor-pointer font-bold hover:bg-indigo-900/80 shrink-0 transition" title="上传/拍摄该物料外袋照片">
+                                                        <label className="text-[11px] bg-indigo-950/80 text-indigo-300 border border-indigo-500/40 px-2 py-1 rounded-lg flex items-center gap-1 cursor-pointer font-bold hover:bg-indigo-900/80 shrink-0 transition" title={t('Upload/take photos of the outer bag of the material')}>
                                                             <Camera size={13} className="text-indigo-400" />
-                                                            <span>📷 添加图片</span>
+                                                            <span>{t('📷Add picture')}</span>
                                                             <input
                                                                 type="file"
                                                                 accept="image/*"
@@ -913,8 +916,9 @@ export const MachineInspectionModal: React.FC<MachineInspectionModalProps> = ({
                                                 <div className="flex items-center gap-2">
                                                     {mat.photoUrl && (
                                                         <label className="text-[10px] text-gray-400 hover:text-indigo-300 underline cursor-pointer">
-                                                            更换
-                                                            <input
+                                                            
+                                                                                                                        {t('replace')}
+                                                                                                                        <input
                                                                 type="file"
                                                                 accept="image/*"
                                                                 capture="environment"
@@ -926,7 +930,7 @@ export const MachineInspectionModal: React.FC<MachineInspectionModalProps> = ({
                                                     <button
                                                         onClick={() => handleRemoveMaterial(mat.id)}
                                                         className="text-gray-500 hover:text-rose-400 p-1 transition"
-                                                        title="删除物料 (将记录删除审计日志)"
+                                                        title={t('Delete material (record deletion in audit log)')}
                                                     >
                                                         <Trash2 size={14} />
                                                     </button>
@@ -951,9 +955,9 @@ export const MachineInspectionModal: React.FC<MachineInspectionModalProps> = ({
                                                     <button
                                                         onClick={() => handleToggleUnit(mat.id)}
                                                         className="text-[11px] bg-amber-950/60 text-amber-300 border border-amber-500/40 px-2 py-0.5 rounded font-bold hover:bg-amber-900/60"
-                                                        title="点击切换单位 (包 / kg)"
+                                                        title={t('Click to switch units (bag/kg)')}
                                                     >
-                                                        {mat.unit} {isBags ? '(25kg/包)' : ''}
+                                                        {mat.unit} {isBags ? t('(25kg/bag)') : ''}
                                                     </button>
                                                     <button
                                                         onClick={() => handleUpdateQty(mat.id, mat.newQty + 1)}
@@ -979,9 +983,10 @@ export const MachineInspectionModal: React.FC<MachineInspectionModalProps> = ({
                             <label className="text-xs font-bold text-gray-300 flex items-center justify-between">
                                 <span className="flex items-center gap-1.5">
                                     <Camera size={14} className="text-blue-400" />
-                                    拍摄/上传【{currentScrewConfig.name}】Mix料实物或料斗照片 <span className="text-rose-400">*必填Mix凭证</span>
+                                    
+                                                                        {t('Shoot/Upload【')}{currentScrewConfig.name}{t('】Mix material or hopper photos')} <span className="text-rose-400">{t('*Mix credentials required')}</span>
                                 </span>
-                                {currentHopperPhoto && <span className="text-emerald-400 text-[10px] font-bold">✓ 已上传照片凭证</span>}
+                                {currentHopperPhoto && <span className="text-emerald-400 text-[10px] font-bold">{t('✓ Photo voucher uploaded')}</span>}
                             </label>
 
                             <label className="border-2 border-dashed border-blue-500/40 bg-gray-950 hover:bg-gray-900 rounded-xl p-3.5 flex flex-col items-center justify-center cursor-pointer min-h-[95px] transition">
@@ -990,7 +995,7 @@ export const MachineInspectionModal: React.FC<MachineInspectionModalProps> = ({
                                 ) : (
                                     <>
                                         <Camera size={22} className="text-blue-400 mb-1" />
-                                        <span className="text-xs font-bold text-gray-200">点击拍摄操作员 Mix 料完成后的料斗实物照片</span>
+                                        <span className="text-xs font-bold text-gray-200">{t('Click to take a photo of the actual hopper after the operator mixes the material')}</span>
                                     </>
                                 )}
                                 <input
@@ -1009,9 +1014,10 @@ export const MachineInspectionModal: React.FC<MachineInspectionModalProps> = ({
                             <div className="flex items-center justify-between text-[11px] text-gray-400 px-1">
                                 <span className="flex items-center gap-1 text-emerald-400 font-bold">
                                     <UserCheck size={12} />
-                                    Mix料操作员: {currentUser?.name || currentUser?.email?.split('@')[0] || '现场操作员'}
+                                    
+                                                                        {t('Mix operator:')} {currentUser?.name || currentUser?.email?.split('@')[0] || t('field operator')}
                                 </span>
-                                <span>时间: {new Date().toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })}</span>
+                                <span>{t('time:')} {new Date().toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })}</span>
                             </div>
 
                             <button
@@ -1020,7 +1026,7 @@ export const MachineInspectionModal: React.FC<MachineInspectionModalProps> = ({
                                 className="w-full py-3 bg-gradient-to-r from-blue-600 via-indigo-600 to-purple-600 hover:from-blue-500 text-white font-extrabold rounded-xl shadow-xl flex items-center justify-center space-x-2 text-sm transition active:scale-95 disabled:opacity-50"
                             >
                                 {isSavingFullRecipe ? <Loader size={18} className="animate-spin" /> : <CheckCircle2 size={18} />}
-                                <span>记录提交【{currentScrewConfig.name}】Mix料操作与照片</span>
+                                <span>{t('Record submission【')}{currentScrewConfig.name}{t('】Mix material operation and photos')}</span>
                             </button>
                         </div>
 
@@ -1031,35 +1037,35 @@ export const MachineInspectionModal: React.FC<MachineInspectionModalProps> = ({
                 {activeTab === 'adjustment' && (
                     <div className="space-y-4">
                         <div className="space-y-1">
-                            <label className="text-xs font-bold text-gray-300">调整位置类型</label>
+                            <label className="text-xs font-bold text-gray-300">{t('Adjust location type')}</label>
                             <select
                                 value={adjPosition}
                                 onChange={(e) => setAdjPosition(e.target.value)}
                                 className="w-full bg-gray-950 border border-gray-800 rounded-xl px-3 py-2.5 text-xs text-white"
                             >
-                                {PRESET_POSITIONS.map((pos, idx) => (
+                                {getPresetPositions(t).map((pos, idx) => (
                                     <option key={idx} value={pos}>{pos}</option>
                                 ))}
                             </select>
                         </div>
 
-                        {adjPosition === '自定义位置 (Custom Location)' && (
+                        {adjPosition === t('Custom Location') && (
                             <input
                                 type="text"
                                 value={adjCustomPos}
                                 onChange={(e) => setAdjCustomPos(e.target.value)}
-                                placeholder="输入具体调整位置..."
+                                placeholder={t('Enter specific adjustment location...')}
                                 className="w-full bg-gray-950 border border-gray-800 rounded-xl px-3 py-2 text-xs text-white"
                             />
                         )}
 
                         <div className="space-y-1">
-                            <label className="text-xs font-bold text-gray-300">调整说明/刻度描述</label>
+                            <label className="text-xs font-bold text-gray-300">{t('Adjustment Instructions/Scale Description')}</label>
                             <input
                                 type="text"
                                 value={adjNotes}
                                 onChange={(e) => setAdjNotes(e.target.value)}
-                                placeholder="如：风环高度从 12cm 调至 15cm"
+                                placeholder={t('For example: adjust the height of the wind ring from 12cm to 15cm')}
                                 className="w-full bg-gray-950 border border-gray-800 rounded-xl px-3 py-2 text-xs text-white"
                             />
                         </div>
@@ -1067,7 +1073,8 @@ export const MachineInspectionModal: React.FC<MachineInspectionModalProps> = ({
                         <div className="space-y-2">
                             <label className="text-xs font-bold text-gray-300 flex items-center gap-1">
                                 <Camera size={14} className="text-emerald-400" />
-                                拍摄机器调整位置照片凭证 <span className="text-rose-400">*必填</span>
+                                
+                                                                {t('Take photo evidence of machine adjustment position')} <span className="text-rose-400">{t('*Required')}</span>
                             </label>
 
                             <label className="border-2 border-dashed border-emerald-500/40 bg-gray-950 hover:bg-gray-900 rounded-xl p-4 flex flex-col items-center justify-center cursor-pointer min-h-[110px]">
@@ -1076,7 +1083,7 @@ export const MachineInspectionModal: React.FC<MachineInspectionModalProps> = ({
                                 ) : (
                                     <>
                                         <Camera size={24} className="text-emerald-400 mb-1" />
-                                        <span className="text-xs font-bold text-gray-200">点击拍摄调整后的机器位置照片</span>
+                                        <span className="text-xs font-bold text-gray-200">{t('Click to take a photo of the adjusted machine position')}</span>
                                     </>
                                 )}
                                 <input
@@ -1099,7 +1106,7 @@ export const MachineInspectionModal: React.FC<MachineInspectionModalProps> = ({
                             className="w-full py-3.5 bg-gradient-to-r from-emerald-600 to-teal-600 hover:from-emerald-500 text-white font-bold rounded-xl shadow-lg flex items-center justify-center space-x-2 text-sm"
                         >
                             <CheckCircle2 size={18} />
-                            <span>保存机器位置调整记录</span>
+                            <span>{t('Save machine position adjustment records')}</span>
                         </button>
                     </div>
                 )}
@@ -1109,7 +1116,7 @@ export const MachineInspectionModal: React.FC<MachineInspectionModalProps> = ({
                     <div className="space-y-4">
                         <div className="grid grid-cols-2 gap-3 bg-gray-950 p-3 rounded-xl border border-gray-800">
                             <div>
-                                <label className="text-[11px] text-gray-400">1 区温度 (°C)</label>
+                                <label className="text-[11px] text-gray-400">{t('Zone 1 temperature (°C)')}</label>
                                 <input
                                     type="number"
                                     value={tempZone1}
@@ -1118,7 +1125,7 @@ export const MachineInspectionModal: React.FC<MachineInspectionModalProps> = ({
                                 />
                             </div>
                             <div>
-                                <label className="text-[11px] text-gray-400">2 区温度 (°C)</label>
+                                <label className="text-[11px] text-gray-400">{t('Zone 2 Temperature (°C)')}</label>
                                 <input
                                     type="number"
                                     value={tempZone2}
@@ -1127,7 +1134,7 @@ export const MachineInspectionModal: React.FC<MachineInspectionModalProps> = ({
                                 />
                             </div>
                             <div>
-                                <label className="text-[11px] text-gray-400">3 区温度 (°C)</label>
+                                <label className="text-[11px] text-gray-400">{t('Zone 3 temperature (°C)')}</label>
                                 <input
                                     type="number"
                                     value={tempZone3}
@@ -1136,7 +1143,7 @@ export const MachineInspectionModal: React.FC<MachineInspectionModalProps> = ({
                                 />
                             </div>
                             <div>
-                                <label className="text-[11px] text-amber-400 font-bold">模头温度 (°C)</label>
+                                <label className="text-[11px] text-amber-400 font-bold">{t('Die temperature (°C)')}</label>
                                 <input
                                     type="number"
                                     value={tempDieHead}
@@ -1147,12 +1154,12 @@ export const MachineInspectionModal: React.FC<MachineInspectionModalProps> = ({
                         </div>
 
                         <div className="space-y-1">
-                            <label className="text-xs font-bold text-gray-300">温度状态评价</label>
+                            <label className="text-xs font-bold text-gray-300">{t('Temperature status evaluation')}</label>
                             <div className="grid grid-cols-3 gap-2">
                                 {[
-                                    { key: 'normal', label: '🟢 正常', class: 'bg-emerald-500/20 border-emerald-500/40 text-emerald-300' },
-                                    { key: 'overheat', label: '🔴 偏高/过热', class: 'bg-rose-500/20 border-rose-500/40 text-rose-300' },
-                                    { key: 'too_low', label: '🔵 偏低/未达标', class: 'bg-blue-500/20 border-blue-500/40 text-blue-300' },
+                                    { key: 'normal', label: t('🟢 normal'), class: 'bg-emerald-500/20 border-emerald-500/40 text-emerald-300' },
+                                    { key: 'overheat', label: t('🔴 Too high/overheated'), class: 'bg-rose-500/20 border-rose-500/40 text-rose-300' },
+                                    { key: 'too_low', label: t('🔵 Low/Not up to standard'), class: 'bg-blue-500/20 border-blue-500/40 text-blue-300' },
                                 ].map((st) => (
                                     <button
                                         key={st.key}
@@ -1169,7 +1176,8 @@ export const MachineInspectionModal: React.FC<MachineInspectionModalProps> = ({
                         <div className="space-y-2">
                             <label className="text-xs font-bold text-gray-300 flex items-center gap-1">
                                 <Camera size={14} className="text-amber-400" />
-                                拍摄温度控制面板/仪表照片 <span className="text-rose-400">*必填</span>
+                                
+                                                                {t('Take photos of the temperature control panel/gauge')} <span className="text-rose-400">{t('*Required')}</span>
                             </label>
 
                             <label className="border-2 border-dashed border-amber-500/40 bg-gray-950 hover:bg-gray-900 rounded-xl p-4 flex flex-col items-center justify-center cursor-pointer min-h-[110px]">
@@ -1178,7 +1186,7 @@ export const MachineInspectionModal: React.FC<MachineInspectionModalProps> = ({
                                 ) : (
                                     <>
                                         <Camera size={24} className="text-amber-400 mb-1" />
-                                        <span className="text-xs font-bold text-gray-200">点击拍摄温度仪表控制面板</span>
+                                        <span className="text-xs font-bold text-gray-200">{t('Click to take a photo of the temperature gauge control panel')}</span>
                                     </>
                                 )}
                                 <input
@@ -1201,7 +1209,7 @@ export const MachineInspectionModal: React.FC<MachineInspectionModalProps> = ({
                             className="w-full py-3.5 bg-gradient-to-r from-amber-600 to-orange-600 hover:from-amber-500 text-white font-bold rounded-xl shadow-lg flex items-center justify-center space-x-2 text-sm"
                         >
                             <CheckCircle2 size={18} />
-                            <span>确认保存温度快记与照片</span>
+                            <span>{t('Confirm to save temperature notes and photos')}</span>
                         </button>
                     </div>
                 )}
@@ -1211,23 +1219,24 @@ export const MachineInspectionModal: React.FC<MachineInspectionModalProps> = ({
                     <div className="space-y-2.5">
                         {logs.length === 0 ? (
                             <div className="text-center py-8 bg-gray-950 border border-gray-800 rounded-xl text-gray-500 text-xs">
-                                机台 [{machineName}] 暂无专属 Mix料 / 巡检记录
-                            </div>
+                                
+                                                                {t('machine [')}{machineName}{t('] No exclusive mix/inspection record yet')}
+                                                            </div>
                         ) : (
                             logs.map((log, idx) => (
                                 <div key={log.id || idx} className="bg-gray-950 border border-gray-800 rounded-xl p-3 flex items-center justify-between text-xs space-x-2">
                                     <div className="space-y-1 flex-1 min-w-0">
                                         <div className="font-medium text-gray-200 flex items-center gap-2 flex-wrap">
                                             <span className="text-gray-300 bg-gray-800 border border-gray-700 px-1.5 py-0.5 rounded text-[11px] font-normal shrink-0">
-                                                {log.screw_name?.split(' ')[0] || log.screw_id || '螺杆 A'}
+                                                {log.screw_name?.split(' ')[0] || log.screw_id || t('Screw A')}
                                             </span>
                                             {log.log_type === 'material' && <span className="text-gray-100 truncate">{log.material_name}</span>}
-                                            {log.log_type === 'machine_adjustment' && <span className="text-emerald-300">调整: {log.adjustment_position}</span>}
-                                            {log.log_type === 'temperature' && <span className="text-amber-300">模头温度: {log.temp_die_head}°C</span>}
+                                            {log.log_type === 'machine_adjustment' && <span className="text-emerald-300">{t('Adjustment:')} {log.adjustment_position}</span>}
+                                            {log.log_type === 'temperature' && <span className="text-amber-300">{t('Die temperature:')} {log.temp_die_head}°C</span>}
                                         </div>
                                         <div className="text-[11px] text-gray-400 flex items-center gap-3">
                                             <span className="text-gray-400 flex items-center gap-1">
-                                                <UserCheck size={11} className="text-gray-500" /> 操作员: {log.operator_name}
+                                                <UserCheck size={11} className="text-gray-500" />  {t('Operator:')} {log.operator_name}
                                             </span>
                                             <span>{new Date(log.created_at || '').toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })}</span>
                                         </div>

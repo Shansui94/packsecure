@@ -13,7 +13,7 @@
     "lint": "eslint .",
     "preview": "vite preview",
     "start": "tsx server.ts",
-    "daily-report": "tsx scripts/daily_report_job.ts"
+    "daily-report": "tsx scripts/check_daily_report.ts"
   },
   "dependencies": {
     "@dnd-kit/core": "^6.3.1",
@@ -38,6 +38,7 @@
     "jspdf": "^3.0.4",
     "jspdf-autotable": "^5.0.2",
     "konva": "^10.3.0",
+    "leaflet": "^1.9.4",
     "lucide-react": "^0.555.0",
     "multer": "^2.0.2",
     "papaparse": "^5.5.3",
@@ -46,10 +47,12 @@
     "react-dom": "^19.2.1",
     "react-i18next": "^17.0.11",
     "react-konva": "^19.2.3",
+    "react-leaflet": "^5.0.0",
     "react-markdown": "^10.1.0",
     "react-qr-code": "^2.0.18",
     "react-webcam": "^7.2.0",
     "recharts": "^3.5.1",
+    "translate": "^3.1.0",
     "tsx": "^4.21.0",
     "ws": "^8.18.3",
     "xlsx": "^0.18.5"
@@ -58,6 +61,7 @@
     "@eslint/js": "^9.39.1",
     "@types/cors": "^2.8.19",
     "@types/express": "^5.0.6",
+    "@types/leaflet": "^1.9.22",
     "@types/multer": "^2.0.0",
     "@types/node": "^25.2.3",
     "@types/papaparse": "^5.5.2",
@@ -76,6 +80,7 @@
     "playwright": "^1.60.0",
     "postcss": "^8.5.6",
     "tailwindcss": "^4.1.17",
+    "ts-morph": "^28.0.0",
     "typescript": "^5.9.3",
     "vite": "^7.2.4"
   }

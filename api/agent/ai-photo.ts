@@ -71,6 +71,15 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
 - other = 其他缺陷
 
 只返回 JSON，不要有其他任何文字。`;
+            } else if (targetMode === 'odometer') {
+                prompt = `You are a professional AI vision assistant. Analyze this truck dashboard photo and extract the current Odometer / Mileage reading.
+If the photo is too blurry, or if it is not a dashboard, return null for mileage.
+Only return pure numbers, do not include 'km' or other units.
+
+You MUST return a JSON format like this:
+{
+  "mileage": 123456
+}`;
             } else if (targetMode === 'do') {
                 prompt = `你是物流系统的 AI 助手。请分析这张司机上传的送货单（DO / Consignment Note / Invoice）照片。
             

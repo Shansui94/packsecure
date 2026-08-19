@@ -28,10 +28,13 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
     }
 
     try {
-        // 1. 查询设备基础配置
+        // 1. 查询设备基础配置 (联合查询 sys_machines_v2 提取真实幅宽)
         const { data: device, error: deviceError } = await supabase
             .from('iot_device_configs')
-            .select('*')
+            .select(`
+                *,
+                sys_machines_v2 ( base_width )
+            `)
             .eq('mac_address', mac)
             .single();
 
@@ -66,18 +69,9 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
             .single();
 
         // 4. 计算产量逻辑
-        const machineWidthMap: Record<string, number> = {
-            'N1-M01': 100,
-            'N2-M02': 100,
-            'T1.3-M02': 100,
-            'T3-M02': 100,
-            'T1.2-M01': 200,   // 2M double-layer machine → always yields 2x per signal
-            'T2-M01': 200,
-            'T1.1-M03': 0
-        };
-
         const machineId = device.machine_id;
-        const baseWidth = machineWidthMap[machineId] || 100;
+        // 从关联查询的机器表中读取真实幅宽，默认为 100
+        const baseWidth = device.sys_machines_v2?.base_width ?? 100;
 
         const cuttingSize = activeProduct?.cutting_size || device.cutting_size || 100;
         const activeSku = activeProduct?.product_sku || device.active_product_sku || 'UNKNOWN';

@@ -8,6 +8,7 @@
 #include <Update.h>
 #include <WebServer.h>
 #include <WiFi.h>
+#include <WiFiMulti.h>
 
 const String CURRENT_VERSION =
     "3.3.0"; // ★ Fix: send 1 pulse per API call (never batch-sum queue)
@@ -19,8 +20,7 @@ const String CURRENT_VERSION =
 #define WDT_TIMEOUT 30 // Restart if stuck for 30 seconds
 
 // --- WIFI CONFIGURATION ---
-const char *ssid = "ESBL_326";
-const char *password = "88888888";
+WiFiMulti wifiMulti;
 
 // 2. Vercel API (Dynamic Config)
 const String configApiUrl = "https://packsecure.vercel.app/api/iot-config?mac=";
@@ -327,11 +327,15 @@ void connectWiFi() {
   WiFi.setSleep(false);
   delay(100);
 
-  Serial.printf("\n正在连接 WiFi: %s\n", ssid);
-  WiFi.begin(ssid, password);
+  Serial.println("\n正在扫描并连接已知 WiFi...");
+  
+  // 添加多个厂区的 WiFi 配置 (WiFiMulti 会自动连接信号最强的可用网络)
+  wifiMulti.addAP("ESBL_326", "88888888");                    // Nilai (N1/N2)
+  wifiMulti.addAP("opm9821_2.4Ghz@MaxisFibre", "88888888"); // Taiping (T1/T2)
+  wifiMulti.addAP("Packsecure_2.4G", "88888888"); // Johor (J1)
   
   int attempts = 0;
-  while (WiFi.status() != WL_CONNECTED && attempts < 40) {
+  while (wifiMulti.run() != WL_CONNECTED && attempts < 40) {
     delay(500);
     esp_task_wdt_reset(); // 喂狗防止重启
     Serial.print(".");
@@ -340,7 +344,7 @@ void connectWiFi() {
   
   Serial.println();
   if(WiFi.status() == WL_CONNECTED) {
-      Serial.println("✅ WiFi 连接成功！");
+      Serial.printf("✅ WiFi 连接成功！当前网络: %s\n", WiFi.SSID().c_str());
   } else {
       Serial.printf("❌ WiFi 连接失败！错误代码 (WiFi Status): %d\n", WiFi.status());
       Serial.println("代码含义: 1=搜不到信号, 4=密码错误/被拉黑, 6=意外断开");

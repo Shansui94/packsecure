@@ -1,5 +1,7 @@
 import { useState, useRef, useEffect } from 'react';
 import { Bot, X, Send, MessageSquare, Mic, MicOff, Sparkles } from 'lucide-react';
+import { useTranslation } from "react-i18next";
+import i18next from "i18next";
 
 interface Message {
     id: string;
@@ -27,54 +29,55 @@ const ROLE_THEMES: Record<string, { headerBg: string; accentColor: string; welco
     SuperAdmin: {
         headerBg: 'bg-gradient-to-r from-zinc-800 to-amber-700',
         accentColor: 'bg-amber-600 hover:bg-amber-700',
-        welcome: '你好，系统管理员！我是系统与数据专家。我可以协助你查询表结构（Schema）、检查 RLS 策略、诊断重复数据或编写 SQL 迁移脚本。',
-        actions: ['🔍 查主表 Schema', '🛡️ 检查 RLS 策略', '🧹 诊断数据重复']
+        welcome: i18next.t('Hello, sysadmin! I\'m a systems and data expert. I can assist you with querying table schemas, checking RLS policies, diagnosing duplicate data, or writing SQL migration scripts.'),
+        actions: [i18next.t('🔍 Check main table Schema'), i18next.t('🛡️ Check RLS policy'), i18next.t('🧹 Duplicate diagnostic data')]
     },
     Admin: {
         headerBg: 'bg-gradient-to-r from-yellow-600 to-amber-700',
         accentColor: 'bg-amber-600 hover:bg-amber-700',
-        welcome: '你好，管理员！我是你的系统与运行助手。请问需要我帮你检查系统性能、用户状态或数据库排错吗？',
-        actions: ['🔍 查主表 Schema', '🛡️ 检查 RLS 策略', '🧹 诊断数据重复']
+        welcome: i18next.t('Hello, admin! I am your system and operation assistant. Do you need me to help you check system performance, user status or database troubleshooting?'),
+        actions: [i18next.t('🔍 Check main table Schema'), i18next.t('🛡️ Check RLS policy'), i18next.t('🧹 Duplicate diagnostic data')]
     },
     Manager: {
         headerBg: 'bg-gradient-to-r from-blue-700 to-indigo-700',
         accentColor: 'bg-blue-600 hover:bg-blue-700',
-        welcome: '你好，经理！我是 Titan，生产部门的主管。请问你想了解今日产量、机器效率、宕机报警还是待审核的请假与报销？',
-        actions: ['📊 今日产量简报', '🚨 异常宕机分析', '🧾 待审批报销']
+        welcome: i18next.t('Hello, manager! I\'m Titan, the head of production. Would you like to know today\'s output, machine efficiency, downtime alarms, or pending leave and reimbursements?'),
+        actions: [i18next.t('📊 Today’s production briefing'), i18next.t('🚨 Abnormal downtime analysis'), i18next.t('🧾 Pending approval for reimbursement')]
     },
     Operator: {
         headerBg: 'bg-gradient-to-r from-blue-600 to-cyan-600',
         accentColor: 'bg-blue-600 hover:bg-blue-700',
-        welcome: '你好！我是你的生产现场协作者。你可以向我咨询当前的生产任务、各机器的标准周期时间，或者让我帮你查询特定设备的 SOP 操作规程。',
-        actions: ['⚙️ 活跃生产任务', '📖 机器操作SOP', '📈 机器今日产量']
+        welcome: i18next.t('Hello! I am your production site collaborator. You can ask me about current production tasks, standard cycle times for each machine, or ask me to help you find SOPs for specific equipment.'),
+        actions: [i18next.t('⚙️Active production tasks'), i18next.t('📖 Machine operation SOP'), i18next.t('📈 Today’s machine output')]
     },
     Driver: {
         headerBg: 'bg-gradient-to-r from-emerald-600 to-teal-600',
         accentColor: 'bg-emerald-600 hover:bg-emerald-700',
-        welcome: '你好，司机师傅！我是你的配送与费用助理。你可以向我查询你今天的配送订单、本月工资预支额度，或者询问费用报销的规则。',
-        actions: ['📅 今日配送行程', '💰 预支工资额度', '🛣️ 报销规则']
+        welcome: i18next.t('Hello, driver! I\'m your shipping and expense assistant. You can ask me about your delivery orders today, your salary advance amount this month, or the rules for expense reimbursement.'),
+        actions: [i18next.t('📅 Today’s delivery itinerary'), i18next.t('💰 Salary advance amount'), i18next.t('🛣️ Reimbursement rules')]
     },
     HR: {
         headerBg: 'bg-gradient-to-r from-violet-600 to-fuchsia-600',
         accentColor: 'bg-violet-600 hover:bg-violet-700',
-        welcome: '你好，人事主管！我是你的人事助手。我可以帮你查询待审批的请假申请、节假日安排或员工出勤汇总。',
-        actions: ['📝 待审核假期', '📅 假节日日历', '💸 待审批工资']
+        welcome: i18next.t('Hello, HR manager! I\'m your HR assistant. I can help you check pending leave applications, holiday arrangements or employee attendance summary.'),
+        actions: [i18next.t('📝 Holidays pending review'), i18next.t('📅 Fake holiday calendar'), i18next.t('💸 Salary pending approval')]
     },
     Finance: {
         headerBg: 'bg-gradient-to-r from-purple-700 to-indigo-700',
         accentColor: 'bg-purple-600 hover:bg-purple-700',
-        welcome: '你好，财务！我是你的费用审计助手。我可以帮你汇总待处理的报销单、查询已批复的总额或核对工资账单。',
-        actions: ['🧾 待审批报销', '💵 本月已批报销', '💸 待审批工资']
+        welcome: i18next.t('Hello Finance! I am your expense audit assistant. I can help you summarize pending reimbursements, check approved totals, or reconcile payroll bills.'),
+        actions: [i18next.t('🧾 Pending approval for reimbursement'), i18next.t('💵 Reimbursement has been approved this month'), i18next.t('💸 Salary pending approval')]
     },
     Sales: {
         headerBg: 'bg-gradient-to-r from-orange-500 to-rose-600',
         accentColor: 'bg-orange-600 hover:bg-orange-700',
-        welcome: '你好，销售主管！我可以帮你查询订单状态、配送进度或客户的送货区域。',
-        actions: ['📦 销售订单状态', '🚚 查询出货单']
+        welcome: i18next.t('Hello, sales executive! I can help you check the order status, delivery progress or the customer\'s delivery area.'),
+        actions: [i18next.t('📦 Sales order status'), i18next.t('🚚 Check shipping order')]
     }
 };
 
 export default function AIAgentWidget({ user, onNavigate }: AIAgentWidgetProps) {
+    const { t } = useTranslation();
     const [isOpen, setIsOpen] = useState(false);
     const [query, setQuery] = useState('');
     const [isLoading, setIsLoading] = useState(false);
@@ -89,13 +92,13 @@ export default function AIAgentWidget({ user, onNavigate }: AIAgentWidgetProps) 
     const activeTheme = ROLE_THEMES[userRole] || {
         headerBg: 'bg-gradient-to-r from-blue-600 to-indigo-600',
         accentColor: 'bg-blue-600 hover:bg-blue-700',
-        welcome: '你好！我是你的 AI 生产主管助理。有什么我可以帮你的吗？',
+        welcome: t('Hello! I\'m your assistant to the AI ​​Production Supervisor. Is there anything I can do to help you?'),
         actions: []
     };
 
     // Reset messages and welcome prompt when user session loads or shifts
     useEffect(() => {
-        const welcomeText = `你好 ${user?.name || '同事'}！${activeTheme.welcome}`;
+        const welcomeText = t('Hello {{var0}}! {{var1}}', { var0: user?.name || t('colleague'), var1: activeTheme.welcome });
         setMessages([
             {
                 id: 'welcome',
@@ -159,7 +162,7 @@ export default function AIAgentWidget({ user, onNavigate }: AIAgentWidgetProps) 
     // Helper to start/stop listening
     const handleVoiceToggle = () => {
         if (!recognitionRef.current) {
-            alert('当前浏览器不支持语音识别功能，请尝试使用 Chrome, Edge 或 Safari。');
+            alert(t('The current browser does not support the speech recognition function, please try using Chrome, Edge or Safari.'));
             return;
         }
 
@@ -221,10 +224,10 @@ export default function AIAgentWidget({ user, onNavigate }: AIAgentWidgetProps) 
                 })
             });
 
-            if (!response.ok) throw new Error('连接 AI 助手失败');
+            if (!response.ok) throw new Error(t('Failed to connect to AI assistant'));
 
             const data = await response.json();
-            const rawResponseText = data.response || "我没能理解您的请求。";
+            const rawResponseText = data.response || t('I didn\'t understand your request.');
             
             // Extract any routing actions inside response text
             const { text: cleanText, action } = parseActionFromText(rawResponseText);
@@ -244,7 +247,7 @@ export default function AIAgentWidget({ user, onNavigate }: AIAgentWidgetProps) 
             const errorMsg: Message = {
                 id: (Date.now() + 1).toString(),
                 sender: 'ai',
-                text: "⚠️ 抱歉，连接大脑时遇到错误，请检查网络或服务端日志。",
+                text: t('⚠️ Sorry, an error occurred while connecting to the brain, please check the network or server logs.'),
                 timestamp: new Date()
             };
             setMessages(prev => [...prev, errorMsg]);
@@ -267,12 +270,12 @@ export default function AIAgentWidget({ user, onNavigate }: AIAgentWidgetProps) 
                             </div>
                             <div>
                                 <h3 className="font-bold text-sm flex items-center gap-1.5">
-                                    {userRole === 'SuperAdmin' || userRole === 'Admin' ? '数据专家 JARVIS' : '智能主管 Titan'}
+                                    {userRole === 'SuperAdmin' || userRole === 'Admin' ? t('Data Expert JARVIS') : t('Intelligent Supervisor Titan')}
                                 </h3>
                                 <p className="text-xs text-blue-100 flex items-center gap-1">
                                     <span className="w-2 h-2 bg-green-400 rounded-full animate-pulse"></span>
-                                    {userRole} • 在线
-                                </p>
+                                    {userRole}  {t('• Online')}
+                                                                    </p>
                             </div>
                         </div>
                         <button onClick={() => setIsOpen(false)} className="hover:bg-white/20 p-1 rounded-full transition-colors text-white">
@@ -306,8 +309,9 @@ export default function AIAgentWidget({ user, onNavigate }: AIAgentWidgetProps) 
                                             className="mt-3 w-full bg-indigo-50 hover:bg-indigo-100 dark:bg-indigo-950/40 dark:hover:bg-indigo-950/60 text-indigo-600 dark:text-indigo-400 py-2 px-4 rounded-xl border border-indigo-200 dark:border-indigo-850 text-xs font-bold transition-all text-center flex items-center justify-center gap-1.5 active:scale-95 shadow-sm"
                                         >
                                             <Sparkles size={14} className="animate-pulse" />
-                                            一键前往 {msg.action.target.toUpperCase()} 页面
-                                        </button>
+                                            
+                                                                                        {t('Go there with one click')} {msg.action.target.toUpperCase()}  {t('page')}
+                                                                                    </button>
                                     )}
                                 </div>
                             </div>
@@ -352,7 +356,7 @@ export default function AIAgentWidget({ user, onNavigate }: AIAgentWidgetProps) 
                                         : 'bg-zinc-100 dark:bg-zinc-800 text-zinc-500 dark:text-zinc-400 border-transparent hover:bg-zinc-200'
                                 }`}
                                 type="button"
-                                title="语音录入"
+                                title={t('Voice recording')}
                             >
                                 {isListening ? <MicOff size={18} /> : <Mic size={18} />}
                             </button>
@@ -363,7 +367,7 @@ export default function AIAgentWidget({ user, onNavigate }: AIAgentWidgetProps) 
                                     value={query}
                                     onChange={(e) => setQuery(e.target.value)}
                                     onKeyDown={(e) => e.key === 'Enter' && handleSend()}
-                                    placeholder={isListening ? '正在录音...' : '发消息提问...'}
+                                    placeholder={isListening ? t('Recording...') : t('Send a message and ask...')}
                                     className="w-full bg-zinc-100 dark:bg-zinc-800 border-none rounded-full py-2.5 pl-4 pr-12 text-sm focus:ring-2 focus:ring-blue-500 outline-none transition-all placeholder:text-zinc-400 text-zinc-800 dark:text-zinc-200"
                                     disabled={isLoading}
                                 />

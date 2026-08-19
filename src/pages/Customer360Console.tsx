@@ -130,7 +130,7 @@ export default function Customer360Console() {
                     order_date: o.order_date,
                     deadline: o.deadline,
                     notes: o.notes,
-                    driver_name: o.driver_name || o.driver_id || '未指派司机',
+                    driver_name: o.driver_name || o.driver_id || t('No driver assigned'),
                     delivery_address: o.delivery_address,
                     zone: o.zone
                 }));
@@ -255,50 +255,51 @@ export default function Customer360Console() {
                             </div>
                             <h2 className="text-sm font-bold text-white uppercase tracking-wider mb-4 pb-2 border-b border-zinc-800 flex items-center gap-2">
                                 <User className="text-green-400" size={16} />
-                                客户资料卡 (Profile)
-                            </h2>
+                                
+                                                                    {t('Customer Information Card (Profile)')}
+                                                                </h2>
                             <div className="space-y-4 text-xs">
                                 <div>
-                                    <label className="text-zinc-500 block mb-1">客户名称</label>
+                                    <label className="text-zinc-500 block mb-1">{t('Customer name')}</label>
                                     <div className="text-white font-bold text-sm bg-zinc-900/50 p-2 rounded-lg border border-zinc-850">{selectedCustomer.name}</div>
                                 </div>
                                 
                                 <div>
-                                    <label className="text-zinc-500 block mb-1">送货地址</label>
+                                    <label className="text-zinc-500 block mb-1">{t('Shipping Address')}</label>
                                     <div className="text-zinc-300 font-semibold bg-zinc-900/50 p-2.5 rounded-lg border border-zinc-850 flex gap-1.5 items-start">
                                         <MapPin className="text-red-400 shrink-0 mt-0.5" size={14} />
-                                        <span>{selectedCustomer.address || '暂无录入地址'}</span>
+                                        <span>{selectedCustomer.address || t('No address entered yet')}</span>
                                     </div>
                                 </div>
 
                                 <div className="grid grid-cols-2 gap-4">
                                     <div>
-                                        <label className="text-zinc-500 block mb-1">所属物流区域 (Zone)</label>
+                                        <label className="text-zinc-500 block mb-1">{t('Logistics area (Zone)')}</label>
                                         <div className="text-green-400 font-bold bg-green-500/5 p-2 rounded-lg border border-green-500/10 flex items-center gap-1.5">
                                             <Compass size={14} />
                                             {selectedCustomer.zone || 'TAIPING'}
                                         </div>
                                     </div>
                                     <div>
-                                        <label className="text-zinc-500 block mb-1">GPS 坐标</label>
+                                        <label className="text-zinc-500 block mb-1">{t('GPS coordinates')}</label>
                                         <div className="text-zinc-400 font-mono bg-zinc-900/50 p-2 rounded-lg border border-zinc-850 text-[10px]">
                                             {selectedCustomer.lat && selectedCustomer.lng 
                                                 ? `${selectedCustomer.lat.toFixed(5)}, ${selectedCustomer.lng.toFixed(5)}`
-                                                : '未定位'}
+                                                : t('Not located')}
                                         </div>
                                     </div>
                                 </div>
 
                                 <div className="grid grid-cols-2 gap-4">
                                     <div>
-                                        <label className="text-zinc-500 block mb-1">联系电话</label>
+                                        <label className="text-zinc-500 block mb-1">{t('Contact number')}</label>
                                         <div className="text-zinc-300 bg-zinc-900/50 p-2 rounded-lg border border-zinc-850 flex items-center gap-1.5">
                                             <Phone size={12} className="text-zinc-500" />
                                             {selectedCustomer.phone || 'N/A'}
                                         </div>
                                     </div>
                                     <div>
-                                        <label className="text-zinc-500 block mb-1">电子邮箱</label>
+                                        <label className="text-zinc-500 block mb-1">{t('Email')}</label>
                                         <div className="text-zinc-300 bg-zinc-900/50 p-2 rounded-lg border border-zinc-850 flex items-center gap-1.5 truncate">
                                             <Mail size={12} className="text-zinc-500" />
                                             {selectedCustomer.email || 'N/A'}
@@ -312,14 +313,16 @@ export default function Customer360Console() {
                         <div className="bg-[#121214] border border-zinc-850 rounded-2xl p-5 shadow-lg">
                             <h2 className="text-sm font-bold text-white uppercase tracking-wider mb-4 pb-2 border-b border-zinc-800 flex items-center gap-2">
                                 <Clipboard className="text-cyan-400" size={16} />
-                                产品别名库对照 (Alias Mapping)
-                            </h2>
+                                
+                                                                    {t('Product Alias ​​Mapping')}
+                                                                </h2>
                             {isLoading ? (
-                                <div className="p-8 text-center text-xs text-zinc-500 animate-pulse">正在载入别名库...</div>
+                                <div className="p-8 text-center text-xs text-zinc-500 animate-pulse">{t('Loading alias library...')}</div>
                             ) : mappings.length === 0 ? (
                                 <div className="p-6 text-center text-xs text-zinc-600 bg-zinc-950/20 border border-zinc-850/50 rounded-xl">
-                                    该客户暂无专属别名映射数据。
-                                </div>
+                                    
+                                                                                {t('This customer currently does not have exclusive alias mapping data.')}
+                                                                            </div>
                             ) : (
                                 <div className="space-y-2.5 max-h-80 overflow-y-auto pr-1">
                                     {mappings.map((m) => (
@@ -351,17 +354,19 @@ export default function Customer360Console() {
                             <h2 className="text-sm font-bold text-white uppercase tracking-wider mb-4 pb-2 border-b border-zinc-800 flex justify-between items-center">
                                 <span className="flex items-center gap-2">
                                     <Clock className="text-indigo-400" size={16} />
-                                    最新出单状态追踪 (Recent Orders)
-                                </span>
+                                    
+                                                                            {t('Latest order status tracking (Recent Orders)')}
+                                                                        </span>
                                 {isLoading && <RefreshCw size={12} className="animate-spin text-zinc-500" />}
                             </h2>
 
                             {isLoading ? (
-                                <div className="p-12 text-center text-xs text-zinc-500 animate-pulse">正在载入最新单据状态...</div>
+                                <div className="p-12 text-center text-xs text-zinc-500 animate-pulse">{t('Loading latest document status...')}</div>
                             ) : orders.length === 0 ? (
                                 <div className="p-12 text-center text-xs text-zinc-600 bg-zinc-950/20 border border-zinc-850/50 rounded-xl">
-                                    最近没有查到该客户的出单记录。
-                                </div>
+                                    
+                                                                                {t('No recent order records for this customer have been found.')}
+                                                                            </div>
                             ) : (
                                 <div className="space-y-4">
                                     {orders.map((order) => (
@@ -375,8 +380,8 @@ export default function Customer360Console() {
                                                         {order.order_number}
                                                     </span>
                                                     <div className="text-[10px] text-zinc-500 flex gap-2 mt-1">
-                                                        <span>下单: {order.order_date}</span>
-                                                        <span>截止: {order.deadline}</span>
+                                                        <span>{t('Place an order:')} {order.order_date}</span>
+                                                        <span>{t('Deadline:')} {order.deadline}</span>
                                                     </div>
                                                 </div>
                                                 <span className={`text-[10px] font-bold px-2 py-0.5 rounded border ${getStatusStyle(order.status)}`}>
@@ -395,7 +400,7 @@ export default function Customer360Console() {
                                                                 <span className="text-[9px] text-zinc-500 bg-zinc-850 px-1 rounded">({item.remark})</span>
                                                             )}
                                                         </div>
-                                                        <span className="font-bold text-white">{item.quantity} 卷</span>
+                                                        <span className="font-bold text-white">{item.quantity}  {t('roll')}</span>
                                                     </div>
                                                 ))}
                                             </div>
@@ -404,11 +409,12 @@ export default function Customer360Console() {
                                             <div className="flex flex-col sm:flex-row justify-between sm:items-center gap-2 pt-2 border-t border-zinc-850/50 text-[10px] text-zinc-500">
                                                 <div className="flex items-center gap-1">
                                                     <Truck size={12} className="text-zinc-500" />
-                                                    <span>司机: <strong className="text-zinc-300">{order.driver_name}</strong></span>
+                                                    <span>{t('driver:')} <strong className="text-zinc-300">{order.driver_name}</strong></span>
                                                 </div>
                                                 {order.notes && (
                                                     <div className="bg-zinc-850/50 px-2 py-0.5 rounded text-zinc-400 truncate max-w-xs">
-                                                        备注: {order.notes}
+                                                        
+                                                                                                                {t('Remark:')} {order.notes}
                                                     </div>
                                                 )}
                                             </div>

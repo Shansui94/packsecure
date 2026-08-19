@@ -3,12 +3,14 @@ import { createPortal } from 'react-dom';
 import { supabase } from '../services/supabase';
 import { Claim } from '../types';
 import { DollarSign, FileText, Plus, X, Upload, CheckCircle } from 'lucide-react';
+import { useTranslation } from "react-i18next";
 
 interface ClaimsManagementProps {
     user: any;
 }
 
 const ClaimsManagement: React.FC<ClaimsManagementProps> = ({ user }) => {
+    const { t } = useTranslation();
     const [claims, setClaims] = useState<Claim[]>([]);
     const [loading, setLoading] = useState(true);
     const [isModalOpen, setIsModalOpen] = useState(false);
@@ -160,31 +162,7 @@ const ClaimsManagement: React.FC<ClaimsManagementProps> = ({ user }) => {
                             contents: [{
                                 parts: [
                                     {
-                                        text: `我想做一个专业的财务审计与 OCR 数据提取专家。你的任务是从用户上传的报销单据（收据、发票）或车辆仪表盘（里程表）照片中精准提取结构化信息。
-
-# Output Format 请只返回一个纯 JSON 对象，不要包含任何 Markdown 格式（如 \`\`\`json）、不要有开场白、不要有任何解释说明。
-
-# Task Logic 请根据图片内容，自动判断是属于 receipt（财务收据）还是 odometer（里程表），并按照以下结构输出：
-
-1. 如果是财务收据 (Receipt Mode): 提取以下字段：
-
-merchant: 商家/供应商名称（例如：Shell, McDonald's, Hardware Store）。
-amount: 支付总额，必须是数字（例如：125.50）。
-date: 收据上的日期，格式统一为 YYYY-MM-DD。
-tax_amount: SST 或其他税额（数字，若未写则为 0）。
-invoice_no: 收据编号或发票号码（用于查重）。
-currency: 币种（例如：MYR）。
-category: 根据内容分类，必须限定在：Meal, Transport, Medical, Other 之一。
-
-2. 如果是里程表 (Odometer Mode): 提取以下字段：
-
-mileage: 仪表盘上显示的当前总行驶里程数，必须是纯数字（例如：45210）。
-
-# Constraints
-
-如果某个字段无法辨认，请设为 null。
-确保日期格式严格按照 YYYY-MM-DD。
-金额和里程必须是数字类型，不要带有单位。` },
+                                        text: t('I want to be a professional financial audit and OCR data extraction expert. Your task is to accurately extract structured information from user-uploaded photos of reimbursement documents (receipts, invoices) or vehicle dashboards (odometer).\n\n# Output Format Please only return a pure JSON object, do not contain any Markdown format (such as ```json), do not have an opening statement, and do not provide any explanation.\n\n# Task Logic Please automatically determine whether it is a receipt (financial receipt) or odometer (odometer) based on the image content, and output it according to the following structure:\n\n1. If it is a financial receipt (Receipt Mode): Extract the following fields:\n\nmerchant: Merchant/supplier name (e.g. Shell, McDonald\'s, Hardware Store).\namount: total payment, must be a number (for example: 125.50).\ndate: The date on the receipt, the format is YYYY-MM-DD.\ntax_amount: SST or other tax amount (number, 0 if not written).\ninvoice_no: receipt number or invoice number (used for plagiarism checking).\ncurrency: currency (for example: MYR).\ncategory: According to the content classification, it must be limited to one of: Meal, Transport, Medical, Other.\n\n2. If it is Odometer Mode: Extract the following fields:\n\nMileage: The current total mileage displayed on the dashboard, must be a pure number (for example: 45210).\n\n#Constraints\n\nIf a field is not recognized, set it to null.\nMake sure the date format is strictly YYYY-MM-DD.\nAmounts and miles must be of numeric type without units.') },
                                     { inline_data: { mime_type: mimeType, data: base64Data } }
                                 ]
                             }]

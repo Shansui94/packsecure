@@ -155,6 +155,7 @@ interface ProductionLaneProps {
 const ProductionLane: React.FC<ProductionLaneProps> = ({ 
     laneId, machineMetadata, operatorId, jobs, onProductionComplete, onBeforeProduce, className, presetSku, isControlMode, onTakeoverClick
 }) => {
+    const { t } = useTranslation();
     const [step, setStep] = useState<1 | 2 | 3>(1);
     const [selectedLayer, setSelectedLayer] = useState<ProductLayer>('Single');
     const [selectedMaterial, setSelectedMaterial] = useState<ProductMaterial>('Clear');
@@ -518,8 +519,8 @@ const ProductionLane: React.FC<ProductionLaneProps> = ({
                 {step === 2 && (
                     <div className="flex flex-col h-full animate-slide-up">
                         <div className="flex items-center justify-between mb-4">
-                            <span className="text-apple-textMuted text-xs font-mono uppercase">Select Size</span>
-                            <button onClick={() => setStep(1)} className="text-xs font-bold text-apple-textMuted hover:text-apple-textMain dark:hover:text-white px-2 py-1 rounded hover:bg-black/5 dark:hover:bg-white/10">BACK</button>
+                            <span className="text-apple-textMuted text-xs font-mono uppercase">{t('Select Size')}</span>
+                            <button onClick={() => setStep(1)} className="text-xs font-bold text-apple-textMuted hover:text-apple-textMain dark:hover:text-white px-2 py-1 rounded hover:bg-black/5 dark:hover:bg-white/10">{t('BACK')}</button>
                         </div>
                         <div className="grid grid-cols-2 gap-3">
                             {PRODUCT_SIZES.map(size => {
@@ -559,7 +560,7 @@ const ProductionLane: React.FC<ProductionLaneProps> = ({
                             >
                                 <div className="absolute inset-0 opacity-10 transition-colors duration-300" style={{ backgroundColor: theme.hex }}></div>
                                 <div className="relative z-10">
-                                    <div className="text-[10px] text-apple-textMuted uppercase font-bold tracking-wider">Pack Color</div>
+                                    <div className="text-[10px] text-apple-textMuted uppercase font-bold tracking-wider">{t('Pack Color')}</div>
                                     <div
                                         className="text-3xl font-black flex items-center gap-2 drop-shadow-md"
                                         style={{ color: theme.hex }}
@@ -573,7 +574,7 @@ const ProductionLane: React.FC<ProductionLaneProps> = ({
                                         <span className="text-[10px] bg-black/5 dark:bg-white/10 px-2 py-0.5 rounded text-apple-textMain dark:text-white">{selectedSize}</span>
                                     </div>
                                 </div>
-                                <button onClick={() => setStep(1)} className="relative z-10 px-3 py-1 bg-black/5 dark:bg-white/10 hover:bg-black/10 dark:hover:bg-white/20 rounded-lg text-xs text-apple-textMain dark:text-white">Change</button>
+                                <button onClick={() => setStep(1)} className="relative z-10 px-3 py-1 bg-black/5 dark:bg-white/10 hover:bg-black/10 dark:hover:bg-white/20 rounded-lg text-xs text-apple-textMain dark:text-white">{t('Change')}</button>
                             </div>
 
                             {/* Note Input */}
@@ -605,7 +606,7 @@ const ProductionLane: React.FC<ProductionLaneProps> = ({
                                 </div>
                                 <input
                                     type="text"
-                                    placeholder="Note (Optional)"
+                                    placeholder={t('Note (Optional)')}
                                     value={productionNote}
                                     onChange={(e) => setProductionNote(e.target.value)}
                                     className="flex-1 bg-black/30 text-white text-xs px-3 py-2 rounded-xl border border-white/10 focus:border-cyan-500 focus:outline-none"
@@ -621,16 +622,16 @@ const ProductionLane: React.FC<ProductionLaneProps> = ({
                                     >
                                         <span className="text-2xl block mb-2 group-hover:scale-110 transition-transform">🔒</span>
                                         <span className="text-sm font-bold text-gray-400 uppercase tracking-wider block group-hover:text-apple-blue transition-colors">Takeover Controls</span>
-                                        <span className="text-[10px] text-gray-500 block mt-1">Click to enter PIN & bind operator to run machine.</span>
+                                        <span className="text-[10px] text-gray-500 block mt-1">{t('Click to enter PIN & bind operator to run machine.')}</span>
                                     </button>
                                 ) : isLiveRun ? (
                                     <div className="w-full flex flex-col items-center animate-fade-in-up">
                                         <div className="text-center mb-4">
-                                            <div className="text-apple-green font-bold text-xs uppercase tracking-[0.2em] mb-1 animate-pulse">Live Production Active</div>
+                                            <div className="text-apple-green font-bold text-xs uppercase tracking-[0.2em] mb-1 animate-pulse">{t('Live Production Active')}</div>
                                             <div className="text-[60px] font-black text-apple-textMain dark:text-white leading-none tabular-nums drop-shadow-md">
                                                 {liveCount}
                                             </div>
-                                            <div className="text-apple-textMuted text-xs font-mono">Units Produced This Session</div>
+                                            <div className="text-apple-textMuted text-xs font-mono">{t('Units Produced This Session')}</div>
                                         </div>
 
                                         {isControlMode ? (
@@ -2202,9 +2203,12 @@ const ProductionControl: React.FC<ProductionControlProps> = ({ user, jobs = [], 
                                              if (detectedCodes && detectedCodes.length > 0) {
                                                  const text = detectedCodes[0].rawValue;
                                                  if (text) {
-                                                     const cleanText = text.trim();
-                                                     const found = machines.find(m => ((m as any).machine_id || m.id) === cleanText || m.name === cleanText);
-                                                     if (found) {
+                                                    const cleanText = text.trim();
+                                                    let found = machines.find(m => ((m as any).machine_id || m.id) === cleanText);
+                                                    if (!found) {
+                                                        found = machines.find(m => m.name === cleanText);
+                                                    }
+                                                    if (found) {
                                                          hasScannedRef.current = true;
                                                          handleMachineTabClick((found as any).machine_id || found.id);
                                                          setTimeout(() => {
@@ -2699,7 +2703,21 @@ const ProductionControl: React.FC<ProductionControlProps> = ({ user, jobs = [], 
                                                         </div>
                                                     </div>
                                                     <div className="p-1.5 space-y-0.5">
-                                                        <p className="text-[10px] font-bold text-gray-200 truncate">{p.user_note || p.ai_description || '现场图片'}</p>
+                                                        <p className="text-[10px] font-bold text-gray-200 truncate" title={p.user_note}>
+                                                            {(() => {
+                                                                let note = p.user_note || p.ai_description || t('Live pictures');
+                                                                if (typeof note === 'string' && (note.trim().startsWith('[') || note.trim().startsWith('{'))) {
+                                                                    try {
+                                                                        const parsed = JSON.parse(note);
+                                                                        if (parsed['log type']) return `[${parsed['log type']}] ${parsed.sku || ''}`;
+                                                                        return t('Machine Log Data');
+                                                                    } catch(e) {
+                                                                        return note;
+                                                                    }
+                                                                }
+                                                                return note;
+                                                            })()}
+                                                        </p>
                                                         <p className="text-[8px] text-gray-400 font-mono truncate">By {p.employee_name || 'Operator'}</p>
                                                     </div>
                                                 </div>
@@ -2925,13 +2943,11 @@ const ProductionControl: React.FC<ProductionControlProps> = ({ user, jobs = [], 
                                         const text = detectedCodes[0].rawValue;
                                         if (text) {
                                             const cleanText = text.trim();
-                                            if (cleanText === selectedMachine) {
-                                                hasScannedClockOutRef.current = true;
-                                                handleManualClockOut();
-                                                setIsScanningForClockOut(false);
-                                            } else {
-                                                alert(`⚠️ 扫码的机台 (${cleanText}) 与当前绑定的机台 (${selectedMachine}) 不匹配，无法登出！\nPlease scan the correct machine QR code.`);
-                                            }
+                                            // Allow scanning ANY QR code to clock out
+                                            // Allow scanning ANY QR code to clock out
+                                            hasScannedClockOutRef.current = true;
+                                            handleManualClockOut();
+                                            setIsScanningForClockOut(false);
                                         }
                                     }
                                 }}

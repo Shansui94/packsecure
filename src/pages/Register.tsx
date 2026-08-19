@@ -2,6 +2,7 @@ import React, { useState } from 'react';
 import { UserPlus, Mail, Lock, User, Briefcase, ArrowLeft, CheckCircle2, MapPin, Building, CreditCard, ShieldCheck, Phone, FileText, Calendar, Award, AlertCircle, HeartPulse, Globe, Upload, File, Image, Trash2, Eye, Camera, Zap } from 'lucide-react';
 import { supabase } from '../services/supabase';
 import { pinToAuthPassword } from '../utils/pinAuth';
+import { useTranslation } from "react-i18next";
 
 interface RegisterProps {
     onNavigate: (page: string) => void;
@@ -10,6 +11,7 @@ interface RegisterProps {
 type Lang = 'bm' | 'en' | 'zh';
 
 const Register: React.FC<RegisterProps> = ({ onNavigate }) => {
+    const { t } = useTranslation();
     // ── Language State ──
     const [lang, setLang] = useState<Lang>('bm');
 
@@ -78,7 +80,7 @@ const Register: React.FC<RegisterProps> = ({ onNavigate }) => {
         if (!file) return;
 
         if (file.size > 5 * 1024 * 1024) {
-            alert(lang === 'zh' ? '文件大小不能超过 5MB！' : (lang === 'en' ? 'File size must not exceed 5MB!' : 'Saiz fail tidak boleh melebihi 5MB!'));
+            alert(lang === 'zh' ? t('File size cannot exceed 5MB!') : (lang === 'en' ? 'File size must not exceed 5MB!' : 'Saiz fail tidak boleh melebihi 5MB!'));
             return;
         }
 
@@ -91,7 +93,7 @@ const Register: React.FC<RegisterProps> = ({ onNavigate }) => {
     };
 
     // ── Translation Dictionary ──
-    const t = {
+    const localT = {
         bm: {
             title: 'BORANG PERMOHONAN PEKERJA & TEMUDUGA',
             subtitle: 'Pendaftaran Jawatan Kumpulan Packsecure OS • Akta Kerja 1955',
@@ -140,7 +142,7 @@ const Register: React.FC<RegisterProps> = ({ onNavigate }) => {
             emergRelation: 'Hubungan Waris (Relationship)',
             emergPhone: 'No. Telefon Waris (Emergency Phone) *',
             pinCode: 'Cipta PIN 4-Digit Masuk App (4-Digit PIN) *',
-            pinTip: 'PIN ini akan digunakan untuk Punch Card 打卡 & Log Masuk Harian. (Default: 1234)',
+            pinTip: t('PIN ini akan digunakan untuk Punch Card Punch & Log Masuk Harian. (Default: 1234)'),
             health: 'Pengakuan Kesihatan (Health Conditions)',
             declarationText: 'Pengakuan Pemohon (Akta Kerja 1955): Saya mengaku bahawa semua maklumat yang dinyatakan dalam borang permohonan ini adalah benar dan sahih.',
             submitBtn: 'HANTAR PERMOHONAN TEMUDUGA / SUBMIT APPLICATION',
@@ -207,61 +209,61 @@ const Register: React.FC<RegisterProps> = ({ onNavigate }) => {
             returnLogin: 'Return to Login Page'
         },
         zh: {
-            title: '员工应聘与面试表格',
-            subtitle: 'Packsecure OS 集团员工入职与面试申请表 • 符合 1955 年劳工法令',
-            badge: '符合马来西亚劳工部 (JTK) 法定标准',
-            step1: '1. 个人资料与头像',
-            step2: '2. 岗位与厂区',
-            step3: '3. 银行与公积金',
-            step4: '4. 紧急联系人与PIN',
-            sec1Title: '第一部分：应聘者个人信息与头像上传 (Personal & Profile Photo)',
-            uploadAvatar: '上传个人证件照 / 头像照片 (Passport Photo)',
-            avatarTip: '点击上传一张清晰的个人证件照或自拍正面照。',
-            fullName: '真实全名（必须与身份证/护照一致）*',
-            icDocType: '证件类型 *',
-            mykad: 'MyKad 身份证 (大马公民)',
-            passport: '护照 (外籍员工)',
-            icNumber: '身份证 / 护照号码 *',
-            gender: '性别 *',
-            dob: '出生日期',
-            race: '种族',
-            marital: '婚姻状况',
-            phone: '手机号码 / WhatsApp *',
-            email: '电子邮箱（选填）',
-            address: '现居住址',
-            uploadIc: '上传身份证 / 护照照片或PDF (IC/Passport Photo)',
-            uploadLicense: '上传驾驶执照照片 (司机必备/选填)',
-            uploadResume: '上传个人简历 / 毕业证书（选填）',
-            chooseFile: '选择文件 (Choose File)',
-            uploaded: '已成功上传文件',
-            nextTo2: '下一步：岗位与厂区 (Step 2) →',
-            sec2Title: '第二部分：应聘岗位与工作厂区 (Position & Location)',
-            prefLocation: '意向工作厂区 (Preferred Base) *',
-            roleApplied: '应聘岗位 (Position Applied) *',
-            education: '最高学历',
-            license: '驾驶执照类型',
-            licenseExp: '驾照到期日',
-            back: '← 返回上一步',
-            nextTo3: '下一步：银行与公积金 (Step 3) →',
-            sec3Title: '第三部分：发薪银行与法定 Caruman 账号',
-            bankName: '发薪银行名称 *',
-            bankAcc: '银行卡账号 *',
-            epf: '公积金 (KWSP/EPF) 账号',
-            socso: '社保 (SOCSO/PERKESO) 账号',
-            nextTo4: '下一步：紧急联系人与PIN (Step 4) →',
-            sec4Title: '第四部分：紧急联系人与 4 位数登录 PIN 码',
-            emergName: '紧急联系人姓名 *',
-            emergRelation: '与申请人关系',
-            emergPhone: '紧急联系人电话 *',
-            pinCode: '设置 4 位数 App 打卡/登录 PIN 码 *',
-            pinTip: '此 4 位数字 PIN 码将用于每日上下班打卡及 App 快速登录。(外籍员工默认: 1234)',
-            health: '健康状况声明',
-            declarationText: '申请人法定声明（1955年劳工法令）：本人谨此声明，本表格中填写的全部信息及上传证件均真实有效。若有虚假，公司有权撤销应聘。',
-            submitBtn: '提交应聘与面试申请表',
-            submitting: '正在提交申请与文件...',
-            successTitle: '应聘申请与文件提交成功！',
-            successMsg: '您的面试应聘表格、头像照片及随附证件已成功登记至 Packsecure OS 集团 HR 系统，请联系 HR 经理审核激活账号。',
-            returnLogin: '返回登录页面'
+            title: t('Employee application and interview forms'),
+            subtitle: t('Packsecure OS Group Employee Onboarding and Interview Application Form • Compliant with the Labor Act 1955'),
+            badge: t('Comply with Malaysian Ministry of Labor (JTK) statutory standards'),
+            step1: t('1. Personal information and avatar'),
+            step2: t('2. Position and factory area'),
+            step3: t('3. Banks and Provident Funds'),
+            step4: t('4. Emergency contact and PIN'),
+            sec1Title: t('Part 1: Upload the applicant’s personal information and avatar (Personal & Profile Photo)'),
+            uploadAvatar: t('Upload personal ID photo/avatar photo (Passport Photo)'),
+            avatarTip: t('Click to upload a clear personal ID photo or a self-portrait of the front.'),
+            fullName: t('Real full name (must be consistent with ID card/passport)*'),
+            icDocType: t('Document type *'),
+            mykad: t('MyKad ID Card (Malaysian Citizens)'),
+            passport: t('Passport (foreign employees)'),
+            icNumber: t('ID/passport number *'),
+            gender: t('gender *'),
+            dob: t('date of birth'),
+            race: t('Race'),
+            marital: t('Marital status'),
+            phone: t('Mobile number/WhatsApp*'),
+            email: t('Email (optional)'),
+            address: t('Current address'),
+            uploadIc: t('Upload ID/Passport Photo or PDF (IC/Passport Photo)'),
+            uploadLicense: t('Upload driver’s license photo (required/optional for drivers)'),
+            uploadResume: t('Upload resume/graduation certificate (optional)'),
+            chooseFile: t('Choose File'),
+            uploaded: t('File uploaded successfully'),
+            nextTo2: t('Next step: Position and factory area (Step 2) →'),
+            sec2Title: t('Part 2: Position & Location'),
+            prefLocation: t('Preferred Base *'),
+            roleApplied: t('Position Applied *'),
+            education: t('Highest academic qualification'),
+            license: t('Driving license type'),
+            licenseExp: t('Driver\'s license expiry date'),
+            back: t('← Return to previous step'),
+            nextTo3: t('Next step: Banks and provident funds (Step 3) →'),
+            sec3Title: t('Part 3: Payroll Bank and Legal Caruman Account Number'),
+            bankName: t('Payroll bank name *'),
+            bankAcc: t('Bank card account number *'),
+            epf: t('Provident Fund (KWSP/EPF) account number'),
+            socso: t('Social Security (SOCSO/PERKESO) Account Number'),
+            nextTo4: t('Next step: Emergency contact and PIN (Step 4) →'),
+            sec4Title: t('Part 4: Emergency Contacts and 4-Digit Login PIN'),
+            emergName: t('Emergency contact name *'),
+            emergRelation: t('Relationship with the applicant'),
+            emergPhone: t('Emergency contact number *'),
+            pinCode: t('Set a 4-digit App Check-in/Login PIN*'),
+            pinTip: t('This 4-digit PIN will be used to clock in and out each day and to quickly log in to the app. (Default for foreign employees: 1234)'),
+            health: t('health statement'),
+            declarationText: t('Applicant\'s Statutory Declaration (Labor Act 1955): I hereby declare that all the information filled in this form and the documents uploaded are true and valid. If there is any falsehood, the company has the right to revoke the application.'),
+            submitBtn: t('Submit application and interview application form'),
+            submitting: t('Submitting application and documents...'),
+            successTitle: t('Application and documents submitted successfully!'),
+            successMsg: t('Your interview application form, headshot photo and accompanying documents have been successfully registered in the Packsecure OS Group HR system. Please contact the HR manager to review and activate your account.'),
+            returnLogin: t('Return to login page')
         }
     }[lang];
 
@@ -288,19 +290,19 @@ const Register: React.FC<RegisterProps> = ({ onNavigate }) => {
         }
 
         if (!isForeignWorker && !declaration) {
-            setErrorMsg(lang === 'zh' ? '请勾选底部法定声明。' : (lang === 'en' ? 'Please agree to the self-declaration.' : 'Sila tandakan pengakuan sah di bahagian bawah.'));
+            setErrorMsg(lang === 'zh' ? t('Please tick the statutory declaration at the bottom.') : (lang === 'en' ? 'Please agree to the self-declaration.' : 'Sila tandakan pengakuan sah di bahagian bawah.'));
             setStatus('error');
             return;
         }
 
         if (!isForeignWorker && pinDigits.length !== 4) {
-            setErrorMsg(lang === 'zh' ? 'PIN 码必须正好为 4 位数字' : 'PIN 码必须正好为 4 位数字 (PIN must be exactly 4 digits)');
+            setErrorMsg(lang === 'zh' ? t('PIN must be exactly 4 digits') : t('PIN must be exactly 4 digits'));
             setStatus('error');
             return;
         }
 
         if (!cleanIc) {
-            setErrorMsg(lang === 'zh' ? '请输入身份证或护照号码' : 'Sila masukkan No. Kad Pengenalan / Pasport.');
+            setErrorMsg(lang === 'zh' ? t('Please enter your ID card or passport number') : 'Sila masukkan No. Kad Pengenalan / Pasport.');
             setStatus('error');
             return;
         }
@@ -364,7 +366,7 @@ const Register: React.FC<RegisterProps> = ({ onNavigate }) => {
 
             if (authError) {
                 if (authError.message.toLowerCase().includes('already registered')) {
-                    throw new Error(lang === 'zh' ? `该身份证/邮箱 (${finalEmail}) 已提交过申请，请联系 HR 经理。` : `No. IC / Emel (${finalEmail}) telah didaftarkan. Sila hubungi Admin/HR.`);
+                    throw new Error(lang === 'zh' ? t('An application has been submitted for this ID card/email address ({{var0}}), please contact the HR manager.', { var0: finalEmail }) : `No. IC / Emel (${finalEmail}) telah didaftarkan. Sila hubungi Admin/HR.`);
                 }
                 throw authError;
             }
@@ -438,7 +440,7 @@ const Register: React.FC<RegisterProps> = ({ onNavigate }) => {
                         {[
                             { id: 'bm', label: '🇲🇾 BM' },
                             { id: 'en', label: '🇬🇧 EN' },
-                            { id: 'zh', label: '🇨🇳 中文' }
+                            { id: 'zh', label: t('🇨🇳 中文') }
                         ].map(l => (
                             <button
                                 key={l.id}
@@ -466,13 +468,13 @@ const Register: React.FC<RegisterProps> = ({ onNavigate }) => {
                         />
                     </div>
                     <div className="inline-flex items-center gap-2 px-3 py-1 rounded-full bg-orange-500/10 border border-orange-500/20 text-orange-400 text-[10px] font-bold uppercase tracking-widest mb-2">
-                        {t.badge}
+                        {localT.badge}
                     </div>
                     <h1 className="text-2xl sm:text-3xl font-black text-white tracking-tight uppercase">
-                        {t.title}
+                        {localT.title}
                     </h1>
                     <p className="text-slate-400 text-xs sm:text-sm mt-1">
-                        {t.subtitle}
+                        {localT.subtitle}
                     </p>
                 </div>
 
@@ -487,9 +489,9 @@ const Register: React.FC<RegisterProps> = ({ onNavigate }) => {
                             <span className="bg-green-500/20 border border-green-500/30 text-green-300 font-mono text-xs px-3 py-1 rounded-full font-bold mb-2">
                                 NO. RUJUKAN: {appRefNo}
                             </span>
-                            <h3 className="text-xl font-bold text-green-400 mb-2">{t.successTitle}</h3>
+                            <h3 className="text-xl font-bold text-green-400 mb-2">{localT.successTitle}</h3>
                             <p className="text-slate-300 text-xs sm:text-sm leading-relaxed max-w-lg">
-                                {t.successMsg}
+                                {localT.successMsg}
                             </p>
                             <div className="mt-4 p-4 bg-black/40 border border-white/10 rounded-2xl w-full max-w-md text-left text-xs space-y-1.5 font-mono text-slate-300">
                                 <div>📍 Kilang / Factory: <strong className="text-orange-400">{baseLocation}</strong></div>
@@ -503,7 +505,7 @@ const Register: React.FC<RegisterProps> = ({ onNavigate }) => {
                             onClick={() => onNavigate('login')}
                             className="w-full bg-gradient-to-r from-[#E97132] to-[#FE4B13] hover:from-[#FE4B13] hover:to-[#E97132] text-white font-bold py-4 rounded-xl transition-all shadow-lg shadow-[#E97132]/20 uppercase tracking-wider text-xs"
                         >
-                            {t.returnLogin}
+                            {localT.returnLogin}
                         </button>
                     </div>
                 ) : (
@@ -515,7 +517,7 @@ const Register: React.FC<RegisterProps> = ({ onNavigate }) => {
                                 <Zap size={20} className="text-amber-400 shrink-0 animate-bounce" />
                                 <span>
                                     {lang === 'zh'
-                                        ? '⚡ 外籍员工极速提交模式已启用：自动忽略所有必填项 (*)，允许直接 SUBMIT！稍后可在个人 Profile 页面补齐剩余资料。'
+                                        ? t('⚡ Speedy submission mode for foreign employees is enabled: all required fields (*) are automatically ignored and direct SUBMIT is allowed! You can fill in the remaining information later on the personal Profile page.')
                                         : (lang === 'en'
                                             ? '⚡ Foreign Worker Express Mode Active: All mandatory (*) requirements bypassed. You can SUBMIT now and complete your profile details later.'
                                             : '⚡ Mod Express Pekerja Asing Aktif: Semua syarat (*) dikecualikan. Anda boleh HANTAR permohonan sekarang dan melengkapkan profil kemudian.')}
@@ -534,7 +536,7 @@ const Register: React.FC<RegisterProps> = ({ onNavigate }) => {
                                         : 'text-slate-500 hover:text-slate-300'
                                 }`}
                             >
-                                <User size={14} /> <span className="hidden sm:inline">{t.step1}</span> <span className="sm:hidden">1</span>
+                                <User size={14} /> <span className="hidden sm:inline">{localT.step1}</span> <span className="sm:hidden">1</span>
                             </button>
                             <button
                                 type="button"
@@ -545,7 +547,7 @@ const Register: React.FC<RegisterProps> = ({ onNavigate }) => {
                                         : 'text-slate-500 hover:text-slate-300'
                                 }`}
                             >
-                                <Building size={14} /> <span className="hidden sm:inline">{t.step2}</span> <span className="sm:hidden">2</span>
+                                <Building size={14} /> <span className="hidden sm:inline">{localT.step2}</span> <span className="sm:hidden">2</span>
                             </button>
                             <button
                                 type="button"
@@ -556,7 +558,7 @@ const Register: React.FC<RegisterProps> = ({ onNavigate }) => {
                                         : 'text-slate-500 hover:text-slate-300'
                                 }`}
                             >
-                                <CreditCard size={14} /> <span className="hidden sm:inline">{t.step3}</span> <span className="sm:hidden">3</span>
+                                <CreditCard size={14} /> <span className="hidden sm:inline">{localT.step3}</span> <span className="sm:hidden">3</span>
                             </button>
                             <button
                                 type="button"
@@ -567,7 +569,7 @@ const Register: React.FC<RegisterProps> = ({ onNavigate }) => {
                                         : 'text-slate-500 hover:text-slate-300'
                                 }`}
                             >
-                                <ShieldCheck size={14} /> <span className="hidden sm:inline">{t.step4}</span> <span className="sm:hidden">4</span>
+                                <ShieldCheck size={14} /> <span className="hidden sm:inline">{localT.step4}</span> <span className="sm:hidden">4</span>
                             </button>
                         </div>
 
@@ -575,7 +577,7 @@ const Register: React.FC<RegisterProps> = ({ onNavigate }) => {
                         {currentStep === 1 && (
                             <div className="space-y-4 animate-fade-in">
                                 <div className="text-xs font-bold text-orange-400 uppercase tracking-widest border-b border-white/10 pb-2 flex items-center gap-2">
-                                    <User size={16} /> {t.sec1Title}
+                                    <User size={16} /> {localT.sec1Title}
                                 </div>
 
                                 {/* ── PROFILE PHOTO AVATAR UPLOAD BOX ── */}
@@ -613,10 +615,10 @@ const Register: React.FC<RegisterProps> = ({ onNavigate }) => {
 
                                     <div className="text-center sm:text-left space-y-1 flex-1">
                                         <label className="block text-xs font-bold text-white uppercase tracking-wide">
-                                            {t.uploadAvatar}
+                                            {localT.uploadAvatar}
                                         </label>
                                         <p className="text-[11px] text-slate-400 leading-relaxed">
-                                            {t.avatarTip}
+                                            {localT.avatarTip}
                                         </p>
                                         {avatarFile ? (
                                             <div className="inline-flex items-center gap-1.5 text-xs text-green-400 font-mono font-bold mt-1 bg-green-500/10 px-2.5 py-1 rounded-lg border border-green-500/20">
@@ -624,7 +626,7 @@ const Register: React.FC<RegisterProps> = ({ onNavigate }) => {
                                             </div>
                                         ) : (
                                             <label className="inline-block mt-2 px-3 py-1.5 bg-orange-500/10 hover:bg-orange-500/20 border border-orange-500/30 text-orange-400 rounded-xl text-xs font-bold cursor-pointer transition-all">
-                                                📷 {t.chooseFile}
+                                                📷 {localT.chooseFile}
                                                 <input
                                                     type="file"
                                                     accept="image/*"
@@ -640,7 +642,7 @@ const Register: React.FC<RegisterProps> = ({ onNavigate }) => {
                                     {/* Full Name */}
                                     <div className="sm:col-span-2">
                                         <label className="block text-xs font-bold text-slate-400 uppercase tracking-wider mb-1">
-                                            {t.fullName} {!isForeignWorker && '*'}
+                                            {localT.fullName} {!isForeignWorker && '*'}
                                         </label>
                                         <input
                                             type="text"
@@ -655,7 +657,7 @@ const Register: React.FC<RegisterProps> = ({ onNavigate }) => {
                                     {/* IC Type & Number */}
                                     <div>
                                         <label className="block text-xs font-bold text-slate-400 uppercase tracking-wider mb-1">
-                                            {t.icDocType}
+                                            {localT.icDocType}
                                         </label>
                                         <div className="grid grid-cols-2 gap-2">
                                             <button
@@ -667,7 +669,7 @@ const Register: React.FC<RegisterProps> = ({ onNavigate }) => {
                                                         : 'bg-black/40 text-slate-500 border-slate-800'
                                                 }`}
                                             >
-                                                {t.mykad}
+                                                {localT.mykad}
                                             </button>
                                             <button
                                                 type="button"
@@ -678,14 +680,14 @@ const Register: React.FC<RegisterProps> = ({ onNavigate }) => {
                                                         : 'bg-black/40 text-slate-500 border-slate-800'
                                                 }`}
                                             >
-                                                {t.passport}
+                                                {localT.passport}
                                             </button>
                                         </div>
                                     </div>
 
                                     <div>
                                         <label className="block text-xs font-bold text-slate-400 uppercase tracking-wider mb-1">
-                                            {t.icNumber} {!isForeignWorker && '*'}
+                                            {localT.icNumber} {!isForeignWorker && '*'}
                                         </label>
                                         <input
                                             type="text"
@@ -700,22 +702,22 @@ const Register: React.FC<RegisterProps> = ({ onNavigate }) => {
                                     {/* Gender */}
                                     <div>
                                         <label className="block text-xs font-bold text-slate-400 uppercase tracking-wider mb-1">
-                                            {t.gender}
+                                            {localT.gender}
                                         </label>
                                         <select
                                             value={gender}
                                             onChange={(e: any) => setGender(e.target.value)}
                                             className="w-full bg-[#08080a] border border-slate-800 rounded-xl px-4 py-3 text-white focus:outline-none focus:border-[#E97132] transition-all text-sm"
                                         >
-                                            <option value="Lelaki / Male">Lelaki / Male / 男</option>
-                                            <option value="Perempuan / Female">Perempuan / Female / 女</option>
+                                            <option value="Lelaki / Male">{t('Lelaki / Male / male')}</option>
+                                            <option value="Perempuan / Female">{t('Perempuan / Female / Female')}</option>
                                         </select>
                                     </div>
 
                                     {/* Date of Birth */}
                                     <div>
                                         <label className="block text-xs font-bold text-slate-400 uppercase tracking-wider mb-1">
-                                            {t.dob}
+                                            {localT.dob}
                                         </label>
                                         <input
                                             type="date"
@@ -728,7 +730,7 @@ const Register: React.FC<RegisterProps> = ({ onNavigate }) => {
                                     {/* Race & Religion */}
                                     <div>
                                         <label className="block text-xs font-bold text-slate-400 uppercase tracking-wider mb-1">
-                                            {t.race}
+                                            {localT.race}
                                         </label>
                                         <select
                                             value={race}
@@ -745,23 +747,23 @@ const Register: React.FC<RegisterProps> = ({ onNavigate }) => {
 
                                     <div>
                                         <label className="block text-xs font-bold text-slate-400 uppercase tracking-wider mb-1">
-                                            {t.marital}
+                                            {localT.marital}
                                         </label>
                                         <select
                                             value={maritalStatus}
                                             onChange={(e) => setMaritalStatus(e.target.value)}
                                             className="w-full bg-[#08080a] border border-slate-800 rounded-xl px-4 py-3 text-white focus:outline-none focus:border-[#E97132] transition-all text-sm"
                                         >
-                                            <option value="Bujang / Single">Bujang / Single / 未婚</option>
-                                            <option value="Kahwin / Married">Kahwin / Married / 已婚</option>
-                                            <option value="Duda/Janda / Divorced">Duda/Janda / Divorced / 离异</option>
+                                            <option value="Bujang / Single">{t('Bujang / Single / Unmarried')}</option>
+                                            <option value="Kahwin / Married">{t('Kahwin / Married / married')}</option>
+                                            <option value="Duda/Janda / Divorced">{t('Duda/Janda / Divorced / Divorced')}</option>
                                         </select>
                                     </div>
 
                                     {/* Phone & Email */}
                                     <div>
                                         <label className="block text-xs font-bold text-slate-400 uppercase tracking-wider mb-1">
-                                            {t.phone} {!isForeignWorker && '*'}
+                                            {localT.phone} {!isForeignWorker && '*'}
                                         </label>
                                         <input
                                             type="tel"
@@ -775,7 +777,7 @@ const Register: React.FC<RegisterProps> = ({ onNavigate }) => {
 
                                     <div>
                                         <label className="block text-xs font-bold text-slate-400 uppercase tracking-wider mb-1">
-                                            {t.email}
+                                            {localT.email}
                                         </label>
                                         <input
                                             type="email"
@@ -789,7 +791,7 @@ const Register: React.FC<RegisterProps> = ({ onNavigate }) => {
                                     {/* Full Residential Address */}
                                     <div className="sm:col-span-2">
                                         <label className="block text-xs font-bold text-slate-400 uppercase tracking-wider mb-1">
-                                            {t.address}
+                                            {localT.address}
                                         </label>
                                         <textarea
                                             rows={2}
@@ -811,7 +813,7 @@ const Register: React.FC<RegisterProps> = ({ onNavigate }) => {
                                             <div className="p-3 bg-[#08080a] border border-slate-800 rounded-2xl flex flex-col justify-between">
                                                 <div className="flex items-center justify-between mb-2">
                                                     <span className="text-xs font-bold text-slate-300 flex items-center gap-1.5">
-                                                        <FileText size={14} className="text-orange-400" /> {t.uploadIc}
+                                                        <FileText size={14} className="text-orange-400" /> {localT.uploadIc}
                                                     </span>
                                                 </div>
 
@@ -832,7 +834,7 @@ const Register: React.FC<RegisterProps> = ({ onNavigate }) => {
                                                 ) : (
                                                     <label className="cursor-pointer border border-dashed border-slate-700 hover:border-orange-500 bg-slate-900/50 hover:bg-slate-900 p-3 rounded-xl flex items-center justify-center gap-2 text-xs text-slate-400 transition-all">
                                                         <Upload size={14} className="text-orange-400" />
-                                                        <span>{t.chooseFile}</span>
+                                                        <span>{localT.chooseFile}</span>
                                                         <input
                                                             type="file"
                                                             accept="image/*,application/pdf"
@@ -847,7 +849,7 @@ const Register: React.FC<RegisterProps> = ({ onNavigate }) => {
                                             <div className="p-3 bg-[#08080a] border border-slate-800 rounded-2xl flex flex-col justify-between">
                                                 <div className="flex items-center justify-between mb-2">
                                                     <span className="text-xs font-bold text-slate-300 flex items-center gap-1.5">
-                                                        <FileText size={14} className="text-orange-400" /> {t.uploadLicense}
+                                                        <FileText size={14} className="text-orange-400" /> {localT.uploadLicense}
                                                     </span>
                                                 </div>
 
@@ -868,7 +870,7 @@ const Register: React.FC<RegisterProps> = ({ onNavigate }) => {
                                                 ) : (
                                                     <label className="cursor-pointer border border-dashed border-slate-700 hover:border-orange-500 bg-slate-900/50 hover:bg-slate-900 p-3 rounded-xl flex items-center justify-center gap-2 text-xs text-slate-400 transition-all">
                                                         <Upload size={14} className="text-orange-400" />
-                                                        <span>{t.chooseFile}</span>
+                                                        <span>{localT.chooseFile}</span>
                                                         <input
                                                             type="file"
                                                             accept="image/*,application/pdf"
@@ -889,7 +891,7 @@ const Register: React.FC<RegisterProps> = ({ onNavigate }) => {
                                             onClick={handleRegister}
                                             className="bg-amber-600 hover:bg-amber-500 text-white font-bold px-5 py-2.5 rounded-xl text-xs uppercase tracking-wider transition-all shadow-md flex items-center gap-1.5"
                                         >
-                                            <Zap size={14} /> {lang === 'zh' ? '⚡ 外籍员工直接提交 (SUBMIT NOW)' : '⚡ HANTAR SEKARANG (SUBMIT NOW)'}
+                                            <Zap size={14} /> {lang === 'zh' ? t('⚡ Foreign employees submit directly (SUBMIT NOW)') : '⚡ HANTAR SEKARANG (SUBMIT NOW)'}
                                         </button>
                                     )}
                                     <button
@@ -897,7 +899,7 @@ const Register: React.FC<RegisterProps> = ({ onNavigate }) => {
                                         onClick={() => setCurrentStep(2)}
                                         className="bg-orange-600 hover:bg-orange-500 text-white font-bold px-6 py-2.5 rounded-xl text-xs uppercase tracking-wider transition-all ml-auto"
                                     >
-                                        {t.nextTo2}
+                                        {localT.nextTo2}
                                     </button>
                                 </div>
                             </div>
@@ -907,14 +909,14 @@ const Register: React.FC<RegisterProps> = ({ onNavigate }) => {
                         {currentStep === 2 && (
                             <div className="space-y-4 animate-fade-in">
                                 <div className="text-xs font-bold text-orange-400 uppercase tracking-widest border-b border-white/10 pb-2 flex items-center gap-2">
-                                    <Building size={16} /> {t.sec2Title}
+                                    <Building size={16} /> {localT.sec2Title}
                                 </div>
 
                                 <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
                                     {/* Base Location Selection */}
                                     <div className="sm:col-span-2">
                                         <label className="block text-xs font-bold text-slate-400 uppercase tracking-wider mb-2">
-                                            {t.prefLocation}
+                                            {localT.prefLocation}
                                         </label>
                                         <div className="grid grid-cols-2 sm:grid-cols-4 gap-2">
                                             {[
@@ -943,7 +945,7 @@ const Register: React.FC<RegisterProps> = ({ onNavigate }) => {
                                     {/* Applied Role */}
                                     <div>
                                         <label className="block text-xs font-bold text-slate-400 uppercase tracking-wider mb-1">
-                                            {t.roleApplied}
+                                            {localT.roleApplied}
                                         </label>
                                         <select
                                             value={appliedRole}
@@ -963,7 +965,7 @@ const Register: React.FC<RegisterProps> = ({ onNavigate }) => {
                                     {/* Education Level */}
                                     <div>
                                         <label className="block text-xs font-bold text-slate-400 uppercase tracking-wider mb-1">
-                                            {t.education}
+                                            {localT.education}
                                         </label>
                                         <select
                                             value={education}
@@ -981,7 +983,7 @@ const Register: React.FC<RegisterProps> = ({ onNavigate }) => {
                                     {/* Driving License Class */}
                                     <div>
                                         <label className="block text-xs font-bold text-slate-400 uppercase tracking-wider mb-1">
-                                            {t.license}
+                                            {localT.license}
                                         </label>
                                         <select
                                             value={licenseClass}
@@ -998,7 +1000,7 @@ const Register: React.FC<RegisterProps> = ({ onNavigate }) => {
 
                                     <div>
                                         <label className="block text-xs font-bold text-slate-400 uppercase tracking-wider mb-1">
-                                            {t.licenseExp}
+                                            {localT.licenseExp}
                                         </label>
                                         <input
                                             type="date"
@@ -1011,7 +1013,7 @@ const Register: React.FC<RegisterProps> = ({ onNavigate }) => {
                                     {/* 3. Resume / Cert Upload (Optional) */}
                                     <div className="sm:col-span-2">
                                         <label className="block text-xs font-bold text-slate-400 uppercase tracking-wider mb-1">
-                                            {t.uploadResume}
+                                            {localT.uploadResume}
                                         </label>
                                         <div className="p-3 bg-[#08080a] border border-slate-800 rounded-2xl">
                                             {resumeDocFile ? (
@@ -1031,7 +1033,7 @@ const Register: React.FC<RegisterProps> = ({ onNavigate }) => {
                                             ) : (
                                                 <label className="cursor-pointer border border-dashed border-slate-700 hover:border-orange-500 bg-slate-900/50 hover:bg-slate-900 p-3 rounded-xl flex items-center justify-center gap-2 text-xs text-slate-400 transition-all">
                                                     <Upload size={14} className="text-orange-400" />
-                                                    <span>{t.chooseFile} (PDF / Image)</span>
+                                                    <span>{localT.chooseFile} (PDF / Image)</span>
                                                     <input
                                                         type="file"
                                                         accept="image/*,application/pdf"
@@ -1050,7 +1052,7 @@ const Register: React.FC<RegisterProps> = ({ onNavigate }) => {
                                         onClick={() => setCurrentStep(1)}
                                         className="bg-slate-800 hover:bg-slate-700 text-slate-300 font-bold px-5 py-2.5 rounded-xl text-xs uppercase transition-all"
                                     >
-                                        {t.back}
+                                        {localT.back}
                                     </button>
 
                                     <div className="flex items-center gap-2">
@@ -1060,7 +1062,7 @@ const Register: React.FC<RegisterProps> = ({ onNavigate }) => {
                                                 onClick={handleRegister}
                                                 className="bg-amber-600 hover:bg-amber-500 text-white font-bold px-5 py-2.5 rounded-xl text-xs uppercase tracking-wider transition-all shadow-md flex items-center gap-1.5"
                                             >
-                                                <Zap size={14} /> {lang === 'zh' ? '⚡ 外籍员工直接提交' : '⚡ HANTAR SEKARANG'}
+                                                <Zap size={14} /> {lang === 'zh' ? t('⚡ Foreign employees submit directly') : '⚡ HANTAR SEKARANG'}
                                             </button>
                                         )}
                                         <button
@@ -1068,7 +1070,7 @@ const Register: React.FC<RegisterProps> = ({ onNavigate }) => {
                                             onClick={() => setCurrentStep(3)}
                                             className="bg-orange-600 hover:bg-orange-500 text-white font-bold px-6 py-2.5 rounded-xl text-xs uppercase tracking-wider transition-all"
                                         >
-                                            {t.nextTo3}
+                                            {localT.nextTo3}
                                         </button>
                                     </div>
                                 </div>
@@ -1079,14 +1081,14 @@ const Register: React.FC<RegisterProps> = ({ onNavigate }) => {
                         {currentStep === 3 && (
                             <div className="space-y-4 animate-fade-in">
                                 <div className="text-xs font-bold text-orange-400 uppercase tracking-widest border-b border-white/10 pb-2 flex items-center gap-2">
-                                    <CreditCard size={16} /> {t.sec3Title}
+                                    <CreditCard size={16} /> {localT.sec3Title}
                                 </div>
 
                                 <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
                                     {/* Bank Name */}
                                     <div>
                                         <label className="block text-xs font-bold text-slate-400 uppercase tracking-wider mb-1">
-                                            {t.bankName}
+                                            {localT.bankName}
                                         </label>
                                         <select
                                             value={bankName}
@@ -1109,7 +1111,7 @@ const Register: React.FC<RegisterProps> = ({ onNavigate }) => {
                                     {/* Bank Account Number */}
                                     <div>
                                         <label className="block text-xs font-bold text-slate-400 uppercase tracking-wider mb-1">
-                                            {t.bankAcc} {!isForeignWorker && '*'}
+                                            {localT.bankAcc} {!isForeignWorker && '*'}
                                         </label>
                                         <input
                                             type="text"
@@ -1124,7 +1126,7 @@ const Register: React.FC<RegisterProps> = ({ onNavigate }) => {
                                     {/* EPF / KWSP No. */}
                                     <div>
                                         <label className="block text-xs font-bold text-slate-400 uppercase tracking-wider mb-1">
-                                            {t.epf}
+                                            {localT.epf}
                                         </label>
                                         <input
                                             type="text"
@@ -1138,7 +1140,7 @@ const Register: React.FC<RegisterProps> = ({ onNavigate }) => {
                                     {/* SOCSO / PERKESO No. */}
                                     <div>
                                         <label className="block text-xs font-bold text-slate-400 uppercase tracking-wider mb-1">
-                                            {t.socso}
+                                            {localT.socso}
                                         </label>
                                         <input
                                             type="text"
@@ -1156,7 +1158,7 @@ const Register: React.FC<RegisterProps> = ({ onNavigate }) => {
                                         onClick={() => setCurrentStep(2)}
                                         className="bg-slate-800 hover:bg-slate-700 text-slate-300 font-bold px-5 py-2.5 rounded-xl text-xs uppercase transition-all"
                                     >
-                                        {t.back}
+                                        {localT.back}
                                     </button>
 
                                     <div className="flex items-center gap-2">
@@ -1166,7 +1168,7 @@ const Register: React.FC<RegisterProps> = ({ onNavigate }) => {
                                                 onClick={handleRegister}
                                                 className="bg-amber-600 hover:bg-amber-500 text-white font-bold px-5 py-2.5 rounded-xl text-xs uppercase tracking-wider transition-all shadow-md flex items-center gap-1.5"
                                             >
-                                                <Zap size={14} /> {lang === 'zh' ? '⚡ 外籍员工直接提交' : '⚡ HANTAR SEKARANG'}
+                                                <Zap size={14} /> {lang === 'zh' ? t('⚡ Foreign employees submit directly') : '⚡ HANTAR SEKARANG'}
                                             </button>
                                         )}
                                         <button
@@ -1174,7 +1176,7 @@ const Register: React.FC<RegisterProps> = ({ onNavigate }) => {
                                             onClick={() => setCurrentStep(4)}
                                             className="bg-orange-600 hover:bg-orange-500 text-white font-bold px-6 py-2.5 rounded-xl text-xs uppercase tracking-wider transition-all"
                                         >
-                                            {t.nextTo4}
+                                            {localT.nextTo4}
                                         </button>
                                     </div>
                                 </div>
@@ -1185,14 +1187,14 @@ const Register: React.FC<RegisterProps> = ({ onNavigate }) => {
                         {currentStep === 4 && (
                             <div className="space-y-4 animate-fade-in">
                                 <div className="text-xs font-bold text-orange-400 uppercase tracking-widest border-b border-white/10 pb-2 flex items-center gap-2">
-                                    <ShieldCheck size={16} /> {t.sec4Title}
+                                    <ShieldCheck size={16} /> {localT.sec4Title}
                                 </div>
 
                                 <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
                                     {/* Emergency Contact Name */}
                                     <div>
                                         <label className="block text-xs font-bold text-slate-400 uppercase tracking-wider mb-1">
-                                            {t.emergName} {!isForeignWorker && '*'}
+                                            {localT.emergName} {!isForeignWorker && '*'}
                                         </label>
                                         <input
                                             type="text"
@@ -1207,17 +1209,17 @@ const Register: React.FC<RegisterProps> = ({ onNavigate }) => {
                                     {/* Relationship */}
                                     <div>
                                         <label className="block text-xs font-bold text-slate-400 uppercase tracking-wider mb-1">
-                                            {t.emergRelation}
+                                            {localT.emergRelation}
                                         </label>
                                         <select
                                             value={emergencyRelation}
                                             onChange={(e) => setEmergencyRelation(e.target.value)}
                                             className="w-full bg-[#08080a] border border-slate-800 rounded-xl px-4 py-3 text-white focus:outline-none focus:border-[#E97132] transition-all text-sm"
                                         >
-                                            <option value="Ibu/Bapa (Parent)">Ibu / Bapa (Parent / 父母)</option>
-                                            <option value="Suami/Isteri (Spouse)">Suami / Isteri (Spouse / 配偶)</option>
-                                            <option value="Adik-Beradik (Sibling)">Adik-Beradik (Sibling / 兄弟姐妹)</option>
-                                            <option value="Anak (Child)">Anak (Child / 子女)</option>
+                                            <option value="Ibu/Bapa (Parent)">{t('Ibu / Bapa (Parent / parent)')}</option>
+                                            <option value="Suami/Isteri (Spouse)">{t('Suami / Isteri (Spouse / spouse)')}</option>
+                                            <option value="Adik-Beradik (Sibling)">{t('Adik-Beradik (Sibling / brother and sister)')}</option>
+                                            <option value="Anak (Child)">{t('Anak (Child/child)')}</option>
                                             <option value="Rakan (Friend)">Rakan / Lain-lain (Friend)</option>
                                         </select>
                                     </div>
@@ -1225,7 +1227,7 @@ const Register: React.FC<RegisterProps> = ({ onNavigate }) => {
                                     {/* Emergency Phone */}
                                     <div>
                                         <label className="block text-xs font-bold text-slate-400 uppercase tracking-wider mb-1">
-                                            {t.emergPhone} {!isForeignWorker && '*'}
+                                            {localT.emergPhone} {!isForeignWorker && '*'}
                                         </label>
                                         <input
                                             type="tel"
@@ -1240,7 +1242,7 @@ const Register: React.FC<RegisterProps> = ({ onNavigate }) => {
                                     {/* 4-Digit Security PIN */}
                                     <div>
                                         <label className="block text-xs font-bold text-[#E97132] uppercase tracking-wider mb-1">
-                                            {t.pinCode} {!isForeignWorker && '*'}
+                                            {localT.pinCode} {!isForeignWorker && '*'}
                                         </label>
                                         <div className="relative">
                                             <Lock size={16} className="absolute left-4 top-1/2 transform -translate-y-1/2 text-slate-500" />
@@ -1257,14 +1259,14 @@ const Register: React.FC<RegisterProps> = ({ onNavigate }) => {
                                             />
                                         </div>
                                         <span className="block text-[10px] text-slate-500 mt-1">
-                                            {t.pinTip}
+                                            {localT.pinTip}
                                         </span>
                                     </div>
 
                                     {/* Health Declaration */}
                                     <div className="sm:col-span-2">
                                         <label className="block text-xs font-bold text-slate-400 uppercase tracking-wider mb-1">
-                                            {t.health}
+                                            {localT.health}
                                         </label>
                                         <input
                                             type="text"
@@ -1287,7 +1289,7 @@ const Register: React.FC<RegisterProps> = ({ onNavigate }) => {
                                             className="mt-1 w-4 h-4 text-orange-500 rounded bg-slate-900 border-slate-700 focus:ring-orange-500"
                                         />
                                         <span className="text-xs text-slate-300 leading-relaxed">
-                                            {t.declarationText}
+                                            {localT.declarationText}
                                         </span>
                                     </label>
                                 </div>
@@ -1304,14 +1306,14 @@ const Register: React.FC<RegisterProps> = ({ onNavigate }) => {
                                         onClick={() => setCurrentStep(3)}
                                         className="bg-slate-800 hover:bg-slate-700 text-slate-300 font-bold px-5 py-3 rounded-xl text-xs uppercase transition-all"
                                     >
-                                        {t.back}
+                                        {localT.back}
                                     </button>
                                     <button
                                         type="submit"
                                         disabled={status === 'loading'}
                                         className="flex-1 ml-3 bg-gradient-to-r from-[#E97132] to-[#FE4B13] hover:from-[#FE4B13] hover:to-[#E97132] text-white font-bold py-3.5 rounded-xl shadow-lg shadow-[#E97132]/20 transition-all text-xs uppercase tracking-wider disabled:opacity-50"
                                     >
-                                        {status === 'loading' ? t.submitting : t.submitBtn}
+                                        {status === 'loading' ? localT.submitting : localT.submitBtn}
                                     </button>
                                 </div>
                             </div>

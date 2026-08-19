@@ -99,6 +99,7 @@ const ProductionReports: React.FC<ProductionReportsProps> = () => {
                     .gte('created_at', startDateTs)
                     .lte('created_at', endDateTs)
                     .order('created_at', { ascending: true })
+                    .order('log_id', { ascending: true })
                     .range(offsetLogs, offsetLogs + 999);
 
                 if (error) throw error;
@@ -123,6 +124,8 @@ const ProductionReports: React.FC<ProductionReportsProps> = () => {
                     .select('id, order_number, customer, items, zone, status, order_date, deadline, created_at, delivery_address, driver_id, trip_id, trip_sequence, trip_origin, trip_drop_count')
                     .neq('status', 'Cancelled')
                     .or(`order_date.gte.${firstDay},deadline.gte.${firstDay},created_at.gte.${startDateTs}`)
+                    .order('created_at', { ascending: true })
+                    .order('id', { ascending: true })
                     .range(offsetOrders, offsetOrders + 999);
 
                 if (error) throw error;

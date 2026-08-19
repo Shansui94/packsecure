@@ -8,6 +8,7 @@ import {
 import { getSalaryAdvances, updateSalaryAdvanceStatus } from '../services/apiV2';
 import { calculateShiftSplit, getRatesForTarget } from '../utils/rateCalculator';
 import { useTranslation } from 'react-i18next';
+import i18next from "i18next";
 
 const formatYYYYMMDD = (dateStr: string | null | undefined): string => {
     if (!dateStr) return '';
@@ -68,8 +69,8 @@ const ALL_PAGES = [
     { id: 'scanner', label: 'Production Control', group: 'Factory' },
     { id: 'livestock', label: 'Live Stock', group: 'Factory' },
     { id: 'production', label: 'Production Logs', group: 'Factory' },
-    { id: 'floor-plan', label: 'Floor Plan (厂房布局)', group: 'Factory' },
-    { id: 'machine-schedule', label: 'Machine Schedule (排产)', group: 'Factory' },
+    { id: 'floor-plan', label: i18next.t('Floor Plan (factory layout)'), group: 'Factory' },
+    { id: 'machine-schedule', label: i18next.t('Machine Schedule'), group: 'Factory' },
     { id: 'inventory', label: 'Inventory', group: 'Inventory' },
     { id: 'products', label: 'Product Library', group: 'Inventory' },
     { id: 'stock-movement', label: 'Stock Movement', group: 'Inventory' },
@@ -82,23 +83,23 @@ const ALL_PAGES = [
     { id: 'delivery-history', label: 'My History', group: 'Driver' },
     { id: 'lorry-service', label: 'Lorry Service', group: 'Driver' },
     { id: 'hr', label: 'HR Portal', group: 'Admin' },
-    { id: 'operators', label: '操作员管理', group: 'Admin' },
+    { id: 'operators', label: i18next.t('operators'), group: 'Admin' },
     { id: 'driver-management', label: 'Driver Management', group: 'Admin' },
     { id: 'data-v2', label: 'Data Command', group: 'Admin' },
     { id: 'iot', label: 'IoT Settings', group: 'Admin' },
     { id: 'reports', label: 'Executive Reports', group: 'Admin' },
-    { id: 'activity-logs', label: 'Activity Logs (操作日志)', group: 'Admin' },
-    { id: 'dev-log', label: 'Dev Log (开发日志)', group: 'Admin' },
+    { id: 'activity-logs', label: i18next.t('Activity Logs (operation logs)'), group: 'Admin' },
+    { id: 'dev-log', label: i18next.t('Dev Log'), group: 'Admin' },
     { id: 'maintenance', label: 'Maintenance Control', group: 'Other' },
     { id: 'claims', label: 'Claims', group: 'Other' },
     { id: 'notes', label: 'Notes', group: 'Other' },
     { id: 'tasks', label: 'Tasks', group: 'Other' },
     { id: 'driver-leave', label: 'Apply Leave', group: 'Other' },
     { id: 'report-history', label: 'Reports', group: 'Other' },
-    { id: 'leave-calendar', label: 'Leave Center (请假中心)', group: 'Other' },
-    { id: 'sop-center', label: 'SOP Guide (SOP 指南)', group: 'Other' },
-    { id: 'work-photos', label: 'Work Photos (工作记录)', group: 'Other' },
-    { id: 'personal-report', label: 'Monthly Report (月度报告)', group: 'Other' },
+    { id: 'leave-calendar', label: i18next.t('Leave Center'), group: 'Other' },
+    { id: 'sop-center', label: i18next.t('SOP Guide'), group: 'Other' },
+    { id: 'work-photos', label: i18next.t('Work Photos'), group: 'Other' },
+    { id: 'personal-report', label: i18next.t('Monthly Report'), group: 'Other' },
 ];
 
 const ALL_ROLES = ['SuperAdmin', 'Admin', 'Manager', 'LogisticsCoordinator', 'HR', 'Operator', 'Driver'];
@@ -119,6 +120,7 @@ const EmployeeModal: React.FC<{
     onSave: () => void;
     currentUser: any;
 }> = ({ emp, onClose, onSave, currentUser }) => {
+    const { t } = useTranslation();
     const isNew = !emp?.id;
     const isSuperAdminOrHR = currentUser?.role === 'SuperAdmin' || currentUser?.role === 'HR';
     const [form, setForm] = useState<Partial<Employee> & { pin_input?: string }>(emp ? {
@@ -459,7 +461,7 @@ const EmployeeModal: React.FC<{
                             </>)}
                             {/* Attendance Bonus for all */}
                             <div className="grid grid-cols-2 gap-3 pt-2 border-t border-white/5">
-                                {f('全勤奖 Attendance Bonus (RM)', 'attendance_bonus', 'number', '200')}
+                                {f(t('Attendance Bonus (RM)'), 'attendance_bonus', 'number', '200')}
                                 <div>
                                     <label className="block text-[10px] text-gray-500 uppercase tracking-widest mb-1.5">Max Absent Days Still Eligible</label>
                                     <input type="number" value={form.attendance_bonus_threshold ?? 0} onChange={e => set('attendance_bonus_threshold', e.target.value)}
@@ -475,33 +477,35 @@ const EmployeeModal: React.FC<{
                     {['SuperAdmin', 'Admin', 'Manager'].includes(currentUser?.role || '') && (
                         <div className="pt-4 border-t border-white/5 space-y-2">
                             <label className="block text-[10px] text-emerald-400 font-bold uppercase tracking-widest">
-                                🛡️ Custom Module Unlocks (特权开通)
-                            </label>
+                                
+                                                                {t('🛡️ Custom Module Unlocks (privilege activation)')}
+                                                            </label>
                             <p className="text-[10px] text-gray-500 leading-tight">
-                                为员工开通专属页面访问权限（无需改变角色，适用于临时授权）。
-                            </p>
+                                
+                                                                {t('grant_exclusive_page_access_no_role_chan')}
+                                                            </p>
                             <div className="grid grid-cols-2 gap-2">
                                 {[
-                                    { id: 'stock-audit', label: 'Stock Audit (盘点)' },
-                                    { id: 'stock-movement', label: 'Stock Move (移库)' },
-                                    { id: 'inventory', label: 'Inventory (原材库存)' },
-                                    { id: 'livestock', label: 'Live Stock (成品仓)' },
-                                    { id: 'scanner', label: 'Scanner (生产打码)' },
-                                    { id: 'machine-schedule', label: 'Machine Schedule (排产)' },
-                                    { id: 'floor-plan', label: 'Floor Plan (厂房布局)' },
-                                    { id: 'data-v2', label: 'Data Base (底层库)' },
-                                    { id: 'order-summary', label: 'Daily Prep (生产预备)' },
-                                    { id: 'delivery', label: 'Trip Admin (行政派车)' },
-                                    { id: 'delivery-driver', label: 'My Delivery (司机手机端)' },
-                                    { id: 'reports', label: 'Exec Reports (总报表)' },
-                                    { id: 'maintenance', label: 'Maintenance (机器维修)' },
-                                    { id: 'hr', label: 'HR Portal (行政人事)' },
-                                    { id: 'leave-calendar', label: 'Leave Center (请假中心)' },
-                                    { id: 'sop-center', label: 'SOP Guide (SOP 指南)' },
-                                    { id: 'work-photos', label: 'Work Photos (工作记录)' },
-                                    { id: 'personal-report', label: 'Monthly Report (月度报告)' },
-                                    { id: 'activity-logs', label: 'Activity Logs (操作日志)' },
-                                    { id: 'dev-log', label: 'Dev Log (开发日志)' }
+                                    { id: 'stock-audit', label: t('Stock Audit') },
+                                    { id: 'stock-movement', label: t('Stock Move') },
+                                    { id: 'inventory', label: t('Inventory (raw material inventory)') },
+                                    { id: 'livestock', label: t('Live Stock (finished product warehouse)') },
+                                    { id: 'scanner', label: t('Scanner (production coding)') },
+                                    { id: 'machine-schedule', label: t('Machine Schedule') },
+                                    { id: 'floor-plan', label: t('Floor Plan (factory layout)') },
+                                    { id: 'data-v2', label: t('Data Base (underlying library)') },
+                                    { id: 'order-summary', label: t('Daily Prep (production preparation)') },
+                                    { id: 'delivery', label: t('Trip Admin (executive dispatch)') },
+                                    { id: 'delivery-driver', label: t('My Delivery (driver mobile app)') },
+                                    { id: 'reports', label: t('Exec Reports (Total Reports)') },
+                                    { id: 'maintenance', label: t('Maintenance (machine maintenance)') },
+                                    { id: 'hr', label: t('HR Portal (Administrative Personnel)') },
+                                    { id: 'leave-calendar', label: t('Leave Center') },
+                                    { id: 'sop-center', label: t('SOP Guide') },
+                                    { id: 'work-photos', label: t('Work Photos') },
+                                    { id: 'personal-report', label: t('Monthly Report') },
+                                    { id: 'activity-logs', label: t('Activity Logs (operation logs)') },
+                                    { id: 'dev-log', label: t('Dev Log') }
                                 ].map(mod => {
                                     const roleModules = form.role_modules || [];
                                     const isEnabled = roleModules.includes(mod.id);
@@ -552,6 +556,7 @@ const PendingRegistrationCard: React.FC<{
     onReject: (emp: Employee) => void;
     isProcessing: boolean;
 }> = ({ emp, onApprove, onReject, isProcessing }) => {
+    const { t } = useTranslation();
     const [selectedRole, setSelectedRole] = useState(emp.role || 'Operator');
     const [selectedLocation, setSelectedLocation] = useState(emp.base_location || 'Taiping');
     const [pinInput, setPinInput] = useState(emp.employee_id || '');
@@ -576,8 +581,9 @@ const PendingRegistrationCard: React.FC<{
             <div className="grid grid-cols-2 gap-3 pt-2 border-t border-white/5 text-xs">
                 <div>
                     <label className="block text-[10px] text-gray-500 uppercase tracking-widest mb-1 font-bold">
-                        Assign Role / 分配岗位
-                    </label>
+                        
+                                                {t('Assign Role/Assign position')}
+                                            </label>
                     <select
                         value={selectedRole}
                         onChange={e => setSelectedRole(e.target.value)}
@@ -591,8 +597,9 @@ const PendingRegistrationCard: React.FC<{
 
                 <div>
                     <label className="block text-[10px] text-gray-500 uppercase tracking-widest mb-1 font-bold">
-                        Base Location / 厂区驻地
-                    </label>
+                        
+                                                {t('Base Location/Factory location')}
+                                            </label>
                     <div className="grid grid-cols-4 gap-1">
                         {['Taiping', 'Nilai', 'Kelantan', 'Johor'].map(loc => (
                             <button
@@ -613,8 +620,9 @@ const PendingRegistrationCard: React.FC<{
 
                 <div className="col-span-2">
                     <label className="block text-[10px] text-gray-500 uppercase tracking-widest mb-1 font-bold">
-                        Employee ID / 4位数工号 (PIN)
-                    </label>
+                        
+                                                {t('Employee ID / 4-digit employee number (PIN)')}
+                                            </label>
                     <input
                         type="text"
                         maxLength={4}
@@ -633,8 +641,9 @@ const PendingRegistrationCard: React.FC<{
                     disabled={isProcessing}
                     className="flex-1 py-2.5 bg-red-500/10 hover:bg-red-500/20 border border-red-500/20 text-red-400 rounded-xl text-xs font-bold transition-all disabled:opacity-50"
                 >
-                    Reject / 驳回
-                </button>
+                    
+                                        {t('Reject / reject')}
+                                    </button>
                 <button
                     type="button"
                     onClick={() => onApprove(emp, selectedRole, selectedLocation, pinInput)}
@@ -642,8 +651,9 @@ const PendingRegistrationCard: React.FC<{
                     className="flex-2 py-2.5 bg-gradient-to-r from-emerald-600 to-teal-600 hover:from-emerald-500 hover:to-teal-500 text-white rounded-xl text-xs font-bold transition-all shadow-lg shadow-emerald-600/20 flex items-center justify-center gap-1.5 disabled:opacity-50"
                 >
                     {isProcessing ? <Loader size={14} className="animate-spin" /> : <Check size={14} />}
-                    Approve & Activate / 批准并激活
-                </button>
+                    
+                                        {t('Approve & Activate / approve and activate')}
+                                    </button>
             </div>
         </div>
     );
@@ -655,6 +665,7 @@ const MachineRateItemCard: React.FC<{
     onSave: (machine_id: string, day_rate: number, night_rate: number) => void;
     isSaving: boolean;
 }> = ({ machine, onSave, isSaving }) => {
+    const { t } = useTranslation();
     const [dayInput, setDayInput] = useState(machine.day_rate.toString());
     const [nightInput, setNightInput] = useState(machine.night_rate.toString());
 
@@ -666,7 +677,7 @@ const MachineRateItemCard: React.FC<{
     const handleSave = () => {
         const dVal = parseFloat(dayInput);
         const nVal = parseFloat(nightInput);
-        if (isNaN(dVal) || dVal < 0 || isNaN(nVal) || nVal < 0) return alert("请输入有效的白班与夜班时薪数额");
+        if (isNaN(dVal) || dVal < 0 || isNaN(nVal) || nVal < 0) return alert(t('Please enter valid hourly wage amounts for day and night shifts'));
         onSave(machine.machine_id, dVal, nVal);
     };
 
@@ -675,7 +686,7 @@ const MachineRateItemCard: React.FC<{
             <div className="flex justify-between items-start">
                 <div>
                     <h4 className="text-xs font-black text-white">{machine.name}</h4>
-                    <span className="text-[10px] font-mono text-gray-500 block">ID: {machine.machine_id} | 厂区: {machine.factory_id}</span>
+                    <span className="text-[10px] font-mono text-gray-500 block">ID: {machine.machine_id}  {t('| Factory area:')} {machine.factory_id}</span>
                 </div>
                 <div className="flex flex-col items-end gap-1">
                     <span className="px-2 py-0.5 rounded text-[9px] font-bold font-mono bg-amber-500/10 border border-amber-500/20 text-amber-400">
@@ -689,7 +700,7 @@ const MachineRateItemCard: React.FC<{
 
             <div className="grid grid-cols-2 gap-2 pt-2 border-t border-white/5">
                 <div>
-                    <label className="text-[9px] text-amber-400 font-bold block mb-1">☀️ 白班 8am-12am</label>
+                    <label className="text-[9px] text-amber-400 font-bold block mb-1">{t('8am_12am')}</label>
                     <div className="relative">
                         <span className="absolute left-2 top-1/2 -translate-y-1/2 text-[10px] text-gray-500 font-bold">RM</span>
                         <input
@@ -703,7 +714,7 @@ const MachineRateItemCard: React.FC<{
                     </div>
                 </div>
                 <div>
-                    <label className="text-[9px] text-purple-400 font-bold block mb-1">🌙 夜班 12am-8am</label>
+                    <label className="text-[9px] text-purple-400 font-bold block mb-1">{t('12am_8am')}</label>
                     <div className="relative">
                         <span className="absolute left-2 top-1/2 -translate-y-1/2 text-[10px] text-gray-500 font-bold">RM</span>
                         <input
@@ -724,8 +735,9 @@ const MachineRateItemCard: React.FC<{
                 className="w-full py-1.5 bg-blue-600 hover:bg-blue-500 disabled:opacity-50 text-white rounded-lg text-xs font-bold transition-all flex items-center justify-center gap-1 shadow mt-1"
             >
                 {isSaving ? <Loader size={12} className="animate-spin" /> : <Save size={12} />}
-                保存费率 / Save Rate
-            </button>
+                
+                                {t('Save Rate / Save Rate')}
+                            </button>
         </div>
     );
 };
@@ -819,12 +831,12 @@ const HRPortal: React.FC<HRPortalProps> = ({ user, initialTab, initialRoleFilter
 
         // Special Factory Login Entries
         const factoryEntries = [
-            { machine_id: 'FACTORY_MODE_1', name: '登录工厂 (计算方式一: 12am-8am RM12 / 8am-12am RM8)', factory_id: 'All Factories' },
-            { machine_id: 'FACTORY_MODE_2', name: '登录工厂 (计算方式二: RM10固定时薪)', factory_id: 'All Factories' },
-            { machine_id: 'FACTORY-TAIPING', name: '太平工厂入口打卡站 (Taiping Factory Station)', factory_id: 'T1' },
-            { machine_id: 'FACTORY-NILAI', name: 'Nilai 工厂入口打卡站 (Nilai Factory Station)', factory_id: 'N1' },
-            { machine_id: 'FACTORY-JOHOR', name: 'Johor 工厂入口打卡站 (Johor Factory Station)', factory_id: 'J1' },
-            { machine_id: 'FACTORY-KELANTAN', name: 'Kelantan 工厂入口打卡站 (Kelantan Factory Station)', factory_id: 'K1' },
+            { machine_id: 'FACTORY_MODE_1', name: t('Log in to the factory (Calculation method 1: 12am-8am RM12 / 8am-12am RM8)'), factory_id: 'All Factories' },
+            { machine_id: 'FACTORY_MODE_2', name: t('Log in to the factory (calculation method 2: fixed hourly wage of RM10)'), factory_id: 'All Factories' },
+            { machine_id: 'FACTORY-TAIPING', name: t('Taiping Factory Station'), factory_id: 'T1' },
+            { machine_id: 'FACTORY-NILAI', name: t('Nilai Factory Station'), factory_id: 'N1' },
+            { machine_id: 'FACTORY-JOHOR', name: t('Johor Factory Station'), factory_id: 'J1' },
+            { machine_id: 'FACTORY-KELANTAN', name: t('Kelantan Factory Station'), factory_id: 'K1' },
         ];
 
         const allTargetList = [
@@ -861,12 +873,12 @@ const HRPortal: React.FC<HRPortalProps> = ({ user, initialTab, initialRoleFilter
             }, { onConflict: 'machine_id' });
 
             if (error) throw error;
-            alert(`✅ 「${machine_id}」的时薪标准已成功保存！\n☀️ 白班 (8am-12am): RM${day_rate.toFixed(2)}/h | 🌙 夜班 (12am-8am): RM${night_rate.toFixed(2)}/h`);
+            alert(t('✅ The hourly wage standard of "{{var0}}" has been successfully saved!\n☀️ Day shift (8am-12am): RM{{var1}}/h | 🌙 Night shift (12am-8am): RM{{var2}}/h', { var0: machine_id, var1: day_rate.toFixed(2), var2: night_rate.toFixed(2) }));
             await fetchMachineRates();
             fetchPayroll();
         } catch (err: any) {
             console.error("Save machine rate error:", err);
-            alert("❌ 保存失败: " + err.message);
+            alert(t('❌ Failed to save:') + err.message);
         } finally {
             setSavingMachineRate(null);
         }
@@ -990,18 +1002,18 @@ const HRPortal: React.FC<HRPortalProps> = ({ user, initialTab, initialRoleFilter
 
             if (pubErr) throw pubErr;
 
-            alert(`✅ 员工「${emp.name}」已成功批准并激活！\n角色: ${assignedRole}\n工号/PIN: ${cleanPin || emp.employee_id || 'N/A'}\n驻地: ${assignedLocation}`);
+            alert(t('✅ Employee "{{var0}}" has been successfully approved and activated!\nRole: {{var1}}\nJob number/PIN: {{var2}}\nResidence: {{var3}}', { var0: emp.name, var1: assignedRole, var2: cleanPin || emp.employee_id || 'N/A', var3: assignedLocation }));
             await fetchEmployees();
         } catch (err: any) {
             console.error("Approve Registration Error:", err);
-            alert(`❌ 审批激活失败: ${err.message}`);
+            alert(t('❌ Approval activation failed: {{var0}}', { var0: err.message }));
         } finally {
             setProcessingApprovalId(null);
         }
     };
 
     const handleRejectRegistration = async (emp: Employee) => {
-        if (!window.confirm(`确认要驳回员工「${emp.name}」的注册申请吗？`)) return;
+        if (!window.confirm(t('Are you sure you want to reject the registration application of employee "{{var0}}"?', { var0: emp.name }))) return;
         const targetAuthId = emp.auth_user_id || (emp.id.startsWith('pub_') ? emp.id.replace('pub_', '') : emp.id);
         if (!targetAuthId) return;
 
@@ -1009,11 +1021,11 @@ const HRPortal: React.FC<HRPortalProps> = ({ user, initialTab, initialRoleFilter
         try {
             await supabase.from('sys_users_v2').update({ status: 'Rejected' }).eq('auth_user_id', targetAuthId);
             await supabase.from('users_public').update({ status: 'Rejected' }).eq('id', targetAuthId);
-            alert(`❌ 已驳回员工「${emp.name}」的注册申请。`);
+            alert(t('❌ The registration application of employee "{{var0}}" has been rejected.', { var0: emp.name }));
             await fetchEmployees();
         } catch (err: any) {
             console.error("Reject Registration Error:", err);
-            alert(`❌ 驳回失败: ${err.message}`);
+            alert(t('❌ Reject failed: {{var0}}', { var0: err.message }));
         } finally {
             setProcessingApprovalId(null);
         }
@@ -1021,7 +1033,7 @@ const HRPortal: React.FC<HRPortalProps> = ({ user, initialTab, initialRoleFilter
 
     const handleDeleteEmployee = async (emp: Employee) => {
         if (!emp) return;
-        const confirmMsg = `确认要彻底删除员工「${emp.name}」吗？\n\n警告：此操作将从系统 Auth、员工记录、请假历史、薪资记录中彻底清除该账户，且不可撤销！`;
+        const confirmMsg = t('Are you sure you want to completely delete employee "{{var0}}"?\n\nWarning: This operation will completely clear the account from system Auth, employee records, leave history, and payroll records, and is irreversible!', { var0: emp.name });
         if (!window.confirm(confirmMsg)) return;
 
         setDeletingId(emp.id);
@@ -1046,11 +1058,11 @@ const HRPortal: React.FC<HRPortalProps> = ({ user, initialTab, initialRoleFilter
             const json = await res.json();
             if (!res.ok) throw new Error(json.error || 'Failed to delete employee');
 
-            alert('✅ 员工账户已成功删除！');
+            alert(t('✅ Employee account has been successfully deleted!'));
             fetchEmployees();
         } catch (err: any) {
             console.error('Delete employee error:', err);
-            alert('❌ 删除失败: ' + err.message);
+            alert(t('❌ Delete failed:') + err.message);
         } finally {
             setDeletingId(null);
         }
@@ -1207,7 +1219,7 @@ const HRPortal: React.FC<HRPortalProps> = ({ user, initialTab, initialRoleFilter
     }, [activeTab, fetchSalaryAdvances]);
 
     const handleApproveAdvance = async (id: string) => {
-        if (!window.confirm("Approve this salary advance request? (确认批准该预支薪资申请？)")) return;
+        if (!window.confirm(t('Approve this salary advance request? (Confirm approval of this salary advance request?)'))) return;
         const success = await updateSalaryAdvanceStatus(id, 'Approved');
         if (success) {
             alert("✅ Advance request approved!");
@@ -1218,7 +1230,7 @@ const HRPortal: React.FC<HRPortalProps> = ({ user, initialTab, initialRoleFilter
     };
 
     const handleMarkAsPaid = async (id: string) => {
-        if (!window.confirm("Mark this advance as PAID (Bank-in completed)? (确认已打款给司机？)")) return;
+        if (!window.confirm(t('Mark this advance as PAID (Bank-in completed)? (Confirm that payment has been sent to the driver?)'))) return;
         const success = await updateSalaryAdvanceStatus(id, 'Paid');
         if (success) {
             alert("✅ Advance marked as PAID!");
@@ -1421,13 +1433,13 @@ const HRPortal: React.FC<HRPortalProps> = ({ user, initialTab, initialRoleFilter
                         const shiftTotal = nightPay + dayPay;
                         calculatedGross += shiftTotal;
 
-                        const nameTag = targetId.startsWith('FACTORY') ? '工厂打卡' : targetId;
+                        const nameTag = targetId.startsWith('FACTORY') ? t('Factory clock in') : targetId;
                         if (split.nightHours > 0 && split.dayHours > 0) {
-                            detailSnippets.push(`${nameTag}: 白班 ${split.dayHours.toFixed(1)}h@RM${rates.day_rate} + 夜班 ${split.nightHours.toFixed(1)}h@RM${rates.night_rate} = RM${shiftTotal.toFixed(2)}`);
+                            detailSnippets.push(t('{{var0}}: day shift {{var1}}h@RM{{var2}} + night shift {{var3}}h@RM{{var4}} = RM{{var5}}', { var0: nameTag, var1: split.dayHours.toFixed(1), var2: rates.day_rate, var3: split.nightHours.toFixed(1), var4: rates.night_rate, var5: shiftTotal.toFixed(2) }));
                         } else if (split.nightHours > 0) {
-                            detailSnippets.push(`${nameTag}: 夜班 ${split.nightHours.toFixed(1)}h@RM${rates.night_rate} = RM${shiftTotal.toFixed(2)}`);
+                            detailSnippets.push(t('{{var0}}: Night shift {{var1}}h@RM{{var2}} = RM{{var3}}', { var0: nameTag, var1: split.nightHours.toFixed(1), var2: rates.night_rate, var3: shiftTotal.toFixed(2) }));
                         } else {
-                            detailSnippets.push(`${nameTag}: 白班 ${split.dayHours.toFixed(1)}h@RM${rates.day_rate} = RM${shiftTotal.toFixed(2)}`);
+                            detailSnippets.push(t('{{var0}}: Day shift {{var1}}h@RM{{var2}} = RM{{var3}}', { var0: nameTag, var1: split.dayHours.toFixed(1), var2: rates.day_rate, var3: shiftTotal.toFixed(2) }));
                         }
                     });
 
@@ -1531,7 +1543,7 @@ const HRPortal: React.FC<HRPortalProps> = ({ user, initialTab, initialRoleFilter
     // ── TABS ──────────────────────────────────────────────────
     const TABS = [
         { id: 'personnel', label: `👥 Personnel (${activeEmps.length})`, count: 0 },
-        { id: 'approvals', label: `🔔 ${t('新注册待审批')}`, count: pendingCount },
+        { id: 'approvals', label: t('🔔 {{var0}}', { var0: t('新注册待审批') }), count: pendingCount },
         { id: 'permissions', label: '🔐 Page Permissions', count: 0 },
         { id: 'payroll', label: '💰 Payroll', count: 0 },
         { id: 'advances', label: '💸 Salary Advances', count: 0 },
@@ -1587,23 +1599,24 @@ const HRPortal: React.FC<HRPortalProps> = ({ user, initialTab, initialRoleFilter
                                 <UserPlus size={24} />
                             </div>
                             <div>
-                                <h3 className="text-base font-black text-white">新注册账号待审批 / Pending Registration Approvals</h3>
+                                <h3 className="text-base font-black text-white">{t('New registration account pending approval / Pending Registration Approvals')}</h3>
                                 <p className="text-xs text-gray-400 mt-0.5">
-                                    审核员工自建账号申请。请为新员工指定岗位角色、驻地厂区及 4 位数字 PIN / 工号，点击“批准并激活”完成后该员工即可正常登录。
-                                </p>
+                                    
+                                                                        {t('Review employee self-created account applications. Please specify the job role, factory location and 4-digit PIN/employee number for the new employee. After clicking "Approve and Activate", the employee can log in normally.')}
+                                                                    </p>
                             </div>
                         </div>
                         <div className="text-right pl-4">
                             <div className="text-3xl font-black text-orange-400 font-mono">{pendingCount}</div>
-                            <div className="text-[10px] text-gray-500 uppercase tracking-widest">待审核申请</div>
+                            <div className="text-[10px] text-gray-500 uppercase tracking-widest">{t('Application pending review')}</div>
                         </div>
                     </div>
 
                     {pendingEmps.length === 0 ? (
                         <div className="text-center py-20 text-gray-600 border border-dashed border-white/10 rounded-2xl bg-[#0d0d12]">
                             <CheckCircle2 size={44} className="mx-auto mb-3 text-emerald-500/50" />
-                            <p className="text-sm font-bold text-gray-400">暂无待审批的新注册账号</p>
-                            <p className="text-xs text-gray-600 mt-1">所有员工注册申请均已完成审批或处于激活状态</p>
+                            <p className="text-sm font-bold text-gray-400">{t('There are currently no new registered accounts pending approval.')}</p>
+                            <p className="text-xs text-gray-600 mt-1">{t('All employee registration applications have been approved or are in active status')}</p>
                         </div>
                     ) : (
                         <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
@@ -1665,7 +1678,7 @@ const HRPortal: React.FC<HRPortalProps> = ({ user, initialTab, initialRoleFilter
                                 <thead>
                                     <tr className="bg-white/[0.03] text-gray-500 text-[10px] uppercase tracking-widest">
                                         {(isSuperAdminOrHR 
-                                            ? ['Employee', 'Role', 'Pay Type', 'Rate / Salary', '全勤奖', 'Status', '']
+                                            ? ['Employee', 'Role', 'Pay Type', 'Rate / Salary', t('Perfect Attendance Award'), 'Status', '']
                                             : ['Employee', 'Role', 'Status', '']
                                         ).map(h => (
                                             <th key={h} className="px-4 py-3 text-left border-b border-white/5 font-bold">{h}</th>
@@ -1837,10 +1850,10 @@ const HRPortal: React.FC<HRPortalProps> = ({ user, initialTab, initialRoleFilter
                             onClick={() => setShowMachineRateEditor(v => !v)}
                         >
                             <div className="flex items-center gap-2.5 text-blue-400 font-bold text-xs uppercase tracking-widest">
-                                <Settings size={16} /> 机台专属时薪配置 / Machine Hourly Rates Config
-                                <span className="px-2 py-0.5 rounded-full text-[10px] bg-blue-500/10 text-blue-400 border border-blue-500/20 font-mono">
-                                    {machineRatesList.length} 台机器
-                                </span>
+                                <Settings size={16} />  {t('Machine Hourly Rates Config')}
+                                                                <span className="px-2 py-0.5 rounded-full text-[10px] bg-blue-500/10 text-blue-400 border border-blue-500/20 font-mono">
+                                    {machineRatesList.length}  {t('machine')}
+                                                                    </span>
                             </div>
                             <div className="flex items-center gap-2 text-xs text-gray-400 font-bold">
                                 {showMachineRateEditor ? <ChevronUp size={16} /> : <ChevronDown size={16} />}
@@ -1851,7 +1864,7 @@ const HRPortal: React.FC<HRPortalProps> = ({ user, initialTab, initialRoleFilter
                             <div className="p-4 space-y-4 bg-black/20">
                                 <div className="text-xs text-gray-400 flex items-center gap-1.5 bg-blue-500/10 border border-blue-500/20 rounded-xl p-3">
                                     <AlertCircle size={14} className="text-blue-400 flex-shrink-0" />
-                                    <span>为各个机台设置专属操作员时薪（RM/hr）。操作员在该机台打卡产生的工时将自动按机台时薪计算工资；若机台时薪为 RM 0，则按员工个人基础时薪计算。</span>
+                                    <span>{t('Set exclusive operator hourly rate (RM/hr) for each machine. The working hours generated by the operator clocking in at the machine will be automatically calculated based on the machine\'s hourly wage; if the machine\'s hourly wage is RM 0, it will be calculated based on the employee\'s personal basic hourly wage.')}</span>
                                 </div>
 
                                 <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-3">
@@ -1974,7 +1987,7 @@ const HRPortal: React.FC<HRPortalProps> = ({ user, initialTab, initialRoleFilter
                             <table className="w-full text-sm">
                                 <thead>
                                     <tr className="bg-white/[0.03] text-gray-500 text-[10px] uppercase tracking-widest">
-                                        {['Employee', 'Pay Type', 'Activity', 'Gross', '全勤奖', 'Net Pay', 'Status'].map(h => (
+                                        {['Employee', 'Pay Type', 'Activity', 'Gross', t('Perfect Attendance Award'), 'Net Pay', 'Status'].map(h => (
                                             <th key={h} className="px-4 py-3 text-left border-b border-white/5 font-bold">{h}</th>
                                         ))}
                                     </tr>
@@ -2180,7 +2193,7 @@ const HRPortal: React.FC<HRPortalProps> = ({ user, initialTab, initialRoleFilter
                                 ❌ Reject Salary Advance Request
                             </h3>
                             <div>
-                                <label className="block text-[10px] text-zinc-500 font-bold uppercase tracking-widest mb-1.5">REJECTION REASON / 拒绝原因</label>
+                                <label className="block text-[10px] text-zinc-500 font-bold uppercase tracking-widest mb-1.5">{t('REJECTION REASON / Reason for rejection')}</label>
                                 <textarea
                                     value={rejectionReason}
                                     onChange={e => setRejectionReason(e.target.value)}
@@ -2232,7 +2245,7 @@ const HRPortal: React.FC<HRPortalProps> = ({ user, initialTab, initialRoleFilter
 
                             <div className="grid grid-cols-2 gap-4">
                                 <div className="col-span-2">
-                                    <label className="block text-[10px] text-amber-500/70 font-bold uppercase tracking-widest mb-1.5">Origin (行程出发地)</label>
+                                    <label className="block text-[10px] text-amber-500/70 font-bold uppercase tracking-widest mb-1.5">{t('Origin (trip departure point)')}</label>
                                     <div className="flex flex-wrap gap-1.5 mb-2">
                                         {['TAIPING', 'NILAI', 'KELANTAN', 'JOHOR'].map(loc => (
                                             <button

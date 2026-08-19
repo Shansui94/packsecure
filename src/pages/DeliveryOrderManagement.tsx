@@ -19,6 +19,7 @@ import {
 import { V2Item } from '../types/v2';
 import { compressImage, dataUrlToBase64Payload } from '../utils/imageCompress';
 import * as XLSX from 'xlsx';
+import { useTranslation } from "react-i18next";
 
 type ScannedTripDraft = {
     label: string;
@@ -362,6 +363,7 @@ const SearchableSelect: React.FC<SearchableSelectProps> = ({
     minimal = false,
     dropdownMaxHeight = 'max-h-[min(50vh,28rem)]',
 }) => {
+    const { t } = useTranslation();
     const [isOpen, setIsOpen] = useState(false);
     const [search, setSearch] = useState('');
     const searchInputRef = useRef<HTMLInputElement>(null);
@@ -483,6 +485,7 @@ const SearchableSelect: React.FC<SearchableSelectProps> = ({
 };
 
 const DeliveryOrderManagement: React.FC = () => {
+    const { t } = useTranslation();
     const getSafeOrigin = (o?: string) => (o || '').toUpperCase().trim();
 
     // --- STATE ---
@@ -1450,20 +1453,20 @@ const DeliveryOrderManagement: React.FC = () => {
                 if (!row || typeof row !== 'object') continue;
 
                 // Extract fields
-                const rawTripDate = findValue(row, ['tripdate', 'date', 'orderdate', 'triporderdate', '行程日期', '日期']);
-                const rawDeliveryDate = findValue(row, ['deliverydate', 'deadline', 'duedate', 'targetdate', '送货日期', '交期', '截止日期']);
-                const driverName = String(findValue(row, ['driver', 'drivername', 'assigneddriver', 'staff', 'driverid', '司机', '司机姓名']) || '').trim();
-                const tripLabel = String(findValue(row, ['triplabel', 'tripname', 'label', 'trip', 'tripno', 'tripnumber', '行程', '行程标签', '趟次', '趟']) || '').trim();
-                const customerName = String(findValue(row, ['customer', 'customername', 'client', 'clientname', 'company', 'companyname', '客户', '客户名称', '公司']) || '').trim();
-                const destinations = String(findValue(row, ['destinations', 'destination', 'address', 'deliveryaddress', 'place', 'places', '目的地', '送货地址', '地址']) || '').trim();
-                const tripCategory = String(findValue(row, ['tripcategory', 'category', 'zone', 'ratezone', 'destinationzone', '区域', '分类']) || '').trim();
-                const tripDropCountVal = findValue(row, ['tripdropcount', 'dropcount', 'drops', 'placescount', 'drop', '落点', '卸货点数', '落点数']);
-                const notes = String(findValue(row, ['notes', 'note', 'remark', 'remarks', 'comment', 'comments', 'sheetnotes', '备注']) || '').trim();
+                const rawTripDate = findValue(row, ['tripdate', 'date', 'orderdate', 'triporderdate', t('Travel date'), t('date')]);
+                const rawDeliveryDate = findValue(row, ['deliverydate', 'deadline', 'duedate', 'targetdate', t('Delivery date'), t('Delivery date'), t('date_to')]);
+                const driverName = String(findValue(row, ['driver', 'drivername', 'assigneddriver', 'staff', 'driverid', t('driver'), t('driver name')]) || '').trim();
+                const tripLabel = String(findValue(row, ['triplabel', 'tripname', 'label', 'trip', 'tripno', 'tripnumber', t('journey'), t('itinerary tag'), t('trips'), t('trip')]) || '').trim();
+                const customerName = String(findValue(row, ['customer', 'customername', 'client', 'clientname', 'company', 'companyname', t('client'), t('Customer name'), t('company')]) || '').trim();
+                const destinations = String(findValue(row, ['destinations', 'destination', 'address', 'deliveryaddress', 'place', 'places', t('destination'), t('Shipping Address'), t('address')]) || '').trim();
+                const tripCategory = String(findValue(row, ['tripcategory', 'category', 'zone', 'ratezone', 'destinationzone', t('area'), t('Classification')]) || '').trim();
+                const tripDropCountVal = findValue(row, ['tripdropcount', 'dropcount', 'drops', 'placescount', 'drop', t('landing point'), t('Unloading points'), t('Number of points dropped')]);
+                const notes = String(findValue(row, ['notes', 'note', 'remark', 'remarks', 'comment', 'comments', 'sheetnotes', t('Remark')]) || '').trim();
 
-                const sku = findValue(row, ['sku', 'productsku', 'itemsku', 'code', 'itemcode', 'productcode', '产品编码', '商品编码', '编码']);
-                const product = findValue(row, ['product', 'productname', 'item', 'itemname', 'description', 'name', '产品名称', '商品名称', '品名']);
-                const quantity = Number(findValue(row, ['quantity', 'qty', 'amount', 'pcs', 'rolls', 'count', '数量', '件数'])) || 1;
-                const itemLoc = findValue(row, ['sourcelocation', 'location', 'factory', 'hub', 'origin', 'warehouse', '发货仓库', '出货仓库', '仓库']);
+                const sku = findValue(row, ['sku', 'productsku', 'itemsku', 'code', 'itemcode', 'productcode', t('product code'), t('Product code'), t('coding')]);
+                const product = findValue(row, ['product', 'productname', 'item', 'itemname', 'description', 'name', t('Product name'), t('Product name'), t('Product name')]);
+                const quantity = Number(findValue(row, ['quantity', 'qty', 'amount', 'pcs', 'rolls', 'count', t('quantity'), t('Number of pieces')])) || 1;
+                const itemLoc = findValue(row, ['sourcelocation', 'location', 'factory', 'hub', 'origin', 'warehouse', t('Shipping warehouse'), t('Shipping warehouse'), t('storehouse')]);
 
                 // If this row has no items and no destinations, skip it
                 if (!sku && !product && !destinations) continue;
@@ -1563,7 +1566,7 @@ const DeliveryOrderManagement: React.FC = () => {
     const handleDownloadTemplate = () => {
         // Headers with translations/descriptions to guide users
         const headers = [
-            ['Trip Date / 行程日期', 'Delivery Date / 送货日期', 'Driver Name / 司机姓名', 'Trip Label / 行程标签', 'Customer Name / 客户名称', 'Destinations / 送货目的地', 'Trip Category / 区域分类', 'Trip Drop Count / 卸货点数', 'Notes / 行程备注', 'SKU / 产品编码', 'Product Name / 产品名称', 'Quantity / 数量', 'Source Location / 发货仓库']
+            [t('Trip Date / trip date'), t('Delivery Date / delivery date'), t('Driver Name / driver name'), t('Trip Label / trip label'), t('Customer Name/Customer Name'), t('Destinations / Shipping destinations'), t('Trip Category/Region Category'), t('Trip Drop Count/drop points'), t('Notes / itinerary notes'), t('SKU / product code'), t('Product Name / product name'), t('Quantity / quantity'), t('Source Location / Shipping warehouse')]
         ];
         
         // Sample data row to guide users
@@ -1796,10 +1799,10 @@ const DeliveryOrderManagement: React.FC = () => {
             );
             await Promise.all(updates);
             await fetchData();
-            setToast({ type: 'success', message: '批量指派成功 (Batch assign success)' });
+            setToast({ type: 'success', message: t('Batch assign success') });
         } catch (err) {
             console.error("Failed to batch assign:", err);
-            setToast({ type: 'error', message: '批量指派失败 (Batch assign failed)' });
+            setToast({ type: 'error', message: t('Batch assign failed') });
             fetchData();
         }
     };
@@ -1890,10 +1893,10 @@ const DeliveryOrderManagement: React.FC = () => {
             }
 
             await fetchData();
-            setToast({ type: 'success', message: '已取消分配 (Order unassigned)' });
+            setToast({ type: 'success', message: t('Order unassigned') });
         } catch (err) {
             console.error("Unassign failed:", err);
-            setToast({ type: 'error', message: '取消分配失败 (Unassign failed)' });
+            setToast({ type: 'error', message: t('Unassign failed') });
             fetchData();
         }
     };
@@ -1903,11 +1906,11 @@ const DeliveryOrderManagement: React.FC = () => {
         const activeDrivers = drivers.filter(d => (d.base_location || 'Taiping').toLowerCase() === activeLocation.toLowerCase());
 
         if (unassigned.length === 0) {
-            alert("没有未分配的订单可以进行智能排单。(No unassigned orders for auto-dispatch.)");
+            alert(t('There are no unallocated orders for smart order scheduling. (No unassigned orders for auto-dispatch.)'));
             return;
         }
         if (activeDrivers.length === 0) {
-            alert("当前仓库没有可用的司机。(No available drivers for active warehouse.)");
+            alert(t('There are currently no drivers available for the warehouse. (No available drivers for active warehouse.)'));
             return;
         }
 
@@ -1921,15 +1924,15 @@ const DeliveryOrderManagement: React.FC = () => {
         const driver = drivers.find(d => d.uid === driverId);
         setAutoDispatchDrafts(prev => {
             if (!prev) return null;
-            return prev.map(t => {
-                if (t.id === tripId) {
+            return prev.map(trip => {
+                if (trip.id === tripId) {
                     return {
-                        ...t,
+                        ...trip,
                         recommendedDriverId: driverId || null,
-                        recommendedDriverName: driver?.name || '未指派'
+                        recommendedDriverName: driver?.name || t('Not assigned')
                     };
                 }
-                return t;
+                return trip;
             });
         });
     };
@@ -1959,11 +1962,11 @@ const DeliveryOrderManagement: React.FC = () => {
             await Promise.all(updates);
             setIsAutoDispatchModalOpen(false);
             setAutoDispatchDrafts(null);
-            alert("智能排单方案已成功应用！(Auto dispatch applied successfully!)");
+            alert(t('The smart order scheduling solution has been successfully applied! (Auto dispatch applied successfully!)'));
             await fetchData();
         } catch (err) {
             console.error("Failed to apply auto dispatch:", err);
-            alert("应用排单方案失败。(Failed to apply auto dispatch.)");
+            alert(t('Application of order scheduling plan failed. (Failed to apply auto dispatch.)'));
         } finally {
             setIsSubmitting(false);
         }
@@ -2110,10 +2113,10 @@ const DeliveryOrderManagement: React.FC = () => {
 
         if (isCustomerMissing || isAddressMissing) {
             const missingFields = [];
-            if (isCustomerMissing) missingFields.push("Customer / Client (客户名称)");
-            if (isAddressMissing) missingFields.push("Destinations (目的地/送货地址)");
+            if (isCustomerMissing) missingFields.push(t('Customer / Client (customer name)'));
+            if (isAddressMissing) missingFields.push(t('Destinations (destination/delivery address)'));
             
-            const warningMsg = `⚠️ Reminder: You have not filled in the following fields:\n- ${missingFields.join('\n- ')}\n\nDo you want to continue creating this trip anyway?\n(提醒：您尚未填写上述字段，是否仍要继续创建此行程？)`;
+            const warningMsg = t('⚠️ Reminder: You have not filled in the following fields:\n- {{var0}}\n\nDo you want to continue creating this trip anyway?\n(Reminder: You have not filled in the above fields. Do you still want to continue creating this itinerary?)', { var0: missingFields.join('\n- ') });
             if (!window.confirm(warningMsg)) {
                 return; // Cancel submission
             }
@@ -2568,7 +2571,7 @@ const DeliveryOrderManagement: React.FC = () => {
                         <button
                             onClick={() => setViewMode('dispatch')}
                             className={`px-3 py-2 rounded-lg text-xs font-bold uppercase transition-all flex items-center gap-1.5 ${viewMode === 'dispatch' ? 'bg-blue-600 text-white shadow-lg shadow-blue-900/50' : 'text-slate-400 hover:bg-slate-800'}`}
-                            title="Dispatch Planner (智能/手动排单)"
+                            title={t('Dispatch Planner (intelligent/manual order scheduling)')}
                         >
                             <Truck size={14} /> Dispatch Planner
                         </button>
@@ -2694,13 +2697,14 @@ const DeliveryOrderManagement: React.FC = () => {
                             <div>
                                 <h2 className="text-base font-bold text-white flex items-center gap-2">
                                     <Box size={18} className="text-blue-500" />
-                                    未指派订单池 (Unassigned Pool)
-                                </h2>
-                                <p className="text-[11px] text-slate-500 mt-0.5">当前仓库未指派的有效订单</p>
+                                    
+                                                                        {t('Unassigned Order Pool (Unassigned Pool)')}
+                                                                    </h2>
+                                <p className="text-[11px] text-slate-500 mt-0.5">{t('There are no valid orders assigned to the current warehouse')}</p>
                             </div>
                             <span className="bg-slate-800 border border-slate-700 text-slate-300 text-xs font-mono px-2.5 py-1 rounded-full font-bold">
-                                {filteredOrders.filter(o => !o.driverId).length} 单
-                            </span>
+                                {filteredOrders.filter(o => !o.driverId).length}  {t('one')}
+                                                            </span>
                         </div>
 
                         {/* Batch Action Bar */}
@@ -2722,7 +2726,7 @@ const DeliveryOrderManagement: React.FC = () => {
                                         }
                                     }}
                                 />
-                                <span className="text-xs font-bold text-slate-400">全选 (Select All)</span>
+                                <span className="text-xs font-bold text-slate-400">{t('Select All')}</span>
                             </div>
 
                             <div className="flex flex-wrap items-center gap-2 w-full sm:w-auto justify-end">
@@ -2736,7 +2740,7 @@ const DeliveryOrderManagement: React.FC = () => {
                                     }}
                                     disabled={selectedOrderIds.length === 0}
                                 >
-                                    <option value="">-- 批量指派司机 --</option>
+                                    <option value="">{t('-- Assign drivers in batches --')}</option>
                                     {drivers
                                         .filter(d => (d.base_location || 'Taiping').toLowerCase() === activeLocation.toLowerCase())
                                         .map(d => (
@@ -2752,8 +2756,9 @@ const DeliveryOrderManagement: React.FC = () => {
                                     className="bg-gradient-to-r from-violet-600 to-indigo-600 hover:from-violet-500 hover:to-indigo-500 text-white px-3 py-1.5 rounded-lg text-xs font-bold flex items-center gap-1.5 shadow-lg shadow-violet-950/30 transition-all active:scale-95 shrink-0"
                                 >
                                     <Sparkles size={13} className="animate-pulse" />
-                                    一键智能排单
-                                </button>
+                                    
+                                                                        {t('One-click smart order scheduling')}
+                                                                    </button>
                             </div>
                         </div>
 
@@ -2761,8 +2766,9 @@ const DeliveryOrderManagement: React.FC = () => {
                         <div className="space-y-3 overflow-y-auto max-h-[700px] pr-1 custom-scrollbar">
                             {filteredOrders.filter(o => !o.driverId).length === 0 ? (
                                 <div className="text-center py-12 text-slate-600 text-xs italic border border-dashed border-slate-800 rounded-xl bg-slate-950/20">
-                                    没有未分配的订单
-                                </div>
+                                    
+                                                                        {t('No unallocated orders')}
+                                                                    </div>
                             ) : (
                                 filteredOrders.filter(o => !o.driverId).map(order => {
                                     const isSelected = selectedOrderIds.includes(order.id);
@@ -2813,7 +2819,7 @@ const DeliveryOrderManagement: React.FC = () => {
                                                             }
                                                         }}
                                                     >
-                                                        <option value="">指派司机...</option>
+                                                        <option value="">{t('Assign a driver...')}</option>
                                                         {drivers
                                                             .filter(d => (d.base_location || 'Taiping').toLowerCase() === activeLocation.toLowerCase())
                                                             .map(d => (
@@ -2829,8 +2835,8 @@ const DeliveryOrderManagement: React.FC = () => {
                                                 <div className="text-[10px] text-slate-500 mb-3 line-clamp-1">{order.deliveryAddress}</div>
 
                                                 <div className="flex gap-3 text-[10px] text-slate-400 font-mono mb-3 bg-slate-900 p-2 rounded-lg border border-slate-800/50">
-                                                    <div>体积: <span className="text-slate-200 font-bold">{orderLoad.totalVol} m³</span></div>
-                                                    <div className="border-l border-slate-800 pl-3">重量: <span className="text-slate-200 font-bold">{orderLoad.totalWeight} kg</span></div>
+                                                    <div>{t('volume:')} <span className="text-slate-200 font-bold">{orderLoad.totalVol} m³</span></div>
+                                                    <div className="border-l border-slate-800 pl-3">{t('weight:')} <span className="text-slate-200 font-bold">{orderLoad.totalWeight} kg</span></div>
                                                 </div>
 
                                                 <div className="space-y-1">
@@ -2882,7 +2888,7 @@ const DeliveryOrderManagement: React.FC = () => {
                                                         {lorry?.plateNumber || 'No Plate'}
                                                         <span className="text-slate-700">|</span>
                                                         <MapPin size={10} className="text-slate-500" />
-                                                        {lorry?.preferredZone || '未指派区域'}
+                                                        {lorry?.preferredZone || t('Unassigned area')}
                                                     </div>
                                                 </div>
                                                 
@@ -2896,7 +2902,7 @@ const DeliveryOrderManagement: React.FC = () => {
                                             <div className="space-y-1.5 mt-2 bg-slate-950 p-2.5 rounded-xl border border-slate-800/50">
                                                 <div>
                                                     <div className="flex justify-between text-[9px] font-mono mb-0.5">
-                                                        <span className="text-slate-400">体积 Vol ({loadStats.totalVol}/20 m³)</span>
+                                                        <span className="text-slate-400">{t('Volume Vol (')}{loadStats.totalVol}/20 m³)</span>
                                                         <span className={`font-bold ${Number(loadStats.percentVol) >= 100 ? 'text-red-400 font-black' : Number(loadStats.percentVol) >= 80 ? 'text-amber-400' : 'text-slate-300'}`}>
                                                             {loadStats.percentVol}%
                                                         </span>
@@ -2913,7 +2919,7 @@ const DeliveryOrderManagement: React.FC = () => {
                                                 
                                                 <div>
                                                     <div className="flex justify-between text-[9px] font-mono mb-0.5">
-                                                        <span className="text-slate-400">重量 Weight ({loadStats.totalWeight}/3000 kg)</span>
+                                                        <span className="text-slate-400">{t('Weight (')}{loadStats.totalWeight}/3000 kg)</span>
                                                         <span className={`font-bold ${Number(loadStats.percentWeight) >= 100 ? 'text-red-400 font-black' : Number(loadStats.percentWeight) >= 80 ? 'text-amber-400' : 'text-slate-300'}`}>
                                                             {loadStats.percentWeight}%
                                                         </span>
@@ -2934,7 +2940,7 @@ const DeliveryOrderManagement: React.FC = () => {
                                             {driverOrders.length === 0 ? (
                                                 <div className="h-40 flex flex-col items-center justify-center text-slate-700 opacity-40 border border-dashed border-slate-800 rounded-xl">
                                                     <Truck size={36} className="mb-2" />
-                                                    <span className="text-xs font-bold uppercase tracking-wider">暂无排单 (Empty)</span>
+                                                    <span className="text-xs font-bold uppercase tracking-wider">{t('No orders yet (Empty)')}</span>
                                                 </div>
                                             ) : (
                                                 driverOrders.map((order, idx) => {
@@ -2946,8 +2952,9 @@ const DeliveryOrderManagement: React.FC = () => {
                                                             className="bg-slate-950 border border-slate-800/80 hover:border-slate-700/80 p-3.5 rounded-xl flex flex-col gap-2 relative group"
                                                         >
                                                             <div className="absolute top-3 right-3 bg-slate-900 border border-slate-800 text-slate-400 text-[9px] font-bold uppercase py-0.5 px-2 rounded-full shadow-lg">
-                                                                第 {idx + 1} 趟
-                                                            </div>
+                                                                
+                                                                                                                                {t('No.')} {idx + 1}  {t('trip')}
+                                                                                                                            </div>
 
                                                             <div className="flex items-center gap-2">
                                                                 <span className="font-mono text-[10px] font-black text-blue-400 bg-blue-500/10 px-1.5 py-0.5 rounded border border-blue-500/20">
@@ -2980,7 +2987,7 @@ const DeliveryOrderManagement: React.FC = () => {
                                                                         onClick={() => handleMoveOrderSequence(order.id, 'up')}
                                                                         disabled={idx === 0}
                                                                         className="p-1 text-slate-400 hover:text-white disabled:opacity-20 disabled:hover:text-slate-400 transition-colors"
-                                                                        title="上移顺序 (Move Up)"
+                                                                        title={t('Move Up')}
                                                                     >
                                                                         <ArrowUp size={14} />
                                                                     </button>
@@ -2988,7 +2995,7 @@ const DeliveryOrderManagement: React.FC = () => {
                                                                         onClick={() => handleMoveOrderSequence(order.id, 'down')}
                                                                         disabled={idx === driverOrders.length - 1}
                                                                         className="p-1 text-slate-400 hover:text-white disabled:opacity-20 disabled:hover:text-slate-400 transition-colors"
-                                                                        title="下移顺序 (Move Down)"
+                                                                        title={t('Move Down')}
                                                                     >
                                                                         <ArrowDown size={14} />
                                                                     </button>
@@ -2997,10 +3004,11 @@ const DeliveryOrderManagement: React.FC = () => {
                                                                 <button
                                                                     onClick={() => handleUnassignOrder(order.id)}
                                                                     className="text-[10px] font-bold text-red-400 hover:text-red-300 bg-red-950/20 border border-red-900/30 px-2 py-0.5 rounded transition-colors"
-                                                                    title="取消分配 (Unassign)"
+                                                                    title={t('Unassign')}
                                                                 >
-                                                                    取消指派
-                                                                </button>
+                                                                    
+                                                                                                                                        {t('Unassign')}
+                                                                                                                                    </button>
                                                             </div>
                                                         </div>
                                                     );
@@ -3569,7 +3577,7 @@ const DeliveryOrderManagement: React.FC = () => {
                                 <div className="grid grid-cols-1 lg:grid-cols-2 gap-4">
                                      <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
                                          <div>
-                                             <label className="block text-xs font-bold text-slate-500 uppercase mb-2">Assigned Lorry (车牌)</label>
+                                             <label className="block text-xs font-bold text-slate-500 uppercase mb-2">{t('Assigned Lorry (license plate)')}</label>
                                              <div className="relative">
                                                  <Truck className="absolute left-3 top-3.5 text-slate-600 z-10" size={16} />
                                                  <select
@@ -3594,7 +3602,7 @@ const DeliveryOrderManagement: React.FC = () => {
                                              </div>
                                          </div>
                                          <div>
-                                             <label className="block text-xs font-bold text-slate-500 uppercase mb-2">Assigned Driver (司机)</label>
+                                             <label className="block text-xs font-bold text-slate-500 uppercase mb-2">{t('Assigned Driver')}</label>
                                              <div className="relative">
                                                  <UserIcon className="absolute left-3 top-3.5 text-slate-600 z-10" size={16} />
                                                  <select
@@ -3714,7 +3722,7 @@ const DeliveryOrderManagement: React.FC = () => {
                                     {/* DRIVER PAYROLL RATES: Origin, Category, Drops */}
                                     <div className="grid grid-cols-1 max-lg:gap-3 lg:grid-cols-3 gap-4 bg-slate-900/50 p-4 border border-slate-800 rounded-xl">
                                         <div>
-                                            <label className="block text-[10px] font-bold text-blue-500/80 uppercase tracking-widest mb-2">Origin (行程出发地)</label>
+                                            <label className="block text-[10px] font-bold text-blue-500/80 uppercase tracking-widest mb-2">{t('Origin (trip departure point)')}</label>
                                             <div className="flex flex-wrap gap-1.5 mb-2">
                                                 {[
                                                     { id: 'TAIPING', label: 'Taiping' },
@@ -3898,7 +3906,7 @@ const DeliveryOrderManagement: React.FC = () => {
                                     <div className="space-y-2 mb-4 bg-slate-900/50 p-3 rounded-xl border border-slate-800/80">
                                         <div>
                                             <div className="flex justify-between text-[10px] font-mono leading-none mb-1">
-                                                <span className="text-slate-400">体积 Vol ({modalLoad.totalVol}/{modalLoad.maxVol} m³)</span>
+                                                <span className="text-slate-400">{t('Volume Vol (')}{modalLoad.totalVol}/{modalLoad.maxVol} m³)</span>
                                                 <span className={getPercentColor(Number(modalLoad.percentVol))}>
                                                     {modalLoad.percentVol}%
                                                 </span>
@@ -3913,7 +3921,7 @@ const DeliveryOrderManagement: React.FC = () => {
 
                                         <div>
                                             <div className="flex justify-between text-[10px] font-mono leading-none mb-1">
-                                                <span className="text-slate-400">重量 Weight ({modalLoad.totalWeight}/{modalLoad.maxWeight} kg)</span>
+                                                <span className="text-slate-400">{t('Weight (')}{modalLoad.totalWeight}/{modalLoad.maxWeight} kg)</span>
                                                 <span className={getPercentColor(Number(modalLoad.percentWeight))}>
                                                     {modalLoad.percentWeight}%
                                                 </span>
@@ -4403,11 +4411,13 @@ const DeliveryOrderManagement: React.FC = () => {
                             <div>
                                 <h3 className="text-lg font-bold text-white flex items-center gap-2">
                                     <Sparkles size={20} className="text-violet-400" />
-                                    一键智能排单推荐方案 (Smart Auto-Dispatch Recommendation)
-                                </h3>
+                                    
+                                                                        {t('Smart Auto-Dispatch Recommendation')}
+                                                                    </h3>
                                 <p className="text-xs text-slate-500 mt-1">
-                                    系统已根据送货区域（Zone）自动聚合拼车并进行容量装箱。请审查并指派最终司机。
-                                </p>
+                                    
+                                                                        {t('The system has automatically aggregated carpooling based on the delivery area (Zone) and performed capacity packing. Please review and assign final driver.')}
+                                                                    </p>
                             </div>
                             <button
                                 onClick={() => {
@@ -4424,8 +4434,9 @@ const DeliveryOrderManagement: React.FC = () => {
                         <div className="p-6 overflow-y-auto custom-scrollbar flex-1 space-y-6">
                             {autoDispatchDrafts.length === 0 ? (
                                 <div className="text-center py-12 text-slate-500 italic">
-                                    没有生成推荐的拼车行程。
-                                </div>
+                                    
+                                                                        {t('No recommended carpool itineraries were generated.')}
+                                                                    </div>
                             ) : (
                                 autoDispatchDrafts.map((trip, tIdx) => (
                                     <div key={trip.id || tIdx} className="bg-slate-900/40 border border-slate-800 rounded-xl p-4 flex flex-col gap-3">
@@ -4436,26 +4447,29 @@ const DeliveryOrderManagement: React.FC = () => {
                                                     {trip.name}
                                                 </div>
                                                 <div className="text-[10px] text-slate-500 font-mono mt-0.5">
-                                                    区域 Zone: <span className="text-slate-300 font-bold">{trip.zone}</span>
+                                                    
+                                                                                                        {t('Zone Zone:')} <span className="text-slate-300 font-bold">{trip.zone}</span>
                                                 </div>
                                             </div>
 
                                             <div className="flex flex-wrap items-center gap-4 text-xs font-mono">
                                                 <div className="bg-slate-950 px-2.5 py-1 rounded border border-slate-800">
-                                                    体积 Vol: <span className={`font-bold ${trip.totalVol > 20 ? 'text-red-400 font-black' : 'text-emerald-400'}`}>{trip.totalVol.toFixed(2)} m³</span>
+                                                    
+                                                                                                        {t('Volume Vol:')} <span className={`font-bold ${trip.totalVol > 20 ? 'text-red-400 font-black' : 'text-emerald-400'}`}>{trip.totalVol.toFixed(2)} m³</span>
                                                 </div>
                                                 <div className="bg-slate-950 px-2.5 py-1 rounded border border-slate-800">
-                                                    重量 Wgt: <span className={`font-bold ${trip.totalWeight > 3000 ? 'text-red-400 font-black' : 'text-emerald-400'}`}>{trip.totalWeight.toFixed(2)} kg</span>
+                                                    
+                                                                                                        {t('Weight Wgt:')} <span className={`font-bold ${trip.totalWeight > 3000 ? 'text-red-400 font-black' : 'text-emerald-400'}`}>{trip.totalWeight.toFixed(2)} kg</span>
                                                 </div>
                                                 
                                                 <div className="flex items-center gap-2">
-                                                    <span className="text-[10px] font-bold text-slate-400 uppercase">指派司机:</span>
+                                                    <span className="text-[10px] font-bold text-slate-400 uppercase">{t('Assigned driver:')}</span>
                                                     <select
                                                         className="bg-slate-950 border border-slate-800 rounded px-2 py-1 text-xs text-white outline-none focus:border-violet-500"
                                                         value={trip.recommendedDriverId || ''}
                                                         onChange={(e) => handleUpdateDraftTripDriver(trip.id, e.target.value)}
                                                     >
-                                                        <option value="">-- 未指派 (Unassigned) --</option>
+                                                        <option value="">{t('-- Unassigned --')}</option>
                                                         {drivers
                                                             .filter(d => (d.base_location || 'Taiping').toLowerCase() === activeLocation.toLowerCase())
                                                             .map(d => (
@@ -4471,7 +4485,7 @@ const DeliveryOrderManagement: React.FC = () => {
 
                                         {/* Orders inside this trip */}
                                         <div className="space-y-2">
-                                            <div className="text-[10px] font-bold text-slate-500 uppercase tracking-widest">包含送货单 ({trip.orders.length} 单)</div>
+                                            <div className="text-[10px] font-bold text-slate-500 uppercase tracking-widest">{t('Contains delivery note (')}{trip.orders.length}  {t('one)')}</div>
                                             <div className="grid grid-cols-1 md:grid-cols-2 gap-3">
                                                 {trip.orders.map((order, oIdx) => (
                                                     <div key={order.id || oIdx} className="bg-slate-950 p-3 rounded-lg border border-slate-800/80 text-xs">
@@ -4514,17 +4528,18 @@ const DeliveryOrderManagement: React.FC = () => {
                                 }}
                                 className="px-6 py-2 rounded-xl text-slate-400 hover:text-white font-bold text-sm transition-colors"
                             >
-                                取消
-                            </button>
+                                
+                                                                {t('Cancel')}
+                                                            </button>
                             <button
                                 onClick={handleApplyAutoDispatch}
                                 disabled={isSubmitting || autoDispatchDrafts.length === 0}
                                 className="px-8 py-2 bg-gradient-to-r from-violet-600 to-indigo-600 hover:from-violet-500 hover:to-indigo-500 disabled:opacity-50 text-white rounded-xl font-bold text-sm shadow-lg shadow-violet-900/30 transition-all active:scale-95 flex items-center gap-2"
                             >
                                 {isSubmitting ? (
-                                    <><span className="w-4 h-4 border-2 border-white/30 border-t-white rounded-full animate-spin" />应用中...</>
+                                    <><span className="w-4 h-4 border-2 border-white/30 border-t-white rounded-full animate-spin" />{t('Applying...')}</>
                                 ) : (
-                                    '应用排单方案 (Apply Scheme)'
+                                    t('Apply Scheme')
                                 )}
                             </button>
                         </div>

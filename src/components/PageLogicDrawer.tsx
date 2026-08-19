@@ -1,6 +1,7 @@
 import { useState, useEffect } from 'react';
 import { Lightbulb, X, BookOpen, Edit, FileText, Sparkles, HelpCircle, ArrowRight } from 'lucide-react';
 import { supabase } from '../services/supabase';
+import { useTranslation } from "react-i18next";
 
 interface PageLogicDrawerProps {
     activePage: string;
@@ -30,6 +31,7 @@ const ROLE_COLORS: Record<string, string> = {
 };
 
 export default function PageLogicDrawer({ activePage, userRole, user, setActivePage }: PageLogicDrawerProps) {
+    const { t } = useTranslation();
     const [isOpen, setIsOpen] = useState(false);
     const [articles, setArticles] = useState<SOPArticle[]>([]);
     const [loading, setLoading] = useState(false);
@@ -91,7 +93,7 @@ export default function PageLogicDrawer({ activePage, userRole, user, setActiveP
 
     // Render simple markdown formatting
     const renderMarkdown = (text: string) => {
-        if (!text) return <p className="text-gray-400 italic">暂无详细说明</p>;
+        if (!text) return <p className="text-gray-400 italic">{t('No detailed description yet')}</p>;
         
         return text.split('\n').map((line, i) => {
             if (line.startsWith('### ')) {
@@ -161,7 +163,7 @@ export default function PageLogicDrawer({ activePage, userRole, user, setActiveP
                                     <Sparkles size={18} />
                                 </div>
                                 <div>
-                                    <h2 className="text-sm font-black text-white tracking-wider uppercase">页面逻辑与规范</h2>
+                                    <h2 className="text-sm font-black text-white tracking-wider uppercase">{t('Page logic and specifications')}</h2>
                                     <p className="text-[10px] text-gray-500 font-mono">Page ID: {activePage}</p>
                                 </div>
                             </div>
@@ -184,8 +186,9 @@ export default function PageLogicDrawer({ activePage, userRole, user, setActiveP
                                 }`}
                             >
                                 <FileText size={14} />
-                                业务逻辑与规则
-                            </button>
+                                
+                                                                {t('Business logic and rules')}
+                                                            </button>
                             <button 
                                 onClick={() => setActiveTab('flow')}
                                 className={`flex-1 py-3 text-center text-xs font-bold transition-all border-b-2 flex items-center justify-center gap-1.5 ${
@@ -195,8 +198,9 @@ export default function PageLogicDrawer({ activePage, userRole, user, setActiveP
                                 }`}
                             >
                                 <BookOpen size={14} />
-                                标准操作指南 (SOP)
-                            </button>
+                                
+                                                                {t('Standard operating instructions (SOP)')}
+                                                            </button>
                         </div>
 
                         {/* Drawer Body (Scrollable) */}
@@ -204,16 +208,17 @@ export default function PageLogicDrawer({ activePage, userRole, user, setActiveP
                             {loading ? (
                                 <div className="flex flex-col items-center justify-center h-64 gap-3 text-gray-500">
                                     <div className="animate-spin w-6 h-6 border-2 border-indigo-500 border-t-transparent rounded-full" />
-                                    <span className="text-xs">正在调取系统规则...</span>
+                                    <span className="text-xs">{t('Loading system rules...')}</span>
                                 </div>
                             ) : articles.length === 0 ? (
                                 <div className="flex flex-col items-center justify-center h-64 text-center space-y-4">
                                     <HelpCircle size={44} className="text-gray-700 opacity-60" />
                                     <div>
-                                        <p className="text-sm font-bold text-gray-400">此页面未关联业务逻辑说明</p>
+                                        <p className="text-sm font-bold text-gray-400">{t('There is no business logic description associated with this page')}</p>
                                         <p className="text-xs text-gray-600 mt-1 max-w-[280px]">
-                                            数据表中暂无绑定当前 Page ID (`{activePage}`) 且已发布的逻辑文档。
-                                        </p>
+                                            
+                                                                                            {t('There is currently no binding to the current Page ID in the data table (`')}{activePage}{t('`) and the published logical document.')}
+                                                                                        </p>
                                     </div>
                                     {isAdmin && (
                                         <button 
@@ -221,8 +226,9 @@ export default function PageLogicDrawer({ activePage, userRole, user, setActiveP
                                             className="px-4 py-2 rounded-xl bg-indigo-600 hover:bg-indigo-500 text-white font-bold text-xs flex items-center gap-1.5 transition-all shadow-md shadow-indigo-600/10 cursor-pointer"
                                         >
                                             <Edit size={12} />
-                                            前往 SOP 中心创建
-                                        </button>
+                                            
+                                                                                            {t('Go to SOP Center to create')}
+                                                                                        </button>
                                     )}
                                 </div>
                             ) : (
@@ -236,7 +242,7 @@ export default function PageLogicDrawer({ activePage, userRole, user, setActiveP
                                                         <button 
                                                             onClick={handleGoToEdit}
                                                             className="text-gray-500 hover:text-indigo-400 p-1 rounded hover:bg-gray-800 transition-colors"
-                                                            title="去编辑此逻辑"
+                                                            title={t('Go edit this logic')}
                                                         >
                                                             <Edit size={13} />
                                                         </button>
@@ -254,11 +260,12 @@ export default function PageLogicDrawer({ activePage, userRole, user, setActiveP
                                                 <div className="pt-2 border-t border-gray-800/60 space-y-3">
                                                     <div className="flex items-center gap-2 text-xs text-indigo-400 font-bold bg-indigo-500/5 p-2.5 rounded-lg border border-indigo-500/10">
                                                         <BookOpen size={14} />
-                                                        <span>此页标准操作规范 (SOP) 已生效</span>
+                                                        <span>{t('The Standard Operating Procedure (SOP) on this page is in effect')}</span>
                                                     </div>
                                                     <p className="text-xs text-gray-400 leading-relaxed">
-                                                        你可以前往 **SOP 指南中心** 查看完整规范、操作步骤视频演示及打印文档。
-                                                    </p>
+                                                        
+                                                                                                                    {t('You can go to the **SOP Guide Center** to view the complete specifications, step-by-step video demonstrations and printed documents.')}
+                                                                                                                </p>
                                                     <button 
                                                         onClick={() => {
                                                             setActivePage('sop-center');
@@ -266,15 +273,16 @@ export default function PageLogicDrawer({ activePage, userRole, user, setActiveP
                                                         }}
                                                         className="w-full py-2 rounded-lg bg-gray-800 hover:bg-gray-700 text-white font-bold text-xs flex items-center justify-center gap-1.5 transition-colors"
                                                     >
-                                                        进入 SOP 中心
-                                                        <ArrowRight size={12} />
+                                                        
+                                                                                                                    {t('Enter the SOP Center')}
+                                                                                                                    <ArrowRight size={12} />
                                                     </button>
                                                 </div>
                                             )}
 
                                             {/* Last Updated */}
                                             <div className="pt-2 border-t border-gray-900 flex justify-between items-center text-[9px] text-gray-600">
-                                                <span>更新时间: {new Date(article.updated_at).toLocaleDateString()}</span>
+                                                <span>{t('Update time:')} {new Date(article.updated_at).toLocaleDateString()}</span>
                                                 {article.target_roles && article.target_roles.length > 0 && (
                                                     <div className="flex gap-1">
                                                         {article.target_roles.map(r => (
@@ -300,8 +308,9 @@ export default function PageLogicDrawer({ activePage, userRole, user, setActiveP
                             <div className="px-6 py-4 border-t border-gray-800/60 bg-gray-900/40 shrink-0 text-center">
                                 <p className="text-[10px] text-gray-500 flex items-center justify-center gap-1">
                                     <Sparkles size={10} className="text-indigo-400" />
-                                    业务规则由管理员动态维护，以线上逻辑为准
-                                </p>
+                                    
+                                                                        {t('Business rules are dynamically maintained by administrators and are subject to online logic.')}
+                                                                    </p>
                             </div>
                         )}
                     </div>

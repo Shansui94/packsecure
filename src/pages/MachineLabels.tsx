@@ -1,6 +1,7 @@
 import React, { useEffect, useState } from 'react';
 import { supabase } from '../services/supabase';
 import QRCode from 'react-qr-code';
+import { useTranslation } from "react-i18next";
 
 interface Machine {
     machine_id: string;
@@ -11,6 +12,7 @@ interface Machine {
 }
 
 const MachineLabels: React.FC = () => {
+    const { t } = useTranslation();
     const [machines, setMachines] = useState<Machine[]>([]);
     const [loading, setLoading] = useState(true);
 
@@ -43,12 +45,12 @@ const MachineLabels: React.FC = () => {
     }
 
     const factoryStationLabels: Machine[] = [
-        { machine_id: 'FACTORY-TAIPING', name: '太平工厂打卡站 (Taiping Station)', factory_id: 'T1', type: 'FactoryStation', status: 'Active' },
-        { machine_id: 'FACTORY-NILAI', name: 'Nilai 工厂打卡站 (Nilai Station)', factory_id: 'N1', type: 'FactoryStation', status: 'Active' },
-        { machine_id: 'FACTORY-JOHOR', name: 'Johor 工厂打卡站 (Johor Station)', factory_id: 'J1', type: 'FactoryStation', status: 'Active' },
-        { machine_id: 'FACTORY-KELANTAN', name: 'Kelantan 工厂打卡站 (Kelantan Station)', factory_id: 'K1', type: 'FactoryStation', status: 'Active' },
-        { machine_id: 'FACTORY_MODE_1', name: '工厂打卡 (计算方式一 班次拆分)', factory_id: 'General', type: 'FactoryStation', status: 'Active' },
-        { machine_id: 'FACTORY_MODE_2', name: '工厂打卡 (计算方式二 RM10固定)', factory_id: 'General', type: 'FactoryStation', status: 'Active' },
+        { machine_id: 'FACTORY-TAIPING', name: t('Taiping Factory Check-in Station (Taiping Station)'), factory_id: 'T1', type: 'FactoryStation', status: 'Active' },
+        { machine_id: 'FACTORY-NILAI', name: t('Nilai Factory Check-in Station (Nilai Station)'), factory_id: 'N1', type: 'FactoryStation', status: 'Active' },
+        { machine_id: 'FACTORY-JOHOR', name: t('Johor Factory Check-in Station (Johor Station)'), factory_id: 'J1', type: 'FactoryStation', status: 'Active' },
+        { machine_id: 'FACTORY-KELANTAN', name: t('Kelantan Factory Check-in Station (Kelantan Station)'), factory_id: 'K1', type: 'FactoryStation', status: 'Active' },
+        { machine_id: 'FACTORY_MODE_1', name: t('Factory punch-in (calculation method 1: shift split)'), factory_id: 'General', type: 'FactoryStation', status: 'Active' },
+        { machine_id: 'FACTORY_MODE_2', name: t('Factory punch-in (calculation method 2: fixed at RM10)'), factory_id: 'General', type: 'FactoryStation', status: 'Active' },
     ];
 
     const allItemsToPrint = [...factoryStationLabels, ...machines];
@@ -125,50 +127,7 @@ const MachineLabels: React.FC = () => {
                 </button>
             </div>
 
-            <style>{`
-                @media print {
-                    /* Reset body & overflow of layout wrappers to allow multi-page printing */
-                    html, body, #root, #root > div, .flex.h-screen, main {
-                        overflow: visible !important;
-                        height: auto !important;
-                        min-height: 0 !important;
-                        max-height: none !important;
-                        position: static !important;
-                    }
-                    /* Hide sidebar, mobile header, floating drawer, and print buttons */
-                    aside, 
-                    .fixed, 
-                    .absolute,
-                    button,
-                    select,
-                    #google_translate_element {
-                        display: none !important;
-                    }
-                    /* Ensure print-labels-container is displayed as a simple block */
-                    #print-labels-container {
-                        display: block !important;
-                        width: 100% !important;
-                        padding: 0 !important;
-                        margin: 0 !important;
-                        background-color: white !important;
-                    }
-                    @page {
-                        size: A4;
-                        margin: 0 !important; /* 强制消除页端自带的页眉页脚，防重叠 */
-                    }
-                    body {
-                        margin: 0 !important;
-                        background-color: white !important;
-                        -webkit-print-color-adjust: exact;
-                    }
-                    .page-break-after-always {
-                        page-break-after: always;
-                        width: 210mm !important;
-                        height: 297mm !important;
-                        margin: 0 auto !important;
-                    }
-                }
-            `}</style>
+            <style>{t('@media print {\n                    /* Reset body & overflow of layout wrappers to allow multi-page printing */\n                    html, body, #root, #root > div, .flex.h-screen, main {\n                        overflow: visible !important;\n                        height: auto !important;\n                        min-height: 0 !important;\n                        max-height: none !important;\n                        position: static !important;\n                    }\n                    /* Hide sidebar, mobile header, floating drawer, and print buttons */\n                    aside,\n                    .fixed,\n                    .absolute,\n                    button,\n                    select,\n                    #google_translate_element {\n                        display: none !important;\n                    }\n                    /* Ensure print-labels-container is displayed as a simple block */\n                    #print-labels-container {\n                        display: block !important;\n                        width: 100% !important;\n                        padding: 0 !important;\n                        margin: 0 !important;\n                        background-color: white !important;\n                    }\n                    @page {\n                        size: A4;\n                        margin: 0 !important; /* Forcibly eliminate the header and footer that comes with the page to prevent overlap */\n                    }\n                    body {\n                        margin: 0 !important;\n                        background-color: white !important;\n                        -webkit-print-color-adjust: exact;\n                    }\n                    .page-break-after-always {\n                        page-break-after: always;\n                        width: 210mm !important;\n                        height: 297mm !important;\n                        margin: 0 auto !important;\n                    }\n                }')}</style>
         </div>
     );
 };

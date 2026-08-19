@@ -8,6 +8,7 @@ import { PRODUCT_LAYERS, PRODUCT_MATERIALS, PACKAGING_COLORS, PRODUCT_SIZES } fr
 import { getBubbleWrapSku } from '../utils/skuMapper';
 import { getRollsPerSet } from '../utils/packagingRules';
 import { supabase } from '../services/supabase';
+import { useTranslation } from "react-i18next";
 
 // --- COMPONENTS ---
 
@@ -24,6 +25,7 @@ const StatCard = ({ label, value, icon: Icon, color }: any) => (
 );
 
 const HoloCard = ({ item, stock, onClick }: { item: V2Item, stock?: number, onClick: () => void }) => {
+    const { t } = useTranslation();
     const isRaw = item.type === 'Raw';
     const accentColor = isRaw ? 'blue' : item.type === 'FG' ? 'green' : 'purple';
 
@@ -72,6 +74,7 @@ const BubbleWrapGenerator = ({
     onClose: () => void;
     onSave: () => void;
 }) => {
+    const { t } = useTranslation();
     const [layer, setLayer] = useState<ProductLayer>('Single');
     const [material, setMaterial] = useState<ProductMaterial>('Clear');
     const [size, setSize] = useState<ProductSize>('25cm');
@@ -162,7 +165,7 @@ const BubbleWrapGenerator = ({
 
             {/* ITEM NAME */}
             <div>
-                <label className="text-[10px] uppercase font-bold text-gray-500 tracking-wider mb-2 block">Item Name 产品名称</label>
+                <label className="text-[10px] uppercase font-bold text-gray-500 tracking-wider mb-2 block">{t('Item Name product name')}</label>
                 <input
                     value={customName}
                     onChange={e => setCustomName(e.target.value)}
@@ -176,7 +179,7 @@ const BubbleWrapGenerator = ({
             <div className="grid grid-cols-2 gap-4">
                 {/* Layer */}
                 <div>
-                    <label className="text-[10px] uppercase font-bold text-gray-500 tracking-wider mb-2 block">Layer 层数</label>
+                    <label className="text-[10px] uppercase font-bold text-gray-500 tracking-wider mb-2 block">{t('Layer number')}</label>
                     <div className="flex gap-2">
                         {PRODUCT_LAYERS.map(l => (
                             <button
@@ -188,7 +191,7 @@ const BubbleWrapGenerator = ({
                                     }`}
                             >
                                 <div className="text-lg">{l.code}</div>
-                                <div className="text-[10px] mt-0.5 opacity-70">{l.value === 'Single' ? '单层' : '双层'}</div>
+                                <div className="text-[10px] mt-0.5 opacity-70">{l.value === 'Single' ? t('single layer') : t('Double layer')}</div>
                             </button>
                         ))}
                     </div>
@@ -196,7 +199,7 @@ const BubbleWrapGenerator = ({
 
                 {/* Material */}
                 <div>
-                    <label className="text-[10px] uppercase font-bold text-gray-500 tracking-wider mb-2 block">Material 材质</label>
+                    <label className="text-[10px] uppercase font-bold text-gray-500 tracking-wider mb-2 block">{t('Material material')}</label>
                     <div className="flex gap-2">
                         {PRODUCT_MATERIALS.map(m => (
                             <button
@@ -218,7 +221,7 @@ const BubbleWrapGenerator = ({
             {/* Size + Rolls */}
             <div className="grid grid-cols-2 gap-4">
                 <div>
-                    <label className="text-[10px] uppercase font-bold text-gray-500 tracking-wider mb-2 block">Size 宽度</label>
+                    <label className="text-[10px] uppercase font-bold text-gray-500 tracking-wider mb-2 block">{t('Size width')}</label>
                     <div className="flex gap-1.5">
                         {PRODUCT_SIZES.map(s => (
                             <button
@@ -236,7 +239,7 @@ const BubbleWrapGenerator = ({
                 </div>
 
                 <div>
-                    <label className="text-[10px] uppercase font-bold text-gray-500 tracking-wider mb-2 block">Rolls 卷数</label>
+                    <label className="text-[10px] uppercase font-bold text-gray-500 tracking-wider mb-2 block">{t('Rolls')}</label>
                     <div className="flex items-center gap-3">
                         <button
                             onClick={() => setRolls(Math.max(1, rolls - 1))}
@@ -257,7 +260,7 @@ const BubbleWrapGenerator = ({
             {/* Packaging Color */}
             <div>
                 <div className="mb-2">
-                    <label className="text-[10px] uppercase font-bold text-gray-500 tracking-wider">Packaging Color 包装色</label>
+                    <label className="text-[10px] uppercase font-bold text-gray-500 tracking-wider">{t('Packaging Color packaging color')}</label>
                 </div>
                 <div className="flex gap-2">
                     {PACKAGING_COLORS.map(c => (
@@ -304,6 +307,7 @@ const ItemFormModal = ({
     initialData: V2Item | null;
     onSave: (data: V2Item) => Promise<void>;
 }) => {
+    const { t } = useTranslation();
     const [formData, setFormData] = useState<Partial<V2Item>>({});
     const [loading, setLoading] = useState(false);
     const [activeTab, setActiveTab] = useState<'bw' | 'generic'>('bw');
@@ -440,8 +444,8 @@ const ItemFormModal = ({
                                         onChange={e => handleChange('supply_type', e.target.value)}
                                         className="w-full bg-gray-950 border border-gray-800 rounded-lg p-2.5 text-white outline-none focus:border-cyan-500"
                                     >
-                                        <option value="Manufactured">Manufactured (自产)</option>
-                                        <option value="Purchased">Purchased (外购)</option>
+                                        <option value="Manufactured">{t('Manufactured')}</option>
+                                        <option value="Purchased">{t('Purchased')}</option>
                                     </select>
                                 </div>
                                 <div>
@@ -523,6 +527,7 @@ const ItemFormModal = ({
 
 
 const ProductLibrary: React.FC = () => {
+    const { t } = useTranslation();
     const [items, setItems] = useState<V2Item[]>([]);
     const [stockMap, setStockMap] = useState<Record<string, number>>({});
     const [loading, setLoading] = useState(true);
@@ -830,8 +835,9 @@ const ProductLibrary: React.FC = () => {
                                     : 'border-transparent text-gray-500 hover:text-gray-300'
                             }`}
                         >
-                            📦 Standard Blueprints (标准商品库)
-                        </button>
+                            
+                                                        {t('📦 Standard Blueprints (standard product library)')}
+                                                    </button>
                         <button
                             onClick={() => {
                                 setActiveTab('ai-mappings');
@@ -843,8 +849,9 @@ const ProductLibrary: React.FC = () => {
                                     : 'border-transparent text-gray-500 hover:text-gray-300'
                             }`}
                         >
-                            🤖 AI Alias Mappings (AI 别名映射)
-                        </button>
+                            
+                                                        {t('🤖 AI Alias ​​Mappings (AI alias mapping)')}
+                                                    </button>
                     </div>
 
                     {/* TABS CONTENT */}
@@ -880,11 +887,11 @@ const ProductLibrary: React.FC = () => {
                                 <table className="w-full text-left border-collapse text-xs">
                                     <thead>
                                         <tr className="bg-gray-950/60 border-b border-gray-800 text-gray-400 font-bold uppercase tracking-wider">
-                                            <th className="p-4">Customer (客户)</th>
-                                            <th className="p-4">Raw Name in WhatsApp (单据原始名称)</th>
-                                            <th className="p-4">Mapped Standard Item (对应系统商品)</th>
-                                            <th className="p-4">Standard SKU (标准料号)</th>
-                                            <th className="p-4">Last Updated (记忆时间)</th>
+                                            <th className="p-4">{t('Customer')}</th>
+                                            <th className="p-4">{t('Raw Name in WhatsApp (original name of the document)')}</th>
+                                            <th className="p-4">{t('Mapped Standard Item (corresponding to system products)')}</th>
+                                            <th className="p-4">{t('Standard SKU (standard material number)')}</th>
+                                            <th className="p-4">{t('Last Updated (memory time)')}</th>
                                             <th className="p-4 text-center">Actions</th>
                                         </tr>
                                     </thead>
@@ -1113,7 +1120,7 @@ const ProductLibrary: React.FC = () => {
                         </div>
                         <div className="p-5 space-y-4 text-xs font-semibold">
                             <div>
-                                <label className="text-[10px] uppercase font-bold text-gray-500 tracking-wider mb-2 block">Customer Name (客户名称)</label>
+                                <label className="text-[10px] uppercase font-bold text-gray-500 tracking-wider mb-2 block">{t('Customer Name')}</label>
                                 <input
                                     type="text"
                                     placeholder="e.g. DIY"
@@ -1123,7 +1130,7 @@ const ProductLibrary: React.FC = () => {
                                 />
                             </div>
                             <div>
-                                <label className="text-[10px] uppercase font-bold text-gray-500 tracking-wider mb-2 block">Raw Name in WhatsApp (单据上的原始商品称呼)</label>
+                                <label className="text-[10px] uppercase font-bold text-gray-500 tracking-wider mb-2 block">{t('Raw Name in WhatsApp (original product name on the receipt)')}</label>
                                 <input
                                     type="text"
                                     placeholder="e.g. oren"
@@ -1133,7 +1140,7 @@ const ProductLibrary: React.FC = () => {
                                 />
                             </div>
                             <div>
-                                <label className="text-[10px] uppercase font-bold text-gray-500 tracking-wider mb-2 block">Mapped System Product (对应的系统标准产品)</label>
+                                <label className="text-[10px] uppercase font-bold text-gray-500 tracking-wider mb-2 block">{t('Mapped System Product (corresponding system standard product)')}</label>
                                 <select
                                     value={modalSelectedSku}
                                     onChange={e => setModalSelectedSku(e.target.value)}

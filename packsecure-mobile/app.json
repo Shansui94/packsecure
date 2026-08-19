@@ -9,7 +9,11 @@
       "supportsTablet": true,
       "bundleIdentifier": "com.packsecure.os",
       "infoPlist": {
-        "UIBackgroundModes": ["location", "fetch", "remote-notification"],
+        "UIBackgroundModes": [
+          "location",
+          "fetch",
+          "remote-notification"
+        ],
         "NSLocationAlwaysAndWhenInUseUsageDescription": "Packsecure 需要后台 GPS 权限以在司机送货过程中实时追踪行驶轨迹。",
         "NSLocationWhenInUseUsageDescription": "Packsecure 需要获取您当前的 GPS 位置以完成送货与考勤打卡。",
         "NSCameraUsageDescription": "Packsecure 需要相机权限以拍照上传 POD 送货凭证与扫描机台二维码。"
@@ -42,7 +46,8 @@
         {
           "cameraPermission": "允许 Packsecure 使用相机拍摄 POD 送货单或扫描机台二维码。"
         }
-      ]
+      ],
+      "expo-sqlite"
     ]
   }
 }

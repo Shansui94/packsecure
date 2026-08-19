@@ -13,14 +13,16 @@ async function dailyReport() {
 
     log("📊 Generating Daily Report for Today (Start of Day ~ Now)...");
 
-    // Jan 27 00:00 UTC+8 = Jan 26 16:00 UTC
-    const start = '2026-01-26T16:00:00Z';
+    // Dynamic start of today in UTC+8 (which is 16:00 UTC yesterday)
+    const sgTime = new Date(new Date().toLocaleString("en-US", { timeZone: "Asia/Singapore" }));
+    sgTime.setHours(0, 0, 0, 0);
+    const start = new Date(sgTime.getTime() - (8 * 60 * 60 * 1000)).toISOString();
     const end = new Date().toISOString();
 
     log(`Checking Window: ${start} -> ${end}`);
 
     const { data: logs, error } = await supabase
-        .from('production_logs')
+        .from('production_logs_v2')
         .select('*')
         .gte('created_at', start)
         .lte('created_at', end)

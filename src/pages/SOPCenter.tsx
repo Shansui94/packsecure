@@ -4,6 +4,7 @@ import {
     ChevronLeft, FileText, Search, Save
 } from 'lucide-react';
 import { supabase } from '../services/supabase';
+import { useTranslation } from "react-i18next";
 
 // ─── Types ────────────────────────────────────────────────────────────────────
 interface SOPArticle {
@@ -34,6 +35,7 @@ const ROLE_COLORS: Record<string, string> = {
 
 // ─── Main Component ───────────────────────────────────────────────────────────
 const SOPCenter = ({ userRole, user }: { userRole?: string; user?: any }) => {
+    const { t } = useTranslation();
     const [articles, setArticles] = useState<SOPArticle[]>([]);
     const [loading, setLoading] = useState(true);
     const [searchTerm, setSearchTerm] = useState(() => {
@@ -122,7 +124,7 @@ const SOPCenter = ({ userRole, user }: { userRole?: string; user?: any }) => {
                     updated_at: new Date().toISOString(),
                 })
                 .eq('id', editArticle.id);
-            if (error) { alert('保存失败: ' + error.message); return; }
+            if (error) { alert(t('Save failed:') + error.message); return; }
         } else {
             // Insert
             const { error } = await supabase
@@ -138,7 +140,7 @@ const SOPCenter = ({ userRole, user }: { userRole?: string; user?: any }) => {
                     is_published: editArticle.is_published ?? true,
                     created_by: editArticle.created_by || '',
                 });
-            if (error) { alert('创建失败: ' + error.message); return; }
+            if (error) { alert(t('Creation failed:') + error.message); return; }
         }
 
         setIsEditing(false);
@@ -147,7 +149,7 @@ const SOPCenter = ({ userRole, user }: { userRole?: string; user?: any }) => {
     };
 
     const handleDelete = async (id: string) => {
-        if (!confirm('确定要删除这篇 SOP 吗？')) return;
+        if (!confirm(t('Are you sure you want to delete this SOP?'))) return;
         await supabase.from('sop_articles').delete().eq('id', id);
         loadArticles();
         if (selectedArticle?.id === id) setSelectedArticle(null);
@@ -164,7 +166,7 @@ const SOPCenter = ({ userRole, user }: { userRole?: string; user?: any }) => {
                         className="flex items-center gap-2 text-gray-400 hover:text-white transition-colors mb-3"
                     >
                         <ChevronLeft size={18} />
-                        <span className="text-sm font-bold">返回 SOP 列表</span>
+                        <span className="text-sm font-bold">{t('Return to SOP list')}</span>
                     </button>
                     <h1 className="text-2xl font-black text-white">{selectedArticle.title}</h1>
                     <p className="text-gray-400 text-sm mt-1">{selectedArticle.description}</p>
@@ -212,8 +214,8 @@ const SOPCenter = ({ userRole, user }: { userRole?: string; user?: any }) => {
                             <BookOpen size={20} className="text-white" />
                         </div>
                         <div>
-                            <h1 className="text-xl font-black text-white tracking-tight">SOP 指南中心</h1>
-                            <p className="text-xs text-gray-500">{filteredArticles.length} 篇操作指南</p>
+                            <h1 className="text-xl font-black text-white tracking-tight">{t('SOP Guide Center')}</h1>
+                            <p className="text-xs text-gray-500">{filteredArticles.length}  {t('Operation Guide')}</p>
                         </div>
                     </div>
 
@@ -221,8 +223,9 @@ const SOPCenter = ({ userRole, user }: { userRole?: string; user?: any }) => {
                         <button onClick={handleCreate}
                             className="px-4 py-2.5 rounded-xl bg-gradient-to-r from-blue-600 to-indigo-600 hover:from-blue-500 hover:to-indigo-500 text-white font-bold text-sm flex items-center gap-2 shadow-lg shadow-blue-500/20 transition-all hover:scale-105">
                             <Plus size={16} />
-                            新建 SOP
-                        </button>
+                            
+                                                        {t('Create new SOP')}
+                                                    </button>
                     )}
                 </div>
 
@@ -232,7 +235,7 @@ const SOPCenter = ({ userRole, user }: { userRole?: string; user?: any }) => {
                     <input
                         value={searchTerm}
                         onChange={e => setSearchTerm(e.target.value)}
-                        placeholder="搜索 SOP..."
+                        placeholder={t('Search SOP...')}
                         className="w-full bg-gray-900 border border-gray-800 rounded-xl pl-10 pr-4 py-2.5 text-white text-sm focus:border-indigo-500 outline-none"
                     />
                 </div>
@@ -247,8 +250,8 @@ const SOPCenter = ({ userRole, user }: { userRole?: string; user?: any }) => {
                 ) : filteredArticles.length === 0 ? (
                     <div className="flex flex-col items-center justify-center h-64 text-gray-600">
                         <FileText size={48} className="mb-4 opacity-30" />
-                        <p className="font-bold">暂无 SOP 内容</p>
-                        {isAdmin && <p className="text-sm mt-1">点击「新建 SOP」开始创建</p>}
+                        <p className="font-bold">{t('No SOP content yet')}</p>
+                        {isAdmin && <p className="text-sm mt-1">{t('Click "New SOP" to start creating')}</p>}
                     </div>
                 ) : (
                     <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
@@ -267,8 +270,9 @@ const SOPCenter = ({ userRole, user }: { userRole?: string; user?: any }) => {
                                     {/* Published Badge */}
                                     {isAdmin && !article.is_published && (
                                         <div className="absolute top-3 left-3 px-2 py-0.5 rounded-full bg-yellow-500/20 border border-yellow-500/30 text-yellow-400 text-[10px] font-bold">
-                                            草稿
-                                        </div>
+                                            
+                                                                                        {t('draft')}
+                                                                                    </div>
                                     )}
 
                                     {/* Admin Actions */}
@@ -303,8 +307,9 @@ const SOPCenter = ({ userRole, user }: { userRole?: string; user?: any }) => {
                                     <div className="flex flex-wrap gap-1 mt-3">
                                         {article.target_roles.length === 0 ? (
                                             <span className="px-2 py-0.5 rounded-full bg-gray-800/50 text-gray-500 text-[10px] font-bold">
-                                                所有人
-                                            </span>
+                                                
+                                                                                                {t('everyone')}
+                                                                                            </span>
                                         ) : (
                                             article.target_roles.slice(0, 3).map(r => (
                                                 <span key={r} className="px-2 py-0.5 rounded-full text-[10px] font-bold"
@@ -333,7 +338,7 @@ const SOPCenter = ({ userRole, user }: { userRole?: string; user?: any }) => {
                         {/* Modal Header */}
                         <div className="flex items-center justify-between px-6 py-4 border-b border-gray-800">
                             <h2 className="text-lg font-black text-white">
-                                {editArticle.id ? '✏️ 编辑 SOP' : '➕ 新建 SOP'}
+                                {editArticle.id ? t('✏️ Edit SOP') : t('➕ Create new SOP')}
                             </h2>
                             <button onClick={() => { setIsEditing(false); setEditArticle(null); }}
                                 className="p-2 rounded-lg hover:bg-gray-800 text-gray-400 hover:text-white">
@@ -345,22 +350,22 @@ const SOPCenter = ({ userRole, user }: { userRole?: string; user?: any }) => {
                         <div className="flex-1 overflow-y-auto p-6 space-y-5">
                             {/* Title */}
                             <div>
-                                <label className="text-[10px] uppercase font-bold text-gray-500 tracking-wider mb-1 block">标题 Title</label>
+                                <label className="text-[10px] uppercase font-bold text-gray-500 tracking-wider mb-1 block">{t('Title Title')}</label>
                                 <input
                                     value={editArticle.title || ''}
                                     onChange={e => setEditArticle(prev => prev ? { ...prev, title: e.target.value } : prev)}
-                                    placeholder="如：如何开始生产"
+                                    placeholder={t('Such as: How to start production')}
                                     className="w-full bg-gray-900 border border-gray-800 rounded-lg p-3 text-white focus:border-blue-500 outline-none"
                                 />
                             </div>
 
                             {/* Description */}
                             <div>
-                                <label className="text-[10px] uppercase font-bold text-gray-500 tracking-wider mb-1 block">简述 Description</label>
+                                <label className="text-[10px] uppercase font-bold text-gray-500 tracking-wider mb-1 block">{t('Brief Description')}</label>
                                 <input
                                     value={editArticle.description || ''}
                                     onChange={e => setEditArticle(prev => prev ? { ...prev, description: e.target.value } : prev)}
-                                    placeholder="一句话说明这篇 SOP 的用途"
+                                    placeholder={t('One sentence explains the purpose of this SOP')}
                                     className="w-full bg-gray-900 border border-gray-800 rounded-lg p-3 text-white focus:border-blue-500 outline-none"
                                 />
                             </div>
@@ -369,11 +374,11 @@ const SOPCenter = ({ userRole, user }: { userRole?: string; user?: any }) => {
 
                             {/* Content */}
                             <div>
-                                <label className="text-[10px] uppercase font-bold text-gray-500 tracking-wider mb-1 block">正文内容 Content (Markdown)</label>
+                                <label className="text-[10px] uppercase font-bold text-gray-500 tracking-wider mb-1 block">{t('Content (Markdown)')}</label>
                                 <textarea
                                     value={editArticle.content || ''}
                                     onChange={e => setEditArticle(prev => prev ? { ...prev, content: e.target.value } : prev)}
-                                    placeholder={"# 标题\n\n## 步骤一\n\n- 打开系统\n- 选择机器\n\n## 步骤二\n\n详细文字说明..."}
+                                    placeholder={t('# title\n\n## Step 1\n\n- Open the system\n- Select machine\n\n## Step 2\n\nDetailed text description...')}
                                     rows={10}
                                     className="w-full bg-gray-900 border border-gray-800 rounded-lg p-3 text-white font-mono text-sm focus:border-blue-500 outline-none resize-y"
                                 />
@@ -381,7 +386,7 @@ const SOPCenter = ({ userRole, user }: { userRole?: string; user?: any }) => {
 
                             {/* Target Roles */}
                             <div>
-                                <label className="text-[10px] uppercase font-bold text-gray-500 tracking-wider mb-2 block">适用角色 Target Roles</label>
+                                <label className="text-[10px] uppercase font-bold text-gray-500 tracking-wider mb-2 block">{t('Target Roles')}</label>
                                 <div className="flex flex-wrap gap-2">
                                     {ALL_ROLES.map(role => {
                                         const isSelected = editArticle.target_roles?.includes(role);
@@ -414,22 +419,22 @@ const SOPCenter = ({ userRole, user }: { userRole?: string; user?: any }) => {
                                         );
                                     })}
                                 </div>
-                                <p className="text-[10px] text-gray-600 mt-1">不选 = 所有角色可见</p>
+                                <p className="text-[10px] text-gray-600 mt-1">{t('Unchecked = visible to all characters')}</p>
                             </div>
 
                             {/* Page ID + Published */}
                             <div className="grid grid-cols-2 gap-4">
                                 <div>
-                                    <label className="text-[10px] uppercase font-bold text-gray-500 tracking-wider mb-1 block">关联页面 Page ID</label>
+                                    <label className="text-[10px] uppercase font-bold text-gray-500 tracking-wider mb-1 block">{t('Associated page Page ID')}</label>
                                     <input
                                         value={editArticle.page_id || ''}
                                         onChange={e => setEditArticle(prev => prev ? { ...prev, page_id: e.target.value } : prev)}
-                                        placeholder="如 scanner, stock-movement"
+                                        placeholder={t('Such as scanner, stock-movement')}
                                         className="w-full bg-gray-900 border border-gray-800 rounded-lg p-3 text-white text-sm focus:border-blue-500 outline-none"
                                     />
                                 </div>
                                 <div>
-                                    <label className="text-[10px] uppercase font-bold text-gray-500 tracking-wider mb-1 block">发布状态</label>
+                                    <label className="text-[10px] uppercase font-bold text-gray-500 tracking-wider mb-1 block">{t('Release status')}</label>
                                     <button
                                         onClick={() => setEditArticle(prev => prev ? { ...prev, is_published: !prev.is_published } : prev)}
                                         className={`w-full py-3 rounded-lg font-bold text-sm transition-all border ${editArticle.is_published
@@ -437,7 +442,7 @@ const SOPCenter = ({ userRole, user }: { userRole?: string; user?: any }) => {
                                             : 'bg-gray-900 border-gray-800 text-gray-500'
                                             }`}
                                     >
-                                        {editArticle.is_published ? '✅ 已发布' : '🔒 草稿'}
+                                        {editArticle.is_published ? t('✅ Published') : t('🔒Draft')}
                                     </button>
                                 </div>
                             </div>
@@ -447,13 +452,15 @@ const SOPCenter = ({ userRole, user }: { userRole?: string; user?: any }) => {
                         <div className="flex justify-end gap-3 px-6 py-4 border-t border-gray-800">
                             <button onClick={() => { setIsEditing(false); setEditArticle(null); }}
                                 className="px-5 py-2.5 rounded-lg bg-gray-800 text-gray-300 hover:bg-gray-700 font-bold text-sm">
-                                取消
-                            </button>
+                                
+                                                                {t('Cancel')}
+                                                            </button>
                             <button onClick={handleSave}
                                 className="px-6 py-2.5 rounded-lg bg-blue-600 hover:bg-blue-500 text-white font-bold text-sm flex items-center gap-2 shadow-lg shadow-blue-500/20">
                                 <Save size={16} />
-                                保存
-                            </button>
+                                
+                                                                {t('save')}
+                                                            </button>
                         </div>
                     </div>
                 </div>

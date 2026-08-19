@@ -440,34 +440,35 @@ const LorryManagement: React.FC = () => {
                                         ? 'bg-blue-600 text-white shadow-md'
                                         : 'text-slate-400 hover:text-slate-200'
                                 }`}
-                                title="Table View / 表格视图"
+                                title={t('Table View/Table View')}
                             >
                                 <TableIcon size={16} />
-                                <span className="hidden sm:inline">表格 / Table</span>
+                                <span className="hidden sm:inline">{t('Table / Table')}</span>
                             </button>
                         </div>
                     </div>
 
                     {/* Content View: Grid vs Table */}
                     {loading ? (
-                        <div className="text-center py-20 text-slate-500 animate-pulse uppercase font-black tracking-widest">加载车队数据中 / Loading fleet data...</div>
+                        <div className="text-center py-20 text-slate-500 animate-pulse uppercase font-black tracking-widest">{t('Loading fleet data / Loading fleet data...')}</div>
                     ) : filteredLorries.length === 0 ? (
                         <div className="text-center py-20 bg-slate-900/30 rounded-[32px] border-2 border-dashed border-slate-800 text-slate-500 uppercase font-black tracking-widest">
-                            暂无货车数据 / No lorries found.
-                        </div>
+                            
+                                                            {t('No truck data / No lorries found.')}
+                                                        </div>
                     ) : viewMode === 'table' ? (
                         <div className="bg-slate-900 border border-slate-800 rounded-[28px] overflow-hidden shadow-xl">
                             <div className="overflow-x-auto">
                                 <table className="w-full text-sm text-left align-middle text-slate-300">
                                     <thead className="text-[10px] text-slate-400 uppercase bg-slate-950 border-b border-slate-800 font-black tracking-widest">
                                         <tr>
-                                            <th className="px-6 py-4">车牌号 / Lorry Plate</th>
-                                            <th className="px-6 py-4">主司机 / Driver</th>
-                                            <th className="px-6 py-4">出车区域 / Zone</th>
-                                            <th className="px-6 py-4">状态 / Status</th>
-                                            <th className="px-6 py-4 text-right">最大体积 / Vol (m³)</th>
-                                            <th className="px-6 py-4 text-right">最大载重 / Weight (kg)</th>
-                                            <th className="px-6 py-4 text-center">操作 / Actions</th>
+                                            <th className="px-6 py-4">{t('License plate number / Lorry Plate')}</th>
+                                            <th className="px-6 py-4">{t('Main driver / Driver')}</th>
+                                            <th className="px-6 py-4">{t('Departure area/Zone')}</th>
+                                            <th className="px-6 py-4">{t('Status / Status')}</th>
+                                            <th className="px-6 py-4 text-right">{t('Maximum volume / Vol (m³)')}</th>
+                                            <th className="px-6 py-4 text-right">{t('Maximum load / Weight (kg)')}</th>
+                                            <th className="px-6 py-4 text-center">{t('Actions')}</th>
                                         </tr>
                                     </thead>
                                     <tbody className="divide-y divide-slate-800/50">
@@ -484,7 +485,7 @@ const LorryManagement: React.FC = () => {
                                                 <td className="px-6 py-4 whitespace-nowrap">
                                                     <div className="flex items-center gap-2">
                                                         <User size={14} className="text-slate-500" />
-                                                        <span className="font-bold text-slate-200">{lorry.driver_name || '未分配 / Unassigned'}</span>
+                                                        <span className="font-bold text-slate-200">{lorry.driver_name || t('Unassigned / Unassigned')}</span>
                                                     </div>
                                                 </td>
                                                 <td className="px-6 py-4 whitespace-nowrap text-xs text-slate-400 font-medium">
@@ -517,21 +518,21 @@ const LorryManagement: React.FC = () => {
                                                         <button
                                                             onClick={() => handleOpenModal(lorry)}
                                                             className="p-2 bg-slate-800 hover:bg-slate-700 text-white rounded-xl transition-all font-bold text-xs"
-                                                            title="Edit / 编辑"
+                                                            title={t('Edit / edit')}
                                                         >
                                                             <Edit2 size={14} />
                                                         </button>
                                                         <button
                                                             onClick={() => handlePrintQR(lorry)}
                                                             className="p-2 bg-blue-500/10 hover:bg-blue-500/20 text-blue-400 rounded-xl transition-all font-bold text-xs"
-                                                            title="Print QR / 打印二维码"
+                                                            title={t('Print QR/print QR code')}
                                                         >
                                                             <QrIcon size={14} />
                                                         </button>
                                                         <button
                                                             onClick={() => handleDelete(lorry.id, lorry.plate_number)}
                                                             className="p-2 bg-red-500/10 hover:bg-red-500/20 text-red-400 rounded-xl transition-all"
-                                                            title="Delete / 删除"
+                                                            title={t('Delete / delete')}
                                                         >
                                                             <Trash2 size={14} />
                                                         </button>
@@ -640,7 +641,8 @@ const LorryManagement: React.FC = () => {
                             }`}
                         >
                             <AlertTriangle size={14} />
-                            异常预警 ({mileageAlerts.filter(a => !a.resolved).length})
+                            
+                                                            {t('Abnormal warning (')}{mileageAlerts.filter(a => !a.resolved).length})
                         </button>
                         <button
                             onClick={() => setOdoSubTab('logs')}
@@ -651,7 +653,8 @@ const LorryManagement: React.FC = () => {
                             }`}
                         >
                             <FileText size={14} />
-                            里程日志 ({mileageLogs.length})
+                            
+                                                            {t('mileage log (')}{mileageLogs.length})
                         </button>
                     </div>
 
@@ -661,8 +664,9 @@ const LorryManagement: React.FC = () => {
                             <div className="flex items-center justify-between bg-slate-900/60 p-4 rounded-2xl border border-slate-800">
                                 <h2 className="text-base sm:text-lg font-black uppercase text-white tracking-wider flex items-center gap-2">
                                     <AlertTriangle className="text-red-500 animate-pulse shrink-0" size={20} />
-                                    异常预警 / Alerts
-                                </h2>
+                                    
+                                                                            {t('Abnormal warning/Alerts')}
+                                                                        </h2>
                                 <span className="bg-red-500/10 text-red-400 border border-red-500/20 text-[10px] font-black px-2.5 py-1 rounded-xl uppercase tracking-wider">
                                     {(() => {
                                         const activeAlerts = mileageAlerts.filter(a => !a.resolved && (selectedLorryPlate === 'All' || a.lorries?.plate_number === selectedLorryPlate));
@@ -677,8 +681,9 @@ const LorryManagement: React.FC = () => {
                                 if (activeAlerts.length === 0) {
                                     return (
                                         <div className="bg-slate-900/30 border border-slate-800/80 rounded-[32px] p-8 text-center text-slate-500 font-bold uppercase text-xs tracking-widest">
-                                            ✅ 暂无待处理异常预警 / No active alerts!
-                                        </div>
+                                            
+                                                                                        {t('✅ No pending exception alerts / No active alerts!')}
+                                                                                    </div>
                                     );
                                 }
 
@@ -722,8 +727,8 @@ const LorryManagement: React.FC = () => {
                                                     >
                                                         <img src={alertItem.photo_url} loading="lazy" className="w-full h-full object-cover group-hover:scale-105 transition-all" alt="Odometer" />
                                                         <div className="absolute inset-0 bg-black/40 opacity-0 group-hover:opacity-100 transition-all flex items-center justify-center gap-1.5 text-xs font-bold text-white">
-                                                            <ImageIcon size={18} /> 查看照片 / View Photo
-                                                        </div>
+                                                            <ImageIcon size={18} />  {t('View Photo / View Photo')}
+                                                                                                                    </div>
                                                     </div>
                                                 )}
 
@@ -731,7 +736,7 @@ const LorryManagement: React.FC = () => {
                                                     <div className="space-y-3 pt-2">
                                                         <textarea
                                                             className="w-full bg-slate-950 border border-slate-800 rounded-xl p-3 text-xs text-white placeholder-slate-600 focus:border-blue-500 outline-none resize-none h-20"
-                                                            placeholder="输入处理说明 (例如: 已与送货单核对)..."
+                                                            placeholder={t('Enter processing instructions (example: checked against delivery note)...')}
                                                             value={resolveNotes}
                                                             onChange={(e) => setResolveNotes(e.target.value)}
                                                         />
@@ -740,14 +745,15 @@ const LorryManagement: React.FC = () => {
                                                                 onClick={() => setResolvingAlertId(null)}
                                                                 className="flex-1 py-2.5 bg-slate-950 hover:bg-slate-800 text-slate-400 rounded-xl text-[10px] font-bold uppercase tracking-wider border border-slate-800 min-h-[40px]"
                                                             >
-                                                                取消 / Cancel
-                                                            </button>
+                                                                
+                                                                                                                                {t('Cancel/Cancel')}
+                                                                                                                            </button>
                                                             <button
                                                                 onClick={() => handleResolveAlert(alertItem.id)}
                                                                 disabled={isResolving}
                                                                 className="flex-2 py-2.5 bg-blue-600 hover:bg-blue-500 disabled:bg-slate-800 text-white rounded-xl text-[10px] font-black uppercase tracking-wider flex items-center justify-center gap-1 shadow-md shadow-blue-950/30 min-h-[40px]"
                                                             >
-                                                                {isResolving ? '提交中...' : '确认解决 / Resolve'}
+                                                                {isResolving ? t('Submitting...') : t('Confirm resolution/Resolve')}
                                                             </button>
                                                         </div>
                                                     </div>
@@ -757,12 +763,14 @@ const LorryManagement: React.FC = () => {
                                                         className="w-full py-3 bg-red-500/10 hover:bg-red-500/20 text-red-400 rounded-xl font-bold text-xs uppercase tracking-widest transition-all flex items-center justify-center gap-2 border border-red-500/20 min-h-[44px]"
                                                     >
                                                         <Check size={14} />
-                                                        处理此异常 / Resolve Discrepancy
-                                                    </button>
+                                                        
+                                                                                                                    {t('Handle this exception / Resolve Discrepancy')}
+                                                                                                                </button>
                                                 )}
 
                                                 <div className="text-[9px] text-slate-500 text-right">
-                                                    时间: {new Date(alertItem.created_at).toLocaleString()}
+                                                    
+                                                                                                        {t('time:')} {new Date(alertItem.created_at).toLocaleString()}
                                                 </div>
                                             </div>
                                         ))}
@@ -775,8 +783,8 @@ const LorryManagement: React.FC = () => {
                                                     onClick={() => setAlertsPage(prev => Math.max(1, prev - 1))}
                                                     className="p-2 bg-slate-950 hover:bg-slate-800 disabled:opacity-30 disabled:cursor-not-allowed text-slate-300 rounded-xl border border-slate-800 flex items-center gap-1 text-[11px] font-bold"
                                                 >
-                                                    <ChevronLeft size={14} /> 上一页
-                                                </button>
+                                                    <ChevronLeft size={14} />  {t('term_1')}
+                                                                                                    </button>
                                                 <span className="font-bold text-slate-400 text-[11px]">
                                                     {alertsPage} / {totalAlertPages}
                                                 </span>
@@ -785,7 +793,8 @@ const LorryManagement: React.FC = () => {
                                                     onClick={() => setAlertsPage(prev => Math.min(totalAlertPages, prev + 1))}
                                                     className="p-2 bg-slate-950 hover:bg-slate-800 disabled:opacity-30 disabled:cursor-not-allowed text-slate-300 rounded-xl border border-slate-800 flex items-center gap-1 text-[11px] font-bold"
                                                 >
-                                                    下一页 <ChevronRight size={14} />
+                                                    
+                                                                                                        {t('term_2')} <ChevronRight size={14} />
                                                 </button>
                                             </div>
                                         )}
@@ -799,8 +808,9 @@ const LorryManagement: React.FC = () => {
                             <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3 bg-slate-900/60 p-4 rounded-2xl border border-slate-800">
                             <h2 className="text-base sm:text-lg font-black uppercase text-white tracking-wider flex items-center gap-2">
                                 <FileText className="text-blue-500 shrink-0" size={20} />
-                                里程日志与解决记录 / Mileage Logs
-                            </h2>
+                                
+                                                                        {t('Mileage Logs and Resolution Records / Mileage Logs')}
+                                                                    </h2>
                             <div className="flex items-center gap-2 flex-wrap">
                                 <select
                                     value={selectedLorryPlate}
@@ -810,7 +820,7 @@ const LorryManagement: React.FC = () => {
                                     }}
                                     className="bg-slate-950 border border-slate-800 text-[11px] font-black uppercase tracking-wider text-slate-300 rounded-xl px-3 py-2 focus:border-blue-500/50 outline-none cursor-pointer min-h-[40px]"
                                 >
-                                    <option value="All">All Lorries (全部货车)</option>
+                                    <option value="All">{t('All Lorries')}</option>
                                     {lorries.map(l => (
                                         <option key={l.id} value={l.plate_number}>{l.plate_number}</option>
                                     ))}
@@ -828,8 +838,8 @@ const LorryManagement: React.FC = () => {
                                     className="bg-emerald-600 hover:bg-emerald-500 text-white text-[11px] font-black px-3.5 py-2 rounded-xl uppercase tracking-wider flex items-center gap-1.5 transition-all shadow-md shadow-emerald-950/40 active:scale-95 min-h-[40px]"
                                     title="Export Odometer Report as Excel Sheet"
                                 >
-                                    <FileSpreadsheet size={14} /> 导出 / Export Sheet (.xlsx)
-                                </button>
+                                    <FileSpreadsheet size={14} />  {t('Export / Export Sheet (.xlsx)')}
+                                                                            </button>
                             </div>
                         </div>
 
@@ -839,12 +849,12 @@ const LorryManagement: React.FC = () => {
                                 <table className="w-full text-sm text-left align-middle text-slate-400">
                                     <thead className="text-[10px] text-slate-400 uppercase bg-slate-950 border-b border-slate-800 font-black tracking-widest">
                                         <tr>
-                                            <th className="px-6 py-4">时间 / Timestamp</th>
-                                            <th className="px-6 py-4">车牌 / Lorry Plate</th>
-                                            <th className="px-6 py-4">司机 / Driver</th>
-                                            <th className="px-6 py-4">类型 / Type</th>
-                                            <th className="px-6 py-4 text-center">读数 / Mileage</th>
-                                            <th className="px-6 py-4 text-center">照片 / Photo</th>
+                                            <th className="px-6 py-4">{t('Time / Timestamp')}</th>
+                                            <th className="px-6 py-4">{t('License Plate / Lorry Plate')}</th>
+                                            <th className="px-6 py-4">{t('Driver / Driver')}</th>
+                                            <th className="px-6 py-4">{t('Type / Type')}</th>
+                                            <th className="px-6 py-4 text-center">{t('Reading/Mileage')}</th>
+                                            <th className="px-6 py-4 text-center">{t('Photo / Photo')}</th>
                                         </tr>
                                     </thead>
                                     <tbody className="divide-y divide-slate-800/50">
@@ -857,8 +867,9 @@ const LorryManagement: React.FC = () => {
                                                 return (
                                                     <tr>
                                                         <td colSpan={6} className="px-6 py-12 text-center text-slate-600 font-bold uppercase tracking-widest">
-                                                            暂无里程日志记录 / No mileage logs found.
-                                                        </td>
+                                                            
+                                                                                                                        {t('No mileage logs found.')}
+                                                                                                                    </td>
                                                     </tr>
                                                 );
                                             }
@@ -880,7 +891,7 @@ const LorryManagement: React.FC = () => {
                                                     </td>
                                                     <td className="px-6 py-4 whitespace-nowrap">
                                                         <span className={`inline-flex items-center px-2.5 py-1 rounded text-[10px] font-black uppercase tracking-wider ${log.log_type === 'start' ? 'bg-emerald-500/10 text-emerald-400 border border-emerald-500/20' : 'bg-blue-500/10 text-blue-400 border border-blue-500/20'}`}>
-                                                            {log.log_type === 'start' ? 'Start Shift (开工)' : 'End Shift (完工)'}
+                                                            {log.log_type === 'start' ? t('Start Shift') : t('End Shift')}
                                                         </span>
                                                     </td>
                                                     <td className="px-6 py-4 whitespace-nowrap text-center font-mono font-bold text-slate-200">
@@ -891,7 +902,7 @@ const LorryManagement: React.FC = () => {
                                                             <button 
                                                                 onClick={() => setPreviewImageUrl(log.photo_url)}
                                                                 className="p-2 bg-slate-800 hover:bg-slate-700 text-slate-200 rounded-xl transition-all inline-flex items-center gap-1 text-xs"
-                                                                title="查看照片 / View Photo"
+                                                                title={t('View Photo / View Photo')}
                                                             >
                                                                 <ImageIcon size={14} />
                                                             </button>
@@ -915,16 +926,17 @@ const LorryManagement: React.FC = () => {
                                 return (
                                     <div className="flex items-center justify-between px-6 py-3 bg-slate-950 border-t border-slate-800 text-xs">
                                         <div className="text-slate-400 font-medium">
-                                            显示 {(logsPage - 1) * LOGS_PER_PAGE + 1} - {Math.min(logsPage * LOGS_PER_PAGE, filteredLogs.length)} 条 (共 {filteredLogs.length} 条)
-                                        </div>
+                                            
+                                                                                        {t('show')} {(logsPage - 1) * LOGS_PER_PAGE + 1} - {Math.min(logsPage * LOGS_PER_PAGE, filteredLogs.length)}  {t('Articles (Total')} {filteredLogs.length}  {t('strip)')}
+                                                                                    </div>
                                         <div className="flex items-center gap-2">
                                             <button
                                                 disabled={logsPage <= 1}
                                                 onClick={() => setLogsPage(prev => Math.max(1, prev - 1))}
                                                 className="p-1.5 bg-slate-900 hover:bg-slate-800 disabled:opacity-30 disabled:cursor-not-allowed text-slate-300 rounded-lg border border-slate-800 flex items-center gap-1 text-[11px] font-bold"
                                             >
-                                                <ChevronLeft size={16} /> 上一页 / Prev
-                                            </button>
+                                                <ChevronLeft size={16} />  {t('Previous Page / Prev')}
+                                                                                            </button>
                                             <span className="font-bold text-slate-300 px-2">
                                                 {logsPage} / {totalPages}
                                             </span>
@@ -933,7 +945,8 @@ const LorryManagement: React.FC = () => {
                                                 onClick={() => setLogsPage(prev => Math.min(totalPages, prev + 1))}
                                                 className="p-1.5 bg-slate-900 hover:bg-slate-800 disabled:opacity-30 disabled:cursor-not-allowed text-slate-300 rounded-lg border border-slate-800 flex items-center gap-1 text-[11px] font-bold"
                                             >
-                                                下一页 / Next <ChevronRight size={16} />
+                                                
+                                                                                                {t('Next page / Next')} <ChevronRight size={16} />
                                             </button>
                                         </div>
                                     </div>

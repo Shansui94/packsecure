@@ -3,6 +3,8 @@ import Webcam from 'react-webcam';
 import { Camera, Send, Loader, Tag, AlertTriangle, Clock, X, Sparkles, Image as ImageIcon, RefreshCw, Video, Square } from 'lucide-react';
 import { supabase } from '../services/supabase';
 import { User } from '../types';
+import { useTranslation } from "react-i18next";
+import i18next from "i18next";
 
 interface WorkPhoto {
     id: string;
@@ -28,11 +30,11 @@ interface AIResult {
 }
 
 const CATEGORIES: Record<string, { label: string; emoji: string; color: string }> = {
-    qc: { label: 'QC 质检', emoji: '🔍', color: 'bg-blue-500/20 text-blue-300 border-blue-500/30' },
-    defect: { label: 'Defect 次品', emoji: '⚠️', color: 'bg-rose-500/20 text-rose-300 border-rose-500/30' },
-    downtime: { label: '停机 Stop', emoji: '🛑', color: 'bg-red-500/20 text-red-300 border-red-500/30' },
-    startup: { label: '开机 Start', emoji: '🟢', color: 'bg-green-500/20 text-green-300 border-green-500/30' },
-    other: { label: '其他 Other', emoji: '📋', color: 'bg-gray-500/20 text-gray-300 border-gray-500/30' },
+    qc: { label: i18next.t('qc'), emoji: '🔍', color: 'bg-blue-500/20 text-blue-300 border-blue-500/30' },
+    defect: { label: i18next.t('defect'), emoji: '⚠️', color: 'bg-rose-500/20 text-rose-300 border-rose-500/30' },
+    downtime: { label: i18next.t('stop'), emoji: '🛑', color: 'bg-red-500/20 text-red-300 border-red-500/30' },
+    startup: { label: i18next.t('start'), emoji: '🟢', color: 'bg-green-500/20 text-green-300 border-green-500/30' },
+    other: { label: i18next.t('other'), emoji: '📋', color: 'bg-gray-500/20 text-gray-300 border-gray-500/30' },
 };
 
 interface Props {
@@ -65,6 +67,7 @@ const compressImage = (file: File, maxWidth = 2048, quality = 0.85): Promise<str
 };
 
 const WorkPhotoLog: React.FC<Props> = ({ user }) => {
+    const { t } = useTranslation();
     const [photos, setPhotos] = useState<WorkPhoto[]>([]);
     const [loading, setLoading] = useState(true);
     const [uploading, setUploading] = useState(false);
@@ -156,7 +159,7 @@ const WorkPhotoLog: React.FC<Props> = ({ user }) => {
                 reader.readAsDataURL(file);
 
                 setAiResult({
-                    description: '工作视频记录 / Work Video Log',
+                    description: t('Work Video Log / Work Video Log'),
                     category: 'other',
                     tags: ['video'],
                     risk_flag: false,
@@ -201,7 +204,7 @@ const WorkPhotoLog: React.FC<Props> = ({ user }) => {
             }
         } catch (err: any) {
             console.error('File process error:', err);
-            alert('处理文件失败: ' + err.message);
+            alert(t('Failed to process file:') + err.message);
         } finally {
             setUploading(false);
         }
@@ -268,7 +271,7 @@ const WorkPhotoLog: React.FC<Props> = ({ user }) => {
     const handleStartRecording = () => {
         const stream = webcamRef.current?.video?.srcObject as MediaStream;
         if (!stream) {
-            alert("无法获取摄像头视频流");
+            alert(t('Unable to get camera video stream'));
             return;
         }
 
@@ -303,7 +306,7 @@ const WorkPhotoLog: React.FC<Props> = ({ user }) => {
                 const base64 = reader.result as string;
                 setPreviewBase64(base64.split(',')[1]);
                 setAiResult({
-                    description: '工作视频记录 / Work Video Log',
+                    description: t('Work Video Log / Work Video Log'),
                     category: 'other',
                     tags: ['video'],
                     risk_flag: false,
@@ -342,11 +345,11 @@ const WorkPhotoLog: React.FC<Props> = ({ user }) => {
     const handleSubmit = async () => {
         console.log("handleSubmit clicked. previewBase64:", !!previewBase64, "aiResult:", !!aiResult, "user:", user);
         if (!previewBase64) {
-            alert("请选择或拍摄照片！ / Please select or take a photo first!");
+            alert(t('Please select or take a photo! / Please select or take a photo first!'));
             return;
         }
         if (!user) {
-            alert("用户未登录，无法提交！ / User not logged in, cannot submit!");
+            alert(t('The user is not logged in and cannot submit! / User not logged in, cannot submit!'));
             return;
         }
         setUploading(true);
@@ -395,7 +398,7 @@ const WorkPhotoLog: React.FC<Props> = ({ user }) => {
             setSelectedMachineId('');
             loadPhotos();
         } catch (err: any) {
-            alert('上传失败: ' + err.message);
+            alert(t('Upload failed:') + err.message);
         } finally {
             setUploading(false);
         }
@@ -412,9 +415,9 @@ const WorkPhotoLog: React.FC<Props> = ({ user }) => {
         const d = new Date(ts);
         const now = new Date();
         const diff = now.getTime() - d.getTime();
-        if (diff < 60000) return '刚刚';
-        if (diff < 3600000) return `${Math.floor(diff / 60000)}分钟前`;
-        if (diff < 86400000) return `${Math.floor(diff / 3600000)}小时前`;
+        if (diff < 60000) return t('just');
+        if (diff < 3600000) return t('{{var0}} minutes ago', { var0: Math.floor(diff / 60000) });
+        if (diff < 86400000) return t('{{var0}} hours ago', { var0: Math.floor(diff / 3600000) });
         return d.toLocaleDateString('zh-CN', { month: 'short', day: 'numeric', hour: '2-digit', minute: '2-digit' });
     };
 
@@ -438,17 +441,18 @@ const WorkPhotoLog: React.FC<Props> = ({ user }) => {
                                 <div className="w-10 h-10 rounded-xl bg-gradient-to-br from-violet-500 to-fuchsia-600 flex items-center justify-center shadow-lg shadow-violet-500/20">
                                     <Camera size={22} />
                                 </div>
-                                工作记录
-                            </h1>
-                            <p className="text-gray-500 text-sm mt-1">AI 智能分析 · 拍照即记录</p>
+                                
+                                                                    {t('work_photos_1')}
+                                                                </h1>
+                            <p className="text-gray-500 text-sm mt-1">{t('AI intelligent analysis · Take a photo and record it')}</p>
                         </div>
                         <div className="flex gap-3 text-xs">
                             <div className="bg-violet-500/10 border border-violet-500/20 px-3 py-2 rounded-xl">
-                                <span className="text-violet-400 font-bold">📷 今天 {todayCount}</span>
+                                <span className="text-violet-400 font-bold">{t('📷Today')} {todayCount}</span>
                             </div>
                             {riskCount > 0 && (
                                 <div className="bg-red-500/10 border border-red-500/20 px-3 py-2 rounded-xl">
-                                    <span className="text-red-400 font-bold">⚠️ 风险 {riskCount}</span>
+                                    <span className="text-red-400 font-bold">{t('⚠️ Risk')} {riskCount}</span>
                                 </div>
                             )}
                         </div>
@@ -468,8 +472,8 @@ const WorkPhotoLog: React.FC<Props> = ({ user }) => {
                                 <Camera size={32} className="text-white" />
                             </div>
                             <div className="text-center">
-                                <p className="text-lg font-bold text-white font-sans">实时相机拍照</p>
-                                <p className="text-xs text-gray-500 mt-1">使用摄像头实时拍照</p>
+                                <p className="text-lg font-bold text-white font-sans">{t('Live camera photo taking')}</p>
+                                <p className="text-xs text-gray-500 mt-1">{t('Use the camera to take pictures in real time')}</p>
                             </div>
                         </button>
 
@@ -481,8 +485,8 @@ const WorkPhotoLog: React.FC<Props> = ({ user }) => {
                                 <ImageIcon size={32} />
                             </div>
                             <div className="text-center">
-                                <p className="text-lg font-bold text-gray-300 font-sans">选择文件上传</p>
-                                <p className="text-xs text-gray-500 mt-1">从相册选择本地图片</p>
+                                <p className="text-lg font-bold text-gray-300 font-sans">{t('Select file to upload')}</p>
+                                <p className="text-xs text-gray-500 mt-1">{t('Select local pictures from album')}</p>
                             </div>
                         </button>
                     </div>
@@ -502,7 +506,7 @@ const WorkPhotoLog: React.FC<Props> = ({ user }) => {
                             {analyzing && (
                                 <div className="absolute inset-0 bg-black/70 flex flex-col items-center justify-center gap-3">
                                     <Sparkles size={32} className="text-violet-400 animate-pulse" />
-                                    <span className="text-sm font-bold text-violet-300 animate-pulse">AI 分析中...</span>
+                                    <span className="text-sm font-bold text-violet-300 animate-pulse">{t('AI analysis in progress...')}</span>
                                 </div>
                             )}
                         </div>
@@ -515,7 +519,7 @@ const WorkPhotoLog: React.FC<Props> = ({ user }) => {
                                     <div className="flex items-start gap-3 p-4 rounded-xl bg-red-500/10 border border-red-500/30">
                                         <AlertTriangle size={20} className="text-red-400 mt-0.5 shrink-0" />
                                         <div>
-                                            <p className="text-sm font-bold text-red-300">⚠️ AI 检测到安全隐患</p>
+                                            <p className="text-sm font-bold text-red-300">{t('⚠️AI detects security risks')}</p>
                                             <p className="text-xs text-red-400/80 mt-1">{aiResult.risk_reason}</p>
                                         </div>
                                     </div>
@@ -524,8 +528,8 @@ const WorkPhotoLog: React.FC<Props> = ({ user }) => {
                                 {/* AI Description */}
                                 <div>
                                     <label className="text-[10px] uppercase font-bold text-gray-500 tracking-wider mb-1 block">
-                                        <Sparkles size={10} className="inline mr-1" />AI 描述
-                                    </label>
+                                        <Sparkles size={10} className="inline mr-1" />{t('AI Description')}
+                                                                                    </label>
                                     <input
                                         value={aiResult.description}
                                         onChange={e => setAiResult(prev => prev ? { ...prev, description: e.target.value } : prev)}
@@ -535,7 +539,7 @@ const WorkPhotoLog: React.FC<Props> = ({ user }) => {
 
                                 {/* Category */}
                                 <div>
-                                    <label className="text-[10px] uppercase font-bold text-gray-500 tracking-wider mb-2 block">分类</label>
+                                    <label className="text-[10px] uppercase font-bold text-gray-500 tracking-wider mb-2 block">{t('Classification')}</label>
                                     <div className="flex flex-wrap gap-2">
                                         {Object.entries(CATEGORIES).map(([key, cat]) => (
                                             <button
@@ -554,13 +558,13 @@ const WorkPhotoLog: React.FC<Props> = ({ user }) => {
 
                                 {/* Machine Select */}
                                 <div>
-                                    <label className="text-[10px] uppercase font-bold text-gray-500 tracking-wider mb-1 block">关联机器（可选）</label>
+                                    <label className="text-[10px] uppercase font-bold text-gray-500 tracking-wider mb-1 block">{t('Associated machines (optional)')}</label>
                                     <select
                                         value={selectedMachineId}
                                         onChange={e => setSelectedMachineId(e.target.value)}
                                         className="w-full bg-gray-900 border border-gray-800 rounded-lg p-3 text-white text-sm focus:border-violet-500 outline-none"
                                     >
-                                        <option value="">-- 选择机器 --</option>
+                                        <option value="">{t('-- Select machine --')}</option>
                                         {machines.map(m => (
                                             <option key={m.machine_id} value={m.machine_id}>
                                                 {m.name} ({m.machine_id})
@@ -573,8 +577,8 @@ const WorkPhotoLog: React.FC<Props> = ({ user }) => {
                                 {aiResult.tags.length > 0 && (
                                     <div>
                                         <label className="text-[10px] uppercase font-bold text-gray-500 tracking-wider mb-2 block">
-                                            <Tag size={10} className="inline mr-1" />AI 标签
-                                        </label>
+                                            <Tag size={10} className="inline mr-1" />{t('AI tag')}
+                                                                                            </label>
                                         <div className="flex flex-wrap gap-2">
                                             {aiResult.tags.map((tag, i) => (
                                                 <span key={i} className="px-2.5 py-1 rounded-full bg-white/5 border border-white/10 text-xs text-gray-300">
@@ -587,11 +591,11 @@ const WorkPhotoLog: React.FC<Props> = ({ user }) => {
 
                                 {/* User Note */}
                                 <div>
-                                    <label className="text-[10px] uppercase font-bold text-gray-500 tracking-wider mb-1 block">补充备注（可选）</label>
+                                    <label className="text-[10px] uppercase font-bold text-gray-500 tracking-wider mb-1 block">{t('Additional remarks (optional)')}</label>
                                     <input
                                         value={userNote}
                                         onChange={e => setUserNote(e.target.value)}
-                                        placeholder="手动添加备注..."
+                                        placeholder={t('Add notes manually...')}
                                         className="w-full bg-gray-900 border border-gray-800 rounded-lg p-3 text-white text-sm focus:border-violet-500 outline-none"
                                     />
                                 </div>
@@ -603,9 +607,9 @@ const WorkPhotoLog: React.FC<Props> = ({ user }) => {
                                     className="w-full py-3.5 rounded-xl bg-gradient-to-r from-violet-600 to-fuchsia-600 hover:from-violet-500 hover:to-fuchsia-500 text-white font-bold text-sm flex items-center justify-center gap-2 shadow-lg shadow-violet-500/20 active:scale-[0.98] transition-all disabled:opacity-50"
                                 >
                                     {uploading ? (
-                                        <><Loader size={16} className="animate-spin" /> 提交中...</>
+                                        <><Loader size={16} className="animate-spin" />  {t('Submitting...')}</>
                                     ) : (
-                                        <><Send size={16} /> 提交记录</>
+                                        <><Send size={16} />  {t('Submit record')}</>
                                     )}
                                 </button>
                             </div>
@@ -636,8 +640,9 @@ const WorkPhotoLog: React.FC<Props> = ({ user }) => {
                             : 'border-transparent text-gray-500 hover:text-gray-300'
                             }`}
                     >
-                        全部
-                    </button>
+                        
+                                                    {t('all')}
+                                                </button>
                     {Object.entries(CATEGORIES).map(([key, cat]) => (
                         <button
                             key={key}
@@ -654,12 +659,12 @@ const WorkPhotoLog: React.FC<Props> = ({ user }) => {
 
                 {/* Timeline */}
                 {loading ? (
-                    <div className="text-center py-20 text-gray-600 animate-pulse">加载中...</div>
+                    <div className="text-center py-20 text-gray-600 animate-pulse">{t('loading...')}</div>
                 ) : photos.length === 0 ? (
                     <div className="text-center py-20">
                         <ImageIcon size={48} className="mx-auto text-gray-700 mb-4" />
-                        <p className="text-gray-500 font-bold">暂无记录</p>
-                        <p className="text-gray-600 text-sm mt-1">拍一张照片开始记录工作吧</p>
+                        <p className="text-gray-500 font-bold">{t('No record yet')}</p>
+                        <p className="text-gray-600 text-sm mt-1">{t('Take a photo and start documenting your work')}</p>
                     </div>
                 ) : (
                     <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-4">
@@ -698,8 +703,8 @@ const WorkPhotoLog: React.FC<Props> = ({ user }) => {
                                         )}
                                         {photo.risk_flag && (
                                             <div className="absolute top-2 right-2 px-2 py-1 rounded-lg bg-red-500/80 text-white text-[10px] font-bold flex items-center gap-1">
-                                                <AlertTriangle size={10} /> 风险
-                                            </div>
+                                                <AlertTriangle size={10} />  {t('risk')}
+                                                                                            </div>
                                         )}
                                         <div className={`absolute top-2 left-2 px-2 py-1 rounded-lg text-[10px] font-bold border ${cat.color}`}>
                                             {cat.emoji} {cat.label}
@@ -711,7 +716,7 @@ const WorkPhotoLog: React.FC<Props> = ({ user }) => {
                                         )}
                                     </div>
                                     <div className="p-3">
-                                        <p className="text-sm text-gray-200 line-clamp-2">{photo.ai_description || photo.user_note || '无描述'}</p>
+                                        <p className="text-sm text-gray-200 line-clamp-2">{photo.ai_description || photo.user_note || t('No description')}</p>
                                         <div className="flex items-center justify-between mt-2">
                                             <span className="text-[10px] text-gray-500 font-bold">{photo.employee_name}</span>
                                             <span className="text-[10px] text-gray-600 flex items-center gap-1">
@@ -739,7 +744,7 @@ const WorkPhotoLog: React.FC<Props> = ({ user }) => {
                 <div key="photo-detail-modal-overlay" className="fixed inset-0 z-50 flex items-center justify-center bg-black/85 backdrop-blur-sm p-4" onClick={() => setSelectedPhoto(null)}>
                     <div className="bg-[#0c0c0e] border border-white/10 rounded-2xl max-w-3xl w-full max-h-[90vh] flex flex-col overflow-hidden" onClick={e => e.stopPropagation()}>
                         <div className="flex justify-between items-center p-4 border-b border-white/5 bg-[#09090b]">
-                            <h3 className="text-sm font-bold text-gray-300">照片详情 / Photo Detail</h3>
+                            <h3 className="text-sm font-bold text-gray-300">{t('Photo Detail / Photo Detail')}</h3>
                             <div className="flex items-center gap-2">
                                 {selectedPhoto.photo_url && selectedPhoto.photo_url.startsWith('http') && (
                                     <a 
@@ -748,15 +753,17 @@ const WorkPhotoLog: React.FC<Props> = ({ user }) => {
                                         rel="noreferrer"
                                         className="text-xs text-violet-400 hover:underline font-bold px-3 py-1.5 bg-violet-500/10 hover:bg-violet-500/20 rounded-lg transition-all"
                                     >
-                                        查看原图 / Open Original ↗
-                                    </a>
+                                        
+                                                                                {t('View original image / Open Original ↗')}
+                                                                            </a>
                                 )}
                                 <button 
                                     onClick={() => setSelectedPhoto(null)}
                                     className="text-gray-400 hover:text-white text-xs font-bold px-3 py-1.5 bg-white/5 hover:bg-white/10 rounded-lg transition-all"
                                 >
-                                    关闭
-                                </button>
+                                    
+                                                                        {t('closure')}
+                                                                    </button>
                             </div>
                         </div>
                         <div className="flex-1 overflow-y-auto p-5 space-y-4">
@@ -781,7 +788,7 @@ const WorkPhotoLog: React.FC<Props> = ({ user }) => {
                                     <div className="flex items-start gap-2 p-3 rounded-xl bg-red-500/10 border border-red-500/30">
                                         <AlertTriangle size={16} className="text-red-400 mt-0.5" />
                                         <div>
-                                            <p className="text-xs font-bold text-red-300">安全隐患</p>
+                                            <p className="text-xs font-bold text-red-300">{t('safety hazard')}</p>
                                             <p className="text-xs text-red-400/80 mt-0.5">{selectedPhoto.risk_reason}</p>
                                         </div>
                                     </div>
@@ -790,7 +797,8 @@ const WorkPhotoLog: React.FC<Props> = ({ user }) => {
                                 {selectedPhoto.user_note && <p className="text-gray-400 text-sm">📝 {selectedPhoto.user_note}</p>}
                                 {selectedPhoto.machine_id && (
                                     <div className="inline-flex items-center gap-1.5 px-2.5 py-1 rounded-lg bg-violet-500/10 border border-violet-500/20 text-xs text-violet-300 font-bold">
-                                        🤖 关联机器: {selectedPhoto.machine_id}
+                                        
+                                                                                {t('🤖 Associated machines:')} {selectedPhoto.machine_id}
                                     </div>
                                 )}
                                 <div className="flex flex-wrap gap-2">
@@ -814,45 +822,53 @@ const WorkPhotoLog: React.FC<Props> = ({ user }) => {
                     <div className="bg-[#1c1c1f] border border-violet-500/30 p-6 rounded-3xl w-full max-w-md shadow-2xl flex flex-col gap-4">
                         <div className="flex justify-between items-center pb-2 border-b border-white/5">
                             <h3 className="text-sm font-black text-violet-400 uppercase tracking-wider flex items-center gap-1.5 font-bold font-sans">
-                                <Camera size={16} /> 实时相机拍照 & 录像
-                            </h3>
+                                <Camera size={16} />  {t('Live Camera Photo & Video')}
+                                                            </h3>
                             <button 
                                 onClick={handleCloseWebcam}
                                 className="text-gray-400 hover:text-white text-xs font-bold px-2.5 py-1 bg-white/5 hover:bg-white/10 rounded-lg transition-all"
                             >
-                                关闭
-                            </button>
+                                
+                                                                {t('closure')}
+                                                            </button>
                         </div>
 
                         {!window.isSecureContext ? (
                             <div key="insecure-context-wpl" className="p-4 bg-amber-500/10 border border-amber-500/20 rounded-2xl flex flex-col gap-2 text-amber-400">
                                 <p className="text-xs font-bold leading-relaxed flex items-center gap-1.5">
-                                    <span>⚠️ 摄像头未启用 (浏览器安全限制)</span>
+                                    <span>{t('⚠️Camera not enabled (browser security restriction)')}</span>
                                 </p>
                                 <p className="text-[11px] text-gray-400 leading-normal">
-                                    您的浏览器限制在非安全连接 (HTTP) 下访问摄像头。请通过以下方式之一解决：
-                                    <br />
-                                    1. 使用 <span className="text-white font-mono font-bold">localhost</span> 在本地打开；
-                                    <br />
-                                    2. 在服务器上配置并使用 <span className="text-white font-mono font-bold">HTTPS</span> 安全连接；
-                                    <br />
-                                    3. 使用本地隧道工具映射为公网 HTTPS 链接测试。
-                                </p>
+                                    
+                                                                        {t('Your browser restricts access to the camera over a non-secure connection (HTTP). Please solve it in one of the following ways:')}
+                                                                        <br />
+                                    
+                                                                        {t('1. Use')} <span className="text-white font-mono font-bold">localhost</span>  {t('Open locally;')}
+                                                                        <br />
+                                    
+                                                                        {t('2. Configure and use on the server')} <span className="text-white font-mono font-bold">HTTPS</span>  {t('secure connection;')}
+                                                                        <br />
+                                    
+                                                                        {t('3. Use the local tunnel tool to map to the public network HTTPS link test.')}
+                                                                    </p>
                             </div>
                         ) : webcamError ? (
                             <div key="webcam-error-wpl" className="p-4 bg-red-500/10 border border-red-500/20 rounded-2xl flex flex-col gap-2 text-red-400">
                                 <p className="text-xs font-bold leading-relaxed">
-                                    ⚠️ 摄像头启动失败
-                                </p>
+                                    
+                                                                            {t('⚠️Camera startup failed')}
+                                                                        </p>
                                 <p className="text-[11px] text-gray-400 leading-normal">
-                                    无法访问摄像头设备，请检查是否已授予权限，或该摄像头是否已被其他应用占用。
-                                </p>
+                                    
+                                                                            {t('The camera device cannot be accessed. Please check whether permission has been granted or if the camera is occupied by another application.')}
+                                                                        </p>
                                 <button
                                     onClick={() => setWebcamError(null)}
                                     className="mt-1 self-start px-3 py-1 bg-red-500/20 hover:bg-red-500/30 text-red-300 rounded-lg text-[10px] font-bold transition-all"
                                 >
-                                    重试
-                                </button>
+                                    
+                                                                            {t('Try again')}
+                                                                        </button>
                             </div>
                         ) : (
                             <div key="webcam-active-wpl" className="relative aspect-video rounded-2xl bg-black overflow-hidden border border-white/10 flex items-center justify-center">
@@ -886,7 +902,7 @@ const WorkPhotoLog: React.FC<Props> = ({ user }) => {
                                 }`}
                             >
                                 <Camera size={16} />
-                                <span>拍照截图</span>
+                                <span>{t('Take a screenshot')}</span>
                             </button>
                             
                             <button
@@ -903,12 +919,12 @@ const WorkPhotoLog: React.FC<Props> = ({ user }) => {
                                 {isRecording ? (
                                     <>
                                         <Square size={14} />
-                                        <span>停止录像 ({recordingDuration}s)</span>
+                                        <span>{t('Stop recording (')}{recordingDuration}s)</span>
                                     </>
                                 ) : (
                                     <>
                                         <Video size={14} />
-                                        <span>录像 10s</span>
+                                        <span>{t('Video 10s')}</span>
                                     </>
                                 )}
                             </button>

@@ -5,15 +5,36 @@ import { NotificationService } from './src/services/notificationService';
 import { DriverHomeScreen } from './src/screens/Driver/DriverHomeScreen';
 import { LabelPrintScreen } from './src/screens/Printing/LabelPrintScreen';
 import { AttendanceScreen } from './src/screens/Attendance/AttendanceScreen';
+import { supabase } from './src/api/supabase';
+import { LoginScreen } from './src/screens/Auth/LoginScreen';
 
 export default function App() {
   const [activeTab, setActiveTab] = useState<'DRIVER' | 'PRINT' | 'ATTENDANCE'>('DRIVER');
+  const [session, setSession] = useState<any>(null);
+  const [isInitializing, setIsInitializing] = useState(true);
 
   useEffect(() => {
     // 启动时初始化 SQLite 与 FCM 通知注册
     StorageService.initDatabase();
     NotificationService.registerForPushNotifications();
+
+    supabase.auth.getSession().then(({ data: { session } }) => {
+      setSession(session);
+      setIsInitializing(false);
+    });
+
+    supabase.auth.onAuthStateChange((_event, session) => {
+      setSession(session);
+    });
   }, []);
+
+  if (isInitializing) {
+    return <SafeAreaView style={styles.safeArea} />;
+  }
+
+  if (!session) {
+    return <LoginScreen onLoginSuccess={() => {}} />;
+  }
 
   return (
     <SafeAreaView style={styles.safeArea}>
@@ -21,8 +42,15 @@ export default function App() {
       
       {/* 顶部导航 Header */}
       <View style={styles.header}>
-        <Text style={styles.headerTitle}>Packsecure OS Mobile</Text>
-        <Text style={styles.headerSubtitle}>原生微 App 引擎 v1.0.0</Text>
+        <View style={{flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center'}}>
+          <View>
+            <Text style={styles.headerTitle}>Packsecure OS Mobile</Text>
+            <Text style={styles.headerSubtitle}>原生微 App 引擎 v1.0.0</Text>
+          </View>
+          <TouchableOpacity onPress={() => supabase.auth.signOut()}>
+            <Text style={{color: '#ef4444'}}>退出</Text>
+          </TouchableOpacity>
+        </View>
       </View>
 
       {/* 模块切换 Tab */}

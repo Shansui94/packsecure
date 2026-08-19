@@ -5,16 +5,7 @@ const supabaseUrl = process.env.VITE_SUPABASE_URL!;
 const supabaseKey = (process.env.SUPABASE_SERVICE_ROLE_KEY || process.env.VITE_SUPABASE_ANON_KEY)!;
 const supabase = createClient(supabaseUrl, supabaseKey);
 
-// ─── Machine Layout Config ────────────────────────────────────────────────────
-const MACHINE_LANES: Record<string, string[]> = {
-    'T1.2-M01': ['Lane1', 'Lane2'],
-    'T2-M01': ['Lane1', 'Lane2'],
-    'N1-M01': ['Single'],
-    'N2-M02': ['Single'],
-    'T1.3-M02': ['Single'],
-    'T3-M02': ['Single'],
-};
-const DEFAULT_LANES = ['Single'];
+
 
 // ─── Handler ──────────────────────────────────────────────────────────────────
 
@@ -30,8 +21,17 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
             return res.status(400).json({ error: 'machine_id is required' });
         }
 
-        const lanes = MACHINE_LANES[machine_id] || DEFAULT_LANES;
-        console.log(`Alarm from ${machine_id} | alarm_count=${alarm_count} | lanes=${lanes.join(',')}`);
+        // Fetch machine rolls_per_alarm config
+        const { data: machineInfo } = await supabase
+            .from('sys_machines_v2')
+            .select('rolls_per_alarm')
+            .eq('machine_id', machine_id)
+            .single();
+
+        const rolls = machineInfo?.rolls_per_alarm || 1;
+        const lanes = rolls > 1 ? Array.from({ length: rolls }, (_, i) => `Lane${i + 1}`) : ['Single'];
+
+        console.log(`Alarm from ${machine_id} | alarm_count=${alarm_count} | rolls_per_alarm=${rolls} | lanes=${lanes.join(',')}`);
 
         const { data: activeProducts } = await supabase
             .from('machine_active_products')

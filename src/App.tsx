@@ -10,6 +10,7 @@ import Register from './pages/Register';
 import ProductionControl from './pages/ProductionControl';
 // import ProductionPlanning from './pages/ProductionPlanning';
 import LiveStock from './pages/LiveStock';
+import LiveFleet from './pages/LiveFleet';
 import StockMovement from './pages/StockMovement';
 import StockAudit from './pages/StockAudit';
 import AuditReport from './pages/AuditReport';
@@ -718,6 +719,8 @@ function App() {
                 return <YieldControl />;
             case 'delivery':
                 return <DeliveryOrderManagement />;
+            case 'live-fleet':
+                return <LiveFleet />;
             case 'order-summary':
                 return <OrderSummary user={user} />;
             case 'delivery-driver':

@@ -1,15 +1,17 @@
+import { useTranslation } from "react-i18next";
+import i18next from "i18next";
 
 // ZERO DEPENDENCY CONSTANTS
 // Moved here to break circular dependency chains.
 // Types are inferred or strictly literal.
 
 export const PRODUCT_LAYERS = [
-    { label: 'Single Layer (单层)', value: 'Single', code: 'SL' },
-    { label: 'Double Layer (双层)', value: 'Double', code: 'DL' },
+    { label: i18next.t('Single Layer'), value: 'Single', code: 'SL' },
+    { label: i18next.t('Double Layer'), value: 'Double', code: 'DL' },
 ];
 
 export const PRODUCT_MATERIALS = [
-    { label: 'Clear (透明)', value: 'Clear', code: 'CLR' },
+    { label: i18next.t('Clear'), value: 'Clear', code: 'CLR' },
     { label: 'Black (Hitam)', value: 'Black', code: 'BLK' },
 ];
 

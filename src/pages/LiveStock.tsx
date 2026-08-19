@@ -716,9 +716,9 @@ const LiveStock: React.FC = () => {
         // 🔒 剔除物理库存为 0 且无订单预留的无用/空占位记录
         const mergedArray = Array.from(skuMap.values());
         return mergedArray.filter(r => {
-            if (r.current_stock === 0 && (r.reserved_stock || 0) === 0) {
-                return false;
-            }
+            // if (r.current_stock === 0 && (r.reserved_stock || 0) === 0) {
+            //     return false;
+            // }
             const matchType = typeFilter === 'All' || r.type === typeFilter;
             const matchSearch = searchTerms.length === 0 || searchTerms.every(term => 
                 r.sku.toLowerCase().includes(term) || r.name.toLowerCase().includes(term)

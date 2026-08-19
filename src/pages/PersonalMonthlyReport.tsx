@@ -1,12 +1,221 @@
-import React, { useState, useEffect, useMemo } from 'react';
+import React, { useState, useEffect, useMemo, useRef } from 'react';
 import { createPortal } from 'react-dom';
 import {
     CalendarDays, Award, AlertTriangle, Camera,
     DollarSign, Clock, ChevronLeft, ChevronRight, Activity, Users, Truck, X,
-    FileSpreadsheet, Printer, FileText, CheckCircle2, Percent, Layers
+    FileSpreadsheet, Printer, FileText, CheckCircle2, Percent, Layers, Plus, Search, Box,
+    User as UserIcon, MapPin, ImagePlus, Calendar, Sparkles, Download, CheckSquare
 } from 'lucide-react';
 import { supabase } from '../services/supabase';
+import { getV2Items } from '../services/apiV2';
 import * as XLSX from 'xlsx';
+
+const normalizeWarehouseName = (loc: string): string => {
+    if (!loc) return 'SPD';
+    const lower = loc.trim().toLowerCase();
+    if (lower === 'spd' || lower === 't1' || lower === 'taiping') return 'SPD';
+    if (lower === 'nilai') return 'Nilai';
+    if (lower === 'kelantan') return 'Kelantan';
+    if (lower === 'johor') return 'Johor';
+    if (lower === 'opm lama' || lower === 'opm_lama') return 'OPM Lama';
+    if (lower === 'opm corner' || lower === 'opm_corner') return 'OPM Corner';
+    if (lower === 'opm ali' || lower === 'opm_ali') return 'OPM Ali';
+    return loc;
+};
+
+const getDefaultLocForOrigin = (origin: string): string => {
+    return normalizeWarehouseName(origin);
+};
+
+const getAvailableWarehousesForOrigin = (origin: string): string[] => {
+    const u = (origin || '').toUpperCase().trim();
+    if (u === 'NILAI') return ['Nilai'];
+    if (u === 'KELANTAN') return ['Kelantan'];
+    if (u === 'JOHOR') return ['Johor'];
+    return ['SPD', 'OPM Lama', 'OPM Corner', 'OPM Ali'];
+};
+
+const getPercentColor = (percent: number): string => {
+    if (percent < 70) return 'text-red-400 font-bold';
+    if (percent >= 70 && percent < 90) return 'text-amber-400 font-bold';
+    if (percent >= 90 && percent <= 100) return 'text-emerald-400 font-bold';
+    return 'text-red-400 font-black';
+};
+
+const getPercentBarColor = (percent: number): string => {
+    if (percent < 70) return 'bg-red-500 shadow-md shadow-red-500/20';
+    if (percent >= 70 && percent < 90) return 'bg-amber-500 shadow-md shadow-amber-500/20';
+    if (percent >= 90 && percent <= 100) return 'bg-emerald-500 shadow-md shadow-emerald-500/20';
+    return 'bg-red-600 shadow-md shadow-red-600/40';
+};
+
+const formatDateDMY = (dateStr?: string | null) => {
+    if (!dateStr) return '';
+    try {
+        const d = new Date(dateStr);
+        if (isNaN(d.getTime())) return dateStr;
+        return `${String(d.getDate()).padStart(2, '0')}/${String(d.getMonth() + 1).padStart(2, '0')}/${d.getFullYear()}`;
+    } catch {
+        return dateStr;
+    }
+};
+
+interface SearchableSelectProps {
+    label?: string;
+    icon?: React.ReactNode;
+    options: {
+        value: string;
+        label: string;
+        subLabel?: string;
+        searchText?: string;
+        statusColor?: string;
+        statusLabel?: string;
+    }[];
+    value: string;
+    onChange: (val: string) => void;
+    placeholder?: string;
+    minimal?: boolean;
+    dropdownMaxHeight?: string;
+}
+
+const filterSelectOptions = (options: SearchableSelectProps['options'], search: string) => {
+    const sortedByName = [...options].sort((a, b) => a.label.localeCompare(b.label, undefined, { sensitivity: 'base' }));
+    if (!search.trim()) return sortedByName.slice(0, 200);
+
+    const q = search.toLowerCase().trim();
+    const searchTerms = q.split(/[\s-]+/).filter(Boolean);
+
+    return sortedByName.filter(opt => {
+        const label = opt.label.toLowerCase();
+        const sub = (opt.subLabel || '').toLowerCase();
+        const extra = (opt.searchText || '').toLowerCase();
+        const haystack = `${label} ${sub} ${extra}`;
+        return searchTerms.every(term => haystack.includes(term));
+    });
+};
+
+const SearchableSelect: React.FC<SearchableSelectProps> = ({
+    label,
+    icon,
+    options,
+    value,
+    onChange,
+    placeholder = "Search by product name...",
+    minimal = false,
+    dropdownMaxHeight = 'max-h-[min(50vh,28rem)]',
+}) => {
+    const [isOpen, setIsOpen] = useState(false);
+    const [search, setSearch] = useState('');
+    const searchInputRef = useRef<HTMLInputElement>(null);
+
+    const selectedOption = options.find(o => o.value === value);
+    const filtered = filterSelectOptions(options, search);
+
+    useEffect(() => {
+        if (isOpen) {
+            const t = window.setTimeout(() => searchInputRef.current?.focus(), 50);
+            return () => window.clearTimeout(t);
+        }
+    }, [isOpen]);
+
+    return (
+        <div className="relative w-full">
+            {label && (
+                <label className="flex items-center gap-2 text-xs font-bold text-slate-500 uppercase mb-1">
+                    {icon} {label}
+                </label>
+            )}
+            <div
+                className={`w-full bg-slate-950 border border-slate-800 rounded-xl flex items-center gap-3 cursor-pointer hover:border-slate-700 transition-colors ${minimal ? 'p-3' : 'px-4 py-4'}`}
+                onClick={() => setIsOpen(!isOpen)}
+            >
+                <Search size={16} className="text-slate-500" />
+                {selectedOption ? (
+                    <div className="flex-1">
+                        <div className={`font-bold text-white ${minimal ? 'text-sm' : ''}`}>{selectedOption.label}</div>
+                        {selectedOption.subLabel && !minimal && (
+                            <div className="text-xs text-slate-500 font-mono">{selectedOption.subLabel}</div>
+                        )}
+                    </div>
+                ) : (
+                    <input
+                        type="text"
+                        placeholder={placeholder}
+                        className="bg-transparent border-none outline-none text-white placeholder:text-slate-600 w-full"
+                        value={search}
+                        onChange={(e) => {
+                            setSearch(e.target.value);
+                            setIsOpen(true);
+                        }}
+                        onClick={(e) => e.stopPropagation()}
+                    />
+                )}
+                {selectedOption ? (
+                    <button
+                        type="button"
+                        onClick={(e) => {
+                            e.stopPropagation();
+                            onChange('');
+                            setSearch('');
+                        }}
+                        className="p-1 hover:bg-slate-800 rounded-full text-slate-500"
+                    >
+                        <X size={16} />
+                    </button>
+                ) : null}
+            </div>
+
+            {isOpen && (
+                <>
+                    <div className="fixed inset-0 z-[80]" onClick={() => setIsOpen(false)} />
+                    <div className="absolute top-full left-0 right-0 mt-2 z-[90] bg-[#141418] border border-slate-700 rounded-xl shadow-2xl overflow-hidden flex flex-col">
+                        <div className="p-3 border-b border-slate-800 bg-slate-900/80">
+                            <input
+                                ref={searchInputRef}
+                                type="text"
+                                placeholder={placeholder}
+                                className="w-full bg-slate-950 border border-slate-700 rounded-lg px-4 py-3 text-sm text-white placeholder:text-slate-500 outline-none focus:border-blue-500"
+                                value={search}
+                                onChange={(e) => setSearch(e.target.value)}
+                                onClick={(e) => e.stopPropagation()}
+                            />
+                            <p className="text-[10px] text-slate-500 mt-2 font-medium">
+                                {filtered.length} match{filtered.length === 1 ? '' : 'es'}
+                                {search.trim() ? ` for "${search.trim()}"` : ' — type to filter'}
+                            </p>
+                        </div>
+                        <div className={`overflow-y-auto custom-scrollbar divide-y divide-slate-800/50 ${dropdownMaxHeight}`}>
+                            {filtered.map(opt => (
+                                <div
+                                    key={opt.value}
+                                    onClick={() => {
+                                        onChange(opt.value);
+                                        setIsOpen(false);
+                                        setSearch('');
+                                    }}
+                                    className="p-3 hover:bg-slate-800 cursor-pointer flex justify-between items-center group transition-colors"
+                                >
+                                    <div>
+                                        <div className="text-sm font-medium text-gray-200 group-hover:text-white">{opt.label}</div>
+                                        {opt.subLabel && <div className="text-[10px] text-gray-500 font-mono">{opt.subLabel}</div>}
+                                    </div>
+                                    {opt.statusColor && opt.statusLabel && (
+                                        <div className={`text-[10px] font-bold ${opt.statusColor} bg-white/10 px-2 py-0.5 rounded uppercase`}>
+                                            {opt.statusLabel}
+                                        </div>
+                                    )}
+                                </div>
+                            ))}
+                            {filtered.length === 0 && (
+                                <div className="p-6 text-center text-gray-500 text-sm">No products found.</div>
+                            )}
+                        </div>
+                    </div>
+                </>
+            )}
+        </div>
+    );
+};
 
 interface Props {
     user: any;
@@ -40,12 +249,14 @@ interface DailyMetrics {
         pod_signature_url?: string | null;
         proof_of_load_url?: string | null;
         driver_id?: string | null;
+        lorry_id?: string | null;
         trip_origin?: string | null;
         zone?: string | null;
         trip_drop_count?: number;
         delivery_address?: string | null;
         earnings?: number;
         deadline?: string | null;
+        order_date?: string | null;
         pod_timestamp?: string | null;
     }[];
     photoCount: number;
@@ -63,6 +274,7 @@ interface DailyMetrics {
 
 const PersonalMonthlyReport: React.FC<Props> = ({ user }) => {
     const today = new Date();
+    const getSafeOrigin = (o?: string) => (o || '').toUpperCase().trim();
     const [selectedMonth, setSelectedMonth] = useState(() => {
         const saved = sessionStorage.getItem('pmr_selectedMonth');
         return saved ? parseInt(saved, 10) : today.getMonth() + 1;
@@ -87,13 +299,29 @@ const PersonalMonthlyReport: React.FC<Props> = ({ user }) => {
     const [editClockOut, setEditClockOut] = useState<string>('');
     const [editAttendanceNotes, setEditAttendanceNotes] = useState<string>('');
 
-    // Trip Edit Form States
+    // Rich Trip Edit Form States (Matching DeliveryOrderManagement UI 1:1)
     const [isEditingTrip, setIsEditingTrip] = useState<boolean>(false);
-    const [editDriverId, setEditDriverId] = useState<string>('');
-    const [editOrigin, setEditOrigin] = useState<string>('');
-    const [editZone, setEditZone] = useState<string>('');
-    const [editDropCount, setEditDropCount] = useState<number>(1);
-    const [editNotes, setEditNotes] = useState<string>('');
+    const [selectedLorryId, setSelectedLorryId] = useState<string>('');
+    const [selectedDriverId, setSelectedDriverId] = useState<string>('');
+    const [newOrderDate, setNewOrderDate] = useState<string>('');
+    const [newOrderDeliveryDate, setNewOrderDeliveryDate] = useState<string>('');
+    const [orderCustomer, setOrderCustomer] = useState<string>('');
+    const [newOrderAddress, setNewOrderAddress] = useState<string>('');
+    const [tripOrigin, setTripOrigin] = useState<string>('JOHOR');
+    const [tripCategory, setTripCategory] = useState<string>('');
+    const [tripDropCount, setTripDropCount] = useState<number>(1);
+    const [newOrderNotes, setNewOrderNotes] = useState<string>('');
+    const [newOrderItems, setNewOrderItems] = useState<any[]>([]);
+
+    // Quick Add Item States for Trip Items (Matching DeliveryOrderManagement)
+    const [selectedV2Item, setSelectedV2Item] = useState<any | null>(null);
+    const [currentItemLoc, setCurrentItemLoc] = useState<string>('SPD');
+    const [currentItemRemark, setCurrentItemRemark] = useState<string>('');
+    const [currentItemQty, setCurrentItemQty] = useState<number>(1);
+
+    // DB Reference Data for Trip Edit Modal
+    const [lorries, setLorries] = useState<any[]>([]);
+    const [v2Items, setV2Items] = useState<any[]>([]);
 
     // Data states
     const [productionLogs, setProductionLogs] = useState<any[]>([]);
@@ -106,6 +334,8 @@ const PersonalMonthlyReport: React.FC<Props> = ({ user }) => {
     const [deliveries, setDeliveries] = useState<any[]>([]);
     const [deliveryRates, setDeliveryRates] = useState<any[]>([]);
     const [driverLorryPlate, setDriverLorryPlate] = useState<string>('N/A');
+    const [isMonthlyConfirmed, setIsMonthlyConfirmed] = useState<boolean>(false);
+    const [confirmedTripIds, setConfirmedTripIds] = useState<Set<string>>(new Set());
     
     // Batch & Single Print States
     const [isPreparingBatchPrint, setIsPreparingBatchPrint] = useState(false);
@@ -121,6 +351,17 @@ const PersonalMonthlyReport: React.FC<Props> = ({ user }) => {
     const isDriver = viewedProfile?.role === 'Driver' || (!viewedProfile && user?.role === 'Driver');
     const isAdminOrHR = ['SuperAdmin', 'Admin', 'HR'].includes(currentUserRole);
     const daysInMonth = new Date(selectedYear, selectedMonth, 0).getDate();
+
+    // Customer DB for Datalist
+    const customerDB = useMemo(() => {
+        const map = new Map();
+        deliveries.forEach(d => {
+            if (d.customer && !map.has(d.customer)) {
+                map.set(d.customer, { id: d.customer, name: d.customer, address: d.delivery_address || '', zone: d.zone || '' });
+            }
+        });
+        return Array.from(map.values());
+    }, [deliveries]);
 
     // Sync selectedEmployeeId when user loads and handle session storage restoration safely
     useEffect(() => {
@@ -177,17 +418,92 @@ const PersonalMonthlyReport: React.FC<Props> = ({ user }) => {
         }
     }, [selectedAttendanceDay, attendanceShifts]);
 
+    // Fetch Lorries and V2 Master Items for Rich Trip Edit Modal
+    useEffect(() => {
+        supabase.from('lorries').select('*').then(({ data }) => setLorries(data || []));
+        getV2Items().then(items => setV2Items(items || []));
+    }, []);
+
     // Sync Trip Edit Form when trip selected
     useEffect(() => {
         if (selectedTrip) {
-            setEditDriverId(selectedTrip.driver_id || selectedEmployeeId || '');
-            setEditOrigin(selectedTrip.trip_origin || 'TAIPING');
-            setEditZone(selectedTrip.zone || '');
-            setEditDropCount(selectedTrip.trip_drop_count || 1);
-            setEditNotes(selectedTrip.notes || '');
-            setIsEditingTrip(false);
+            const hasPendingPayload = selectedTrip.pending_edit_payload;
+            const source = hasPendingPayload ? selectedTrip.pending_edit_payload : selectedTrip;
+
+            setSelectedLorryId(source.lorry_id || selectedTrip.lorry_id || '');
+            setSelectedDriverId(source.driver_id || selectedTrip.driver_id || selectedEmployeeId || '');
+            setNewOrderDate(source.order_date || selectedTrip.order_date || selectedTrip.date || '');
+            setNewOrderDeliveryDate(source.deadline || selectedTrip.deadline || '');
+            setOrderCustomer(source.customer || selectedTrip.customer || '');
+            setNewOrderAddress(source.delivery_address || selectedTrip.delivery_address || selectedTrip.zone || '');
+            setTripOrigin(source.trip_origin || selectedTrip.trip_origin || 'JOHOR');
+            setTripCategory(source.zone || selectedTrip.zone || '');
+            setTripDropCount(source.trip_drop_count || selectedTrip.trip_drop_count || 1);
+            setNewOrderNotes((source.notes || selectedTrip.notes || '').replace(/(?:\n\n)?\[PENDING_EDIT_PAYLOAD\]:[\s\S]*$/is, '').replace(/\[PENDING EDIT.*?\]:?[\s\S]*/gi, '').trim());
+            setNewOrderItems(source.items ? [...source.items] : (selectedTrip.items ? [...selectedTrip.items] : []));
+            setIsEditingTrip(true);
         }
     }, [selectedTrip, selectedEmployeeId]);
+
+    const handleAddItem = () => {
+        if (!selectedV2Item || !currentItemQty) return;
+        const newItem = {
+            product: selectedV2Item.name,
+            sku: selectedV2Item.sku,
+            quantity: currentItemQty,
+            packaging: selectedV2Item.packaging || 'Unit',
+            sourceLocation: currentItemLoc,
+            remark: currentItemRemark || ''
+        };
+        setNewOrderItems(prev => [...prev, newItem]);
+        setSelectedV2Item(null);
+        setCurrentItemRemark('');
+        setCurrentItemQty(1);
+    };
+
+    const handleRemoveItem = (index: number) => {
+        setNewOrderItems(prev => prev.filter((_, i) => i !== index));
+    };
+
+    const calculateLoad = (itemsList: any[], masterItems: any[]) => {
+        let totalVol = 0;
+        let totalWeight = 0;
+
+        (itemsList || []).forEach(item => {
+            const qty = Number(item.quantity || item.qty) || 0;
+            const itemSku = item.sku || item.item_sku || '';
+            const itemProd = item.product || item.name || '';
+            const matched = masterItems.find(v => 
+                (itemSku && v.sku && v.sku.toLowerCase() === itemSku.toLowerCase()) || 
+                (itemProd && v.name && v.name.toLowerCase() === itemProd.toLowerCase()) ||
+                (itemProd && v.sku && v.sku.toLowerCase() === itemProd.toLowerCase())
+            );
+            if (matched) {
+                const vol = Number(matched.unit_volume_m3 || matched.volume_m3 || matched.vol_m3) || 0;
+                const weight = Number(matched.unit_weight_kg || matched.weight_kg || matched.weight) || 0;
+                totalVol += vol * qty;
+                totalWeight += weight * qty;
+            } else if (qty > 0) {
+                // Default estimate per roll/unit if not found in master_items_v2
+                totalVol += 0.04 * qty;
+                totalWeight += 10 * qty;
+            }
+        });
+
+        const maxVol = 36.81;
+        const maxWeight = 5000;
+        const percentVol = maxVol > 0 ? ((totalVol / maxVol) * 100).toFixed(1) : '0.0';
+        const percentWeight = maxWeight > 0 ? ((totalWeight / maxWeight) * 100).toFixed(1) : '0.0';
+
+        return {
+            totalVol: totalVol.toFixed(2),
+            totalWeight: totalWeight.toFixed(2),
+            maxVol,
+            maxWeight,
+            percentVol,
+            percentWeight
+        };
+    };
 
     // 1. Initial Load: Fetch Logged In User Profile to check permissions
     useEffect(() => {
@@ -199,10 +515,11 @@ const PersonalMonthlyReport: React.FC<Props> = ({ user }) => {
                 .eq('auth_user_id', user.uid || user.id)
                 .single();
 
-            // If Manager/HR/Admin/SuperAdmin, fetch all employees
             const role = data?.role || user.role;
             setCurrentUserRole(role);
-            if (['SuperAdmin', 'Admin', 'Manager', 'HR'].includes(role)) {
+            const isAdminOrHRUser = ['SuperAdmin', 'Admin', 'HR'].includes(role);
+            
+            if (isAdminOrHRUser) {
                 // HR Portal persists status as lowercase 'active'; Driver API / others may use 'Active'
                 const activeStatuses = ['Active', 'active'];
                 const [v2Res, pubRes] = await Promise.all([
@@ -222,6 +539,9 @@ const PersonalMonthlyReport: React.FC<Props> = ({ user }) => {
                     });
                 }
                 setEmployeesList(merged.sort((a,b) => (a.name || '').localeCompare(b.name || '')));
+            } else {
+                setEmployeesList([]);
+                setSelectedEmployeeId(user.uid || user.id);
             }
         };
         fetchPermissions();
@@ -426,7 +746,7 @@ const PersonalMonthlyReport: React.FC<Props> = ({ user }) => {
                 .gte('end_date', firstDay);   
             setLeaves(leaveData || []);
 
-            // F. Payroll
+            // F. Payroll & Confirmation Status
             if (activeEmpId) {
                 const { data: payrollData } = await supabase
                     .from('payroll_records')
@@ -436,8 +756,14 @@ const PersonalMonthlyReport: React.FC<Props> = ({ user }) => {
                     .eq('year', selectedYear)
                     .maybeSingle();
                 setPayroll(payrollData || null);
+
+                // Sync monthly confirmation state
+                const savedState = sessionStorage.getItem(`pmr_confirmed_${selectedEmployeeId}_${selectedYear}_${selectedMonth}`);
+                setIsMonthlyConfirmed(payrollData?.driver_confirmed || savedState === 'true');
             } else {
                 setPayroll(null);
+                const savedState = sessionStorage.getItem(`pmr_confirmed_${selectedEmployeeId}_${selectedYear}_${selectedMonth}`);
+                setIsMonthlyConfirmed(savedState === 'true');
             }
 
             // H. Claims
@@ -465,9 +791,8 @@ const PersonalMonthlyReport: React.FC<Props> = ({ user }) => {
 
                 const { data: rawDeliveryData } = await supabase
                     .from('sales_orders')
-                    .select('id, order_number, customer, items, notes, order_date, pod_timestamp, deadline, zone, delivery_address, created_at, trip_origin, trip_drop_count, pod_photo_url, pod_signature_url, proof_of_load_url, driver_id')
-                    .eq('driver_id', selectedEmployeeId) 
-                    .eq('status', 'Delivered');
+                    .select('*')
+                    .eq('driver_id', selectedEmployeeId);
 
                 const monthlyDeliveries = (rawDeliveryData || []).filter(d => {
                     const rawDate = d.deadline || (d.pod_timestamp ? d.pod_timestamp.split('T')[0] : (d.created_at ? d.created_at.split('T')[0] : null));
@@ -475,6 +800,15 @@ const PersonalMonthlyReport: React.FC<Props> = ({ user }) => {
                     return rawDate >= firstDay && rawDate <= lastDayStr;
                 });
                 setDeliveries(monthlyDeliveries);
+
+                const confirmedSet = new Set<string>();
+                (rawDeliveryData || []).forEach(d => {
+                    const savedLocal = sessionStorage.getItem(`pmr_confirmed_trip_${d.id}`);
+                    if (d.driver_confirmed === true || d.driver_verified === true || savedLocal === 'true') {
+                        confirmedSet.add(d.id);
+                    }
+                });
+                setConfirmedTripIds(confirmedSet);
 
                 // Fetch tied lorry for driver / Dapatkan lorry yang terikat untuk pemandu
                 const { data: lorryData } = await supabase
@@ -583,29 +917,234 @@ const PersonalMonthlyReport: React.FC<Props> = ({ user }) => {
         }
     };
 
-    const handleSaveTrip = async () => {
-        if (!selectedTrip) return;
-        
+    const handleToggleTripConfirmation = async (tripId: string, checked: boolean) => {
+        setConfirmedTripIds(prev => {
+            const updated = new Set(prev);
+            if (checked) {
+                updated.add(tripId);
+            } else {
+                updated.delete(tripId);
+            }
+            return updated;
+        });
+
+        sessionStorage.setItem(`pmr_confirmed_trip_${tripId}`, String(checked));
+
         try {
-            const { error } = await supabase
+            await supabase
                 .from('sales_orders')
                 .update({
-                    driver_id: editDriverId || null,
-                    trip_origin: editOrigin.toUpperCase(),
-                    zone: editZone,
-                    trip_drop_count: Math.max(1, Number(editDropCount) || 1),
-                    notes: editNotes || null
+                    driver_confirmed: checked,
+                    driver_confirmed_at: checked ? new Date().toISOString() : null
                 })
-                .eq('id', selectedTrip.id);
+                .eq('id', tripId);
+        } catch (err) {
+            console.log("Trip confirmation state saved locally.");
+        }
+    };
+
+    const handleToggleHRApproveTrip = async (trip: any, checked: boolean) => {
+        const oldNotes = trip.notes || '';
+        let newNotes = oldNotes;
+        if (checked) {
+            if (!oldNotes.includes('[HR_APPROVED]')) {
+                newNotes = (oldNotes ? oldNotes + '\n' : '') + '[HR_APPROVED]';
+            }
+        } else {
+            newNotes = oldNotes.replace(/\[HR_APPROVED\]\n?/g, '').trim();
+        }
+
+        try {
+            await supabase
+                .from('sales_orders')
+                .update({ notes: newNotes })
+                .eq('id', trip.id);
+            fetchData();
+        } catch (err) {
+            console.error("Error saving HR approval", err);
+        }
+    };
+
+    const handleToggleMonthlyConfirmation = async (checked: boolean) => {
+        setIsMonthlyConfirmed(checked);
+        sessionStorage.setItem(`pmr_confirmed_${selectedEmployeeId}_${selectedYear}_${selectedMonth}`, String(checked));
+
+        try {
+            await supabase
+                .from('driver_monthly_confirmations')
+                .upsert({
+                    employee_id: selectedEmployeeId,
+                    month: selectedMonth,
+                    year: selectedYear,
+                    status: checked ? 'Confirmed' : 'Pending',
+                    confirmed_at: checked ? new Date().toISOString() : null,
+                    confirmed_by: viewedProfile?.name || selectedEmployeeId
+                });
+        } catch (err) {
+            try {
+                await supabase
+                    .from('payroll_records')
+                    .update({ driver_confirmed: checked, driver_confirmed_at: checked ? new Date().toISOString() : null })
+                    .eq('employee_id', selectedEmployeeId)
+                    .eq('month', selectedMonth)
+                    .eq('year', selectedYear);
+            } catch (pErr) {
+                console.log("Saved confirmation state locally.");
+            }
+        }
+
+        if (checked) {
+            alert("✅ 已打钩确认本月出车/考勤数据无误！ / Monthly report confirmed as correct!");
+        } else {
+            alert("ℹ️ 已取消本月打钩确认。 / Monthly confirmation unchecked.");
+        }
+    };
+
+    const handleAdminApproveTrip = async (approve: boolean) => {
+        if (!selectedTrip) return;
+
+        try {
+            if (approve) {
+                // Try to parse fallback payload from notes if present
+                const payloadMatch = selectedTrip.notes?.match(/\[PENDING_EDIT_PAYLOAD\]:\s*(\{.*\})/is);
+                let fallbackPayload: any = {};
+                if (payloadMatch) {
+                    try { fallbackPayload = JSON.parse(payloadMatch[1]); } catch(e) {}
+                }
                 
-            if (error) throw error;
-            alert("✅ Rekod trip berjaya dikemas kini! / Trip record updated successfully!");
+                const finalNotes = fallbackPayload.notes !== undefined ? fallbackPayload.notes : newOrderNotes;
+                const cleanNotes = (finalNotes || selectedTrip.notes || '').replace(/(?:\n\n)?\[PENDING_EDIT_PAYLOAD\]:[\s\S]*$/i, '').replace(/\[PENDING EDIT.*?\]:?[\s\S]*/gi, '').trim();
+
+                const payload = selectedTrip.pending_edit_payload || {
+                    driver_id: selectedDriverId || selectedTrip.driver_id,
+                    lorry_id: selectedLorryId || selectedTrip.lorry_id,
+                    customer: fallbackPayload.customer || orderCustomer || selectedTrip.customer,
+                    delivery_address: fallbackPayload.delivery_address || newOrderAddress || selectedTrip.delivery_address,
+                    trip_origin: (fallbackPayload.trip_origin || tripOrigin).toUpperCase(),
+                    zone: fallbackPayload.zone || tripCategory || selectedTrip.zone,
+                    trip_drop_count: fallbackPayload.trip_drop_count || tripDropCount || selectedTrip.trip_drop_count,
+                    notes: cleanNotes,
+                    items: newOrderItems || selectedTrip.items,
+                    deadline: fallbackPayload.deadline || newOrderDeliveryDate || selectedTrip.deadline
+                };
+
+                const { error } = await supabase
+                    .from('sales_orders')
+                    .update({
+                        ...payload,
+                        edit_status: 'Approved',
+                        pending_edit_payload: null
+                    })
+                    .eq('id', selectedTrip.id);
+
+                if (error) {
+                    await supabase
+                        .from('sales_orders')
+                        .update(payload)
+                        .eq('id', selectedTrip.id);
+                }
+
+                alert("✅ Admin 批准预修改并已套用！ / Edit approved and applied!");
+            } else {
+                const cleanNotes = (selectedTrip.notes || '').replace(/(?:\n\n)?\[PENDING_EDIT_PAYLOAD\]:[\s\S]*$/i, '').replace(/\[PENDING EDIT.*?\]:?[\s\S]*/gi, '').trim();
+                await supabase
+                    .from('sales_orders')
+                    .update({
+                        edit_status: 'Rejected',
+                        pending_edit_payload: null,
+                        notes: cleanNotes
+                    })
+                    .eq('id', selectedTrip.id);
+
+                alert("❌ Admin 拒绝了预修改申请。 / Pending edit request rejected.");
+            }
+            setSelectedTrip(null);
+            setIsEditingTrip(false);
+            fetchData();
+        } catch (err: any) {
+            console.error("Admin approve/reject error:", err);
+            alert("Ralat: " + err.message);
+        }
+    };
+
+    const handleSaveTrip = async () => {
+        if (!selectedTrip) return;
+
+        const isUserAdmin = ['SuperAdmin', 'Admin'].includes(currentUserRole);
+
+        const updatedTripPayload = {
+            driver_id: selectedDriverId || null,
+            lorry_id: selectedLorryId || null,
+            customer: orderCustomer || null,
+            delivery_address: newOrderAddress || null,
+            trip_origin: tripOrigin.toUpperCase(),
+            zone: tripCategory,
+            trip_drop_count: Math.max(1, Number(tripDropCount) || 1),
+            notes: newOrderNotes || null,
+            items: newOrderItems,
+            deadline: newOrderDeliveryDate || null
+        };
+
+        try {
+            if (isUserAdmin) {
+                // Admin can directly edit and approve
+                const { error } = await supabase
+                    .from('sales_orders')
+                    .update({
+                        ...updatedTripPayload,
+                        edit_status: 'Approved',
+                        pending_edit_payload: null
+                    })
+                    .eq('id', selectedTrip.id);
+
+                if (error) {
+                    await supabase
+                        .from('sales_orders')
+                        .update(updatedTripPayload)
+                        .eq('id', selectedTrip.id);
+                }
+
+                alert("✅ Admin 已成功保存 Trip 更改！ / Trip record updated by Admin!");
+            } else {
+                // Driver or Non-Admin: PRE-CHANGE (Sets to Pending awaiting Admin confirmation)
+                const pendingData = {
+                    edit_status: 'Pending',
+                    pending_edit_payload: updatedTripPayload
+                };
+
+                const { error } = await supabase
+                    .from('sales_orders')
+                    .update(pendingData)
+                    .eq('id', selectedTrip.id);
+
+                if (error) {
+                    const pendingPayload = {
+                        customer: orderCustomer,
+                        delivery_address: newOrderAddress,
+                        trip_origin: tripOrigin,
+                        zone: tripCategory,
+                        trip_drop_count: tripDropCount,
+                        notes: newOrderNotes,
+                        deadline: newOrderDeliveryDate
+                    };
+                    const cleanNotes = (selectedTrip.notes || '').replace(/(?:\n\n)?\[PENDING_EDIT_PAYLOAD\]:[\s\S]*$/is, '').replace(/\[PENDING EDIT.*?\]:?[\s\S]*/gi, '').trim();
+                    const appendedNotes = cleanNotes ? `${cleanNotes}\n\n[PENDING_EDIT_PAYLOAD]: ${JSON.stringify(pendingPayload)}` : `[PENDING_EDIT_PAYLOAD]: ${JSON.stringify(pendingPayload)}`;
+                    
+                    await supabase
+                        .from('sales_orders')
+                        .update({ notes: appendedNotes })
+                        .eq('id', selectedTrip.id);
+                }
+
+                alert("⏳ 预修改已提交！已转入 Pending 状态，须待 Admin 确认后才正式生效。 / Pre-change submitted! Set to Pending status awaiting Admin approval.");
+            }
+
             setSelectedTrip(null);
             setIsEditingTrip(false);
             fetchData();
         } catch (err: any) {
             console.error("Failed to save trip details:", err);
-            alert("Ralat menyimpan trip: / Error saving trip: " + err.message);
+            alert("Ralat: / Error: " + err.message);
         }
     };
 
@@ -1037,13 +1576,19 @@ const PersonalMonthlyReport: React.FC<Props> = ({ user }) => {
                 const rateInfo = rateMap[key];
                 const drops = Math.max(1, t.trip_drop_count || 1);
 
+                let baseRate = 0;
+                let extraRate = 0;
                 let tEarnings = 0;
                 if (rateInfo) {
-                    const base = Number(rateInfo.base_rate) || 0;
+                    baseRate = Number(rateInfo.base_rate) || 0;
                     const maxPlaces = Number(rateInfo.max_places) || 0;
                     const extraPlaces = Math.max(0, drops - maxPlaces);
-                    const extraRate = extraPlaces * (Number(rateInfo.extra_rate_per_place) || 0);
-                    tEarnings = base + extraRate;
+                    extraRate = extraPlaces * (Number(rateInfo.extra_rate_per_place) || 0);
+                    tEarnings = baseRate + extraRate;
+                    tripEarnings += tEarnings;
+                } else if (t.earnings || t.trip_allowance) {
+                    tEarnings = Number(t.earnings || t.trip_allowance || 0);
+                    baseRate = tEarnings;
                     tripEarnings += tEarnings;
                 }
 
@@ -1062,6 +1607,11 @@ const PersonalMonthlyReport: React.FC<Props> = ({ user }) => {
                     zone: t.zone || null,
                     trip_drop_count: t.trip_drop_count || 1,
                     delivery_address: t.delivery_address || null,
+                    edit_status: t.edit_status || null,
+                    pending_edit_payload: t.pending_edit_payload || null,
+                    driver_confirmed: t.driver_confirmed || false,
+                    baseRate,
+                    extraRate,
                     earnings: tEarnings,
                     deadline: t.deadline || null,
                     pod_timestamp: t.pod_timestamp || null,
@@ -1706,10 +2256,25 @@ const PersonalMonthlyReport: React.FC<Props> = ({ user }) => {
                                             <td className="px-5 py-4 whitespace-nowrap text-right">
                                                 {isDriver ? (
                                                     day.tripCount > 0 ? (
-                                                        <div className="flex flex-col items-end">
+                                                        <div className="flex flex-col items-end gap-1">
                                                             <span className="font-mono text-amber-400 font-bold">{day.tripCount} <span className="text-[10px] text-gray-500">trip</span></span>
-                                                            {day.tripEarnings > 0 && (
-                                                                <span className="text-[10px] text-green-400 font-mono mt-0.5">+ RM{day.tripEarnings.toFixed(2)}</span>
+                                                            {day.tripDetails && day.tripDetails.length > 0 ? (
+                                                                <div className="flex flex-col items-end gap-0.5 font-mono text-[10px]">
+                                                                    {day.tripDetails.map((td: any, tidx: number) => (
+                                                                        <span key={tidx} className="text-emerald-400 font-bold bg-emerald-500/10 px-1.5 py-0.5 rounded border border-emerald-500/20" title={`Trip ${tidx+1}: Base RM${(td.baseRate||td.earnings||0).toFixed(2)} + Extra Drop RM${(td.extraRate||0).toFixed(2)}`}>
+                                                                            Trip #{tidx + 1}: RM {(td.earnings || 0).toFixed(2)}
+                                                                        </span>
+                                                                    ))}
+                                                                    {day.tripDetails.length > 1 && (
+                                                                        <span className="text-[10px] text-amber-300 font-black mt-0.5 pt-0.5 border-t border-slate-800">
+                                                                            合计: RM {day.tripEarnings.toFixed(2)}
+                                                                        </span>
+                                                                    )}
+                                                                </div>
+                                                            ) : (
+                                                                day.tripEarnings > 0 && (
+                                                                    <span className="text-[10px] text-green-400 font-mono mt-0.5">+ RM{day.tripEarnings.toFixed(2)}</span>
+                                                                )
                                                             )}
                                                         </div>
                                                     ) : <span className="text-gray-700 font-mono">—</span>
@@ -1733,16 +2298,66 @@ const PersonalMonthlyReport: React.FC<Props> = ({ user }) => {
                                             {isDriver ? (
                                                 <td className="px-5 py-4 whitespace-nowrap text-center">
                                                     {day.tripDetails && day.tripDetails.length > 0 ? (
-                                                        <div className="flex flex-col items-center gap-1.5">
-                                                            {day.tripDetails.map((td, idx) => (
-                                                                <button 
-                                                                    key={idx} 
-                                                                    onClick={() => setSelectedTrip(td)}
-                                                                    className="text-[10px] bg-blue-500/10 text-blue-400 border border-blue-500/20 hover:bg-blue-500/20 hover:text-blue-300 px-2 py-0.5 rounded font-mono shadow-sm cursor-pointer transition-colors"
-                                                                >
-                                                                    {td.displayString}
-                                                                </button>
-                                                            ))}
+                                                        <div className="flex flex-col items-center gap-2">
+                                                            {day.tripDetails.map((td: any, idx: number) => {
+                                                                const isPending = td.edit_status === 'Pending' || td.notes?.includes('[PENDING_EDIT_PAYLOAD]') || td.notes?.includes('[PENDING EDIT');
+                                                                const isTripConfirmed = confirmedTripIds.has(td.id) || td.driver_confirmed === true;
+
+                                                                return (
+                                                                    <div key={idx} className="flex items-center gap-2 justify-center">
+                                                                        <button 
+                                                                            onClick={() => setSelectedTrip(td)}
+                                                                            className={`text-[10px] px-2.5 py-1 rounded-lg font-mono shadow-sm cursor-pointer transition-all flex items-center gap-1.5 ${
+                                                                                td.notes?.includes('[HR_APPROVED]')
+                                                                                    ? 'bg-indigo-500/15 text-indigo-300 border border-indigo-500/30 font-bold'
+                                                                                    : isPending 
+                                                                                        ? 'bg-amber-500/20 text-amber-300 border border-amber-500/40 animate-pulse font-bold'
+                                                                                        : isTripConfirmed
+                                                                                            ? 'bg-emerald-500/15 text-emerald-300 border border-emerald-500/30 font-bold'
+                                                                                            : 'bg-blue-500/10 text-blue-400 border border-blue-500/20 hover:bg-blue-500/20 hover:text-blue-300'
+                                                                            }`}
+                                                                            title={td.notes?.includes('[HR_APPROVED]') ? "🔒 已被 HR 锁定 / Locked by HR" : "点击查看或提交预修改申请 / Click to view or pre-edit"}
+                                                                        >
+                                                                            {td.notes?.includes('[HR_APPROVED]') && <div className="text-indigo-400 shrink-0">🔒</div>}
+                                                                            {isPending && !td.notes?.includes('[HR_APPROVED]') && <Clock size={10} className="text-amber-400 shrink-0" />}
+                                                                            {isTripConfirmed && !td.notes?.includes('[HR_APPROVED]') && <CheckCircle2 size={11} className="text-emerald-400 shrink-0" />}
+                                                                            <span>{isPending ? `[Pending] ${td.displayString}` : td.displayString}</span>
+                                                                            <span className={`ml-1 px-1.5 py-0.5 rounded font-black border text-[9.5px] ${td.notes?.includes('[HR_APPROVED]') ? 'bg-indigo-500/20 text-indigo-300 border-indigo-500/30' : 'bg-emerald-500/20 text-emerald-300 border-emerald-500/30'}`}>
+                                                                                RM {(td.earnings || 0).toFixed(2)}
+                                                                            </span>
+                                                                        </button>
+
+                                                                        <div className="flex items-center gap-1.5 border-l border-slate-700/50 pl-1.5 ml-1">
+                                                                            <label 
+                                                                                className={`flex items-center justify-center p-1 rounded transition-colors ${td.notes?.includes('[HR_APPROVED]') ? 'opacity-50 cursor-not-allowed' : 'hover:bg-white/5 cursor-pointer'}`}
+                                                                                title={td.notes?.includes('[HR_APPROVED]') ? "🔒 已被 HR 锁定 / Locked by HR" : (isTripConfirmed ? "✅ 该 Trip 已确认无误 / Trip Confirmed" : "⬜ 点击打钩确认此 Trip 无误 / Confirm this Trip")}
+                                                                            >
+                                                                                <input
+                                                                                    type="checkbox"
+                                                                                    checked={isTripConfirmed}
+                                                                                    onChange={(e) => handleToggleTripConfirmation(td.id, e.target.checked)}
+                                                                                    className="w-4 h-4 accent-emerald-500 rounded cursor-pointer disabled:cursor-not-allowed"
+                                                                                    disabled={td.notes?.includes('[HR_APPROVED]')}
+                                                                                />
+                                                                            </label>
+                                                                            {isAdminOrHR && (
+                                                                                <label 
+                                                                                    className={`flex items-center justify-center px-1.5 py-0.5 border text-[9px] font-bold uppercase rounded cursor-pointer transition-all ${td.notes?.includes('[HR_APPROVED]') ? 'bg-indigo-500/20 border-indigo-500/50 text-indigo-300' : 'bg-slate-800/50 border-slate-700 text-slate-500 hover:bg-slate-700'}`}
+                                                                                    title={td.notes?.includes('[HR_APPROVED]') ? "HR 已批准此 Trip (锁定) / HR Approved (Locked)" : "点击由 HR 批准此 Trip / Click to HR Approve"}
+                                                                                >
+                                                                                    <input
+                                                                                        type="checkbox"
+                                                                                        checked={td.notes?.includes('[HR_APPROVED]') || false}
+                                                                                        onChange={(e) => handleToggleHRApproveTrip(td, e.target.checked)}
+                                                                                        className="w-3 h-3 accent-indigo-500 rounded cursor-pointer mr-1"
+                                                                                    />
+                                                                                    HR
+                                                                                </label>
+                                                                            )}
+                                                                        </div>
+                                                                    </div>
+                                                                );
+                                                            })}
                                                         </div>
                                                     ) : <span className="text-gray-700 font-mono">—</span>}
                                                 </td>
@@ -1826,304 +2441,688 @@ const PersonalMonthlyReport: React.FC<Props> = ({ user }) => {
                                         </tr>
                                     ))}
                                 </tbody>
+                                <tfoot>
+                                    <tr className="bg-slate-900/90 border-t-2 border-slate-800">
+                                        <td colSpan={isAdminOrHR ? 6 : 5} className="px-5 py-4">
+                                            <div className="flex flex-col sm:flex-row items-center justify-between gap-4">
+                                                <div className="flex items-center gap-3">
+                                                    <div className="p-2.5 rounded-xl bg-emerald-500/10 border border-emerald-500/20 text-emerald-400 shrink-0">
+                                                        <CheckSquare size={22} />
+                                                    </div>
+                                                    <div>
+                                                        <div className="text-xs font-black text-white uppercase tracking-wider flex items-center gap-2">
+                                                            司机 Trip 逐项打钩确认 / Driver Per-Trip Confirmation
+                                                        </div>
+                                                        <div className="text-[11px] text-slate-400 mt-0.5">
+                                                            每个 Trip 按钮后方均有独立打钩框。出车无误请逐个打钩；如有数据问题请点击 Trip 按钮提交预修改（需 Admin 审核生效）。
+                                                        </div>
+                                                    </div>
+                                                </div>
+
+                                                <div className="flex items-center gap-3">
+                                                    <div className="bg-slate-950 border border-slate-800 px-3.5 py-2 rounded-xl text-xs font-bold text-slate-300 shadow-md">
+                                                        已确认: <span className="text-emerald-400 font-mono text-sm font-black">{confirmedTripIds.size}</span> 个 Trip
+                                                    </div>
+                                                    <label className="flex items-center gap-3 bg-slate-950 border border-slate-800 hover:border-slate-700 px-4 py-2 rounded-xl cursor-pointer transition-all shrink-0 shadow-md">
+                                                        <input
+                                                            type="checkbox"
+                                                            checked={isMonthlyConfirmed}
+                                                            onChange={e => handleToggleMonthlyConfirmation(e.target.checked)}
+                                                            className="w-5 h-5 accent-emerald-500 rounded cursor-pointer"
+                                                        />
+                                                        <span className={`text-xs font-black font-mono ${isMonthlyConfirmed ? 'text-emerald-400' : 'text-slate-300'}`}>
+                                                            {isMonthlyConfirmed ? '✅ 全月确认 / Confirmed' : '⬜ 全月打钩'}
+                                                        </span>
+                                                    </label>
+                                                </div>
+                                            </div>
+                                        </td>
+                                    </tr>
+                                </tfoot>
                             </table>
                         </div>
                     </div>
                 </div>
             )}
 
-            {/* Trip Detail Modal / Paparan Butiran Trip */}
+            {/* --- CREATE / EDIT TRIP MODAL (1:1 COPIED FROM TRIP MANAGEMENT) --- */}
             {selectedTrip && (
-                <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/60 backdrop-blur-sm animate-in fade-in duration-200">
-                    <div className="bg-[#09090b] border border-slate-800 rounded-2xl w-full max-w-lg max-h-[85vh] flex flex-col shadow-2xl shadow-black relative overflow-hidden">
-                        {/* Header */}
-                        <div className="p-5 border-b border-white/5 bg-slate-900/50 flex justify-between items-start">
-                            <div className="flex items-center gap-3">
-                                <div className="p-2.5 rounded-xl bg-blue-500/10 text-blue-400 border border-blue-500/20">
-                                    <Truck size={20} />
-                                </div>
-                                <div>
-                                    <h2 className="text-lg font-black text-white flex items-center gap-2">
-                                        {selectedTrip.order_number || 'DO Tidak Diketahui'}
-                                    </h2>
-                                    <p className="text-[10px] uppercase font-bold text-gray-400 tracking-widest mt-0.5">
-                                        Butiran Trip / Trip Details
-                                    </p>
-                                </div>
+                <div className="fixed inset-0 z-[100] flex items-center justify-center p-0 sm:p-3 lg:p-6 bg-black/70 backdrop-blur-sm animate-in fade-in duration-200">
+                    <div className="bg-slate-950 border-0 sm:border border-slate-800 rounded-none sm:rounded-2xl w-full max-w-6xl h-full sm:h-[min(96vh,920px)] overflow-hidden flex flex-col shadow-2xl shadow-black">
+                        {/* Modal Header */}
+                        <div className="py-3 px-4 sm:px-6 border-b border-slate-800 flex justify-between items-center gap-3 bg-slate-900/50">
+                            <div className="min-w-0 flex-1 flex items-center gap-3">
+                                <h2 className="text-base sm:text-lg font-bold text-slate-100 flex items-center gap-2">
+                                    <FileText className="text-blue-400" size={18} />
+                                    Edit Trip: {selectedTrip.order_number || 'DO'}
+                                </h2>
                             </div>
-                            <div className="flex items-center gap-2 -mr-2 -mt-2">
-                                {isAdminOrHR && (
-                                    <button 
-                                        onClick={() => setIsEditingTrip(!isEditingTrip)}
-                                        className="text-xs bg-violet-600 hover:bg-violet-500 px-2.5 py-1.5 rounded-lg font-bold text-white transition-colors cursor-pointer"
-                                    >
-                                        {isEditingTrip ? 'Batal / Cancel' : '✏️ Sunting / Edit'}
-                                    </button>
-                                )}
-                                <button 
+                            <div className="flex items-center gap-2">
+                                <button
+                                    type="button"
                                     onClick={() => { setSelectedTrip(null); setIsEditingTrip(false); }}
-                                    className="p-2 text-gray-500 hover:text-white hover:bg-white/5 rounded-xl transition-colors cursor-pointer"
+                                    className="p-2 hover:bg-slate-800 rounded-lg text-slate-500 hover:text-white transition-all cursor-pointer"
                                 >
                                     <X size={20} />
                                 </button>
                             </div>
                         </div>
-                        
-                        {/* Body */}
-                        <div className="flex-1 overflow-y-auto p-5 space-y-5 custom-scrollbar bg-slate-950">
-                            
-                            {isEditingTrip ? (
-                                <div className="space-y-4">
-                                    <div>
-                                        <label className="block text-[10px] text-gray-400 font-bold uppercase tracking-widest mb-1.5">
-                                            Pemandu / Driver
-                                        </label>
-                                        <select
-                                            value={editDriverId}
-                                            onChange={(e) => setEditDriverId(e.target.value)}
-                                            className="w-full px-3 py-2 bg-[#0d0d12] border border-white/10 rounded-lg text-sm text-white focus:outline-none focus:border-blue-500 cursor-pointer"
-                                        >
-                                            <option value="">-- Pilih Pemandu / Select Driver --</option>
-                                            {employeesList.filter(e => e.role === 'Driver' || e.role === 'driver').map(drv => (
-                                                <option key={drv.uid} value={drv.uid}>
-                                                    {drv.name || drv.employee_id} ({drv.employee_id})
-                                                </option>
-                                            ))}
-                                        </select>
-                                    </div>
 
-                                    <div className="grid grid-cols-2 gap-4">
-                                        <div>
-                                            <label className="block text-[10px] text-gray-400 font-bold uppercase tracking-widest mb-1.5">
-                                                Asal Trip / Trip Origin
-                                            </label>
-                                            <input
-                                                type="text"
-                                                value={editOrigin}
-                                                onChange={(e) => setEditOrigin(e.target.value)}
-                                                className="w-full px-3 py-2 bg-[#0d0d12] border border-white/10 rounded-lg text-sm text-white focus:outline-none focus:border-blue-500 uppercase font-bold"
-                                                placeholder="TAIPING / NILAI / KELANTAN / JOHOR"
-                                            />
-                                            <div className="flex gap-1 mt-1.5 flex-wrap">
-                                                {['TAIPING', 'NILAI', 'KELANTAN', 'JOHOR'].map(loc => (
-                                                    <button
-                                                        key={loc}
-                                                        type="button"
-                                                        onClick={() => setEditOrigin(loc)}
-                                                        className={`px-2 py-0.5 rounded text-[10px] font-bold border transition-all ${
-                                                            editOrigin.toUpperCase() === loc
-                                                                ? 'bg-blue-500/20 text-blue-400 border-blue-500/30'
-                                                                : 'bg-white/5 text-gray-400 border-white/5 hover:text-white'
-                                                        }`}
-                                                    >
-                                                        {loc}
-                                                    </button>
-                                                ))}
+                        {/* Modal Body */}
+                        <div className="flex-1 overflow-y-auto p-4 sm:p-6 lg:p-8 custom-scrollbar bg-slate-950 min-h-0">
+
+                            {/* Trip Price Breakdown Banner */}
+                            <div className="mb-6 p-4 bg-gradient-to-r from-slate-900 to-slate-950 border border-slate-800 rounded-2xl flex flex-col sm:flex-row items-center justify-between gap-3 shadow-lg">
+                                <div className="flex items-center gap-3 text-slate-300 font-bold text-xs">
+                                    <DollarSign size={20} className="text-emerald-400 shrink-0" />
+                                    <div>
+                                        <div className="text-sm font-black text-white flex items-center gap-2">
+                                            Trip 运费独立明细 / Price Breakdown
+                                        </div>
+                                        <div className="text-[11px] text-slate-400 font-normal mt-0.5">
+                                            基本运费 Base: <span className="font-mono text-emerald-400 font-bold">RM {(selectedTrip.baseRate || selectedTrip.earnings || 0).toFixed(2)}</span>
+                                            {(selectedTrip.extraRate || 0) > 0 && (
+                                                <span className="ml-2">
+                                                    + Extra Drop 津贴 ({selectedTrip.trip_drop_count || 1} Drops): <span className="font-mono text-amber-400 font-bold">RM {selectedTrip.extraRate.toFixed(2)}</span>
+                                                </span>
+                                            )}
+                                        </div>
+                                    </div>
+                                </div>
+                                <div className="flex items-center gap-2 shrink-0 bg-emerald-500/10 border border-emerald-500/30 px-3.5 py-2 rounded-xl text-emerald-300 font-mono text-sm font-black">
+                                    本 Trip 合计: RM {(selectedTrip.earnings || 0).toFixed(2)}
+                                </div>
+                            </div>
+
+                            {/* Pending Admin Approval Banner */}
+                            {(selectedTrip.edit_status === 'Pending' || selectedTrip.notes?.includes('[PENDING_EDIT_PAYLOAD]') || selectedTrip.notes?.includes('[PENDING EDIT')) && (
+                                <div className="mb-6 p-4 bg-amber-500/10 border border-amber-500/30 rounded-2xl flex flex-col gap-3 shadow-lg">
+                                    <div className="flex flex-col sm:flex-row items-start sm:items-center justify-between gap-3">
+                                        <div className="flex items-center gap-3 text-amber-400 font-bold text-xs">
+                                            <Clock size={18} className="animate-spin text-amber-400" />
+                                            <div>
+                                                <div className="text-sm font-black text-amber-300">⏳ 预修改审核中 / Pending Admin Approval</div>
+                                                <div className="text-[11px] text-amber-400/80 font-normal mt-0.5">
+                                                    司机已提交预修改申请。在 Admin 审核确定之前，系统保持原有数据不变。
+                                                </div>
                                             </div>
                                         </div>
-                                        <div>
-                                            <label className="block text-[10px] text-gray-400 font-bold uppercase tracking-widest mb-1.5">
-                                                Zon / Destination Zone
-                                            </label>
-                                            <input
-                                                type="text"
-                                                value={editZone}
-                                                onChange={(e) => setEditZone(e.target.value)}
-                                                className="w-full px-3 py-2 bg-[#0d0d12] border border-white/10 rounded-lg text-sm text-white focus:outline-none focus:border-blue-500 font-bold"
-                                                placeholder="e.g. KL, SITIAWAN"
-                                            />
-                                        </div>
+                                        {isAdminOrHR ? (
+                                            <div className="flex items-center gap-2 shrink-0">
+                                                <button
+                                                    type="button"
+                                                    onClick={() => handleAdminApproveTrip(true)}
+                                                    className="px-4 py-2 bg-emerald-600 hover:bg-emerald-500 text-white rounded-xl text-xs font-bold transition-all shadow-md active:scale-95 cursor-pointer"
+                                                >
+                                                    ✅ 批准预修改 / Approve
+                                                </button>
+                                                <button
+                                                    type="button"
+                                                    onClick={() => handleAdminApproveTrip(false)}
+                                                    className="px-4 py-2 bg-red-600 hover:bg-red-500 text-white rounded-xl text-xs font-bold transition-all shadow-md active:scale-95 cursor-pointer"
+                                                >
+                                                    ❌ 拒绝预修改 / Reject
+                                                </button>
+                                            </div>
+                                        ) : (
+                                            <span className="text-[11px] text-amber-300 font-mono bg-amber-950/80 border border-amber-500/30 px-3 py-1.5 rounded-xl font-bold">
+                                                等待 Admin 审核
+                                            </span>
+                                        )}
                                     </div>
+                                    
+                                    {/* Show the pending changes clearly */}
+                                    {isAdminOrHR && (selectedTrip.notes?.includes('[PENDING_EDIT_PAYLOAD]') || selectedTrip.notes?.includes('[PENDING EDIT')) && (
+                                        <div className="mt-2 p-3 bg-amber-950/40 rounded-xl border border-amber-500/20 text-amber-200/90 text-[11px] font-mono leading-relaxed shadow-inner">
+                                            <div className="text-amber-400 font-bold mb-2 flex items-center gap-1.5 uppercase tracking-wider text-[10px]">
+                                                <span>Proposed Changes (Before ➔ After):</span>
+                                            </div>
+                                            <div className="pl-2 border-l-2 border-amber-500/30 text-amber-100 flex flex-col gap-1">
+                                                {(() => {
+                                                    const payloadMatch = selectedTrip.notes?.match(/\[PENDING_EDIT_PAYLOAD\]:\s*(\{.*\})/is);
+                                                    if (payloadMatch) {
+                                                        try {
+                                                            const after = JSON.parse(payloadMatch[1]);
+                                                            
+                                                            const oldNotes = (selectedTrip.notes || '').replace(/(?:\n\n)?\[PENDING_EDIT_PAYLOAD\]:[\s\S]*$/is, '').replace(/\[PENDING EDIT.*?\]:?[\s\S]*/gi, '').trim() || '(无/empty)';
+                                                            const newNotes = (after.notes || '').replace(/(?:\n\n)?\[PENDING_EDIT_PAYLOAD\]:[\s\S]*$/is, '').replace(/\[PENDING EDIT.*?\]:?[\s\S]*/gi, '').trim() || '(无/empty)';
+                                                            const oldCustomer = selectedTrip.customer || '(无/empty)';
+                                                            const oldAddress = selectedTrip.delivery_address || '(无/empty)';
+                                                            const oldDrops = selectedTrip.trip_drop_count || 1;
+                                                            const oldZone = selectedTrip.zone || '(无/empty)';
+                                                            const oldOrigin = selectedTrip.trip_origin || '(无/empty)';
+                                                            
+                                                            const hasCustomerChange = after.customer && after.customer !== selectedTrip.customer;
+                                                            const hasAddressChange = after.delivery_address && after.delivery_address !== selectedTrip.delivery_address;
+                                                            const hasDropChange = after.trip_drop_count !== undefined && after.trip_drop_count !== oldDrops;
+                                                            const hasNotesChange = newNotes !== oldNotes;
+                                                            const hasZoneChange = after.zone && after.zone !== selectedTrip.zone;
+                                                            const hasOriginChange = after.trip_origin && after.trip_origin !== selectedTrip.trip_origin;
 
-                                    <div>
-                                        <label className="block text-[10px] text-gray-400 font-bold uppercase tracking-widest mb-1.5">
-                                            Bilangan Drop / Drop Count
-                                        </label>
-                                        <input
-                                            type="number"
-                                            min="1"
-                                            value={editDropCount}
-                                            onChange={(e) => setEditDropCount(Number(e.target.value))}
-                                            className="w-full px-3 py-2 bg-[#0d0d12] border border-white/10 rounded-lg text-sm text-white focus:outline-none focus:border-blue-500 font-mono"
-                                        />
-                                    </div>
-
-                                    <div>
-                                        <label className="block text-[10px] text-gray-400 font-bold uppercase tracking-widest mb-1.5">
-                                            Nota Perjalanan / Trip Notes
-                                        </label>
-                                        <textarea
-                                            value={editNotes}
-                                            onChange={(e) => setEditNotes(e.target.value)}
-                                            rows={3}
-                                            className="w-full px-3 py-2 bg-[#0d0d12] border border-white/10 rounded-lg text-sm text-white focus:outline-none focus:border-blue-500"
-                                            placeholder="Notes"
-                                        />
-                                    </div>
-
-                                    <div className="flex justify-end gap-3 pt-3 border-t border-white/5">
-                                        <button
-                                            type="button"
-                                            onClick={() => setIsEditingTrip(false)}
-                                            className="px-4 py-2 bg-white/5 hover:bg-white/10 rounded-xl text-xs font-bold text-gray-400 hover:text-white transition-colors cursor-pointer"
-                                        >
-                                            Batal / Cancel
-                                        </button>
-                                        <button
-                                            type="button"
-                                            onClick={handleSaveTrip}
-                                            className="px-4 py-2 bg-gradient-to-r from-blue-500 to-indigo-500 hover:from-blue-600 hover:to-indigo-600 rounded-xl text-xs font-bold text-white transition-all shadow-md active:scale-95 cursor-pointer"
-                                        >
-                                            Simpan / Save
-                                        </button>
-                                    </div>
-
-                                    {/* Render DO Photos inside edit mode for reference */}
-                                    {(selectedTrip.proof_of_load_url || selectedTrip.pod_photo_url || selectedTrip.pod_signature_url) && (
-                                        <div className="pt-4 border-t border-white/5 space-y-3">
-                                            <h3 className="text-[10px] font-bold text-gray-400 uppercase tracking-widest flex items-center gap-2">
-                                                Rujukan Gambar DO / DO Photos Reference
-                                            </h3>
-                                            <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
-                                                {selectedTrip.proof_of_load_url && (
-                                                    <div className="bg-[#121214] border border-[#27272a] p-2 rounded-xl flex flex-col gap-1">
-                                                        <span className="text-[8px] font-black text-gray-400 uppercase tracking-wider text-center">Gambar Muatan / Proof of Load</span>
-                                                        <a href={selectedTrip.proof_of_load_url} target="_blank" rel="noreferrer" className="relative aspect-video rounded-lg overflow-hidden border border-white/5 bg-black flex items-center justify-center cursor-zoom-in">
-                                                            <img src={selectedTrip.proof_of_load_url} alt="Proof of Load" className="max-w-full max-h-full object-contain" />
-                                                        </a>
-                                                    </div>
-                                                )}
-                                                {selectedTrip.pod_photo_url && selectedTrip.pod_photo_url.split(',').map((url: string, idx: number) => {
-                                                    const trimmed = url.trim();
-                                                    if (!trimmed) return null;
-                                                    const isDo = idx % 2 === 0;
-                                                    const label = isDo ? 'Gambar DO / DO Proof' : 'Gambar Barang / Cargo Proof';
-                                                    return (
-                                                        <div key={idx} className="bg-[#121214] border border-[#27272a] p-2 rounded-xl flex flex-col gap-1">
-                                                            <span className="text-[8px] font-black text-gray-400 uppercase tracking-wider text-center">{label} ({Math.floor(idx / 2) + 1})</span>
-                                                            <a href={trimmed} target="_blank" rel="noreferrer" className="relative aspect-video rounded-lg overflow-hidden border border-white/5 bg-black flex items-center justify-center cursor-zoom-in">
-                                                                <img src={trimmed} alt={`Proof of Delivery ${idx + 1}`} className="max-w-full max-h-full object-contain" />
-                                                            </a>
-                                                        </div>
-                                                    );
-                                                })}
+                                                            if (!hasCustomerChange && !hasAddressChange && !hasDropChange && !hasNotesChange && !hasZoneChange && !hasOriginChange) {
+                                                                return (
+                                                                    <div className="mt-1 text-[11px] text-amber-500/70 italic">
+                                                                        (未检测到任何实质修改 / No actual changes detected)
+                                                                    </div>
+                                                                );
+                                                            }
+                                                            
+                                                            return (
+                                                                <div className="flex flex-col gap-2 mt-1">
+                                                                    {hasOriginChange && (
+                                                                        <div className="flex flex-col sm:flex-row sm:items-start gap-1 sm:gap-2">
+                                                                            <span className="text-gray-400 w-28 shrink-0 font-bold uppercase text-[9px]">起点 / Origin:</span> 
+                                                                            <div className="flex items-center gap-1.5 flex-wrap">
+                                                                                <span className="line-through opacity-60 text-red-300 bg-red-950/30 px-1.5 py-0.5 rounded border border-red-500/20">{oldOrigin}</span> 
+                                                                                <span className="text-emerald-400 font-bold bg-emerald-950/30 px-1.5 py-0.5 rounded border border-emerald-500/20">➔ {after.trip_origin}</span>
+                                                                            </div>
+                                                                        </div>
+                                                                    )}
+                                                                    {hasZoneChange && (
+                                                                        <div className="flex flex-col sm:flex-row sm:items-start gap-1 sm:gap-2">
+                                                                            <span className="text-gray-400 w-28 shrink-0 font-bold uppercase text-[9px]">类别 / Category:</span> 
+                                                                            <div className="flex items-center gap-1.5 flex-wrap">
+                                                                                <span className="line-through opacity-60 text-red-300 bg-red-950/30 px-1.5 py-0.5 rounded border border-red-500/20">{oldZone}</span> 
+                                                                                <span className="text-emerald-400 font-bold bg-emerald-950/30 px-1.5 py-0.5 rounded border border-emerald-500/20">➔ {after.zone}</span>
+                                                                            </div>
+                                                                        </div>
+                                                                    )}
+                                                                    {hasCustomerChange && (
+                                                                        <div className="flex flex-col sm:flex-row sm:items-start gap-1 sm:gap-2">
+                                                                            <span className="text-gray-400 w-28 shrink-0 font-bold uppercase text-[9px]">客户 / Client:</span> 
+                                                                            <div className="flex items-center gap-1.5 flex-wrap">
+                                                                                <span className="line-through opacity-60 text-red-300 bg-red-950/30 px-1.5 py-0.5 rounded border border-red-500/20">{oldCustomer}</span> 
+                                                                                <span className="text-emerald-400 font-bold bg-emerald-950/30 px-1.5 py-0.5 rounded border border-emerald-500/20">➔ {after.customer}</span>
+                                                                            </div>
+                                                                        </div>
+                                                                    )}
+                                                                    {hasAddressChange && (
+                                                                        <div className="flex flex-col sm:flex-row sm:items-start gap-1 sm:gap-2">
+                                                                            <span className="text-gray-400 w-28 shrink-0 font-bold uppercase text-[9px]">目的地 / Dest:</span> 
+                                                                            <div className="flex items-center gap-1.5 flex-wrap">
+                                                                                <span className="line-through opacity-60 text-red-300 bg-red-950/30 px-1.5 py-0.5 rounded border border-red-500/20">{oldAddress}</span> 
+                                                                                <span className="text-emerald-400 font-bold bg-emerald-950/30 px-1.5 py-0.5 rounded border border-emerald-500/20">➔ {after.delivery_address}</span>
+                                                                            </div>
+                                                                        </div>
+                                                                    )}
+                                                                    {hasDropChange && (
+                                                                        <div className="flex flex-col sm:flex-row sm:items-start gap-1 sm:gap-2">
+                                                                            <span className="text-gray-400 w-28 shrink-0 font-bold uppercase text-[9px]">卸货点 / Drops:</span> 
+                                                                            <div className="flex items-center gap-1.5 flex-wrap">
+                                                                                <span className="line-through opacity-60 text-red-300 bg-red-950/30 px-1.5 py-0.5 rounded border border-red-500/20">{oldDrops}</span> 
+                                                                                <span className="text-emerald-400 font-bold bg-emerald-950/30 px-1.5 py-0.5 rounded border border-emerald-500/20">➔ {after.trip_drop_count}</span>
+                                                                            </div>
+                                                                        </div>
+                                                                    )}
+                                                                    {hasNotesChange && (
+                                                                        <div className="flex flex-col sm:flex-row sm:items-start gap-1 sm:gap-2">
+                                                                            <span className="text-gray-400 w-28 shrink-0 font-bold uppercase text-[9px]">备注 / Notes:</span> 
+                                                                            <div className="flex flex-col gap-1 w-full max-w-sm">
+                                                                                <span className="line-through opacity-60 text-red-300 bg-red-950/30 px-2 py-1 rounded border border-red-500/20 block">{oldNotes}</span> 
+                                                                                <span className="text-emerald-400 font-bold bg-emerald-950/30 px-2 py-1 rounded border border-emerald-500/20 block">➔ {newNotes}</span>
+                                                                            </div>
+                                                                        </div>
+                                                                    )}
+                                                                </div>
+                                                            );
+                                                        } catch (e) {
+                                                            return <div>Error parsing payload</div>;
+                                                        }
+                                                    }
+                                                    // Fallback for older format
+                                                    return <div className="whitespace-pre-wrap">{selectedTrip.notes.match(/(?:\[PENDING EDIT.*?\]:?)\s*([\s\S]*)/i)?.[1] || "No details provided"}</div>;
+                                                })()}
                                             </div>
                                         </div>
                                     )}
                                 </div>
-                            ) : (
-                                <>
-                                    {/* Route & Customer */}
-                                    <div className="space-y-4 bg-[#0d0d12] border border-white/5 p-4 rounded-xl">
-                                        <div>
-                                            <div className="text-[10px] text-gray-500 font-bold uppercase tracking-widest mb-1">Ringkasan Laluan / Route Summary</div>
-                                            <div className="text-sm font-bold text-blue-400 font-mono bg-blue-500/10 inline-block px-3 py-1 rounded border border-blue-500/20">
-                                                {selectedTrip.displayString}
+                            )}
+                            <div className="grid grid-cols-1 lg:grid-cols-2 gap-6 lg:gap-8">
+                                <div className="space-y-6">
+
+                                    {/* Section 1: Basic Info */}
+                                    <div className="grid grid-cols-1 lg:grid-cols-2 gap-4">
+                                        <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
+                                            <div>
+                                                <label className="block text-xs font-bold text-slate-500 uppercase mb-2">Lorry</label>
+                                                <div className="relative">
+                                                    <Truck className="absolute left-3 top-3.5 text-slate-600 z-10" size={16} />
+                                                    <select
+                                                        className="w-full bg-slate-900 border border-slate-800 rounded-xl pl-10 pr-3 py-3 text-sm text-slate-200 focus:border-blue-500/50 outline-none appearance-none cursor-pointer disabled:opacity-60 disabled:cursor-not-allowed"
+                                                        value={selectedLorryId}
+                                                        onChange={(e) => {
+                                                            const lorryId = e.target.value;
+                                                            setSelectedLorryId(lorryId);
+                                                            const l = lorries.find(x => x.id === lorryId);
+                                                            if (l && l.driverUserId && !selectedDriverId) {
+                                                                setSelectedDriverId(l.driverUserId);
+                                                            }
+                                                        }}
+                                                        disabled={!isAdminOrHR}
+                                                    >
+                                                        <option value="">-- Select Lorry --</option>
+                                                        {lorries.map(l => (
+                                                            <option key={l.id} value={l.id}>
+                                                                {l.plateNumber || l.plate_number} {l.driverName ? `(${l.driverName})` : ''}
+                                                            </option>
+                                                        ))}
+                                                    </select>
+                                                </div>
+                                            </div>
+                                            <div>
+                                                <label className="block text-xs font-bold text-slate-500 uppercase mb-2">Driver</label>
+                                                <div className="relative">
+                                                    <UserIcon className="absolute left-3 top-3.5 text-slate-600 z-10" size={16} />
+                                                    <select
+                                                        className="w-full bg-slate-900 border border-slate-800 rounded-xl pl-10 pr-3 py-3 text-sm text-slate-200 focus:border-blue-500/50 outline-none appearance-none cursor-pointer disabled:opacity-60 disabled:cursor-not-allowed"
+                                                        value={selectedDriverId}
+                                                        onChange={(e) => {
+                                                            const driverId = e.target.value;
+                                                            setSelectedDriverId(driverId);
+                                                            const l = lorries.find(x => x.driverUserId === driverId);
+                                                            if (l && !selectedLorryId) {
+                                                                setSelectedLorryId(l.id);
+                                                            }
+                                                        }}
+                                                        disabled={!isAdminOrHR}
+                                                    >
+                                                        <option value="">-- Select Driver --</option>
+                                                        {employeesList.map(d => (
+                                                            <option key={d.uid || d.id} value={d.uid || d.id}>
+                                                                {d.name || d.employee_id}
+                                                            </option>
+                                                        ))}
+                                                    </select>
+                                                </div>
                                             </div>
                                         </div>
-                                        {selectedTrip.customer && (
+
+                                        <div>
+                                            <div className="grid grid-cols-1 sm:grid-cols-2 gap-3 sm:gap-4">
+                                                <div>
+                                                    <label className="block text-[10px] font-black text-slate-600 uppercase mb-2 tracking-widest flex items-center gap-2">
+                                                        <Calendar size={12} /> Trip Date
+                                                    </label>
+                                                    <div className="relative group">
+                                                        <input
+                                                            type="date"
+                                                            className="w-full bg-slate-900/50 border border-slate-800 rounded-xl px-4 py-2.5 text-xs text-slate-400 focus:border-blue-500/30 outline-none appearance-none cursor-pointer [color-scheme:dark] transition-all disabled:opacity-60 disabled:cursor-not-allowed"
+                                                            value={newOrderDate}
+                                                            onChange={e => setNewOrderDate(e.target.value)}
+                                                            disabled={!isAdminOrHR}
+                                                        />
+                                                    </div>
+                                                </div>
+                                                <div>
+                                                    <label className="block text-[10px] font-black text-blue-500/80 uppercase mb-2 tracking-widest flex items-center gap-2">
+                                                        <Calendar size={12} /> Delivery Date
+                                                    </label>
+                                                    <div className="relative group">
+                                                        <input
+                                                            type="date"
+                                                            className="w-full bg-slate-900 border border-slate-800 rounded-xl px-4 py-2.5 text-xs text-slate-200 focus:border-blue-500/50 outline-none appearance-none cursor-pointer [color-scheme:dark] transition-all font-bold disabled:opacity-60 disabled:cursor-not-allowed"
+                                                            value={newOrderDeliveryDate}
+                                                            onChange={e => setNewOrderDeliveryDate(e.target.value)}
+                                                            disabled={!isAdminOrHR}
+                                                        />
+                                                    </div>
+                                                </div>
+                                            </div>
+                                            <div className="hidden lg:flex mt-1 justify-between px-1">
+                                                <div className="text-[9px] text-slate-700 font-bold uppercase">Ord: {formatDateDMY(newOrderDate) || "Today"}</div>
+                                                <div className="text-[9px] text-blue-500/60 font-black uppercase">Del: {formatDateDMY(newOrderDeliveryDate) || "Not Set"}</div>
+                                            </div>
+                                        </div>
+                                    </div>
+
+                                    {/* CUSTOMER / CLIENT SELECTION */}
+                                    <div>
+                                        <label className="block text-xs font-bold text-slate-500 uppercase mb-2">Customer / Client</label>
+                                        <div className="relative">
+                                            <input
+                                                list="customers-list"
+                                                className="w-full bg-slate-900 border border-slate-800 rounded-xl px-4 py-3 text-sm text-slate-200 focus:border-blue-500/50 outline-none placeholder:text-slate-600 disabled:opacity-60 disabled:cursor-not-allowed"
+                                                placeholder="-- Type or Select Customer (Auto-fills Address & Zone) --"
+                                                value={orderCustomer}
+                                                onChange={e => setOrderCustomer(e.target.value)}
+                                                disabled={!isAdminOrHR}
+                                            />
+                                            <datalist id="customers-list">
+                                                {customerDB.map((c, i) => (
+                                                    <option key={c.id || i} value={c.name} />
+                                                ))}
+                                            </datalist>
+                                        </div>
+                                    </div>
+
+                                    {/* DESTINATIONS (Delivery Address) */}
+                                    <div>
+                                        <label className="block text-xs font-bold text-slate-500 uppercase mb-2">Destinations (e.g., KL, PJ, Subang)</label>
+                                        <input
+                                            type="text"
+                                            placeholder="Enter all delivery locations for this trip..."
+                                            className="w-full bg-slate-900 border border-slate-800 rounded-xl px-4 py-3 text-sm text-slate-200 focus:border-blue-500/50 outline-none placeholder:text-slate-600 mb-4 disabled:opacity-60 disabled:cursor-not-allowed"
+                                            value={newOrderAddress}
+                                            onChange={e => {
+                                                setNewOrderAddress(e.target.value);
+                                                const drops = e.target.value.split(',').reduce((total, s) => {
+                                                    if (s.trim().length === 0) return total;
+                                                    const match = s.match(/[x*]\s*(\d+)/i);
+                                                    if (match && match[1]) {
+                                                        return total + parseInt(match[1], 10);
+                                                    }
+                                                    return total + 1;
+                                                }, 0) || 1;
+                                                setTripDropCount(drops);
+                                            }}
+                                            disabled={!isAdminOrHR}
+                                        />
+
+                                        {/* DRIVER PAYROLL RATES: Origin, Category, Drops */}
+                                        <div className="grid grid-cols-1 max-lg:gap-3 lg:grid-cols-3 gap-4 bg-slate-900/50 p-4 border border-slate-800 rounded-xl">
                                             <div>
-                                                <div className="text-[10px] text-gray-500 font-bold uppercase tracking-widest mb-1">Pelanggan / Customer</div>
-                                                <div className="text-sm font-bold text-gray-200">
-                                                    {selectedTrip.customer}
+                                                <label className="block text-[10px] font-bold text-blue-500/80 uppercase tracking-widest mb-2">Trip Category / Origin</label>
+                                                <div className="flex flex-wrap gap-1.5 mb-2">
+                                                    {[
+                                                        { id: 'TAIPING', label: 'Taiping' },
+                                                        { id: 'NILAI', label: 'Nilai' },
+                                                        { id: 'KELANTAN', label: 'Kelantan' },
+                                                        { id: 'JOHOR', label: 'Johor' }
+                                                    ].map(loc => (
+                                                        <button
+                                                            type="button"
+                                                            key={loc.id}
+                                                            onClick={() => {
+                                                                setTripOrigin(loc.id);
+                                                                setCurrentItemLoc(getDefaultLocForOrigin(loc.id));
+                                                            }}
+                                                            className={`px-3 py-1.5 rounded-lg text-xs font-bold transition-all flex items-center gap-1 cursor-pointer ${
+                                                                tripOrigin.toUpperCase() === loc.id
+                                                                    ? 'bg-blue-600 text-white shadow-md shadow-blue-900/50'
+                                                                    : 'bg-slate-950 text-slate-400 border border-slate-800 hover:border-slate-700'
+                                                            }`}
+                                                        >
+                                                            <MapPin size={12} /> {loc.label}
+                                                        </button>
+                                                    ))}
+                                                </div>
+                                                <select
+                                                    className="w-full bg-slate-950 border border-slate-800 rounded-lg px-3 py-2 text-xs text-white focus:border-blue-500/50 outline-none cursor-pointer"
+                                                    value={tripOrigin}
+                                                    onChange={e => {
+                                                        const newOrigin = e.target.value;
+                                                        setTripOrigin(newOrigin);
+                                                        setCurrentItemLoc(getDefaultLocForOrigin(newOrigin));
+                                                    }}
+                                                >
+                                                    <option value="TAIPING">Taiping</option>
+                                                    <option value="NILAI">Nilai</option>
+                                                    <option value="KELANTAN">Kelantan</option>
+                                                    <option value="JOHOR">Johor</option>
+                                                </select>
+                                            </div>
+                                            <div className="relative">
+                                                <label className="block text-[10px] font-bold text-blue-500/80 uppercase tracking-widest mb-2">Trip Category</label>
+                                                <input
+                                                    list="trip-category-list"
+                                                    placeholder="-- Auto/Manual --"
+                                                    className={`w-full bg-slate-950 border rounded-lg px-3 py-2 text-xs text-white focus:outline-none transition-colors ${
+                                                        tripCategory && !deliveryRates.some(r => getSafeOrigin(r.origin) === getSafeOrigin(tripOrigin) && r.location_name === tripCategory)
+                                                            ? 'border-red-500/80 focus:border-red-500 text-red-100' // Invalid styling
+                                                            : 'border-slate-800 focus:border-blue-500/50'     // Normal styling
+                                                    }`}
+                                                    value={tripCategory}
+                                                    onChange={e => setTripCategory(e.target.value.toUpperCase())}
+                                                />
+                                                <datalist id="trip-category-list">
+                                                    {Array.from(new Set(deliveryRates.filter(r => getSafeOrigin(r.origin) === getSafeOrigin(tripOrigin)).map(r => r.location_name))).map(loc => (
+                                                        <option key={loc} value={loc} />
+                                                    ))}
+                                                </datalist>
+                                                {tripCategory && !deliveryRates.some(r => getSafeOrigin(r.origin) === getSafeOrigin(tripOrigin) && r.location_name === tripCategory) && (
+                                                    <div className="absolute mt-1 text-[9px] font-bold text-red-400">?? Unlisted category. Pay will be RM0.</div>
+                                                )}
+                                            </div>
+                                            <div>
+                                                <label className="block text-[10px] font-bold text-emerald-500/80 uppercase tracking-widest mb-2">Total Drops</label>
+                                                <input
+                                                    type="number"
+                                                    min={1}
+                                                    className="w-full bg-slate-950 border border-slate-800 rounded-lg px-3 py-2 text-xs text-white focus:border-emerald-500/50 outline-none font-mono font-bold"
+                                                    value={tripDropCount}
+                                                    onChange={e => setTripDropCount(parseInt(e.target.value) || 1)}
+                                                />
+                                            </div>
+                                        </div>
+                                    </div>
+
+                                    {/* TRIP NOTE & PHOTO */}
+                                    <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                                        <div>
+                                            <label className="block text-xs font-bold text-slate-500 uppercase mb-2">Trip Notes</label>
+                                            <textarea
+                                                rows={3}
+                                                placeholder="Enter notes for this trip..."
+                                                className="w-full bg-slate-900 border border-slate-800 rounded-xl px-4 py-3 text-sm text-slate-300 focus:border-blue-500/50 outline-none placeholder:text-slate-600 resize-none font-mono disabled:opacity-60 disabled:cursor-not-allowed"
+                                                value={newOrderNotes}
+                                                disabled={!isAdminOrHR}
+                                                onChange={e => setNewOrderNotes(e.target.value)}
+                                            />
+                                        </div>
+                                        <div>
+                                            <label className="block text-xs font-bold text-slate-500 uppercase mb-2">Driver Proof of Load</label>
+                                            {selectedTrip.proof_of_load_url ? (
+                                                <a href={selectedTrip.proof_of_load_url} target="_blank" rel="noopener noreferrer" className="block relative group overflow-hidden rounded-xl border border-slate-700 h-28 bg-black">
+                                                    <img src={selectedTrip.proof_of_load_url} alt="Proof of Load" className="w-full h-full object-cover opacity-80 group-hover:opacity-100 transition-opacity" />
+                                                </a>
+                                            ) : (
+                                                <div className="flex flex-col items-center justify-center bg-slate-900 border border-dashed border-slate-800 rounded-xl h-28 opacity-50">
+                                                    <Camera size={24} className="text-slate-600 mb-2" />
+                                                    <span className="text-xs font-bold text-slate-600 uppercase tracking-widest">No Photo Uploaded</span>
+                                                </div>
+                                            )}
+                                        </div>
+                                    </div>
+
+                                </div>
+
+                                {/* RIGHT COLUMN */}
+                                <div className="flex flex-col min-h-0 lg:min-h-[min(72vh,680px)]">
+                                    <h3 className="text-sm font-bold text-slate-400 uppercase tracking-wider mb-4 flex items-center gap-2">
+                                        <Box size={16} /> Trip Items
+                                    </h3>
+
+                                    {/* Volume & Weight Load Progress Bars */}
+                                    {(() => {
+                                        const load = calculateLoad(newOrderItems, v2Items);
+                                        return (
+                                            <div className="space-y-2 mb-4 bg-slate-900/50 p-3 rounded-xl border border-slate-800/80">
+                                                <div>
+                                                    <div className="flex justify-between text-[10px] font-mono leading-none mb-1">
+                                                        <span className="text-slate-400">Volume Load ({load.totalVol}/{load.maxVol} m³)</span>
+                                                        <span className={getPercentColor(Number(load.percentVol))}>
+                                                            {load.percentVol}%
+                                                        </span>
+                                                    </div>
+                                                    <div className="w-full bg-slate-950 h-1.5 rounded-full overflow-hidden border border-slate-800">
+                                                        <div
+                                                            className={`h-full rounded-full transition-all duration-300 ${getPercentBarColor(Number(load.percentVol))}`}
+                                                            style={{ width: `${Math.min(Number(load.percentVol), 100)}%` }}
+                                                        />
+                                                    </div>
+                                                </div>
+
+                                                <div>
+                                                    <div className="flex justify-between text-[10px] font-mono leading-none mb-1">
+                                                        <span className="text-slate-400">Weight Load ({load.totalWeight}/{load.maxWeight} kg)</span>
+                                                        <span className={getPercentColor(Number(load.percentWeight))}>
+                                                            {load.percentWeight}%
+                                                        </span>
+                                                    </div>
+                                                    <div className="w-full bg-slate-950 h-1.5 rounded-full overflow-hidden border border-slate-800">
+                                                        <div
+                                                            className={`h-full rounded-full transition-all duration-300 ${getPercentBarColor(Number(load.percentWeight))}`}
+                                                            style={{ width: `${Math.min(Number(load.percentWeight), 100)}%` }}
+                                                        />
+                                                    </div>
+                                                </div>
+                                            </div>
+                                        );
+                                    })()}
+
+                                    {/* Item List Layout */}
+                                    <div className="bg-slate-900/80 rounded-2xl border border-slate-800 shadow-lg flex flex-col flex-1 min-h-0 overflow-hidden">
+                                        {isAdminOrHR && (
+                                            <div className="p-4 border-b border-slate-800 bg-slate-800/40 flex flex-col gap-3 shrink-0 z-10">
+                                                <div className="flex items-center justify-between gap-2">
+                                                    <div className="flex items-center gap-2 text-xs font-bold text-slate-400 uppercase tracking-wider">
+                                                        <ImagePlus size={14} className="text-blue-400" /> Quick Add (search by name)
+                                                    </div>
+                                                    <div className="text-xs font-bold text-slate-500 bg-slate-950 px-2 py-1 rounded border border-slate-800">
+                                                        {newOrderItems.length} in list
+                                                    </div>
+                                                </div>
+                                                <SearchableSelect
+                                                    placeholder="Type product name (e.g. stretch film)..."
+                                                    dropdownMaxHeight="max-h-[min(55vh,32rem)]"
+                                                    options={v2Items.map(item => ({
+                                                        value: item.sku,
+                                                        label: item.name,
+                                                        subLabel: `${item.sku}`,
+                                                        searchText: [item.brand, item.description, item.legacy_code].filter(Boolean).join(' ')
+                                                    }))}
+                                                    value={selectedV2Item?.sku || ''}
+                                                    onChange={(val) => {
+                                                        const i = v2Items.find(x => x.sku === val);
+                                                        setSelectedV2Item(i || null);
+                                                    }}
+                                                />
+                                                <div className="flex flex-wrap gap-2">
+                                                    <select
+                                                        className="min-w-[5rem] bg-slate-950 border border-slate-700 rounded-xl px-3 py-3 text-slate-300 outline-none focus:border-blue-50 text-xs font-bold uppercase cursor-pointer"
+                                                        value={normalizeWarehouseName(currentItemLoc)}
+                                                        onChange={e => setCurrentItemLoc(e.target.value)}
+                                                    >
+                                                        {getAvailableWarehousesForOrigin(tripOrigin).map(loc => (
+                                                            <option key={loc} value={loc}>{loc}</option>
+                                                        ))}
+                                                    </select>
+                                                    <input
+                                                        type="text"
+                                                        placeholder="Item remark..."
+                                                        className="flex-1 min-w-[8rem] bg-slate-950 border border-slate-700 rounded-xl px-4 py-3 text-slate-300 outline-none focus:border-blue-500 text-sm placeholder:text-slate-600"
+                                                        value={currentItemRemark}
+                                                        onChange={e => setCurrentItemRemark(e.target.value)}
+                                                    />
+                                                    <input
+                                                        type="number"
+                                                        placeholder="Qty"
+                                                        className="w-20 bg-slate-950 border border-slate-700 rounded-xl px-2 py-3 text-white text-right font-bold outline-none focus:border-orange-500 text-sm"
+                                                        value={currentItemQty || ''}
+                                                        onChange={e => setCurrentItemQty(Number(e.target.value))}
+                                                    />
+                                                    <button
+                                                        type="button"
+                                                        onClick={handleAddItem}
+                                                        disabled={!selectedV2Item || !currentItemQty}
+                                                        className="bg-blue-600 hover:bg-blue-500 disabled:opacity-50 text-white px-5 py-3 rounded-xl font-bold text-sm transition-all flex items-center gap-2 shrink-0 cursor-pointer"
+                                                    >
+                                                        <Plus size={16} /> Add
+                                                    </button>
                                                 </div>
                                             </div>
                                         )}
-                                    </div>
-
-                                    {/* Items List */}
-                                    <div>
-                                        <h3 className="text-xs font-bold text-gray-400 uppercase tracking-widest mb-3 flex items-center gap-2">
-                                            <div className="w-1.5 h-1.5 rounded-full bg-blue-500"></div> Barangan Dimuatkan / Loaded Items
-                                        </h3>
-                                        
-                                        {selectedTrip.items && selectedTrip.items.length > 0 ? (
-                                            <div className="space-y-2">
-                                                {selectedTrip.items.map((item: any, idx: number) => (
-                                                    <div key={idx} className="bg-[#121214] border border-[#27272a] p-3 rounded-lg flex items-center justify-between gap-3 group hover:border-blue-500/30 transition-colors">
-                                                        <div className="flex-1 min-w-0">
-                                                            <div className="text-xs font-bold text-gray-200 truncate">{item.product}</div>
-                                                            {(item.remark || item.sourceLocation) && (
-                                                                <div className="text-[10px] font-mono text-gray-500 mt-1 truncate">
-                                                                    {item.sourceLocation && <span className="text-blue-400 mr-2">[{item.sourceLocation}]</span>}
-                                                                    {item.remark}
+                                        <div className="px-4 py-2 border-b border-slate-800/80 text-[10px] font-bold text-slate-600 uppercase shrink-0 flex items-center gap-2">
+                                            <Box size={12} /> Line items
+                                        </div>
+                                        <div className="flex-1 min-h-0 p-4 space-y-2 overflow-y-auto custom-scrollbar max-h-[min(42vh,380px)] xl:max-h-none">
+                                            {newOrderItems.length === 0 ? (
+                                                <div className="text-center py-12 text-slate-700 text-sm italic border-2 border-dashed border-slate-800/50 rounded-xl">
+                                                    No items yet. Use Quick Add above or Scan Photo.
+                                                </div>
+                                            ) : (
+                                                newOrderItems.map((item, idx) => (
+                                                    <div key={idx} className="bg-slate-950 p-3 rounded-xl border border-slate-800 flex flex-col gap-2 group hover:border-slate-700 transition-colors">
+                                                        <div className="flex justify-between items-start">
+                                                            <div className="flex-1">
+                                                                <div className="font-bold text-white text-sm leading-tight">{item.product}</div>
+                                                                <div className="flex items-center gap-2 mt-1">
+                                                                    <span className="text-[10px] text-slate-500 font-mono">{item.sku}</span>
+                                                                    <span className="text-[10px] bg-blue-500/10 text-blue-400 px-1.5 py-0.5 rounded uppercase font-bold border border-blue-500/20">
+                                                                        {item.packaging || 'Unit'}
+                                                                    </span>
                                                                 </div>
-                                                            )}
+                                                            </div>
+                                                            <div className="flex items-center gap-3">
+                                                                <input
+                                                                    type="number"
+                                                                    disabled={!isAdminOrHR}
+                                                                    className="w-16 bg-slate-900 border border-slate-700 rounded-lg px-2 py-1 text-right font-bold text-orange-400 focus:border-orange-500 outline-none text-sm disabled:opacity-60 disabled:cursor-not-allowed"
+                                                                    value={item.quantity}
+                                                                    onChange={(e) => {
+                                                                        const val = Number(e.target.value);
+                                                                        const updated = [...newOrderItems];
+                                                                        updated[idx].quantity = val;
+                                                                        setNewOrderItems(updated);
+                                                                    }}
+                                                                />
+                                                                <button onClick={() => handleRemoveItem(idx)} className="text-slate-600 hover:text-red-500 p-1 rounded-full hover:bg-slate-900 transition-colors cursor-pointer">
+                                                                    <X size={16} />
+                                                                </button>
+                                                            </div>
                                                         </div>
-                                                        <div className="flex items-center gap-2 pl-3 border-l border-white/5 shrink-0">
-                                                            <span className="text-lg font-black font-mono text-white">x{item.quantity}</span>
+
+                                                        <div className="flex flex-col gap-2 mt-1">
+                                                            <div className="flex items-center gap-2">
+                                                                <div className="text-[10px] font-bold text-slate-600 uppercase w-16">Pickup:</div>
+                                                                <select
+                                                                    className="flex-1 bg-slate-900 border border-slate-800 rounded px-2 py-1 text-xs text-blue-400 font-bold focus:border-blue-500 outline-none cursor-pointer"
+                                                                    value={normalizeWarehouseName(item.sourceLocation || getDefaultLocForOrigin(tripOrigin))}
+                                                                    onChange={(e) => {
+                                                                        const val = e.target.value;
+                                                                        const updated = [...newOrderItems];
+                                                                        updated[idx].sourceLocation = val;
+                                                                        setNewOrderItems(updated);
+                                                                    }}
+                                                                >
+                                                                    {getAvailableWarehousesForOrigin(tripOrigin).map(loc => <option key={loc} value={loc}>{loc}</option>)}
+                                                                </select>
+                                                            </div>
+                                                            <div className="flex items-center gap-2">
+                                                                <div className="text-[10px] font-bold text-slate-600 uppercase w-16">Remark:</div>
+                                                                <input
+                                                                    type="text"
+                                                                    placeholder="Add remark..."
+                                                                    className="flex-1 bg-transparent border-b border-slate-800 text-xs text-slate-400 focus:border-blue-500 outline-none py-0.5 placeholder:text-slate-700"
+                                                                    value={item.remark || ''}
+                                                                    onChange={(e) => {
+                                                                        const val = e.target.value;
+                                                                        const updated = [...newOrderItems];
+                                                                        updated[idx].remark = val;
+                                                                        setNewOrderItems(updated);
+                                                                    }}
+                                                                />
+                                                            </div>
                                                         </div>
                                                     </div>
-                                                ))}
-                                            </div>
-                                        ) : (
-                                            <div className="p-4 bg-white/5 border border-white/5 rounded-xl text-center text-xs text-gray-500 font-bold">
-                                                Tiada barangan direkodkan untuk trip ini. / No items recorded for this trip.
-                                            </div>
-                                        )}
+                                                ))
+                                            )}
+                                        </div>
                                     </div>
+                                </div>
+                            </div>
+                        </div>
 
-                                    {/* Photos section / Seksyen Gambar DO */}
-                                    {(selectedTrip.proof_of_load_url || selectedTrip.pod_photo_url || selectedTrip.pod_signature_url) && (
-                                        <div className="space-y-4">
-                                            <h3 className="text-xs font-bold text-gray-400 uppercase tracking-widest flex items-center gap-2">
-                                                <div className="w-1.5 h-1.5 rounded-full bg-violet-500 animate-pulse"></div> Gambar DO / DO Photos
-                                            </h3>
-                                            
-                                            <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
-                                                {/* Proof of Load */}
-                                                {selectedTrip.proof_of_load_url && (
-                                                    <div className="bg-[#121214] border border-[#27272a] p-2.5 rounded-xl flex flex-col gap-1.5">
-                                                        <span className="text-[9px] font-black text-gray-400 uppercase tracking-wider text-center">Gambar Muatan / Proof of Load</span>
-                                                        <a href={selectedTrip.proof_of_load_url} target="_blank" rel="noreferrer" className="relative aspect-video rounded-lg overflow-hidden border border-white/5 bg-black flex items-center justify-center cursor-zoom-in group-hover:border-violet-500/50 transition-colors">
-                                                            <img src={selectedTrip.proof_of_load_url} alt="Proof of Load" className="max-w-full max-h-full object-contain" />
-                                                        </a>
-                                                    </div>
-                                                )}
-
-                                                {/* POD Photo */}
-                                                {selectedTrip.pod_photo_url && selectedTrip.pod_photo_url.split(',').map((url: string, idx: number) => {
-                                                    const trimmed = url.trim();
-                                                    if (!trimmed) return null;
-                                                    const isDo = idx % 2 === 0;
-                                                    const label = isDo ? 'Gambar DO / DO Proof' : 'Gambar Barang / Cargo Proof';
-                                                    return (
-                                                        <div key={idx} className="bg-[#121214] border border-[#27272a] p-2.5 rounded-xl flex flex-col gap-1.5">
-                                                            <span className="text-[9px] font-black text-gray-400 uppercase tracking-wider text-center">{label} ({Math.floor(idx / 2) + 1})</span>
-                                                            <a href={trimmed} target="_blank" rel="noreferrer" className="relative aspect-video rounded-lg overflow-hidden border border-white/5 bg-black flex items-center justify-center cursor-zoom-in group-hover:border-violet-500/50 transition-colors">
-                                                                <img src={trimmed} alt={`Proof of Delivery ${idx + 1}`} className="max-w-full max-h-full object-contain" />
-                                                            </a>
-                                                        </div>
-                                                    );
-                                                })}
-
-                                                {/* Signature */}
-                                                {selectedTrip.pod_signature_url && (
-                                                    <div className="bg-[#121214] border border-[#27272a] p-2.5 rounded-xl flex flex-col gap-1.5 sm:col-span-2">
-                                                        <span className="text-[9px] font-black text-gray-400 uppercase tracking-wider text-center font-sans">Tandatangan Penerima / Signature</span>
-                                                        <div className="relative h-24 rounded-lg overflow-hidden bg-white/95 flex items-center justify-center border border-white/10 shadow-inner">
-                                                            <img src={selectedTrip.pod_signature_url} alt="POD Signature" className="max-h-full object-contain p-1" />
-                                                        </div>
-                                                    </div>
-                                                )}
-                                            </div>
-                                        </div>
-                                    )}
-
-                                    {/* Notes */}
-                                    {selectedTrip.notes && (
-                                        <div>
-                                            <h3 className="text-[10px] font-bold text-gray-500 uppercase tracking-widest mb-2 flex items-center gap-2">
-                                                Nota Perjalanan / Trip Notes
-                                            </h3>
-                                            <div className="bg-amber-500/5 border border-amber-500/20 p-3 rounded-xl text-xs text-amber-200/80 leading-relaxed font-medium">
-                                                {selectedTrip.notes}
-                                            </div>
-                                        </div>
-                                    )}
-                                </>
-                            )}
-
+                        {/* Modal Footer */}
+                        <div className="p-6 border-t border-slate-800 bg-slate-900/50 flex justify-end gap-3 shrink-0">
+                            <button onClick={() => { setSelectedTrip(null); setIsEditingTrip(false); }} className="px-6 py-2 rounded-xl text-slate-400 hover:text-white font-bold transition-colors cursor-pointer">Cancel</button>
+                            <button
+                                onClick={handleSaveTrip}
+                                disabled={newOrderNotes.includes('[HR_APPROVED]')}
+                                className="px-8 py-2 bg-gradient-to-r from-orange-500 to-amber-600 hover:from-orange-600 hover:to-amber-700 text-white rounded-xl font-bold shadow-lg shadow-orange-950/30 transition-all active:scale-95 flex items-center gap-2 cursor-pointer disabled:opacity-50 disabled:cursor-not-allowed disabled:hover:scale-100 disabled:active:scale-100"
+                            >
+                                {newOrderNotes.includes('[HR_APPROVED]') ? 'Locked by HR' : 'CONFIRM TRIP'}
+                            </button>
                         </div>
                     </div>
                 </div>

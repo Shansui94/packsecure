@@ -7,6 +7,7 @@ import {
 } from 'lucide-react';
 import { supabase } from '../services/supabase';
 import { User } from '../types';
+import { useTranslation } from "react-i18next";
 
 interface Thread {
     id: string;
@@ -51,6 +52,7 @@ interface Props {
 }
 
 export default function TeamChat({ user }: Props) {
+    const { t } = useTranslation();
     const [threads, setThreads] = useState<Thread[]>([]);
     const [activeThread, setActiveThread] = useState<Thread | null>(null);
     const [messages, setMessages] = useState<Message[]>([]);
@@ -130,13 +132,13 @@ export default function TeamChat({ user }: Props) {
             }, (payload) => {
                 if (payload.eventType === 'INSERT') {
                     setTasks(prev => {
-                        if (prev.some(t => t.id === payload.new.id)) return prev;
+                        if (prev.some(item => item.id === payload.new.id)) return prev;
                         return [...prev, payload.new as CanvasTask];
                     });
                 } else if (payload.eventType === 'UPDATE') {
-                    setTasks(prev => prev.map(t => t.id === payload.new.id ? (payload.new as CanvasTask) : t));
+                    setTasks(prev => prev.map(item => item.id === payload.new.id ? (payload.new as CanvasTask) : item));
                 } else if (payload.eventType === 'DELETE') {
-                    setTasks(prev => prev.filter(t => t.id !== payload.old.id));
+                    setTasks(prev => prev.filter(item => item.id !== payload.old.id));
                 }
             })
             .subscribe();
@@ -151,7 +153,7 @@ export default function TeamChat({ user }: Props) {
             }, (payload) => {
                 const updated = payload.new as Thread;
                 setActiveThread(updated);
-                setThreads(prev => prev.map(t => t.id === updated.id ? updated : t));
+                setThreads(prev => prev.map(item => item.id === updated.id ? updated : item));
                 setEditedDocContent(updated.canvas_document || '');
             })
             .subscribe();
@@ -236,7 +238,7 @@ export default function TeamChat({ user }: Props) {
     const handleCreateThread = async () => {
         if (!user) return;
         const newThread = {
-            title: `新对话 (${new Date().toLocaleDateString('zh-CN', { month: 'short', day: 'numeric' })})`,
+            title: t('New conversation ({{var0}})', { var0: new Date().toLocaleDateString('zh-CN', { month: 'short', day: 'numeric' }) }),
             canvas_document: '',
             members: [user.uid],
             created_by: user.uid
@@ -252,13 +254,13 @@ export default function TeamChat({ user }: Props) {
             setThreads(prev => [data, ...prev]);
             setActiveThread(data);
         } else {
-            alert('新建会话失败: ' + (error?.message || '未知错误'));
+            alert(t('Failed to create new session:') + (error?.message || t('unknown error')));
         }
     };
 
     const handleDeleteThread = async (id: string, e: React.MouseEvent) => {
         e.stopPropagation();
-        if (!confirm('确定删除此对话吗？此操作不可逆。')) return;
+        if (!confirm(t('Are you sure you want to delete this conversation? This operation is irreversible.'))) return;
 
         const { error } = await supabase
             .from('team_chat_threads')
@@ -266,12 +268,12 @@ export default function TeamChat({ user }: Props) {
             .eq('id', id);
 
         if (!error) {
-            setThreads(prev => prev.filter(t => t.id !== id));
+            setThreads(prev => prev.filter(item => item.id !== id));
             if (activeThread?.id === id) {
                 setActiveThread(null);
             }
         } else {
-            alert('删除失败: ' + error.message);
+            alert(t('Delete failed:') + error.message);
         }
     };
 
@@ -285,10 +287,10 @@ export default function TeamChat({ user }: Props) {
 
         if (!error) {
             setActiveThread(prev => prev ? { ...prev, title: renameTitle.trim() } : null);
-            setThreads(prev => prev.map(t => t.id === activeThread.id ? { ...t, title: renameTitle.trim() } : t));
+            setThreads(prev => prev.map(item => item.id === activeThread.id ? { ...item, title: renameTitle.trim() } : item));
             setIsRenamingThread(false);
         } else {
-            alert('重命名失败: ' + error.message);
+            alert(t('Rename failed:') + error.message);
         }
     };
 
@@ -326,7 +328,7 @@ export default function TeamChat({ user }: Props) {
 
     const handleVoiceToggle = () => {
         if (!recognitionRef.current) {
-            alert('当前浏览器不支持语音录入，请尝试使用 Chrome 或 Safari。');
+            alert(t('The current browser does not support voice recording, please try using Chrome or Safari.'));
             return;
         }
         if (isListening) {
@@ -371,7 +373,7 @@ export default function TeamChat({ user }: Props) {
                 sender_id: user.uid,
                 sender_name: user.name || 'Anonymous',
                 sender_role: user.role || 'Guest',
-                content: textToSend || (imageUrl ? '发送了图片附件' : ''),
+                content: textToSend || (imageUrl ? t('Image attachment sent') : ''),
                 image_url: imageUrl
             };
 
@@ -407,7 +409,7 @@ export default function TeamChat({ user }: Props) {
                 });
 
                 const aiRequestBody = {
-                    query: textToSend || '请分析我发送的这张照片',
+                    query: textToSend || t('Please analyze this photo I sent'),
                     userContext: {
                         role: user.role,
                         name: user.name,
@@ -417,7 +419,7 @@ export default function TeamChat({ user }: Props) {
                     },
                     history: chatHistoryContext,
                     canvas_document: activeThread.canvas_document || '',
-                    canvas_tasks: tasks.map(t => ({ title: t.title, status: t.status, assigned_name: t.assigned_name })),
+                    canvas_tasks: tasks.map(cTask => ({ title: cTask.title, status: cTask.status, assigned_name: cTask.assigned_name })),
                     imageBase64: attachedImageBase64 || undefined,
                     mimeType: 'image/jpeg'
                 };
@@ -428,10 +430,10 @@ export default function TeamChat({ user }: Props) {
                     body: JSON.stringify(aiRequestBody)
                 });
 
-                if (!res.ok) throw new Error('AI 服务响应错误');
+                if (!res.ok) throw new Error(t('AI service response error'));
 
                 const data = await res.json();
-                let rawAIResponse = data.response || '我未能理解该请求。';
+                let rawAIResponse = data.response || t('I failed to understand the request.');
 
                 // 4. Parse Canvas manipulations from AI response
                 // A. Parse Document Updates (handles both <update_doc> and [UPDATE_DOC: ])
@@ -475,7 +477,7 @@ export default function TeamChat({ user }: Props) {
                     let assignedId: string | null = null;
                     let assignedName: string | null = null;
 
-                    if (assigneeQuery.toLowerCase() !== 'unassigned' && assigneeQuery.toLowerCase() !== '未指派' && assigneeQuery.toLowerCase() !== '无') {
+                    if (assigneeQuery.toLowerCase() !== 'unassigned' && assigneeQuery.toLowerCase() !== t('Not assigned') && assigneeQuery.toLowerCase() !== t('none')) {
                         const resolvedMember = teamUsers.find(u => 
                             u.name.toLowerCase().includes(assigneeQuery.toLowerCase()) || 
                             u.employee_id === assigneeQuery
@@ -539,7 +541,7 @@ export default function TeamChat({ user }: Props) {
                 sender_id: null,
                 sender_name: 'System',
                 sender_role: 'System',
-                content: `⚠️ 发送消息或 AI 回应出错: ${err.message}`,
+                content: t('⚠️ Error sending message or AI response: {{var0}}', { var0: err.message }),
                 image_url: null,
                 created_at: new Date().toISOString()
             }]);
@@ -559,7 +561,7 @@ export default function TeamChat({ user }: Props) {
         if (!error) {
             setIsEditingDoc(false);
         } else {
-            alert('保存文档失败: ' + error.message);
+            alert(t('Failed to save document:') + error.message);
         }
     };
 
@@ -579,7 +581,7 @@ export default function TeamChat({ user }: Props) {
         if (!error) {
             setNewTaskTitle('');
         } else {
-            alert('添加任务失败: ' + error.message);
+            alert(t('Failed to add task:') + error.message);
         }
     };
 
@@ -591,7 +593,7 @@ export default function TeamChat({ user }: Props) {
             .update({ status: newStatus })
             .eq('id', task.id);
         
-        if (error) alert('更新任务状态失败: ' + error.message);
+        if (error) alert(t('Failed to update task status:') + error.message);
     };
 
     // Assign Task Assignee
@@ -605,7 +607,7 @@ export default function TeamChat({ user }: Props) {
             })
             .eq('id', taskId);
 
-        if (error) alert('指派任务失败: ' + error.message);
+        if (error) alert(t('Failed to assign task:') + error.message);
     };
 
     // Delete Task
@@ -614,7 +616,7 @@ export default function TeamChat({ user }: Props) {
             .from('team_chat_tasks')
             .delete()
             .eq('id', taskId);
-        if (error) alert('删除任务失败: ' + error.message);
+        if (error) alert(t('Delete task failed:') + error.message);
     };
 
     // Invite Member to Thread
@@ -628,7 +630,7 @@ export default function TeamChat({ user }: Props) {
             .update({ members: updatedMembers, updated_at: new Date().toISOString() })
             .eq('id', activeThread.id);
 
-        if (error) alert('邀请成员失败: ' + error.message);
+        if (error) alert(t('Failed to invite members:') + error.message);
     };
 
     // Remove Member from Thread
@@ -640,13 +642,13 @@ export default function TeamChat({ user }: Props) {
             .update({ members: updatedMembers, updated_at: new Date().toISOString() })
             .eq('id', activeThread.id);
 
-        if (error) alert('移除成员失败: ' + error.message);
+        if (error) alert(t('Failed to remove member:') + error.message);
     };
 
     // Filter threads by search bar
-    const filteredThreads = threads.filter(t => 
-        t.title.toLowerCase().includes(searchQuery.toLowerCase()) ||
-        t.canvas_document?.toLowerCase().includes(searchQuery.toLowerCase())
+    const filteredThreads = threads.filter(item => 
+        item.title.toLowerCase().includes(searchQuery.toLowerCase()) ||
+        item.canvas_document?.toLowerCase().includes(searchQuery.toLowerCase())
     );
 
     return (
@@ -660,15 +662,16 @@ export default function TeamChat({ user }: Props) {
                         className="w-full py-3 px-4 rounded-xl bg-gradient-to-r from-blue-600 to-indigo-600 hover:from-blue-500 hover:to-indigo-500 text-white font-bold text-sm flex items-center justify-center gap-2 shadow-lg shadow-blue-500/20 active:scale-95 transition-all"
                     >
                         <Plus size={18} />
-                        新建协同会话
-                    </button>
+                        
+                                                {t('Create a new collaborative session')}
+                                            </button>
                     
                     {/* Search Bar */}
                     <div className="relative">
                         <Search size={16} className="absolute left-3 top-1/2 -translate-y-1/2 text-zinc-500" />
                         <input
                             type="text"
-                            placeholder="搜索对话或文档内容..."
+                            placeholder={t('Search conversation or document content...')}
                             value={searchQuery}
                             onChange={e => setSearchQuery(e.target.value)}
                             className="w-full pl-9 pr-4 py-2 bg-zinc-900 border border-white/5 rounded-xl text-xs text-white focus:outline-none focus:border-blue-500/50 transition-all placeholder-zinc-500"
@@ -680,15 +683,16 @@ export default function TeamChat({ user }: Props) {
                 <div className="flex-1 overflow-y-auto p-2 space-y-1 custom-scrollbar">
                     {filteredThreads.length === 0 ? (
                         <div className="text-center py-10 text-xs text-zinc-600">
-                            没有找到相关的对话
-                        </div>
+                            
+                                                        {t('No relevant conversations found')}
+                                                    </div>
                     ) : (
-                        filteredThreads.map(t => {
-                            const isSelected = activeThread?.id === t.id;
+                        filteredThreads.map(threadItem => {
+                            const isSelected = activeThread?.id === threadItem.id;
                             return (
                                 <div
-                                    key={t.id}
-                                    onClick={() => setActiveThread(t)}
+                                    key={threadItem.id}
+                                    onClick={() => setActiveThread(threadItem)}
                                     className={`group flex items-center justify-between p-3.5 rounded-xl cursor-pointer transition-all ${
                                         isSelected 
                                             ? 'bg-blue-600/10 border border-blue-500/20 text-white font-medium' 
@@ -697,12 +701,12 @@ export default function TeamChat({ user }: Props) {
                                 >
                                     <div className="flex items-center gap-3 min-w-0 flex-1">
                                         <MessageSquare size={16} className={isSelected ? 'text-blue-400' : 'text-zinc-500'} />
-                                        <span className="text-xs truncate">{t.title}</span>
+                                        <span className="text-xs truncate">{threadItem.title}</span>
                                     </div>
                                     <button
-                                        onClick={(e) => handleDeleteThread(t.id, e)}
+                                        onClick={(e) => handleDeleteThread(threadItem.id, e)}
                                         className="opacity-0 group-hover:opacity-100 hover:text-red-400 p-1 rounded transition-all"
-                                        title="删除会话"
+                                        title={t('Delete session')}
                                     >
                                         <Trash2 size={14} />
                                     </button>
@@ -720,24 +724,27 @@ export default function TeamChat({ user }: Props) {
                     <div className="w-16 h-16 rounded-3xl bg-gradient-to-br from-blue-500 to-indigo-600 flex items-center justify-center shadow-xl shadow-blue-500/15 mb-6 animate-pulse">
                         <Sparkles size={32} className="text-white" />
                     </div>
-                    <h2 className="text-2xl font-black tracking-tight text-white mb-2">欢迎来到团队智能协作室</h2>
+                    <h2 className="text-2xl font-black tracking-tight text-white mb-2">{t('Welcome to the team intelligent collaboration room')}</h2>
                     <p className="text-zinc-500 text-sm text-center max-w-md mb-8">
-                        这里是团队进行实时讨论与 AI 共享画布协同的空间。在左侧新建或选择一个会话以开始。
-                    </p>
+                        
+                                                {t('This is a space for teams to have real-time discussions and collaborate on an AI shared canvas. Create a new session on the left or select a session to start.')}
+                                            </p>
                     <div className="grid grid-cols-1 md:grid-cols-2 gap-4 max-w-xl">
                         <div className="bg-zinc-950/40 border border-white/5 p-4 rounded-2xl hover:border-blue-500/30 transition-all">
                             <h4 className="text-white font-bold text-xs flex items-center gap-2 mb-1.5">
                                 <ImageIcon size={14} className="text-blue-400" />
-                                现场图片智能识别
-                            </h4>
-                            <p className="text-zinc-500 text-xxs">上传原材料照片，让 AI 读出称重数字并自动分类，生成测试记录。</p>
+                                
+                                                                {t('Intelligent recognition of on-site pictures')}
+                                                            </h4>
+                            <p className="text-zinc-500 text-xxs">{t('Upload photos of raw materials, let AI read the weighing numbers and automatically classify them, and generate test records.')}</p>
                         </div>
                         <div className="bg-zinc-950/40 border border-white/5 p-4 rounded-2xl hover:border-blue-500/30 transition-all">
                             <h4 className="text-white font-bold text-xs flex items-center gap-2 mb-1.5">
                                 <ClipboardList size={14} className="text-indigo-400" />
-                                聊天自动生成任务
-                            </h4>
-                            <p className="text-zinc-500 text-xxs">在群聊中说“分配某某去清洁卫生”，AI 会在右侧 Canvas 自动生成并指派任务。</p>
+                                
+                                                                {t('Chat automatically generates tasks')}
+                                                            </h4>
+                            <p className="text-zinc-500 text-xxs">{t('Say "Assign so-and-so to cleaning" in the group chat, and AI will automatically generate and assign tasks in the Canvas on the right.')}</p>
                         </div>
                     </div>
                 </div>
@@ -755,7 +762,7 @@ export default function TeamChat({ user }: Props) {
                                         value={renameTitle}
                                         onChange={e => setRenameTitle(e.target.value)}
                                         className="bg-zinc-900 border border-white/10 rounded-lg px-2.5 py-1 text-xs text-white focus:outline-none focus:border-blue-500"
-                                        placeholder="对话名称"
+                                        placeholder={t('Conversation name')}
                                         onKeyDown={e => e.key === 'Enter' && handleRenameThread()}
                                     />
                                     <button onClick={handleRenameThread} className="bg-blue-600 hover:bg-blue-500 p-1.5 rounded-lg text-white">
@@ -787,8 +794,8 @@ export default function TeamChat({ user }: Props) {
                                 <div className="flex items-center gap-1.5">
                                     <span className="w-1.5 h-1.5 rounded-full bg-green-500 animate-pulse" />
                                     <span className="text-[10px] text-zinc-500 uppercase tracking-widest font-mono">
-                                        {activeThread.members.length} 位成员活跃
-                                    </span>
+                                        {activeThread.members.length}  {t('members are active')}
+                                                                                </span>
                                 </div>
                             </div>
                         </div>
@@ -798,7 +805,7 @@ export default function TeamChat({ user }: Props) {
                             {messages.length === 0 ? (
                                 <div className="text-center py-20 text-zinc-600 text-xs">
                                     <MessageSquare size={24} className="mx-auto mb-3 opacity-30" />
-                                    <span>欢迎在此讨论！可以在消息中@Gemini 或勾选“问 Gemini”获取 AI 协助。</span>
+                                    <span>{t('Welcome to discuss here! You can get AI assistance by @Gemini in a message or by checking “Ask Gemini”.')}</span>
                                 </div>
                             ) : (
                                 messages.map((m) => {
@@ -840,7 +847,7 @@ export default function TeamChat({ user }: Props) {
                                                         <div className="mt-2.5 rounded-xl overflow-hidden border border-white/10 max-w-[240px] cursor-zoom-in">
                                                             <img 
                                                                 src={m.image_url} 
-                                                                alt="附件图片" 
+                                                                alt={t('Attachment picture')} 
                                                                 className="w-full object-cover max-h-[180px] hover:scale-105 transition-all"
                                                                 onClick={() => window.open(m.image_url!, '_blank')}
                                                             />
@@ -856,7 +863,7 @@ export default function TeamChat({ user }: Props) {
                                 <div className="flex justify-start w-full">
                                     <div className="bg-zinc-900 border border-white/5 rounded-2xl rounded-bl-none px-4 py-3 flex items-center gap-1.5">
                                         <Loader size={12} className="animate-spin text-blue-400" />
-                                        <span className="text-xxs text-zinc-500">Gemini 正在分析并生成回答...</span>
+                                        <span className="text-xxs text-zinc-500">{t('Gemini is analyzing and generating answers...')}</span>
                                     </div>
                                 </div>
                             )}
@@ -867,10 +874,10 @@ export default function TeamChat({ user }: Props) {
                         {attachedImagePreview && (
                             <div className="absolute bottom-20 left-6 p-2.5 bg-zinc-950 border border-white/10 rounded-2xl flex items-center gap-3 z-10 shadow-2xl animate-in slide-in-from-bottom-2 duration-200">
                                 <div className="w-14 h-14 rounded-lg overflow-hidden border border-white/10">
-                                    <img src={attachedImagePreview} alt="待上传" className="w-full h-full object-cover" />
+                                    <img src={attachedImagePreview} alt={t('To be uploaded')} className="w-full h-full object-cover" />
                                 </div>
                                 <div>
-                                    <p className="text-[10px] text-zinc-400">已就绪待上传</p>
+                                    <p className="text-[10px] text-zinc-400">{t('Ready to upload')}</p>
                                     <button 
                                         onClick={() => {
                                             setAttachedImagePreview(null);
@@ -878,8 +885,9 @@ export default function TeamChat({ user }: Props) {
                                         }}
                                         className="text-xs text-red-400 hover:text-red-300 font-bold mt-0.5"
                                     >
-                                        取消附加
-                                    </button>
+                                        
+                                                                                    {t('Cancel attachment')}
+                                                                                </button>
                                 </div>
                             </div>
                         )}
@@ -899,14 +907,16 @@ export default function TeamChat({ user }: Props) {
                                         />
                                         <span className={`text-xxs font-bold flex items-center gap-1 ${askAI ? 'text-blue-400' : 'text-zinc-500'}`}>
                                             <Sparkles size={11} className={askAI ? 'animate-pulse' : ''} />
-                                            启用 Gemini 实时回复
-                                        </span>
+                                            
+                                                                                            {t('Enable Gemini real-time replies')}
+                                                                                        </span>
                                     </label>
                                 </div>
 
                                 <div className="text-[10px] text-zinc-600">
-                                    按 Enter 发送消息
-                                </div>
+                                    
+                                                                            {t('Press Enter to send message')}
+                                                                        </div>
                             </div>
 
                             {/* TextInput & Action Buttons */}
@@ -917,7 +927,7 @@ export default function TeamChat({ user }: Props) {
                                     onClick={() => fileInputRef.current?.click()}
                                     disabled={isUploadingImage}
                                     className="p-3 bg-zinc-900 hover:bg-zinc-800 text-zinc-400 hover:text-white rounded-xl border border-white/5 transition-all shrink-0 active:scale-95"
-                                    title="添加图片"
+                                    title={t('add picture')}
                                 >
                                     {isUploadingImage ? <Loader size={16} className="animate-spin text-blue-400" /> : <ImageIcon size={16} />}
                                 </button>
@@ -938,7 +948,7 @@ export default function TeamChat({ user }: Props) {
                                             ? 'bg-red-600 text-white border-red-500 animate-pulse scale-105'
                                             : 'bg-zinc-900 text-zinc-400 border-white/5 hover:bg-zinc-800 hover:text-white'
                                     }`}
-                                    title="语音录入"
+                                    title={t('Voice recording')}
                                 >
                                     {isListening ? <MicOff size={16} /> : <Mic size={16} />}
                                 </button>
@@ -949,7 +959,7 @@ export default function TeamChat({ user }: Props) {
                                         type="text"
                                         value={inputText}
                                         onChange={e => setInputText(e.target.value)}
-                                        placeholder={isListening ? '正在录音，请说话...' : '输入消息讨论，或发送任务说明...'}
+                                        placeholder={isListening ? t('Recording, please speak...') : t('Type a message to discuss, or send a task description...')}
                                         disabled={isLoadingAI}
                                         className="w-full bg-zinc-900 border border-white/5 rounded-xl py-3 pl-4 pr-12 text-xs focus:outline-none focus:border-blue-500/60 focus:ring-1 focus:ring-blue-500/30 transition-all text-white placeholder-zinc-500"
                                     />
@@ -979,8 +989,9 @@ export default function TeamChat({ user }: Props) {
                                     }`}
                                 >
                                     <FileText size={13} />
-                                    文档画布 (Canvas)
-                                </button>
+                                    
+                                                                            {t('Document canvas (Canvas)')}
+                                                                        </button>
                                 <button
                                     onClick={() => setActiveTab('tasks')}
                                     className={`px-4 py-2 rounded-xl text-xxs font-bold transition-all flex items-center gap-1.5 ${
@@ -990,10 +1001,11 @@ export default function TeamChat({ user }: Props) {
                                     }`}
                                 >
                                     <ClipboardList size={13} />
-                                    任务清单
-                                    {tasks.filter(t => t.status === 'Pending').length > 0 && (
+                                    
+                                                                            {t('task list')}
+                                                                            {tasks.filter(item => item.status === 'Pending').length > 0 && (
                                         <span className="bg-blue-500 text-white font-bold rounded-full w-4 h-4 flex items-center justify-center text-[9px]">
-                                            {tasks.filter(t => t.status === 'Pending').length}
+                                            {tasks.filter(item => item.status === 'Pending').length}
                                         </span>
                                     )}
                                 </button>
@@ -1006,8 +1018,9 @@ export default function TeamChat({ user }: Props) {
                                     }`}
                                 >
                                     <Users size={13} />
-                                    会话成员
-                                </button>
+                                    
+                                                                            {t('session member')}
+                                                                        </button>
                             </div>
                         </div>
 
@@ -1017,7 +1030,7 @@ export default function TeamChat({ user }: Props) {
                             {activeTab === 'doc' && (
                                 <div className="space-y-4 h-full flex flex-col">
                                     <div className="flex items-center justify-between shrink-0">
-                                        <h4 className="text-white font-bold text-xs">共享工作区文档</h4>
+                                        <h4 className="text-white font-bold text-xs">{t('Shared workspace documents')}</h4>
                                         {isEditingDoc ? (
                                             <div className="flex gap-2">
                                                 <button
@@ -1025,8 +1038,9 @@ export default function TeamChat({ user }: Props) {
                                                     className="px-3 py-1.5 rounded-lg bg-green-600 hover:bg-green-500 text-white font-bold text-[10px] flex items-center gap-1"
                                                 >
                                                     <Save size={12} />
-                                                    保存
-                                                </button>
+                                                    
+                                                                                                            {t('save')}
+                                                                                                        </button>
                                                 <button
                                                     onClick={() => {
                                                         setEditedDocContent(activeThread.canvas_document || '');
@@ -1034,8 +1048,9 @@ export default function TeamChat({ user }: Props) {
                                                     }}
                                                     className="px-3 py-1.5 rounded-lg bg-zinc-800 hover:bg-zinc-700 text-zinc-300 font-bold text-[10px]"
                                                 >
-                                                    取消
-                                                </button>
+                                                    
+                                                                                                            {t('Cancel')}
+                                                                                                        </button>
                                             </div>
                                         ) : (
                                             <button
@@ -1043,8 +1058,9 @@ export default function TeamChat({ user }: Props) {
                                                 className="px-3 py-1.5 rounded-lg bg-zinc-900 hover:bg-zinc-800 text-zinc-300 hover:text-white border border-white/5 font-bold text-[10px] flex items-center gap-1"
                                             >
                                                 <Edit2 size={12} />
-                                                编辑文档
-                                            </button>
+                                                
+                                                                                                        {t('Edit document')}
+                                                                                                    </button>
                                         )}
                                     </div>
 
@@ -1053,7 +1069,7 @@ export default function TeamChat({ user }: Props) {
                                             value={editedDocContent}
                                             onChange={e => setEditedDocContent(e.target.value)}
                                             className="flex-1 w-full bg-zinc-900 border border-white/5 rounded-xl p-4 text-xs text-zinc-100 focus:outline-none focus:border-blue-500/50 resize-none font-mono custom-scrollbar min-h-[300px]"
-                                            placeholder="在此编写报告、规范或测试记录（支持 Markdown 格式）..."
+                                            placeholder={t('Write reports, specifications or test records here (Markdown format supported)...')}
                                         />
                                     ) : (
                                         <div className="flex-1 bg-zinc-900/40 border border-white/5 rounded-2xl p-5 overflow-y-auto custom-scrollbar prose prose-invert prose-sm max-w-none text-zinc-300 min-h-[300px]">
@@ -1062,8 +1078,8 @@ export default function TeamChat({ user }: Props) {
                                             ) : (
                                                 <div className="text-center text-zinc-600 text-xs py-20">
                                                     <FileText size={20} className="mx-auto mb-2 opacity-25" />
-                                                    <span>画布文档为空。</span>
-                                                    <p className="mt-1 text-xxs">您可以直接编辑它，或者让 AI 根据聊天内容编写记录。</p>
+                                                    <span>{t('The canvas document is empty.')}</span>
+                                                    <p className="mt-1 text-xxs">{t('You can edit it directly or let the AI ​​write a transcript based on the chat.')}</p>
                                                 </div>
                                             )}
                                         </div>
@@ -1075,14 +1091,14 @@ export default function TeamChat({ user }: Props) {
                             {activeTab === 'tasks' && (
                                 <div className="space-y-4">
                                     <div className="flex items-center justify-between">
-                                        <h4 className="text-white font-bold text-xs">会话关联任务</h4>
+                                        <h4 className="text-white font-bold text-xs">{t('Session correlation tasks')}</h4>
                                     </div>
 
                                     {/* Manual Task Add */}
                                     <form onSubmit={handleAddTask} className="flex gap-2">
                                         <input
                                             type="text"
-                                            placeholder="添加协同待办任务（如：洗厕所）..."
+                                            placeholder={t('Add collaborative to-do tasks (eg: wash the toilet)...')}
                                             value={newTaskTitle}
                                             onChange={e => setNewTaskTitle(e.target.value)}
                                             className="flex-1 bg-zinc-900 border border-white/5 rounded-lg px-3 py-2 text-xxs text-white focus:outline-none focus:border-blue-500/50 placeholder-zinc-600"
@@ -1091,22 +1107,24 @@ export default function TeamChat({ user }: Props) {
                                             type="submit"
                                             className="px-3 bg-blue-600 hover:bg-blue-500 rounded-lg text-white font-bold text-xxs"
                                         >
-                                            添加
-                                        </button>
+                                            
+                                                                                            {t('Add to')}
+                                                                                        </button>
                                     </form>
 
                                     {/* Tasks List */}
                                     <div className="space-y-2">
                                         {tasks.length === 0 ? (
                                             <div className="text-center text-zinc-600 text-xs py-10">
-                                                当前暂无关联任务
-                                            </div>
+                                                
+                                                                                                    {t('There are currently no associated tasks')}
+                                                                                                </div>
                                         ) : (
-                                            tasks.map(t => {
-                                                const isCompleted = t.status === 'Completed';
+                                            tasks.map(cTask => {
+                                                const isCompleted = cTask.status === 'Completed';
                                                 return (
                                                     <div 
-                                                        key={t.id} 
+                                                        key={cTask.id} 
                                                         className={`p-3 bg-zinc-900 border border-white/5 rounded-xl flex items-center justify-between gap-3 ${
                                                             isCompleted ? 'opacity-55' : ''
                                                         }`}
@@ -1114,7 +1132,7 @@ export default function TeamChat({ user }: Props) {
                                                         <div className="flex items-center gap-3 min-w-0 flex-1">
                                                             {/* Checkbox */}
                                                             <button 
-                                                                onClick={() => handleToggleTask(t)}
+                                                                onClick={() => handleToggleTask(cTask)}
                                                                 className={`w-4 h-4 rounded border flex items-center justify-center transition-colors ${
                                                                     isCompleted 
                                                                         ? 'bg-blue-600 border-blue-500 text-white' 
@@ -1127,18 +1145,18 @@ export default function TeamChat({ user }: Props) {
                                                             {/* Text */}
                                                             <div className="min-w-0 flex-1">
                                                                 <p className={`text-xs font-bold text-zinc-200 truncate ${isCompleted ? 'line-through text-zinc-500' : ''}`}>
-                                                                    {t.title}
+                                                                    {cTask.title}
                                                                 </p>
                                                                 
                                                                 {/* Assignee select */}
                                                                 <div className="flex items-center gap-1.5 mt-1">
-                                                                    <span className="text-[10px] text-zinc-500">指派给:</span>
+                                                                    <span className="text-[10px] text-zinc-500">{t('Assigned to:')}</span>
                                                                     <select
-                                                                        value={t.assigned_to || ''}
-                                                                        onChange={e => handleAssignTask(t.id, e.target.value)}
+                                                                        value={cTask.assigned_to || ''}
+                                                                        onChange={e => handleAssignTask(cTask.id, e.target.value)}
                                                                         className="bg-transparent text-[10px] text-blue-400 font-bold border-none p-0 focus:ring-0 focus:outline-none cursor-pointer"
                                                                     >
-                                                                        <option value="" className="bg-zinc-950 text-zinc-500">未指派</option>
+                                                                        <option value="" className="bg-zinc-950 text-zinc-500">{t('Not assigned')}</option>
                                                                         {teamUsers.map(member => (
                                                                             <option key={member.id} value={member.id} className="bg-zinc-950 text-zinc-300">
                                                                                 {member.name} ({member.role})
@@ -1151,7 +1169,7 @@ export default function TeamChat({ user }: Props) {
 
                                                         {/* Delete button */}
                                                         <button 
-                                                            onClick={() => handleDeleteTask(t.id)}
+                                                            onClick={() => handleDeleteTask(cTask.id)}
                                                             className="text-zinc-600 hover:text-red-400 p-1 rounded"
                                                         >
                                                             <Trash2 size={13} />
@@ -1168,12 +1186,12 @@ export default function TeamChat({ user }: Props) {
                             {activeTab === 'members' && (
                                 <div className="space-y-4">
                                     <div className="flex items-center justify-between">
-                                        <h4 className="text-white font-bold text-xs">会话邀请与管理</h4>
+                                        <h4 className="text-white font-bold text-xs">{t('Session invitations and management')}</h4>
                                     </div>
 
                                     {/* Invite Dropdown Selector */}
                                     <div className="bg-zinc-900 border border-white/5 p-3 rounded-xl space-y-2">
-                                        <label className="block text-[10px] font-bold text-zinc-500 uppercase tracking-widest">拉人进入此会话讨论:</label>
+                                        <label className="block text-[10px] font-bold text-zinc-500 uppercase tracking-widest">{t('Invite people into this conversation to discuss:')}</label>
                                         <select
                                             value=""
                                             onChange={e => {
@@ -1184,7 +1202,7 @@ export default function TeamChat({ user }: Props) {
                                             }}
                                             className="w-full bg-zinc-950 border border-white/10 rounded-lg px-2.5 py-2 text-xxs text-zinc-300 focus:outline-none focus:border-blue-500"
                                         >
-                                            <option value="" disabled>选择要邀请的团队成员...</option>
+                                            <option value="" disabled>{t('Select team members to invite...')}</option>
                                             {teamUsers
                                                 .filter(u => !activeThread.members.includes(u.id))
                                                 .map(u => (
@@ -1198,7 +1216,7 @@ export default function TeamChat({ user }: Props) {
 
                                     {/* Current Members List */}
                                     <div className="space-y-2">
-                                        <p className="text-[10px] font-bold text-zinc-500 uppercase tracking-widest px-1">当前会话成员 ({activeThread.members.length}):</p>
+                                        <p className="text-[10px] font-bold text-zinc-500 uppercase tracking-widest px-1">{t('current session member (')}{activeThread.members.length}):</p>
                                         <div className="space-y-1">
                                             {activeThread.members.map(memberId => {
                                                 const resolvedMember = teamUsers.find(u => u.id === memberId);
@@ -1214,14 +1232,15 @@ export default function TeamChat({ user }: Props) {
                                                                 {resolvedMember?.name?.charAt(0).toUpperCase() || 'U'}
                                                             </div>
                                                             <div>
-                                                                <p className="font-bold text-zinc-200">{resolvedMember?.name || '未知员工'}</p>
+                                                                <p className="font-bold text-zinc-200">{resolvedMember?.name || t('Unknown employee')}</p>
                                                                 <p className="text-[9px] text-zinc-500">{resolvedMember?.role || 'Guest'}</p>
                                                             </div>
                                                         </div>
                                                         {isCreator ? (
                                                             <span className="text-[9px] bg-blue-500/10 text-blue-400 font-bold border border-blue-500/20 px-2 py-0.5 rounded-full">
-                                                                创建人
-                                                            </span>
+                                                                
+                                                                                                                                {t('Creator')}
+                                                                                                                            </span>
                                                         ) : (
                                                             // Remove button (only allowed for Creator or SuperAdmins)
                                                             (activeThread.created_by === user?.uid || user?.role === 'SuperAdmin') && (
@@ -1229,8 +1248,9 @@ export default function TeamChat({ user }: Props) {
                                                                     onClick={() => handleRemoveMember(memberId)}
                                                                     className="text-xxs text-red-400 hover:text-red-300"
                                                                 >
-                                                                    移除
-                                                                </button>
+                                                                    
+                                                                                                                                            {t('Remove')}
+                                                                                                                                        </button>
                                                             )
                                                         )}
                                                     </div>

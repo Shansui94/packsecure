@@ -4,6 +4,7 @@ import { Camera, ClipboardList, Loader, CheckCircle, Package, RefreshCw, AlertCi
 import { SalesOrder } from '../types';
 import { WAREHOUSES } from '../data/factoryData';
 import { parsePrepPhotos, stringifyPrepPhotos, PrepPhoto } from '../utils/prepPhotos';
+import { useTranslation } from "react-i18next";
 
 const getItemLocation = (item: any, order: any): string => {
     if (item.sourceLocation) {
@@ -74,6 +75,7 @@ const compressImage = (file: File, maxWidth = 2048, quality = 0.85): Promise<str
 };
 
 const TripPrep: React.FC = () => {
+    const { t } = useTranslation();
     const [trips, setTrips] = useState<SalesOrder[]>([]);
     const [previewImageUrl, setPreviewImageUrl] = useState<string | null>(null);
     const [drivers, setDrivers] = useState<Record<string, DriverInfo>>({});
@@ -219,8 +221,8 @@ const TripPrep: React.FC = () => {
                         employee_id: empId,
                         employee_name: empName,
                         photo_url: publicUrl,
-                        category: 'Cargo Prep / 备货照片',
-                        user_note: `Trip Prep 备货位置图 - 订单: ${currentTrip?.orderNumber || 'Unknown'} - 库位: ${uploadLoc}`,
+                        category: t('Cargo Prep / Stocking Photos'),
+                        user_note: t('Trip Prep Stocking Location Map - Order: {{var0}} - Location: {{var1}}', { var0: currentTrip?.orderNumber || 'Unknown', var1: uploadLoc }),
                         location: uploadLoc,
                         risk_flag: false
                     });
@@ -233,7 +235,7 @@ const TripPrep: React.FC = () => {
             setTrips(prev => prev.map(t => t.id === tripId ? { ...t, preparation_photo_url: updatedPhotoUrlField } as any : t));
             
             // Highlight success
-            alert(`✅ ${uploadLoc} 备货图片上传成功！ / Cargo photo uploaded successfully!`);
+            alert(t('✅ {{var0}} stocking pictures uploaded successfully! / Cargo photo uploaded successfully!', { var0: uploadLoc }));
         } catch (err: any) {
             console.error("Failed to upload photo:", err);
             alert("Upload failed: " + err.message);
@@ -245,7 +247,7 @@ const TripPrep: React.FC = () => {
     };
 
     const handleDeletePhoto = async (tripId: string, photoIndex: number) => {
-        if (!window.confirm("确定要删除这张备货照片吗？ / Are you sure you want to delete this photo?")) return;
+        if (!window.confirm(t('Are you sure you want to delete this stocking photo? / Are you sure you want to delete this photo?'))) return;
         
         try {
             const currentTrip = trips.find(t => t.id === tripId);
@@ -263,7 +265,7 @@ const TripPrep: React.FC = () => {
             if (error) throw error;
             
             setTrips(prev => prev.map(t => t.id === tripId ? { ...t, preparation_photo_url: updatedPhotoUrlField } as any : t));
-            alert("✅ 照片已成功删除！ / Photo deleted successfully!");
+            alert(t('✅ The photo has been successfully deleted! / Photo deleted successfully!'));
         } catch (err: any) {
             console.error("Failed to delete photo:", err);
             alert("Delete failed: " + err.message);
@@ -325,8 +327,8 @@ const TripPrep: React.FC = () => {
             <div className="mb-6 flex flex-col sm:flex-row sm:items-center sm:justify-between gap-4">
                 <div>
                     <h1 className="text-2xl md:text-3xl font-black text-white flex items-center gap-3 mb-1">
-                        <Camera className="text-amber-500" size={28} /> Cargo Trip Prep (备货拍照)
-                    </h1>
+                        <Camera className="text-amber-500" size={28} />  {t('Cargo Trip Prep (take photos while preparing goods)')}
+                                            </h1>
                     <p className="text-gray-500 text-xs md:text-sm">Prepare items for active trips and upload photos to guide drivers.</p>
                 </div>
                 <button 
@@ -404,8 +406,8 @@ const TripPrep: React.FC = () => {
                                             </span>
                                             {isUploaded && (
                                                 <span className="text-[9px] font-black uppercase bg-green-500/15 border border-green-500/20 text-green-400 px-2 py-0.5 rounded flex items-center gap-1">
-                                                    <CheckCircle size={8} /> Prepared (已备货)
-                                                </span>
+                                                    <CheckCircle size={8} />  {t('Prepared')}
+                                                                                                    </span>
                                             )}
                                         </div>
                                         <h2 className="font-bold text-sm text-slate-400 tracking-wider">
@@ -435,8 +437,8 @@ const TripPrep: React.FC = () => {
                                         {/* Products List */}
                                         <div className="space-y-2 flex-1">
                                             <p className="text-[10px] text-zinc-500 uppercase font-black tracking-widest flex items-center gap-1">
-                                                <Package size={10} /> Prepared Products List / 待备货清单
-                                            </p>
+                                                <Package size={10} />  {t('Prepared Products List / To-be-stocked list')}
+                                                                                            </p>
                                             <div className="bg-black/35 rounded-xl border border-white/5 p-3 space-y-2">
                                                 {(trip.items || []).map((item, idx) => (
                                                     <div key={idx} className="flex justify-between items-start text-xs border-b border-white/[0.03] last:border-0 pb-2.5 last:pb-0 pt-1.5 first:pt-0">
@@ -462,8 +464,8 @@ const TripPrep: React.FC = () => {
                                             return (
                                                 <div className="mt-2 pt-4 border-t border-white/5 space-y-4">
                                                     <p className="text-[10px] text-zinc-500 uppercase font-black tracking-widest flex items-center gap-1">
-                                                        <Camera size={10} className="text-amber-500" /> Cargo Photos / 备货照片
-                                                    </p>
+                                                        <Camera size={10} className="text-amber-500" />  {t('Cargo Photos / stocking photos')}
+                                                                                                            </p>
                                                     
                                                     {photos.length > 0 ? (
                                                         <div className="grid grid-cols-2 sm:grid-cols-3 gap-3">
@@ -492,15 +494,16 @@ const TripPrep: React.FC = () => {
                                                     ) : (
                                                         <div className="w-full py-6 rounded-xl border-2 border-dashed border-white/5 flex flex-col items-center justify-center text-zinc-600 bg-black/20">
                                                             <AlertCircle size={24} className="opacity-30 mb-1" />
-                                                            <span className="text-[9px] uppercase font-bold tracking-widest">No Cargo Photos Uploaded / 暂无备货照片</span>
+                                                            <span className="text-[9px] uppercase font-bold tracking-widest">{t('No Cargo Photos Uploaded / No stock photos yet')}</span>
                                                         </div>
                                                     )}
 
                                                     {/* Upload triggers */}
                                                     <div className="flex flex-col gap-2">
                                                         <p className="text-[10px] text-zinc-500 uppercase font-black tracking-widest">
-                                                            📷 Upload Photo by Warehouse / 按仓库拍照上传:
-                                                        </p>
+                                                            
+                                                                                                                        {t('📷 Upload Photo by Warehouse / Take photos and upload by warehouse:')}
+                                                                                                                    </p>
                                                         
                                                         <div className="flex flex-wrap gap-2">
                                                             {(() => {

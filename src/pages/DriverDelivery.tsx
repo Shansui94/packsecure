@@ -120,6 +120,47 @@ const DriverDelivery: React.FC<DriverDeliveryProps> = ({ user }) => {
     const [previewImageUrl, setPreviewImageUrl] = useState<string | null>(null);
     const [loading, setLoading] = useState(true);
     const [activeTab, setActiveTab] = useState<'todo' | 'done'>('todo');
+
+    // 📡 网页端原生 HTML5 地理定位实时同步 (Web App Realtime Location)
+    const [webGpsActive, setWebGpsActive] = useState<boolean>(true);
+    const [webGpsStatus, setWebGpsStatus] = useState<string>('正在获取网页端 GPS 定位...');
+
+    useEffect(() => {
+        if (!user?.uid || !webGpsActive || !navigator.geolocation) return;
+
+        console.log('[Web GPS] 开启网页端 HTML5 定位监听...');
+
+        const watchId = navigator.geolocation.watchPosition(
+            async (pos) => {
+                const { latitude, longitude, speed, heading } = pos.coords;
+                setWebGpsStatus(`● Web 实时定位: ${latitude.toFixed(4)}, ${longitude.toFixed(4)}`);
+
+                try {
+                    await supabase.from('driver_locations').upsert({
+                        driver_id: user.uid,
+                        latitude,
+                        longitude,
+                        speed: speed || 0,
+                        heading: heading || 0,
+                        updated_at: new Date().toISOString(),
+                    });
+                } catch (err) {
+                    console.warn('[Web GPS] 上报 Supabase 失败:', err);
+                }
+            },
+            (err) => {
+                console.warn('[Web GPS] 位置获取失败:', err.message);
+                setWebGpsStatus('⚠️ 请在浏览器中允许定位权限以开启实时跟踪');
+            },
+            {
+                enableHighAccuracy: true,
+                maximumAge: 10000,
+                timeout: 15000,
+            }
+        );
+
+        return () => navigator.geolocation.clearWatch(watchId);
+    }, [user?.uid, webGpsActive]);
     
     // Lorry Binding State
     const [currentLorry, setCurrentLorry] = useState<any>(null);
@@ -953,6 +994,11 @@ const DriverDelivery: React.FC<DriverDeliveryProps> = ({ user }) => {
             return;
         }
 
+        if (detectedMileage !== null && Math.abs(detectedMileage - mileageVal) > 100) {
+            const proceed = window.confirm(`⚠️ AMARAN AI! (AI WARNING!)\n\nAI membaca [ ${detectedMileage} km ] dari gambar, tetapi anda menaip [ ${mileageVal} km ].\n\nAdakah anda pasti gambar yang diunggah adalah betul? Jika anda memalsukan rekod, tindakan tatatertib akan diambil.\n(AI read ${detectedMileage} km but you typed ${mileageVal} km. Are you sure?)\n\nTeruskan? / Proceed?`);
+            if (!proceed) return;
+        }
+
         setSubmittingOdometer(true);
         try {
             // Add Watermark
@@ -995,6 +1041,13 @@ const DriverDelivery: React.FC<DriverDeliveryProps> = ({ user }) => {
                 if (lastLogErr) console.warn("Failed to fetch last mileage log:", lastLogErr);
 
                 if (lastLog && lastLog.mileage !== mileageVal) {
+                    // HARD BLOCK if discrepancy is > 2000 km (impossible jump, prevents DB corruption)
+                    if (Math.abs(mileageVal - lastLog.mileage) > 2000) {
+                        alert(`Ralat! Perbezaan perbatuan terlalu besar (+${mileageVal - lastLog.mileage} km).\nSila hubungi Admin. / Error! Mileage jump is too large. Please contact Admin.`);
+                        setSubmittingOdometer(false);
+                        return;
+                    }
+
                     // Create discrepancy alert!
                     const diff = mileageVal - lastLog.mileage;
                     const { error: alertErr } = await supabase
@@ -1046,6 +1099,42 @@ const DriverDelivery: React.FC<DriverDeliveryProps> = ({ user }) => {
             } 
             // Handle UNBIND / END SHIFT
             else if (scannedLorryData.mode === 'unbind') {
+                // Fetch previous mileage log for discrepancy check
+                const { data: lastLog, error: lastLogErr } = await supabase
+                    .from('lorry_mileage_logs')
+                    .select('mileage')
+                    .eq('lorry_id', scannedLorryData.id)
+                    .order('created_at', { ascending: false })
+                    .limit(1)
+                    .maybeSingle();
+
+                if (lastLogErr) console.warn("Failed to fetch last mileage log:", lastLogErr);
+
+                if (lastLog && lastLog.mileage !== mileageVal) {
+                    // HARD BLOCK if discrepancy is > 2000 km (impossible jump, prevents DB corruption)
+                    if (Math.abs(mileageVal - lastLog.mileage) > 2000) {
+                        alert(`Ralat! Perbezaan perbatuan terlalu besar (+${mileageVal - lastLog.mileage} km).\nSila hubungi Admin. / Error! Mileage jump is too large. Please contact Admin.`);
+                        setSubmittingOdometer(false);
+                        return;
+                    }
+
+                    // Create discrepancy alert!
+                    const diff = mileageVal - lastLog.mileage;
+                    const { error: alertErr } = await supabase
+                        .from('lorry_mileage_alerts')
+                        .insert({
+                            lorry_id: scannedLorryData.id,
+                            driver_id: user.uid,
+                            logged_mileage: mileageVal,
+                            expected_mileage: lastLog.mileage,
+                            difference: diff,
+                            photo_url: photoUrl,
+                            resolved: false
+                        });
+
+                    if (alertErr) console.error("Failed to create discrepancy alert:", alertErr);
+                }
+
                 // Insert ending log
                 const { error: logErr } = await supabase
                     .from('lorry_mileage_logs')
@@ -1196,6 +1285,22 @@ const DriverDelivery: React.FC<DriverDeliveryProps> = ({ user }) => {
                         className="p-1.5 bg-slate-800 rounded-lg text-blue-400 border border-slate-700 active:scale-95 transition-all"
                     >
                         <RefreshCw size={14} className={loading ? 'animate-spin' : ''} />
+                    </button>
+                </div>
+            </div>
+
+            {/* 📡 网页端实时 GPS 上报状态条 */}
+            <div className="px-4 pt-3">
+                <div className="bg-slate-900/90 border border-slate-800 rounded-xl px-3 py-2 flex items-center justify-between text-xs">
+                    <div className="flex items-center gap-2">
+                        <span className={`w-2 h-2 rounded-full ${webGpsActive ? 'bg-green-500 animate-pulse' : 'bg-red-500'}`} />
+                        <span className="font-medium text-slate-300">{webGpsStatus}</span>
+                    </div>
+                    <button
+                        onClick={() => setWebGpsActive(!webGpsActive)}
+                        className="px-2 py-1 bg-slate-800 hover:bg-slate-700 text-slate-400 rounded text-[11px] font-bold"
+                    >
+                        {webGpsActive ? '关闭网页 GPS' : '开启网页 GPS'}
                     </button>
                 </div>
             </div>

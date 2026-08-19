@@ -5,6 +5,7 @@ import {
     Truck, Package, BarChart3, ArrowUpDown, FileBarChart,
     Plus, Calendar, Check, Clock, Play, Trash2, Camera
 } from 'lucide-react';
+import { useTranslation } from "react-i18next";
 
 // ─── Types ───────────────────────────────────────────────────────────────────
 
@@ -105,6 +106,7 @@ const resolveStatus = (heartbeatIso: string | null, hasActiveSku: boolean): { st
 // ─── Detail Panel ─────────────────────────────────────────────────────────────
 
 const DetailPanel = ({ machine, onClose }: { machine: MachineCard; onClose: () => void }) => {
+    const { t } = useTranslation();
     const [logs, setLogs] = useState<ProductionLogRow[]>([]);
     const [viewMode, setViewMode] = useState<'today' | 'history'>('today');
     const [dailyLogs, setDailyLogs] = useState<{ date: string; sku: string; qty: number; timeStr: string }[]>([]);
@@ -338,6 +340,7 @@ const DetailPanel = ({ machine, onClose }: { machine: MachineCard; onClose: () =
 // ─── Machine Card ─────────────────────────────────────────────────────────────
 
 const MachineCardView = ({ machine, onClick }: { machine: MachineCard; onClick: () => void }) => {
+    const { t } = useTranslation();
     const c = getStatusColor(machine.status, machine.isProducing);
     const isDL = machine.name.includes('Double Layer');
     const isNoIoT = machine.name.toLowerCase().includes('stretch film') || machine.name.toLowerCase().includes('recycle');
@@ -447,6 +450,7 @@ interface FactoryLiveOSProps {
 }
 
 const FactoryLiveOS: React.FC<FactoryLiveOSProps> = ({ onNavigate }) => {
+    const { t } = useTranslation();
     const [machines, setMachines] = useState<MachineCard[]>([]);
     const [selectedMachine, setSelectedMachine] = useState<MachineCard | null>(null);
     const [lastUpdate, setLastUpdate] = useState(new Date());
@@ -912,8 +916,8 @@ const FactoryLiveOS: React.FC<FactoryLiveOSProps> = ({ onNavigate }) => {
                                     onClick={() => setShowScheduleModal(true)}
                                     className="flex items-center gap-1.5 px-3 py-1.5 rounded-lg bg-blue-600 hover:bg-blue-500 text-white text-xs font-bold transition-colors"
                                 >
-                                    <Plus size={14} /> 排产
-                                </button>
+                                    <Plus size={14} />  {t('Scheduling')}
+                                                                        </button>
                             </div>
 
                             {schedule.length === 0 ? (
@@ -1131,8 +1135,8 @@ const FactoryLiveOS: React.FC<FactoryLiveOSProps> = ({ onNavigate }) => {
                         {/* Modal Header */}
                         <div className="px-6 py-4 border-b border-white/5 flex items-center justify-between">
                             <h3 className="text-sm font-black uppercase tracking-wider text-white flex items-center gap-2">
-                                <Calendar size={16} className="text-blue-400" /> 新增排产任务
-                            </h3>
+                                <Calendar size={16} className="text-blue-400" />  {t('Add new production scheduling task')}
+                                                            </h3>
                             <button onClick={() => setShowScheduleModal(false)} className="p-1 rounded-lg hover:bg-white/10 text-gray-500 hover:text-white transition-colors">
                                 <X size={18} />
                             </button>

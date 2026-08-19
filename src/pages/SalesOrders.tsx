@@ -4,9 +4,10 @@ import { supabase } from '../services/supabase';
 import { getV2Items } from '../services/apiV2';
 import { V2Item } from '../types/v2';
 import { determineState, findBestFactory } from '../utils/logistics';
-
+import { useTranslation } from "react-i18next";
 
 const SalesOrders: React.FC = () => {
+    const { t } = useTranslation();
     // Orders Data State
     const [orders, setOrders] = useState<any[]>([]);
     const [loading, setLoading] = useState(true);
@@ -253,7 +254,7 @@ const SalesOrders: React.FC = () => {
                     .from('sales_orders')
                     .insert({
                         order_number: orderNum,
-                        customer: (order as any).customer || "未知客户 (WhatsApp)",
+                        customer: (order as any).customer || t('Unknown Customer (WhatsApp)'),
                         delivery_address: (order as any).deliveryAddress || "",
                         deadline: (order as any).deadline || orderDeadline,
                         notes: (order as any).notes || "",
@@ -578,10 +579,10 @@ address: Lot 123 Jalan Nilai..."
                                 className="bg-slate-950 border border-slate-800 rounded px-2.5 py-1 text-slate-300 outline-none cursor-pointer"
                             >
                                 <option value="All">All Status</option>
-                                <option value="Pending">Pending (待指派)</option>
-                                <option value="Loading">Loading (装车中)</option>
-                                <option value="En-Route">En-Route (送货中)</option>
-                                <option value="Delivered">Delivered (已送达)</option>
+                                <option value="Pending">{t('Pending')}</option>
+                                <option value="Loading">{t('Loading')}</option>
+                                <option value="En-Route">{t('En-Route (delivering)')}</option>
+                                <option value="Delivered">{t('Delivered')}</option>
                             </select>
                         </div>
                         {/* Date limits */}
@@ -617,8 +618,8 @@ address: Lot 123 Jalan Nilai..."
                                         <th className="p-4">Order Details</th>
                                         <th className="p-4">Customer</th>
                                         <th className="p-4">Delivery Address</th>
-                                        <th className="p-4">Items (商品名称)</th>
-                                        <th className="p-4 text-right">Qty (数量)</th>
+                                        <th className="p-4">{t('Items (product name)')}</th>
+                                        <th className="p-4 text-right">{t('Qty (Quantity)')}</th>
                                         <th className="p-4">Status</th>
                                         <th className="p-4 text-center">Actions</th>
                                     </tr>
@@ -762,7 +763,7 @@ address: Lot 123 Jalan Nilai..."
                                     <div className="lg:col-span-5 space-y-4">
                                         {/* Customer */}
                                         <div>
-                                            <label className="text-[10px] uppercase font-bold text-slate-500 tracking-wider mb-1.5 block">Customer Name (客户名称)*</label>
+                                            <label className="text-[10px] uppercase font-bold text-slate-500 tracking-wider mb-1.5 block">{t('Customer Name*')}</label>
                                             <input
                                                 type="text"
                                                 required
@@ -777,7 +778,7 @@ address: Lot 123 Jalan Nilai..."
                                         <div className="grid grid-cols-2 gap-4">
                                             {/* Order Date */}
                                             <div>
-                                                <label className="text-[10px] uppercase font-bold text-slate-500 tracking-wider mb-1.5 block">Order Date (下单日期)</label>
+                                                <label className="text-[10px] uppercase font-bold text-slate-500 tracking-wider mb-1.5 block">{t('Order Date')}</label>
                                                 <input
                                                     type="date"
                                                     value={orderDate}
@@ -787,7 +788,7 @@ address: Lot 123 Jalan Nilai..."
                                             </div>
                                             {/* Deadline Date */}
                                             <div>
-                                                <label className="text-[10px] uppercase font-bold text-slate-500 tracking-wider mb-1.5 block">Delivery Deadline (截止日期)</label>
+                                                <label className="text-[10px] uppercase font-bold text-slate-500 tracking-wider mb-1.5 block">{t('Delivery Deadline')}</label>
                                                 <input
                                                     type="date"
                                                     value={orderDeadline}
@@ -799,7 +800,7 @@ address: Lot 123 Jalan Nilai..."
 
                                         {/* Address */}
                                         <div>
-                                            <label className="text-[10px] uppercase font-bold text-slate-500 tracking-wider mb-1.5 block">Delivery Address (送货地址)</label>
+                                            <label className="text-[10px] uppercase font-bold text-slate-500 tracking-wider mb-1.5 block">{t('Delivery Address')}</label>
                                             <textarea
                                                 className="w-full h-24 bg-gray-950 border border-slate-800 rounded-lg p-2.5 text-white outline-none focus:border-blue-500 resize-none font-medium"
                                                 placeholder="Enter full delivery location..."
@@ -810,7 +811,7 @@ address: Lot 123 Jalan Nilai..."
 
                                         {/* Order Notes */}
                                         <div>
-                                            <label className="text-[10px] uppercase font-bold text-slate-500 tracking-wider mb-1.5 block">Batch Notes (整单备注)</label>
+                                            <label className="text-[10px] uppercase font-bold text-slate-500 tracking-wider mb-1.5 block">{t('Batch Notes')}</label>
                                             <textarea
                                                 placeholder="Any overall notes for driver or dispatch..."
                                                 value={orderNotes}
@@ -824,11 +825,11 @@ address: Lot 123 Jalan Nilai..."
                                     <div className="lg:col-span-7 space-y-4 lg:border-l lg:border-slate-800/80 lg:pl-8">
                                         {/* Items builder */}
                                         <div className="border border-slate-800/80 rounded-xl p-4 space-y-3 bg-slate-950/40">
-                                            <h4 className="text-[11px] font-bold text-white uppercase tracking-wider border-b border-slate-800 pb-1.5">Order Items Builder (添加订单商品)</h4>
+                                            <h4 className="text-[11px] font-bold text-white uppercase tracking-wider border-b border-slate-800 pb-1.5">{t('Order Items Builder (Add order items)')}</h4>
                                             
                                             <div className="flex flex-wrap gap-3 items-end">
                                                 <div className="flex-1 min-w-[200px] relative">
-                                                    <label className="text-[9px] uppercase font-bold text-slate-500 mb-1 block">Choose Product (搜索选择主库产品)*</label>
+                                                    <label className="text-[9px] uppercase font-bold text-slate-500 mb-1 block">{t('Choose Product (Search and select main library product)*')}</label>
                                                     <input
                                                         type="text"
                                                         placeholder="Type to search SKU or Name..."
@@ -877,7 +878,7 @@ address: Lot 123 Jalan Nilai..."
                                                     )}
                                                 </div>
                                                 <div className="w-20">
-                                                    <label className="text-[9px] uppercase font-bold text-slate-500 mb-1 block">Quantity (数量)</label>
+                                                    <label className="text-[9px] uppercase font-bold text-slate-500 mb-1 block">{t('Quantity')}</label>
                                                     <input
                                                         type="number"
                                                         value={newItemQty}
@@ -886,7 +887,7 @@ address: Lot 123 Jalan Nilai..."
                                                     />
                                                 </div>
                                                 <div className="flex-1 min-w-[120px]">
-                                                    <label className="text-[9px] uppercase font-bold text-slate-500 mb-1 block">Remarks (备注)</label>
+                                                    <label className="text-[9px] uppercase font-bold text-slate-500 mb-1 block">{t('Remarks')}</label>
                                                     <input
                                                         type="text"
                                                         placeholder="e.g. urgent"
@@ -1047,7 +1048,7 @@ address: Lot 123 Jalan Nilai..."
                                                 </div>
                                                 {!item.isMatched && (
                                                     <div className="flex flex-col sm:flex-row gap-1.5 items-start sm:items-center text-[10px] text-red-400 font-bold bg-red-950/20 px-2 py-1 rounded border border-red-500/10">
-                                                        <span className="shrink-0">❌ 库中无此商品，请指定关联商品：</span>
+                                                        <span className="shrink-0">{t('❌ This product is not in the library, please specify related products:')}</span>
                                                         <select
                                                             className="bg-slate-950 border border-slate-800 text-[10px] text-amber-400 font-mono rounded px-2 py-0.5 max-w-xs outline-none cursor-pointer"
                                                             value={item.sku || 'GENERIC-ITEM'}
@@ -1067,7 +1068,7 @@ address: Lot 123 Jalan Nilai..."
                                                                 setParsedOrdersReview(updated);
                                                             }}
                                                         >
-                                                            <option value="GENERIC-ITEM">-- 选择标准库商品 (Select Standard) --</option>
+                                                            <option value="GENERIC-ITEM">{t('--Select Standard Library Products --')}</option>
                                                             {v2Items.map(prod => (
                                                                 <option key={prod.sku} value={prod.sku}>
                                                                     {prod.name} ({prod.sku})

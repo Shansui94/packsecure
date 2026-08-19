@@ -14,8 +14,8 @@ export const RawMaterialMobilePortal: React.FC<RawMaterialMobilePortalProps> = (
     activeFactoryId
 }) => {
     const [machines, setMachines] = useState<{ id: string; name: string }[]>([]);
-    const [selectedMachineId, setSelectedMachineId] = useState<string>('m1');
-    const [selectedMachineName, setSelectedMachineName] = useState<string>('1号 吹膜机 (Extruder 1)');
+    const [selectedMachineId, setSelectedMachineId] = useState<string>('');
+    const [selectedMachineName, setSelectedMachineName] = useState<string>('');
 
     // 初始获取数据库中的机台列表
     useEffect(() => {
@@ -35,8 +35,6 @@ export const RawMaterialMobilePortal: React.FC<RawMaterialMobilePortalProps> = (
                     name: m.name || m.machine_id
                 }));
                 setMachines(list);
-                setSelectedMachineId(list[0].id);
-                setSelectedMachineName(list[0].name);
             } else {
                 const defaultMacs = [
                     { id: 'J1-M01', name: '2M Double Layer (J1)' },
@@ -44,8 +42,6 @@ export const RawMaterialMobilePortal: React.FC<RawMaterialMobilePortalProps> = (
                     { id: 'T1-M03', name: 'Stretch Film (T1)' }
                 ];
                 setMachines(defaultMacs);
-                setSelectedMachineId(defaultMacs[0].id);
-                setSelectedMachineName(defaultMacs[0].name);
             }
         } catch (e) {
             console.error('Error loading machines:', e);
@@ -82,6 +78,7 @@ export const RawMaterialMobilePortal: React.FC<RawMaterialMobilePortalProps> = (
                         onChange={handleSelectMachine}
                         className="w-full bg-gray-950 border border-gray-700 text-xs px-3 py-2 rounded-xl text-amber-300 font-bold appearance-none pr-8 focus:outline-none focus:border-indigo-500"
                     >
+                        <option value="" disabled>-- 请选择机台 (Select Machine) --</option>
                         {machines.map((mac) => (
                             <option key={mac.id} value={mac.id}>
                                 {mac.name}
@@ -93,16 +90,23 @@ export const RawMaterialMobilePortal: React.FC<RawMaterialMobilePortalProps> = (
             </div>
 
             {/* 嵌入全功能多螺杆配料 Modal 组件 (螺杆 A/B/C、底部照片凭证、单一下拉/写字、修改人审计) */}
-            <div className="relative">
-                <MachineInspectionModal
-                    isOpen={true}
-                    onClose={() => {}}
-                    machineId={selectedMachineId}
-                    machineName={selectedMachineName}
-                    currentUser={currentUser}
-                    activeFactoryId={activeFactoryId}
-                />
-            </div>
+            {selectedMachineId ? (
+                <div className="relative">
+                    <MachineInspectionModal
+                        isOpen={true}
+                        onClose={() => window.location.href = '/'}
+                        machineId={selectedMachineId}
+                        machineName={selectedMachineName}
+                        currentUser={currentUser}
+                        activeFactoryId={activeFactoryId}
+                    />
+                </div>
+            ) : (
+                <div className="flex flex-col items-center justify-center p-12 mt-10 border-2 border-dashed border-gray-800 rounded-3xl bg-gray-900/50">
+                    <Layers className="w-12 h-12 text-gray-700 mb-4" />
+                    <p className="text-gray-400 font-bold text-center">请在上方选择您当前操作的机台<br/><span className="text-xs opacity-50">(Please select a machine above)</span></p>
+                </div>
+            )}
 
         </div>
     );

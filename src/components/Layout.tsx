@@ -486,10 +486,16 @@ const Layout: React.FC<LayoutProps> = ({ children, activePage, setActivePage, us
                             </>
                         )}
 
-                        {/* BABY OVERRIDE: STOCK AUDIT (Global visibility irrespective of evaluated Role) */}
-                        {(user?.employeeId === '0014' || user?.email === 'driver.0014@packsecure.local' || user?.name?.toLowerCase() === 'baby') && (
+                        {/* CUSTOM ACCESS OVERRIDE: STOCK AUDIT (Global visibility for explicit DB permissions, avoiding duplicate for execs) */}
+                        {userRole !== 'SuperAdmin' && userRole !== 'Admin' && userRole !== 'Manager' && canAccessPage('stock-audit', {
+                            isSuperAdmin,
+                            userRole,
+                            navRoles: ['Operator', 'Driver', 'HR'],
+                            dbAllowedPages,
+                            roleModules: user?.roleModules
+                        }) && (
                             <NavGroup title="Inventory Audits">
-                                <NavItem id="stock-audit" icon={ClipboardCheck} label="Stock Audit" roles={['Operator', 'Driver', 'SuperAdmin', 'Admin', 'Manager', 'HR']} />
+                                <NavItem id="stock-audit" icon={ClipboardCheck} label="Stock Audit" roles={['Operator', 'Driver', 'HR']} />
                             </NavGroup>
                         )}
                         {/* 🤖 AI 助理与 💡 本页逻辑说明 专用按钮 (移至左侧菜单) */}
