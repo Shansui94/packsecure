@@ -58,6 +58,7 @@ const Layout: React.FC<LayoutProps> = ({ children, activePage, setActivePage, us
     // DB-driven page permissions: Set<page_id> of allowed pages for this role
     const [dbAllowedPages, setDbAllowedPages] = useState<Set<string> | null>(null);
     const [showLangModal, setShowLangModal] = useState(false);
+    const isSuperAdmin = userRole === 'SuperAdmin' || user?.employeeId === '001';
 
     // Languages Config
     const languages = [
@@ -208,8 +209,6 @@ const Layout: React.FC<LayoutProps> = ({ children, activePage, setActivePage, us
     );
 
     const NavItem = ({ id, icon: Icon, label, roles, badge }: { id: string, icon: any, label: string, roles?: string[], badge?: number }) => {
-        const isSuperAdmin = userRole === 'SuperAdmin' || user?.employeeId === '001';
-
         const hasAccess = canAccessPage(id, {
             isSuperAdmin,
             userRole,
