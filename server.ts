@@ -7,6 +7,7 @@ import manageEmployeeHandler from './api/manage-employee';
 import visionHandler from './api/agent/vision';
 import geocodeHandler from './api/geocode';
 import aiPhotoHandler from './api/agent/ai-photo';
+import lorryLatestMileageHandler from './api/lorry-latest-mileage';
 
 const app = express();
 const PORT = 8080;
@@ -31,6 +32,7 @@ mountVercelHandler('/api/manage-employee', manageEmployeeHandler);
 mountVercelHandler('/api/agent/vision', visionHandler);
 mountVercelHandler('/api/geocode', geocodeHandler);
 mountVercelHandler('/api/agent/ai-photo', aiPhotoHandler);
+mountVercelHandler('/api/lorry-latest-mileage', lorryLatestMileageHandler);
 
 // Mimic Vercel Request/Response for the handler
 app.post('/api/agent/chat', async (req, res) => {

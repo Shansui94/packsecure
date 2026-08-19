@@ -1027,18 +1027,41 @@ const DriverDelivery: React.FC<DriverDeliveryProps> = ({ user }) => {
             const { data: urlData } = supabase.storage.from('work-photos').getPublicUrl(fileName);
             const photoUrl = urlData.publicUrl;
 
+            // Helper to fetch true latest mileage across all drivers
+            const getLatestMileage = async (lorryId: string): Promise<{ mileage: number } | null> => {
+                try {
+                    const res = await fetch(`/api/lorry-latest-mileage?lorry_id=${encodeURIComponent(lorryId)}`);
+                    if (res.ok) {
+                        const json = await res.json();
+                        if (json && typeof json.mileage === 'number') {
+                            return { mileage: json.mileage };
+                        }
+                    }
+                } catch (e) {
+                    console.warn("Failed to fetch latest mileage from API, falling back to direct query:", e);
+                }
+
+                try {
+                    const { data: directLog } = await supabase
+                        .from('lorry_mileage_logs')
+                        .select('mileage')
+                        .eq('lorry_id', lorryId)
+                        .order('created_at', { ascending: false })
+                        .limit(1)
+                        .maybeSingle();
+                    if (directLog && typeof directLog.mileage === 'number') {
+                        return directLog;
+                    }
+                } catch (e) {
+                    console.warn("Direct query failed:", e);
+                }
+                return null;
+            };
+
             // Handle BIND / START SHIFT
             if (scannedLorryData.mode === 'bind') {
                 // Fetch previous mileage log for discrepancy check
-                const { data: lastLog, error: lastLogErr } = await supabase
-                    .from('lorry_mileage_logs')
-                    .select('mileage')
-                    .eq('lorry_id', scannedLorryData.id)
-                    .order('created_at', { ascending: false })
-                    .limit(1)
-                    .maybeSingle();
-
-                if (lastLogErr) console.warn("Failed to fetch last mileage log:", lastLogErr);
+                const lastLog = await getLatestMileage(scannedLorryData.id);
 
                 if (lastLog && lastLog.mileage !== mileageVal) {
                     // HARD BLOCK if discrepancy is > 2000 km (impossible jump, prevents DB corruption)
@@ -1100,15 +1123,7 @@ const DriverDelivery: React.FC<DriverDeliveryProps> = ({ user }) => {
             // Handle UNBIND / END SHIFT
             else if (scannedLorryData.mode === 'unbind') {
                 // Fetch previous mileage log for discrepancy check
-                const { data: lastLog, error: lastLogErr } = await supabase
-                    .from('lorry_mileage_logs')
-                    .select('mileage')
-                    .eq('lorry_id', scannedLorryData.id)
-                    .order('created_at', { ascending: false })
-                    .limit(1)
-                    .maybeSingle();
-
-                if (lastLogErr) console.warn("Failed to fetch last mileage log:", lastLogErr);
+                const lastLog = await getLatestMileage(scannedLorryData.id);
 
                 if (lastLog && lastLog.mileage !== mileageVal) {
                     // HARD BLOCK if discrepancy is > 2000 km (impossible jump, prevents DB corruption)
