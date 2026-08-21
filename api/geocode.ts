@@ -1,5 +1,5 @@
 import { VercelRequest, VercelResponse } from '@vercel/node';
-import { applyAdminCors } from './lib/cors.js';
+import { applyAdminCors } from '../lib/cors.js';
 
 export default async function handler(req: VercelRequest, res: VercelResponse) {
     applyAdminCors(req, res);

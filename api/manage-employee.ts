@@ -1,7 +1,7 @@
 import { VercelRequest, VercelResponse } from '@vercel/node';
-import { applyAdminCors } from './lib/cors.js';
-import { requireStaffAuth, sendAuthError } from './lib/admin-auth.js';
-import { normalizeFourDigitPin, pinToAuthPassword } from './lib/pin-auth.js';
+import { applyAdminCors } from '../lib/cors.js';
+import { requireStaffAuth, sendAuthError } from '../lib/admin-auth.js';
+import { normalizeFourDigitPin, pinToAuthPassword } from '../lib/pin-auth.js';
 
 export default async function handler(req: VercelRequest, res: VercelResponse) {
     applyAdminCors(req, res);
