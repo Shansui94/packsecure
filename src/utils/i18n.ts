@@ -12,14 +12,14 @@ import bnJson from '../locales/bn.json';
 
 export type SupportedLanguage = 'zh-CN' | 'en' | 'ms' | 'my' | 'zh-TW' | 'hi' | 'bn';
 
-export const LANGUAGES = [
-    { code: 'en', label: 'English' },
-    { code: 'zh-CN', label: '中文 (简体)' },
-    { code: 'my', label: 'မြန်မာဘာသာ' },
-    { code: 'ms', label: 'Bahasa Melayu' },
-    { code: 'zh-TW', label: '中文 (繁體)' },
-    { code: 'hi', label: 'हिंदी' },
-    { code: 'bn', label: 'বাংলা' }
+export const LANGUAGES: { code: SupportedLanguage; label: string; flag: string }[] = [
+    { code: 'en', label: 'English', flag: '🇬🇧' },
+    { code: 'zh-CN', label: '中文 (简体)', flag: '🇨🇳' },
+    { code: 'my', label: 'မြန်မာဘာသာ', flag: '🇲🇲' },
+    { code: 'ms', label: 'Bahasa Melayu', flag: '🇲🇾' },
+    { code: 'zh-TW', label: '中文 (繁體)', flag: '🇹🇼' },
+    { code: 'hi', label: 'हिंदी', flag: '🇮🇳' },
+    { code: 'bn', label: 'বাংলা', flag: '🇧🇩' }
 ];
 
 const resources = {
