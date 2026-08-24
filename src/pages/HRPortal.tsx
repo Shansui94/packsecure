@@ -3,7 +3,7 @@ import { supabase } from '../services/supabase';
 import {
     Users, Download, AlertCircle,
     Wallet, Plus, Edit2, Save, X, ToggleLeft, Trash2,
-    ToggleRight, Star, Award, MapPin, DollarSign, ChevronLeft, ChevronRight, ChevronDown, ChevronUp, Loader, Shield, Check, RefreshCw, UserPlus, CheckCircle2, Settings
+    ToggleRight, Star, Award, MapPin, DollarSign, ChevronLeft, ChevronRight, ChevronDown, ChevronUp, Loader, Shield, Check, RefreshCw, UserPlus, CheckCircle2, Settings, Calendar
 } from 'lucide-react';
 import { getSalaryAdvances, updateSalaryAdvanceStatus } from '../services/apiV2';
 import { calculateShiftSplit, getRatesForTarget } from '../utils/rateCalculator';
@@ -735,9 +735,8 @@ const MachineRateItemCard: React.FC<{
                 className="w-full py-1.5 bg-blue-600 hover:bg-blue-500 disabled:opacity-50 text-white rounded-lg text-xs font-bold transition-all flex items-center justify-center gap-1 shadow mt-1"
             >
                 {isSaving ? <Loader size={12} className="animate-spin" /> : <Save size={12} />}
-                
-                                {t('Save Rate / Save Rate')}
-                            </button>
+                {t('Save Rate / Save Rate')}
+            </button>
         </div>
     );
 };
@@ -747,9 +746,10 @@ interface HRPortalProps {
     user?: any;
     initialTab?: 'personnel' | 'permissions' | 'payroll' | 'advances' | 'approvals';
     initialRoleFilter?: string;
+    onNavigate?: (page: string) => void;
 }
 
-const HRPortal: React.FC<HRPortalProps> = ({ user, initialTab, initialRoleFilter }) => {
+const HRPortal: React.FC<HRPortalProps> = ({ user, initialTab, initialRoleFilter, onNavigate }) => {
     const { t } = useTranslation();
     const isSuperAdminOrHR = user?.role === 'SuperAdmin' || user?.role === 'HR';
     const [activeTab, setActiveTab] = useState<'personnel' | 'permissions' | 'payroll' | 'advances' | 'approvals'>(
@@ -1566,11 +1566,23 @@ const HRPortal: React.FC<HRPortalProps> = ({ user, initialTab, initialRoleFilter
     return (
         <div className="p-4 md:p-6 bg-[#07070a] min-h-screen text-white font-sans">
             {/* Header */}
-            <div className="mb-6">
-                <h1 className="text-3xl font-black text-white flex items-center gap-3 mb-1">
-                    <Users className="text-blue-500" size={28} /> HR Control Center
-                </h1>
-                <p className="text-gray-500 text-sm">Manage employees, permissions, leave and payroll.</p>
+            <div className="mb-6 flex flex-col sm:flex-row sm:items-center justify-between gap-4">
+                <div>
+                    <h1 className="text-2xl sm:text-3xl font-black text-white flex items-center gap-3 mb-1">
+                        <Users className="text-blue-500" size={28} /> HR Control Center
+                    </h1>
+                    <p className="text-gray-500 text-sm">Manage employees, permissions, leave and payroll.</p>
+                </div>
+                {onNavigate && (
+                    <button
+                        onClick={() => onNavigate('leave-calendar')}
+                        className="self-start sm:self-auto px-4 py-2.5 rounded-xl bg-blue-600/10 border border-blue-500/30 text-blue-400 hover:bg-blue-600/20 hover:text-blue-300 text-xs font-bold flex items-center gap-2 transition active:scale-95 shadow-sm cursor-pointer"
+                    >
+                        <Calendar size={15} />
+                        <span>📅 前往 Staff Hub (员工服务台 / 请假日历)</span>
+                        <ChevronRight size={14} />
+                    </button>
+                )}
             </div>
 
             {/* Tabs */}

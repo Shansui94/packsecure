@@ -1,6 +1,6 @@
 import React, { useState, useEffect } from 'react';
 import { supabase } from '../services/supabase';
-import { Calendar as CalendarIcon, ChevronLeft, ChevronRight, User as UserIcon, CalendarDays, Loader, Send, History, CheckCircle, XCircle, FileText, ClipboardList, Undo2, DollarSign, AlertCircle } from 'lucide-react';
+import { Calendar as CalendarIcon, ChevronLeft, ChevronRight, User as UserIcon, CalendarDays, Loader, Send, History, CheckCircle, XCircle, FileText, ClipboardList, Undo2, DollarSign, AlertCircle, Users } from 'lucide-react';
 import { getSalaryAdvancesForDriver, createSalaryAdvance } from '../services/apiV2';
 
 interface LeaveRecord {
@@ -28,9 +28,10 @@ const WEEKDAYS = ['Ahd/Sun', 'Isn/Mon', 'Sel/Tue', 'Rab/Wed', 'Kha/Thu', 'Jum/Fr
 
 interface Props {
     user?: any;
+    onNavigate?: (page: string) => void;
 }
 
-const LeaveCalendar: React.FC<Props> = ({ user }) => {
+const LeaveCalendar: React.FC<Props> = ({ user, onNavigate }) => {
     // Current Active Tab
     const [activeTab, setActiveTab] = useState<'calendar' | 'my-leave' | 'approvals' | 'my-advance'>('calendar');
 
@@ -1191,16 +1192,28 @@ const LeaveCalendar: React.FC<Props> = ({ user }) => {
 
             {/* PAGE HEADER & TABS */}
             <div className="max-w-7xl w-full mx-auto">
-                <div className="flex items-center gap-3 sm:gap-4 mb-5 sm:mb-6">
-                    <div className="p-2.5 sm:p-3 bg-gradient-to-br from-blue-600/20 to-purple-600/20 rounded-xl sm:rounded-2xl border border-blue-500/20 shadow-[0_0_20px_rgba(59,130,246,0.15)] text-blue-400 shrink-0">
-                        <CalendarIcon className="w-5 h-5 sm:w-6 sm:h-6" />
+                <div className="flex flex-col sm:flex-row justify-between items-start sm:items-center gap-4 mb-5 sm:mb-6">
+                    <div className="flex items-center gap-3 sm:gap-4">
+                        <div className="p-2.5 sm:p-3 bg-gradient-to-br from-blue-600/20 to-purple-600/20 rounded-xl sm:rounded-2xl border border-blue-500/20 shadow-[0_0_20px_rgba(59,130,246,0.15)] text-blue-400 shrink-0">
+                            <CalendarIcon className="w-5 h-5 sm:w-6 sm:h-6" />
+                        </div>
+                        <div>
+                            <h1 className="text-lg sm:text-2xl font-black italic uppercase tracking-wider bg-clip-text text-transparent bg-gradient-to-r from-blue-400 to-purple-400 drop-shadow-sm leading-tight">
+                                URUSAN STAF / STAFF HUB
+                            </h1>
+                            <p className="text-[9px] sm:text-[10px] text-slate-500 font-bold uppercase tracking-widest mt-0.5">Sistem Urusan Staf Bersepadu / Unified Staff Request Hub</p>
+                        </div>
                     </div>
-                    <div>
-                        <h1 className="text-lg sm:text-2xl font-black italic uppercase tracking-wider bg-clip-text text-transparent bg-gradient-to-r from-blue-400 to-purple-400 drop-shadow-sm leading-tight">
-                            URUSAN STAF / STAFF HUB
-                        </h1>
-                        <p className="text-[9px] sm:text-[10px] text-slate-500 font-bold uppercase tracking-widest mt-0.5">Sistem Urusan Staf Bersepadu / Unified Staff Request Hub</p>
-                    </div>
+                    {isManagement && onNavigate && (
+                        <button
+                            onClick={() => onNavigate('hr')}
+                            className="self-start sm:self-auto px-4 py-2.5 rounded-xl bg-purple-600/10 border border-purple-500/30 text-purple-300 hover:bg-purple-600/20 hover:text-purple-200 text-xs font-bold flex items-center gap-2 transition active:scale-95 shadow-sm cursor-pointer"
+                        >
+                            <Users size={15} />
+                            <span>⚙️ 前往 HR 控制中心 (HR Control)</span>
+                            <ChevronRight size={14} />
+                        </button>
+                    )}
                 </div>
 
                 {/* TABS CONTROLLER */}

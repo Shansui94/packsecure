@@ -404,8 +404,8 @@ const Layout: React.FC<LayoutProps> = ({ children, activePage, setActivePage, us
                                 </NavGroup>
 
                                 <NavGroup title="Organization">
-                                    <NavItem id="leave-calendar" icon={Calendar} label="Leave Center" roles={['SuperAdmin', 'Admin', 'Manager', 'HR', 'Driver', 'Operator']} />
-                                    <NavItem id="hr" icon={Users} label="Staff Hub / HR Portal" roles={['SuperAdmin', 'Admin', 'Manager']} />
+                                    <NavItem id="leave-calendar" icon={Calendar} label="Staff Hub" roles={['SuperAdmin', 'Admin', 'Manager', 'HR', 'Driver', 'Operator']} />
+                                    <NavItem id="hr" icon={Users} label="HR Control Center" roles={['SuperAdmin', 'Admin', 'Manager']} />
                                     <NavItem id="reports" icon={FileBarChart} label="Reports" roles={['SuperAdmin', 'Admin', 'Manager']} />
                                     <NavItem id="iot" icon={Cpu} label="IOT SETTINGS" roles={['SuperAdmin', 'Admin', 'Manager']} />
                                     <NavItem id="dev-log" icon={Activity} label="Dev Log" roles={['SuperAdmin', 'Admin']} />
@@ -450,7 +450,7 @@ const Layout: React.FC<LayoutProps> = ({ children, activePage, setActivePage, us
                         {userRole === 'HR' && (
                             <>
                                 <NavGroup title="HR Workspace">
-                                    <NavItem id="hr" icon={Users} label="HR Portal" roles={['HR']} />
+                                    <NavItem id="hr" icon={Users} label="HR Control Center" roles={['HR']} />
                                     <NavItem id="driver-leave" icon={Calendar} label="Staff Hub" roles={['HR']} />
                                     <NavItem id="personal-report" icon={FileText} label="My Monthly Report" roles={['HR']} />
                                 </NavGroup>

@@ -751,11 +751,11 @@ function App() {
                 return <ExecutiveReports user={user} />;
             // Organization
             case 'users':
-                return <HRPortal user={user} initialTab="personnel" />;
+                return <HRPortal user={user} initialTab="personnel" onNavigate={setActivePage} />;
             case 'driver-management':
-                return <HRPortal user={user} initialTab="personnel" initialRoleFilter="Driver" />;
+                return <HRPortal user={user} initialTab="personnel" initialRoleFilter="Driver" onNavigate={setActivePage} />;
             case 'hr':
-                return <HRPortal user={user} />;
+                return <HRPortal user={user} onNavigate={setActivePage} />;
             case 'update-password':
                 return <UpdatePassword />;
             case 'factory-live-os':
@@ -763,7 +763,7 @@ function App() {
             case 'floor-plan':
                 return <FloorPlan user={user} />;
             case 'operators':
-                return <HRPortal user={user} initialTab="personnel" initialRoleFilter="Operator" />;
+                return <HRPortal user={user} initialTab="personnel" initialRoleFilter="Operator" onNavigate={setActivePage} />;
             case 'dev-log':
                 return <DevLog />;
             case 'notes':
@@ -772,7 +772,7 @@ function App() {
                 return <Tasks user={user} />;
             case 'driver-leave':
             case 'leave-calendar':
-                return <LeaveCalendar user={user} />;
+                return <LeaveCalendar user={user} onNavigate={setActivePage} />;
             case 'sop-center':
                 return <SOPCenter userRole={user?.role} user={user} />;
             case 'work-photos':
