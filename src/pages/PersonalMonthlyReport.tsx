@@ -1615,6 +1615,7 @@ const PersonalMonthlyReport: React.FC<Props> = ({ user }) => {
                     earnings: tEarnings,
                     deadline: t.deadline || null,
                     pod_timestamp: t.pod_timestamp || null,
+                    pod_signed_by: t.pod_signed_by || null,
                     displayString: `${originRaw} ➞ ${displayZone} (${drops} Drop${drops > 1 ? 's' : ''})`
                 });
             });
@@ -2923,6 +2924,67 @@ const PersonalMonthlyReport: React.FC<Props> = ({ user }) => {
                                             )}
                                         </div>
                                     </div>
+
+                                    {/* DRIVER DELIVERY / POD INFO SECTION */}
+                                    {(selectedTrip.pod_photo_url || selectedTrip.pod_signature_url || selectedTrip.pod_timestamp) && (
+                                        <div className="mt-4 p-4 rounded-xl border border-slate-800 bg-slate-900/30 flex flex-col gap-3">
+                                            <h4 className="text-xs font-bold text-emerald-400 uppercase tracking-widest flex items-center gap-1.5 border-b border-slate-800/80 pb-2">
+                                                🚚 Proof of Delivery / POD (Driver Uploads)
+                                            </h4>
+                                            
+                                            <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
+                                                {/* POD Photos */}
+                                                <div>
+                                                    <label className="block text-[10px] font-bold text-slate-500 uppercase tracking-wider mb-2">Delivery Photos (DO / Goods)</label>
+                                                    {selectedTrip.pod_photo_url ? (
+                                                        <div className="flex flex-wrap gap-2">
+                                                            {selectedTrip.pod_photo_url.split(',').map((url: string, idx: number) => (
+                                                                <a key={idx} href={url.trim()} target="_blank" rel="noopener noreferrer" className="relative group overflow-hidden rounded-lg border border-slate-800 hover:border-blue-500 h-20 w-20 bg-black flex-shrink-0 block transition-all">
+                                                                    <img src={url.trim()} alt={`POD Photo ${idx + 1}`} className="w-full h-full object-cover opacity-85 group-hover:opacity-100 transition-opacity" />
+                                                                    <div className="absolute inset-0 flex items-center justify-center bg-black/40 opacity-0 group-hover:opacity-100 transition-opacity pointer-events-none">
+                                                                        <span className="text-[9px] bg-blue-500 text-white font-bold px-1.5 py-0.5 rounded shadow">View</span>
+                                                                    </div>
+                                                                </a>
+                                                            ))}
+                                                        </div>
+                                                    ) : (
+                                                        <div className="text-xs text-slate-600 italic">No delivery photos uploaded</div>
+                                                    )}
+                                                </div>
+
+                                                {/* POD Signature */}
+                                                <div>
+                                                    <label className="block text-[10px] font-bold text-slate-500 uppercase tracking-wider mb-2">Customer Signature</label>
+                                                    {selectedTrip.pod_signature_url ? (
+                                                        <a href={selectedTrip.pod_signature_url} target="_blank" rel="noopener noreferrer" className="relative group overflow-hidden rounded-lg border border-slate-800 hover:border-blue-500 h-20 w-full max-w-[200px] bg-white flex items-center justify-center block transition-all">
+                                                            <img src={selectedTrip.pod_signature_url} alt="POD Signature" className="max-h-full object-contain p-1" />
+                                                            <div className="absolute inset-0 flex items-center justify-center bg-black/10 opacity-0 group-hover:opacity-100 transition-opacity pointer-events-none">
+                                                                <span className="text-[9px] bg-blue-500 text-white font-bold px-1.5 py-0.5 rounded shadow">View</span>
+                                                            </div>
+                                                        </a>
+                                                    ) : (
+                                                        <div className="text-xs text-slate-600 italic">No signature recorded</div>
+                                                    )}
+                                                </div>
+
+                                                {/* POD Details */}
+                                                <div className="text-xs text-slate-400 flex flex-col gap-2.5 justify-center">
+                                                    {selectedTrip.pod_timestamp && (
+                                                        <div>
+                                                            <span className="text-[9px] font-bold text-slate-500 uppercase tracking-wider block mb-0.5">Delivered At</span>
+                                                            <span className="text-slate-300 font-medium font-mono">{new Date(selectedTrip.pod_timestamp).toLocaleString('en-GB')}</span>
+                                                        </div>
+                                                    )}
+                                                    {selectedTrip.pod_signed_by && (
+                                                        <div>
+                                                            <span className="text-[9px] font-bold text-slate-500 uppercase tracking-wider block mb-0.5">Received By</span>
+                                                            <span className="text-slate-300 font-medium font-mono">{selectedTrip.pod_signed_by}</span>
+                                                        </div>
+                                                    )}
+                                                </div>
+                                            </div>
+                                        </div>
+                                    )}
 
                                 </div>
 
