@@ -336,6 +336,7 @@ const PersonalMonthlyReport: React.FC<Props> = ({ user }) => {
     const [driverLorryPlate, setDriverLorryPlate] = useState<string>('N/A');
     const [isMonthlyConfirmed, setIsMonthlyConfirmed] = useState<boolean>(false);
     const [confirmedTripIds, setConfirmedTripIds] = useState<Set<string>>(new Set());
+    const [pendingCountsMap, setPendingCountsMap] = useState<Record<string, number>>({});
     
     // Batch & Single Print States
     const [isPreparingBatchPrint, setIsPreparingBatchPrint] = useState(false);
@@ -539,6 +540,7 @@ const PersonalMonthlyReport: React.FC<Props> = ({ user }) => {
                     });
                 }
                 setEmployeesList(merged.sort((a,b) => (a.name || '').localeCompare(b.name || '')));
+                fetchGlobalPendingCounts();
             } else {
                 setEmployeesList([]);
                 setSelectedEmployeeId(user.uid || user.id);
@@ -553,8 +555,36 @@ const PersonalMonthlyReport: React.FC<Props> = ({ user }) => {
         fetchData();
     }, [selectedEmployeeId, selectedMonth, selectedYear]);
 
+    const fetchGlobalPendingCounts = async () => {
+        try {
+            const firstDay = `${selectedYear}-${String(selectedMonth).padStart(2, '0')}-01`;
+            const lastDayObj = new Date(selectedYear, selectedMonth, 0);
+            const lastDayStr = `${lastDayObj.getFullYear()}-${String(lastDayObj.getMonth() + 1).padStart(2, '0')}-${String(lastDayObj.getDate()).padStart(2, '0')}`;
+
+            const { data } = await supabase
+                .from('sales_orders')
+                .select('id, driver_id, status, edit_status, notes, deadline, created_at')
+                .or('status.eq.Pending Approval,status.eq.Pending,edit_status.eq.Pending,notes.ilike.%[PENDING%');
+
+            if (data) {
+                const counts: Record<string, number> = {};
+                data.forEach((o: any) => {
+                    const rawDate = o.deadline || (o.created_at ? o.created_at.split('T')[0] : null);
+                    if (rawDate && (rawDate < firstDay || rawDate > lastDayStr)) return;
+                    if (o.driver_id) {
+                        counts[o.driver_id] = (counts[o.driver_id] || 0) + 1;
+                    }
+                });
+                setPendingCountsMap(counts);
+            }
+        } catch (e) {
+            console.warn("Global pending counts error:", e);
+        }
+    };
+
     const fetchData = async () => {
         setLoading(true);
+        fetchGlobalPendingCounts();
 
         const firstDay = `${selectedYear}-${String(selectedMonth).padStart(2, '0')}-01`;
         const lastDayObj = new Date(selectedYear, selectedMonth, 0);
@@ -1717,9 +1747,10 @@ const PersonalMonthlyReport: React.FC<Props> = ({ user }) => {
                                 >
                                     {employeesList.map(emp => {
                                         const rowKey = emp.uid || emp.auth_user_id || emp.id;
+                                        const pendingCount = pendingCountsMap[rowKey] || 0;
                                         return (
                                             <option key={rowKey} value={rowKey}>
-                                                {emp.name || emp.employee_id} ({emp.role === 'Driver' ? 'Pemandu / Driver' : emp.role})
+                                                {emp.name || emp.employee_id} ({emp.role === 'Driver' ? 'Pemandu / Driver' : emp.role}){pendingCount > 0 ? ` 🟡 [${pendingCount} 待审核 / Pending]` : ''}
                                             </option>
                                         );
                                     })}
@@ -2211,6 +2242,78 @@ const PersonalMonthlyReport: React.FC<Props> = ({ user }) => {
                         </div>
                     </div>
 
+                    {/* PENDING EXTRA JOBS & EDITS QUICK REVIEW SECTION */ }
+                    {(() => {
+                        const pendingTripsList = dailyMetrics.flatMap(d => (d.tripDetails || []).filter((t: any) => 
+                            t.status === 'Pending Approval' || t.status === 'Pending' || t.edit_status === 'Pending' || t.notes?.includes('[PENDING_EDIT_PAYLOAD]') || t.notes?.includes('[PENDING EDIT')
+                        ).map((t: any) => ({ ...t, dateStr: d.dateStr })));
+
+                        if (!isDriver || pendingTripsList.length === 0) return null;
+
+                        return (
+                            <div className="bg-gradient-to-br from-amber-950/40 via-amber-900/20 to-black border-2 border-amber-500/40 rounded-3xl p-6 shadow-2xl relative overflow-hidden animate-fade-in">
+                                <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3 mb-4">
+                                    <div className="flex items-center gap-3">
+                                        <div className="p-2.5 bg-amber-500/20 text-amber-300 rounded-2xl border border-amber-500/30">
+                                            <Clock size={22} className="animate-spin" />
+                                        </div>
+                                        <div>
+                                            <h3 className="text-base font-black text-amber-300 flex items-center gap-2">
+                                                <span>待审核任务专区 / Pending Approvals List</span>
+                                                <span className="px-2 py-0.5 bg-amber-500 text-black text-xs font-black rounded-full">
+                                                    {pendingTripsList.length} 项待处理
+                                                </span>
+                                            </h3>
+                                            <p className="text-xs text-amber-400/80 mt-0.5">
+                                                {isAdminOrHR ? "发现该司机有待审核的额外任务/预修改，点击卡片可直接核实并批准金额：" : "您提交的任务已进入审核列表，等待 Admin/Manager 确认：" }
+                                            </p>
+                                        </div>
+                                    </div>
+                                </div>
+
+                                <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-3">
+                                    {pendingTripsList.map((pt, pidx) => (
+                                        <div 
+                                            key={pidx} 
+                                            onClick={() => setSelectedTrip(pt)}
+                                            className="bg-black/60 border border-amber-500/30 hover:border-amber-500/70 p-4 rounded-2xl flex flex-col justify-between gap-3 transition-all cursor-pointer group hover:bg-black/80 hover:shadow-lg hover:shadow-amber-500/10"
+                                        >
+                                            <div className="space-y-2">
+                                                <div className="flex justify-between items-start gap-2">
+                                                    <span className="px-2 py-0.5 rounded bg-amber-500/20 border border-amber-500/30 text-amber-300 text-[10px] font-bold">
+                                                        📅 {pt.dateStr}
+                                                    </span>
+                                                    <span className="font-mono font-black text-amber-300 text-sm">
+                                                        预估 RM {(pt.earnings || 0).toFixed(2)}
+                                                    </span>
+                                                </div>
+                                                <div className="text-xs font-black text-white group-hover:text-amber-200 transition-colors">
+                                                    {pt.displayString}
+                                                </div>
+                                                {pt.delivery_address && (
+                                                    <div className="text-[10px] text-gray-400 truncate">
+                                                        📍 {pt.delivery_address}
+                                                    </div>
+                                                )}
+                                                {pt.proof_of_load_url && (
+                                                    <div className="aspect-video w-full rounded-xl overflow-hidden bg-black/50 border border-white/10 relative">
+                                                        <img src={pt.proof_of_load_url} alt="Proof" className="w-full h-full object-cover group-hover:scale-105 transition-transform" />
+                                                    </div>
+                                                )}
+                                            </div>
+                                            <button 
+                                                type="button" 
+                                                className="w-full py-2 bg-amber-500/20 hover:bg-amber-500 text-amber-300 hover:text-black rounded-xl text-xs font-bold transition-all border border-amber-500/30 flex items-center justify-center gap-1.5"
+                                            >
+                                                <span>{isAdminOrHR ? "⚡ 点击审核 / Review & Approve" : "查看详情 / View"}</span>
+                                            </button>
+                                        </div>
+                                    ))}
+                                </div>
+                            </div>
+                        );
+                    })()}
+
                     {/* Daily Breakdown Table Section / Seksyen Jadual Harian */}
                     <div className="bg-[#0d0d12] border border-white/5 rounded-3xl p-6 md:p-8 shadow-2xl relative overflow-hidden">
                         <div className="absolute top-0 right-0 w-64 h-64 bg-blue-500/5 rounded-full blur-3xl -z-10"></div>
@@ -2239,8 +2342,12 @@ const PersonalMonthlyReport: React.FC<Props> = ({ user }) => {
                                     </tr>
                                 </thead>
                                 <tbody className="divide-y divide-white/5">
-                                    {dailyMetrics.map((day) => (
-                                        <tr key={day.dateStr} className={`transition-colors hover:bg-white/[0.03] ${day.isWeekend ? 'bg-white/[0.01]' : ''}`}>
+                                    {dailyMetrics.map((day) => {
+                                        const hasDayPending = isDriver && day.tripDetails?.some((t: any) => 
+                                            t.status === 'Pending Approval' || t.status === 'Pending' || t.edit_status === 'Pending' || t.notes?.includes('[PENDING_EDIT_PAYLOAD]') || t.notes?.includes('[PENDING EDIT')
+                                        );
+                                        return (
+                                        <tr key={day.dateStr} className={`transition-colors ${hasDayPending ? 'bg-amber-500/10 hover:bg-amber-500/15 border-l-4 border-l-amber-500 shadow-sm' : (day.isWeekend ? 'bg-white/[0.01] hover:bg-white/[0.03]' : 'hover:bg-white/[0.03]')}`}>
                                             <td className="px-5 py-4 whitespace-nowrap">
                                                 <div className="flex flex-col">
                                                     <span className={`font-black text-lg ${day.isWeekend ? 'text-gray-600' : 'text-gray-300'}`}>{day.dayNum}</span>
@@ -2250,6 +2357,12 @@ const PersonalMonthlyReport: React.FC<Props> = ({ user }) => {
                                                 </div>
                                             </td>
                                             <td className="px-5 py-4 whitespace-nowrap">
+                                                {hasDayPending && (
+                                                    <span className="inline-flex items-center gap-1 px-2 py-0.5 rounded bg-amber-500/20 border border-amber-500/40 text-amber-300 text-[10px] font-black uppercase tracking-wider animate-pulse mb-1">
+                                                        <Clock size={10} className="animate-spin" />
+                                                        待审核 / Pending
+                                                    </span>
+                                                )}
                                                 {day.leaveStatus ? (
                                                     <div className="flex flex-col items-start gap-0.5">
                                                         <span className="inline-flex items-center px-2 py-0.5 rounded bg-amber-500/10 border border-amber-500/20 text-amber-400 text-[10px] font-black uppercase tracking-wider">
@@ -2479,25 +2592,38 @@ const PersonalMonthlyReport: React.FC<Props> = ({ user }) => {
                                             </td>
                                             {isAdminOrHR && (
                                                 <td className="px-5 py-4 whitespace-nowrap text-center">
-                                                    {day.hasAttendance ? (
-                                                        <button 
-                                                            onClick={() => setSelectedAttendanceDay(day)}
-                                                            className="text-[10px] bg-amber-500/10 text-amber-400 border border-amber-500/20 hover:bg-amber-500/20 px-2 py-1 rounded font-bold transition-colors cursor-pointer"
-                                                        >
-                                                            ✏️ Sunting / Edit
-                                                        </button>
-                                                    ) : (
-                                                        <button 
-                                                            onClick={() => setSelectedAttendanceDay(day)}
-                                                            className="text-[10px] bg-blue-500/10 text-blue-400 border border-blue-500/20 hover:bg-blue-500/20 px-2 py-1 rounded font-bold transition-colors cursor-pointer"
-                                                        >
-                                                            ➕ Tambah Log / Add
-                                                        </button>
-                                                    )}
+                                                    <div className="flex items-center justify-center gap-1.5">
+                                                        {hasDayPending ? (
+                                                            <button
+                                                                onClick={() => {
+                                                                    const pTrip = day.tripDetails.find((t: any) => t.status === 'Pending Approval' || t.status === 'Pending' || t.edit_status === 'Pending' || t.notes?.includes('[PENDING_EDIT_PAYLOAD]') || t.notes?.includes('[PENDING EDIT'));
+                                                                    if (pTrip) setSelectedTrip(pTrip);
+                                                                }}
+                                                                className="text-[10px] bg-amber-500 hover:bg-amber-400 text-black font-black px-2.5 py-1 rounded-lg shadow-md shadow-amber-500/20 flex items-center gap-1 transition-all active:scale-95 animate-pulse cursor-pointer"
+                                                            >
+                                                                <Clock size={11} className="animate-spin" />
+                                                                <span>审核 / Review</span>
+                                                            </button>
+                                                        ) : day.hasAttendance ? (
+                                                            <button 
+                                                                onClick={() => setSelectedAttendanceDay(day)}
+                                                                className="text-[10px] bg-amber-500/10 text-amber-400 border border-amber-500/20 hover:bg-amber-500/20 px-2 py-1 rounded font-bold transition-colors cursor-pointer"
+                                                            >
+                                                                ✏️ Sunting / Edit
+                                                            </button>
+                                                        ) : (
+                                                            <button 
+                                                                onClick={() => setSelectedAttendanceDay(day)}
+                                                                className="text-[10px] bg-white/5 text-gray-400 border border-white/5 hover:bg-white/10 px-2 py-1 rounded font-bold transition-colors cursor-pointer"
+                                                            >
+                                                                ➕ Log
+                                                            </button>
+                                                        )}
+                                                    </div>
                                                 </td>
                                             )}
                                         </tr>
-                                    ))}
+                                    ); })}
                                 </tbody>
                                 <tfoot>
                                     <tr className="bg-slate-900/90 border-t-2 border-slate-800">
