@@ -878,6 +878,14 @@ const PersonalMonthlyReport: React.FC<Props> = ({ user }) => {
                 });
                 setConfirmedTripIds(confirmedSet);
 
+                // Determine if whole month is fully confirmed
+                const validTrips = (rawDeliveryData || []).filter(d => d.status !== 'Cancelled');
+                if (validTrips.length > 0 && validTrips.every(d => confirmedSet.has(d.id))) {
+                    setIsMonthlyConfirmed(true);
+                } else {
+                    setIsMonthlyConfirmed(false);
+                }
+
                 // Fetch tied lorry for driver / Dapatkan lorry yang terikat untuk pemandu
                 const { data: lorryData } = await supabase
                     .from('lorries')
@@ -1052,34 +1060,56 @@ const PersonalMonthlyReport: React.FC<Props> = ({ user }) => {
         setIsMonthlyConfirmed(checked);
         sessionStorage.setItem(`pmr_confirmed_${selectedEmployeeId}_${selectedYear}_${selectedMonth}`, String(checked));
 
-        try {
-            await supabase
-                .from('driver_monthly_confirmations')
-                .upsert({
-                    employee_id: selectedEmployeeId,
-                    month: selectedMonth,
-                    year: selectedYear,
-                    status: checked ? 'Confirmed' : 'Pending',
-                    confirmed_at: checked ? new Date().toISOString() : null,
-                    confirmed_by: viewedProfile?.name || selectedEmployeeId
-                });
-        } catch (err) {
-            try {
-                await supabase
-                    .from('payroll_records')
-                    .update({ driver_confirmed: checked, driver_confirmed_at: checked ? new Date().toISOString() : null })
-                    .eq('employee_id', selectedEmployeeId)
-                    .eq('month', selectedMonth)
-                    .eq('year', selectedYear);
-            } catch (pErr) {
-                console.log("Saved confirmation state locally.");
-            }
-        }
+        const driverTrips = (deliveries || []).filter(d => d.status !== 'Cancelled');
 
         if (checked) {
-            alert("✅ 已打钩确认本月出车/考勤数据无误！ / Monthly report confirmed as correct!");
+            const allTripIds = new Set(confirmedTripIds);
+            driverTrips.forEach(d => allTripIds.add(d.id));
+            setConfirmedTripIds(allTripIds);
+
+            // Optimistically update deliveries state in memory
+            setDeliveries(prev => prev.map(d => {
+                const oldNotes = d.notes || '';
+                const newNotes = oldNotes.includes('[DRIVER_CONFIRMED') 
+                    ? oldNotes 
+                    : (oldNotes ? `${oldNotes}\n` : '') + `[DRIVER_CONFIRMED: ${new Date().toISOString()}]`;
+                return { ...d, notes: newNotes, driver_confirmed: true };
+            }));
+
+            // Persist to Supabase in background for all monthly trips
+            try {
+                for (const d of driverTrips) {
+                    if (!d.notes?.includes('[DRIVER_CONFIRMED')) {
+                        const newNotes = ((d.notes || '') + `\n[DRIVER_CONFIRMED: ${new Date().toISOString()}]`).trim();
+                        await supabase.from('sales_orders').update({ notes: newNotes }).eq('id', d.id);
+                    }
+                }
+            } catch (err) {
+                console.error("Error bulk confirming trips:", err);
+            }
+            alert("✅ 已打钩确认全月所有 Trip 出车无误！ / All trips for this month confirmed!");
         } else {
-            alert("ℹ️ 已取消本月打钩确认。 / Monthly confirmation unchecked.");
+            setConfirmedTripIds(new Set());
+
+            // Optimistically update deliveries in memory
+            setDeliveries(prev => prev.map(d => {
+                const oldNotes = d.notes || '';
+                const newNotes = oldNotes.replace(/\[DRIVER_CONFIRMED:[^\]]*\]\n?/gi, '').replace(/\[DRIVER_CONFIRMED\]\n?/gi, '').trim();
+                return { ...d, notes: newNotes, driver_confirmed: false };
+            }));
+
+            // Persist uncheck in background for all monthly trips
+            try {
+                for (const d of driverTrips) {
+                    if (d.notes?.includes('[DRIVER_CONFIRMED')) {
+                        const newNotes = (d.notes || '').replace(/\[DRIVER_CONFIRMED:[^\]]*\]\n?/gi, '').replace(/\[DRIVER_CONFIRMED\]\n?/gi, '').trim();
+                        await supabase.from('sales_orders').update({ notes: newNotes }).eq('id', d.id);
+                    }
+                }
+            } catch (err) {
+                console.error("Error bulk unchecking trips:", err);
+            }
+            alert("ℹ️ 已取消全月打钩确认。 / Monthly confirmation unchecked.");
         }
     };
 
