@@ -590,8 +590,8 @@ const PersonalMonthlyReport: React.FC<Props> = ({ user }) => {
         }
     };
 
-    const fetchData = async () => {
-        setLoading(true);
+    const fetchData = async (isSilent: boolean = false) => {
+        if (!isSilent) setLoading(true);
         fetchGlobalPendingCounts();
 
         const firstDay = `${selectedYear}-${String(selectedMonth).padStart(2, '0')}-01`;
@@ -865,7 +865,7 @@ const PersonalMonthlyReport: React.FC<Props> = ({ user }) => {
         } catch (error) {
             console.error("Error fetching report data:", error);
         } finally {
-            setLoading(false);
+            if (!isSilent) setLoading(false);
         }
     };
 
@@ -980,6 +980,9 @@ const PersonalMonthlyReport: React.FC<Props> = ({ user }) => {
             newNotes = oldNotes.replace(/\[DRIVER_CONFIRMED:[^\]]*\]\n?/gi, '').replace(/\[DRIVER_CONFIRMED\]\n?/gi, '').trim();
         }
 
+        // Optimistic UI update: instant transition with ZERO screen flash/reload
+        setDeliveries(prev => prev.map(d => d.id === tripId ? { ...d, notes: newNotes, driver_confirmed: checked } : d));
+
         try {
             await supabase
                 .from('sales_orders')
@@ -995,20 +998,24 @@ const PersonalMonthlyReport: React.FC<Props> = ({ user }) => {
         let newNotes = oldNotes;
         if (checked) {
             if (!oldNotes.includes('[HR_APPROVED]')) {
-                newNotes = (oldNotes ? oldNotes + '\n' : '') + '[HR_APPROVED]';
+                newNotes = (oldNotes ? oldNotes + '\n' : '') + '[HR_APPROVED]'; 
             }
         } else {
             newNotes = oldNotes.replace(/\[HR_APPROVED\]\n?/g, '').trim();
         }
+
+        // Optimistic UI update: instant transition with ZERO screen flash/reload
+        setDeliveries(prev => prev.map(d => d.id === trip.id ? { ...d, notes: newNotes } : d));
 
         try {
             await supabase
                 .from('sales_orders')
                 .update({ notes: newNotes })
                 .eq('id', trip.id);
-            fetchData();
         } catch (err) {
-            console.error("Error saving HR approval", err);
+            console.error("Error saving HR approval:", err);
+            // Revert state if error
+            setDeliveries(prev => prev.map(d => d.id === trip.id ? { ...d, notes: oldNotes } : d));
         }
     };
 
