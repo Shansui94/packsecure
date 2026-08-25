@@ -1058,59 +1058,43 @@ const PersonalMonthlyReport: React.FC<Props> = ({ user }) => {
         if (!selectedTrip) return;
 
         try {
-            if (approve) {
-                // Try to parse fallback payload from notes if present
-                const payloadMatch = selectedTrip.notes?.match(/\[PENDING_EDIT_PAYLOAD\]:\s*(\{.*\})/is);
-                let fallbackPayload: any = {};
-                if (payloadMatch) {
-                    try { fallbackPayload = JSON.parse(payloadMatch[1]); } catch(e) {}
-                }
-                
-                const finalNotes = fallbackPayload.notes !== undefined ? fallbackPayload.notes : newOrderNotes;
-                const cleanNotes = (finalNotes || selectedTrip.notes || '').replace(/(?:\n\n)?\[PENDING_EDIT_PAYLOAD\]:[\s\S]*$/i, '').replace(/\[PENDING EDIT.*?\]:?[\s\S]*/gi, '').trim();
+            const payloadMatch = selectedTrip.notes?.match(/\[PENDING_EDIT_PAYLOAD\]:\s*(\{.*\})/is);
+            let fallbackPayload: any = {};
+            if (payloadMatch) {
+                try { fallbackPayload = JSON.parse(payloadMatch[1]); } catch(e) {}
+            }
+            
+            const cleanNotes = (selectedTrip.notes || '')
+                .replace(/(?:\n\n)?\[PENDING_EDIT_PAYLOAD\]:[\s\S]*$/is, '')
+                .replace(/\[PENDING EDIT.*?\]:?[\s\S]*/gi, '')
+                .trim();
 
-                const payload = selectedTrip.pending_edit_payload || {
-                    driver_id: selectedDriverId || selectedTrip.driver_id,
-                    lorry_id: selectedLorryId || selectedTrip.lorry_id,
-                    customer: fallbackPayload.customer || orderCustomer || selectedTrip.customer,
-                    delivery_address: fallbackPayload.delivery_address || newOrderAddress || selectedTrip.delivery_address,
-                    trip_origin: (fallbackPayload.trip_origin || tripOrigin).toUpperCase(),
-                    zone: fallbackPayload.zone || tripCategory || selectedTrip.zone,
-                    trip_drop_count: fallbackPayload.trip_drop_count || tripDropCount || selectedTrip.trip_drop_count,
-                    notes: cleanNotes,
-                    items: newOrderItems || selectedTrip.items,
-                    deadline: fallbackPayload.deadline || newOrderDeliveryDate || selectedTrip.deadline
+            if (approve) {
+                const payload: any = {
+                    notes: cleanNotes
                 };
+                if (fallbackPayload.customer !== undefined) payload.customer = fallbackPayload.customer;
+                if (fallbackPayload.delivery_address !== undefined) payload.delivery_address = fallbackPayload.delivery_address;
+                if (fallbackPayload.trip_origin !== undefined) payload.trip_origin = fallbackPayload.trip_origin.toUpperCase();
+                if (fallbackPayload.zone !== undefined) payload.zone = fallbackPayload.zone;
+                if (fallbackPayload.trip_drop_count !== undefined) payload.trip_drop_count = fallbackPayload.trip_drop_count;
+                if (fallbackPayload.deadline !== undefined) payload.deadline = fallbackPayload.deadline;
 
                 const { error } = await supabase
                     .from('sales_orders')
-                    .update({
-                        ...payload,
-                        edit_status: 'Approved',
-                        pending_edit_payload: null
-                    })
+                    .update(payload)
                     .eq('id', selectedTrip.id);
 
-                if (error) {
-                    await supabase
-                        .from('sales_orders')
-                        .update(payload)
-                        .eq('id', selectedTrip.id);
-                }
-
-                alert("✅ Admin 批准预修改并已套用！ / Edit approved and applied!");
+                if (error) throw error;
+                alert("✅ Admin 已批准预修改并套用更改！ / Edit approved and applied!");
             } else {
-                const cleanNotes = (selectedTrip.notes || '').replace(/(?:\n\n)?\[PENDING_EDIT_PAYLOAD\]:[\s\S]*$/i, '').replace(/\[PENDING EDIT.*?\]:?[\s\S]*/gi, '').trim();
-                await supabase
+                const { error } = await supabase
                     .from('sales_orders')
-                    .update({
-                        edit_status: 'Rejected',
-                        pending_edit_payload: null,
-                        notes: cleanNotes
-                    })
+                    .update({ notes: cleanNotes })
                     .eq('id', selectedTrip.id);
 
-                alert("❌ Admin 拒绝了预修改申请。 / Pending edit request rejected.");
+                if (error) throw error;
+                alert("❌ Admin 已拒绝预修改申请，已清除待审核状态。 / Pending edit request rejected.");
             }
             setSelectedTrip(null);
             setIsEditingTrip(false);
@@ -2745,7 +2729,7 @@ const PersonalMonthlyReport: React.FC<Props> = ({ user }) => {
                             </div>
 
                             {/* Extra Job Pending Approval Banner */}
-                            {isTripPending(selectedTrip) && (
+                            {(selectedTrip.job_type === 'Extra Job' || selectedTrip.order_number?.startsWith('TRIP-JOB') || selectedTrip.order_number?.startsWith('TRIP-PU')) && selectedTrip.status !== 'Delivered' && selectedTrip.status !== 'Cancelled' && (
                                 <div className="mb-6 p-4 bg-amber-500/10 border border-amber-500/30 rounded-2xl flex flex-col gap-3 shadow-lg">
                                     <div className="flex flex-col sm:flex-row items-start sm:items-center justify-between gap-3">
                                         <div className="flex items-center gap-3 text-amber-400 font-bold text-xs">
@@ -2824,7 +2808,7 @@ const PersonalMonthlyReport: React.FC<Props> = ({ user }) => {
                             )}
 
                             {/* Pending Admin Approval Banner */}
-                            {(selectedTrip.edit_status === 'Pending' || selectedTrip.notes?.includes('[PENDING_EDIT_PAYLOAD]') || selectedTrip.notes?.includes('[PENDING EDIT')) && (
+                            {!(selectedTrip.job_type === 'Extra Job' || selectedTrip.order_number?.startsWith('TRIP-JOB') || selectedTrip.order_number?.startsWith('TRIP-PU')) && (selectedTrip.notes?.includes('[PENDING_EDIT_PAYLOAD]') || selectedTrip.notes?.includes('[PENDING EDIT')) && (
                                 <div className="mb-6 p-4 bg-amber-500/10 border border-amber-500/30 rounded-2xl flex flex-col gap-3 shadow-lg">
                                     <div className="flex flex-col sm:flex-row items-start sm:items-center justify-between gap-3">
                                         <div className="flex items-center gap-3 text-amber-400 font-bold text-xs">
