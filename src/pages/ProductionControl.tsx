@@ -2264,21 +2264,29 @@ const ProductionControl: React.FC<ProductionControlProps> = ({ user, jobs = [], 
                             {/* OPERATOR STATUS BANNER */}
                             {machineOperator ? (
                                 <div className="bg-emerald-500/10 border border-emerald-500/20 p-3 rounded-2xl flex items-center justify-between gap-3">
-                                    <div className="flex items-center gap-3 min-w-0">
-                                        <div className="w-8 h-8 rounded-xl bg-emerald-500/20 flex items-center justify-center text-emerald-400 shrink-0">
-                                            <UserIcon size={16} />
-                                        </div>
-                                        <div className="min-w-0">
-                                            <p className="text-white font-medium text-xs truncate">
-                                                {t('当前值班操作员')}: <span className="font-semibold">{machineOperator.name}</span> ({t('PIN: ')}{machineOperator.employeeId})
-                                                {operatorEmployeeId === machineOperator.employeeId && ` (${t('当前为您')})`}
-                                            </p>
-                                            <p className="text-[11px] text-gray-400 mt-0.5 truncate">
-                                                {t('打卡时间')}: {new Date(machineOperator.clockIn).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })}
-                                                {operatorEmployeeId === machineOperator.employeeId && ` · ${t('已值班')} ${durationText}`}
-                                            </p>
-                                        </div>
-                                    </div>
+                                    {(() => {
+                                        const isMeAsOperator = (user?.role === 'Operator' || isControlMode) && (
+                                            (user?.employeeId && user.employeeId === machineOperator.employeeId) ||
+                                            (operatorEmployeeId && operatorEmployeeId === machineOperator.employeeId && (user?.role === 'Operator' || isControlMode))
+                                        );
+                                        return (
+                                            <div className="flex items-center gap-3 min-w-0">
+                                                <div className="w-8 h-8 rounded-xl bg-emerald-500/20 flex items-center justify-center text-emerald-400 shrink-0">
+                                                    <UserIcon size={16} />
+                                                </div>
+                                                <div className="min-w-0">
+                                                    <p className="text-white font-medium text-xs truncate">
+                                                        {t('当前值班操作员')}: <span className="font-semibold">{machineOperator.name}</span> ({t('PIN: ')}{machineOperator.employeeId})
+                                                        {isMeAsOperator && ` (${t('当前为您')})`}
+                                                    </p>
+                                                    <p className="text-[11px] text-gray-400 mt-0.5 truncate">
+                                                        {t('打卡时间')}: {new Date(machineOperator.clockIn).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })}
+                                                        {isMeAsOperator && ` · ${t('已值班')} ${durationText}`}
+                                                    </p>
+                                                </div>
+                                            </div>
+                                        );
+                                    })()}
                                      {user && user.role !== 'Operator' && (
                                          <button
                                              onClick={() => initiateTakeover(selectedMachine!)}
@@ -2529,137 +2537,139 @@ const ProductionControl: React.FC<ProductionControlProps> = ({ user, jobs = [], 
                         {/* RIGHT COLUMN: WORK PHOTO LOGGER, RECENT PHOTOS, TASKS, ACTIVITY LOGS (4 cols) */}
                         <div className="lg:col-span-4 flex flex-col gap-6">
 
-                            {/* 1. WORK PHOTO LOGGER */}
-                            <div className="bg-white/5 border border-white/10 rounded-2xl p-4 backdrop-blur-md">
-                                <h3 className="text-xs font-semibold text-purple-400 flex items-center gap-1.5 mb-3">
-                                    <Camera size={14} /> {t('现场拍照登记')}
-                                </h3>
+                            {/* 1. WORK PHOTO LOGGER (Only on bubble wrap lanes; Stretch Film & Recycle have photo logger in the main column) */}
+                            {!isSfOrRecycle && (
+                                <div className="bg-white/5 border border-white/10 rounded-2xl p-4 backdrop-blur-md">
+                                    <h3 className="text-xs font-semibold text-purple-400 flex items-center gap-1.5 mb-3">
+                                        <Camera size={14} /> {t('现场拍照登记')}
+                                    </h3>
 
-                                {!photoPreview ? (
-                                    <div className="flex gap-2">
-                                        <button 
-                                            onClick={() => setShowWebcam(true)} 
-                                            className="flex-1 py-6 bg-purple-600/10 hover:bg-purple-600/20 border border-dashed border-purple-500/20 rounded-xl flex flex-col items-center justify-center gap-1 transition-all text-center cursor-pointer"
-                                        >
-                                            <div className="w-8 h-8 rounded-full bg-purple-500/20 flex items-center justify-center text-purple-400">
-                                                <Camera size={15} />
-                                            </div>
-                                            <span className="text-xs font-medium text-purple-300">{t('相机拍照')}</span>
-                                        </button>
-                                        
-                                        <button 
-                                            onClick={triggerFileSelect} 
-                                            className="flex-1 py-6 bg-white/[0.02] hover:bg-white/5 border border-dashed border-white/10 rounded-xl flex flex-col items-center justify-center gap-1 transition-all text-center cursor-pointer"
-                                        >
-                                            <div className="w-8 h-8 rounded-full bg-white/5 flex items-center justify-center text-gray-400">
-                                                <ImageIcon size={15} />
-                                            </div>
-                                            <span className="text-xs font-medium text-gray-300">{t('上传图片')}</span>
-                                        </button>
-                                    </div>
-                                ) : (
-                                    <div className="space-y-3">
-                                        <div className="relative aspect-video rounded-xl bg-black overflow-hidden border border-white/10">
-                                            {mediaType === 'video' ? (
-                                                <video src={photoPreview} controls className="w-full h-full object-cover" />
-                                            ) : (
-                                                <img src={photoPreview} alt="Preview" className="w-full h-full object-cover" />
-                                            )}
-                                            {(uploadingPhoto || analyzingPhoto) && (
-                                                <div className="absolute inset-0 bg-black/60 flex flex-col items-center justify-center gap-2">
-                                                    <Loader className="animate-spin text-purple-400" size={20} />
-                                                    <span className="text-xs text-purple-300 font-medium">AI 识别中...</span>
-                                                </div>
-                                            )}
-                                        </div>
-
-                                        {aiAnalysis && (
-                                            <div className="p-2.5 bg-purple-500/5 border border-purple-500/10 rounded-xl">
-                                                <div className="text-[10px] text-purple-400 font-semibold flex items-center gap-1">
-                                                    <Sparkles size={10} /> AI 图像分析:
-                                                </div>
-                                                <p className="text-xs text-white mt-0.5 leading-tight">{aiAnalysis}</p>
-                                            </div>
-                                        )}
-
-                                        {/* Category selector */}
-                                        <div className="grid grid-cols-3 gap-1">
-                                            {Object.entries(CATEGORIES).map(([key, cat]) => (
-                                                <button 
-                                                    key={key} 
-                                                    onClick={() => setPhotoCategory(key)} 
-                                                    className={`px-2 py-1 border text-[10px] rounded-lg font-medium transition-all truncate ${
-                                                        photoCategory === key ? cat.color : 'border-white/5 text-gray-500 hover:text-gray-300'
-                                                    }`}
-                                                >
-                                                    {cat.emoji} {cat.label}
-                                                </button>
-                                            ))}
-                                        </div>
-
-                                        {/* DEFECT SPECIFIC INPUTS */}
-                                        {photoCategory === 'defect' && (
-                                            <div className="p-3 bg-rose-500/5 border border-rose-500/10 rounded-xl space-y-2.5">
-                                                <div className="text-[10px] font-semibold text-rose-400">次品明细记录</div>
-                                                
-                                                <div className="space-y-1">
-                                                    <label className="text-[10px] text-gray-400">重量 (KG)</label>
-                                                    <div className="flex gap-2">
-                                                        <input
-                                                            type="text"
-                                                            placeholder="例: 10.90"
-                                                            value={defectWeight}
-                                                            onChange={e => setDefectWeight(e.target.value)}
-                                                            className="flex-1 bg-white/5 border border-white/10 text-xs px-2.5 py-1.5 rounded-lg focus:border-rose-500 focus:outline-none"
-                                                        />
-                                                        <button
-                                                            type="button"
-                                                            onClick={runAIDefectScan}
-                                                            disabled={analyzingPhoto || !photoBase64}
-                                                            className="px-3 bg-rose-500/20 hover:bg-rose-500/30 text-rose-300 font-medium text-xs rounded-lg border border-rose-500/30 flex items-center gap-1 transition-all"
-                                                        >
-                                                            {analyzingPhoto ? <Loader className="animate-spin" size={10} /> : <Sparkles size={10} />}
-                                                            <span>AI 识别</span>
-                                                        </button>
-                                                    </div>
-                                                </div>
-
-                                                <div className="space-y-1">
-                                                    <label className="text-[10px] text-gray-400">次品原因</label>
-                                                    <select
-                                                        value={defectReason}
-                                                        onChange={e => setDefectReason(e.target.value)}
-                                                        className="w-full bg-white/5 border border-white/10 text-xs px-2.5 py-1.5 rounded-lg focus:border-rose-500 focus:outline-none text-white [&>option]:bg-zinc-900"
-                                                    >
-                                                        <option value="">选择原因...</option>
-                                                        <option value="underweight">克重不足</option>
-                                                        <option value="deformation">变形</option>
-                                                        <option value="damage">破损</option>
-                                                        <option value="other">其他</option>
-                                                    </select>
-                                                </div>
-                                            </div>
-                                        )}
-
-                                        {/* Manual Note */}
-                                        <input 
-                                            type="text" 
-                                            value={photoNote} 
-                                            onChange={e => setPhotoNote(e.target.value)} 
-                                            placeholder="备注信息..."
-                                            className="w-full bg-white/5 border border-white/10 text-xs p-2 rounded-xl focus:border-purple-500 focus:outline-none"
-                                        />
-
+                                    {!photoPreview ? (
                                         <div className="flex gap-2">
-                                            <button onClick={cancelPhotoSelect} className="flex-1 py-1.5 bg-white/5 hover:bg-white/10 text-gray-400 font-medium text-xs rounded-xl border border-white/5 transition-all">取消</button>
-                                            <button onClick={submitPhotoLog} disabled={uploadingPhoto || analyzingPhoto} className="flex-1 py-1.5 bg-purple-600 hover:bg-purple-500 text-white font-medium text-xs rounded-xl flex items-center justify-center gap-1 transition-all active:scale-95 shadow-md">
-                                                <Send size={12} />
-                                                <span>提交</span>
+                                            <button 
+                                                onClick={() => setShowWebcam(true)} 
+                                                className="flex-1 py-6 bg-purple-600/10 hover:bg-purple-600/20 border border-dashed border-purple-500/20 rounded-xl flex flex-col items-center justify-center gap-1 transition-all text-center cursor-pointer"
+                                            >
+                                                <div className="w-8 h-8 rounded-full bg-purple-500/20 flex items-center justify-center text-purple-400">
+                                                    <Camera size={15} />
+                                                </div>
+                                                <span className="text-xs font-medium text-purple-300">{t('相机拍照')}</span>
+                                            </button>
+                                            
+                                            <button 
+                                                onClick={triggerFileSelect} 
+                                                className="flex-1 py-6 bg-white/[0.02] hover:bg-white/5 border border-dashed border-white/10 rounded-xl flex flex-col items-center justify-center gap-1 transition-all text-center cursor-pointer"
+                                            >
+                                                <div className="w-8 h-8 rounded-full bg-white/5 flex items-center justify-center text-gray-400">
+                                                    <ImageIcon size={15} />
+                                                </div>
+                                                <span className="text-xs font-medium text-gray-300">{t('上传图片')}</span>
                                             </button>
                                         </div>
-                                    </div>
-                                )}
-                            </div>
+                                    ) : (
+                                        <div className="space-y-3">
+                                            <div className="relative aspect-video rounded-xl bg-black overflow-hidden border border-white/10">
+                                                {mediaType === 'video' ? (
+                                                    <video src={photoPreview} controls className="w-full h-full object-cover" />
+                                                ) : (
+                                                    <img src={photoPreview} alt="Preview" className="w-full h-full object-cover" />
+                                                )}
+                                                {(uploadingPhoto || analyzingPhoto) && (
+                                                    <div className="absolute inset-0 bg-black/60 flex flex-col items-center justify-center gap-2">
+                                                        <Loader className="animate-spin text-purple-400" size={20} />
+                                                        <span className="text-xs text-purple-300 font-medium">AI 识别中...</span>
+                                                    </div>
+                                                )}
+                                            </div>
+
+                                            {aiAnalysis && (
+                                                <div className="p-2.5 bg-purple-500/5 border border-purple-500/10 rounded-xl">
+                                                    <div className="text-[10px] text-purple-400 font-semibold flex items-center gap-1">
+                                                        <Sparkles size={10} /> AI 图像分析:
+                                                    </div>
+                                                    <p className="text-xs text-white mt-0.5 leading-tight">{aiAnalysis}</p>
+                                                </div>
+                                            )}
+
+                                            {/* Category selector */}
+                                            <div className="grid grid-cols-3 gap-1">
+                                                {Object.entries(CATEGORIES).map(([key, cat]) => (
+                                                    <button 
+                                                        key={key} 
+                                                        onClick={() => setPhotoCategory(key)} 
+                                                        className={`px-2 py-1 border text-[10px] rounded-lg font-medium transition-all truncate ${
+                                                            photoCategory === key ? cat.color : 'border-white/5 text-gray-500 hover:text-gray-300'
+                                                        }`}
+                                                    >
+                                                        {cat.emoji} {cat.label}
+                                                    </button>
+                                                ))}
+                                            </div>
+
+                                            {/* DEFECT SPECIFIC INPUTS */}
+                                            {photoCategory === 'defect' && (
+                                                <div className="p-3 bg-rose-500/5 border border-rose-500/10 rounded-xl space-y-2.5">
+                                                    <div className="text-[10px] font-semibold text-rose-400">次品明细记录</div>
+                                                    
+                                                    <div className="space-y-1">
+                                                        <label className="text-[10px] text-gray-400">重量 (KG)</label>
+                                                        <div className="flex gap-2">
+                                                            <input
+                                                                type="text"
+                                                                placeholder="例: 10.90"
+                                                                value={defectWeight}
+                                                                onChange={e => setDefectWeight(e.target.value)}
+                                                                className="flex-1 bg-white/5 border border-white/10 text-xs px-2.5 py-1.5 rounded-lg focus:border-rose-500 focus:outline-none"
+                                                            />
+                                                            <button
+                                                                type="button"
+                                                                onClick={runAIDefectScan}
+                                                                disabled={analyzingPhoto || !photoBase64}
+                                                                className="px-3 bg-rose-500/20 hover:bg-rose-500/30 text-rose-300 font-medium text-xs rounded-lg border border-rose-500/30 flex items-center gap-1 transition-all"
+                                                            >
+                                                                {analyzingPhoto ? <Loader className="animate-spin" size={10} /> : <Sparkles size={10} />}
+                                                                <span>AI 识别</span>
+                                                            </button>
+                                                        </div>
+                                                    </div>
+
+                                                    <div className="space-y-1">
+                                                        <label className="text-[10px] text-gray-400">次品原因</label>
+                                                        <select
+                                                            value={defectReason}
+                                                            onChange={e => setDefectReason(e.target.value)}
+                                                            className="w-full bg-white/5 border border-white/10 text-xs px-2.5 py-1.5 rounded-lg focus:border-rose-500 focus:outline-none text-white [&>option]:bg-zinc-900"
+                                                        >
+                                                            <option value="">选择原因...</option>
+                                                            <option value="underweight">克重不足</option>
+                                                            <option value="deformation">变形</option>
+                                                            <option value="damage">破损</option>
+                                                            <option value="other">其他</option>
+                                                        </select>
+                                                    </div>
+                                                </div>
+                                            )}
+
+                                            {/* Manual Note */}
+                                            <input 
+                                                type="text" 
+                                                value={photoNote} 
+                                                onChange={e => setPhotoNote(e.target.value)} 
+                                                placeholder="备注信息..."
+                                                className="w-full bg-white/5 border border-white/10 text-xs p-2 rounded-xl focus:border-purple-500 focus:outline-none"
+                                            />
+
+                                            <div className="flex gap-2">
+                                                <button onClick={cancelPhotoSelect} className="flex-1 py-1.5 bg-white/5 hover:bg-white/10 text-gray-400 font-medium text-xs rounded-xl border border-white/5 transition-all">取消</button>
+                                                <button onClick={submitPhotoLog} disabled={uploadingPhoto || analyzingPhoto} className="flex-1 py-1.5 bg-purple-600 hover:bg-purple-500 text-white font-medium text-xs rounded-xl flex items-center justify-center gap-1 transition-all active:scale-95 shadow-md">
+                                                    <Send size={12} />
+                                                    <span>提交</span>
+                                                </button>
+                                            </div>
+                                        </div>
+                                    )}
+                                </div>
+                            )}
 
                             {/* 📷 2. RECENT PHOTOS GRID (最近登记照片 - 全机台通用跨端呈现) */}
                             <div className="bg-white/5 border border-white/10 rounded-2xl p-4 backdrop-blur-md">
