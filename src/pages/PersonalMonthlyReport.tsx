@@ -275,6 +275,14 @@ interface DailyMetrics {
 const PersonalMonthlyReport: React.FC<Props> = ({ user }) => {
     const today = new Date();
     const getSafeOrigin = (o?: string) => (o || '').toUpperCase().trim();
+    // Unified helper to check if a trip / extra job is pending approval
+    const isTripPending = (t: any) => {
+        if (!t) return false;
+        if (t.status === 'Pending Approval' || t.status === 'Pending') return true;
+        if ((t.job_type === 'Extra Job' || t.order_number?.startsWith('TRIP-JOB') || t.order_number?.startsWith('TRIP-PU')) && t.status !== 'Delivered' && t.status !== 'Cancelled') return true;
+        if (t.notes?.includes('[PENDING_EDIT_PAYLOAD]') || t.notes?.includes('[PENDING EDIT')) return true;
+        return false;
+    };
     const [selectedMonth, setSelectedMonth] = useState(() => {
         const saved = sessionStorage.getItem('pmr_selectedMonth');
         return saved ? parseInt(saved, 10) : today.getMonth() + 1;
@@ -563,15 +571,15 @@ const PersonalMonthlyReport: React.FC<Props> = ({ user }) => {
 
             const { data } = await supabase
                 .from('sales_orders')
-                .select('id, driver_id, status, edit_status, notes, deadline, created_at')
-                .or('status.eq.Pending Approval,status.eq.Pending,edit_status.eq.Pending,notes.ilike.%[PENDING%');
+                .select('id, driver_id, status, job_type, order_number, notes, deadline, created_at')
+                .or('status.eq.Pending Approval,status.eq.Pending,job_type.eq.Extra Job,order_number.ilike.TRIP-JOB%,order_number.ilike.TRIP-PU%,notes.ilike.%[PENDING%');
 
             if (data) {
                 const counts: Record<string, number> = {};
                 data.forEach((o: any) => {
                     const rawDate = o.deadline || (o.created_at ? o.created_at.split('T')[0] : null);
                     if (rawDate && (rawDate < firstDay || rawDate > lastDayStr)) return;
-                    if (o.driver_id) {
+                    if (isTripPending(o) && o.driver_id) {
                         counts[o.driver_id] = (counts[o.driver_id] || 0) + 1;
                     }
                 });
@@ -1900,7 +1908,7 @@ const PersonalMonthlyReport: React.FC<Props> = ({ user }) => {
                     })()}
 
                     {/* Driver Pending Extra Jobs / Trips Notice Banner */}
-                    {isDriver && dailyMetrics.some(d => d.tripDetails.some((t: any) => t.status === 'Pending Approval' || t.status === 'Pending' || t.edit_status === 'Pending' || t.notes?.includes('[PENDING_EDIT_PAYLOAD]') || t.notes?.includes('[PENDING EDIT'))) && (
+                    {isDriver && dailyMetrics.some(d => d.tripDetails.some((t: any) => isTripPending(t))) && (
                         <div className="bg-amber-500/10 border border-amber-500/30 rounded-2xl p-4 flex items-center justify-between gap-3 shadow-lg animate-fade-in">
                             <div className="flex items-center gap-3">
                                 <Clock className="text-amber-400 animate-spin shrink-0" size={20} />
@@ -2245,7 +2253,7 @@ const PersonalMonthlyReport: React.FC<Props> = ({ user }) => {
                     {/* PENDING EXTRA JOBS & EDITS QUICK REVIEW SECTION */ }
                     {(() => {
                         const pendingTripsList = dailyMetrics.flatMap(d => (d.tripDetails || []).filter((t: any) => 
-                            t.status === 'Pending Approval' || t.status === 'Pending' || t.edit_status === 'Pending' || t.notes?.includes('[PENDING_EDIT_PAYLOAD]') || t.notes?.includes('[PENDING EDIT')
+                            isTripPending(t)
                         ).map((t: any) => ({ ...t, dateStr: d.dateStr })));
 
                         if (!isDriver || pendingTripsList.length === 0) return null;
@@ -2343,9 +2351,7 @@ const PersonalMonthlyReport: React.FC<Props> = ({ user }) => {
                                 </thead>
                                 <tbody className="divide-y divide-white/5">
                                     {dailyMetrics.map((day) => {
-                                        const hasDayPending = isDriver && day.tripDetails?.some((t: any) => 
-                                            t.status === 'Pending Approval' || t.status === 'Pending' || t.edit_status === 'Pending' || t.notes?.includes('[PENDING_EDIT_PAYLOAD]') || t.notes?.includes('[PENDING EDIT')
-                                        );
+                                        const hasDayPending = isDriver && day.tripDetails?.some((t: any) => isTripPending(t));
                                         return (
                                         <tr key={day.dateStr} className={`transition-colors ${hasDayPending ? 'bg-amber-500/10 hover:bg-amber-500/15 border-l-4 border-l-amber-500 shadow-sm' : (day.isWeekend ? 'bg-white/[0.01] hover:bg-white/[0.03]' : 'hover:bg-white/[0.03]')}`}>
                                             <td className="px-5 py-4 whitespace-nowrap">
@@ -2419,7 +2425,7 @@ const PersonalMonthlyReport: React.FC<Props> = ({ user }) => {
                                                             {day.tripDetails && day.tripDetails.length > 0 ? (
                                                                 <div className="flex flex-col items-end gap-0.5 font-mono text-[10px]">
                                                                     {day.tripDetails.map((td: any, tidx: number) => {
-                                                                        const isTripPending = td.status === 'Pending Approval' || td.status === 'Pending' || td.edit_status === 'Pending' || td.notes?.includes('[PENDING_EDIT_PAYLOAD]') || td.notes?.includes('[PENDING EDIT');
+                                                                        const isPending = isTripPending(td);
                                                                         return (
                                                                             <span key={tidx} className={`font-bold px-1.5 py-0.5 rounded border ${
                                                                                 isTripPending 
@@ -2465,7 +2471,7 @@ const PersonalMonthlyReport: React.FC<Props> = ({ user }) => {
                                                     {day.tripDetails && day.tripDetails.length > 0 ? (
                                                         <div className="flex flex-col items-center gap-2">
                                                             {day.tripDetails.map((td: any, idx: number) => {
-                                                                const isPending = td.status === 'Pending Approval' || td.status === 'Pending' || td.edit_status === 'Pending' || td.notes?.includes('[PENDING_EDIT_PAYLOAD]') || td.notes?.includes('[PENDING EDIT');
+                                                                const isPending = isTripPending(td);
                                                                 const isTripConfirmed = confirmedTripIds.has(td.id) || td.driver_confirmed === true;
 
                                                                 return (
@@ -2596,7 +2602,7 @@ const PersonalMonthlyReport: React.FC<Props> = ({ user }) => {
                                                         {hasDayPending ? (
                                                             <button
                                                                 onClick={() => {
-                                                                    const pTrip = day.tripDetails.find((t: any) => t.status === 'Pending Approval' || t.status === 'Pending' || t.edit_status === 'Pending' || t.notes?.includes('[PENDING_EDIT_PAYLOAD]') || t.notes?.includes('[PENDING EDIT'));
+                                                                    const pTrip = day.tripDetails.find((t: any) => isTripPending(t));
                                                                     if (pTrip) setSelectedTrip(pTrip);
                                                                 }}
                                                                 className="text-[10px] bg-amber-500 hover:bg-amber-400 text-black font-black px-2.5 py-1 rounded-lg shadow-md shadow-amber-500/20 flex items-center gap-1 transition-all active:scale-95 animate-pulse cursor-pointer"
@@ -2723,7 +2729,7 @@ const PersonalMonthlyReport: React.FC<Props> = ({ user }) => {
                             </div>
 
                             {/* Extra Job Pending Approval Banner */}
-                            {(selectedTrip.status === 'Pending Approval' || selectedTrip.status === 'Pending' || ((selectedTrip.job_type === 'Extra Job' || selectedTrip.order_number?.startsWith('TRIP-JOB')) && selectedTrip.status !== 'Delivered')) && (
+                            {isTripPending(selectedTrip) && (
                                 <div className="mb-6 p-4 bg-amber-500/10 border border-amber-500/30 rounded-2xl flex flex-col gap-3 shadow-lg">
                                     <div className="flex flex-col sm:flex-row items-start sm:items-center justify-between gap-3">
                                         <div className="flex items-center gap-3 text-amber-400 font-bold text-xs">
