@@ -833,6 +833,7 @@ const PersonalMonthlyReport: React.FC<Props> = ({ user }) => {
                     .eq('driver_id', selectedEmployeeId);
 
                 const monthlyDeliveries = (rawDeliveryData || []).filter(d => {
+                    if (d.status === 'Cancelled') return false; // Exclude rejected/cancelled orders
                     const rawDate = d.deadline || (d.pod_timestamp ? d.pod_timestamp.split('T')[0] : (d.created_at ? d.created_at.split('T')[0] : null));
                     if (!rawDate) return false;
                     return rawDate >= firstDay && rawDate <= lastDayStr;
@@ -842,7 +843,7 @@ const PersonalMonthlyReport: React.FC<Props> = ({ user }) => {
                 const confirmedSet = new Set<string>();
                 (rawDeliveryData || []).forEach(d => {
                     const savedLocal = sessionStorage.getItem(`pmr_confirmed_trip_${d.id}`);
-                    if (d.driver_confirmed === true || d.driver_verified === true || savedLocal === 'true') {
+                    if (d.notes?.includes('[DRIVER_CONFIRMED') || d.driver_confirmed === true || d.driver_verified === true || savedLocal === 'true') {
                         confirmedSet.add(d.id);
                     }
                 });
@@ -955,7 +956,9 @@ const PersonalMonthlyReport: React.FC<Props> = ({ user }) => {
         }
     };
 
-    const handleToggleTripConfirmation = async (tripId: string, checked: boolean) => {
+    const handleToggleTripConfirmation = async (tripOrId: any, checked: boolean) => {
+        const tripId = typeof tripOrId === 'string' ? tripOrId : tripOrId.id;
+        const oldNotes = (typeof tripOrId === 'object' ? tripOrId.notes : '') || '';
         setConfirmedTripIds(prev => {
             const updated = new Set(prev);
             if (checked) {
@@ -968,16 +971,22 @@ const PersonalMonthlyReport: React.FC<Props> = ({ user }) => {
 
         sessionStorage.setItem(`pmr_confirmed_trip_${tripId}`, String(checked));
 
+        let newNotes = oldNotes;
+        if (checked) {
+            if (!oldNotes.includes('[DRIVER_CONFIRMED]')) {
+                newNotes = (oldNotes ? oldNotes + '\n' : '') + `[DRIVER_CONFIRMED: ${new Date().toISOString()}]`;
+            }
+        } else {
+            newNotes = oldNotes.replace(/\[DRIVER_CONFIRMED:[^\]]*\]\n?/gi, '').replace(/\[DRIVER_CONFIRMED\]\n?/gi, '').trim();
+        }
+
         try {
             await supabase
                 .from('sales_orders')
-                .update({
-                    driver_confirmed: checked,
-                    driver_confirmed_at: checked ? new Date().toISOString() : null
-                })
+                .update({ notes: newNotes })
                 .eq('id', tripId);
         } catch (err) {
-            console.log("Trip confirmation state saved locally.");
+            console.error("Error saving trip confirmation:", err);
         }
     };
 
@@ -2472,7 +2481,7 @@ const PersonalMonthlyReport: React.FC<Props> = ({ user }) => {
                                                         <div className="flex flex-col items-center gap-2">
                                                             {day.tripDetails.map((td: any, idx: number) => {
                                                                 const isPending = isTripPending(td);
-                                                                const isTripConfirmed = confirmedTripIds.has(td.id) || td.driver_confirmed === true;
+                                                                const isTripConfirmed = confirmedTripIds.has(td.id) || td.notes?.includes('[DRIVER_CONFIRMED') || td.driver_confirmed === true;
 
                                                                 return (
                                                                     <div key={idx} className="flex items-center gap-2 justify-center">
@@ -2512,7 +2521,7 @@ const PersonalMonthlyReport: React.FC<Props> = ({ user }) => {
                                                                                 <input
                                                                                     type="checkbox"
                                                                                     checked={isTripConfirmed}
-                                                                                    onChange={(e) => handleToggleTripConfirmation(td.id, e.target.checked)}
+                                                                                    onChange={(e) => handleToggleTripConfirmation(td, e.target.checked)}
                                                                                     className="w-4 h-4 accent-emerald-500 rounded cursor-pointer disabled:cursor-not-allowed"
                                                                                     disabled={td.notes?.includes('[HR_APPROVED]')}
                                                                                 />
