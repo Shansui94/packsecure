@@ -187,8 +187,10 @@ const DriverDelivery: React.FC<DriverDeliveryProps> = ({ user }) => {
     const [uploadingPhoto, setUploadingPhoto] = useState(false);
     const fileInputRef = useRef<HTMLInputElement>(null);
 
-    // PICK UP State
+    // PICK UP / EXTRA JOB State
     const [isPickUpModalOpen, setIsPickUpModalOpen] = useState(false);
+    const [pickUpCategory, setPickUpCategory] = useState<string>('AMBIK PALLET');
+    const [deliveryRates, setDeliveryRates] = useState<any[]>([]);
     const [pickUpNote, setPickUpNote] = useState('');
     const [pickupLocation, setPickupLocation] = useState<string>('Searching GPS...');
     const pickUpFileInputRef = useRef<HTMLInputElement>(null);
@@ -293,6 +295,9 @@ const DriverDelivery: React.FC<DriverDeliveryProps> = ({ user }) => {
 
     useEffect(() => {
         fetchTasks();
+        supabase.from('delivery_rates').select('*').then(({ data }) => {
+            if (data) setDeliveryRates(data);
+        });
     }, [user]);
 
 
@@ -456,17 +461,17 @@ const DriverDelivery: React.FC<DriverDeliveryProps> = ({ user }) => {
         }
     };
 
-    // 5. Submit Ad-Hoc Pick Up
+    // 5. Submit Ad-Hoc Extra Job / Pick Up
     const handleConfirmPickUp = async () => {
         if (!loadPhotoBase64) {
-            alert("⚠️ Sila ambil gambar barangan kutipan dahulu! / Please take a photo of the collected goods first!");
+            alert("⚠️ Sila ambil gambar bukti tugasan dahulu! / Please take a photo of the task proof first!");
             return;
         }
         
         setSubmitting(true);
         try {
             // Upload Photo
-            const fileName = `pickup_${user?.employeeId}_${Date.now()}.jpg`;
+            const fileName = `extrajob_${user?.employeeId}_${Date.now()}.jpg`;
             const blob = dataURLtoBlob(`data:image/jpeg;base64,${loadPhotoBase64}`);
 
             const { error: uploadError } = await supabase.storage
@@ -481,26 +486,48 @@ const DriverDelivery: React.FC<DriverDeliveryProps> = ({ user }) => {
             const { data: urlData } = supabase.storage.from('work-photos').getPublicUrl(fileName);
             const photoUrl = urlData.publicUrl;
 
-            // Generate an order number for this ad-hoc pick up
-            const pickupOrderNo = `TRIP-PU-${Date.now().toString().slice(-6)}`;
+            // Generate an order number for this ad-hoc extra job
+            const pickupOrderNo = `TRIP-JOB-${Date.now().toString().slice(-6)}`;
+            const driverOrigin = (currentLorry?.factory_id || user?.base_location || 'TAIPING').toUpperCase();
 
-            // Insert via SECURITY DEFINER RPC to bypass Row-Level Security
-            const { data, error } = await supabase.rpc('create_driver_pickup_safe', {
-                p_order_number: pickupOrderNo,
-                p_driver_id: user?.uid,
-                p_notes: pickUpNote,
-                p_photo_url: photoUrl,
-                p_location: pickupLocation
-            });
+            const payload = {
+                order_number: pickupOrderNo,
+                driver_id: user?.uid,
+                customer: `[${pickUpCategory}] ${user?.name || 'Driver'}`,
+                job_type: 'Extra Job',
+                zone: pickUpCategory,
+                trip_origin: driverOrigin,
+                notes: pickUpNote ? `[${pickUpCategory}] ${pickUpNote}` : `[${pickUpCategory}]`,
+                proof_of_load_url: photoUrl,
+                delivery_address: pickupLocation,
+                deadline: new Date().toISOString().split('T')[0],
+                order_date: new Date().toISOString().split('T')[0],
+                status: 'Pending Approval',
+                trip_drop_count: 1,
+                delivery_method: 'Company Delivery',
+                items: []
+            };
 
-            if (error) {
-                console.error('RPC Error:', error);
-                throw new Error("RPC Insert failed: " + error.message);
+            const { data: insertedRecord, error: insertError } = await supabase
+                .from('sales_orders')
+                .insert(payload)
+                .select()
+                .single();
+
+            if (insertError) {
+                console.warn("Direct insert failed, using RPC fallback:", insertError);
+                await supabase.rpc('create_driver_pickup_safe', {
+                    p_order_number: pickupOrderNo,
+                    p_driver_id: user?.uid,
+                    p_notes: `[${pickUpCategory}] ${pickUpNote}`,
+                    p_photo_url: photoUrl,
+                    p_location: pickupLocation
+                });
             }
 
             // Optimistic update
-            if (data) {
-                const newOrderRecord = data as any;
+            if (insertedRecord) {
+                const newOrderRecord = insertedRecord as any;
                 const mapped = {
                     ...newOrderRecord,
                     orderNumber: newOrderRecord.order_number,
@@ -509,15 +536,17 @@ const DriverDelivery: React.FC<DriverDeliveryProps> = ({ user }) => {
                     deliveryDate: newOrderRecord.deadline,
                 };
                 setTasks(prev => [mapped, ...prev]);
+            } else {
+                fetchTasks();
             }
 
             // Reset and close
             setIsPickUpModalOpen(false);
             setLoadPhotoBase64(null);
             setPickUpNote('');
-            alert("✅ Tugasan kutipan berjaya direkodkan! / Pick Up task recorded successfully!");
+            alert("✅ Tugasan berjaya direkodkan! Sedang menunggu kelulusan Admin. / Extra job recorded! Awaiting Admin approval.");
         } catch (e: any) {
-            alert("Error saving pickup: " + e.message);
+            alert("Error saving extra job: " + e.message);
         } finally {
             setSubmitting(false);
         }
@@ -1245,6 +1274,10 @@ const DriverDelivery: React.FC<DriverDeliveryProps> = ({ user }) => {
     // For 'Pending Approval' orders: they remain in the Todo list (todoList) until all drops are delivered
     const isPendingApprovalDone = (t: SalesOrder) => {
         if (t.status !== 'Pending Approval') return false;
+        // If it's an Extra Job or Pick Up, it has already been submitted with photo proof and is only awaiting Admin approval.
+        const isExtra = (t as any).job_type === 'Extra Job' || (t as any).job_type === 'Pick Up' || t.orderNumber?.startsWith('TRIP-JOB') || t.orderNumber?.startsWith('TRIP-PU') || (!t.items || t.items.length === 0);
+        if (isExtra) return true;
+
         // If driver currently has a lorry bound, do not auto-complete/hide Pending Approval orders 
         // to prevent premature completion before the driver ends their shift.
         if (currentLorry) return false;
@@ -1281,19 +1314,26 @@ const DriverDelivery: React.FC<DriverDeliveryProps> = ({ user }) => {
                         onChange={(e) => handleFileSelect(e, true)}
                     />
                     <button
-                        onClick={() => pickUpFileInputRef.current?.click()}
+                        onClick={() => {
+                            setIsPickUpModalOpen(true);
+                            if (navigator.geolocation) {
+                                setPickupLocation('Searching GPS...');
+                                navigator.geolocation.getCurrentPosition(
+                                    async (pos) => {
+                                        const addr = await fetchAddressFromCoords(pos.coords.latitude, pos.coords.longitude);
+                                        setPickupLocation(addr);
+                                    },
+                                    () => setPickupLocation('GPS Unavailable'),
+                                    { enableHighAccuracy: true, timeout: 5000 }
+                                );
+                            }
+                        }}
                         disabled={uploadingPhoto}
-                        className="px-3 py-1.5 bg-emerald-600/20 hover:bg-emerald-600/30 border border-emerald-500/30 text-emerald-400 rounded-lg text-[10px] font-bold uppercase tracking-wider flex items-center gap-1.5 transition-all disabled:opacity-50"
+                        className="px-3 py-1.5 bg-gradient-to-r from-emerald-600/30 to-teal-600/30 hover:from-emerald-600/40 hover:to-teal-600/40 border border-emerald-500/40 text-emerald-300 rounded-lg text-[10px] font-bold uppercase tracking-wider flex items-center gap-1.5 transition-all shadow-sm active:scale-95 cursor-pointer"
                     >
-                        {uploadingPhoto ? (
-                            <span>SEDANG DIPROSES...</span>
-                        ) : (
-                            <>
-                                <span>🚛</span>
-                                <span className="hidden sm:inline"> REKOD KUTIPAN / RECORD PICK UP</span>
-                                <span className="inline sm:hidden"> REKOD KUTIPAN</span>
-                            </>
-                        )}
+                        <span>📸</span>
+                        <span className="hidden sm:inline"> TUGASAN TAMBAHAN / EXTRA JOB</span>
+                        <span className="inline sm:hidden"> EXTRA JOB</span>
                     </button>
 
 
@@ -1387,7 +1427,116 @@ const DriverDelivery: React.FC<DriverDeliveryProps> = ({ user }) => {
                         <h3 className="font-bold text-slate-500">Tiada pesanan ditemui. / No orders found.</h3>
                     </div>
                 ) : (
-                    displayList.map((order) => (
+                    displayList.map((order) => {
+                        const isExtraJob = (order as any).job_type === 'Extra Job' || (order as any).job_type === 'Pick Up' || order.orderNumber?.startsWith('TRIP-JOB') || order.orderNumber?.startsWith('TRIP-PU') || (order.notes && order.notes.startsWith('[') && (!order.items || order.items.length === 0));
+
+                        if (isExtraJob) {
+                            const extraJobPhoto = (order as any).proof_of_load_url || (order as any).proofOfLoadUrl;
+                            const categoryIconMap: Record<string, string> = {
+                                'SHOPEE': '🛍️',
+                                'AMBIK PALLET': '🪵',
+                                'LORRY SERVICE': '🔧',
+                                'RETURN': '↩️',
+                                'OTHER': '🛠️'
+                            };
+                            const categoryIcon = categoryIconMap[order.zone?.toUpperCase() || ''] || '📸';
+
+                            return (
+                                <div key={order.id} className="bg-slate-900 border border-slate-800 rounded-2xl overflow-hidden shadow-lg relative">
+                                    {/* Status Strip */}
+                                    <div className={`absolute left-0 top-0 bottom-0 w-1.5 ${
+                                        order.status === 'Delivered' ? 'bg-emerald-500' :
+                                        order.status === 'Pending Approval' ? 'bg-amber-500' : 'bg-red-500'
+                                    }`} />
+
+                                    <div className="p-5 pl-7">
+                                        {/* Header */}
+                                        <div className="flex justify-between items-start mb-4">
+                                            <div>
+                                                <div className="flex items-center flex-wrap gap-2 mb-1.5">
+                                                    <span className="text-[10px] font-black uppercase bg-emerald-500/20 text-emerald-400 px-2 py-0.5 rounded border border-emerald-500/30 flex items-center gap-1">
+                                                        <span>{categoryIcon}</span>
+                                                        <span>{order.zone || 'Extra Job'}</span>
+                                                    </span>
+                                                    <span className="text-[10px] font-mono font-bold text-slate-400">
+                                                        {order.orderNumber}
+                                                    </span>
+                                                </div>
+                                                <h2 className="text-base font-black text-white leading-tight">
+                                                    {order.deliveryAddress || 'Tugasan Luar / Ad-hoc Task'}
+                                                </h2>
+                                                {order.deliveryDate && (
+                                                    <div className="flex items-center gap-2 mt-1 text-xs font-bold uppercase tracking-wider">
+                                                        <span className="text-orange-400">
+                                                            {['Ahad', 'Isnin', 'Selasa', 'Rabu', 'Khamis', 'Jumaat', 'Sabtu'][new Date(order.deliveryDate).getDay()]}
+                                                        </span>
+                                                        <span className="text-slate-400">
+                                                            {new Date(order.deliveryDate).toLocaleDateString('en-GB', { day: '2-digit', month: 'short', year: 'numeric' })}
+                                                        </span>
+                                                    </div>
+                                                )}
+                                            </div>
+                                        </div>
+
+                                        {/* Driver Photo Proof */}
+                                        {extraJobPhoto && (
+                                            <div className="mb-4 bg-slate-950/60 p-3 rounded-xl border border-slate-800">
+                                                <p className="text-[10px] text-emerald-400 uppercase font-black mb-2 flex items-center gap-1">
+                                                    📸 Bukti Gambar Tugasan / Task Photo Proof
+                                                </p>
+                                                <div className="w-full h-44 rounded-lg overflow-hidden border border-slate-700 bg-black relative group">
+                                                    <img
+                                                        src={extraJobPhoto}
+                                                        alt="Proof"
+                                                        className="w-full h-full object-cover cursor-zoom-in group-hover:scale-105 transition-transform"
+                                                        onClick={() => setPreviewImageUrl(extraJobPhoto)}
+                                                    />
+                                                    <div className="absolute bottom-2 left-2 bg-black/80 backdrop-blur-sm px-2 py-0.5 rounded text-[9px] text-emerald-300 font-bold">
+                                                        Ketik untuk besarkan gambar
+                                                    </div>
+                                                </div>
+                                            </div>
+                                        )}
+
+                                        {/* Notes */}
+                                        {order.notes && (
+                                            <div className="mb-4 bg-slate-800/50 p-2.5 rounded-lg border border-slate-700/50 text-xs">
+                                                <p className="text-[10px] text-slate-500 uppercase font-black mb-1">Catatan / Notes</p>
+                                                <p className="text-slate-300 italic whitespace-pre-line">{order.notes}</p>
+                                            </div>
+                                        )}
+
+                                        {/* Status Bar */}
+                                        <div className={`p-3 rounded-xl text-xs font-bold uppercase flex items-center justify-center gap-2 ${
+                                            order.status === 'Pending Approval'
+                                                ? 'bg-amber-500/15 border border-amber-500/30 text-amber-300'
+                                                : order.status === 'Delivered'
+                                                ? 'bg-emerald-500/15 border border-emerald-500/30 text-emerald-300'
+                                                : 'bg-red-500/15 border border-red-500/30 text-red-300'
+                                        }`}>
+                                            {order.status === 'Pending Approval' ? (
+                                                <>
+                                                    <div className="w-2 h-2 rounded-full bg-amber-400 animate-pulse"></div>
+                                                    <span>🟡 Sedang Menunggu Kelulusan Admin / Pending Approval</span>
+                                                </>
+                                            ) : order.status === 'Delivered' ? (
+                                                <>
+                                                    <CheckCircle size={15} />
+                                                    <span>✅ Diluluskan & Gaji Dikreditkan / Approved</span>
+                                                </>
+                                            ) : (
+                                                <>
+                                                    <X size={15} />
+                                                    <span>❌ Ditolak / Rejected</span>
+                                                </>
+                                            )}
+                                        </div>
+                                    </div>
+                                </div>
+                            );
+                        }
+
+                        return (
                         <div key={order.id} className="bg-slate-900 border border-slate-800 rounded-2xl overflow-hidden shadow-lg relative">
                             {/* Status Strip */}
                             <div className={`absolute left-0 top-0 bottom-0 w-1.5 ${order.status === 'Delivered' ? 'bg-green-500' :
@@ -1600,7 +1749,8 @@ const DriverDelivery: React.FC<DriverDeliveryProps> = ({ user }) => {
                                 </div>
                             )}
                         </div>
-                    ))
+                    );
+                })
                 )}
             </div>
 
@@ -2002,73 +2152,173 @@ const DriverDelivery: React.FC<DriverDeliveryProps> = ({ user }) => {
                 </div>
             )}
 
-            {/* PICK UP MODAL AD-HOC */}
-            {isPickUpModalOpen && (
-                <div className="fixed inset-0 z-[200] bg-black flex flex-col animate-in slide-in-from-bottom-10">
-                    <div className="p-4 border-b border-slate-800 flex justify-between items-center bg-slate-900 safe-top-padding">
-                        <div>
-                            <h2 className="font-black text-emerald-400 text-lg flex items-center gap-2"><Truck size={20} /> REKOD KUTIPAN / LOG PICK UP</h2>
-                            <p className="text-[10px] text-slate-500 uppercase font-bold">Kutipan Ad-Hoc / Ad-Hoc Collection</p>
-                        </div>
-                        <button onClick={() => { setIsPickUpModalOpen(false); setLoadPhotoBase64(null); }} className="p-2 bg-slate-800 rounded-full text-white"><X size={20} /></button>
-                    </div>
+            {/* PICK UP / EXTRA JOB MODAL */}
+            {isPickUpModalOpen && (() => {
+                const driverOrigin = (currentLorry?.factory_id || user?.base_location || 'TAIPING').toUpperCase();
+                const matchedRate = deliveryRates.find(r => 
+                    r.origin?.toUpperCase() === driverOrigin && 
+                    r.location_name?.toUpperCase() === pickUpCategory
+                );
+                const currentRateAmount = matchedRate ? Number(matchedRate.base_rate) || 0 : 0;
 
-                    <div className="flex-1 overflow-y-auto p-5 space-y-6 bg-black">
-                        {/* PHOTO MANDATORY */}
-                        <div>
-                            <label className="text-xs font-bold text-slate-400 uppercase tracking-widest mb-2 block">1. BUKTI GAMBAR / PHOTO PROOF</label>
-                            {!loadPhotoBase64 ? (
-                                <button
-                                    onClick={() => pickUpFileInputRef.current?.click()}
-                                    className="w-full py-10 rounded-xl border-2 border-dashed border-emerald-500/30 bg-emerald-500/5 hover:bg-emerald-500/10 flex flex-col items-center gap-3"
-                                >
-                                    <ImageIcon size={32} className="text-emerald-500" />
-                                    <span className="text-xs font-bold text-emerald-400">
-                                        {uploadingPhoto ? 'SEDANG DIPROSES / PROCESSING...' : 'AMBIL GAMBAR SEMULA / TAKE PHOTO AGAIN'}
-                                    </span>
-                                </button>
-                            ) : (
-                                <div className="w-full relative rounded-xl overflow-hidden border border-slate-700">
-                                    <img 
-                                        src={`data:image/jpeg;base64,${loadPhotoBase64}`} 
-                                        alt="Pick Up" 
-                                        className="w-full h-48 object-cover cursor-zoom-in" 
-                                        onClick={() => setPreviewImageUrl(`data:image/jpeg;base64,${loadPhotoBase64}`)}
-                                    />
-                                    <button 
-                                        onClick={() => setLoadPhotoBase64(null)}
-                                        className="absolute top-3 right-3 p-2 bg-red-500 rounded-full text-white shadow-lg"
-                                    >
-                                        <X size={16} />
-                                    </button>
+                const EXTRA_JOB_CATEGORIES = [
+                    { id: 'SHOPEE', label: 'Shopee', desc: 'Shopee / Parcel', icon: '🛍️' },
+                    { id: 'AMBIK PALLET', label: 'Angkat Pallet', desc: 'Pallet Handling', icon: '🪵' },
+                    { id: 'LORRY SERVICE', label: 'Lorry Service', desc: 'Servis / Puspakom', icon: '🔧' },
+                    { id: 'RETURN', label: 'Return', desc: 'Barang Pulang / Returns', icon: '↩️' },
+                    { id: 'OTHER', label: 'Other', desc: 'Lain-lain / Admin Tentukan', icon: '🛠️' },
+                ];
+
+                return (
+                    <div className="fixed inset-0 z-[200] bg-black flex flex-col animate-in slide-in-from-bottom-10">
+                        <div className="p-4 border-b border-slate-800 flex justify-between items-center bg-slate-900 safe-top-padding">
+                            <div>
+                                <h2 className="font-black text-emerald-400 text-lg flex items-center gap-2">
+                                    📸 TUGASAN TAMBAHAN / EXTRA JOB
+                                </h2>
+                                <p className="text-[10px] text-slate-400 uppercase font-bold">Pilih Kategori Tugasan & Ambil Gambar Bukti</p>
+                            </div>
+                            <button onClick={() => { setIsPickUpModalOpen(false); setLoadPhotoBase64(null); }} className="p-2 bg-slate-800 hover:bg-slate-700 rounded-full text-white cursor-pointer"><X size={20} /></button>
+                        </div>
+
+                        <div className="flex-1 overflow-y-auto p-5 space-y-5 bg-black">
+                            {/* 1. CATEGORY SELECTION */}
+                            <div>
+                                <label className="text-xs font-black text-slate-400 uppercase tracking-widest mb-2.5 block flex items-center gap-1.5">
+                                    <span>1. PILIH KATEGORI TUGASAN / SELECT CATEGORY</span>
+                                    <span className="text-red-400">*</span>
+                                </label>
+                                <div className="grid grid-cols-2 sm:grid-cols-3 gap-2.5">
+                                    {EXTRA_JOB_CATEGORIES.map(cat => {
+                                        const isSelected = pickUpCategory === cat.id;
+                                        return (
+                                            <button
+                                                key={cat.id}
+                                                type="button"
+                                                onClick={() => setPickUpCategory(cat.id)}
+                                                className={`p-3 rounded-xl border text-left transition-all flex flex-col justify-between cursor-pointer ${
+                                                    isSelected
+                                                        ? 'bg-emerald-500/20 border-emerald-500 text-white shadow-lg shadow-emerald-950/40 ring-1 ring-emerald-500/50'
+                                                        : 'bg-slate-900/80 border-slate-800 text-slate-400 hover:border-slate-700 hover:text-slate-200'
+                                                }`}
+                                            >
+                                                <div className="flex items-center justify-between mb-1.5">
+                                                    <span className="text-xl">{cat.icon}</span>
+                                                    {isSelected && <span className="w-2 h-2 rounded-full bg-emerald-400 animate-pulse"></span>}
+                                                </div>
+                                                <div>
+                                                    <p className="text-xs font-black leading-tight text-white">{cat.label}</p>
+                                                    <p className="text-[9px] text-slate-500 mt-0.5 leading-tight">{cat.desc}</p>
+                                                </div>
+                                            </button>
+                                        );
+                                    })}
                                 </div>
-                            )}
-                                {/* Input already defined at header level, no need to duplicate here since it's triggered via ref */}
+                            </div>
+
+                            {/* 2. SALARY BADGE (SYSTEM PRESET, LOCKED) */}
+                            <div className="bg-slate-900/90 border border-slate-800 rounded-2xl p-4 flex flex-col sm:flex-row sm:items-center justify-between gap-3 shadow-inner">
+                                <div>
+                                    <span className="text-[10px] font-black uppercase tracking-wider text-slate-400 block mb-0.5">
+                                        💰 Kadar Gaji Sistem / System Salary Rate
+                                    </span>
+                                    <span className="text-xs text-slate-500">
+                                        Asal / Origin: <strong className="text-slate-300 font-mono">{driverOrigin}</strong>
+                                    </span>
+                                </div>
+                                <div className="flex items-center gap-2">
+                                    {pickUpCategory === 'OTHER' ? (
+                                        <div className="bg-amber-500/10 border border-amber-500/30 px-3 py-1.5 rounded-xl text-amber-300 font-bold text-xs">
+                                            Admin / Manager Tentukan Gaji
+                                        </div>
+                                    ) : (
+                                        <div className="bg-emerald-500/15 border border-emerald-500/30 px-4 py-1.5 rounded-xl text-emerald-400 font-mono font-black text-lg">
+                                            RM {currentRateAmount.toFixed(2)}
+                                        </div>
+                                    )}
+                                </div>
+                            </div>
+                            <p className="text-[10px] text-slate-500 italic -mt-2">
+                                🔒 Kadar gaji telah ditetapkan oleh sistem (tidak boleh diubah oleh pemandu) & akan disahkan oleh Admin/Manager.
+                            </p>
+
+                            {/* 3. PHOTO MANDATORY */}
+                            <div>
+                                <label className="text-xs font-black text-slate-400 uppercase tracking-widest mb-2 block flex items-center gap-1.5">
+                                    <span>2. BUKTI GAMBAR / PHOTO PROOF</span>
+                                    <span className="text-red-400">* Wajib</span>
+                                </label>
+                                {!loadPhotoBase64 ? (
+                                    <button
+                                        type="button"
+                                        onClick={() => pickUpFileInputRef.current?.click()}
+                                        className="w-full py-10 rounded-xl border-2 border-dashed border-emerald-500/40 bg-emerald-500/5 hover:bg-emerald-500/10 flex flex-col items-center gap-3 transition-all cursor-pointer"
+                                    >
+                                        <div className="w-12 h-12 rounded-full bg-emerald-500/20 flex items-center justify-center text-emerald-400">
+                                            <Camera size={26} />
+                                        </div>
+                                        <div className="text-center">
+                                            <span className="text-sm font-black text-emerald-400 block uppercase tracking-wider">
+                                                {uploadingPhoto ? 'SEDANG DIPROSES / PROCESSING...' : 'AMBIL GAMBAR BUKTI KERJA / TAKE PHOTO PROOF'}
+                                            </span>
+                                            <span className="text-[10px] text-slate-500 mt-1 block font-medium">
+                                                Ketik untuk buka kamera & ambil gambar tugasan
+                                            </span>
+                                        </div>
+                                    </button>
+                                ) : (
+                                    <div className="w-full relative rounded-xl overflow-hidden border border-slate-700 bg-black">
+                                        <img 
+                                            src={`data:image/jpeg;base64,${loadPhotoBase64}`} 
+                                            alt="Extra Job Proof" 
+                                            className="w-full h-52 object-cover cursor-zoom-in" 
+                                            onClick={() => setPreviewImageUrl(`data:image/jpeg;base64,${loadPhotoBase64}`)}
+                                        />
+                                        <button 
+                                            type="button"
+                                            onClick={() => setLoadPhotoBase64(null)}
+                                            className="absolute top-3 right-3 p-2 bg-red-500/90 hover:bg-red-600 rounded-full text-white shadow-lg cursor-pointer transition-transform active:scale-90"
+                                            title="Ambil gambar semula"
+                                        >
+                                            <X size={16} />
+                                        </button>
+                                        <div className="absolute bottom-2 left-2 bg-black/80 backdrop-blur-sm px-2.5 py-1 rounded-lg border border-white/10 text-[10px] text-emerald-300 font-bold flex items-center gap-1.5">
+                                            <CheckCircle size={12} /> Gambar Berjaya Dimuat Naik
+                                        </div>
+                                    </div>
+                                )}
+                            </div>
+
+                            {/* 4. NOTE & LOCATION */}
+                            <div>
+                                <label className="text-xs font-black text-slate-400 uppercase tracking-widest mb-2 block">3. CATATAN / REMARKS (PILIHAN / OPTIONAL)</label>
+                                <textarea
+                                    value={pickUpNote}
+                                    onChange={e => setPickUpNote(e.target.value)}
+                                    placeholder="Contoh: Angkat 20 biji pallet di kilang Skudai / Servis lori di bengkel ABC..."
+                                    className="w-full bg-slate-900 border border-slate-700 rounded-xl p-4 text-white placeholder:text-slate-600 focus:border-emerald-500 outline-none resize-none h-24 text-sm"
+                                />
+                                {pickupLocation && (
+                                    <p className="text-[10px] text-slate-500 mt-1 font-mono flex items-center gap-1">
+                                        📍 Lokasi: {pickupLocation}
+                                    </p>
+                                )}
+                            </div>
                         </div>
 
-                        {/* NOTE */}
-                        <div>
-                            <label className="text-xs font-bold text-slate-400 uppercase tracking-widest mb-2 block">2. CATATAN / REMARKS</label>
-                            <textarea
-                                value={pickUpNote}
-                                onChange={e => setPickUpNote(e.target.value)}
-                                placeholder="Contoh: Kotak dipulangkan dari Pembekal ABC (e.g. Returned Cartons from Supplier ABC)"
-                                className="w-full bg-slate-900 border border-slate-700 rounded-xl p-4 text-white placeholder:text-slate-600 focus:border-emerald-500 outline-none resize-none h-32"
-                            />
+                        <div className="p-4 border-t border-slate-800 bg-slate-900 safe-bottom-padding">
+                            <button
+                                type="button"
+                                onClick={handleConfirmPickUp}
+                                disabled={submitting || !loadPhotoBase64}
+                                className="w-full py-4 bg-gradient-to-r from-emerald-600 to-teal-600 hover:from-emerald-500 hover:to-teal-500 text-white rounded-xl font-black text-base uppercase tracking-widest shadow-lg shadow-emerald-950/40 disabled:opacity-40 disabled:grayscale transition-all active:scale-95 flex items-center justify-center gap-2 cursor-pointer"
+                            >
+                                {submitting ? 'SEDANG DIPROSES / PROCESSING...' : 'HANTAR UNTUK KELULUSAN ADMIN / SUBMIT FOR APPROVAL'}
+                            </button>
                         </div>
                     </div>
-
-                    <div className="p-4 border-t border-slate-800 bg-slate-900 safe-bottom-padding">
-                        <button
-                            onClick={handleConfirmPickUp}
-                            disabled={submitting || !loadPhotoBase64}
-                            className="w-full py-4 bg-emerald-600 hover:bg-emerald-500 text-white rounded-xl font-black text-lg uppercase tracking-widest shadow-lg shadow-emerald-900/40 disabled:opacity-50 disabled:grayscale transition-all active:scale-95 flex items-center justify-center gap-2"
-                        >
-                            {submitting ? 'SEDANG DIPROSES / PROCESSING...' : 'SAHKAN KUTIPAN / CONFIRM PICK UP'}
-                        </button>
-                    </div>
-                </div>
-            )}
+                );
+            })()}
 
             {/* SCANNER MODAL */}
             {isScannerOpen && (

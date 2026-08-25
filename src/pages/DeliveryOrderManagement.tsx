@@ -567,6 +567,10 @@ const DeliveryOrderManagement: React.FC = () => {
     const [splitTargetDriverId, setSplitTargetDriverId] = useState('');
     const [splitTargetDate, setSplitTargetDate] = useState('');
 
+    // Extra Job Review State
+    const [reviewingExtraJob, setReviewingExtraJob] = useState<any>(null);
+    const [extraJobAmountInput, setExtraJobAmountInput] = useState<string>('');
+
     // Driver Leave & Service State
     const [driverLeaves, setDriverLeaves] = useState<any[]>([]);
     const [scheduledServices, setScheduledServices] = useState<any[]>([]);
@@ -1134,11 +1138,19 @@ const DeliveryOrderManagement: React.FC = () => {
 
     // APPROVE AMENDMENT
     const handleApproveAmendment = async (order: SalesOrder) => {
+        if ((order as any).job_type === 'Extra Job' || (order.orderNumber && order.orderNumber.startsWith('TRIP-JOB'))) {
+            setReviewingExtraJob(order);
+            const driverOrigin = ((order as any).trip_origin || (order as any).tripOrigin || 'TAIPING').toUpperCase();
+            const matched = deliveryRates.find(r => r.origin?.toUpperCase() === driverOrigin && r.location_name?.toUpperCase() === order.zone?.toUpperCase());
+            const parsedNoteAmount = order.notes?.match(/\[APPROVED_AMOUNT:\s*([\d.]+)\]/)?.[1];
+            setExtraJobAmountInput(parsedNoteAmount || (matched ? matched.base_rate.toString() : '0'));
+            return;
+        }
+
         if (!window.confirm(`Approve changes for Order ${order.orderNumber}? \nThis will adjust stock for amendments and mark as Loaded.`)) return;
 
         try {
             // 1. Let V6 DB Trigger handle the stock deduction/adjustment automatically.
-
 
             // 2. Update Status
             const { error } = await supabase.from('sales_orders').update({
@@ -1159,6 +1171,53 @@ const DeliveryOrderManagement: React.FC = () => {
 
             // fetchData(); // Optional debounce
 
+        } catch (e: any) {
+            alert("Error: " + e.message);
+        }
+    };
+
+    const handleApproveExtraJob = async (order: any, amount?: number) => {
+        try {
+            const finalAmount = amount !== undefined ? amount : (parseFloat(extraJobAmountInput) || 0);
+            let updatedNotes = order.notes || '';
+            if (finalAmount > 0) {
+                updatedNotes = updatedNotes.replace(/\[APPROVED_AMOUNT:\s*[\d.]+\]/gi, '').trim();
+                updatedNotes = `${updatedNotes}\n[APPROVED_AMOUNT: ${finalAmount.toFixed(2)}]`.trim();
+            }
+
+            const { error } = await supabase.from('sales_orders').update({
+                status: 'Delivered',
+                notes: updatedNotes
+            }).eq('id', order.id);
+
+            if (error) throw error;
+
+            setOrders(prev => prev.map(o => o.id === order.id ? { ...o, status: 'Delivered', notes: updatedNotes } : o));
+            setReviewingExtraJob(null);
+            setToast({ type: 'success', message: `✅ Tugasan Tambahan Diluluskan! (Gaji RM ${finalAmount.toFixed(2)} dikreditkan)` });
+            fetchData();
+        } catch (e: any) {
+            alert("Error: " + e.message);
+        }
+    };
+
+    const handleRejectExtraJob = async (order: any) => {
+        const reason = window.prompt("Sebab penolakan / Rejection reason:", "Gambar tidak jelas / Tidak sah");
+        if (reason === null) return;
+
+        try {
+            const updatedNotes = `${order.notes || ''}\n[REJECTED: ${reason}]`.trim();
+            const { error } = await supabase.from('sales_orders').update({
+                status: 'Cancelled',
+                notes: updatedNotes
+            }).eq('id', order.id);
+
+            if (error) throw error;
+
+            setOrders(prev => prev.map(o => o.id === order.id ? { ...o, status: 'Cancelled', notes: updatedNotes } : o));
+            setReviewingExtraJob(null);
+            setToast({ type: 'error', message: `❌ Tugasan Tambahan Ditolak / Extra job rejected.` });
+            fetchData();
         } catch (e: any) {
             alert("Error: " + e.message);
         }
@@ -2380,6 +2439,11 @@ const DeliveryOrderManagement: React.FC = () => {
             driverName: drivers.find(d => d.uid === l.employee_id)?.name || 'Unknown Driver'
         }));
 
+    const pendingExtraJobs = orders.filter(o => 
+        ((o as any).job_type === 'Extra Job' || (o.orderNumber && o.orderNumber.startsWith('TRIP-JOB')) || (o.notes && o.notes.startsWith('[') && !o.items?.length)) && 
+        o.status === 'Pending Approval'
+    );
+
     const filteredDriversForModal = drivers.filter(d => 
         (d.base_location || 'Taiping').toUpperCase() === tripOrigin.toUpperCase()
     );
@@ -2412,6 +2476,79 @@ const DeliveryOrderManagement: React.FC = () => {
                     New Trip
                 </button>
             </div>
+
+            {/* --- PENDING EXTRA JOBS BANNER --- */}
+            {pendingExtraJobs.length > 0 && (
+                <div className="mb-6 p-4 bg-emerald-500/10 border border-emerald-500/30 rounded-2xl flex flex-col gap-3 shadow-lg animate-in slide-in-from-top">
+                    <div className="flex items-center justify-between">
+                        <div className="text-sm font-black text-emerald-400 uppercase tracking-widest flex items-center gap-2">
+                            <Camera size={18} className="text-emerald-400" />
+                            <span>Pending Extra Job Approvals ({pendingExtraJobs.length})</span>
+                        </div>
+                        <span className="text-[10px] bg-emerald-500/20 border border-emerald-500/40 text-emerald-300 font-mono px-2.5 py-0.5 rounded-full uppercase font-bold">
+                            Perlu Kelulusan Gaji & Bukti Gambar
+                        </span>
+                    </div>
+
+                    <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-3">
+                        {pendingExtraJobs.map(job => {
+                            const driverName = getDriverName(job.driverId);
+                            const driverOrigin = ((job as any).trip_origin || (job as any).tripOrigin || 'TAIPING').toUpperCase();
+                            const matched = deliveryRates.find(r => r.origin?.toUpperCase() === driverOrigin && r.location_name?.toUpperCase() === job.zone?.toUpperCase());
+                            const presetAmount = matched ? matched.base_rate : 0;
+                            const jobPhoto = (job as any).proof_of_load_url || (job as any).proofOfLoadUrl;
+
+                            return (
+                                <div key={job.id} className="bg-slate-900/90 border border-slate-800 rounded-xl p-3.5 flex flex-col justify-between gap-3 hover:border-slate-700 transition-all">
+                                    <div className="flex gap-3 items-start">
+                                        {jobPhoto ? (
+                                            <a href={jobPhoto} target="_blank" rel="noopener noreferrer" className="relative group overflow-hidden rounded-lg border border-slate-700 w-16 h-16 bg-black shrink-0">
+                                                <img src={jobPhoto} alt="Proof" className="w-full h-full object-cover group-hover:scale-110 transition-transform" />
+                                                <div className="absolute inset-0 bg-black/40 flex items-center justify-center opacity-0 group-hover:opacity-100 transition-opacity">
+                                                    <span className="text-[8px] bg-blue-500 text-white font-bold px-1 rounded">View</span>
+                                                </div>
+                                            </a>
+                                        ) : (
+                                            <div className="w-16 h-16 rounded-lg bg-slate-800 border border-slate-700/50 flex flex-col items-center justify-center text-slate-600 shrink-0">
+                                                <Camera size={18} />
+                                                <span className="text-[7px] uppercase font-bold mt-0.5">No Photo</span>
+                                            </div>
+                                        )}
+                                        <div className="flex-1 min-w-0">
+                                            <div className="flex items-center gap-1.5 flex-wrap mb-1">
+                                                <span className="text-xs font-black text-white truncate">{driverName}</span>
+                                                <span className="text-[9px] font-black uppercase bg-emerald-500/20 text-emerald-300 border border-emerald-500/30 px-1.5 py-0.5 rounded">
+                                                    {job.zone || 'Extra Job'}
+                                                </span>
+                                            </div>
+                                            <p className="text-[10px] text-slate-400 font-mono">{job.deadline || job.orderDate} • {job.deliveryAddress || 'GPS Address'}</p>
+                                            {job.notes && <p className="text-[10px] text-slate-300 italic line-clamp-2 mt-1">"{job.notes}"</p>}
+                                        </div>
+                                    </div>
+
+                                    <div className="flex items-center justify-between pt-2 border-t border-slate-800/80">
+                                        <span className="text-xs font-mono text-emerald-400 font-bold">
+                                            {job.zone === 'OTHER' ? 'RM (Admin Tetap)' : `RM ${presetAmount.toFixed(2)}`}
+                                        </span>
+                                        <div className="flex gap-1.5">
+                                            <button
+                                                type="button"
+                                                onClick={() => {
+                                                    setReviewingExtraJob(job);
+                                                    setExtraJobAmountInput(presetAmount > 0 ? presetAmount.toString() : '0');
+                                                }}
+                                                className="px-3 py-1 bg-emerald-600 hover:bg-emerald-500 text-white rounded-lg text-[10px] font-bold uppercase tracking-wider transition-all cursor-pointer"
+                                            >
+                                                Semak & Lulus / Review
+                                            </button>
+                                        </div>
+                                    </div>
+                                </div>
+                            );
+                        })}
+                    </div>
+                </div>
+            )}
 
             {/* --- STATUS DASHBOARD (Driver Leaves & Lorry Services) --- */}
             <div className="grid grid-cols-1 md:grid-cols-2 gap-4 mb-8">
@@ -4552,6 +4689,119 @@ const DeliveryOrderManagement: React.FC = () => {
                 </div>
             )}
 
+            {/* REVIEW EXTRA JOB MODAL */}
+            {reviewingExtraJob && (() => {
+                const driverName = getDriverName(reviewingExtraJob.driverId);
+                const driverOrigin = ((reviewingExtraJob as any).trip_origin || (reviewingExtraJob as any).tripOrigin || 'TAIPING').toUpperCase();
+                const matched = deliveryRates.find(r => r.origin?.toUpperCase() === driverOrigin && r.location_name?.toUpperCase() === reviewingExtraJob.zone?.toUpperCase());
+                const jobPhoto = (reviewingExtraJob as any).proof_of_load_url || (reviewingExtraJob as any).proofOfLoadUrl;
+
+                return (
+                    <div className="fixed inset-0 z-[250] flex items-center justify-center p-4 bg-black/80 backdrop-blur-sm animate-in fade-in">
+                        <div className="bg-slate-900 border border-slate-800 rounded-2xl w-full max-w-lg overflow-hidden shadow-2xl flex flex-col max-h-[90vh]">
+                            <div className="p-4 border-b border-slate-800 flex justify-between items-center bg-slate-950/50">
+                                <div>
+                                    <h3 className="text-sm font-black text-white uppercase tracking-wider flex items-center gap-2">
+                                        📸 Semakan Tugasan Tambahan / Extra Job Review
+                                    </h3>
+                                    <p className="text-[10px] text-slate-400 font-mono">{reviewingExtraJob.orderNumber}</p>
+                                </div>
+                                <button onClick={() => setReviewingExtraJob(null)} className="p-1.5 text-slate-400 hover:text-white rounded-lg hover:bg-slate-800 transition-colors cursor-pointer">
+                                    <X size={18} />
+                                </button>
+                            </div>
+
+                            <div className="p-5 overflow-y-auto space-y-4 text-xs">
+                                {/* Driver & Category Info */}
+                                <div className="grid grid-cols-2 gap-3 bg-slate-950/50 p-3.5 rounded-xl border border-slate-800">
+                                    <div>
+                                        <span className="text-[10px] text-slate-500 uppercase font-bold block mb-0.5">Pemandu / Driver</span>
+                                        <span className="text-sm font-black text-white">{driverName}</span>
+                                    </div>
+                                    <div>
+                                        <span className="text-[10px] text-slate-500 uppercase font-bold block mb-0.5">Kategori Tugasan</span>
+                                        <span className="inline-block px-2 py-0.5 rounded bg-emerald-500/20 text-emerald-400 font-black border border-emerald-500/30 text-xs">
+                                            {reviewingExtraJob.zone || 'Extra Job'}
+                                        </span>
+                                    </div>
+                                </div>
+
+                                {/* Photo Proof */}
+                                <div>
+                                    <span className="text-[10px] text-slate-400 uppercase font-black tracking-wider block mb-1.5">
+                                        Bukti Gambar / Photo Proof:
+                                    </span>
+                                    {jobPhoto ? (
+                                        <a href={jobPhoto} target="_blank" rel="noopener noreferrer" className="block relative group overflow-hidden rounded-xl border border-slate-700 bg-black h-56">
+                                            <img src={jobPhoto} alt="Extra Job Proof" className="w-full h-full object-cover group-hover:scale-105 transition-transform" />
+                                            <div className="absolute inset-0 bg-black/40 flex items-center justify-center opacity-0 group-hover:opacity-100 transition-opacity">
+                                                <span className="bg-blue-600 text-white font-bold text-xs px-3 py-1.5 rounded-lg shadow-lg">Klik untuk Zoom</span>
+                                            </div>
+                                        </a>
+                                    ) : (
+                                        <div className="h-32 bg-slate-950 rounded-xl border border-dashed border-slate-800 flex items-center justify-center text-slate-600">
+                                            Tiada Gambar Dimuat Naik
+                                        </div>
+                                    )}
+                                </div>
+
+                                {/* Details & Notes */}
+                                <div className="space-y-2">
+                                    <div>
+                                        <span className="text-[10px] text-slate-500 uppercase font-bold block">Lokasi & Tarikh:</span>
+                                        <span className="text-slate-300 font-mono text-[11px]">{reviewingExtraJob.deliveryAddress || 'GPS'} • {reviewingExtraJob.deadline || reviewingExtraJob.orderDate}</span>
+                                    </div>
+                                    {reviewingExtraJob.notes && (
+                                        <div>
+                                            <span className="text-[10px] text-slate-500 uppercase font-bold block">Catatan Pemandu / Notes:</span>
+                                            <p className="bg-slate-950 p-2.5 rounded-lg border border-slate-800 text-slate-300 italic text-[11px] whitespace-pre-line">{reviewingExtraJob.notes}</p>
+                                        </div>
+                                    )}
+                                </div>
+
+                                {/* Salary Amount Input / Confirmation */}
+                                <div className="bg-emerald-950/30 border border-emerald-500/30 p-4 rounded-xl space-y-2">
+                                    <label className="text-xs font-black text-emerald-400 uppercase tracking-wide block">
+                                        💵 Sahkan Jumlah Gaji / Approved Salary Amount (RM):
+                                    </label>
+                                    <div className="flex items-center gap-2">
+                                        <span className="text-lg font-bold text-slate-400 font-mono">RM</span>
+                                        <input
+                                            type="number"
+                                            step="0.5"
+                                            min="0"
+                                            value={extraJobAmountInput}
+                                            onChange={e => setExtraJobAmountInput(e.target.value)}
+                                            className="w-full bg-slate-950 border border-emerald-500/50 rounded-xl px-3 py-2 text-base font-mono font-bold text-emerald-300 outline-none focus:ring-1 focus:ring-emerald-400"
+                                            placeholder="0.00"
+                                        />
+                                    </div>
+                                    <p className="text-[10px] text-slate-400 italic">
+                                        * Jumlah ini akan dimasukkan terus ke dalam gaji biasa pemandu (Trip/Basic Earnings) untuk bulan ini.
+                                    </p>
+                                </div>
+                            </div>
+
+                            <div className="p-4 border-t border-slate-800 bg-slate-950/50 flex justify-end gap-2">
+                                <button
+                                    type="button"
+                                    onClick={() => handleRejectExtraJob(reviewingExtraJob)}
+                                    className="px-4 py-2 bg-red-600/20 hover:bg-red-600/30 border border-red-500/30 text-red-300 rounded-xl font-bold transition-all text-xs cursor-pointer"
+                                >
+                                    ❌ Tolak / Reject
+                                </button>
+                                <button
+                                    type="button"
+                                    onClick={() => handleApproveExtraJob(reviewingExtraJob, parseFloat(extraJobAmountInput) || 0)}
+                                    className="px-6 py-2 bg-gradient-to-r from-emerald-600 to-teal-600 hover:from-emerald-500 hover:to-teal-500 text-white rounded-xl font-black transition-all text-xs shadow-lg shadow-emerald-950/40 active:scale-95 cursor-pointer"
+                                >
+                                    ✅ Luluskan & Kredit Gaji (RM {(parseFloat(extraJobAmountInput) || 0).toFixed(2)})
+                                </button>
+                            </div>
+                        </div>
+                    </div>
+                );
+            })()}
 
         </div >
     );

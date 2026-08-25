@@ -1576,29 +1576,54 @@ const PersonalMonthlyReport: React.FC<Props> = ({ user }) => {
                 const rateInfo = rateMap[key];
                 const drops = Math.max(1, t.trip_drop_count || 1);
 
+                const isExtraJob = t.job_type === 'Extra Job' || t.order_number?.startsWith('TRIP-JOB');
+                const approvedAmountMatch = t.notes?.match(/\[APPROVED_AMOUNT:\s*([\d.]+)\]/);
+
                 let baseRate = 0;
                 let extraRate = 0;
                 let tEarnings = 0;
-                if (rateInfo) {
+
+                if (approvedAmountMatch) {
+                    baseRate = parseFloat(approvedAmountMatch[1]) || 0;
+                    tEarnings = baseRate;
+                } else if (rateInfo) {
                     baseRate = Number(rateInfo.base_rate) || 0;
                     const maxPlaces = Number(rateInfo.max_places) || 0;
                     const extraPlaces = Math.max(0, drops - maxPlaces);
                     extraRate = extraPlaces * (Number(rateInfo.extra_rate_per_place) || 0);
                     tEarnings = baseRate + extraRate;
-                    tripEarnings += tEarnings;
                 } else if (t.earnings || t.trip_allowance) {
                     tEarnings = Number(t.earnings || t.trip_allowance || 0);
                     baseRate = tEarnings;
+                }
+
+                // If Delivered, add to trip earnings (for both standard trips and extra jobs)
+                if (t.status === 'Delivered') {
                     tripEarnings += tEarnings;
                 }
 
-                // Push formatting: "TAIPING ➞ KL (2 Drops)"
+                let displayString = `${originRaw} ➞ ${displayZone} (${drops} Drop${drops > 1 ? 's' : ''})`;
+                if (isExtraJob) {
+                    const iconMap: Record<string, string> = {
+                        'AMBIK PALLET': '🪵',
+                        'LORRY SERVICE': '🔧',
+                        'SHOPEE': '🛍️',
+                        'RETURN': '↩️',
+                        'OTHER': '🛠️'
+                    };
+                    const icon = iconMap[t.zone?.toUpperCase()] || '📸';
+                    displayString = `${icon} ${t.zone || 'Extra Job'}`;
+                }
+
+                // Push formatting
                 tripDetails.push({
                     id: t.id,
                     order_number: t.order_number,
                     customer: t.customer,
                     items: t.items,
                     notes: t.notes,
+                    status: t.status,
+                    job_type: t.job_type || (isExtraJob ? 'Extra Job' : undefined),
                     pod_photo_url: t.pod_photo_url || null,
                     pod_signature_url: t.pod_signature_url || null,
                     proof_of_load_url: t.proof_of_load_url || null,
@@ -1616,7 +1641,7 @@ const PersonalMonthlyReport: React.FC<Props> = ({ user }) => {
                     deadline: t.deadline || null,
                     pod_timestamp: t.pod_timestamp || null,
                     pod_signed_by: t.pod_signed_by || null,
-                    displayString: `${originRaw} ➞ ${displayZone} (${drops} Drop${drops > 1 ? 's' : ''})`
+                    displayString
                 });
             });
 
@@ -2534,6 +2559,85 @@ const PersonalMonthlyReport: React.FC<Props> = ({ user }) => {
                                     本 Trip 合计: RM {(selectedTrip.earnings || 0).toFixed(2)}
                                 </div>
                             </div>
+
+                            {/* Extra Job Pending Approval Banner */}
+                            {selectedTrip.status === 'Pending Approval' && (
+                                <div className="mb-6 p-4 bg-amber-500/10 border border-amber-500/30 rounded-2xl flex flex-col gap-3 shadow-lg">
+                                    <div className="flex flex-col sm:flex-row items-start sm:items-center justify-between gap-3">
+                                        <div className="flex items-center gap-3 text-amber-400 font-bold text-xs">
+                                            <Clock size={18} className="animate-spin text-amber-400" />
+                                            <div>
+                                                <div className="text-sm font-black text-amber-300">⏳ 额外任务待审核 / Pending Extra Job Approval</div>
+                                                <div className="text-[11px] text-amber-400/80 font-normal mt-0.5">
+                                                    司机已上传完成证据（照片与GPS），等待 Admin/Manager 审核确认金额并计入普通薪资。
+                                                </div>
+                                            </div>
+                                        </div>
+                                        {isAdminOrHR ? (
+                                            <div className="flex items-center gap-2 shrink-0">
+                                                <button
+                                                    type="button"
+                                                    onClick={async () => {
+                                                        const defaultVal = (selectedTrip.earnings || 10).toString();
+                                                        const amountStr = window.prompt("确认批准此额外任务金额 (RM) / Confirm approved salary (RM):", defaultVal);
+                                                        if (amountStr === null) return;
+                                                        const val = parseFloat(amountStr) || 0;
+                                                        
+                                                        let updatedNotes = selectedTrip.notes || '';
+                                                        if (val > 0) {
+                                                            updatedNotes = updatedNotes.replace(/\[APPROVED_AMOUNT:\s*[\d.]+\]/gi, '').trim();
+                                                            updatedNotes = `${updatedNotes}\n[APPROVED_AMOUNT: ${val.toFixed(2)}]`.trim();
+                                                        }
+
+                                                        const { error } = await supabase.from('sales_orders').update({
+                                                            status: 'Delivered',
+                                                            notes: updatedNotes
+                                                        }).eq('id', selectedTrip.id);
+
+                                                        if (error) {
+                                                            alert("Approval failed: " + error.message);
+                                                        } else {
+                                                            alert(`✅ 额外任务已批准！RM ${val.toFixed(2)} 已直接计入当月普通薪水。`);
+                                                            setSelectedTrip(null);
+                                                            fetchData();
+                                                        }
+                                                    }}
+                                                    className="px-4 py-2 bg-emerald-600 hover:bg-emerald-500 text-white rounded-xl text-xs font-bold transition-all shadow-md active:scale-95 cursor-pointer"
+                                                >
+                                                    ✅ 批准并计入薪资 / Approve
+                                                </button>
+                                                <button
+                                                    type="button"
+                                                    onClick={async () => {
+                                                        const reason = window.prompt("驳回原因 / Rejection reason:", "Gambar tidak jelas / 不符合要求");
+                                                        if (reason === null) return;
+                                                        const updatedNotes = `${selectedTrip.notes || ''}\n[REJECTED: ${reason}]`.trim();
+                                                        const { error } = await supabase.from('sales_orders').update({
+                                                            status: 'Cancelled',
+                                                            notes: updatedNotes
+                                                        }).eq('id', selectedTrip.id);
+
+                                                        if (error) {
+                                                            alert("Reject failed: " + error.message);
+                                                        } else {
+                                                            alert("❌ 额外任务已驳回 / Extra job rejected.");
+                                                            setSelectedTrip(null);
+                                                            fetchData();
+                                                        }
+                                                    }}
+                                                    className="px-4 py-2 bg-red-600 hover:bg-red-500 text-white rounded-xl text-xs font-bold transition-all shadow-md active:scale-95 cursor-pointer"
+                                                >
+                                                    ❌ 驳回 / Reject
+                                                </button>
+                                            </div>
+                                        ) : (
+                                            <span className="text-[11px] text-amber-300 font-mono bg-amber-950/80 border border-amber-500/30 px-3 py-1.5 rounded-xl font-bold">
+                                                等待 Admin 审核
+                                            </span>
+                                        )}
+                                    </div>
+                                </div>
+                            )}
 
                             {/* Pending Admin Approval Banner */}
                             {(selectedTrip.edit_status === 'Pending' || selectedTrip.notes?.includes('[PENDING_EDIT_PAYLOAD]') || selectedTrip.notes?.includes('[PENDING EDIT')) && (

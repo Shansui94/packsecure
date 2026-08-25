@@ -1319,7 +1319,7 @@ const HRPortal: React.FC<HRPortalProps> = ({ user, initialTab, initialRoleFilter
 
         // Driver trips with zone info for zone-based allowance
         const { data: trips } = await supabase.from('sales_orders')
-            .select('driver_id, zone, trip_origin, trip_drop_count')
+            .select('driver_id, zone, trip_origin, trip_drop_count, notes, job_type')
             .eq('status', 'Delivered')
             .gte('deadline', firstDay)
             .lte('deadline', lastDay);
@@ -1370,7 +1370,12 @@ const HRPortal: React.FC<HRPortalProps> = ({ user, initialTab, initialRoleFilter
             if (!tripEarningsMap[t.driver_id]) tripEarningsMap[t.driver_id] = { total: 0, count: 0, breakdown: [] };
             tripEarningsMap[t.driver_id].count += 1;
             
-            if (rateInfo) {
+            const approvedAmountMatch = t.notes?.match(/\[APPROVED_AMOUNT:\s*([\d.]+)\]/);
+            if (approvedAmountMatch) {
+                const approvedMoney = parseFloat(approvedAmountMatch[1]) || 0;
+                tripEarningsMap[t.driver_id].total += approvedMoney;
+                tripEarningsMap[t.driver_id].breakdown.push(`${t.zone || 'Extra Job'}: RM${approvedMoney.toFixed(2)}`);
+            } else if (rateInfo) {
                 const base = Number(rateInfo.base_rate) || 0;
                 const maxPlaces = Number(rateInfo.max_places) || 0;
                 const extraPlaces = Math.max(0, drops - maxPlaces);
