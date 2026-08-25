@@ -1868,6 +1868,25 @@ const PersonalMonthlyReport: React.FC<Props> = ({ user }) => {
                         );
                     })()}
 
+                    {/* Driver Pending Extra Jobs / Trips Notice Banner */}
+                    {isDriver && dailyMetrics.some(d => d.tripDetails.some((t: any) => t.status === 'Pending Approval' || t.status === 'Pending' || t.edit_status === 'Pending' || t.notes?.includes('[PENDING_EDIT_PAYLOAD]') || t.notes?.includes('[PENDING EDIT'))) && (
+                        <div className="bg-amber-500/10 border border-amber-500/30 rounded-2xl p-4 flex items-center justify-between gap-3 shadow-lg animate-fade-in">
+                            <div className="flex items-center gap-3">
+                                <Clock className="text-amber-400 animate-spin shrink-0" size={20} />
+                                <div>
+                                    <div className="text-sm font-bold text-amber-300">
+                                        {isAdminOrHR ? "发现待审核的额外任务 / 预修改申请" : "您有待审核的额外任务 / 预修改申请"}
+                                    </div>
+                                    <div className="text-xs text-amber-400/80 mt-0.5">
+                                        {isAdminOrHR 
+                                            ? "下方行程标有 ⏳ [待审核] 标签。点击该行程即可直接进行审核、修改金额并批准。" 
+                                            : "额外任务或预修改已提交，等待 Admin/Manager 审核确认后将直接计入当月薪资。"}
+                                    </div>
+                                </div>
+                            </div>
+                        </div>
+                    )}
+
                     {/* Top Row: Metrics Overview / Ringkasan Metrik */}
                     <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-5 gap-4">
                         {/* Attendance Card */}
@@ -2286,11 +2305,18 @@ const PersonalMonthlyReport: React.FC<Props> = ({ user }) => {
                                                             <span className="font-mono text-amber-400 font-bold">{day.tripCount} <span className="text-[10px] text-gray-500">trip</span></span>
                                                             {day.tripDetails && day.tripDetails.length > 0 ? (
                                                                 <div className="flex flex-col items-end gap-0.5 font-mono text-[10px]">
-                                                                    {day.tripDetails.map((td: any, tidx: number) => (
-                                                                        <span key={tidx} className="text-emerald-400 font-bold bg-emerald-500/10 px-1.5 py-0.5 rounded border border-emerald-500/20" title={`Trip ${tidx+1}: Base RM${(td.baseRate||td.earnings||0).toFixed(2)} + Extra Drop RM${(td.extraRate||0).toFixed(2)}`}>
-                                                                            Trip #{tidx + 1}: RM {(td.earnings || 0).toFixed(2)}
-                                                                        </span>
-                                                                    ))}
+                                                                    {day.tripDetails.map((td: any, tidx: number) => {
+                                                                        const isTripPending = td.status === 'Pending Approval' || td.status === 'Pending' || td.edit_status === 'Pending' || td.notes?.includes('[PENDING_EDIT_PAYLOAD]') || td.notes?.includes('[PENDING EDIT');
+                                                                        return (
+                                                                            <span key={tidx} className={`font-bold px-1.5 py-0.5 rounded border ${
+                                                                                isTripPending 
+                                                                                    ? 'text-amber-300 bg-amber-500/10 border-amber-500/30 animate-pulse' 
+                                                                                    : 'text-emerald-400 bg-emerald-500/10 border-emerald-500/20'
+                                                                            }`} title={`Trip ${tidx+1}: Base RM${(td.baseRate||td.earnings||0).toFixed(2)} + Extra Drop RM${(td.extraRate||0).toFixed(2)}`}>
+                                                                                {isTripPending ? `Trip #${tidx + 1}: ⏳ 待审核 (RM ${(td.earnings || 0).toFixed(2)})` : `Trip #${tidx + 1}: RM ${(td.earnings || 0).toFixed(2)}`}
+                                                                            </span>
+                                                                        );
+                                                                    })}
                                                                     {day.tripDetails.length > 1 && (
                                                                         <span className="text-[10px] text-amber-300 font-black mt-0.5 pt-0.5 border-t border-slate-800">
                                                                             合计: RM {day.tripEarnings.toFixed(2)}
@@ -2326,7 +2352,7 @@ const PersonalMonthlyReport: React.FC<Props> = ({ user }) => {
                                                     {day.tripDetails && day.tripDetails.length > 0 ? (
                                                         <div className="flex flex-col items-center gap-2">
                                                             {day.tripDetails.map((td: any, idx: number) => {
-                                                                const isPending = td.edit_status === 'Pending' || td.notes?.includes('[PENDING_EDIT_PAYLOAD]') || td.notes?.includes('[PENDING EDIT');
+                                                                const isPending = td.status === 'Pending Approval' || td.status === 'Pending' || td.edit_status === 'Pending' || td.notes?.includes('[PENDING_EDIT_PAYLOAD]') || td.notes?.includes('[PENDING EDIT');
                                                                 const isTripConfirmed = confirmedTripIds.has(td.id) || td.driver_confirmed === true;
 
                                                                 return (
@@ -2347,9 +2373,15 @@ const PersonalMonthlyReport: React.FC<Props> = ({ user }) => {
                                                                             {td.notes?.includes('[HR_APPROVED]') && <div className="text-indigo-400 shrink-0">🔒</div>}
                                                                             {isPending && !td.notes?.includes('[HR_APPROVED]') && <Clock size={10} className="text-amber-400 shrink-0" />}
                                                                             {isTripConfirmed && !td.notes?.includes('[HR_APPROVED]') && <CheckCircle2 size={11} className="text-emerald-400 shrink-0" />}
-                                                                            <span>{isPending ? `[Pending] ${td.displayString}` : td.displayString}</span>
-                                                                            <span className={`ml-1 px-1.5 py-0.5 rounded font-black border text-[9.5px] ${td.notes?.includes('[HR_APPROVED]') ? 'bg-indigo-500/20 text-indigo-300 border-indigo-500/30' : 'bg-emerald-500/20 text-emerald-300 border-emerald-500/30'}`}>
-                                                                                RM {(td.earnings || 0).toFixed(2)}
+                                                                            <span>{isPending ? `⏳ [待审核] ${td.displayString}` : td.displayString}</span>
+                                                                            <span className={`ml-1 px-1.5 py-0.5 rounded font-black border text-[9.5px] ${
+                                                                                td.notes?.includes('[HR_APPROVED]') 
+                                                                                    ? 'bg-indigo-500/20 text-indigo-300 border-indigo-500/30' 
+                                                                                    : isPending
+                                                                                        ? 'bg-amber-500/20 text-amber-300 border-amber-500/30'
+                                                                                        : 'bg-emerald-500/20 text-emerald-300 border-emerald-500/30'
+                                                                            }`}>
+                                                                                {isPending ? `待审核 RM ${(td.earnings || 0).toFixed(2)}` : `RM ${(td.earnings || 0).toFixed(2)}`}
                                                                             </span>
                                                                         </button>
 
@@ -2555,13 +2587,17 @@ const PersonalMonthlyReport: React.FC<Props> = ({ user }) => {
                                         </div>
                                     </div>
                                 </div>
-                                <div className="flex items-center gap-2 shrink-0 bg-emerald-500/10 border border-emerald-500/30 px-3.5 py-2 rounded-xl text-emerald-300 font-mono text-sm font-black">
-                                    本 Trip 合计: RM {(selectedTrip.earnings || 0).toFixed(2)}
+                                <div className={`flex items-center gap-2 shrink-0 border px-3.5 py-2 rounded-xl font-mono text-sm font-black ${
+                                    (selectedTrip.status === 'Pending Approval' || selectedTrip.status === 'Pending' || selectedTrip.edit_status === 'Pending')
+                                        ? 'bg-amber-500/10 border-amber-500/30 text-amber-300'
+                                        : 'bg-emerald-500/10 border-emerald-500/30 text-emerald-300'
+                                }`}>
+                                    本 Trip 合计: {(selectedTrip.status === 'Pending Approval' || selectedTrip.status === 'Pending' || selectedTrip.edit_status === 'Pending') ? '⏳ 待审核' : ''} RM {(selectedTrip.earnings || 0).toFixed(2)}
                                 </div>
                             </div>
 
                             {/* Extra Job Pending Approval Banner */}
-                            {selectedTrip.status === 'Pending Approval' && (
+                            {(selectedTrip.status === 'Pending Approval' || selectedTrip.status === 'Pending' || ((selectedTrip.job_type === 'Extra Job' || selectedTrip.order_number?.startsWith('TRIP-JOB')) && selectedTrip.status !== 'Delivered')) && (
                                 <div className="mb-6 p-4 bg-amber-500/10 border border-amber-500/30 rounded-2xl flex flex-col gap-3 shadow-lg">
                                     <div className="flex flex-col sm:flex-row items-start sm:items-center justify-between gap-3">
                                         <div className="flex items-center gap-3 text-amber-400 font-bold text-xs">
