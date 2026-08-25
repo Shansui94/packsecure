@@ -275,12 +275,41 @@ interface DailyMetrics {
 const PersonalMonthlyReport: React.FC<Props> = ({ user }) => {
     const today = new Date();
     const getSafeOrigin = (o?: string) => (o || '').toUpperCase().trim();
+    // Check if a pending edit payload actually has real differences from the original order
+    const hasRealPreEditChanges = (notes?: string | null, original?: any) => {
+        if (!notes) return false;
+        const payloadMatch = notes.match(/\[PENDING_EDIT_PAYLOAD\]:\s*(\{.*\})/is);
+        if (!payloadMatch) {
+            return Boolean(notes.includes('[PENDING EDIT'));
+        }
+        if (!original) return true;
+        try {
+            const after = JSON.parse(payloadMatch[1]);
+            const cleanOldNotes = (original.notes || '').replace(/(?:\n\n)?\[PENDING_EDIT_PAYLOAD\]:[\s\S]*$/is, '').replace(/\[PENDING EDIT.*?\]:?[\s\S]*/gi, '').trim();
+            const cleanNewNotes = (after.notes || '').replace(/(?:\n\n)?\[PENDING_EDIT_PAYLOAD\]:[\s\S]*$/is, '').replace(/\[PENDING EDIT.*?\]:?[\s\S]*/gi, '').trim();
+
+            const originChanged = after.trip_origin && after.trip_origin.toUpperCase() !== (original.trip_origin || '').toUpperCase();
+            const zoneChanged = after.zone && after.zone !== original.zone;
+            const dropsChanged = after.trip_drop_count !== undefined && Number(after.trip_drop_count) !== Number(original.trip_drop_count || 1);
+            const addressChanged = after.delivery_address && after.delivery_address.trim() !== (original.delivery_address || '').trim();
+            const customerChanged = after.customer && after.customer.trim() !== (original.customer || '').trim();
+            const dateChanged = after.deadline && after.deadline !== original.deadline;
+            const notesChanged = cleanNewNotes !== cleanOldNotes;
+
+            return Boolean(originChanged || zoneChanged || dropsChanged || addressChanged || customerChanged || dateChanged || notesChanged);
+        } catch(e) {
+            return true;
+        }
+    };
+
     // Unified helper to check if a trip / extra job is pending approval
     const isTripPending = (t: any) => {
         if (!t) return false;
         if (t.status === 'Pending Approval' || t.status === 'Pending') return true;
         if ((t.job_type === 'Extra Job' || t.order_number?.startsWith('TRIP-JOB') || t.order_number?.startsWith('TRIP-PU')) && t.status !== 'Delivered' && t.status !== 'Cancelled') return true;
-        if (t.notes?.includes('[PENDING_EDIT_PAYLOAD]') || t.notes?.includes('[PENDING EDIT')) return true;
+        if (t.notes?.includes('[PENDING_EDIT_PAYLOAD]') || t.notes?.includes('[PENDING EDIT')) {
+            return hasRealPreEditChanges(t.notes, t);
+        }
         return false;
     };
     const [selectedMonth, setSelectedMonth] = useState(() => {
@@ -1110,6 +1139,29 @@ const PersonalMonthlyReport: React.FC<Props> = ({ user }) => {
 
         const isUserAdmin = ['SuperAdmin', 'Admin'].includes(currentUserRole);
 
+        const cleanOriginalNotes = (selectedTrip.notes || '')
+            .replace(/(?:\n\n)?\[PENDING_EDIT_PAYLOAD\]:[\s\S]*$/is, '')
+            .replace(/\[PENDING EDIT.*?\]:?[\s\S]*/gi, '')
+            .trim();
+        const cleanNewNotes = (newOrderNotes || '').trim();
+
+        const originChanged = (tripOrigin || '').toUpperCase() !== (selectedTrip.trip_origin || '').toUpperCase();
+        const zoneChanged = (tripCategory || '') !== (selectedTrip.zone || '');
+        const dropsChanged = Number(tripDropCount || 1) !== Number(selectedTrip.trip_drop_count || 1);
+        const addressChanged = (newOrderAddress || '').trim() !== (selectedTrip.delivery_address || '').trim();
+        const customerChanged = (orderCustomer || '').trim() !== (selectedTrip.customer || '').trim();
+        const dateChanged = (newOrderDeliveryDate || '') !== (selectedTrip.deadline || '');
+        const notesChanged = cleanNewNotes !== cleanOriginalNotes;
+
+        const hasAnyChange = originChanged || zoneChanged || dropsChanged || addressChanged || customerChanged || dateChanged || notesChanged;
+
+        if (!hasAnyChange) {
+            alert("ℹ️ 未检测到任何修改内容，未提交申请。 / No changes detected.");
+            setSelectedTrip(null);
+            setIsEditingTrip(false);
+            return;
+        }
+
         const updatedTripPayload = {
             driver_id: selectedDriverId || null,
             lorry_id: selectedLorryId || null,
@@ -1118,62 +1170,40 @@ const PersonalMonthlyReport: React.FC<Props> = ({ user }) => {
             trip_origin: tripOrigin.toUpperCase(),
             zone: tripCategory,
             trip_drop_count: Math.max(1, Number(tripDropCount) || 1),
-            notes: newOrderNotes || null,
+            notes: cleanNewNotes || null,
             items: newOrderItems,
             deadline: newOrderDeliveryDate || null
         };
 
         try {
             if (isUserAdmin) {
-                // Admin can directly edit and approve
+                // Admin can directly edit and apply
                 const { error } = await supabase
                     .from('sales_orders')
-                    .update({
-                        ...updatedTripPayload,
-                        edit_status: 'Approved',
-                        pending_edit_payload: null
-                    })
+                    .update(updatedTripPayload)
                     .eq('id', selectedTrip.id);
 
-                if (error) {
-                    await supabase
-                        .from('sales_orders')
-                        .update(updatedTripPayload)
-                        .eq('id', selectedTrip.id);
-                }
-
+                if (error) throw error;
                 alert("✅ Admin 已成功保存 Trip 更改！ / Trip record updated by Admin!");
             } else {
-                // Driver or Non-Admin: PRE-CHANGE (Sets to Pending awaiting Admin confirmation)
-                const pendingData = {
-                    edit_status: 'Pending',
-                    pending_edit_payload: updatedTripPayload
+                // Driver: submit pre-edit payload only when there are actual changes
+                const pendingPayload = {
+                    customer: orderCustomer,
+                    delivery_address: newOrderAddress,
+                    trip_origin: tripOrigin,
+                    zone: tripCategory,
+                    trip_drop_count: tripDropCount,
+                    notes: cleanNewNotes,
+                    deadline: newOrderDeliveryDate
                 };
+                const appendedNotes = cleanOriginalNotes ? `${cleanOriginalNotes}\n\n[PENDING_EDIT_PAYLOAD]: ${JSON.stringify(pendingPayload)}` : `[PENDING_EDIT_PAYLOAD]: ${JSON.stringify(pendingPayload)}`;
 
                 const { error } = await supabase
                     .from('sales_orders')
-                    .update(pendingData)
+                    .update({ notes: appendedNotes })
                     .eq('id', selectedTrip.id);
 
-                if (error) {
-                    const pendingPayload = {
-                        customer: orderCustomer,
-                        delivery_address: newOrderAddress,
-                        trip_origin: tripOrigin,
-                        zone: tripCategory,
-                        trip_drop_count: tripDropCount,
-                        notes: newOrderNotes,
-                        deadline: newOrderDeliveryDate
-                    };
-                    const cleanNotes = (selectedTrip.notes || '').replace(/(?:\n\n)?\[PENDING_EDIT_PAYLOAD\]:[\s\S]*$/is, '').replace(/\[PENDING EDIT.*?\]:?[\s\S]*/gi, '').trim();
-                    const appendedNotes = cleanNotes ? `${cleanNotes}\n\n[PENDING_EDIT_PAYLOAD]: ${JSON.stringify(pendingPayload)}` : `[PENDING_EDIT_PAYLOAD]: ${JSON.stringify(pendingPayload)}`;
-                    
-                    await supabase
-                        .from('sales_orders')
-                        .update({ notes: appendedNotes })
-                        .eq('id', selectedTrip.id);
-                }
-
+                if (error) throw error;
                 alert("⏳ 预修改已提交！已转入 Pending 状态，须待 Admin 确认后才正式生效。 / Pre-change submitted! Set to Pending status awaiting Admin approval.");
             }
 
@@ -3455,7 +3485,7 @@ const PersonalMonthlyReport: React.FC<Props> = ({ user }) => {
                                 disabled={newOrderNotes.includes('[HR_APPROVED]')}
                                 className="px-8 py-2 bg-gradient-to-r from-orange-500 to-amber-600 hover:from-orange-600 hover:to-amber-700 text-white rounded-xl font-bold shadow-lg shadow-orange-950/30 transition-all active:scale-95 flex items-center gap-2 cursor-pointer disabled:opacity-50 disabled:cursor-not-allowed disabled:hover:scale-100 disabled:active:scale-100"
                             >
-                                {newOrderNotes.includes('[HR_APPROVED]') ? 'Locked by HR' : 'CONFIRM TRIP'}
+                                {newOrderNotes.includes('[HR_APPROVED]') ? '🔒 Locked by HR' : (isAdminOrHR ? '💾 保存修改 / Save Changes' : '💾 提交预修改申请 / Submit Pre-Edit')}
                             </button>
                         </div>
                     </div>
