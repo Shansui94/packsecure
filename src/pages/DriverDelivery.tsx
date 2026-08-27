@@ -124,28 +124,61 @@ const DriverDelivery: React.FC<DriverDeliveryProps> = ({ user }) => {
     // 📡 网页端原生 HTML5 地理定位实时同步 (Web App Realtime Location)
     const [webGpsActive, setWebGpsActive] = useState<boolean>(true);
     const [webGpsStatus, setWebGpsStatus] = useState<string>('正在获取网页端 GPS 定位...');
+    const lastGpsUploadTimeRef = useRef<number>(0);
+    const lastGpsCoordsRef = useRef<{ lat: number; lng: number } | null>(null);
 
     useEffect(() => {
         if (!user?.uid || !webGpsActive || !navigator.geolocation) return;
 
         console.log('[Web GPS] 开启网页端 HTML5 定位监听...');
 
+        const calculateDistanceKm = (lat1: number, lon1: number, lat2: number, lon2: number) => {
+            const R = 6371;
+            const dLat = (lat2 - lat1) * Math.PI / 180;
+            const dLon = (lon2 - lon1) * Math.PI / 180;
+            const a = Math.sin(dLat / 2) * Math.sin(dLat / 2) +
+                      Math.cos(lat1 * Math.PI / 180) * Math.cos(lat2 * Math.PI / 180) *
+                      Math.sin(dLon / 2) * Math.sin(dLon / 2);
+            const c = 2 * Math.atan2(Math.sqrt(a), Math.sqrt(1 - a));
+            return R * c;
+        };
+
         const watchId = navigator.geolocation.watchPosition(
             async (pos) => {
                 const { latitude, longitude, speed, heading } = pos.coords;
                 setWebGpsStatus(`● Web 实时定位: ${latitude.toFixed(4)}, ${longitude.toFixed(4)}`);
 
-                try {
-                    await supabase.from('driver_locations').upsert({
-                        driver_id: user.uid,
+                const now = Date.now();
+                const timeDiffSeconds = (now - lastGpsUploadTimeRef.current) / 1000;
+                let distanceMovedMeters = 0;
+                if (lastGpsCoordsRef.current) {
+                    distanceMovedMeters = calculateDistanceKm(
+                        lastGpsCoordsRef.current.lat,
+                        lastGpsCoordsRef.current.lng,
                         latitude,
-                        longitude,
-                        speed: speed || 0,
-                        heading: heading || 0,
-                        updated_at: new Date().toISOString(),
-                    });
-                } catch (err) {
-                    console.warn('[Web GPS] 上报 Supabase 失败:', err);
+                        longitude
+                    ) * 1000;
+                }
+
+                // 节流机制：至少间隔 20 秒，或位移超过 50 米且间隔 >= 10 秒才上报
+                const shouldUpload = !lastGpsCoordsRef.current || timeDiffSeconds >= 20 || (distanceMovedMeters >= 50 && timeDiffSeconds >= 10);
+
+                if (shouldUpload) {
+                    lastGpsUploadTimeRef.current = now;
+                    lastGpsCoordsRef.current = { lat: latitude, lng: longitude };
+
+                    try {
+                        await supabase.from('driver_locations').upsert({
+                            driver_id: user.uid,
+                            latitude,
+                            longitude,
+                            speed: speed || 0,
+                            heading: heading || 0,
+                            updated_at: new Date().toISOString(),
+                        });
+                    } catch (err) {
+                        console.warn('[Web GPS] 上报 Supabase 失败 (可忽略网络抖动):', err);
+                    }
                 }
             },
             (err) => {
@@ -712,8 +745,9 @@ const DriverDelivery: React.FC<DriverDeliveryProps> = ({ user }) => {
             }
 
             // Append to existing photos as a structured pair [DO, Product] per drop
-            const newPair = [doUrl, prodUrl];
-            const existingPhotos = selectedOrder.pod_photo_url ? selectedOrder.pod_photo_url.split(',') : [];
+            const newPair = [doUrl || '', prodUrl || ''];
+            const rawPod = selectedOrder.pod_photo_url ? selectedOrder.pod_photo_url.trim() : '';
+            const existingPhotos = rawPod ? rawPod.split(',') : [];
             const newPhotos = [...existingPhotos, ...newPair];
             const podPhotoUrl = newPhotos.join(',');
 
@@ -1203,17 +1237,64 @@ const DriverDelivery: React.FC<DriverDeliveryProps> = ({ user }) => {
 
                 if (unbindError) throw unbindError;
 
-                // 自动完成所有已 Loaded 且上传了卸货照片的订单 (满足扫码退车自动 selesai，且防止无图任务被完成)
-                const { error: orderError } = await supabase.from('sales_orders')
-                    .update({ status: 'Delivered' })
+                // 自动完成所有已 Loaded 且上传了足够卸货照片的订单 (严谨校验 multi-drop，防止未送完的订单被误杀)
+                const { data: driverLoadedOrders } = await supabase
+                    .from('sales_orders')
+                    .select('id, order_number, trip_drop_count, pod_photo_url, notes')
                     .eq('driver_id', user.uid)
-                    .eq('status', 'Loaded')
-                    .not('pod_photo_url', 'is', null)
-                    .neq('pod_photo_url', '');
+                    .eq('status', 'Loaded');
 
-                if (orderError) throw orderError;
+                let fullyCompletedCount = 0;
+                let partialCount = 0;
+                let unstartedCount = 0;
 
-                alert("✅ Syif Selesai & Lori dilepaskan! / Shift completed & Lorry unbound!");
+                if (driverLoadedOrders && driverLoadedOrders.length > 0) {
+                    const fullyDeliveredIds: string[] = [];
+                    const partialUpdates: { id: string; notes: string }[] = [];
+
+                    const now = new Date();
+                    const timeStr = now.toLocaleDateString('en-GB', { day: '2-digit', month: '2-digit' }) + ' ' +
+                                    now.toLocaleTimeString('en-GB', { hour: '2-digit', minute: '2-digit' });
+
+                    for (const ord of driverLoadedOrders) {
+                        const podStr = ord.pod_photo_url ? ord.pod_photo_url.trim() : '';
+                        const photos = podStr ? podStr.split(',').filter(Boolean) : [];
+                        // 每 2 张照片为一个 Drop 点（DO + Cargo）
+                        const completedDrops = Math.floor(photos.length / 2);
+                        const totalDrops = ord.trip_drop_count || 1;
+
+                        if (completedDrops >= totalDrops && totalDrops > 0 && photos.length > 0) {
+                            fullyDeliveredIds.push(ord.id);
+                            fullyCompletedCount++;
+                        } else if (completedDrops > 0) {
+                            // 部分完成：保留 Loaded 状态，并在 Notes 中记录部分完成时间与已完成 drop 数
+                            const partialNote = `[${timeStr}] ⚠️ Hantaran Separa / Partial Delivery (${completedDrops}/${totalDrops} drops completed). Unfinished cargo returned to base.`;
+                            const updatedNotes = ord.notes ? `${ord.notes}\n${partialNote}` : partialNote;
+                            partialUpdates.push({ id: ord.id, notes: updatedNotes });
+                            partialCount++;
+                        } else {
+                            unstartedCount++;
+                        }
+                    }
+
+                    if (fullyDeliveredIds.length > 0) {
+                        await supabase.from('sales_orders')
+                            .update({ status: 'Delivered' })
+                            .in('id', fullyDeliveredIds);
+                    }
+
+                    for (const pu of partialUpdates) {
+                        await supabase.from('sales_orders')
+                            .update({ notes: pu.notes })
+                            .eq('id', pu.id);
+                    }
+                }
+
+                if (partialCount > 0 || unstartedCount > 0) {
+                    alert(`✅ Syif Selesai & Lori dilepaskan! / Shift completed & Lorry unbound!\n\nRingkasan Pesanan / Orders Summary:\n- Selesai Sepenuhnya (Delivered): ${fullyCompletedCount}\n- Hantaran Separa (Incomplete Drops): ${partialCount}\n- Belum Dihantar (Unstarted): ${unstartedCount}\n\nPesanan yang belum selesai dikekalkan dalam status 'Dalam Proses' untuk tindakan susulan Logistik.`);
+                } else {
+                    alert("✅ Syif Selesai & Lori dilepaskan! / Shift completed & Lorry unbound!");
+                }
                 setCurrentLorry(null);
                 setIsOdometerModalOpen(false);
                 fetchTasks(); // Refresh lorry status

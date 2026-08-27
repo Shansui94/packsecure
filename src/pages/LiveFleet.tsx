@@ -51,6 +51,29 @@ function getCityCoordinate(addressText: string): [number, number] | null {
   return null;
 }
 
+const FACTORY_BASE_COORDS: Record<string, [number, number]> = {
+  taiping: [4.8500, 100.7333],
+  spd: [4.8500, 100.7333],
+  t1: [4.8500, 100.7333],
+  kelantan: [6.1254, 102.2381],
+  k1: [6.1254, 102.2381],
+  johor: [1.4927, 103.7414],
+  jb: [1.4927, 103.7414],
+  j1: [1.4927, 103.7414],
+  nilai: [2.8167, 101.7972],
+  n1: [2.8167, 101.7972],
+};
+
+function getBaseCoordinate(locationKey?: string): [number, number] {
+  const str = (locationKey || '').toLowerCase().trim();
+  for (const [key, coords] of Object.entries(FACTORY_BASE_COORDS)) {
+    if (str.includes(key)) {
+      return coords;
+    }
+  }
+  return [2.8167, 101.7972]; // 默认 Nilai 基地
+}
+
 // 动态生成 Leaflet 彩色图标 (鲜绿色 🟢: 有绑定司机 / 亮红色 🔴: 没有绑定司机)
 function createLorryIcon(hasDriver: boolean) {
   const bgColor = hasDriver ? '#22c55e' : '#ef4444'; // 鲜绿 (Green 500) / 亮红 (Red 500)
@@ -228,7 +251,8 @@ export default function LiveFleet() {
             }
 
             if (!lat) {
-              [lat, lng] = [2.8167, 101.7972]; // Packsecure Main Factory Base
+              const originKey = (lorry as any).factory_id || lorry.preferred_zone || (order && (order.trip_origin || order.delivery_zone)) || '';
+              [lat, lng] = getBaseCoordinate(originKey);
             }
 
             locMap[key] = {
@@ -274,7 +298,10 @@ export default function LiveFleet() {
             }
           }
 
-          if (!lat) [lat, lng] = [2.8167, 101.7972];
+          if (!lat) {
+            const originKey = order.trip_origin || order.delivery_zone || '';
+            [lat, lng] = getBaseCoordinate(originKey);
+          }
 
           locMap[driverId] = {
             id: driverId,

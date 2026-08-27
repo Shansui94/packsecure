@@ -550,6 +550,7 @@ const DeliveryOrderManagement: React.FC = () => {
 
     // --- Driver Payroll Rate State ---
     const [deliveryRates, setDeliveryRates] = useState<any[]>([]);
+    const [allUsersMap, setAllUsersMap] = useState<Record<string, string>>({});
     const [tripOrigin, setTripOrigin] = useState(activeLocation.toUpperCase());
     const [tripCategory, setTripCategory] = useState('');
     const [tripDropCount, setTripDropCount] = useState<number>(1);
@@ -650,6 +651,12 @@ const DeliveryOrderManagement: React.FC = () => {
             }
 
             if (usersRes.data) {
+                const userMap: Record<string, string> = {};
+                usersRes.data.forEach((u: any) => {
+                    userMap[u.id] = (u.name && u.name.trim() !== '') ? u.name : (u.email?.split('@')[0] || `User (${u.id.substring(0, 6)})`);
+                });
+                setAllUsersMap(userMap);
+
                 // Filter locally to ensure complex OR logic is handled correctly
                 const filteredUsers = usersRes.data.filter(u =>
                     u.role === 'Driver' ||
@@ -759,8 +766,8 @@ const DeliveryOrderManagement: React.FC = () => {
         });
 
         if (strictConflict) {
-            alert(`⛔ BLOCKED: ${driverName} is on leave from ${formatDateDMY(strictConflict.start_date)} to ${formatDateDMY(strictConflict.end_date)}.\n\nCannot assign orders on ${formatDateDMY(targetDateStr)}.`);
-            return false;
+            const proceed = window.confirm(`⚠️ PERINGATAN CUTI / LEAVE WARNING:\n\n${driverName} sedang bercuti dari ${formatDateDMY(strictConflict.start_date)} hingga ${formatDateDMY(strictConflict.end_date)}.\n(${driverName} is on leave from ${formatDateDMY(strictConflict.start_date)} to ${formatDateDMY(strictConflict.end_date)}).\n\nAdakah anda mahu meneruskan tugasan ini atas sebab kecemasan/penggantian?\n(Override and assign anyway for emergency/replacement?)`);
+            if (!proceed) return false;
         }
 
         // 2. WARN: Near-future Warning (3 days before leave starts)
@@ -865,14 +872,14 @@ const DeliveryOrderManagement: React.FC = () => {
         const unknownDriverIds = Array.from(assignedDriverIds).filter(id => !knownDriverIds.has(id));
         const unknownDrivers: User[] = unknownDriverIds.map(id => ({
             uid: id,
-            name: `Driver (ID: ${id.substring(0, 6)})`,
+            name: allUsersMap[id] || `Driver (${id.substring(0, 6)})`,
             email: '',
             role: 'Driver',
             base_location: activeLocation
         } as any));
 
         return [...baseDrivers, ...additionalDrivers, ...unknownDrivers];
-    }, [drivers, filteredOrders, activeLocation]);
+    }, [drivers, filteredOrders, activeLocation, allUsersMap]);
 
     const hasActiveListFilters =
         Boolean(searchTerm.trim()) ||
@@ -2389,7 +2396,9 @@ const DeliveryOrderManagement: React.FC = () => {
     function getDriverName(driverId?: string) {
         if (!driverId) return 'Unassigned';
         const d = drivers.find(u => u.uid === driverId);
-        return d ? d.name : 'Unknown Driver';
+        if (d?.name) return d.name;
+        if (allUsersMap[driverId]) return allUsersMap[driverId];
+        return `Driver (${driverId.substring(0, 6)})`;
     }
 
     // ... (rest of functions) ...
@@ -3203,7 +3212,19 @@ const DeliveryOrderManagement: React.FC = () => {
                                             {isUnassigned ? '?' : (driver.name || '?').charAt(0).toUpperCase()}
                                         </div>
                                         <div>
-                                            <div className={`font-bold text-sm ${isUnassigned ? 'text-slate-400' : 'text-white'}`}>{driver.name || 'Unknown'}</div>
+                                            <div className="flex items-center gap-2">
+                                                <span className={`font-bold text-sm ${isUnassigned ? 'text-slate-400' : 'text-white'}`}>{driver.name || 'Unknown'}</span>
+                                                {!isUnassigned && driverLeaves.some(l => l.employee_id === driver.uid && l.status === 'Approved' && (() => {
+                                                    const today = new Date().toLocaleDateString('en-CA');
+                                                    const start = (l.start_date || '').slice(0, 10);
+                                                    const end = (l.end_date || '').slice(0, 10);
+                                                    return today >= start && today <= end;
+                                                })()) && (
+                                                    <span className="text-[9px] font-black uppercase bg-rose-500/20 text-rose-400 border border-rose-500/40 px-1.5 py-0.5 rounded shadow-sm">
+                                                        🏖️ On Leave
+                                                    </span>
+                                                )}
+                                            </div>
                                             <div className="text-[10px] text-slate-500 font-mono flex items-center gap-2">
                                                 {!isUnassigned && (
                                                     <>
@@ -3378,8 +3399,8 @@ const DeliveryOrderManagement: React.FC = () => {
                                                             </div>
 
                                                             {order.notes && (
-                                                                <div className="text-[10px] text-amber-500/80 bg-amber-500/5 px-2 py-1 rounded border border-amber-500/10 mb-3 break-all font-medium leading-relaxed">
-                                                                    📝 {order.notes}
+                                                                <div className="text-[10px] text-amber-400/90 bg-amber-500/10 px-2.5 py-1.5 rounded-lg border border-amber-500/20 mb-3 break-words font-mono leading-relaxed">
+                                                                    📝 {order.notes.replace(/^\|\s*/, '').trim()}
                                                                 </div>
                                                             )}
 
@@ -3412,20 +3433,40 @@ const DeliveryOrderManagement: React.FC = () => {
                                                                 )}
                                                             </div>
 
-                                                            {/* Approve driver quantity amendments */}
-                                                            {order.status === 'Pending Approval' && (
-                                                                <div className="mt-4">
-                                                                    <button
-                                                                        onClick={(e) => {
-                                                                            e.stopPropagation();
-                                                                            handleApproveAmendment(order);
-                                                                        }}
-                                                                        className="w-full py-2.5 bg-red-600 hover:bg-red-500 text-white rounded-lg font-bold text-[10px] uppercase tracking-wider flex items-center justify-center gap-2 shadow-lg shadow-red-900/30 transition-all active:scale-95"
-                                                                    >
-                                                                        <Zap size={14} className="fill-white" /> Approve & Deduct Stock
-                                                                    </button>
-                                                                </div>
-                                                            )}
+                                                            {/* Approve driver quantity amendments or Extra Job */}
+                                                            {order.status === 'Pending Approval' && (() => {
+                                                                const isExtraJob = (order as any).job_type === 'Extra Job' || (order.orderNumber && order.orderNumber.startsWith('TRIP-JOB')) || (order.notes && order.notes.startsWith('[') && (!order.items || order.items.length === 0));
+
+                                                                if (isExtraJob) {
+                                                                    return (
+                                                                        <div className="mt-4">
+                                                                            <button
+                                                                                onClick={(e) => {
+                                                                                    e.stopPropagation();
+                                                                                    handleApproveAmendment(order);
+                                                                                }}
+                                                                                className="w-full py-2.5 bg-gradient-to-r from-emerald-600 to-teal-600 hover:from-emerald-500 hover:to-teal-500 text-white rounded-lg font-black text-[10px] uppercase tracking-wider flex items-center justify-center gap-2 shadow-lg shadow-emerald-950/40 transition-all active:scale-95 border border-emerald-500/30 cursor-pointer"
+                                                                            >
+                                                                                <span>📸</span> Semak & Lulus Tugasan / Review Extra Job
+                                                                            </button>
+                                                                        </div>
+                                                                    );
+                                                                }
+
+                                                                return (
+                                                                    <div className="mt-4">
+                                                                        <button
+                                                                            onClick={(e) => {
+                                                                                e.stopPropagation();
+                                                                                handleApproveAmendment(order);
+                                                                            }}
+                                                                            className="w-full py-2.5 bg-gradient-to-r from-amber-600 to-orange-600 hover:from-amber-500 hover:to-orange-500 text-white rounded-lg font-black text-[10px] uppercase tracking-wider flex items-center justify-center gap-2 shadow-lg shadow-amber-950/40 transition-all active:scale-95 border border-amber-500/30 cursor-pointer"
+                                                                        >
+                                                                            <Zap size={14} className="fill-white" /> Lulus Pindaan & Tolak Stok / Approve & Deduct Stock
+                                                                        </button>
+                                                                    </div>
+                                                                );
+                                                            })()}
                                                         </div>
                                                     )}
                                                 </Draggable>

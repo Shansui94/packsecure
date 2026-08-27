@@ -386,7 +386,7 @@ const PersonalMonthlyReport: React.FC<Props> = ({ user }) => {
     const [showPayrollModal, setShowPayrollModal] = useState<boolean>(false);
     const [currentUserRole, setCurrentUserRole] = useState<string>('');
 
-    const isDriver = viewedProfile?.role === 'Driver' || (!viewedProfile && user?.role === 'Driver');
+    const isDriver = viewedProfile?.role === 'Driver' || (!viewedProfile && user?.role === 'Driver') || deliveries.length > 0;
     const isAdminOrHR = ['SuperAdmin', 'Admin', 'HR'].includes(currentUserRole);
     const daysInMonth = new Date(selectedYear, selectedMonth, 0).getDate();
 
@@ -851,53 +851,47 @@ const PersonalMonthlyReport: React.FC<Props> = ({ user }) => {
                 setClaims([]);
             }
 
-            // G. Deliveries (For Drivers)
-            if (profileData?.role === 'Driver' || (!profileData && user.role === 'Driver')) {
-                const { data: dr } = await supabase.from('delivery_rates').select('*');
-                setDeliveryRates(dr || []);
+            // G. Deliveries & Rates (Fetched for all roles so pending tasks/trips are always visible)
+            const { data: dr } = await supabase.from('delivery_rates').select('*');
+            setDeliveryRates(dr || []);
 
-                const { data: rawDeliveryData } = await supabase
-                    .from('sales_orders')
-                    .select('*')
-                    .eq('driver_id', selectedEmployeeId);
+            const { data: rawDeliveryData } = await supabase
+                .from('sales_orders')
+                .select('*')
+                .eq('driver_id', selectedEmployeeId);
 
-                const monthlyDeliveries = (rawDeliveryData || []).filter(d => {
-                    if (d.status === 'Cancelled') return false; // Exclude rejected/cancelled orders
-                    const rawDate = d.deadline || (d.pod_timestamp ? d.pod_timestamp.split('T')[0] : (d.created_at ? d.created_at.split('T')[0] : null));
-                    if (!rawDate) return false;
-                    return rawDate >= firstDay && rawDate <= lastDayStr;
-                });
-                setDeliveries(monthlyDeliveries);
+            const monthlyDeliveries = (rawDeliveryData || []).filter(d => {
+                if (d.status === 'Cancelled') return false; // Exclude rejected/cancelled orders
+                const rawDate = d.deadline || (d.pod_timestamp ? d.pod_timestamp.split('T')[0] : (d.created_at ? d.created_at.split('T')[0] : null));
+                if (!rawDate) return false;
+                return rawDate >= firstDay && rawDate <= lastDayStr;
+            });
+            setDeliveries(monthlyDeliveries);
 
-                const confirmedSet = new Set<string>();
-                (rawDeliveryData || []).forEach(d => {
-                    const savedLocal = sessionStorage.getItem(`pmr_confirmed_trip_${d.id}`);
-                    if (d.notes?.includes('[DRIVER_CONFIRMED') || d.driver_confirmed === true || d.driver_verified === true || savedLocal === 'true') {
-                        confirmedSet.add(d.id);
-                    }
-                });
-                setConfirmedTripIds(confirmedSet);
-
-                // Determine if whole month is fully confirmed
-                const validTrips = (rawDeliveryData || []).filter(d => d.status !== 'Cancelled');
-                if (validTrips.length > 0 && validTrips.every(d => confirmedSet.has(d.id))) {
-                    setIsMonthlyConfirmed(true);
-                } else {
-                    setIsMonthlyConfirmed(false);
+            const confirmedSet = new Set<string>();
+            (rawDeliveryData || []).forEach(d => {
+                const savedLocal = sessionStorage.getItem(`pmr_confirmed_trip_${d.id}`);
+                if (d.notes?.includes('[DRIVER_CONFIRMED') || d.driver_confirmed === true || d.driver_verified === true || savedLocal === 'true') {
+                    confirmedSet.add(d.id);
                 }
+            });
+            setConfirmedTripIds(confirmedSet);
 
-                // Fetch tied lorry for driver / Dapatkan lorry yang terikat untuk pemandu
-                const { data: lorryData } = await supabase
-                    .from('lorries')
-                    .select('plate_number')
-                    .eq('driver_id', selectedEmployeeId)
-                    .maybeSingle();
-                setDriverLorryPlate(lorryData?.plate_number || 'N/A');
+            // Determine if whole month is fully confirmed
+            const validTrips = (rawDeliveryData || []).filter(d => d.status !== 'Cancelled');
+            if (validTrips.length > 0 && validTrips.every(d => confirmedSet.has(d.id))) {
+                setIsMonthlyConfirmed(true);
             } else {
-                setDeliveries([]);
-                setDeliveryRates([]);
-                setDriverLorryPlate('N/A');
+                setIsMonthlyConfirmed(false);
             }
+
+            // Fetch tied lorry for driver / Dapatkan lorry yang terikat untuk pemandu
+            const { data: lorryData } = await supabase
+                .from('lorries')
+                .select('plate_number')
+                .eq('driver_id', selectedEmployeeId)
+                .maybeSingle();
+            setDriverLorryPlate(lorryData?.plate_number || 'N/A');
 
         } catch (error) {
             console.error("Error fetching report data:", error);
@@ -2789,7 +2783,7 @@ const PersonalMonthlyReport: React.FC<Props> = ({ user }) => {
                             </div>
 
                             {/* Extra Job Pending Approval Banner */}
-                            {(selectedTrip.job_type === 'Extra Job' || selectedTrip.order_number?.startsWith('TRIP-JOB') || selectedTrip.order_number?.startsWith('TRIP-PU')) && selectedTrip.status !== 'Delivered' && selectedTrip.status !== 'Cancelled' && (
+                            {(selectedTrip.job_type === 'Extra Job' || selectedTrip.order_number?.startsWith('TRIP-JOB') || selectedTrip.order_number?.startsWith('TRIP-PU') || (selectedTrip.notes && selectedTrip.notes.startsWith('[') && (!selectedTrip.items || selectedTrip.items.length === 0))) && selectedTrip.status !== 'Delivered' && selectedTrip.status !== 'Cancelled' && (
                                 <div className="mb-6 p-4 bg-amber-500/10 border border-amber-500/30 rounded-2xl flex flex-col gap-3 shadow-lg">
                                     <div className="flex flex-col sm:flex-row items-start sm:items-center justify-between gap-3">
                                         <div className="flex items-center gap-3 text-amber-400 font-bold text-xs">
@@ -2856,6 +2850,48 @@ const PersonalMonthlyReport: React.FC<Props> = ({ user }) => {
                                                     className="px-4 py-2 bg-red-600 hover:bg-red-500 text-white rounded-xl text-xs font-bold transition-all shadow-md active:scale-95 cursor-pointer"
                                                 >
                                                     ❌ 驳回 / Reject
+                                                </button>
+                                            </div>
+                                        ) : (
+                                            <span className="text-[11px] text-amber-300 font-mono bg-amber-950/80 border border-amber-500/30 px-3 py-1.5 rounded-xl font-bold">
+                                                等待 Admin 审核
+                                            </span>
+                                        )}
+                                    </div>
+                                </div>
+                            )}
+
+                            {/* Regular Order Quantity Amendment Pending Approval Banner */}
+                            {selectedTrip.status === 'Pending Approval' && !(selectedTrip.job_type === 'Extra Job' || selectedTrip.order_number?.startsWith('TRIP-JOB') || selectedTrip.order_number?.startsWith('TRIP-PU') || (selectedTrip.notes && selectedTrip.notes.startsWith('[') && (!selectedTrip.items || selectedTrip.items.length === 0))) && !selectedTrip.notes?.includes('[PENDING_EDIT_PAYLOAD]') && (
+                                <div className="mb-6 p-4 bg-amber-500/10 border border-amber-500/30 rounded-2xl flex flex-col gap-3 shadow-lg">
+                                    <div className="flex flex-col sm:flex-row items-start sm:items-center justify-between gap-3">
+                                        <div className="flex items-center gap-3 text-amber-400 font-bold text-xs">
+                                            <Clock size={18} className="animate-spin text-amber-400" />
+                                            <div>
+                                                <div className="text-sm font-black text-amber-300">⚡ 司机改量待审核 / Quantity Amendment Pending Approval</div>
+                                                <div className="text-[11px] text-amber-400/80 font-normal mt-0.5">
+                                                    司机在送货/装车时调整了货物数量，等待 Admin 审核并自动调整库存。
+                                                </div>
+                                            </div>
+                                        </div>
+                                        {isAdminOrHR ? (
+                                            <div className="flex items-center gap-2 shrink-0">
+                                                <button
+                                                    type="button"
+                                                    onClick={async () => {
+                                                        if (!window.confirm(`批准 ${selectedTrip.order_number} 的修改？\nApprove changes and mark as Loaded?`)) return;
+                                                        const { error } = await supabase.from('sales_orders').update({ status: 'Loaded' }).eq('id', selectedTrip.id);
+                                                        if (error) {
+                                                            alert("Approval failed: " + error.message);
+                                                        } else {
+                                                            alert("✅ 已批准并扣减库存！ / Approved & stock adjusted!");
+                                                            setSelectedTrip(null);
+                                                            fetchData();
+                                                        }
+                                                    }}
+                                                    className="px-4 py-2 bg-emerald-600 hover:bg-emerald-500 text-white rounded-xl text-xs font-bold transition-all shadow-md active:scale-95 cursor-pointer"
+                                                >
+                                                    ✅ 批准并扣减库存 / Approve
                                                 </button>
                                             </div>
                                         ) : (

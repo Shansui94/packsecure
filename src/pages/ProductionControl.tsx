@@ -3150,8 +3150,11 @@ const ProductionControl: React.FC<ProductionControlProps> = ({ user, jobs = [], 
                                     audio={false}
                                     ref={webcamRef}
                                     screenshotFormat="image/jpeg"
+                                    screenshotQuality={0.95}
                                     videoConstraints={{
-                                        facingMode: "environment"
+                                        facingMode: "environment",
+                                        width: { ideal: 1920, min: 1280 },
+                                        height: { ideal: 1080, min: 720 }
                                     }}
                                     onUserMediaError={(err) => setWebcamError(err)}
                                     className="w-full h-full object-cover"
