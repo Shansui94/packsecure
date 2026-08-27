@@ -2401,8 +2401,19 @@ const ProductionControl: React.FC<ProductionControlProps> = ({ user, jobs = [], 
                                 </div>
                             )}
 
-                            {/* PRODUCTION VIEW: BUBBLE WRAP LANES OR PHOTO ONLY LOGGING */}
-                            {isSfOrRecycle ? (
+                            {/* PRODUCTION VIEW: RECYCLE MACHINE DEDICATED OR STRETCH FILM OR BUBBLE WRAP LANES */}
+                            {isRecycleMachine ? (
+                                <RecycleMachineControl
+                                    machineId={selectedMachine || 'T5-M05'}
+                                    machineName={currentMachineName}
+                                    operatorId={operatorId}
+                                    operatorEmployeeId={operatorEmployeeId}
+                                    operatorName={operatorName}
+                                    user={user}
+                                    isControlMode={isControlMode}
+                                    onTakeoverClick={() => initiateTakeover(selectedMachine!)}
+                                />
+                            ) : isSfMachine ? (
                                 <div className="flex flex-col gap-6 animate-fade-in">
                                     {/* 专属拍照录入板 */}
                                     <div className="bg-white/5 border border-white/10 rounded-3xl p-6 backdrop-blur-md">
