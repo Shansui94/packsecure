@@ -18,7 +18,8 @@ import {
     Calendar,
     ChevronRight,
     Play,
-    Filter
+    Filter,
+    RefreshCw
 } from 'lucide-react';
 import { supabase } from '../services/supabase';
 import { User } from '../types';
@@ -49,6 +50,7 @@ interface RecycleBatchLog {
     downtimeReason?: string;
     operatorName: string;
     photoUrl?: string;
+    userNote?: string;
 }
 
 const RECYCLE_MATERIALS = [
@@ -82,11 +84,8 @@ export const RecycleMachineControl: React.FC<RecycleMachineControlProps> = ({
     // Active Material Selection
     const [selectedMaterialKey, setSelectedMaterialKey] = useState<string>('SF.W');
 
-    // Date Range View (today vs all_recent)
-    const [viewRange, setViewRange] = useState<'today' | 'recent'>('today');
-
-    // Input States
-    const [weightInput, setWeightInput] = useState<string>('');
+    // Input States (default 15.0 KG for fast logging)
+    const [weightInput, setWeightInput] = useState<string>('15.0');
     const [userNote, setUserNote] = useState<string>('');
     const [downtimeReason, setDowntimeReason] = useState<string>('');
 
@@ -102,34 +101,27 @@ export const RecycleMachineControl: React.FC<RecycleMachineControlProps> = ({
     const fileInputRef = useRef<HTMLInputElement>(null);
     const webcamRef = useRef<Webcam>(null);
 
-    // Logs and Time Analytics
+    // All Historical Logs & Filter
     const [logs, setLogs] = useState<RecycleBatchLog[]>([]);
     const [loadingLogs, setLoadingLogs] = useState(true);
+    const [selectedDateFilter, setSelectedDateFilter] = useState<string>('ALL'); // 'ALL' | 'TODAY' | 'YYYY-MM-DD'
 
     // Lightbox modal for photos
     const [lightboxPhoto, setLightboxPhoto] = useState<string | null>(null);
 
-    // Fetch Logs for this Recycle Machine
+    // Fetch Logs for this Recycle Machine (Loads all historical logs)
     const fetchRecycleLogs = async () => {
         try {
             setLoadingLogs(true);
             const shortKey = machineId.split('-')[0].trim();
 
-            let query = supabase
+            const { data, error } = await supabase
                 .from('work_photos')
                 .select('*')
                 .or(`machine_id.eq.${machineId},machine_id.eq.${shortKey},machine_id.ilike.${shortKey}-%`)
-                .order('created_at', { ascending: true });
+                .order('created_at', { ascending: true })
+                .limit(500);
 
-            if (viewRange === 'today') {
-                const todayStart = new Date();
-                todayStart.setHours(0, 0, 0, 0);
-                query = query.gte('created_at', todayStart.toISOString());
-            } else {
-                query = query.limit(100);
-            }
-
-            const { data, error } = await query;
             if (error) throw error;
 
             if (data) {
@@ -185,11 +177,12 @@ export const RecycleMachineControl: React.FC<RecycleMachineControlProps> = ({
                         intervalMinutes: intervalMin,
                         downtimeReason: p.ai_raw_json?.downtimeReason,
                         operatorName: p.employee_name || 'Operator',
-                        photoUrl: p.photo_url
+                        photoUrl: p.photo_url,
+                        userNote: p.user_note
                     });
                 });
 
-                // Display newest first in timeline list
+                // Display newest first
                 setLogs(parsedLogs.reverse());
             }
         } catch (err) {
@@ -211,30 +204,40 @@ export const RecycleMachineControl: React.FC<RecycleMachineControlProps> = ({
         return () => {
             supabase.removeChannel(channel);
         };
-    }, [machineId, viewRange]);
+    }, [machineId]);
 
-    // Compute Live Metrics
-    const totalKg = logs.reduce((sum, item) => sum + item.weight, 0);
-    const totalBags = logs.length;
+    // Available Distinct Dates
+    const distinctDates = Array.from(new Set(logs.map(l => l.dateStr))).sort().reverse();
+    const todayStr = new Date(Date.now() + 8 * 3600000).toISOString().substring(0, 10);
+
+    // Filtered logs to display
+    const displayedLogs = logs.filter(l => {
+        if (selectedDateFilter === 'ALL') return true;
+        if (selectedDateFilter === 'TODAY') return l.dateStr === todayStr;
+        return l.dateStr === selectedDateFilter;
+    });
+
+    // Compute Metrics based on displayed scope
+    const totalKg = displayedLogs.reduce((sum, item) => sum + item.weight, 0);
+    const totalBags = displayedLogs.length;
 
     // Time calculations
-    const earliestTime = logs.length > 0 ? new Date(logs[logs.length - 1].created_at) : null;
-    const latestTime = logs.length > 0 ? new Date(logs[0].created_at) : null;
+    const earliestTime = displayedLogs.length > 0 ? new Date(displayedLogs[displayedLogs.length - 1].created_at) : null;
+    const latestTime = displayedLogs.length > 0 ? new Date(displayedLogs[0].created_at) : null;
 
     let totalSpanHours = 0;
     let activeHours = 0;
     let downtimeHours = 0;
     let avgCycleMinutes = 0;
 
-    if (earliestTime && latestTime && logs.length >= 2) {
+    if (earliestTime && latestTime && displayedLogs.length >= 2) {
         totalSpanHours = Math.max(0.1, (latestTime.getTime() - earliestTime.getTime()) / 3600000);
         
         let activeMin = 0;
         let downMin = 0;
         const validIntervals: number[] = [];
 
-        // Traverse in chronological order
-        const chronoLogs = [...logs].reverse();
+        const chronoLogs = [...displayedLogs].reverse();
         chronoLogs.forEach((item, i) => {
             if (i > 0) {
                 const diff = item.intervalMinutes;
@@ -250,7 +253,7 @@ export const RecycleMachineControl: React.FC<RecycleMachineControlProps> = ({
         avgCycleMinutes = validIntervals.length > 0 ? Math.round(validIntervals.reduce((a, b) => a + b, 0) / validIntervals.length) : 0;
         activeHours = Math.max(0.1, (activeMin + (avgCycleMinutes || 30)) / 60);
         downtimeHours = Math.round((downMin / 60) * 10) / 10;
-    } else if (logs.length === 1) {
+    } else if (displayedLogs.length === 1) {
         totalSpanHours = 0.5;
         activeHours = 0.5;
         avgCycleMinutes = 35;
@@ -259,7 +262,7 @@ export const RecycleMachineControl: React.FC<RecycleMachineControlProps> = ({
     const currentSpeedKgPerHour = activeHours > 0 ? Math.round((totalKg / activeHours) * 10) / 10 : 0;
 
     // Last Bag Cycle Time
-    const lastBagInterval = logs.length >= 2 ? logs[0].intervalMinutes : avgCycleMinutes || 35;
+    const lastBagInterval = logs.length >= 2 ? logs[0].intervalMinutes : 35;
     const showDowntimeWarning = lastBagInterval > 60;
 
     // Trigger AI OCR on scale photo
@@ -331,7 +334,7 @@ export const RecycleMachineControl: React.FC<RecycleMachineControlProps> = ({
         setPhotoPreview(null);
         setPhotoBlob(null);
         setPhotoBase64(null);
-        setWeightInput('');
+        setWeightInput('15.0');
         setUserNote('');
         setDowntimeReason('');
         setAiAnalysis(null);
@@ -375,7 +378,7 @@ export const RecycleMachineControl: React.FC<RecycleMachineControlProps> = ({
             const formattedNote = `${selectedConfig.key} | ${parsedWeight.toFixed(2)} KG | ${userNote || 'Recycle Output'}`;
 
             // 2. Insert into work_photos table for historical tracking
-            await supabase.from('work_photos').insert([{
+            const { data: insertedPhoto, error: photoErr } = await supabase.from('work_photos').insert([{
                 employee_id: effectiveOpEmpId,
                 employee_name: effectiveOpName,
                 machine_id: machineId,
@@ -389,7 +392,9 @@ export const RecycleMachineControl: React.FC<RecycleMachineControlProps> = ({
                     weight: parsedWeight,
                     downtimeReason: downtimeReason || null
                 }
-            }]);
+            }]).select().single();
+
+            if (photoErr) throw photoErr;
 
             // 3. Insert structured log into production_logs_v2 for company-wide ledger
             await supabase.from('production_logs_v2').insert([{
@@ -401,10 +406,27 @@ export const RecycleMachineControl: React.FC<RecycleMachineControlProps> = ({
                 alarm_count: 1
             }]);
 
-            // Reset form and refresh
+            // Optimistic UI update: instantly prepend the new record to table
+            const nowLocal = new Date(Date.now() + 8 * 3600000);
+            const newLogItem: RecycleBatchLog = {
+                id: insertedPhoto?.id || String(Date.now()),
+                created_at: new Date().toISOString(),
+                timeLocal: nowLocal.toISOString().substring(11, 16),
+                dateStr: nowLocal.toISOString().substring(0, 10),
+                materialKey: selectedConfig.key,
+                materialLabel: selectedConfig.label,
+                materialColor: selectedConfig.color,
+                weight: parsedWeight,
+                intervalMinutes: logs.length > 0 ? Math.round((Date.now() - new Date(logs[0].created_at).getTime()) / 60000) : 0,
+                downtimeReason: downtimeReason || undefined,
+                operatorName: effectiveOpName,
+                photoUrl: uploadedPhotoUrl,
+                userNote: formattedNote
+            };
+
+            setLogs(prev => [newLogItem, ...prev]);
             resetForm();
-            fetchRecycleLogs();
-            alert(`✅ 成功登记第 ${logs.length + 1} 包再生料！\n重量: ${parsedWeight.toFixed(2)} KG (${selectedConfig.label})`);
+            alert(`✅ 成功登记入库！\n第 ${logs.length + 1} 包: ${parsedWeight.toFixed(2)} KG (${selectedConfig.label})`);
         } catch (err: any) {
             console.error("Failed to submit recycle output:", err);
             alert("提交失败: " + err.message);
@@ -420,7 +442,7 @@ export const RecycleMachineControl: React.FC<RecycleMachineControlProps> = ({
                 {/* 累计总产出 */}
                 <div className="apple-glass rounded-2xl p-4 border border-white/10 flex flex-col justify-between relative overflow-hidden bg-gradient-to-br from-cyan-900/20 to-blue-900/10">
                     <div className="flex items-center justify-between text-cyan-400 text-xs font-bold uppercase tracking-wider">
-                        <span>{viewRange === 'today' ? '今日总产出' : '统计总产出'}</span>
+                        <span>{selectedDateFilter === 'ALL' ? '累计总产出' : (selectedDateFilter === 'TODAY' ? '今日总产出' : `${selectedDateFilter} 产出`)}</span>
                         <Scale size={16} />
                     </div>
                     <div className="mt-2">
@@ -536,7 +558,7 @@ export const RecycleMachineControl: React.FC<RecycleMachineControlProps> = ({
                     {/* WEIGHING & PHOTO REGISTRATION */}
                     <div className="space-y-4 pt-4 border-t border-white/10">
                         <span className="text-xs font-black uppercase tracking-widest text-purple-400 flex items-center gap-1.5">
-                            <Scale size={14} /> 2. 电子秤称重与拍照 / Weigh & Photo Record
+                            <Scale size={14} /> 2. 电子秤称重与快捷填报 / Enter Weight & Submit
                         </span>
 
                         <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
@@ -552,18 +574,18 @@ export const RecycleMachineControl: React.FC<RecycleMachineControlProps> = ({
                                         placeholder="例: 15.60"
                                         value={weightInput}
                                         onChange={(e) => setWeightInput(e.target.value)}
-                                        className="w-full bg-black/40 border border-cyan-500/30 focus:border-cyan-400 rounded-2xl py-3.5 px-4 text-2xl font-black text-white placeholder-gray-600 focus:outline-none tabular-nums shadow-inner"
+                                        className="w-full bg-black/40 border border-cyan-500/30 focus:border-cyan-400 rounded-2xl py-3 px-4 text-2xl font-black text-white placeholder-gray-600 focus:outline-none tabular-nums shadow-inner"
                                     />
                                     <span className="absolute right-4 text-xs font-bold text-cyan-400 uppercase">KG</span>
                                 </div>
-                                <div className="text-[10px] text-gray-500 flex gap-2">
-                                    <span>快捷预设:</span>
-                                    {['14.0', '15.0', '16.0', '20.0'].map(w => (
+                                <div className="text-[10px] text-gray-400 flex items-center gap-1.5 flex-wrap pt-1">
+                                    <span className="font-bold text-gray-500">常用重量:</span>
+                                    {['12.0', '13.5', '14.0', '15.0', '16.0', '18.0', '20.0'].map(w => (
                                         <button
                                             key={w}
                                             type="button"
                                             onClick={() => setWeightInput(w)}
-                                            className="text-cyan-400/80 hover:text-cyan-300 underline font-mono text-[10px]"
+                                            className={`px-2 py-0.5 rounded-lg border text-[10px] font-mono transition ${weightInput === w ? 'bg-cyan-500 text-black font-black border-cyan-400' : 'bg-white/5 border-white/10 text-cyan-300 hover:bg-white/10'}`}
                                         >
                                             {w}kg
                                         </button>
@@ -581,7 +603,7 @@ export const RecycleMachineControl: React.FC<RecycleMachineControlProps> = ({
                                     placeholder="如: 换网后第一包 / 杂质清理..."
                                     value={userNote}
                                     onChange={(e) => setUserNote(e.target.value)}
-                                    className="w-full bg-black/40 border border-white/10 focus:border-purple-400 rounded-2xl py-3.5 px-4 text-xs text-white placeholder-gray-600 focus:outline-none"
+                                    className="w-full bg-black/40 border border-white/10 focus:border-purple-400 rounded-2xl py-3 px-4 text-xs text-white placeholder-gray-600 focus:outline-none"
                                 />
                             </div>
                         </div>
@@ -634,7 +656,7 @@ export const RecycleMachineControl: React.FC<RecycleMachineControlProps> = ({
                 <div className="lg:col-span-5 apple-glass rounded-3xl p-6 border border-white/10 flex flex-col justify-between gap-4 shadow-xl">
                     <div className="flex items-center justify-between">
                         <span className="text-xs font-black uppercase tracking-widest text-purple-400 flex items-center gap-1.5">
-                            <Camera size={14} /> 现场电子秤拍照 (AI OCR)
+                            <Camera size={14} /> 现场电子秤拍照 (支持拍照/选图)
                         </span>
                         {photoPreview && (
                             <button onClick={resetForm} className="text-[10px] text-gray-400 hover:text-red-400 flex items-center gap-0.5">
@@ -677,7 +699,7 @@ export const RecycleMachineControl: React.FC<RecycleMachineControlProps> = ({
                                 </div>
                             </div>
                         ) : photoPreview ? (
-                            <div className="relative w-full h-full group">
+                            <div className="relative w-full h-full group flex items-center justify-center bg-black">
                                 <img src={photoPreview} alt="Scale Preview" className="w-full h-full max-h-[260px] object-contain" />
                                 {isAiScanning && (
                                     <div className="absolute inset-0 bg-black/70 flex flex-col items-center justify-center gap-2">
@@ -692,21 +714,21 @@ export const RecycleMachineControl: React.FC<RecycleMachineControlProps> = ({
                                     <Scale size={22} />
                                 </div>
                                 <div>
-                                    <p className="text-xs font-bold text-gray-300">对准电子秤仪表拍照</p>
-                                    <p className="text-[10px] text-gray-500 mt-0.5">AI 将自动读取并填写重量数值</p>
+                                    <p className="text-xs font-bold text-gray-300">现场电子秤拍照存证</p>
+                                    <p className="text-[10px] text-gray-500 mt-0.5">拍摄或上传电子秤照片（选填）</p>
                                 </div>
                                 <div className="flex gap-2 mt-2">
                                     <button
                                         type="button"
                                         onClick={() => setShowWebcam(true)}
-                                        className="px-3 py-2 bg-purple-600/20 hover:bg-purple-600/30 border border-purple-500/30 text-purple-300 rounded-xl text-xs font-bold flex items-center gap-1.5 transition"
+                                        className="px-3.5 py-2 bg-purple-600/20 hover:bg-purple-600/30 border border-purple-500/30 text-purple-300 rounded-xl text-xs font-bold flex items-center gap-1.5 transition"
                                     >
                                         <Camera size={13} /> 开启相机
                                     </button>
                                     <button
                                         type="button"
                                         onClick={() => fileInputRef.current?.click()}
-                                        className="px-3 py-2 bg-white/5 hover:bg-white/10 border border-white/10 text-gray-300 rounded-xl text-xs font-bold flex items-center gap-1.5 transition"
+                                        className="px-3.5 py-2 bg-white/5 hover:bg-white/10 border border-white/10 text-gray-300 rounded-xl text-xs font-bold flex items-center gap-1.5 transition"
                                     >
                                         <ImageIcon size={13} /> 相册选择
                                     </button>
@@ -728,52 +750,76 @@ export const RecycleMachineControl: React.FC<RecycleMachineControlProps> = ({
                 </div>
             </div>
 
-            {/* 3. RECYCLE TIMELINE & BATCH HISTORY (今日 / 历史造粒时间轴与流水明细) */}
+            {/* 3. RECYCLE TIMELINE & BATCH HISTORY (全量历史流水明细表 + 智能日期筛选) */}
             <div className="apple-glass rounded-3xl p-6 border border-white/10 shadow-xl">
-                <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3 mb-4">
+                <div className="flex flex-col md:flex-row md:items-center justify-between gap-3 mb-4">
                     <div className="flex items-center gap-2">
                         <History size={18} className="text-cyan-400" />
                         <h3 className="text-sm font-black uppercase tracking-wider text-white">
-                            {viewRange === 'today' ? '今日造粒流水' : '历史造粒流水 (最近100包)'} ({logs.length} 包)
+                            造粒称重流水明细 ({displayedLogs.length} 条记录 / 总库 {logs.length} 条)
                         </h3>
                     </div>
 
-                    <div className="flex items-center gap-2">
-                        {/* Toggle Range */}
-                        <div className="flex bg-white/5 p-1 rounded-xl border border-white/10 text-xs">
+                    {/* Date Selector Pills */}
+                    <div className="flex items-center gap-1.5 overflow-x-auto custom-scrollbar py-1">
+                        <button
+                            type="button"
+                            onClick={() => setSelectedDateFilter('ALL')}
+                            className={`px-3 py-1.5 rounded-xl text-xs font-bold transition shrink-0 border ${
+                                selectedDateFilter === 'ALL'
+                                    ? 'bg-cyan-500 text-black border-cyan-400 shadow-md'
+                                    : 'bg-white/5 border-white/10 text-gray-400 hover:text-white'
+                            }`}
+                        >
+                            全部历史 ({logs.length})
+                        </button>
+
+                        <button
+                            type="button"
+                            onClick={() => setSelectedDateFilter('TODAY')}
+                            className={`px-3 py-1.5 rounded-xl text-xs font-bold transition shrink-0 border ${
+                                selectedDateFilter === 'TODAY'
+                                    ? 'bg-cyan-500 text-black border-cyan-400 shadow-md'
+                                    : 'bg-white/5 border-white/10 text-gray-400 hover:text-white'
+                            }`}
+                        >
+                            今日 ({logs.filter(l => l.dateStr === todayStr).length})
+                        </button>
+
+                        {distinctDates.slice(0, 7).map(d => (
                             <button
+                                key={d}
                                 type="button"
-                                onClick={() => setViewRange('today')}
-                                className={`px-3 py-1 rounded-lg font-bold transition ${viewRange === 'today' ? 'bg-cyan-500 text-black shadow' : 'text-gray-400 hover:text-white'}`}
+                                onClick={() => setSelectedDateFilter(d)}
+                                className={`px-2.5 py-1.5 rounded-xl text-xs font-mono transition shrink-0 border ${
+                                    selectedDateFilter === d
+                                        ? 'bg-purple-600 text-white border-purple-400 font-bold shadow-md'
+                                        : 'bg-white/5 border-white/10 text-gray-400 hover:text-white'
+                                }`}
                             >
-                                今日数据
+                                {d.slice(5)} ({logs.filter(l => l.dateStr === d).length})
                             </button>
-                            <button
-                                type="button"
-                                onClick={() => setViewRange('recent')}
-                                className={`px-3 py-1 rounded-lg font-bold transition ${viewRange === 'recent' ? 'bg-cyan-500 text-black shadow' : 'text-gray-400 hover:text-white'}`}
-                            >
-                                最近历史 (含8月300+记录)
-                            </button>
-                        </div>
+                        ))}
 
                         <button
                             type="button"
                             onClick={fetchRecycleLogs}
-                            className="text-xs text-cyan-400 hover:text-cyan-300 flex items-center gap-1 font-bold px-2 py-1 bg-cyan-500/10 rounded-lg border border-cyan-500/20"
+                            className="p-1.5 bg-white/5 hover:bg-white/10 text-cyan-400 rounded-xl border border-white/10 shrink-0"
+                            title="刷新最新数据"
                         >
-                            刷新
+                            <RefreshCw size={14} />
                         </button>
                     </div>
                 </div>
 
                 {loadingLogs ? (
-                    <div className="py-12 flex justify-center items-center gap-2 text-gray-400 text-xs">
-                        <Loader className="animate-spin" size={16} /> 加载造粒数据中...
+                    <div className="py-16 flex flex-col justify-center items-center gap-2 text-gray-400 text-xs">
+                        <Loader className="animate-spin text-cyan-400" size={24} />
+                        <span>正在加载历史造粒与称重流水...</span>
                     </div>
-                ) : logs.length === 0 ? (
-                    <div className="py-12 text-center text-gray-500 text-xs font-mono">
-                        今日暂无新造粒称重记录。您可以点击右上角「最近历史」查看往日数据，或在上方提交今日第一包！
+                ) : displayedLogs.length === 0 ? (
+                    <div className="py-16 text-center text-gray-500 text-xs font-mono">
+                        未查询到选定日期的称重记录。请切换至「全部历史」或在上方登记新批次！
                     </div>
                 ) : (
                     <div className="overflow-x-auto">
@@ -781,17 +827,17 @@ export const RecycleMachineControl: React.FC<RecycleMachineControlProps> = ({
                             <thead>
                                 <tr className="border-b border-white/10 text-gray-400 font-mono text-[10px] uppercase">
                                     <th className="pb-3 px-3">序号</th>
-                                    <th className="pb-3 px-3">日期/时间</th>
+                                    <th className="pb-3 px-3">日期 / 时间</th>
                                     <th className="pb-3 px-3">物料类别</th>
                                     <th className="pb-3 px-3">单包重量</th>
-                                    <th className="pb-3 px-3">本包节拍</th>
+                                    <th className="pb-3 px-3">产出耗时</th>
                                     <th className="pb-3 px-3">操作员</th>
                                     <th className="pb-3 px-3 text-right">现场称重照片</th>
                                 </tr>
                             </thead>
                             <tbody className="divide-y divide-white/5 font-mono">
-                                {logs.map((log, idx) => {
-                                    const bagIndex = logs.length - idx;
+                                {displayedLogs.map((log, idx) => {
+                                    const bagIndex = displayedLogs.length - idx;
                                     const isDowntime = log.intervalMinutes > 60;
                                     return (
                                         <tr key={log.id} className="hover:bg-white/[0.02] transition">
@@ -799,8 +845,8 @@ export const RecycleMachineControl: React.FC<RecycleMachineControlProps> = ({
                                                 #{bagIndex}
                                             </td>
                                             <td className="py-3 px-3 text-white font-bold">
-                                                <span className="text-[10px] text-gray-400 mr-1">{log.dateStr}</span>
-                                                {log.timeLocal}
+                                                <span className="text-[10px] text-gray-400 mr-1.5 font-normal">{log.dateStr}</span>
+                                                <span>{log.timeLocal}</span>
                                             </td>
                                             <td className="py-3 px-3">
                                                 <span className={`px-2.5 py-1 rounded-lg text-[10px] font-bold border ${log.materialColor}`}>
@@ -811,7 +857,7 @@ export const RecycleMachineControl: React.FC<RecycleMachineControlProps> = ({
                                                 {log.weight.toFixed(2)} <span className="text-[10px] text-gray-400">KG</span>
                                             </td>
                                             <td className="py-3 px-3">
-                                                {idx === logs.length - 1 ? (
+                                                {idx === displayedLogs.length - 1 ? (
                                                     <span className="text-[10px] text-gray-500">首包开机</span>
                                                 ) : (
                                                     <span className={`text-[11px] font-bold ${isDowntime ? 'text-amber-400' : 'text-purple-300'}`}>
@@ -830,10 +876,10 @@ export const RecycleMachineControl: React.FC<RecycleMachineControlProps> = ({
                                                         onClick={() => setLightboxPhoto(log.photoUrl!)}
                                                         className="inline-flex items-center gap-1 text-[10px] font-bold text-purple-400 hover:text-purple-300 bg-purple-500/10 px-2.5 py-1 rounded-lg border border-purple-500/20 transition"
                                                     >
-                                                        <ImageIcon size={11} /> 查看称重照片
+                                                        <ImageIcon size={11} /> 称重照片
                                                     </button>
                                                 ) : (
-                                                    <span className="text-[10px] text-gray-600">已存档</span>
+                                                    <span className="text-[10px] text-gray-600">已入库</span>
                                                 )}
                                             </td>
                                         </tr>
