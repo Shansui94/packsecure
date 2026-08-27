@@ -20,6 +20,7 @@ import {
 } from 'lucide-react';
 import { supabase } from '../services/supabase';
 import { getMachineByCode, getMachineById } from '../services/productionService';
+import { RecycleMachineControl } from '../components/RecycleMachineControl';
 import { Scanner } from '@yudiel/react-qr-scanner';
 import MachineInspectionModal from '../components/MachineInspectionModal';
 import { useTranslation } from 'react-i18next';
@@ -2066,10 +2067,25 @@ const ProductionControl: React.FC<ProductionControlProps> = ({ user, jobs = [], 
         setMediaType('image');
     };
 
-    const isSfOrRecycle = machineMetadata && (
-        machineMetadata.name.toLowerCase().includes('stretch film') || 
-        machineMetadata.name.toLowerCase().includes('recycle')
+    const isRecycleMachine = Boolean(
+        (machineMetadata && (
+            machineMetadata.name?.toLowerCase().includes('recycle') || 
+            machineMetadata.type?.toLowerCase().includes('recycle')
+        )) ||
+        selectedMachine?.toLowerCase().includes('rec') ||
+        selectedMachine === 'T5-M05' ||
+        selectedMachine === 'N3-M03'
     );
+
+    const isSfMachine = Boolean(
+        (machineMetadata && (
+            machineMetadata.name?.toLowerCase().includes('stretch film')
+        )) ||
+        selectedMachine === 'T1-M03' ||
+        selectedMachine === 'T4-M04'
+    );
+
+    const isSfOrRecycle = isSfMachine || isRecycleMachine;
     return (
         <>
             <div className="min-h-screen text-apple-textMain dark:text-white font-sans selection:bg-apple-blue/30 overflow-x-hidden relative animate-fade-in">
