@@ -131,16 +131,24 @@ export const RecycleMachineControl: React.FC<RecycleMachineControlProps> = ({
                     const note = (p.user_note || '').trim().toUpperCase();
                     const ai = p.ai_description || '';
 
-                    // Match weight
+                    // Match weight with high precision
                     let weight = 0;
-                    const aiMatch = ai.match(/([\d.]+)\s*(?:公斤|kg|KG)/i) || 
-                                    ai.match(/重量(?:为|：|:)?\s*([\d.]+)/) || 
-                                    ai.match(/数值\s*([\d.]+)/) || 
-                                    ai.match(/显示\s*([\d.]+)/);
-                    if (aiMatch) {
-                        weight = parseFloat(aiMatch[1]);
-                    } else if (p.ai_raw_json && p.ai_raw_json.weight) {
+                    if (p.ai_raw_json && p.ai_raw_json.weight && Number(p.ai_raw_json.weight) > 0) {
                         weight = parseFloat(p.ai_raw_json.weight);
+                    } else {
+                        const noteMatch = note.match(/([\d.]+)\s*KG/i) || note.match(/\|\s*([\d.]+)/);
+                        if (noteMatch) {
+                            weight = parseFloat(noteMatch[1]);
+                        } else {
+                            const aiMatch = ai.match(/读数(?:为|：|:)?\s*([\d.]+)/) ||
+                                            ai.match(/([\d.]+)\s*(?:公斤|kg|KG)/i) || 
+                                            ai.match(/重量(?:为|：|:)?\s*([\d.]+)/) || 
+                                            ai.match(/数值\s*([\d.]+)/) || 
+                                            ai.match(/显示\s*([\d.]+)/);
+                            if (aiMatch) {
+                                weight = parseFloat(aiMatch[1]);
+                            }
+                        }
                     }
 
                     // Match material
@@ -272,15 +280,19 @@ export const RecycleMachineControl: React.FC<RecycleMachineControlProps> = ({
             const res = await fetch('/api/agent/ai-photo', {
                 method: 'POST',
                 headers: { 'Content-Type': 'application/json' },
-                body: JSON.stringify({ imageBase64: base64Img, mode: 'defect' })
+                body: JSON.stringify({ imageBase64: base64Img, mode: 'scale' })
             });
             if (res.ok) {
                 const data = await res.json();
                 if (data.weight !== undefined && Number(data.weight) > 0) {
-                    setWeightInput(String(data.weight));
+                    const cleanWeight = Number(data.weight).toFixed(2);
+                    setWeightInput(cleanWeight);
                 }
-                if (data.description) {
-                    setAiAnalysis(data.description);
+                if (data.material_type && ['SF.W', 'SF.B', 'BW.W', 'BW.B', 'MIX'].includes(data.material_type)) {
+                    setSelectedMaterialKey(data.material_type);
+                }
+                if (data.digits_raw_seen || data.description) {
+                    setAiAnalysis(`电子秤读数: ${data.weight} kg (仪表显示: ${data.digits_raw_seen || data.weight})`);
                 }
             }
         } catch (e) {

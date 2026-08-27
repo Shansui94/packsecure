@@ -48,7 +48,29 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
 
         // 2. Fallback default prompts if DB is empty or fails
         if (!prompt) {
-            if (targetMode === 'defect') {
+                        if (targetMode === 'scale' || targetMode === 'recycle') {
+                prompt = `You are an industrial vision AI specialized in reading digital weighing scales and electronic platform scales in manufacturing plants.
+
+TASK:
+1. Locate the digital screen / LED / LCD display of the electronic weighing scale in the photo.
+2. Accurately read the weight reading displayed on the scale.
+   - Look at the digits and decimal point very carefully (e.g., 0015.60, 14.85, 12.30, 20.00, 15.10, 9.80).
+   - In 7-segment LED/LCD displays, don't confuse 5 and 6, or 8 and 0, or 1 and 7.
+   - Check if there are leading unlit zeros (e.g. 0014.50 means 14.50 kg).
+   - Identify the unit (usually kg / 公斤).
+3. If there is a bag/material on the scale, identify its type/color (SF.W, SF.B, BW.W, BW.B, MIX).
+
+Return ONLY valid JSON (no markdown ticks):
+{
+  "scale_detected": true,
+  "weight": 14.50,
+  "unit": "kg",
+  "digits_raw_seen": "14.50",
+  "material_type": "SF.W",
+  "confidence": 0.95,
+  "description": "电子秤读数为 14.50 公斤"
+}`;
+            } else if (targetMode === 'defect') {
                 prompt = `你是工厂管理系统的 AI 助手。请分析这张放在电子称重器上的缺陷产品照片。
             
 你需要重点定位照片中的电子秤屏幕，读取并提取其显示的数字重量值（必须是一个数字，例如 10.90，不要带单位。如果读不出来，返回 0），并诊断或识别产品的缺陷原因。
