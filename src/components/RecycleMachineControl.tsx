@@ -17,7 +17,8 @@ import {
     History,
     Calendar,
     ChevronRight,
-    Play
+    Play,
+    Filter
 } from 'lucide-react';
 import { supabase } from '../services/supabase';
 import { User } from '../types';
@@ -39,6 +40,7 @@ interface RecycleBatchLog {
     id: string;
     created_at: string;
     timeLocal: string;
+    dateStr: string;
     materialKey: string;
     materialLabel: string;
     materialColor: string;
@@ -80,6 +82,9 @@ export const RecycleMachineControl: React.FC<RecycleMachineControlProps> = ({
     // Active Material Selection
     const [selectedMaterialKey, setSelectedMaterialKey] = useState<string>('SF.W');
 
+    // Date Range View (today vs all_recent)
+    const [viewRange, setViewRange] = useState<'today' | 'recent'>('today');
+
     // Input States
     const [weightInput, setWeightInput] = useState<string>('');
     const [userNote, setUserNote] = useState<string>('');
@@ -97,28 +102,34 @@ export const RecycleMachineControl: React.FC<RecycleMachineControlProps> = ({
     const fileInputRef = useRef<HTMLInputElement>(null);
     const webcamRef = useRef<Webcam>(null);
 
-    // Today's Logs and Time Analytics
-    const [todayLogs, setTodayLogs] = useState<RecycleBatchLog[]>([]);
+    // Logs and Time Analytics
+    const [logs, setLogs] = useState<RecycleBatchLog[]>([]);
     const [loadingLogs, setLoadingLogs] = useState(true);
 
     // Lightbox modal for photos
     const [lightboxPhoto, setLightboxPhoto] = useState<string | null>(null);
 
-    // Fetch Today's Logs for this Recycle Machine
-    const fetchTodayRecycleLogs = async () => {
+    // Fetch Logs for this Recycle Machine
+    const fetchRecycleLogs = async () => {
         try {
             setLoadingLogs(true);
-            const todayStart = new Date();
-            todayStart.setHours(0, 0, 0, 0);
+            const shortKey = machineId.split('-')[0].trim();
 
-            // Fetch from work_photos for T5-M05 / N3-M03
-            const { data, error } = await supabase
+            let query = supabase
                 .from('work_photos')
                 .select('*')
-                .eq('machine_id', machineId)
-                .gte('created_at', todayStart.toISOString())
+                .or(`machine_id.eq.${machineId},machine_id.eq.${shortKey},machine_id.ilike.${shortKey}-%`)
                 .order('created_at', { ascending: true });
 
+            if (viewRange === 'today') {
+                const todayStart = new Date();
+                todayStart.setHours(0, 0, 0, 0);
+                query = query.gte('created_at', todayStart.toISOString());
+            } else {
+                query = query.limit(100);
+            }
+
+            const { data, error } = await query;
             if (error) throw error;
 
             if (data) {
@@ -158,13 +169,15 @@ export const RecycleMachineControl: React.FC<RecycleMachineControlProps> = ({
                         intervalMin = Math.round((currTime - prevTime) / 60000);
                     }
 
-                    const localDate = new Date(p.created_at);
-                    const timeLocal = localDate.toLocaleTimeString('en-MY', { hour: '2-digit', minute: '2-digit' });
+                    const localDate = new Date(new Date(p.created_at).getTime() + 8 * 3600000);
+                    const timeLocal = localDate.toISOString().substring(11, 16);
+                    const dateStr = localDate.toISOString().substring(0, 10);
 
                     parsedLogs.push({
                         id: p.id,
                         created_at: p.created_at,
                         timeLocal,
+                        dateStr,
                         materialKey: matKey,
                         materialLabel: matConfig.label,
                         materialColor: matConfig.color,
@@ -177,7 +190,7 @@ export const RecycleMachineControl: React.FC<RecycleMachineControlProps> = ({
                 });
 
                 // Display newest first in timeline list
-                setTodayLogs(parsedLogs.reverse());
+                setLogs(parsedLogs.reverse());
             }
         } catch (err) {
             console.error("Error fetching recycle logs:", err);
@@ -187,33 +200,33 @@ export const RecycleMachineControl: React.FC<RecycleMachineControlProps> = ({
     };
 
     useEffect(() => {
-        fetchTodayRecycleLogs();
+        fetchRecycleLogs();
 
         const channel = supabase.channel(`recycle-logs-${machineId}`)
             .on('postgres_changes', { event: '*', schema: 'public', table: 'work_photos' }, () => {
-                fetchTodayRecycleLogs();
+                fetchRecycleLogs();
             })
             .subscribe();
 
         return () => {
             supabase.removeChannel(channel);
         };
-    }, [machineId]);
+    }, [machineId, viewRange]);
 
-    // Compute Today's Live Metrics
-    const totalTodayKg = todayLogs.reduce((sum, item) => sum + item.weight, 0);
-    const totalBags = todayLogs.length;
+    // Compute Live Metrics
+    const totalKg = logs.reduce((sum, item) => sum + item.weight, 0);
+    const totalBags = logs.length;
 
     // Time calculations
-    const earliestTime = todayLogs.length > 0 ? new Date(todayLogs[todayLogs.length - 1].created_at) : null;
-    const latestTime = todayLogs.length > 0 ? new Date(todayLogs[0].created_at) : null;
+    const earliestTime = logs.length > 0 ? new Date(logs[logs.length - 1].created_at) : null;
+    const latestTime = logs.length > 0 ? new Date(logs[0].created_at) : null;
 
     let totalSpanHours = 0;
     let activeHours = 0;
     let downtimeHours = 0;
     let avgCycleMinutes = 0;
 
-    if (earliestTime && latestTime && todayLogs.length >= 2) {
+    if (earliestTime && latestTime && logs.length >= 2) {
         totalSpanHours = Math.max(0.1, (latestTime.getTime() - earliestTime.getTime()) / 3600000);
         
         let activeMin = 0;
@@ -221,7 +234,7 @@ export const RecycleMachineControl: React.FC<RecycleMachineControlProps> = ({
         const validIntervals: number[] = [];
 
         // Traverse in chronological order
-        const chronoLogs = [...todayLogs].reverse();
+        const chronoLogs = [...logs].reverse();
         chronoLogs.forEach((item, i) => {
             if (i > 0) {
                 const diff = item.intervalMinutes;
@@ -237,16 +250,16 @@ export const RecycleMachineControl: React.FC<RecycleMachineControlProps> = ({
         avgCycleMinutes = validIntervals.length > 0 ? Math.round(validIntervals.reduce((a, b) => a + b, 0) / validIntervals.length) : 0;
         activeHours = Math.max(0.1, (activeMin + (avgCycleMinutes || 30)) / 60);
         downtimeHours = Math.round((downMin / 60) * 10) / 10;
-    } else if (todayLogs.length === 1) {
+    } else if (logs.length === 1) {
         totalSpanHours = 0.5;
         activeHours = 0.5;
         avgCycleMinutes = 35;
     }
 
-    const currentSpeedKgPerHour = activeHours > 0 ? Math.round((totalTodayKg / activeHours) * 10) / 10 : 0;
+    const currentSpeedKgPerHour = activeHours > 0 ? Math.round((totalKg / activeHours) * 10) / 10 : 0;
 
     // Last Bag Cycle Time
-    const lastBagInterval = todayLogs.length >= 2 ? todayLogs[0].intervalMinutes : avgCycleMinutes || 35;
+    const lastBagInterval = logs.length >= 2 ? logs[0].intervalMinutes : avgCycleMinutes || 35;
     const showDowntimeWarning = lastBagInterval > 60;
 
     // Trigger AI OCR on scale photo
@@ -390,8 +403,8 @@ export const RecycleMachineControl: React.FC<RecycleMachineControlProps> = ({
 
             // Reset form and refresh
             resetForm();
-            fetchTodayRecycleLogs();
-            alert(`✅ 成功登记第 ${todayLogs.length + 1} 包再生料！\n重量: ${parsedWeight.toFixed(2)} KG (${selectedConfig.label})`);
+            fetchRecycleLogs();
+            alert(`✅ 成功登记第 ${logs.length + 1} 包再生料！\n重量: ${parsedWeight.toFixed(2)} KG (${selectedConfig.label})`);
         } catch (err: any) {
             console.error("Failed to submit recycle output:", err);
             alert("提交失败: " + err.message);
@@ -404,15 +417,15 @@ export const RecycleMachineControl: React.FC<RecycleMachineControlProps> = ({
         <div className="flex flex-col gap-6 animate-fade-in">
             {/* 1. TOP LIVE TIME & CAPACITY ANALYTICS BAR (实时时间与产能指标大屏) */}
             <div className="grid grid-cols-2 md:grid-cols-5 gap-3">
-                {/* 今日总产出 */}
+                {/* 累计总产出 */}
                 <div className="apple-glass rounded-2xl p-4 border border-white/10 flex flex-col justify-between relative overflow-hidden bg-gradient-to-br from-cyan-900/20 to-blue-900/10">
                     <div className="flex items-center justify-between text-cyan-400 text-xs font-bold uppercase tracking-wider">
-                        <span>今日总产出</span>
+                        <span>{viewRange === 'today' ? '今日总产出' : '统计总产出'}</span>
                         <Scale size={16} />
                     </div>
                     <div className="mt-2">
                         <div className="text-3xl font-black text-white tabular-nums">
-                            {totalTodayKg.toFixed(1)} <span className="text-xs font-normal text-cyan-300">KG</span>
+                            {totalKg.toFixed(1)} <span className="text-xs font-normal text-cyan-300">KG</span>
                         </div>
                         <div className="text-[10px] text-gray-400 mt-0.5">累计 {totalBags} 包再生颗粒</div>
                     </div>
@@ -449,7 +462,7 @@ export const RecycleMachineControl: React.FC<RecycleMachineControlProps> = ({
                 {/* 今日运行时间 */}
                 <div className="apple-glass rounded-2xl p-4 border border-white/10 flex flex-col justify-between relative overflow-hidden bg-gradient-to-br from-amber-900/20 to-orange-900/10">
                     <div className="flex items-center justify-between text-amber-400 text-xs font-bold uppercase tracking-wider">
-                        <span>开机有效工时</span>
+                        <span>有效造粒工时</span>
                         <TrendingUp size={16} />
                     </div>
                     <div className="mt-2">
@@ -463,14 +476,14 @@ export const RecycleMachineControl: React.FC<RecycleMachineControlProps> = ({
                 {/* 首尾时间窗口 */}
                 <div className="col-span-2 md:col-span-1 apple-glass rounded-2xl p-4 border border-white/10 flex flex-col justify-between relative overflow-hidden bg-white/5">
                     <div className="flex items-center justify-between text-gray-400 text-xs font-bold uppercase tracking-wider">
-                        <span>今日作业窗口</span>
+                        <span>作业时间窗口</span>
                         <Calendar size={16} />
                     </div>
                     <div className="mt-2">
                         <div className="text-sm font-mono font-bold text-white">
-                            {earliestTime ? earliestTime.toLocaleTimeString('en-MY', { hour: '2-digit', minute: '2-digit' }) : '--:--'}
+                            {earliestTime ? new Date(earliestTime.getTime() + 8*3600000).toISOString().substring(11, 16) : '--:--'}
                             <span className="text-gray-500 mx-1">~</span>
-                            {latestTime ? latestTime.toLocaleTimeString('en-MY', { hour: '2-digit', minute: '2-digit' }) : '--:--'}
+                            {latestTime ? new Date(latestTime.getTime() + 8*3600000).toISOString().substring(11, 16) : '--:--'}
                         </div>
                         <div className="text-[10px] text-gray-400 mt-1 truncate">
                             值班: {operatorName || 'Aung (0024)'}
@@ -715,31 +728,52 @@ export const RecycleMachineControl: React.FC<RecycleMachineControlProps> = ({
                 </div>
             </div>
 
-            {/* 3. TODAY'S RECYCLE TIMELINE & BATCH HISTORY (今日造粒时间轴与称重明细流水) */}
+            {/* 3. RECYCLE TIMELINE & BATCH HISTORY (今日 / 历史造粒时间轴与流水明细) */}
             <div className="apple-glass rounded-3xl p-6 border border-white/10 shadow-xl">
-                <div className="flex items-center justify-between mb-4">
+                <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3 mb-4">
                     <div className="flex items-center gap-2">
                         <History size={18} className="text-cyan-400" />
                         <h3 className="text-sm font-black uppercase tracking-wider text-white">
-                            今日造粒时间轴与称重明细 ({todayLogs.length} 包)
+                            {viewRange === 'today' ? '今日造粒流水' : '历史造粒流水 (最近100包)'} ({logs.length} 包)
                         </h3>
                     </div>
-                    <button
-                        type="button"
-                        onClick={fetchTodayRecycleLogs}
-                        className="text-xs text-cyan-400 hover:text-cyan-300 flex items-center gap-1 font-bold"
-                    >
-                        刷新流水
-                    </button>
+
+                    <div className="flex items-center gap-2">
+                        {/* Toggle Range */}
+                        <div className="flex bg-white/5 p-1 rounded-xl border border-white/10 text-xs">
+                            <button
+                                type="button"
+                                onClick={() => setViewRange('today')}
+                                className={`px-3 py-1 rounded-lg font-bold transition ${viewRange === 'today' ? 'bg-cyan-500 text-black shadow' : 'text-gray-400 hover:text-white'}`}
+                            >
+                                今日数据
+                            </button>
+                            <button
+                                type="button"
+                                onClick={() => setViewRange('recent')}
+                                className={`px-3 py-1 rounded-lg font-bold transition ${viewRange === 'recent' ? 'bg-cyan-500 text-black shadow' : 'text-gray-400 hover:text-white'}`}
+                            >
+                                最近历史 (含8月300+记录)
+                            </button>
+                        </div>
+
+                        <button
+                            type="button"
+                            onClick={fetchRecycleLogs}
+                            className="text-xs text-cyan-400 hover:text-cyan-300 flex items-center gap-1 font-bold px-2 py-1 bg-cyan-500/10 rounded-lg border border-cyan-500/20"
+                        >
+                            刷新
+                        </button>
+                    </div>
                 </div>
 
                 {loadingLogs ? (
                     <div className="py-12 flex justify-center items-center gap-2 text-gray-400 text-xs">
-                        <Loader className="animate-spin" size={16} /> 加载今日造粒数据中...
+                        <Loader className="animate-spin" size={16} /> 加载造粒数据中...
                     </div>
-                ) : todayLogs.length === 0 ? (
+                ) : logs.length === 0 ? (
                     <div className="py-12 text-center text-gray-500 text-xs font-mono">
-                        今日暂无造粒称重记录。请在上方选择物料并拍摄电子秤提交第一包！
+                        今日暂无新造粒称重记录。您可以点击右上角「最近历史」查看往日数据，或在上方提交今日第一包！
                     </div>
                 ) : (
                     <div className="overflow-x-auto">
@@ -747,7 +781,7 @@ export const RecycleMachineControl: React.FC<RecycleMachineControlProps> = ({
                             <thead>
                                 <tr className="border-b border-white/10 text-gray-400 font-mono text-[10px] uppercase">
                                     <th className="pb-3 px-3">序号</th>
-                                    <th className="pb-3 px-3">时间</th>
+                                    <th className="pb-3 px-3">日期/时间</th>
                                     <th className="pb-3 px-3">物料类别</th>
                                     <th className="pb-3 px-3">单包重量</th>
                                     <th className="pb-3 px-3">本包节拍</th>
@@ -756,8 +790,8 @@ export const RecycleMachineControl: React.FC<RecycleMachineControlProps> = ({
                                 </tr>
                             </thead>
                             <tbody className="divide-y divide-white/5 font-mono">
-                                {todayLogs.map((log, idx) => {
-                                    const bagIndex = todayLogs.length - idx;
+                                {logs.map((log, idx) => {
+                                    const bagIndex = logs.length - idx;
                                     const isDowntime = log.intervalMinutes > 60;
                                     return (
                                         <tr key={log.id} className="hover:bg-white/[0.02] transition">
@@ -765,6 +799,7 @@ export const RecycleMachineControl: React.FC<RecycleMachineControlProps> = ({
                                                 #{bagIndex}
                                             </td>
                                             <td className="py-3 px-3 text-white font-bold">
+                                                <span className="text-[10px] text-gray-400 mr-1">{log.dateStr}</span>
                                                 {log.timeLocal}
                                             </td>
                                             <td className="py-3 px-3">
@@ -776,7 +811,7 @@ export const RecycleMachineControl: React.FC<RecycleMachineControlProps> = ({
                                                 {log.weight.toFixed(2)} <span className="text-[10px] text-gray-400">KG</span>
                                             </td>
                                             <td className="py-3 px-3">
-                                                {idx === todayLogs.length - 1 ? (
+                                                {idx === logs.length - 1 ? (
                                                     <span className="text-[10px] text-gray-500">首包开机</span>
                                                 ) : (
                                                     <span className={`text-[11px] font-bold ${isDowntime ? 'text-amber-400' : 'text-purple-300'}`}>
