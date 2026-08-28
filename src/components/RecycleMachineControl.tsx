@@ -1,4 +1,5 @@
 import React, { useState, useEffect, useRef } from 'react';
+import { createPortal } from 'react-dom';
 import Webcam from 'react-webcam';
 import { 
     Camera, 
@@ -903,22 +904,49 @@ export const RecycleMachineControl: React.FC<RecycleMachineControlProps> = ({
                 )}
             </div>
 
-            {/* LIGHTBOX MODAL */}
-            {lightboxPhoto && (
+            {/* LIGHTBOX MODAL (Portaled to document.body to avoid parent CSS transform clipping) */}
+            {lightboxPhoto && typeof document !== 'undefined' && createPortal(
                 <div
                     onClick={() => setLightboxPhoto(null)}
-                    className="fixed inset-0 z-50 bg-black/90 flex items-center justify-center p-4 backdrop-blur-md cursor-pointer animate-fade-in"
+                    className="fixed inset-0 z-[99999] bg-black/95 backdrop-blur-lg flex flex-col items-center justify-center p-4 sm:p-6 animate-fade-in select-none"
+                    style={{ position: 'fixed', top: 0, left: 0, right: 0, bottom: 0, width: '100vw', height: '100vh' }}
                 >
-                    <div className="relative max-w-2xl max-h-[85vh] bg-black rounded-3xl overflow-hidden border border-white/20 shadow-2xl">
-                        <img src={lightboxPhoto} alt="Scale Full Photo" className="w-full h-full object-contain" />
+                    {/* Header Controls */}
+                    <div 
+                        className="w-full max-w-3xl flex items-center justify-between py-2 px-4 mb-2 bg-white/10 rounded-2xl border border-white/10 text-white"
+                        onClick={(e) => e.stopPropagation()}
+                    >
+                        <div className="flex items-center gap-2 text-xs font-bold text-cyan-400">
+                            <Scale size={16} />
+                            <span>现场电子秤实拍照片 / Weighing Scale Photo</span>
+                        </div>
                         <button
+                            type="button"
                             onClick={() => setLightboxPhoto(null)}
-                            className="absolute top-4 right-4 p-2 bg-black/60 rounded-full text-white hover:bg-red-600 transition"
+                            className="px-3 py-1 bg-red-600/80 hover:bg-red-600 text-white font-bold text-xs rounded-xl flex items-center gap-1 transition-all active:scale-95 cursor-pointer shadow"
                         >
-                            <X size={18} />
+                            <X size={14} />
+                            <span>关闭 (Close)</span>
                         </button>
                     </div>
-                </div>
+
+                    {/* Image Container */}
+                    <div 
+                        onClick={(e) => e.stopPropagation()} 
+                        className="relative max-w-3xl max-h-[80vh] w-full flex items-center justify-center bg-black/80 rounded-3xl overflow-hidden border border-white/10 shadow-2xl p-2"
+                    >
+                        <img 
+                            src={lightboxPhoto} 
+                            alt="Scale Full Photo" 
+                            className="max-h-[75vh] w-auto max-w-full object-contain rounded-2xl shadow-inner" 
+                        />
+                    </div>
+
+                    <div className="text-[11px] text-gray-400 mt-2 font-mono">
+                        点击遮罩任意区域或右上角按钮即可关闭
+                    </div>
+                </div>,
+                document.body
             )}
         </div>
     );
