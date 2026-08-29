@@ -535,7 +535,7 @@ export const RecycleMachineControl: React.FC<RecycleMachineControlProps> = ({
                         </div>
                         <div className="text-[10px] text-gray-300 mt-1 truncate flex items-center gap-1 font-medium">
                             <span className="w-1.5 h-1.5 rounded-full bg-emerald-400"></span>
-                            <span>登记人: {user?.name || operatorName || 'Aung Naing'}</span>
+                            <span>当班操作员: {operatorName || (logs.length > 0 ? logs[0].operatorName : 'Aung Naing (6075)')}</span>
                         </div>
                     </div>
                 </div>
@@ -551,8 +551,8 @@ export const RecycleMachineControl: React.FC<RecycleMachineControlProps> = ({
                                 <Layers size={14} /> 1. 选择造粒物料种类 / Select Material
                             </span>
                             <div className="flex items-center gap-2">
-                                <span className="text-[10px] bg-white/10 px-2 py-0.5 rounded-lg text-cyan-300 font-medium">
-                                    👤 {user?.name || operatorName || 'Operator'}
+                                <span className="text-[10px] bg-cyan-500/10 border border-cyan-500/20 px-2.5 py-0.5 rounded-lg text-cyan-300 font-medium">
+                                    👤 当前操作: {user?.name || operatorName || 'Aung Naing'}
                                 </span>
                                 <span className="text-[10px] text-gray-400 font-mono">{machineName} ({machineId})</span>
                             </div>
