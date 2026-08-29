@@ -116,19 +116,22 @@ export const RecycleMachineControl: React.FC<RecycleMachineControlProps> = ({
             setLoadingLogs(true);
             const shortKey = machineId.split('-')[0].trim();
 
+            // Fetch up to 1000 newest records first to guarantee latest records are always present
             const { data, error } = await supabase
                 .from('work_photos')
                 .select('*')
                 .or(`machine_id.eq.${machineId},machine_id.eq.${shortKey},machine_id.ilike.${shortKey}-%`)
-                .order('created_at', { ascending: true })
-                .limit(500);
+                .order('created_at', { ascending: false })
+                .limit(1000);
 
             if (error) throw error;
 
             if (data) {
+                // Sort chronologically for accurate interval calculations
+                const chronoData = [...data].reverse();
                 const parsedLogs: RecycleBatchLog[] = [];
 
-                data.forEach((p, idx) => {
+                chronoData.forEach((p, idx) => {
                     const note = (p.user_note || '').trim().toUpperCase();
                     const ai = p.ai_description || '';
 
