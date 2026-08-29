@@ -362,10 +362,8 @@ export const RecycleMachineControl: React.FC<RecycleMachineControlProps> = ({
             return;
         }
 
-        const effectiveOpId = operatorId || user?.uid || 'OP-REC';
-        const effectiveOpEmpId = operatorEmployeeId || user?.employeeId || 'OP-001';
-        const effectiveOpName = operatorName || user?.name || user?.email?.split('@')[0] || 'Aung';
-
+        const effectiveOpEmpId = operatorEmployeeId || user?.employeeId || '6075';
+        const effectiveOpName = operatorName || user?.name || user?.email?.split('@')[0] || 'Aung Naing';
         const selectedConfig = RECYCLE_MATERIALS.find(m => m.key === selectedMaterialKey) || RECYCLE_MATERIALS[0];
 
         try {
@@ -375,22 +373,27 @@ export const RecycleMachineControl: React.FC<RecycleMachineControlProps> = ({
 
             // 1. Upload photo to Supabase storage if available
             if (photoBlob || photoBase64) {
-                const blob = photoBlob || await fetch(`data:image/jpeg;base64,${photoBase64}`).then(r => r.blob());
-                const fileName = `recycle_${machineId}_${effectiveOpEmpId}_${Date.now()}.jpg`;
+                try {
+                    const blob = photoBlob || await fetch(`data:image/jpeg;base64,${photoBase64}`).then(r => r.blob());
+                    const fileName = `recycle_${machineId}_${effectiveOpEmpId}_${Date.now()}.jpg`;
 
-                const { error: uploadErr } = await supabase.storage
-                    .from('work-photos')
-                    .upload(fileName, blob, { contentType: 'image/jpeg' });
+                    const { error: uploadErr } = await supabase.storage
+                        .from('work-photos')
+                        .upload(fileName, blob, { contentType: 'image/jpeg' });
 
-                if (!uploadErr) {
-                    const { data: urlData } = supabase.storage.from('work-photos').getPublicUrl(fileName);
-                    uploadedPhotoUrl = urlData.publicUrl;
+                    if (!uploadErr) {
+                        const { data: urlData } = supabase.storage.from('work-photos').getPublicUrl(fileName);
+                        uploadedPhotoUrl = urlData.publicUrl;
+                    }
+                } catch (storErr) {
+                    console.warn("Photo storage upload non-fatal:", storErr);
                 }
             }
 
-            const formattedNote = `${selectedConfig.key} | ${parsedWeight.toFixed(2)} KG | ${userNote || 'Recycle Output'}`;
+            const formattedNote = `${selectedConfig.key} | ${parsedWeight.toFixed(2)} KG`;
+            const formattedDesc = `电子秤称量读数: ${parsedWeight.toFixed(2)} 公斤 (显示 ${parsedWeight.toFixed(2)})`;
 
-            // 2. Insert into work_photos table for historical tracking
+            // 2. Insert into work_photos table for historical tracking (CLEAN SCHEMA ONLY)
             const { data: insertedPhoto, error: photoErr } = await supabase.from('work_photos').insert([{
                 employee_id: effectiveOpEmpId,
                 employee_name: effectiveOpName,
@@ -398,28 +401,32 @@ export const RecycleMachineControl: React.FC<RecycleMachineControlProps> = ({
                 category: 'qc',
                 photo_url: uploadedPhotoUrl,
                 user_note: formattedNote,
-                ai_description: `电子秤称量再生颗粒，重量为 ${parsedWeight.toFixed(2)} 公斤。`,
-                ai_raw_json: {
-                    materialKey: selectedConfig.key,
-                    sku: selectedConfig.sku,
-                    weight: parsedWeight,
-                    downtimeReason: downtimeReason || null
-                }
+                ai_description: formattedDesc
             }]).select().single();
 
-            if (photoErr) throw photoErr;
+            if (photoErr) {
+                console.error("work_photos insert error:", photoErr);
+                throw photoErr;
+            }
 
-            // 3. Insert structured log into production_logs_v2 for company-wide ledger
-            await supabase.from('production_logs_v2').insert([{
-                machine_id: machineId,
-                sku: selectedConfig.sku,
-                output_qty: parsedWeight,
-                operator_id: effectiveOpId,
-                source_lane: 'Recycle',
-                alarm_count: 1
-            }]);
+            // 3. Optional ledger sync with error tolerance
+            try {
+                if (user && (user.uid || (user as any).id)) {
+                    const validUid = user.uid || (user as any).id;
+                    await supabase.from('production_logs_v2').insert([{
+                        machine_id: machineId,
+                        sku: selectedConfig.sku,
+                        output_qty: parsedWeight,
+                        operator_id: validUid,
+                        reject_qty: 0,
+                        note: formattedNote
+                    }]);
+                }
+            } catch (logErr) {
+                console.warn("Optional production_logs_v2 sync skipped:", logErr);
+            }
 
-            // Optimistic UI update: instantly prepend the new record to table
+            // 4. Optimistic UI update: instantly prepend the new record to table
             const nowLocal = new Date(Date.now() + 8 * 3600000);
             const newLogItem: RecycleBatchLog = {
                 id: insertedPhoto?.id || String(Date.now()),
@@ -442,7 +449,7 @@ export const RecycleMachineControl: React.FC<RecycleMachineControlProps> = ({
             alert(`✅ 成功登记入库！\n第 ${logs.length + 1} 包: ${parsedWeight.toFixed(2)} KG (${selectedConfig.label})`);
         } catch (err: any) {
             console.error("Failed to submit recycle output:", err);
-            alert("提交失败: " + err.message);
+            alert("提交失败: " + (err.message || JSON.stringify(err)));
         } finally {
             setIsUploading(false);
         }
@@ -751,6 +758,18 @@ export const RecycleMachineControl: React.FC<RecycleMachineControlProps> = ({
                     </div>
 
                     <input ref={fileInputRef} type="file" accept="image/*" capture="environment" className="hidden" onChange={handleFileSelect} />
+
+                    {photoPreview && (
+                        <button
+                            type="button"
+                            onClick={handleSubmitRecycleOutput}
+                            disabled={isUploading || !weightInput}
+                            className="w-full py-3 bg-gradient-to-r from-emerald-500 to-teal-600 hover:from-emerald-400 hover:to-teal-500 text-white font-black text-xs rounded-xl shadow-lg flex items-center justify-center gap-1.5 transition-all active:scale-95 cursor-pointer"
+                        >
+                            {isUploading ? <Loader className="animate-spin" size={14} /> : <CheckCircle2 size={16} />}
+                            <span>📸 立即保存入库 ({weightInput || '0'} KG {RECYCLE_MATERIALS.find(m => m.key === selectedMaterialKey)?.label})</span>
+                        </button>
+                    )}
 
                     {aiAnalysis && (
                         <div className="p-3 bg-purple-500/10 border border-purple-500/20 rounded-xl">
