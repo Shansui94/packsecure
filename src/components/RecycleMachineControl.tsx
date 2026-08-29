@@ -362,8 +362,14 @@ export const RecycleMachineControl: React.FC<RecycleMachineControlProps> = ({
             return;
         }
 
-        const effectiveOpEmpId = operatorEmployeeId || user?.employeeId || '6075';
-        const effectiveOpName = operatorName || user?.name || user?.email?.split('@')[0] || 'Aung Naing';
+        // Accurately resolve who is submitting: Logged-in User (Admin/SuperAdmin/Operator) or bound Operator
+        const effectiveOpName = (user?.name) 
+            ? user.name 
+            : (operatorName || user?.email?.split('@')[0] || 'Operator');
+
+        const effectiveOpEmpId = (user?.employeeId)
+            ? user.employeeId
+            : (operatorEmployeeId || (user?.role === 'SuperAdmin' ? 'ADMIN' : 'OP-001'));
         const selectedConfig = RECYCLE_MATERIALS.find(m => m.key === selectedMaterialKey) || RECYCLE_MATERIALS[0];
 
         try {
@@ -527,8 +533,9 @@ export const RecycleMachineControl: React.FC<RecycleMachineControlProps> = ({
                             <span className="text-gray-500 mx-1">~</span>
                             {latestTime ? new Date(latestTime.getTime() + 8*3600000).toISOString().substring(11, 16) : '--:--'}
                         </div>
-                        <div className="text-[10px] text-gray-400 mt-1 truncate">
-                            值班: {operatorName || 'Aung (0024)'}
+                        <div className="text-[10px] text-gray-300 mt-1 truncate flex items-center gap-1 font-medium">
+                            <span className="w-1.5 h-1.5 rounded-full bg-emerald-400"></span>
+                            <span>登记人: {user?.name || operatorName || 'Aung Naing'}</span>
                         </div>
                     </div>
                 </div>
@@ -543,7 +550,12 @@ export const RecycleMachineControl: React.FC<RecycleMachineControlProps> = ({
                             <span className="text-xs font-black uppercase tracking-widest text-cyan-400 flex items-center gap-1.5">
                                 <Layers size={14} /> 1. 选择造粒物料种类 / Select Material
                             </span>
-                            <span className="text-[10px] text-gray-400 font-mono">{machineName} ({machineId})</span>
+                            <div className="flex items-center gap-2">
+                                <span className="text-[10px] bg-white/10 px-2 py-0.5 rounded-lg text-cyan-300 font-medium">
+                                    👤 {user?.name || operatorName || 'Operator'}
+                                </span>
+                                <span className="text-[10px] text-gray-400 font-mono">{machineName} ({machineId})</span>
+                            </div>
                         </div>
 
                         {/* 5 Material Big Buttons */}
