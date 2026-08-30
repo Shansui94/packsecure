@@ -1,7 +1,8 @@
 import React, { useState, useEffect, useMemo } from 'react';
 import { supabase } from '../services/supabase';
-import { Search, RefreshCw, Box, Filter, X, TrendingUp, TrendingDown, Clipboard, ArrowUpDown, Truck, MapPin, Hash, ChevronLeft, ChevronRight, LayoutGrid, List } from 'lucide-react';
+import { Search, RefreshCw, Box, Filter, X, TrendingUp, TrendingDown, Clipboard, ArrowUpDown, Truck, MapPin, Hash, ChevronLeft, ChevronRight, LayoutGrid, List, Scale } from 'lucide-react';
 import { WAREHOUSES } from '../data/factoryData';
+import { StockReconciliationDashboard } from '../components/StockReconciliationDashboard';
 
 // --- TYPES ---
 interface StockRow {
