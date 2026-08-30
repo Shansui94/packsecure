@@ -5,6 +5,7 @@ import { SalesOrder } from '../types';
 import { Scanner } from '@yudiel/react-qr-scanner';
 import { parsePrepPhotos } from '../utils/prepPhotos';
 import { dataURLtoBlob } from '../utils/imageCompress';
+import { deductStockForOrder } from '../services/stockService';
 
 
 
@@ -394,7 +395,16 @@ const DriverDelivery: React.FC<DriverDeliveryProps> = ({ user }) => {
                     proof_of_load_url: photoUrl
                 }).eq('id', selectedOrder.id);
 
-                alert("⚠️ Kuantiti pesanan berubah. Menunggu kelulusan logistik. / Order quantity changed. Pending logistics approval.");
+                // ⚡ Immediately deduct driver's actual loaded quantity from warehouse
+                await deductStockForOrder({
+                    id: selectedOrder.id,
+                    order_number: selectedOrder.orderNumber,
+                    trip_origin: (selectedOrder as any).trip_origin || (selectedOrder as any).tripOrigin,
+                    items: updatedItems,
+                    driver_name: user?.name
+                });
+
+                alert("⚠️ Kuantiti pesanan berubah. Stok ditolak mengikut muatan sebenar & Menunggu kelulusan logistik. / Order quantity changed. Stock deducted according to actual load & Pending logistics approval.");
 
                 // Optimistic Update: Move to Pending Approval locally so button changes to Confirm Delivery immediately
                 setTasks(prev => prev.map(t => {
@@ -410,9 +420,7 @@ const DriverDelivery: React.FC<DriverDeliveryProps> = ({ user }) => {
                 }));
 
             } else {
-                // 2. NO AMENDMENTS - Stock already deducted at order creation via DB trigger
-                //    Just update status to Loaded
-
+                // 2. NO AMENDMENTS - Deduct stock immediately upon loading (Naik Barang)
                 const { data: updatedData, error: updateError } = await supabase.from('sales_orders').update({
                     status: 'Loaded',
                     proof_of_load_url: photoUrl
