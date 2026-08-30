@@ -557,6 +557,14 @@ const LiveStock: React.FC = () => {
     const [viewMode, setViewMode] = useState<'card' | 'list'>(() => {
         return (localStorage.getItem('livestock_view') as 'card' | 'list') || 'card';
     });
+    const [activeTab, setActiveTab] = useState<'stock' | 'reconciliation'>('stock');
+    const [reconcileSku, setReconcileSku] = useState<string | null>(null);
+
+    const handleOpenReconcile = (sku: string) => {
+        setReconcileSku(sku);
+        setActiveTab('reconciliation');
+        window.scrollTo({ top: 0, behavior: 'smooth' });
+    };
 
     useEffect(() => {
         localStorage.setItem('livestock_view', viewMode);
@@ -750,6 +758,49 @@ const LiveStock: React.FC = () => {
         <div className="min-h-screen bg-white dark:bg-[#0a0a0e] text-slate-900 dark:text-white p-4 md:p-8 pb-24 transition-colors duration-300">
             <div className="max-w-7xl mx-auto">
 
+                {/* ── MAIN TAB SWITCHER (LIVE STOCK vs RECONCILIATION & AUDIT) ── */}
+                <div className="flex items-center gap-3 p-1.5 bg-black/40 border border-white/10 rounded-2xl w-fit mb-6 shadow-xl">
+                    <button
+                        type="button"
+                        onClick={() => setActiveTab('stock')}
+                        className={`flex items-center gap-2 px-5 py-2.5 rounded-xl font-black text-xs transition-all active:scale-95 cursor-pointer ${
+                            activeTab === 'stock'
+                                ? 'bg-gradient-to-r from-cyan-500 to-blue-600 text-black shadow-lg shadow-cyan-950/50'
+                                : 'text-gray-400 hover:text-white hover:bg-white/5'
+                        }`}
+                    >
+                        <LayoutGrid size={15} />
+                        <span>📦 实时库存大屏 (Live Stock)</span>
+                    </button>
+
+                    <button
+                        type="button"
+                        onClick={() => {
+                            setReconcileSku(null);
+                            setActiveTab('reconciliation');
+                        }}
+                        className={`flex items-center gap-2 px-5 py-2.5 rounded-xl font-black text-xs transition-all active:scale-95 cursor-pointer ${
+                            activeTab === 'reconciliation'
+                                ? 'bg-gradient-to-r from-purple-500 to-indigo-600 text-white shadow-lg shadow-purple-950/50'
+                                : 'text-gray-400 hover:text-white hover:bg-white/5'
+                        }`}
+                    >
+                        <Scale size={15} />
+                        <span>⚖️ 产销存平衡与盘点稽核 (Reconciliation & Audit)</span>
+                        <span className="px-1.5 py-0.2 rounded text-[9px] bg-purple-400 text-black font-black uppercase">
+                            NEW
+                        </span>
+                    </button>
+                </div>
+
+                {/* ── CONDITIONAL RENDERING ── */}
+                {activeTab === 'reconciliation' ? (
+                    <StockReconciliationDashboard
+                        initialSku={reconcileSku}
+                        onBackToMatrix={() => setActiveTab('stock')}
+                    />
+                ) : (
+                    <>
                 {/* ── Header ── */}
                 <div className="flex flex-col md:flex-row md:items-end justify-between gap-4 mb-8">
                     <div>
@@ -1013,6 +1064,8 @@ const LiveStock: React.FC = () => {
                             );
                         })}
                     </div>
+                )}
+                    </>
                 )}
             </div>
 
