@@ -8,6 +8,7 @@ import {
 } from 'lucide-react';
 import { supabase } from '../services/supabase';
 import { getV2Items } from '../services/apiV2';
+import { deductStockForOrder } from '../services/stockService';
 import * as XLSX from 'xlsx';
 
 const normalizeWarehouseName = (loc: string): string => {
@@ -861,7 +862,7 @@ const PersonalMonthlyReport: React.FC<Props> = ({ user }) => {
                 .eq('driver_id', selectedEmployeeId);
 
             const monthlyDeliveries = (rawDeliveryData || []).filter(d => {
-                if (d.status === 'Cancelled') return false; // Exclude rejected/cancelled orders
+                if (d.status !== 'Delivered') return false; // 🔒 仅统计已实际送达完成的 Trip（排除未完成/未进行的计划单与装车单）
                 const rawDate = d.deadline || (d.pod_timestamp ? d.pod_timestamp.split('T')[0] : (d.created_at ? d.created_at.split('T')[0] : null));
                 if (!rawDate) return false;
                 return rawDate >= firstDay && rawDate <= lastDayStr;
@@ -869,7 +870,7 @@ const PersonalMonthlyReport: React.FC<Props> = ({ user }) => {
             setDeliveries(monthlyDeliveries);
 
             const confirmedSet = new Set<string>();
-            (rawDeliveryData || []).forEach(d => {
+            (monthlyDeliveries || []).forEach(d => {
                 const savedLocal = sessionStorage.getItem(`pmr_confirmed_trip_${d.id}`);
                 if (d.notes?.includes('[DRIVER_CONFIRMED') || d.driver_confirmed === true || d.driver_verified === true || savedLocal === 'true') {
                     confirmedSet.add(d.id);
@@ -878,7 +879,7 @@ const PersonalMonthlyReport: React.FC<Props> = ({ user }) => {
             setConfirmedTripIds(confirmedSet);
 
             // Determine if whole month is fully confirmed
-            const validTrips = (rawDeliveryData || []).filter(d => d.status !== 'Cancelled');
+            const validTrips = (monthlyDeliveries || []).filter(d => d.status === 'Delivered');
             if (validTrips.length > 0 && validTrips.every(d => confirmedSet.has(d.id))) {
                 setIsMonthlyConfirmed(true);
             } else {
@@ -2884,6 +2885,13 @@ const PersonalMonthlyReport: React.FC<Props> = ({ user }) => {
                                                         if (error) {
                                                             alert("Approval failed: " + error.message);
                                                         } else {
+                                                            // ⚡ Deduct stock for approved loaded trip
+                                                            await deductStockForOrder({
+                                                                id: selectedTrip.id,
+                                                                order_number: selectedTrip.order_number,
+                                                                trip_origin: selectedTrip.trip_origin,
+                                                                items: selectedTrip.items
+                                                            });
                                                             alert("✅ 已批准并扣减库存！ / Approved & stock adjusted!");
                                                             setSelectedTrip(null);
                                                             fetchData();

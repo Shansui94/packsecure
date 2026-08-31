@@ -35,3 +35,12 @@ functions/service-account-key.json
 
 .vercel
 .env*.local
+
+# Temporary / Scratch scripts
+*.txt
+scratch/
+scratch_*.mjs
+deploy_preview.ps1
+orig_*
+upload.mjs
+update.cjs

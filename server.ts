@@ -8,12 +8,18 @@ import visionHandler from './api/agent/vision';
 import geocodeHandler from './api/geocode';
 import aiPhotoHandler from './api/agent/ai-photo';
 import lorryLatestMileageHandler from './api/lorry-latest-mileage';
+import v2DocumentsHandler, {
+    handleProcess as documentProcessHandler,
+    handleDashboardMetrics as dashboardMetricsHandler,
+    handleEntities as documentEntitiesHandler,
+    handleLogs as documentLogsHandler
+} from './api/v2-documents';
 
 const app = express();
 const PORT = 8080;
 
 app.use(cors());
-app.use(express.json({ limit: '10mb' }));
+app.use(express.json({ limit: '25mb' }));
 
 const mountVercelHandler = (path: string, handler: (req: any, res: any) => Promise<void | unknown>) => {
     app.all(path, async (req, res) => {
@@ -33,6 +39,11 @@ mountVercelHandler('/api/agent/vision', visionHandler);
 mountVercelHandler('/api/geocode', geocodeHandler);
 mountVercelHandler('/api/agent/ai-photo', aiPhotoHandler);
 mountVercelHandler('/api/lorry-latest-mileage', lorryLatestMileageHandler);
+mountVercelHandler('/api/v2-documents', v2DocumentsHandler);
+mountVercelHandler('/api/v2/documents/process', documentProcessHandler);
+mountVercelHandler('/api/v2/documents/dashboard-metrics', dashboardMetricsHandler);
+mountVercelHandler('/api/v2/documents/entities', documentEntitiesHandler);
+mountVercelHandler('/api/v2/documents/logs', documentLogsHandler);
 
 // Mimic Vercel Request/Response for the handler
 app.post('/api/agent/chat', async (req, res) => {

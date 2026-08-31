@@ -3,12 +3,21 @@ import { supabase } from '../services/supabase';
 import {
     Users, Download, AlertCircle,
     Wallet, Plus, Edit2, Save, X, ToggleLeft, Trash2,
-    ToggleRight, Star, Award, MapPin, DollarSign, ChevronLeft, ChevronRight, ChevronDown, ChevronUp, Loader, Shield, Check, RefreshCw, UserPlus, CheckCircle2, Settings, Calendar
+    ToggleRight, Star, Award, MapPin, DollarSign, ChevronLeft, ChevronRight, ChevronDown, ChevronUp, Loader, Shield, Check, RefreshCw, UserPlus, CheckCircle2, Settings, Calendar,
+    Trophy, Sparkles, Target, Zap, Gift
 } from 'lucide-react';
 import { getSalaryAdvances, updateSalaryAdvanceStatus } from '../services/apiV2';
 import { calculateShiftSplit, getRatesForTarget } from '../utils/rateCalculator';
 import { useTranslation } from 'react-i18next';
 import i18next from "i18next";
+import { 
+    SystemBadge, 
+    DEFAULT_SYSTEM_BADGES, 
+    fetchAllSystemBadges, 
+    saveSystemBadge, 
+    deleteSystemBadge, 
+    awardBadgeToEmployee 
+} from '../services/badgeService';
 
 const formatYYYYMMDD = (dateStr: string | null | undefined): string => {
     if (!dateStr) return '';
@@ -142,7 +151,13 @@ const EmployeeModal: React.FC<{
     const set = (k: keyof Employee, v: any) => setForm(f => ({ ...f, [k]: v }));
 
     const staffAuthHeaders = async (): Promise<Record<string, string>> => {
-        const { data: { session } } = await supabase.auth.getSession();
+        let { data: { session } } = await supabase.auth.getSession();
+        if (session?.expires_at && session.expires_at * 1000 < Date.now() + 60000) {
+            const { data: refreshed } = await supabase.auth.refreshSession();
+            if (refreshed?.session) {
+                session = refreshed.session;
+            }
+        }
         const headers: Record<string, string> = { 'Content-Type': 'application/json' };
         if (session?.access_token) {
             headers.Authorization = `Bearer ${session.access_token}`;
@@ -194,10 +209,10 @@ const EmployeeModal: React.FC<{
         const validEmail = form.email || `emp_${pin}@packsecure.local`;
 
         // Supabase Auth requires minimum 6 characters for passwords.
-        // We append '00' to the 4-digit PIN for Auth purposes.
+        // Initial default password for newly created employees = PIN + '00'.
         const authPassword = pin ? `${pin}00` : undefined;
 
-        // 1. SUPABASE AUTH SYNC
+        // 1. SUPABASE AUTH SYNC (Only for newly created employees)
         if (isNew && authPassword) {
             try {
                 const headers = await staffAuthHeaders();
@@ -224,7 +239,9 @@ const EmployeeModal: React.FC<{
                 }
                 if (!res.ok) {
                     const hint =
-                        res.status === 404
+                        res.status === 401
+                            ? '管理员登录会话已过期，请重新登录系统后再试 (Session expired, please log in again).'
+                            : res.status === 404
                             ? 'API route missing — run npm run dev:all locally, or redeploy with api/manage-employee on Vercel.'
                             : res.status === 500 &&
                                 /misconfigured|SUPABASE_SERVICE_ROLE|SUPABASE_URL/i.test(String(data.error || ''))
@@ -248,27 +265,9 @@ const EmployeeModal: React.FC<{
                 setSaving(false);
                 return;
             }
-        } else if (authPassword && targetAuthId) {
-            try {
-                const headers = await staffAuthHeaders();
-                const res = await fetch('/api/manage-employee', {
-                    method: 'POST',
-                    headers,
-                    body: JSON.stringify({ action: 'update_password', targetAuthId, password: authPassword }),
-                });
-                if (!res.ok) {
-                    const data = await res.json().catch(() => ({}));
-                    setError(data.error || 'Failed to update login password from PIN.');
-                    setSaving(false);
-                    return;
-                }
-            } catch (e: any) {
-                setError(e.message || 'Password update failed');
-                setSaving(false);
-                return;
-            }
         }
 
+        // 2. Explicit Password Reset by Admin for existing employee
         if (!isNew && newPassword.trim().length >= 6 && targetAuthId) {
             try {
                 const headers = await staffAuthHeaders();
@@ -283,7 +282,10 @@ const EmployeeModal: React.FC<{
                 });
                 if (!res.ok) {
                     const data = await res.json().catch(() => ({}));
-                    setError(data.error || 'Failed to reset login password.');
+                    const errMsg = res.status === 401 
+                        ? '管理员登录会话已过期，请重新登录系统后再试 (Session expired, please log in again).' 
+                        : (data.error || 'Failed to reset login password.');
+                    setError(errMsg);
                     setSaving(false);
                     return;
                 }
@@ -744,7 +746,7 @@ const MachineRateItemCard: React.FC<{
 // ── MAIN COMPONENT ────────────────────────────────────────────
 interface HRPortalProps {
     user?: any;
-    initialTab?: 'personnel' | 'permissions' | 'payroll' | 'advances' | 'approvals';
+    initialTab?: 'personnel' | 'permissions' | 'payroll' | 'advances' | 'approvals' | 'badges';
     initialRoleFilter?: string;
     onNavigate?: (page: string) => void;
 }
@@ -752,12 +754,51 @@ interface HRPortalProps {
 const HRPortal: React.FC<HRPortalProps> = ({ user, initialTab, initialRoleFilter, onNavigate }) => {
     const { t } = useTranslation();
     const isSuperAdminOrHR = user?.role === 'SuperAdmin' || user?.role === 'HR';
-    const [activeTab, setActiveTab] = useState<'personnel' | 'permissions' | 'payroll' | 'advances' | 'approvals'>(
+    const [activeTab, setActiveTab] = useState<'personnel' | 'permissions' | 'payroll' | 'advances' | 'approvals' | 'badges'>(
         (initialTab && (initialTab !== 'payroll' && initialTab !== 'advances' || isSuperAdminOrHR)) 
             ? initialTab 
             : 'personnel'
     );
     const [roleFilter, setRoleFilter] = useState<string>(initialRoleFilter || 'All');
+
+    // ── Badges Studio State ──
+    const [badgesList, setBadgesList] = useState<SystemBadge[]>([]);
+    const [loadingBadges, setLoadingBadges] = useState(false);
+    const [editingBadge, setEditingBadge] = useState<Partial<SystemBadge> | null | 'new'>(null);
+    const [badgeForm, setBadgeForm] = useState<Partial<SystemBadge>>({
+        title: '',
+        titleEn: '',
+        icon: '🏅',
+        tier: 'Gold',
+        category: 'All',
+        ruleType: 'trips_completed',
+        targetValue: 50,
+        desc: '',
+        story: ''
+    });
+    const [savingBadge, setSavingBadge] = useState(false);
+    const [awardingBadge, setAwardingBadge] = useState<SystemBadge | null>(null);
+    const [awardTargetEmpId, setAwardTargetEmpId] = useState('');
+    const [awardNote, setAwardNote] = useState('');
+    const [awardingLoading, setAwardingLoading] = useState(false);
+
+    const fetchBadges = useCallback(async () => {
+        setLoadingBadges(true);
+        try {
+            const list = await fetchAllSystemBadges();
+            setBadgesList(list);
+        } catch (e) {
+            console.error('Error fetching badges in HRPortal:', e);
+        } finally {
+            setLoadingBadges(false);
+        }
+    }, []);
+
+    useEffect(() => {
+        if (activeTab === 'badges') {
+            fetchBadges();
+        }
+    }, [activeTab, fetchBadges]);
 
     // Sync tab/filter if redirect parameters change
     useEffect(() => {
@@ -1038,8 +1079,14 @@ const HRPortal: React.FC<HRPortalProps> = ({ user, initialTab, initialRoleFilter
 
         setDeletingId(emp.id);
         try {
-            const { data: { session } } = await supabase.auth.getSession();
-            if (!session) throw new Error('Not authenticated');
+            let { data: { session } } = await supabase.auth.getSession();
+            if (session?.expires_at && session.expires_at * 1000 < Date.now() + 60000) {
+                const { data: refreshed } = await supabase.auth.refreshSession();
+                if (refreshed?.session) {
+                    session = refreshed.session;
+                }
+            }
+            if (!session?.access_token) throw new Error(t('管理员登录状态已失效，请重新登录系统后再试'));
 
             const res = await fetch('/api/manage-employee', {
                 method: 'POST',
@@ -1552,6 +1599,7 @@ const HRPortal: React.FC<HRPortalProps> = ({ user, initialTab, initialRoleFilter
         { id: 'permissions', label: '🔐 Page Permissions', count: 0 },
         { id: 'payroll', label: '💰 Payroll', count: 0 },
         { id: 'advances', label: '💸 Salary Advances', count: 0 },
+        { id: 'badges', label: '🏅 Badges Studio (勋章工坊)', count: 0 },
     ];
 
     const visibleTabs = TABS.filter(tab => {
@@ -2319,8 +2367,503 @@ const HRPortal: React.FC<HRPortalProps> = ({ user, initialTab, initialRoleFilter
                     </div>
                 </div>
             )}
+
+            {/* ── BADGES STUDIO (勋章与荣誉工坊) ── */}
+            {activeTab === 'badges' && (
+                <div className="space-y-6 animate-in fade-in duration-200">
+                    {/* Header */}
+                    <div className="bg-gradient-to-r from-amber-500/10 via-purple-500/10 to-blue-500/10 border border-amber-500/20 rounded-3xl p-6 shadow-xl flex flex-col md:flex-row items-start md:items-center justify-between gap-4">
+                        <div className="flex items-center gap-4">
+                            <div className="w-14 h-14 rounded-2xl bg-amber-500/20 border border-amber-500/30 flex items-center justify-center text-3xl shadow-lg shadow-amber-500/10">
+                                🏅
+                            </div>
+                            <div>
+                                <h2 className="text-xl font-black text-white flex items-center gap-2">
+                                    <span>勋章与荣誉工坊 (Badges Studio)</span>
+                                    <span className="text-xs bg-amber-500/20 text-amber-300 font-mono px-2 py-0.5 rounded-full border border-amber-500/30">
+                                        SUPER ADMIN SUITE
+                                    </span>
+                                </h2>
+                                <p className="text-xs text-gray-400 mt-1">
+                                    制定业务考核荣誉规则（出车/生产指标自动判定）或向优秀员工定向颁发特别嘉奖
+                                </p>
+                            </div>
+                        </div>
+
+                        <div className="flex items-center gap-3 w-full md:w-auto flex-wrap">
+                            <button
+                                type="button"
+                                onClick={() => {
+                                    setBadgeForm({
+                                        title: '',
+                                        titleEn: '',
+                                        icon: '🏅',
+                                        tier: 'Gold',
+                                        category: 'All',
+                                        ruleType: 'trips_completed',
+                                        targetValue: 50,
+                                        desc: '',
+                                        story: ''
+                                    });
+                                    setEditingBadge('new');
+                                }}
+                                className="px-4 py-2.5 bg-gradient-to-r from-amber-500 to-yellow-600 hover:from-amber-400 hover:to-yellow-500 text-black font-black text-xs rounded-xl flex items-center gap-2 shadow-lg shadow-amber-500/20 transition active:scale-95 cursor-pointer"
+                            >
+                                <Plus size={16} />
+                                <span>制作新勋章 (New Badge)</span>
+                            </button>
+
+                            <button
+                                type="button"
+                                onClick={() => {
+                                    if (badgesList.length > 0) {
+                                        setAwardingBadge(badgesList[0]);
+                                        setAwardTargetEmpId(activeEmps[0]?.auth_user_id || activeEmps[0]?.id || '');
+                                        setAwardNote('');
+                                    }
+                                }}
+                                className="px-4 py-2.5 bg-purple-600 hover:bg-purple-500 text-white font-black text-xs rounded-xl flex items-center gap-2 shadow-lg shadow-purple-600/20 transition active:scale-95 cursor-pointer"
+                            >
+                                <Gift size={16} />
+                                <span>向员工颁发荣誉 (Award)</span>
+                            </button>
+
+                            <button
+                                type="button"
+                                onClick={fetchBadges}
+                                className="p-2.5 bg-white/5 hover:bg-white/10 rounded-xl text-gray-400 hover:text-white transition cursor-pointer"
+                                title="刷新列表"
+                            >
+                                <RefreshCw size={15} className={loadingBadges ? 'animate-spin' : ''} />
+                            </button>
+                        </div>
+                    </div>
+
+                    {/* Badges Grid */}
+                    {loadingBadges ? (
+                        <div className="p-12 text-center text-gray-500 flex flex-col items-center gap-3">
+                            <Loader size={24} className="animate-spin text-amber-400" />
+                            <span className="text-xs">加载勋章规则库...</span>
+                        </div>
+                    ) : (
+                        <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
+                            {badgesList.map(b => (
+                                <div key={b.id} className="bg-[#0d0d14] border border-white/10 rounded-2xl p-5 relative flex flex-col justify-between space-y-4 hover:border-amber-500/30 transition-all shadow-lg">
+                                    <div className="space-y-3">
+                                        <div className="flex items-start justify-between">
+                                            <div className="flex items-center gap-3">
+                                                <div className="w-12 h-12 rounded-2xl bg-white/5 border border-white/10 flex items-center justify-center text-2xl shadow-inner">
+                                                    {b.icon}
+                                                </div>
+                                                <div>
+                                                    <div className="font-black text-sm text-white">{b.title}</div>
+                                                    <div className="text-[11px] font-mono text-gray-500">{b.titleEn}</div>
+                                                </div>
+                                            </div>
+                                            <span className={`px-2 py-0.5 rounded-full text-[9px] font-mono font-bold uppercase border ${
+                                                b.tier === 'Diamond' ? 'bg-cyan-500/20 text-cyan-300 border-cyan-500/30' :
+                                                b.tier === 'Special' ? 'bg-purple-500/20 text-purple-300 border-purple-500/30' :
+                                                b.tier === 'Silver' ? 'bg-slate-500/20 text-slate-300 border-slate-500/30' :
+                                                'bg-amber-500/20 text-amber-300 border-amber-500/30'
+                                            }`}>
+                                                {b.tier}
+                                            </span>
+                                        </div>
+
+                                        <div className="bg-black/40 border border-white/5 rounded-xl p-3 space-y-1.5 text-xs">
+                                            <div className="flex items-center justify-between text-[11px]">
+                                                <span className="text-gray-500 font-bold uppercase">判定规则：</span>
+                                                <span className="text-amber-400 font-mono font-bold">
+                                                    {b.ruleType === 'trips_completed' ? `🚚 累计出车 ${b.targetValue} 趟` :
+                                                     b.ruleType === 'production_kg' ? `⚙️ 累计产出 ${Number(b.targetValue).toLocaleString()} Kg` :
+                                                     b.ruleType === 'attendance_streak' ? `🏆 月度全勤达标` :
+                                                     b.ruleType === 'tenure_months' ? `⏳ 入职满 ${b.targetValue} 个月` :
+                                                     b.ruleType === 'role_bound' ? `🛡️ 岗位授权绑定` :
+                                                     '🎖️ 管理员特别嘉奖'}
+                                                </span>
+                                            </div>
+                                            <div className="text-[11px] text-gray-300">
+                                                {b.desc}
+                                            </div>
+                                        </div>
+
+                                        {b.story && (
+                                            <div className="text-[10px] text-amber-300/80 italic line-clamp-2">
+                                                “{b.story}”
+                                            </div>
+                                        )}
+                                    </div>
+
+                                    {/* Action buttons */}
+                                    <div className="pt-3 border-t border-white/5 flex items-center justify-between gap-2">
+                                        <button
+                                            type="button"
+                                            onClick={() => {
+                                                setAwardingBadge(b);
+                                                setAwardTargetEmpId(activeEmps[0]?.auth_user_id || activeEmps[0]?.id || '');
+                                                setAwardNote('');
+                                            }}
+                                            className="px-3 py-1.5 bg-purple-600/20 hover:bg-purple-600/30 border border-purple-500/30 text-purple-300 rounded-xl text-xs font-bold flex items-center gap-1.5 transition active:scale-95 cursor-pointer"
+                                        >
+                                            <Gift size={13} />
+                                            <span>颁发给员工</span>
+                                        </button>
+
+                                        <div className="flex items-center gap-1">
+                                            <button
+                                                type="button"
+                                                onClick={() => {
+                                                    setBadgeForm({ ...b });
+                                                    setEditingBadge(b);
+                                                }}
+                                                className="p-1.5 bg-white/5 hover:bg-white/10 rounded-lg text-gray-400 hover:text-white transition cursor-pointer"
+                                                title="编辑勋章"
+                                            >
+                                                <Edit2 size={13} />
+                                            </button>
+                                            <button
+                                                type="button"
+                                                onClick={async () => {
+                                                    if (confirm(`确定要删除/下架【${b.title}】吗？`)) {
+                                                        await deleteSystemBadge(b.id);
+                                                        fetchBadges();
+                                                    }
+                                                }}
+                                                className="p-1.5 bg-red-500/10 hover:bg-red-500/20 rounded-lg text-red-400 transition cursor-pointer"
+                                                title="删除勋章"
+                                            >
+                                                <Trash2 size={13} />
+                                            </button>
+                                        </div>
+                                    </div>
+                                </div>
+                            ))}
+                        </div>
+                    )}
+
+                    {/* ── MODAL: CREATE / EDIT BADGE ── */}
+                    {editingBadge && (
+                        <div className="fixed inset-0 z-50 bg-black/85 backdrop-blur-md flex items-center justify-center p-4">
+                            <div className="bg-[#0e0e16] border border-white/15 rounded-3xl w-full max-w-lg overflow-hidden shadow-2xl p-6 relative max-h-[90vh] overflow-y-auto">
+                                <div className="flex justify-between items-center mb-5 pb-3 border-b border-white/10">
+                                    <div className="flex items-center gap-2.5">
+                                        <span className="text-2xl">{badgeForm.icon || '🏅'}</span>
+                                        <h3 className="text-base font-black text-white">
+                                            {editingBadge === 'new' ? '制作新荣誉勋章 (Create Badge)' : '编辑勋章规则 (Edit Badge)'}
+                                        </h3>
+                                    </div>
+                                    <button
+                                        onClick={() => setEditingBadge(null)}
+                                        className="p-2 rounded-xl bg-white/5 hover:bg-white/10 text-gray-400 hover:text-white cursor-pointer"
+                                    >
+                                        <X size={16} />
+                                    </button>
+                                </div>
+
+                                <form
+                                    onSubmit={async (e) => {
+                                        e.preventDefault();
+                                        if (!badgeForm.title || !badgeForm.desc) {
+                                            alert('请填写勋章名称与达成条件说明');
+                                            return;
+                                        }
+                                        setSavingBadge(true);
+                                        try {
+                                            const badgeToSave: SystemBadge = {
+                                                id: badgeForm.id || `badge_${Date.now()}`,
+                                                title: badgeForm.title.trim(),
+                                                titleEn: badgeForm.titleEn?.trim() || '',
+                                                icon: badgeForm.icon?.trim() || '🏅',
+                                                tier: badgeForm.tier || 'Gold',
+                                                category: badgeForm.category || 'All',
+                                                ruleType: badgeForm.ruleType || 'trips_completed',
+                                                targetValue: badgeForm.targetValue || 1,
+                                                desc: badgeForm.desc.trim(),
+                                                story: badgeForm.story?.trim() || ''
+                                            };
+                                            await saveSystemBadge(badgeToSave, user?.uid || user?.id);
+                                            setEditingBadge(null);
+                                            fetchBadges();
+                                        } catch (err: any) {
+                                            alert('保存勋章失败: ' + err.message);
+                                        } finally {
+                                            setSavingBadge(false);
+                                        }
+                                    }}
+                                    className="space-y-4"
+                                >
+                                    <div className="grid grid-cols-2 gap-3">
+                                        <div>
+                                            <label className="block text-[10px] text-gray-400 font-bold uppercase tracking-wider mb-1">
+                                                勋章中文名称 <span className="text-red-400">*</span>
+                                            </label>
+                                            <input
+                                                type="text"
+                                                required
+                                                value={badgeForm.title || ''}
+                                                onChange={e => setBadgeForm({ ...badgeForm, title: e.target.value })}
+                                                placeholder="如：百趟运力标兵"
+                                                className="w-full bg-black/50 border border-white/10 rounded-xl px-3.5 py-2.5 text-xs text-white placeholder-gray-600 focus:outline-none focus:border-amber-400"
+                                            />
+                                        </div>
+
+                                        <div>
+                                            <label className="block text-[10px] text-gray-400 font-bold uppercase tracking-wider mb-1">
+                                                英文名称 (Title EN)
+                                            </label>
+                                            <input
+                                                type="text"
+                                                value={badgeForm.titleEn || ''}
+                                                onChange={e => setBadgeForm({ ...badgeForm, titleEn: e.target.value })}
+                                                placeholder="e.g. 100 Trips Champion"
+                                                className="w-full bg-black/50 border border-white/10 rounded-xl px-3.5 py-2.5 text-xs text-white placeholder-gray-600 focus:outline-none focus:border-amber-400 font-mono"
+                                            />
+                                        </div>
+                                    </div>
+
+                                    <div className="grid grid-cols-3 gap-3">
+                                        <div>
+                                            <label className="block text-[10px] text-gray-400 font-bold uppercase tracking-wider mb-1">
+                                                图标 Emoji
+                                            </label>
+                                            <input
+                                                type="text"
+                                                value={badgeForm.icon || '🏅'}
+                                                onChange={e => setBadgeForm({ ...badgeForm, icon: e.target.value })}
+                                                placeholder="🏅"
+                                                className="w-full bg-black/50 border border-white/10 rounded-xl px-3 py-2 text-center text-lg font-bold text-white focus:outline-none focus:border-amber-400"
+                                            />
+                                        </div>
+
+                                        <div>
+                                            <label className="block text-[10px] text-gray-400 font-bold uppercase tracking-wider mb-1">
+                                                品质品级 (Tier)
+                                            </label>
+                                            <select
+                                                value={badgeForm.tier || 'Gold'}
+                                                onChange={e => setBadgeForm({ ...badgeForm, tier: e.target.value as any })}
+                                                className="w-full bg-black/50 border border-white/10 rounded-xl px-3 py-2.5 text-xs text-white focus:outline-none focus:border-amber-400"
+                                            >
+                                                <option value="Gold">Gold (金质)</option>
+                                                <option value="Silver">Silver (银质)</option>
+                                                <option value="Diamond">Diamond (钻石)</option>
+                                                <option value="Special">Special (特别荣誉)</option>
+                                            </select>
+                                        </div>
+
+                                        <div>
+                                            <label className="block text-[10px] text-gray-400 font-bold uppercase tracking-wider mb-1">
+                                                适用岗位 (Category)
+                                            </label>
+                                            <select
+                                                value={badgeForm.category || 'All'}
+                                                onChange={e => setBadgeForm({ ...badgeForm, category: e.target.value as any })}
+                                                className="w-full bg-black/50 border border-white/10 rounded-xl px-3 py-2.5 text-xs text-white focus:outline-none focus:border-amber-400"
+                                            >
+                                                <option value="All">全员通用 (All)</option>
+                                                <option value="Driver">司机专属 (Driver)</option>
+                                                <option value="Operator">操作工专属 (Operator)</option>
+                                                <option value="Manager">管理层 (Manager)</option>
+                                                <option value="Special">特殊嘉奖 (Special)</option>
+                                            </select>
+                                        </div>
+                                    </div>
+
+                                    <div className="grid grid-cols-2 gap-3">
+                                        <div>
+                                            <label className="block text-[10px] text-gray-400 font-bold uppercase tracking-wider mb-1">
+                                                判定规则类型 <span className="text-red-400">*</span>
+                                            </label>
+                                            <select
+                                                value={badgeForm.ruleType || 'trips_completed'}
+                                                onChange={e => setBadgeForm({ ...badgeForm, ruleType: e.target.value as any })}
+                                                className="w-full bg-black/50 border border-white/10 rounded-xl px-3 py-2.5 text-xs text-amber-300 font-bold focus:outline-none focus:border-amber-400"
+                                            >
+                                                <option value="trips_completed">🚚 累计出车单数达标 (Trips)</option>
+                                                <option value="production_kg">⚙️ 累计生产重量达标 (Kg)</option>
+                                                <option value="attendance_streak">🏆 月度全勤达标 (Attendance)</option>
+                                                <option value="tenure_months">⏳ 入职资历月数 (Tenure)</option>
+                                                <option value="role_bound">🛡️ 岗位权限自动绑定</option>
+                                                <option value="manual_award">🎖️ 管理员人工特别嘉奖</option>
+                                            </select>
+                                        </div>
+
+                                        <div>
+                                            <label className="block text-[10px] text-gray-400 font-bold uppercase tracking-wider mb-1">
+                                                目标数值门槛 (Target)
+                                            </label>
+                                            <input
+                                                type="number"
+                                                value={badgeForm.targetValue || 0}
+                                                onChange={e => setBadgeForm({ ...badgeForm, targetValue: Number(e.target.value) })}
+                                                placeholder="如：50 趟 / 10000 Kg / 6 个月"
+                                                className="w-full bg-black/50 border border-white/10 rounded-xl px-3.5 py-2.5 text-xs text-white font-mono placeholder-gray-600 focus:outline-none focus:border-amber-400"
+                                            />
+                                        </div>
+                                    </div>
+
+                                    <div>
+                                        <label className="block text-[10px] text-gray-400 font-bold uppercase tracking-wider mb-1">
+                                            达成规则说明 (Requirement Description) <span className="text-red-400">*</span>
+                                        </label>
+                                        <input
+                                            type="text"
+                                            required
+                                            value={badgeForm.desc || ''}
+                                            onChange={e => setBadgeForm({ ...badgeForm, desc: e.target.value })}
+                                            placeholder="如：累计完成 50 趟安全送货发车任务。"
+                                            className="w-full bg-black/50 border border-white/10 rounded-xl px-3.5 py-2.5 text-xs text-white placeholder-gray-600 focus:outline-none focus:border-amber-400"
+                                        />
+                                    </div>
+
+                                    <div>
+                                        <label className="block text-[10px] text-gray-400 font-bold uppercase tracking-wider mb-1">
+                                            荣誉故事与赞誉寄语 (Lore / Praise)
+                                        </label>
+                                        <textarea
+                                            rows={3}
+                                            value={badgeForm.story || ''}
+                                            onChange={e => setBadgeForm({ ...badgeForm, story: e.target.value })}
+                                            placeholder="如：车轮滚滚，日夜兼程，用每一次安全准时的交付铸就了企业的卓越口碑！"
+                                            className="w-full bg-black/50 border border-white/10 rounded-xl px-3.5 py-2 text-xs text-white placeholder-gray-600 focus:outline-none focus:border-amber-400"
+                                        />
+                                    </div>
+
+                                    <div className="flex gap-3 pt-3 border-t border-white/10">
+                                        <button
+                                            type="button"
+                                            onClick={() => setEditingBadge(null)}
+                                            className="flex-1 py-3 bg-white/5 hover:bg-white/10 rounded-xl text-xs text-gray-400 cursor-pointer"
+                                        >
+                                            取消
+                                        </button>
+                                        <button
+                                            type="submit"
+                                            disabled={savingBadge}
+                                            className="flex-2 py-3 bg-gradient-to-r from-amber-500 to-yellow-600 hover:from-amber-400 hover:to-yellow-500 text-black font-black text-xs rounded-xl flex items-center justify-center gap-2 shadow-lg shadow-amber-500/20 transition active:scale-95 cursor-pointer disabled:opacity-50"
+                                        >
+                                            {savingBadge ? <Loader size={14} className="animate-spin" /> : <Save size={14} />}
+                                            <span>保存勋章规则</span>
+                                        </button>
+                                    </div>
+                                </form>
+                            </div>
+                        </div>
+                    )}
+
+                    {/* ── MODAL: AWARD BADGE TO EMPLOYEE ── */}
+                    {awardingBadge && (
+                        <div className="fixed inset-0 z-50 bg-black/85 backdrop-blur-md flex items-center justify-center p-4">
+                            <div className="bg-[#0e0e16] border border-white/15 rounded-3xl w-full max-w-md overflow-hidden shadow-2xl p-6 relative">
+                                <div className="flex justify-between items-center mb-4 pb-3 border-b border-white/10">
+                                    <div className="flex items-center gap-2.5">
+                                        <span className="text-2xl">{awardingBadge.icon}</span>
+                                        <h3 className="text-base font-black text-white">颁发荣誉勋章</h3>
+                                    </div>
+                                    <button
+                                        onClick={() => setAwardingBadge(null)}
+                                        className="p-2 rounded-xl bg-white/5 hover:bg-white/10 text-gray-400 hover:text-white cursor-pointer"
+                                    >
+                                        <X size={16} />
+                                    </button>
+                                </div>
+
+                                <form
+                                    onSubmit={async (e) => {
+                                        e.preventDefault();
+                                        if (!awardTargetEmpId) {
+                                            alert('请选择要授予荣誉的员工');
+                                            return;
+                                        }
+                                        setAwardingLoading(true);
+                                        try {
+                                            await awardBadgeToEmployee(
+                                                awardTargetEmpId, 
+                                                awardingBadge.id, 
+                                                awardNote || 'SuperAdmin 特别嘉奖', 
+                                                user?.name || 'SuperAdmin'
+                                            );
+                                            alert(`✅ 成功向员工颁发【${awardingBadge.title}】荣誉勋章！`);
+                                            setAwardingBadge(null);
+                                            setAwardTargetEmpId('');
+                                            setAwardNote('');
+                                        } catch (err: any) {
+                                            alert('颁发失败: ' + err.message);
+                                        } finally {
+                                            setAwardingLoading(false);
+                                        }
+                                    }}
+                                    className="space-y-4"
+                                >
+                                    <div>
+                                        <label className="block text-[10px] text-gray-400 font-bold uppercase tracking-wider mb-1">
+                                            正在颁发的勋章
+                                        </label>
+                                        <div className="bg-black/50 border border-amber-500/30 rounded-xl p-3 flex items-center justify-between text-xs">
+                                            <div className="flex items-center gap-2 font-bold text-white">
+                                                <span>{awardingBadge.icon}</span>
+                                                <span>{awardingBadge.title}</span>
+                                            </div>
+                                            <span className="text-[10px] font-mono text-amber-300 font-bold uppercase">{awardingBadge.tier}</span>
+                                        </div>
+                                    </div>
+
+                                    <div>
+                                        <label className="block text-[10px] text-gray-400 font-bold uppercase tracking-wider mb-1">
+                                            授予员工 <span className="text-red-400">*</span>
+                                        </label>
+                                        <select
+                                            value={awardTargetEmpId}
+                                            onChange={e => setAwardTargetEmpId(e.target.value)}
+                                            className="w-full bg-black/50 border border-white/10 rounded-xl px-3 py-2.5 text-xs text-white focus:outline-none focus:border-purple-400"
+                                        >
+                                            {activeEmps.map(emp => (
+                                                <option key={emp.id} value={emp.auth_user_id || emp.id}>
+                                                    {emp.name} (#{emp.employee_id || emp.id.slice(0, 6)}) • {emp.role} • {emp.base_location || 'Taiping'}
+                                                </option>
+                                            ))}
+                                        </select>
+                                    </div>
+
+                                    <div>
+                                        <label className="block text-[10px] text-gray-400 font-bold uppercase tracking-wider mb-1">
+                                            颁发评语与寄语 (Award Note)
+                                        </label>
+                                        <textarea
+                                            rows={2}
+                                            value={awardNote}
+                                            onChange={e => setAwardNote(e.target.value)}
+                                            placeholder="如：2026 季度安全生产标兵特别嘉奖"
+                                            className="w-full bg-black/50 border border-white/10 rounded-xl px-3.5 py-2 text-xs text-white placeholder-gray-600 focus:outline-none focus:border-purple-400"
+                                        />
+                                    </div>
+
+                                    <div className="flex gap-3 pt-3 border-t border-white/10">
+                                        <button
+                                            type="button"
+                                            onClick={() => setAwardingBadge(null)}
+                                            className="flex-1 py-3 bg-white/5 hover:bg-white/10 rounded-xl text-xs text-gray-400 cursor-pointer"
+                                        >
+                                            取消
+                                        </button>
+                                        <button
+                                            type="submit"
+                                            disabled={awardingLoading || !awardTargetEmpId}
+                                            className="flex-2 py-3 bg-purple-600 hover:bg-purple-500 text-white font-black text-xs rounded-xl flex items-center justify-center gap-2 shadow-lg shadow-purple-600/20 transition active:scale-95 cursor-pointer disabled:opacity-50"
+                                        >
+                                            {awardingLoading ? <Loader size={14} className="animate-spin" /> : <Gift size={14} />}
+                                            <span>确认颁发勋章</span>
+                                        </button>
+                                    </div>
+                                </form>
+                            </div>
+                        </div>
+                    )}
+                </div>
+            )}
         </div>
     );
 };
 
 export default HRPortal;
+

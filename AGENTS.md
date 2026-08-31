@@ -96,11 +96,24 @@ npm run lint           # ESLint
 - 类型优先放在 `src/types/index.ts` 或页面旁，避免重复定义
 - 未要求时不自动 `git commit` / `git push`
 
-## 常见入口速查
+## 业务真理库与数据字典 (必读)
 
+所有业务逻辑与数据库结构必须严格遵照以下两份文档，**重构或修改时严禁擅自删改或遗漏既有规则**：
+- 核心业务真理库：[BUSINESS_RULES.md](file:///c:/Users/Max%20Tan/Downloads/Packsecure%20OS/packsecure/docs/BUSINESS_RULES.md)（厂区、机台、工时费率、车队容量、额外补贴等）
+- 数据结构字典：[DATA_DICTIONARY.md](file:///c:/Users/Max%20Tan/Downloads/Packsecure%20OS/packsecure/docs/DATA_DICTIONARY.md)（表结构、枚举值、状态机）
+
+## 关键安全防线 (Safety Guardrails)
+
+1. **部署前编译自检**：任何前端代码修改完成后，在汇报或建议部署前，必须运行 `npm run build` 或验证 TS 类型，杜绝生产构建报错。
+2. **移动端响应式优先**：司机端、操作员端、考勤端必须确保在手机端宽度（375px~390px）下正常显示，弹窗不可遮挡底部导航或操作按钮。
+3. **生产数据修改预览**：执行任何批量更新/修复数据的脚本前，必须先查询输出受影响的行数与具体 ID 清单，禁止无条件全量更新。
+
+## 常见入口速查
 
 | 需求            | 文件                                              |
 | ------------- | ----------------------------------------------- |
+| 核心业务规则     | `docs/BUSINESS_RULES.md`                        |
+| 数据结构定义     | `docs/DATA_DICTIONARY.md`                       |
 | 改路由/登录        | `src/App.tsx`                                   |
 | 改侧边栏/主题       | `src/components/Layout.tsx`                     |
 | 改类型           | `src/types/index.ts`                            |
@@ -108,7 +121,6 @@ npm run lint           # ESLint
 | AI 对话         | `api/agent/chat.ts`                             |
 | HR/司机管理 API   | `api/manage-employee.ts`、`api/create-driver.ts` |
 | 活动日志          | `src/utils/logger.ts`                           |
-
 
 ## 验证建议
 

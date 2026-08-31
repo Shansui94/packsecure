@@ -1,6 +1,14 @@
 {
     "rewrites": [
         {
+            "source": "/api/v2/documents/(.*)",
+            "destination": "/api/v2-documents?action=$1"
+        },
+        {
+            "source": "/api/v2/documents",
+            "destination": "/api/v2-documents"
+        },
+        {
             "source": "/api/(.*)",
             "destination": "/api/$1"
         },

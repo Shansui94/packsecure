@@ -38,7 +38,9 @@ export async function requireStaffAuth(
 
     const { data: { user: caller }, error: authError } = await admin.auth.getUser(token);
     if (authError || !caller) {
-        return { ok: false, status: 401, message: 'Unauthorized: Invalid token' };
+        console.error('[requireStaffAuth] admin.auth.getUser failed:', authError?.message || 'No user associated with token');
+        const reason = authError?.message ? ` (${authError.message})` : '';
+        return { ok: false, status: 401, message: `Unauthorized: Invalid or expired token${reason}` };
     }
 
     let callerRole: string | null = null;

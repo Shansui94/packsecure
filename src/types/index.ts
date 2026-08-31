@@ -469,3 +469,96 @@ export interface MobileInspectionLog {
     created_at?: string;
 }
 
+// 17. William's Document Processing & 12-Month Executive Dashboard Types
+export type DocumentSection = 'FLEET' | 'COMPANY' | 'PRODUCTION' | 'SALES';
+export type DocumentOwner = 'AMY' | 'WINNIE' | 'MAX TAN' | 'YUAN YUAN';
+export type DocumentDataSource = 'PDF_EXTRACT' | 'SYSTEM_LIVE' | 'MANUAL';
+export type DocumentProcessingStage = 'UPLOAD' | 'ROUTING' | 'AI_EXTRACTION' | 'DASHBOARD_SYNC' | 'ERROR';
+export type DocumentProcessingStatus = 'SUCCESS' | 'WARNING' | 'FAILED';
+export type ExtractedDocStatus = 'Uploaded' | 'Routed' | 'Extracted' | 'Dashboard_Updated' | 'Approved' | 'Rejected' | 'Unassigned_Review';
+
+export interface DocumentManifestEntity {
+    id: string;
+    name: string;
+    category_key: string;
+    section: DocumentSection;
+    owner: DocumentOwner;
+    folder_slug: string;
+    aliases: string[];
+    data_source: DocumentDataSource;
+    unit: string;
+    is_active: boolean;
+    notes?: string;
+    created_at?: string;
+    updated_at?: string;
+}
+
+export interface ExtractedDocumentItem {
+    id?: string;
+    document_id?: string;
+    line_number: number;
+    item_description: string;
+    sku_match?: string;
+    quantity: number;
+    uom?: string;
+    unit_price: number;
+    total_amount: number;
+}
+
+export interface ExtractedDocument {
+    id: string;
+    file_name: string;
+    file_url: string;
+    storage_path: string;
+    file_size_bytes?: number;
+    category_key?: string;
+    entity_name?: string;
+    owner?: DocumentOwner;
+    doc_type: string;
+    doc_number?: string;
+    doc_date?: string;
+    period_year?: number;
+    period_month?: number;
+    currency?: string;
+    subtotal_amount?: number;
+    tax_amount?: number;
+    total_amount?: number;
+    payment_terms?: string;
+    notes?: string;
+    confidence_score?: number;
+    status: ExtractedDocStatus;
+    raw_ai_response?: any;
+    created_by?: string;
+    created_at?: string;
+    updated_at?: string;
+    items?: ExtractedDocumentItem[];
+}
+
+export interface WilliamDashboardMetric {
+    id?: string;
+    year: number;
+    month: number; // 1 - 12
+    category_key: string;
+    metric_value: number;
+    unit: string;
+    source_type: 'AUTO_EXTRACTED' | 'SYSTEM_SYNCED' | 'MANUAL_OVERRIDE';
+    document_id?: string;
+    file_url?: string;
+    notes?: string;
+    updated_by?: string;
+    created_at?: string;
+    updated_at?: string;
+}
+
+export interface DocumentProcessingLog {
+    id: string;
+    document_id?: string;
+    file_name: string;
+    stage: DocumentProcessingStage;
+    status: DocumentProcessingStatus;
+    message: string;
+    execution_time_ms: number;
+    created_at: string;
+}
+
+

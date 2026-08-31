@@ -20,6 +20,7 @@ import { V2Item } from '../types/v2';
 import { compressImage, dataUrlToBase64Payload } from '../utils/imageCompress';
 import * as XLSX from 'xlsx';
 import { useTranslation } from "react-i18next";
+import { deductStockForOrder, reverseStockForOrder, adjustStockForOrderDelta } from '../services/stockService';
 
 type ScannedTripDraft = {
     label: string;
@@ -1077,12 +1078,25 @@ const DeliveryOrderManagement: React.FC = () => {
 
     // DELETE ORDER (Soft Delete)
     const handleDeleteOrder = async (orderId: string, orderNumber: string) => {
-        if (!window.confirm(`Are you sure you want to CANCEL Order ${orderNumber}?\nThis will move it to the Cancelled tab.`)) return;
+        if (!window.confirm(`Are you sure you want to CANCEL Order ${orderNumber}?\nThis will move it to the Cancelled tab and reverse deducted stock if loaded.`)) return;
 
         try {
+            const target = orders.find(o => o.id === orderId);
+
             // Soft Delete: Update status to 'Cancelled'
             const { error } = await supabase.from('sales_orders').update({ status: 'Cancelled' }).eq('id', orderId);
             if (error) throw error;
+
+            // ⚡ If order was already Loaded or Delivered, reverse stock back to warehouse
+            if (target && ['Loaded', 'Delivered', 'Pending Approval'].includes(target.status)) {
+                await reverseStockForOrder({
+                    id: target.id,
+                    order_number: target.orderNumber,
+                    trip_origin: (target as any).trip_origin || (target as any).tripOrigin,
+                    items: target.items,
+                    reason: 'Order Cancelled by Admin'
+                });
+            }
 
             // Optimistic Remove (or move to Cancelled if checking that tab)
             setOrders(prev => prev.map(o => o.id === orderId ? { ...o, status: 'Cancelled' } : o));
@@ -1097,7 +1111,7 @@ const DeliveryOrderManagement: React.FC = () => {
 
     // Restore Cancelled/Delivered Order to Loaded Status
     const handleRestoreToLoaded = async (order: SalesOrder) => {
-        if (!window.confirm(`Are you sure you want to restore Order ${order.orderNumber} to LOADED status?\nThis will make it active under the assigned driver.`)) return;
+        if (!window.confirm(`Are you sure you want to restore Order ${order.orderNumber} to LOADED status?\nThis will make it active under the assigned driver and deduct stock.`)) return;
 
         try {
             const { error } = await supabase
@@ -1107,7 +1121,15 @@ const DeliveryOrderManagement: React.FC = () => {
 
             if (error) throw error;
 
-            alert(`✅ Order ${order.orderNumber} restored to Loaded!`);
+            // ⚡ Deduct stock for restored loaded order
+            await deductStockForOrder({
+                id: order.id,
+                order_number: order.orderNumber,
+                trip_origin: (order as any).trip_origin || (order as any).tripOrigin,
+                items: order.items
+            });
+
+            alert(`✅ Order ${order.orderNumber} restored to Loaded & stock deducted!`);
 
             // Optimistic update
             setOrders(prev => prev.map(o => o.id === order.id ? { ...o, status: 'Loaded' } : o));
@@ -1119,7 +1141,7 @@ const DeliveryOrderManagement: React.FC = () => {
 
     // Reset Order to New Status and clear driver
     const handleResetToNew = async (order: SalesOrder) => {
-        if (!window.confirm(`Are you sure you want to reset Order ${order.orderNumber} to NEW status?\nThis will clear driver assignments and return it to the unassigned pool.`)) return;
+        if (!window.confirm(`Are you sure you want to reset Order ${order.orderNumber} to NEW status?\nThis will clear driver assignments, restore stock to warehouse, and return it to the unassigned pool.`)) return;
 
         try {
             const { error } = await supabase
@@ -1133,7 +1155,18 @@ const DeliveryOrderManagement: React.FC = () => {
 
             if (error) throw error;
 
-            alert(`✅ Order ${order.orderNumber} reset to New status!`);
+            // ⚡ If order was Loaded, reverse stock back into warehouse
+            if (['Loaded', 'Delivered', 'Pending Approval'].includes(order.status)) {
+                await reverseStockForOrder({
+                    id: order.id,
+                    order_number: order.orderNumber,
+                    trip_origin: (order as any).trip_origin || (order as any).tripOrigin,
+                    items: order.items,
+                    reason: 'Reset to New / Cargo Unloaded'
+                });
+            }
+
+            alert(`✅ Order ${order.orderNumber} reset to New status & stock restored!`);
 
             // Optimistic update
             setOrders(prev => prev.map(o => o.id === order.id ? { ...o, status: 'New', driverId: undefined, driver_id: undefined } : o));
@@ -2317,8 +2350,20 @@ const DeliveryOrderManagement: React.FC = () => {
             let newOrderObj: SalesOrder | null = null;
 
             if (editingOrderId) {
+                const existingOrder = orders.find(o => o.id === editingOrderId);
                 const { error } = await supabase.from('sales_orders').update(payload).eq('id', editingOrderId);
                 if (error) throw error;
+
+                // ⚡ If order is Loaded/Delivered/Pending, adjust stock ledger delta (e.g. partial delivery return)
+                if (existingOrder && ['Loaded', 'Delivered', 'Pending Approval'].includes(existingOrder.status)) {
+                    await adjustStockForOrderDelta(
+                        doNumber,
+                        (existingOrder as any).trip_origin || (existingOrder as any).tripOrigin || tripOrigin,
+                        existingOrder.items,
+                        payload.items
+                    );
+                }
+
                 alert(`Order Updated!\nAssigned to ${finalFactoryName}`);
 
                 // Optimistic Update: Edit
@@ -2407,10 +2452,16 @@ const DeliveryOrderManagement: React.FC = () => {
         switch (state) {
             case 'Selangor': return 'text-purple-400 bg-purple-500/10 border-purple-500/20';
             case 'K. Lumpur': return 'text-blue-400 bg-blue-500/10 border-blue-500/20';
-            case 'Johor': return 'text-red-400 bg-red-500/10 border-red-500/20';
+            case 'Johor': return 'text-rose-400 bg-rose-500/10 border-rose-500/20';
             case 'Penang': return 'text-emerald-400 bg-emerald-500/10 border-emerald-500/20';
             case 'Melaka': return 'text-orange-400 bg-orange-500/10 border-orange-500/20';
             case 'Perak': return 'text-cyan-400 bg-cyan-500/10 border-cyan-500/20';
+            case 'Kedah': return 'text-lime-400 bg-lime-500/10 border-lime-500/20';
+            case 'Kelantan': return 'text-amber-400 bg-amber-500/10 border-amber-500/20';
+            case 'N. Sembilan': return 'text-pink-400 bg-pink-500/10 border-pink-500/20';
+            case 'Pahang': return 'text-teal-400 bg-teal-500/10 border-teal-500/20';
+            case 'Terengganu': return 'text-indigo-400 bg-indigo-500/10 border-indigo-500/20';
+            case 'Perlis': return 'text-violet-400 bg-violet-500/10 border-violet-500/20';
             default: return 'text-slate-400 bg-slate-800 border-slate-700';
         }
     }

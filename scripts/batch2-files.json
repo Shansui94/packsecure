@@ -1,0 +1,23 @@
+[
+  "src/pages/Customer360Console.tsx",
+  "src/pages/DeliveryOrderManagement.tsx",
+  "src/pages/DevLog.tsx",
+  "src/pages/DriverDelivery.tsx",
+  "src/pages/FactoryLiveOS.tsx",
+  "src/pages/HRPortal.tsx",
+  "src/pages/LiveStock.tsx",
+  "src/pages/LorryManagement.tsx",
+  "src/pages/MachineLabels.tsx",
+  "src/pages/OrderSummary.tsx",
+  "src/pages/ProductionControl.tsx",
+  "src/pages/ProductionReports.tsx",
+  "src/pages/ProductLibrary.tsx",
+  "src/pages/RawMaterialMobilePortal.tsx",
+  "src/pages/Register.tsx",
+  "src/pages/SalesOrders.tsx",
+  "src/pages/SOPCenter.tsx",
+  "src/pages/TeamChat.tsx",
+  "src/pages/TripPrep.tsx",
+  "src/pages/WorkPhotoLog.tsx",
+  "src/pages/YieldControl.tsx"
+]

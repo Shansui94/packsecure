@@ -5,6 +5,7 @@ import {
     ClipboardList,
     BarChart3,
     Box,
+    Boxes,
     LogOut,
     User,
     Users,
@@ -373,6 +374,7 @@ const Layout: React.FC<LayoutProps> = ({ children, activePage, setActivePage, us
                             <>
                                 <NavGroup title="Executive Suite">
                                     <NavItem id="factory-live-os" icon={LayoutDashboard} label="Factory Live OS" roles={['SuperAdmin', 'Admin', 'Manager']} />
+                                    <NavItem id="william-dashboard" icon={FileText} label="William's Dashboard" roles={['SuperAdmin', 'Admin', 'Manager']} />
                                     <NavItem id="data-v2" icon={Database} label="Data Command" roles={['SuperAdmin', 'Admin', 'Manager']} />
                                 </NavGroup>
 
@@ -387,7 +389,7 @@ const Layout: React.FC<LayoutProps> = ({ children, activePage, setActivePage, us
                                 </NavGroup>
 
                                 <NavGroup title="Inventory & BOM">
-                                    <NavItem id="inventory" icon={Box} label="Inventory" roles={['SuperAdmin', 'Admin', 'Manager']} />
+                                    <NavItem id="inventory" icon={Boxes} label="Global Inventory" roles={['SuperAdmin', 'Admin', 'Manager']} />
                                     <NavItem id="products" icon={Package} label="Product Library" roles={['SuperAdmin', 'Admin', 'Manager']} />
                                     <NavItem id="stock-movement" icon={ArrowUpDown} label="Stock Movement" roles={['SuperAdmin', 'Admin', 'Manager']} />
                                     <NavItem id="stock-audit" icon={ClipboardCheck} label="Stock Audit" roles={['SuperAdmin', 'Admin', 'Manager']} />

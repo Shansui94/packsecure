@@ -199,26 +199,157 @@ export const calculateLoad = (items: any[], vehicle: any) => {
 
 
 export const determineState = (address: string): string => {
+    if (!address) return 'Other';
     const lowerAddr = address.toLowerCase();
 
-    if (lowerAddr.includes('johor') || lowerAddr.includes('jb') || lowerAddr.includes('skudai') || lowerAddr.includes('pasir gudang') || lowerAddr.includes('kulai') || lowerAddr.includes('kota tinggi') || lowerAddr.includes('pontian') || lowerAddr.includes('batu pahat') || lowerAddr.includes('kluang') || lowerAddr.includes('muar') || lowerAddr.includes('tangkak') || lowerAddr.includes('segamat') || lowerAddr.includes('mersing') || lowerAddr.includes('weheng')) return 'Johor';
-    if (lowerAddr.includes('penang') || lowerAddr.includes('pulau pinang') || lowerAddr.includes('georgetown') || lowerAddr.includes('butterworth')) return 'Penang';
-    if (lowerAddr.includes('kuala lumpur') || lowerAddr.includes('kl ') || lowerAddr.includes('klang valley') || lowerAddr.includes('wilayah persekutuan') || lowerAddr.endsWith(' kl') || lowerAddr.includes(',kl') || lowerAddr.includes(' kl,')) return 'K. Lumpur';
-    if (lowerAddr.includes('selangor') || lowerAddr.includes('shah alam') || lowerAddr.includes('petaling jaya') || lowerAddr.includes('klang') || lowerAddr.includes('kajang') || lowerAddr.includes('rawang') || lowerAddr.includes('semenyih')) return 'Selangor';
-    if (lowerAddr.includes('melaka') || lowerAddr.includes('malacca')) return 'Melaka';
-    if (lowerAddr.includes('negeri sembilan') || lowerAddr.includes('seremban') || lowerAddr.includes('nilai')) return 'N. Sembilan';
-    if (lowerAddr.includes('perak') || lowerAddr.includes('ipoh') || lowerAddr.includes('taiping') || lowerAddr.includes('sitiawan')) return 'Perak';
-    if (lowerAddr.includes('kedah') || lowerAddr.includes('kulim') || lowerAddr.includes('sungai petani')) return 'Kedah';
-    if (lowerAddr.includes('pahang') || lowerAddr.includes('kuantan')) return 'Pahang';
-    if (lowerAddr.includes('terengganu')) return 'Terengganu';
-    if (lowerAddr.includes('kelantan') || lowerAddr.includes('kota bharu') || lowerAddr.includes('pasir mas') || lowerAddr.includes('tumpat') || lowerAddr.includes('pasir puteh') || lowerAddr.includes('bachok') || lowerAddr.includes('machang') || lowerAddr.includes('tanah merah') || lowerAddr.includes('kuala krai') || lowerAddr.includes('jeli') || lowerAddr.includes('gua musang') || lowerAddr.includes('rantau panjang')) return 'Kelantan';
-    if (lowerAddr.includes('perlis')) return 'Perlis';
-    if (lowerAddr.includes('sabah')) return 'Sabah';
-    if (lowerAddr.includes('sarawak')) return 'Sarawak';
+    // 1. Keyword-based matching for Malaysian states and major towns/industrial areas
+    if (
+        lowerAddr.includes('johor') || lowerAddr.includes('jb') || lowerAddr.includes('skudai') || 
+        lowerAddr.includes('pasir gudang') || lowerAddr.includes('kulai') || lowerAddr.includes('kota tinggi') || 
+        lowerAddr.includes('pontian') || lowerAddr.includes('batu pahat') || lowerAddr.includes('kluang') || 
+        lowerAddr.includes('muar') || lowerAddr.includes('tangkak') || lowerAddr.includes('segamat') || 
+        lowerAddr.includes('mersing') || lowerAddr.includes('weheng') || lowerAddr.includes('senai') || 
+        lowerAddr.includes('permas') || lowerAddr.includes('tampoi') || lowerAddr.includes('nusajaya') || 
+        lowerAddr.includes('iskandar') || lowerAddr.includes('plentong') || lowerAddr.includes('ulu tiram') || 
+        lowerAddr.includes('masai') || lowerAddr.includes('yong peng') || lowerAddr.includes('simpang renggam') || 
+        lowerAddr.includes('labis') || lowerAddr.includes('pekannenas') || lowerAddr.includes('pekan nanas') ||
+        lowerAddr.includes('bukit indah') || lowerAddr.includes('gelang patah')
+    ) return 'Johor';
 
-    // Fallback based on typical Central area if no state found
-    if (lowerAddr.includes('puchong') || lowerAddr.includes('bangi') || lowerAddr.includes('cyberjaya')) return 'Selangor';
-    if (lowerAddr.includes('cheras')) return 'K. Lumpur';
+    if (
+        lowerAddr.includes('penang') || lowerAddr.includes('pulau pinang') || lowerAddr.includes('georgetown') || 
+        lowerAddr.includes('butterworth') || lowerAddr.includes('bukit mertajam') || lowerAddr.includes('perai') || 
+        lowerAddr.includes('prai') || lowerAddr.includes('bayan lepas') || lowerAddr.includes('bayan baru') || 
+        lowerAddr.includes('seberang jaya') || lowerAddr.includes('seberang perai') || lowerAddr.includes('nibong tebal') || 
+        lowerAddr.includes('simpang ampat') || lowerAddr.includes('batu kawan') || lowerAddr.includes('sungai bakap') || 
+        lowerAddr.includes('kepala batas') || lowerAddr.includes('valdor') || lowerAddr.includes('jawi') ||
+        lowerAddr.includes('gelugor') || lowerAddr.includes('jelutong') || lowerAddr.includes('air itam') || 
+        lowerAddr.includes('ayer itam') || lowerAddr.includes('tanjung bungah') || lowerAddr.includes('tasek gelugor')
+    ) return 'Penang';
+
+    if (
+        lowerAddr.includes('kuala lumpur') || lowerAddr.includes('kl ') || lowerAddr.includes('klang valley') || 
+        lowerAddr.includes('wilayah persekutuan') || lowerAddr.endsWith(' kl') || lowerAddr.includes(',kl') || 
+        lowerAddr.includes(' kl,') || lowerAddr.includes('cheras') || lowerAddr.includes('kepong') || 
+        lowerAddr.includes('setapak') || lowerAddr.includes('wangsa maju') || lowerAddr.includes('bangsar') || 
+        lowerAddr.includes('brickfields') || lowerAddr.includes('segambut') || lowerAddr.includes('mont kiara') || 
+        lowerAddr.includes('sri hartamas') || lowerAddr.includes('sentul') || lowerAddr.includes('sri petaling') || 
+        lowerAddr.includes('bukit jalil') || lowerAddr.includes('sungai besi') || lowerAddr.includes('jinjang') || 
+        lowerAddr.includes('taman desa') || lowerAddr.includes('old klang road') || lowerAddr.includes('oug') ||
+        lowerAddr.includes('pudu') || lowerAddr.includes('danau kota') || lowerAddr.includes('titiwangsa')
+    ) return 'K. Lumpur';
+
+    if (
+        lowerAddr.includes('selangor') || lowerAddr.includes('shah alam') || lowerAddr.includes('petaling jaya') || 
+        lowerAddr.includes('pj') || lowerAddr.includes('klang') || lowerAddr.includes('kajang') || 
+        lowerAddr.includes('rawang') || lowerAddr.includes('semenyih') || lowerAddr.includes('puchong') || 
+        lowerAddr.includes('bangi') || lowerAddr.includes('cyberjaya') || lowerAddr.includes('subang') || 
+        lowerAddr.includes('seri kembangan') || lowerAddr.includes('serdang') || lowerAddr.includes('balakong') || 
+        lowerAddr.includes('banting') || lowerAddr.includes('kapar') || lowerAddr.includes('meru') || 
+        lowerAddr.includes('jenjarom') || lowerAddr.includes('telok panglima') || lowerAddr.includes('teluk panglima') || 
+        lowerAddr.includes('sungai buloh') || lowerAddr.includes('sg buloh') || lowerAddr.includes('kota damansara') || 
+        lowerAddr.includes('damansara') || lowerAddr.includes('bandar utama') || lowerAddr.includes('sunway') || 
+        lowerAddr.includes('puncak alam') || lowerAddr.includes('kuala selangor') || lowerAddr.includes('selayang') || 
+        lowerAddr.includes('gombak') || lowerAddr.includes('ampang') || lowerAddr.includes('dengkil') || 
+        lowerAddr.includes('sepang') || lowerAddr.includes('batu caves') || lowerAddr.includes('port klang') ||
+        lowerAddr.includes('pelabuhan klang') || lowerAddr.includes('ijok') || lowerAddr.includes('kuang') ||
+        lowerAddr.includes('batang kali') || lowerAddr.includes('pandan indah') || lowerAddr.includes('pandan jaya')
+    ) return 'Selangor';
+
+    if (
+        lowerAddr.includes('melaka') || lowerAddr.includes('malacca') || lowerAddr.includes('ayer keroh') || 
+        lowerAddr.includes('air keroh') || lowerAddr.includes('batu berendam') || lowerAddr.includes('alor gajah') || 
+        lowerAddr.includes('jasin') || lowerAddr.includes('masjid tanah') || lowerAddr.includes('cheng') || 
+        lowerAddr.includes('krubong') || lowerAddr.includes('klebang')
+    ) return 'Melaka';
+
+    if (
+        lowerAddr.includes('negeri sembilan') || lowerAddr.includes('n. sembilan') || lowerAddr.includes('n.sembilan') || 
+        lowerAddr.includes('seremban') || lowerAddr.includes('nilai') || lowerAddr.includes('senawang') || 
+        lowerAddr.includes('port dickson') || lowerAddr.includes('bahau') || lowerAddr.includes('kuala pilah') || 
+        lowerAddr.includes('rembau') || lowerAddr.includes('tampin') || lowerAddr.includes('mantin') || 
+        lowerAddr.includes('sendayan') || lowerAddr.includes('enstek') || lowerAddr.includes('lukut') ||
+        lowerAddr.includes('labu')
+    ) return 'N. Sembilan';
+
+    if (
+        lowerAddr.includes('perak') || lowerAddr.includes('ipoh') || lowerAddr.includes('taiping') || 
+        lowerAddr.includes('sitiawan') || lowerAddr.includes('manjung') || lowerAddr.includes('seri manjung') || 
+        lowerAddr.includes('lumut') || lowerAddr.includes('teluk intan') || lowerAddr.includes('kuala kangsar') || 
+        lowerAddr.includes('kampar') || lowerAddr.includes('batu gajah') || lowerAddr.includes('tanjung malim') || 
+        lowerAddr.includes('tapah') || lowerAddr.includes('bidor') || lowerAddr.includes('parit buntar') || 
+        lowerAddr.includes('bagan serai') || lowerAddr.includes('simpang') || lowerAddr.includes('kamunting') || 
+        lowerAddr.includes('gopeng') || lowerAddr.includes('chemor') || lowerAddr.includes('menglembu') || 
+        lowerAddr.includes('bercham') || lowerAddr.includes('sungai siput') || lowerAddr.includes('pantai remis')
+    ) return 'Perak';
+
+    if (
+        lowerAddr.includes('kedah') || lowerAddr.includes('kulim') || lowerAddr.includes('sungai petani') || 
+        lowerAddr.includes('sg petani') || lowerAddr.includes('alor setar') || lowerAddr.includes('alor star') || 
+        lowerAddr.includes('jitra') || lowerAddr.includes('langkawi') || lowerAddr.includes('baling') || 
+        lowerAddr.includes('padang serai') || lowerAddr.includes('lunas') || lowerAddr.includes('kuala ketil') || 
+        lowerAddr.includes('gurun') || lowerAddr.includes('pendang') || lowerAddr.includes('yan') ||
+        lowerAddr.includes('changlun') || lowerAddr.includes('pokok sena')
+    ) return 'Kedah';
+
+    if (
+        lowerAddr.includes('pahang') || lowerAddr.includes('kuantan') || lowerAddr.includes('temerloh') || 
+        lowerAddr.includes('bentong') || lowerAddr.includes('mentakab') || lowerAddr.includes('raub') || 
+        lowerAddr.includes('jerantut') || lowerAddr.includes('pekan') || lowerAddr.includes('rompin') || 
+        lowerAddr.includes('cameron') || lowerAddr.includes('genting') || lowerAddr.includes('gebeng') ||
+        lowerAddr.includes('gambang') || lowerAddr.includes('muadzam shah')
+    ) return 'Pahang';
+
+    if (
+        lowerAddr.includes('terengganu') || lowerAddr.includes('kuala terengganu') || lowerAddr.includes('kemaman') || 
+        lowerAddr.includes('cukai') || lowerAddr.includes('chukai') || lowerAddr.includes('dungun') || 
+        lowerAddr.includes('kerteh') || lowerAddr.includes('paka') || lowerAddr.includes('marang') || 
+        lowerAddr.includes('besut') || lowerAddr.includes('jerteh') || lowerAddr.includes('setiu')
+    ) return 'Terengganu';
+
+    if (
+        lowerAddr.includes('kelantan') || lowerAddr.includes('kota bharu') || lowerAddr.includes('kota baru') || 
+        lowerAddr.includes('pasir mas') || lowerAddr.includes('tumpat') || lowerAddr.includes('pasir puteh') || 
+        lowerAddr.includes('bachok') || lowerAddr.includes('machang') || lowerAddr.includes('tanah merah') || 
+        lowerAddr.includes('kuala krai') || lowerAddr.includes('jeli') || lowerAddr.includes('gua musang') || 
+        lowerAddr.includes('rantau panjang') || lowerAddr.includes('pengkalan chepa') || lowerAddr.includes('kubang kerian') || 
+        lowerAddr.includes('wakaf bharu') || lowerAddr.includes('ketereh') || lowerAddr.includes('kok lanas')
+    ) return 'Kelantan';
+
+    if (
+        lowerAddr.includes('perlis') || lowerAddr.includes('kangar') || lowerAddr.includes('arau') || 
+        lowerAddr.includes('kuala perlis') || lowerAddr.includes('padang besar')
+    ) return 'Perlis';
+
+    if (
+        lowerAddr.includes('sabah') || lowerAddr.includes('kota kinabalu') || lowerAddr.includes('sandakan') || 
+        lowerAddr.includes('tawau') || lowerAddr.includes('lahad datu') || lowerAddr.includes('keningau')
+    ) return 'Sabah';
+
+    if (
+        lowerAddr.includes('sarawak') || lowerAddr.includes('kuching') || lowerAddr.includes('miri') || 
+        lowerAddr.includes('sibu') || lowerAddr.includes('bintulu')
+    ) return 'Sarawak';
+
+    // 2. Postcode range fallback (5 digits regex)
+    const postalMatch = address.match(/\b(\d{5})\b/);
+    if (postalMatch) {
+        const pc = parseInt(postalMatch[1], 10);
+        if (pc >= 1000 && pc <= 2600) return 'Perlis';
+        if (pc >= 5000 && pc <= 9810) return 'Kedah';
+        if (pc >= 10000 && pc <= 14400) return 'Penang';
+        if (pc >= 15000 && pc <= 18500) return 'Kelantan';
+        if (pc >= 20000 && pc <= 24300) return 'Terengganu';
+        if (pc >= 25000 && pc <= 28800) return 'Pahang';
+        if (pc >= 30000 && pc <= 36810) return 'Perak';
+        if ((pc >= 40000 && pc <= 48300) || (pc >= 63000 && pc <= 68100)) return 'Selangor';
+        if ((pc >= 50000 && pc <= 60000) || (pc >= 62000 && pc <= 62988)) return 'K. Lumpur';
+        if (pc >= 70000 && pc <= 73509) return 'N. Sembilan';
+        if (pc >= 75000 && pc <= 78309) return 'Melaka';
+        if (pc >= 80000 && pc <= 86900) return 'Johor';
+        if (pc >= 88000 && pc <= 91309) return 'Sabah';
+        if (pc >= 93000 && pc <= 98859) return 'Sarawak';
+    }
 
     return 'Other'; // Or 'Unknown'
 };

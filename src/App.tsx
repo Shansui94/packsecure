@@ -31,6 +31,7 @@ import ProductionReports from './pages/ProductionReports';
 import UnderConstruction from './pages/UnderConstruction';
 
 import UpdatePassword from './pages/UpdatePassword';
+import Profile from './pages/Profile';
 import OrderSummary from './pages/OrderSummary'; // New Page
 // import CustomerImport from './pages/CustomerImport'; // Added Import Page
 // import UniversalIntake from './pages/UniversalIntake';
@@ -50,6 +51,7 @@ import PersonalMonthlyReport from './pages/PersonalMonthlyReport';
 import MachineSchedule from './pages/MachineSchedule';
 import ActivityLogs from './pages/ActivityLogs';
 import FloorPlan from './pages/FloorPlan';
+import WilliamDocumentCenter from './pages/WilliamDocumentCenter';
 
 import { User, UserRole, InventoryItem, ProductionLog as ProductionLogType, JobOrder } from './types';
 import { mergeAllowedPages } from './utils/pageAccess';
@@ -703,7 +705,7 @@ function App() {
             case 'iot':
                 return <IoTManagement />;
             case 'inventory':
-                return <Inventory inventory={inventory} />;
+                return <Inventory />;
             case 'livestock':
                 return <LiveStock />;
             case 'stock-movement':
@@ -749,6 +751,8 @@ function App() {
                 return <ProductionReports user={user} />;
             case 'executive-reports':
                 return <ExecutiveReports user={user} />;
+            case 'william-dashboard':
+                return <WilliamDocumentCenter />;
             // Organization
             case 'users':
                 return <HRPortal user={user} initialTab="personnel" onNavigate={setActivePage} />;
@@ -758,6 +762,8 @@ function App() {
                 return <HRPortal user={user} onNavigate={setActivePage} />;
             case 'update-password':
                 return <UpdatePassword />;
+            case 'profile':
+                return <Profile user={user} onNavigate={setActivePage} />;
             case 'factory-live-os':
                 return <FactoryLiveOS onNavigate={setActivePage} />;
             case 'floor-plan':

@@ -3,7 +3,7 @@ import { supabase } from '../services/supabase';
 import { 
     Calendar, TrendingUp, 
     ChevronLeft, ChevronRight, Search, Download, Loader, 
-    PieChart as PieIcon, BarChart2, Cpu, Activity, Info, Globe, FileSpreadsheet
+    PieChart as PieIcon, BarChart2, Cpu, Activity, Info, Globe, FileSpreadsheet, MapPin
 } from 'lucide-react';
 import { 
     ResponsiveContainer, PieChart, Pie, Cell, Tooltip, Legend, 
@@ -113,7 +113,7 @@ const ProductionReports: React.FC<ProductionReportsProps> = () => {
                 }
             }
 
-            // 2. Fetch Sales Orders (exclude Cancelled) with extra logistics fields
+            // 2. Fetch Sales Orders (Delivered only) with extra logistics fields
             let allOrders: any[] = [];
             let hasMoreOrders = true;
             let offsetOrders = 0;
@@ -122,7 +122,7 @@ const ProductionReports: React.FC<ProductionReportsProps> = () => {
                 const { data, error } = await supabase
                     .from('sales_orders')
                     .select('id, order_number, customer, items, zone, status, order_date, deadline, created_at, delivery_address, driver_id, trip_id, trip_sequence, trip_origin, trip_drop_count')
-                    .neq('status', 'Cancelled')
+                    .eq('status', 'Delivered')
                     .or(`order_date.gte.${firstDay},deadline.gte.${firstDay},created_at.gte.${startDateTs}`)
                     .order('created_at', { ascending: true })
                     .order('id', { ascending: true })
@@ -356,9 +356,10 @@ const ProductionReports: React.FC<ProductionReportsProps> = () => {
         // Zone delivery data for chart
         const zoneMap = new Map<string, number>();
         orders.forEach(order => {
-            let zone = (order.zone || '未分配地区 / Unassigned').trim();
+            let zone = (order.zone || '').trim();
             if (zone === '' || zone.toLowerCase() === 'null') {
-                zone = '未分配地区 / Unassigned';
+                const inferred = order.delivery_address ? determineState(order.delivery_address) : '';
+                zone = inferred && inferred !== 'Other' ? inferred.toUpperCase() : '未分配地区 / UNASSIGNED';
             } else {
                 zone = zone.toUpperCase();
             }
@@ -443,17 +444,40 @@ const ProductionReports: React.FC<ProductionReportsProps> = () => {
         return stats.skuList;
     }, [stats, tableLocation]);
 
-    // Calculate logistics statistics (monthly trips by state)
+    // Helper to calculate bubble wrap rolls for an order consistently
+    const calcOrderBubbleWrapRolls = (items: any[] = []): number => {
+        let rolls = 0;
+        items.forEach((item: any) => {
+            const sku = (item.sku || '').toUpperCase();
+            const prd = (item.product || item.name || '').toUpperCase();
+            // 🔒 仅统计 Bubblewrap 泡膜品类的送货卷数
+            const isBubbleWrap = sku.startsWith('BW-') || 
+                                 /^(SL|DL)-/.test(sku) || 
+                                 prd.includes('MERAH') || 
+                                 prd.includes('OREN') || 
+                                 prd.includes('HITAM') || 
+                                 prd.includes('BUBBLE');
+            
+            if (isBubbleWrap) {
+                rolls += Number(item.quantity) || 0;
+            }
+        });
+        return rolls;
+    };
+
+    // Calculate logistics statistics (1 Trip = 1 Vehicle Run / DO Dispatch)
     const logisticsStats = useMemo(() => {
         const stateMap: Record<string, {
             state: string;
             tripKeys: Set<string>;
+            totalDrops: number;
             totalDOs: number;
             totalRolls: number;
             orders: any[];
         }> = {};
 
-        const tripDriverDate = new Set<string>();
+        const globalTrips = new Set<string>();
+        let totalDrops = 0;
         let totalDOs = 0;
         let totalRolls = 0;
 
@@ -461,45 +485,31 @@ const ProductionReports: React.FC<ProductionReportsProps> = () => {
             const addr = order.delivery_address || '';
             const zone = order.zone || '';
             const state = determineState(`${addr} ${zone}`.trim());
-            const date = (order.order_date || order.deadline || order.created_at || '').slice(0, 10);
-            const driverId = order.driver_id || 'unassigned';
-
-            const tripKey = `${driverId}_${date}_${state}`;
-            const globalTripKey = `${driverId}_${date}`;
+            
+            // 🚚 1 Trip = 1 车次 (以 trip_id 或 order_number 唯一定义一次独立出车调度)
+            const tripId = order.trip_id || order.order_number || String(order.id);
+            const dropCount = Math.max(1, Number(order.trip_drop_count) || 1);
 
             if (!stateMap[state]) {
                 stateMap[state] = {
                     state,
                     tripKeys: new Set(),
+                    totalDrops: 0,
                     totalDOs: 0,
                     totalRolls: 0,
                     orders: []
                 };
             }
 
-            stateMap[state].tripKeys.add(tripKey);
+            stateMap[state].tripKeys.add(tripId);
+            stateMap[state].totalDrops += dropCount;
             stateMap[state].totalDOs += 1;
             stateMap[state].orders.push(order);
-            tripDriverDate.add(globalTripKey);
+            globalTrips.add(tripId);
+            totalDrops += dropCount;
             totalDOs += 1;
 
-            let orderRolls = 0;
-            const items = order.items || [];
-            items.forEach((item: any) => {
-                const sku = (item.sku || '').toUpperCase();
-                const prd = (item.product || item.name || '').toUpperCase();
-                // 🔒 仅统计 Bubblewrap 泡膜品类的送货卷数
-                const isBubbleWrap = sku.startsWith('BW-') || 
-                                     /^(SL|DL)-/.test(sku) || 
-                                     prd.includes('MERAH') || 
-                                     prd.includes('OREN') || 
-                                     prd.includes('HITAM') || 
-                                     prd.includes('BUBBLE');
-                
-                if (isBubbleWrap) {
-                    orderRolls += Number(item.quantity) || 0;
-                }
-            });
+            const orderRolls = calcOrderBubbleWrapRolls(order.items || []);
             stateMap[state].totalRolls += orderRolls;
             totalRolls += orderRolls;
         });
@@ -507,16 +517,24 @@ const ProductionReports: React.FC<ProductionReportsProps> = () => {
         const stateList = Object.values(stateMap).map(s => ({
             state: s.state,
             tripsCount: s.tripKeys.size,
+            dropsCount: s.totalDrops,
             dosCount: s.totalDOs,
             rollsCount: s.totalRolls,
             orders: s.orders
         })).sort((a, b) => b.tripsCount - a.tripsCount);
 
+        const totalTrips = globalTrips.size;
+        const totalStateTrips = stateList.reduce((acc, s) => acc + s.tripsCount, 0);
+
         return {
             stateList,
-            totalTrips: tripDriverDate.size,
+            totalTrips,
+            totalStateTrips,
+            totalDrops,
             totalDOs,
             totalRolls,
+            avgRollsPerTrip: totalTrips > 0 ? (totalRolls / totalTrips).toFixed(1) : '0',
+            avgDropsPerTrip: totalTrips > 0 ? (totalDrops / totalTrips).toFixed(1) : '0',
             statesCount: stateList.filter(s => s.tripsCount > 0 && s.state !== 'Other').length
         };
     }, [orders]);
@@ -530,15 +548,16 @@ const ProductionReports: React.FC<ProductionReportsProps> = () => {
 
         // Sheet 1: State Summary
         const summaryRows = logisticsStats.stateList.map((s, index) => {
-            const tripShare = logisticsStats.totalTrips > 0 ? ((s.tripsCount / logisticsStats.totalTrips) * 105 / 1.05).toFixed(2) : '0.00';
+            const tripShare = logisticsStats.totalStateTrips > 0 ? ((s.tripsCount / logisticsStats.totalStateTrips) * 100).toFixed(2) : '0.00';
             const rollShare = logisticsStats.totalRolls > 0 ? ((s.rollsCount / logisticsStats.totalRolls) * 100).toFixed(2) : '0.00';
             return {
                 'No': index + 1,
                 '州属 / State': s.state,
-                '出车趟数 / Trip Days': s.tripsCount,
+                '出车车次 / Trips': s.tripsCount,
+                '送达客户点数 / Drop Points': s.dropsCount,
                 '送货单数 / Delivery Orders (DOs)': s.dosCount,
                 '送货卷数 / Quantity (Rolls)': s.rollsCount,
-                '出车占比 / Trip Share (%)': tripShare + '%',
+                '车次占比 / Trip Share (%)': tripShare + '%',
                 '送货量占比 / Roll Share (%)': rollShare + '%'
             };
         });
@@ -547,10 +566,11 @@ const ProductionReports: React.FC<ProductionReportsProps> = () => {
         summaryRows.push({
             'No': 'Total',
             '州属 / State': '总计 / Total',
-            '出车趟数 / Trip Days': logisticsStats.totalTrips,
+            '出车车次 / Trips': logisticsStats.totalStateTrips,
+            '送达客户点数 / Drop Points': logisticsStats.totalDrops,
             '送货单数 / Delivery Orders (DOs)': logisticsStats.totalDOs,
             '送货卷数 / Quantity (Rolls)': logisticsStats.totalRolls,
-            '出车占比 / Trip Share (%)': '100.00%',
+            '车次占比 / Trip Share (%)': '100.00%',
             '送货量占比 / Roll Share (%)': '100.00%'
         } as any);
 
@@ -558,18 +578,17 @@ const ProductionReports: React.FC<ProductionReportsProps> = () => {
         const detailedRows: any[] = [];
         logisticsStats.stateList.forEach(s => {
             s.orders.forEach(order => {
-                let rolls = 0;
-                const items = order.items || [];
-                items.forEach((item: any) => { rolls += Number(item.quantity) || 0; });
-
+                const rolls = calcOrderBubbleWrapRolls(order.items || []);
                 const driverName = driversMap.get(order.driver_id) || '未分配 / Unassigned';
-                const date = order.order_date || order.deadline || 'N/A';
+                const date = (order.order_date || order.deadline || order.created_at || 'N/A').slice(0, 10);
+                const drops = Math.max(1, Number(order.trip_drop_count) || 1);
 
                 detailedRows.push({
                     '州属 / State': s.state,
                     '日期 / Date': date,
                     '司机 / Driver': driverName,
                     '送货单号 / DO Number': order.order_number || 'N/A',
+                    '送达客户点数 / Drops': drops,
                     '客户名称 / Customer': order.customer || 'N/A',
                     '送货地址 / Delivery Address': order.delivery_address || order.zone || 'N/A',
                     '送货量 / Quantity (Rolls)': rolls
@@ -591,7 +610,8 @@ const ProductionReports: React.FC<ProductionReportsProps> = () => {
         wsSummary['!cols'] = [
             { wch: 6 },  // No
             { wch: 20 }, // State
-            { wch: 20 }, // Trip Days
+            { wch: 20 }, // Trips
+            { wch: 22 }, // Drop Points
             { wch: 20 }, // DOs
             { wch: 20 }, // Rolls
             { wch: 22 }, // Trip Share
@@ -602,6 +622,7 @@ const ProductionReports: React.FC<ProductionReportsProps> = () => {
             { wch: 15 }, // Date
             { wch: 20 }, // Driver
             { wch: 22 }, // DO Number
+            { wch: 15 }, // Drops
             { wch: 25 }, // Customer
             { wch: 50 }, // Address
             { wch: 15 }  // Rolls
@@ -741,28 +762,28 @@ const ProductionReports: React.FC<ProductionReportsProps> = () => {
                                 <div className="bg-white dark:bg-[#121214] p-5 rounded-2xl border border-slate-200 dark:border-white/5 shadow-sm flex flex-col justify-between">
                                     <div>
                                         <div className="text-[10px] text-slate-500 dark:text-gray-500 font-black uppercase tracking-wider mb-1">
-                                            出车总趟数 / Total Trip Days
+                                            出车总车次 / Total Trips
                                         </div>
                                         <div className="text-2xl md:text-3xl font-black text-blue-600 dark:text-blue-500 font-mono">
                                             {logisticsStats.totalTrips.toLocaleString()}
                                         </div>
                                     </div>
                                     <div className="text-[11px] text-slate-400 dark:text-gray-500 mt-2 font-semibold flex items-center gap-1">
-                                        <TrendingUp size={12} className="text-blue-500" /> 司机·日期·州属 唯一组合 / Unique Trips
+                                        <TrendingUp size={12} className="text-blue-500" /> 全月累计 {logisticsStats.totalTrips} 车次 · 平均 {logisticsStats.avgRollsPerTrip} 卷/车
                                     </div>
                                 </div>
 
                                 <div className="bg-white dark:bg-[#121214] p-5 rounded-2xl border border-slate-200 dark:border-white/5 shadow-sm flex flex-col justify-between">
                                     <div>
                                         <div className="text-[10px] text-slate-500 dark:text-gray-500 font-black uppercase tracking-wider mb-1">
-                                            完成送货单数 / Delivery Orders (DOs)
+                                            送达客户点数 / Customer Drops
                                         </div>
                                         <div className="text-2xl md:text-3xl font-black text-emerald-600 dark:text-emerald-400 font-mono">
-                                            {logisticsStats.totalDOs.toLocaleString()}
+                                            {logisticsStats.totalDrops.toLocaleString()}
                                         </div>
                                     </div>
                                     <div className="text-[11px] text-slate-400 dark:text-gray-500 mt-2 font-semibold flex items-center gap-1">
-                                        <Info size={12} className="text-emerald-500" /> 已配送的送货单总数 / Total DOs
+                                        <MapPin size={12} className="text-emerald-500" /> 全月累计送达 {logisticsStats.totalDrops} 点 · 平均 {logisticsStats.avgDropsPerTrip} 点/车
                                     </div>
                                 </div>
 
@@ -801,16 +822,25 @@ const ProductionReports: React.FC<ProductionReportsProps> = () => {
                                 <div className="bg-white dark:bg-[#121214] p-5 rounded-2xl border border-slate-200 dark:border-white/5 shadow-sm flex flex-col h-[450px]">
                                     <div className="flex items-center gap-2 mb-4 shrink-0">
                                         <BarChart2 className="text-blue-500" size={18} />
-                                        <h3 className="font-bold text-slate-800 dark:text-white text-sm">州属出车分布图 / Trips & DOs by State</h3>
+                                        <h3 className="font-bold text-slate-800 dark:text-white text-sm">州属出车分布图 / Trips & Drops by State</h3>
                                     </div>
                                     <div className="flex-1 min-h-0">
                                         <ResponsiveContainer width="100%" height="100%">
                                             <BarChart
                                                 data={logisticsStats.stateList.filter(s => s.tripsCount > 0)}
-                                                margin={{ top: 10, right: 10, left: -20, bottom: 0 }}
+                                                margin={{ top: 10, right: 10, left: -20, bottom: 25 }}
                                             >
                                                 <CartesianGrid strokeDasharray="3 3" stroke="#374151" opacity={0.15} />
-                                                <XAxis dataKey="state" stroke="#94a3b8" fontSize={9} tickLine={false} />
+                                                <XAxis 
+                                                    dataKey="state" 
+                                                    stroke="#94a3b8" 
+                                                    fontSize={9} 
+                                                    tickLine={false} 
+                                                    interval={0}
+                                                    angle={-30}
+                                                    textAnchor="end"
+                                                    height={45}
+                                                />
                                                 <YAxis stroke="#94a3b8" fontSize={9} tickLine={false} />
                                                 <Tooltip
                                                     contentStyle={{
@@ -821,9 +851,9 @@ const ProductionReports: React.FC<ProductionReportsProps> = () => {
                                                         fontSize: '11px',
                                                     }}
                                                 />
-                                                <Legend wrapperStyle={{ fontSize: '10px' }} />
-                                                <Bar name="出车趟数 / Trips" dataKey="tripsCount" fill="#3b82f6" radius={[4, 4, 0, 0]} />
-                                                <Bar name="单数 / DOs" dataKey="dosCount" fill="#10b981" radius={[4, 4, 0, 0]} />
+                                                <Legend wrapperStyle={{ fontSize: '10px', paddingTop: '10px' }} />
+                                                <Bar name="出车车次 / Trips" dataKey="tripsCount" fill="#3b82f6" radius={[4, 4, 0, 0]} />
+                                                <Bar name="送达点数 / Drops" dataKey="dropsCount" fill="#10b981" radius={[4, 4, 0, 0]} />
                                             </BarChart>
                                         </ResponsiveContainer>
                                     </div>
@@ -850,16 +880,16 @@ const ProductionReports: React.FC<ProductionReportsProps> = () => {
                                                 <tr className="bg-slate-50 dark:bg-[#18181b] text-slate-500 dark:text-gray-400 text-[10px] uppercase tracking-wider border-b border-slate-200 dark:border-white/5 sticky top-0 z-10">
                                                     <th className="p-3 font-bold w-10"></th>
                                                     <th className="p-3 font-bold">州属 / State</th>
-                                                    <th className="p-3 font-bold text-right">出车趟数</th>
-                                                    <th className="p-3 font-bold text-right">送货单数 (DOs)</th>
+                                                    <th className="p-3 font-bold text-right">出车车次</th>
+                                                    <th className="p-3 font-bold text-right">送达客户点数 (Drops)</th>
                                                     <th className="p-3 font-bold text-right">配送卷数 (Rolls)</th>
-                                                    <th className="p-3 font-bold text-right">出车占比</th>
+                                                    <th className="p-3 font-bold text-right">车次占比</th>
                                                 </tr>
                                             </thead>
                                             <tbody className="divide-y divide-slate-100 dark:divide-white/5 text-xs">
                                                 {logisticsStats.stateList.map(s => {
                                                     const isExpanded = !!expandedStates[s.state];
-                                                    const tripShare = logisticsStats.totalTrips > 0 ? (s.tripsCount / logisticsStats.totalTrips) * 100 : 0;
+                                                    const tripShare = logisticsStats.totalStateTrips > 0 ? (s.tripsCount / logisticsStats.totalStateTrips) * 100 : 0;
                                                     return (
                                                         <React.Fragment key={s.state}>
                                                             <tr 
@@ -876,10 +906,10 @@ const ProductionReports: React.FC<ProductionReportsProps> = () => {
                                                                     {s.state}
                                                                 </td>
                                                                 <td className="p-3 text-right font-mono font-bold text-slate-800 dark:text-white">
-                                                                    {s.tripsCount} 趟
+                                                                    {s.tripsCount} 车
                                                                 </td>
-                                                                <td className="p-3 text-right font-mono text-slate-600 dark:text-gray-400">
-                                                                    {s.dosCount} 单
+                                                                <td className="p-3 text-right font-mono font-bold text-emerald-600 dark:text-emerald-400">
+                                                                    {s.dropsCount} 点
                                                                 </td>
                                                                 <td className="p-3 text-right font-mono text-slate-600 dark:text-gray-400">
                                                                     {s.rollsCount.toLocaleString()} 卷
@@ -898,6 +928,7 @@ const ProductionReports: React.FC<ProductionReportsProps> = () => {
                                                                                         <th className="p-2">日期</th>
                                                                                         <th className="p-2">司机</th>
                                                                                         <th className="p-2">送货单号</th>
+                                                                                        <th className="p-2 text-center">送达点数</th>
                                                                                         <th className="p-2">客户名称</th>
                                                                                         <th className="p-2">详细送货地址</th>
                                                                                         <th className="p-2 text-right">送货卷数</th>
@@ -905,16 +936,16 @@ const ProductionReports: React.FC<ProductionReportsProps> = () => {
                                                                                 </thead>
                                                                                 <tbody className="divide-y divide-slate-100 dark:divide-white/5">
                                                                                     {s.orders.map(order => {
-                                                                                        let rolls = 0;
-                                                                                        const items = order.items || [];
-                                                                                        items.forEach((item: any) => { rolls += Number(item.quantity) || 0; });
+                                                                                        const rolls = calcOrderBubbleWrapRolls(order.items || []);
                                                                                         const driverName = driversMap.get(order.driver_id) || '未分配 / Unassigned';
                                                                                         const date = (order.order_date || order.deadline || order.created_at || 'N/A').slice(0, 10);
+                                                                                        const drops = Math.max(1, Number(order.trip_drop_count) || 1);
                                                                                         return (
                                                                                             <tr key={order.id} className="hover:bg-slate-200/30 dark:hover:bg-white/[0.02] text-slate-700 dark:text-gray-300">
                                                                                                 <td className="p-2 font-mono whitespace-nowrap">{date}</td>
                                                                                                 <td className="p-2 font-medium">{driverName}</td>
                                                                                                 <td className="p-2 font-mono font-bold text-blue-600 dark:text-blue-400">{order.order_number || 'N/A'}</td>
+                                                                                                <td className="p-2 text-center font-mono font-bold text-emerald-600 dark:text-emerald-400">{drops} 点</td>
                                                                                                 <td className="p-2 truncate max-w-[120px]" title={order.customer}>{order.customer || 'N/A'}</td>
                                                                                                 <td className="p-2 max-w-[240px]">
                                                                                                     <div className="truncate font-medium text-slate-800 dark:text-slate-200" title={order.delivery_address}>
@@ -942,6 +973,26 @@ const ProductionReports: React.FC<ProductionReportsProps> = () => {
                                                     );
                                                 })}
                                             </tbody>
+                                            {logisticsStats.stateList.length > 0 && (
+                                                <tfoot className="bg-slate-100/90 dark:bg-[#18181b] font-bold border-t-2 border-slate-200 dark:border-white/10 text-xs sticky bottom-0 z-10 backdrop-blur-sm">
+                                                    <tr>
+                                                        <td className="p-3 text-center"></td>
+                                                        <td className="p-3 font-black text-slate-900 dark:text-white">总计 / Total</td>
+                                                        <td className="p-3 text-right font-mono font-black text-slate-900 dark:text-white">
+                                                            {logisticsStats.totalTrips} 车
+                                                        </td>
+                                                        <td className="p-3 text-right font-mono font-black text-emerald-600 dark:text-emerald-400">
+                                                            {logisticsStats.totalDrops.toLocaleString()} 点
+                                                        </td>
+                                                        <td className="p-3 text-right font-mono font-black text-slate-700 dark:text-gray-300">
+                                                            {logisticsStats.totalRolls.toLocaleString()} 卷
+                                                        </td>
+                                                        <td className="p-3 text-right font-mono font-black text-blue-600 dark:text-blue-400">
+                                                            100.0%
+                                                        </td>
+                                                    </tr>
+                                                </tfoot>
+                                            )}
                                         </table>
                                     </div>
                                 </div>
