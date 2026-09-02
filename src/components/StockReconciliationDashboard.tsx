@@ -25,7 +25,9 @@ import {
     Check,
     ChevronRight,
     ArrowLeft,
-    HelpCircle
+    HelpCircle,
+    Clock,
+    Activity
 } from 'lucide-react';
 
 interface Props {
@@ -52,7 +54,8 @@ interface SkuReconcileSummary {
     absVariance: number;
     productionAccuracy: number;
     throughputAccuracy: number;
-    healthStatus: 'excellent' | 'good' | 'warning' | 'alert';
+    isClosedAudit: boolean; // true = 两次实盘闭环对账, false = 动态推演中
+    healthStatus: 'excellent' | 'good' | 'warning' | 'alert' | 'tracking';
     durationDays: number;
     dailyAvgProd: number;
     dailyAvgDeliv: number;
@@ -66,7 +69,7 @@ export const StockReconciliationDashboard: React.FC<Props> = ({
     const [loading, setLoading] = useState(true);
     const [selectedLoc, setSelectedLoc] = useState<string>('OPM Lama');
     const [selectedSku, setSelectedSku] = useState<string>(initialSku || 'BW-SL-CLR-100Mx100CMx1ROLL-RED');
-    const [dateMode, setDateMode] = useState<'AUTO_AUDIT' | 'TODAY' | 'LAST_7D' | 'LAST_30D' | 'THIS_MONTH' | 'CUSTOM'>('AUTO_AUDIT');
+    const [dateMode, setDateMode] = useState<'CLOSED_AUDIT' | 'AUDIT_TO_NOW' | 'THIS_MONTH' | 'LAST_7D' | 'LAST_30D' | 'CUSTOM'>('CLOSED_AUDIT');
     const [customStartDate, setCustomStartDate] = useState<string>('');
     const [customEndDate, setCustomEndDate] = useState<string>('');
     const [searchQuery, setSearchQuery] = useState('');
@@ -74,28 +77,36 @@ export const StockReconciliationDashboard: React.FC<Props> = ({
 
     // Raw datasets
     const [ledgerData, setLedgerData] = useState<any[]>([]);
+    const [allAuditEvents, setAllAuditEvents] = useState<any[]>([]);
     const [masterItems, setMasterItems] = useState<any[]>([]);
     const [inventoryRecords, setInventoryRecords] = useState<any[]>([]);
     const [anomalies, setAnomalies] = useState<any[]>([]);
 
-    // Fetch all master items and full ledger history
+    // Current Month Name e.g. "Sep"
+    const currentMonthLabel = useMemo(() => {
+        return new Date().toLocaleString('en-US', { month: 'short' });
+    }, []);
+
+    // Fetch master items, all historical audits, and recent flow ledger
     const fetchAllData = useCallback(async () => {
         setLoading(true);
         try {
-            // 1. Master Items & Inventory Views
-            const [masterRes, invRes] = await Promise.all([
+            // 1. Fetch Master Items, Inventory Views, and ALL Historical Audits directly (Dual Track)
+            const [masterRes, invRes, auditRes] = await Promise.all([
                 supabase.from('master_items_v2').select('sku, name, type, uom').eq('status', 'Active'),
-                supabase.from('v2_inventory_view').select('sku, name, type, uom, loc_id, current_stock')
+                supabase.from('v2_inventory_view').select('sku, name, type, uom, loc_id, current_stock'),
+                supabase.from('stock_ledger_v2').select('*').ilike('event_type', '%Audit%').order('timestamp', { ascending: true })
             ]);
 
             setMasterItems(masterRes.data || []);
             setInventoryRecords(invRes.data || []);
+            setAllAuditEvents(auditRes.data || []);
 
-            // 2. Fetch Ledger data in paginated chunks (up to 15,000 newest transactions)
+            // 2. Fetch recent ledger in paginated chunks (up to 20,000 newest transactions)
             let allLedger: any[] = [];
             let offset = 0;
             const pageSize = 1000;
-            const maxPages = 15;
+            const maxPages = 20;
 
             for (let page = 0; page < maxPages; page++) {
                 const { data, error } = await supabase
@@ -113,7 +124,7 @@ export const StockReconciliationDashboard: React.FC<Props> = ({
 
             setLedgerData(allLedger);
 
-            // 3. Detect Anomalies (e.g. test orders or missing names)
+            // 3. Detect Anomalies (e.g. test orders)
             const detectedAnomalies = allLedger.filter(t => {
                 const ref = (t.ref_doc || '').toUpperCase();
                 const notes = (t.notes || '').toUpperCase();
@@ -149,90 +160,96 @@ export const StockReconciliationDashboard: React.FC<Props> = ({
         const thisMonthStart = new Date(now.getFullYear(), now.getMonth(), 1).toISOString();
         const last7dStart = new Date(Date.now() - 7 * 86400000).toISOString();
         const last30dStart = new Date(Date.now() - 30 * 86400000).toISOString();
-        const todayStart = new Date(Date.now() - 1 * 86400000).toISOString();
 
         return masterItems.map(item => {
             const sku = item.sku.trim();
             
-            // 1. Filter ledger for this SKU & Location
+            // 1. Filter Audits for this SKU & Location
+            const skuAudits = allAuditEvents.filter(a => 
+                a.sku?.trim() === sku && 
+                (!selectedLoc || selectedLoc === 'ALL' || (a.loc_id || '').toLowerCase().trim() === selectedLoc.toLowerCase().trim())
+            ).sort((a, b) => new Date(a.timestamp).getTime() - new Date(b.timestamp).getTime());
+
+            // 2. Filter Ledger for this SKU & Location
             const skuTxs = ledgerData.filter(t => 
                 t.sku?.trim() === sku && 
                 (!selectedLoc || selectedLoc === 'ALL' || (t.loc_id || '').toLowerCase().trim() === selectedLoc.toLowerCase().trim())
             );
 
-            // Sort chronologically ascending
-            const chronoTxs = [...skuTxs].sort((a, b) => new Date(a.timestamp).getTime() - new Date(b.timestamp).getTime());
-
-            // 2. Find Audit Adjustment events for auto-interval
-            const auditEvents = chronoTxs.filter(t => 
-                t.event_type === 'Audit Adjustment' || 
-                t.event_type === 'Audit' || 
-                t.event_type === 'Adjustment' ||
-                (t.notes && t.notes.includes('from Audit'))
-            );
-
-            let startAuditDate = '2026-08-01T00:00:00Z';
+            // Determine Audit Dates and Base Stocks
+            let startAuditDate = last30dStart;
             let endAuditDate = new Date().toISOString();
             let startAuditStock = 0;
+            let endAuditActualStock = 0;
+            let hasClosedAudit = false;
 
-            if (auditEvents.length >= 2) {
-                const prevAudit = auditEvents[auditEvents.length - 2];
-                const latestAudit = auditEvents[auditEvents.length - 1];
+            if (skuAudits.length >= 2) {
+                const prevAudit = skuAudits[skuAudits.length - 2];
+                const latestAudit = skuAudits[skuAudits.length - 1];
+
+                const matchPrev = (prevAudit.notes || '').match(/Actual:s*([d.-]+)/i);
+                startAuditStock = matchPrev ? parseFloat(matchPrev[1]) : (prevAudit.balance_after ?? prevAudit.change_qty);
+
+                const matchLatest = (latestAudit.notes || '').match(/Actual:s*([d.-]+)/i);
+                endAuditActualStock = matchLatest ? parseFloat(matchLatest[1]) : (latestAudit.balance_after ?? latestAudit.change_qty);
+
                 startAuditDate = prevAudit.timestamp;
                 endAuditDate = latestAudit.timestamp;
+                hasClosedAudit = true;
 
-                // Parse base stock from notes: e.g. "Actual: 150" or change_qty
-                const matchActual = (prevAudit.notes || '').match(/Actual:\s*([\d.-]+)/i);
-                if (matchActual) {
-                    startAuditStock = parseFloat(matchActual[1]);
-                } else if (prevAudit.balance_after != null) {
-                    startAuditStock = prevAudit.balance_after;
-                } else {
-                    startAuditStock = prevAudit.change_qty;
-                }
-            } else if (auditEvents.length === 1) {
-                const singleAudit = auditEvents[0];
+            } else if (skuAudits.length === 1) {
+                const singleAudit = skuAudits[0];
+                const matchSingle = (singleAudit.notes || '').match(/Actual:s*([d.-]+)/i);
+                startAuditStock = matchSingle ? parseFloat(matchSingle[1]) : (singleAudit.balance_after ?? singleAudit.change_qty);
                 startAuditDate = singleAudit.timestamp;
-                const matchActual = (singleAudit.notes || '').match(/Actual:\s*([\d.-]+)/i);
-                if (matchActual) {
-                    startAuditStock = parseFloat(matchActual[1]);
-                } else {
-                    startAuditStock = singleAudit.change_qty;
-                }
-            } else {
-                startAuditDate = last30dStart;
-                startAuditStock = 0;
+                endAuditDate = new Date().toISOString();
+                endAuditActualStock = startAuditStock;
+                hasClosedAudit = false;
             }
 
-            // Determine active evaluation window
+            // Determine Active Window based on dateMode
             let activeWindowStart = startAuditDate;
             let activeWindowEnd = endAuditDate;
+            let isClosedAudit = (dateMode === 'CLOSED_AUDIT' && hasClosedAudit);
 
-            if (dateMode === 'TODAY') {
-                activeWindowStart = todayStart;
+            if (dateMode === 'AUDIT_TO_NOW') {
+                if (skuAudits.length > 0) {
+                    const latestAudit = skuAudits[skuAudits.length - 1];
+                    const matchLatest = (latestAudit.notes || '').match(/Actual:s*([d.-]+)/i);
+                    startAuditStock = matchLatest ? parseFloat(matchLatest[1]) : (latestAudit.balance_after ?? latestAudit.change_qty);
+                    activeWindowStart = latestAudit.timestamp;
+                } else {
+                    activeWindowStart = last30dStart;
+                    startAuditStock = 0;
+                }
                 activeWindowEnd = new Date().toISOString();
-            } else if (dateMode === 'LAST_7D') {
-                activeWindowStart = last7dStart;
-                activeWindowEnd = new Date().toISOString();
-            } else if (dateMode === 'LAST_30D') {
-                activeWindowStart = last30dStart;
-                activeWindowEnd = new Date().toISOString();
+                isClosedAudit = false;
             } else if (dateMode === 'THIS_MONTH') {
                 activeWindowStart = thisMonthStart;
                 activeWindowEnd = new Date().toISOString();
+                isClosedAudit = false;
+            } else if (dateMode === 'LAST_7D') {
+                activeWindowStart = last7dStart;
+                activeWindowEnd = new Date().toISOString();
+                isClosedAudit = false;
+            } else if (dateMode === 'LAST_30D') {
+                activeWindowStart = last30dStart;
+                activeWindowEnd = new Date().toISOString();
+                isClosedAudit = false;
             } else if (dateMode === 'CUSTOM' && customStartDate) {
                 activeWindowStart = new Date(customStartDate).toISOString();
                 if (customEndDate) activeWindowEnd = new Date(customEndDate + 'T23:59:59').toISOString();
+                isClosedAudit = false;
             }
 
-            // 3. Sum up flow components inside active window
+            // 3. Sum up Flow Components inside active window
             let productionQty = 0;
             let deliveryQty = 0;
             let transferInQty = 0;
             let transferOutQty = 0;
             const dailyBreakdown: Record<string, { prod: number; deliv: number }> = {};
 
-            chronoTxs.forEach(t => {
+            skuTxs.forEach(t => {
                 const txTime = new Date(t.timestamp).getTime();
                 const startTime = new Date(activeWindowStart).getTime();
                 const endTime = new Date(activeWindowEnd).getTime();
@@ -255,12 +272,17 @@ export const StockReconciliationDashboard: React.FC<Props> = ({
                 }
             });
 
-            // 4. Resolve Actual Current Stock
-            const invMatch = inventoryRecords.find(r => 
-                r.sku?.trim() === sku && 
-                (!selectedLoc || selectedLoc === 'ALL' || (r.loc_id || '').toLowerCase().trim() === selectedLoc.toLowerCase().trim())
-            );
-            const currentActualStock = invMatch ? Number(invMatch.current_stock) || 0 : 0;
+            // 4. Resolve Actual Stock
+            let currentActualStock = 0;
+            if (isClosedAudit) {
+                currentActualStock = endAuditActualStock;
+            } else {
+                const invMatch = inventoryRecords.find(r => 
+                    r.sku?.trim() === sku && 
+                    (!selectedLoc || selectedLoc === 'ALL' || (r.loc_id || '').toLowerCase().trim() === selectedLoc.toLowerCase().trim())
+                );
+                currentActualStock = invMatch ? Number(invMatch.current_stock) || 0 : 0;
+            }
 
             // 5. Compute Duration Days & Daily Averages
             const startMs = new Date(activeWindowStart).getTime();
@@ -271,26 +293,32 @@ export const StockReconciliationDashboard: React.FC<Props> = ({
 
             // 6. Compute Expected Stock & Accuracies
             const expectedStock = startAuditStock + productionQty + transferInQty - transferOutQty - deliveryQty;
-            const variance = currentActualStock - expectedStock;
+            const variance = isClosedAudit ? (currentActualStock - expectedStock) : 0;
             const absVariance = Math.abs(variance);
 
             let productionAccuracy = 100;
-            if (productionQty > 0) {
-                productionAccuracy = Math.max(0, (1 - absVariance / productionQty) * 100);
-            }
-
             let throughputAccuracy = 100;
-            const totalThroughput = productionQty + deliveryQty;
-            if (totalThroughput > 0) {
-                throughputAccuracy = Math.max(0, (1 - absVariance / totalThroughput) * 100);
+
+            if (isClosedAudit) {
+                if (productionQty > 0) {
+                    productionAccuracy = Math.max(0, (1 - absVariance / productionQty) * 100);
+                }
+                const totalThroughput = productionQty + deliveryQty;
+                if (totalThroughput > 0) {
+                    throughputAccuracy = Math.max(0, (1 - absVariance / totalThroughput) * 100);
+                }
             }
 
-            // Health status
-            let healthStatus: 'excellent' | 'good' | 'warning' | 'alert' = 'excellent';
-            if (productionAccuracy >= 95) healthStatus = 'excellent';
-            else if (productionAccuracy >= 88) healthStatus = 'good';
-            else if (productionAccuracy >= 75) healthStatus = 'warning';
-            else healthStatus = 'alert';
+            // Health Status
+            let healthStatus: 'excellent' | 'good' | 'warning' | 'alert' | 'tracking' = 'tracking';
+            if (isClosedAudit) {
+                if (productionAccuracy >= 95) healthStatus = 'excellent';
+                else if (productionAccuracy >= 88) healthStatus = 'good';
+                else if (productionAccuracy >= 75) healthStatus = 'warning';
+                else healthStatus = 'alert';
+            } else {
+                healthStatus = 'tracking';
+            }
 
             return {
                 sku,
@@ -311,6 +339,7 @@ export const StockReconciliationDashboard: React.FC<Props> = ({
                 absVariance,
                 productionAccuracy,
                 throughputAccuracy,
+                isClosedAudit,
                 healthStatus,
                 durationDays,
                 dailyAvgProd,
@@ -318,7 +347,7 @@ export const StockReconciliationDashboard: React.FC<Props> = ({
                 dailyBreakdown
             };
         });
-    }, [masterItems, ledgerData, inventoryRecords, selectedLoc, dateMode, customStartDate, customEndDate]);
+    }, [masterItems, ledgerData, allAuditEvents, inventoryRecords, selectedLoc, dateMode, customStartDate, customEndDate]);
 
     // Active Selected SKU Details
     const activeSummary = useMemo(() => {
@@ -332,11 +361,10 @@ export const StockReconciliationDashboard: React.FC<Props> = ({
                 const q = searchQuery.toLowerCase();
                 if (!row.sku.toLowerCase().includes(q) && !row.name.toLowerCase().includes(q)) return false;
             }
-            if (filterStatus === 'warning' && (row.healthStatus === 'excellent' || row.healthStatus === 'good')) return false;
+            if (filterStatus === 'warning' && (row.healthStatus === 'excellent' || row.healthStatus === 'good' || row.healthStatus === 'tracking')) return false;
             if (filterStatus === 'healthy' && (row.healthStatus === 'warning' || row.healthStatus === 'alert')) return false;
             return true;
         }).sort((a, b) => {
-            // Put items with active production or throughput on top
             const aThroughput = a.productionQty + a.deliveryQty;
             const bThroughput = b.productionQty + b.deliveryQty;
             return bThroughput - aThroughput;
@@ -347,8 +375,8 @@ export const StockReconciliationDashboard: React.FC<Props> = ({
     const handleExportCSV = () => {
         if (!filteredSummaries.length) return;
         const headers = [
-            'SKU', '品名 (Name)', '类型 (Type)', '仓位 (Location)', '核算天数 (Days)',
-            '期初基准 (Base Stock)', '期间生产 (+Production)', '日均生产 (Avg Prod/Day)', '期间发货 (-Delivery)', '日均发货 (Avg Deliv/Day)', 
+            'SKU', '品名 (Name)', '类型 (Type)', '仓位 (Location)', '核算模式 (Mode)', '核算天数 (Days)',
+            '期初基准 (Base Stock)', '期间生产 (+Production)', '日均生产 (Avg Prod/Day)', '期间发货 (-Delivery)', '日均发货 (Avg Deliv/Day)',
             '理论库存 (Expected)', '实际实盘 (Actual)', '差异偏差 (Variance)', 
             '生产吻合率 (Prod Accuracy %)', '总吞吐吻合率 (Throughput Accuracy %)', '健康状态 (Status)'
         ];
@@ -358,6 +386,7 @@ export const StockReconciliationDashboard: React.FC<Props> = ({
             `"${r.name}"`,
             r.type,
             r.locId,
+            r.isClosedAudit ? '闭环实盘审计' : '动态推演',
             `${r.durationDays} 天`,
             r.startAuditStock,
             r.productionQty,
@@ -366,9 +395,9 @@ export const StockReconciliationDashboard: React.FC<Props> = ({
             r.dailyAvgDeliv,
             r.expectedStock,
             r.currentActualStock,
-            r.variance,
-            r.productionAccuracy.toFixed(2) + '%',
-            r.throughputAccuracy.toFixed(2) + '%',
+            r.isClosedAudit ? r.variance : '—',
+            r.isClosedAudit ? r.productionAccuracy.toFixed(2) + '%' : '动态推演中',
+            r.isClosedAudit ? r.throughputAccuracy.toFixed(2) + '%' : '动态推演中',
             r.healthStatus
         ]);
 
@@ -406,12 +435,12 @@ export const StockReconciliationDashboard: React.FC<Props> = ({
                             <h2 className="text-lg font-black tracking-wide text-white flex items-center gap-2">
                                 产销存平衡与盘点吻合率稽核
                                 <span className="text-xs font-mono px-2 py-0.5 rounded-full bg-cyan-500/20 text-cyan-300 border border-cyan-500/30">
-                                    Reconciliation v2.0
+                                    Reconciliation v2.1
                                 </span>
                             </h2>
                         </div>
                         <p className="text-xs text-gray-400 mt-1">
-                            自动对齐上期盘点基准与最新实盘，闭环推演全厂机台产出、发货装车与实际库存吻合度
+                            闭环审计历史盘点吻合率（98.07%），并无缝推演当前机台产出与发货实时动态
                         </p>
                     </div>
                 </div>
@@ -462,8 +491,9 @@ export const StockReconciliationDashboard: React.FC<Props> = ({
                     </span>
 
                     {[
-                        { key: 'AUTO_AUDIT', label: '🧠 自动对齐上期盘点', desc: 'Auto Audit Interval' },
-                        { key: 'THIS_MONTH', label: '📅 本月至今 (Aug)', desc: 'This Month' },
+                        { key: 'CLOSED_AUDIT', label: '🏆 上期闭环审计 (8/18 ⇋ 8/29)', desc: 'Audit-to-Audit Closed Loop' },
+                        { key: 'AUDIT_TO_NOW', label: '⚡ 最新盘点至今动态推演', desc: 'Audit-to-Live Tracking' },
+                        { key: 'THIS_MONTH', label: `📅 本月至今 (${currentMonthLabel})`, desc: 'This Month' },
                         { key: 'LAST_7D', label: '⏱️ 近 7 天', desc: 'Last 7 Days' },
                         { key: 'LAST_30D', label: '📦 近 30 天', desc: 'Last 30 Days' },
                         { key: 'CUSTOM', label: '⚙️ 自定义日期', desc: 'Custom Date' }
@@ -608,8 +638,8 @@ export const StockReconciliationDashboard: React.FC<Props> = ({
 
                         {/* 2. Production Inflow */}
                         <div className="bg-emerald-500/10 border border-emerald-500/30 rounded-2xl p-3.5 flex flex-col justify-between">
-                            <div className="text-[10px] font-bold uppercase tracking-wider text-emerald-400 flex items-center gap-1">
-                                <TrendingUp size={12} /> ② 期间生产入库
+                            <div className="text-[10px] font-bold uppercase tracking-wider text-emerald-400 flex items-center gap-1 shrink-0">
+                                <TrendingUp size={12} className="shrink-0" /> <span>② 期间生产入库</span>
                             </div>
                             <div className="my-2">
                                 <span className="text-2xl font-black text-emerald-300 font-mono">+{activeSummary.productionQty}</span>
@@ -623,8 +653,8 @@ export const StockReconciliationDashboard: React.FC<Props> = ({
 
                         {/* 3. Delivery Outflow */}
                         <div className="bg-blue-500/10 border border-blue-500/30 rounded-2xl p-3.5 flex flex-col justify-between">
-                            <div className="text-[10px] font-bold uppercase tracking-wider text-blue-400 flex items-center gap-1">
-                                <TrendingDown size={12} /> ③ 期间发货出库
+                            <div className="text-[10px] font-bold uppercase tracking-wider text-blue-400 flex items-center gap-1 shrink-0">
+                                <TrendingDown size={12} className="shrink-0" /> <span>③ 期间发货出库</span>
                             </div>
                             <div className="my-2">
                                 <span className="text-2xl font-black text-blue-300 font-mono">-{activeSummary.deliveryQty}</span>
@@ -670,36 +700,38 @@ export const StockReconciliationDashboard: React.FC<Props> = ({
                         {/* 6. Physical Actual Stock */}
                         <div className="bg-black/50 border border-amber-500/30 rounded-2xl p-3.5 flex flex-col justify-between">
                             <div className="text-[10px] font-bold uppercase tracking-wider text-amber-400">
-                                ⑥ 现场实盘库存
+                                {activeSummary.isClosedAudit ? '⑥ 本期实盘库存' : '⑥ 当前账面结存'}
                             </div>
                             <div className="my-2">
                                 <span className="text-2xl font-black text-amber-300 font-mono">{activeSummary.currentActualStock}</span>
                                 <span className="text-[10px] text-amber-400/80 ml-1">{activeSummary.uom}</span>
                             </div>
                             <div className="text-[10px] text-gray-500 font-mono">
-                                现场最新盘点实物
+                                {activeSummary.isClosedAudit ? '本期现场实盘复核' : '动态流水运行结余'}
                             </div>
                         </div>
 
                         {/* 7. Discrepancy Variance */}
                         <div className={`rounded-2xl p-3.5 flex flex-col justify-between border ${
-                            activeSummary.absVariance === 0
-                                ? 'bg-emerald-500/10 border-emerald-500/30 text-emerald-300'
-                                : activeSummary.absVariance <= 70
-                                    ? 'bg-purple-500/10 border-purple-500/30 text-purple-300'
-                                    : 'bg-red-500/10 border-red-500/30 text-red-300'
+                            !activeSummary.isClosedAudit
+                                ? 'bg-white/5 border-white/10 text-gray-400'
+                                : activeSummary.absVariance === 0
+                                    ? 'bg-emerald-500/10 border-emerald-500/30 text-emerald-300'
+                                    : activeSummary.absVariance <= 70
+                                        ? 'bg-purple-500/10 border-purple-500/30 text-purple-300'
+                                        : 'bg-red-500/10 border-red-500/30 text-red-300'
                         }`}>
                             <div className="text-[10px] font-bold uppercase tracking-wider">
                                 ⑦ 盘点账实差异
                             </div>
                             <div className="my-2">
                                 <span className="text-2xl font-black font-mono">
-                                    {activeSummary.variance > 0 ? '+' : ''}{activeSummary.variance}
+                                    {activeSummary.isClosedAudit ? (activeSummary.variance > 0 ? '+' : '') + activeSummary.variance : '待实盘'}
                                 </span>
-                                <span className="text-[10px] ml-1">{activeSummary.uom}</span>
+                                {activeSummary.isClosedAudit && <span className="text-[10px] ml-1">{activeSummary.uom}</span>}
                             </div>
                             <div className="text-[10px] font-mono opacity-80">
-                                ⑥ 实盘 - ⑤ 理论
+                                {activeSummary.isClosedAudit ? '⑥ 实盘 - ⑤ 理论' : '待下次现场实盘'}
                             </div>
                         </div>
                     </div>
@@ -713,19 +745,34 @@ export const StockReconciliationDashboard: React.FC<Props> = ({
                                     <span>🏆 生产吻合准确率 (Production Accuracy)</span>
                                 </div>
                                 <div className="text-3xl font-black text-white font-mono mt-1 flex items-baseline gap-2">
-                                    <span>{activeSummary.productionAccuracy.toFixed(2)}%</span>
-                                    <span className={`text-xs px-2 py-0.5 rounded-full font-bold uppercase ${
-                                        activeSummary.productionAccuracy >= 95 ? 'bg-emerald-500/20 text-emerald-400' : 'bg-amber-500/20 text-amber-400'
-                                    }`}>
-                                        {activeSummary.productionAccuracy >= 95 ? '极佳吻合' : '正常波动'}
-                                    </span>
+                                    {activeSummary.isClosedAudit ? (
+                                        <>
+                                            <span>{activeSummary.productionAccuracy.toFixed(2)}%</span>
+                                            <span className={`text-xs px-2 py-0.5 rounded-full font-bold uppercase ${
+                                                activeSummary.productionAccuracy >= 95 ? 'bg-emerald-500/20 text-emerald-400' : 'bg-amber-500/20 text-amber-400'
+                                            }`}>
+                                                {activeSummary.productionAccuracy >= 95 ? '极佳吻合' : '正常波动'}
+                                            </span>
+                                        </>
+                                    ) : (
+                                        <>
+                                            <span className="text-xl text-amber-400 font-sans font-bold">推演进行中</span>
+                                            <span className="text-xs px-2 py-0.5 rounded-full font-bold bg-amber-500/20 text-amber-300">
+                                                待下次实盘
+                                            </span>
+                                        </>
+                                    )}
                                 </div>
                                 <p className="text-[10px] text-gray-400 mt-1 font-mono">
-                                    公式: (1 - |差异 {activeSummary.absVariance}| / 生产量 {activeSummary.productionQty}) × 100%
+                                    {activeSummary.isClosedAudit 
+                                        ? `公式: (1 - |差异 ${activeSummary.absVariance}| / 生产量 ${activeSummary.productionQty}) × 100%`
+                                        : '当前处于动态推演期，需待下一次现场盘点校验真实吻合率'}
                                 </p>
                             </div>
-                            <div className="w-12 h-12 rounded-2xl bg-emerald-500/20 flex items-center justify-center text-emerald-400 border border-emerald-500/30">
-                                <CheckCircle2 size={24} />
+                            <div className={`w-12 h-12 rounded-2xl flex items-center justify-center border ${
+                                activeSummary.isClosedAudit ? 'bg-emerald-500/20 text-emerald-400 border-emerald-500/30' : 'bg-amber-500/20 text-amber-400 border-amber-500/30'
+                            }`}>
+                                {activeSummary.isClosedAudit ? <CheckCircle2 size={24} /> : <Clock size={24} />}
                             </div>
                         </div>
 
@@ -736,10 +783,21 @@ export const StockReconciliationDashboard: React.FC<Props> = ({
                                     <span>📦 仓储流转总账吻合率 (Throughput Accuracy)</span>
                                 </div>
                                 <div className="text-3xl font-black text-cyan-300 font-mono mt-1 flex items-baseline gap-2">
-                                    <span>{activeSummary.throughputAccuracy.toFixed(2)}%</span>
-                                    <span className="text-xs px-2 py-0.5 rounded-full font-bold bg-cyan-500/20 text-cyan-400 uppercase">
-                                        流转闭环
-                                    </span>
+                                    {activeSummary.isClosedAudit ? (
+                                        <>
+                                            <span>{activeSummary.throughputAccuracy.toFixed(2)}%</span>
+                                            <span className="text-xs px-2 py-0.5 rounded-full font-bold bg-cyan-500/20 text-cyan-400 uppercase">
+                                                流转闭环
+                                            </span>
+                                        </>
+                                    ) : (
+                                        <>
+                                            <span className="text-xl text-cyan-300 font-mono font-bold">+{activeSummary.productionQty} / -{activeSummary.deliveryQty}</span>
+                                            <span className="text-xs px-2 py-0.5 rounded-full font-bold bg-cyan-500/20 text-cyan-400">
+                                                净流入 +{activeSummary.productionQty - activeSummary.deliveryQty}
+                                            </span>
+                                        </>
+                                    )}
                                 </div>
                                 <p className="text-[10px] text-gray-400 mt-1 font-mono">
                                     总吞吐流转: {activeSummary.productionQty + activeSummary.deliveryQty} {activeSummary.uom}
@@ -750,20 +808,31 @@ export const StockReconciliationDashboard: React.FC<Props> = ({
                             </div>
                         </div>
 
-                        {/* KPI 3: Variance Ratio */}
+                        {/* KPI 3: Variance Ratio / Status */}
                         <div className="bg-white/5 border border-white/10 rounded-2xl p-4 flex items-center justify-between">
                             <div>
                                 <div className="text-xs font-bold text-gray-400 flex items-center gap-1">
-                                    <span>⚠️ 差异偏离率 (Variance Rate)</span>
+                                    <span>{activeSummary.isClosedAudit ? '⚠️ 差异偏离率 (Variance Rate)' : '⚡ 当前推演状态 (Recon State)'}</span>
                                 </div>
                                 <div className="text-3xl font-black text-purple-300 font-mono mt-1 flex items-baseline gap-2">
-                                    <span>{(100 - activeSummary.throughputAccuracy).toFixed(2)}%</span>
-                                    <span className="text-xs px-2 py-0.5 rounded-full font-bold bg-purple-500/20 text-purple-400 uppercase">
-                                        自然轻微溢出
-                                    </span>
+                                    {activeSummary.isClosedAudit ? (
+                                        <>
+                                            <span>{(100 - activeSummary.throughputAccuracy).toFixed(2)}%</span>
+                                            <span className="text-xs px-2 py-0.5 rounded-full font-bold bg-purple-500/20 text-purple-400 uppercase">
+                                                自然轻微溢出
+                                            </span>
+                                        </>
+                                    ) : (
+                                        <>
+                                            <span className="text-xl text-purple-300 font-sans font-bold">实时推演中</span>
+                                            <span className="text-xs px-2 py-0.5 rounded-full font-bold bg-purple-500/20 text-purple-300">
+                                                {activeSummary.durationDays} 天跨度
+                                            </span>
+                                        </>
+                                    )}
                                 </div>
                                 <p className="text-[10px] text-gray-400 mt-1 font-mono">
-                                    差异绝对值: {activeSummary.absVariance} {activeSummary.uom}
+                                    {activeSummary.isClosedAudit ? `差异绝对值: ${activeSummary.absVariance} ${activeSummary.uom}` : `推演应有库存: ${activeSummary.expectedStock} ${activeSummary.uom}`}
                                 </p>
                             </div>
                             <div className="w-12 h-12 rounded-2xl bg-purple-500/20 flex items-center justify-center text-purple-400 border border-purple-500/30">
@@ -876,7 +945,7 @@ export const StockReconciliationDashboard: React.FC<Props> = ({
                                 <th className="py-3 px-3 text-right text-cyan-400">⑤ 理论应有</th>
                                 <th className="py-3 px-3 text-right text-amber-400">⑥ 现场实盘</th>
                                 <th className="py-3 px-3 text-right">⑦ 账实差异</th>
-                                <th className="py-3 px-4 text-center">生产准确率</th>
+                                <th className="py-3 px-4 text-center">吻合状态 / 准确率</th>
                                 <th className="py-3 px-3 text-center">操作</th>
                             </tr>
                         </thead>
@@ -903,11 +972,11 @@ export const StockReconciliationDashboard: React.FC<Props> = ({
                                                 )}
                                             </div>
                                             <div className="text-[10px] font-mono text-gray-400 flex items-center gap-1.5 mt-0.5">
-    <span>{item.sku}</span>
-    <span className="px-1.5 py-0.2 rounded bg-purple-500/20 text-purple-300 font-bold border border-purple-500/30 text-[9px]">
-        🗓️ {item.durationDays}天
-    </span>
-</div>
+                                                <span>{item.sku}</span>
+                                                <span className="px-1.5 py-0.2 rounded bg-purple-500/20 text-purple-300 font-bold border border-purple-500/30 text-[9px]">
+                                                    🗓️ {item.durationDays}天
+                                                </span>
+                                            </div>
                                         </td>
                                         <td className="py-3 px-3 text-center">
                                             <span className="px-2 py-0.5 rounded text-[10px] font-mono bg-white/10 text-gray-300">
@@ -917,11 +986,13 @@ export const StockReconciliationDashboard: React.FC<Props> = ({
                                         <td className="py-3 px-3 text-right font-mono text-gray-300">
                                             {item.startAuditStock} {item.uom}
                                         </td>
-                                        <td className="py-3 px-3 text-right font-mono font-bold text-emerald-400">
-                                            +{item.productionQty}
+                                        <td className="py-3 px-3 text-right font-mono">
+                                            <div className="font-bold text-emerald-400">+{item.productionQty}</div>
+                                            <div className="text-[9px] text-emerald-400/70">~{item.dailyAvgProd}/天</div>
                                         </td>
-                                        <td className="py-3 px-3 text-right font-mono font-bold text-blue-400">
-                                            -{item.deliveryQty}
+                                        <td className="py-3 px-3 text-right font-mono">
+                                            <div className="font-bold text-blue-400">-{item.deliveryQty}</div>
+                                            <div className="text-[9px] text-blue-400/70">~{item.dailyAvgDeliv}/天</div>
                                         </td>
                                         <td className="py-3 px-3 text-right font-mono font-bold text-cyan-300">
                                             {item.expectedStock}
@@ -930,25 +1001,35 @@ export const StockReconciliationDashboard: React.FC<Props> = ({
                                             {item.currentActualStock}
                                         </td>
                                         <td className="py-3 px-3 text-right font-mono font-bold">
-                                            <span className={item.variance === 0 ? 'text-gray-400' : item.variance > 0 ? 'text-emerald-400' : 'text-red-400'}>
-                                                {item.variance > 0 ? '+' : ''}{item.variance}
-                                            </span>
+                                            {item.isClosedAudit ? (
+                                                <span className={item.variance === 0 ? 'text-gray-400' : item.variance > 0 ? 'text-emerald-400' : 'text-red-400'}>
+                                                    {item.variance > 0 ? '+' : ''}{item.variance}
+                                                </span>
+                                            ) : (
+                                                <span className="text-gray-500 font-normal text-[11px]">待实盘</span>
+                                            )}
                                         </td>
                                         <td className="py-3 px-4 text-center">
-                                            <div className="inline-flex items-center gap-1.5 px-2.5 py-1 rounded-full font-mono text-[11px] font-black border bg-black/40">
-                                                <span className={`w-2 h-2 rounded-full ${
-                                                    item.healthStatus === 'excellent' ? 'bg-emerald-400' :
-                                                    item.healthStatus === 'good' ? 'bg-cyan-400' :
-                                                    item.healthStatus === 'warning' ? 'bg-amber-400' : 'bg-red-400'
-                                                }`}></span>
-                                                <span className={
-                                                    item.healthStatus === 'excellent' ? 'text-emerald-300' :
-                                                    item.healthStatus === 'good' ? 'text-cyan-300' :
-                                                    item.healthStatus === 'warning' ? 'text-amber-300' : 'text-red-300'
-                                                }>
-                                                    {item.productionAccuracy.toFixed(1)}%
+                                            {item.isClosedAudit ? (
+                                                <div className="inline-flex items-center gap-1.5 px-2.5 py-1 rounded-full font-mono text-[11px] font-black border bg-black/40">
+                                                    <span className={`w-2 h-2 rounded-full ${
+                                                        item.healthStatus === 'excellent' ? 'bg-emerald-400' :
+                                                        item.healthStatus === 'good' ? 'bg-cyan-400' :
+                                                        item.healthStatus === 'warning' ? 'bg-amber-400' : 'bg-red-400'
+                                                    }`}></span>
+                                                    <span className={
+                                                        item.healthStatus === 'excellent' ? 'text-emerald-300' :
+                                                        item.healthStatus === 'good' ? 'text-cyan-300' :
+                                                        item.healthStatus === 'warning' ? 'text-amber-300' : 'text-red-300'
+                                                    }>
+                                                        {item.productionAccuracy.toFixed(1)}%
+                                                    </span>
+                                                </div>
+                                            ) : (
+                                                <span className="px-2 py-1 bg-amber-500/10 text-amber-400 border border-amber-500/20 rounded-lg text-[10px] font-bold">
+                                                    ⚡ 动态推演中
                                                 </span>
-                                            </div>
+                                            )}
                                         </td>
                                         <td className="py-3 px-3 text-center">
                                             <button
