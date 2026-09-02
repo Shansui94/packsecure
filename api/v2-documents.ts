@@ -14,6 +14,8 @@ function getGeminiModel() {
     return genAI.getGenerativeModel({ model: 'gemini-2.5-flash' });
 }
 
+const MULTI_RECEIPT_CATEGORIES = ['PETROL_FLEET', 'TNGO_TOLL', 'LORRY_SERVICE', 'MACHINE_EXPENSES'];
+
 // ----------------------------------------------------------------------
 // 1. DASHBOARD METRICS HANDLER
 // ----------------------------------------------------------------------
@@ -24,6 +26,7 @@ export async function handleDashboardMetrics(req: VercelRequest, res: VercelResp
         try {
             const year = parseInt(req.query.year as string, 10) || new Date().getFullYear();
 
+            // 1. Fetch categories
             const { data: categories, error: catErr } = await supabase
                 .from('document_manifest_entities')
                 .select('*')
@@ -32,6 +35,7 @@ export async function handleDashboardMetrics(req: VercelRequest, res: VercelResp
 
             if (catErr) throw catErr;
 
+            // 2. Fetch stored metrics
             const { data: storedMetrics, error: metErr } = await supabase
                 .from('william_dashboard_metrics')
                 .select('*')
@@ -39,6 +43,22 @@ export async function handleDashboardMetrics(req: VercelRequest, res: VercelResp
 
             if (metErr) throw metErr;
 
+            // 3. Fetch all extracted documents for this year to populate vouchers
+            const { data: yearDocs } = await supabase
+                .from('extracted_documents')
+                .select('id, file_name, file_url, category_key, period_year, period_month, total_amount, doc_date, doc_number, vendor_name, vehicle_plate, location_tag, created_at')
+                .eq('period_year', year);
+
+            // Group vouchers by category_key and month
+            const vouchersMap: Record<string, Record<number, any[]>> = {};
+            (yearDocs || []).forEach(doc => {
+                if (!doc.category_key || !doc.period_month) return;
+                if (!vouchersMap[doc.category_key]) vouchersMap[doc.category_key] = {};
+                if (!vouchersMap[doc.category_key][doc.period_month]) vouchersMap[doc.category_key][doc.period_month] = [];
+                vouchersMap[doc.category_key][doc.period_month].push(doc);
+            });
+
+            // 4. Aggregate live system operational data
             let currentLiveStock = 0;
             try {
                 const { data: stockData } = await supabase.from('live_stock').select('quantity');
@@ -73,22 +93,22 @@ export async function handleDashboardMetrics(req: VercelRequest, res: VercelResp
             const monthlyDefect: Record<number, number> = {};
             try {
                 const { data: prodLogs } = await supabase
-                    .from('production_logs')
-                    .select('machine_id, quantity, scrap_quantity, created_at, shift_date')
+                    .from('production_logs_v2')
+                    .select('machine_id, output_qty, reject_qty, created_at')
                     .gte('created_at', `${year}-01-01`)
                     .lte('created_at', `${year}-12-31`);
 
                 if (prodLogs) {
                     prodLogs.forEach(p => {
-                        const dateStr = p.shift_date || p.created_at;
+                        const dateStr = p.created_at;
                         if (!dateStr) return;
                         const m = new Date(dateStr).getMonth() + 1;
                         const isRecycle = (p.machine_id && (p.machine_id.includes('T5') || p.machine_id.includes('N3') || p.machine_id.toLowerCase().includes('recycle')));
                         if (isRecycle) {
-                            monthlyRecycle[m] = (monthlyRecycle[m] || 0) + (Number(p.quantity) || 0);
+                            monthlyRecycle[m] = (monthlyRecycle[m] || 0) + (Number(p.output_qty) || 0);
                         }
-                        if (p.scrap_quantity) {
-                            monthlyDefect[m] = (monthlyDefect[m] || 0) + (Number(p.scrap_quantity) || 0);
+                        if (p.reject_qty) {
+                            monthlyDefect[m] = (monthlyDefect[m] || 0) + (Number(p.reject_qty) || 0);
                         }
                     });
                 }
@@ -96,6 +116,7 @@ export async function handleDashboardMetrics(req: VercelRequest, res: VercelResp
                 console.warn('Failed to aggregate production logs:', err);
             }
 
+            // 5. Build matrix
             const matrix: Record<string, any> = {};
 
             (categories || []).forEach(cat => {
@@ -107,25 +128,43 @@ export async function handleDashboardMetrics(req: VercelRequest, res: VercelResp
                 };
 
                 for (let m = 1; m <= 12; m++) {
+                    const docList = vouchersMap[cat.category_key]?.[m] || [];
+                    const docSum = docList.reduce((acc, d) => acc + (Number(d.total_amount) || 0), 0);
+
                     matrix[cat.category_key].months[m] = {
-                        value: 0,
-                        source_type: cat.data_source === 'SYSTEM_LIVE' ? 'SYSTEM_SYNCED' : 'AUTO_EXTRACTED'
+                        value: docSum,
+                        source_type: cat.data_source === 'SYSTEM_LIVE' ? 'SYSTEM_SYNCED' : 'AUTO_EXTRACTED',
+                        vouchers: docList,
+                        file_url: docList.length > 0 ? docList[docList.length - 1].file_url : undefined,
+                        document_id: docList.length > 0 ? docList[docList.length - 1].id : undefined
                     };
                 }
             });
 
+            // Merge stored metrics (including manual overrides)
             (storedMetrics || []).forEach(sm => {
                 if (matrix[sm.category_key] && matrix[sm.category_key].months[sm.month]) {
+                    const existingVouchers = matrix[sm.category_key].months[sm.month].vouchers || [];
+                    const isMulti = MULTI_RECEIPT_CATEGORIES.includes(sm.category_key);
+
+                    // If manual override, prioritize override value; if multi-receipt and has vouchers, use voucher sum
+                    let effectiveVal = Number(sm.metric_value) || 0;
+                    if (sm.source_type !== 'MANUAL_OVERRIDE' && isMulti && existingVouchers.length > 0) {
+                        effectiveVal = existingVouchers.reduce((acc: number, d: any) => acc + (Number(d.total_amount) || 0), 0);
+                    }
+
                     matrix[sm.category_key].months[sm.month] = {
-                        value: Number(sm.metric_value) || 0,
+                        value: effectiveVal,
                         source_type: sm.source_type,
-                        file_url: sm.file_url,
-                        document_id: sm.document_id,
-                        notes: sm.notes
+                        file_url: sm.file_url || (existingVouchers.length > 0 ? existingVouchers[existingVouchers.length - 1].file_url : undefined),
+                        document_id: sm.document_id || (existingVouchers.length > 0 ? existingVouchers[existingVouchers.length - 1].id : undefined),
+                        notes: sm.notes,
+                        vouchers: existingVouchers
                     };
                 }
             });
 
+            // Merge Live Stock
             if (matrix['STOCK_BALANCE']) {
                 const curM = new Date().getMonth() + 1;
                 for (let m = 1; m <= curM; m++) {
@@ -135,6 +174,7 @@ export async function handleDashboardMetrics(req: VercelRequest, res: VercelResp
                 }
             }
 
+            // Merge Trips
             if (matrix['TRIP_BY_STATES']) {
                 for (let m = 1; m <= 12; m++) {
                     if (matrix['TRIP_BY_STATES'].months[m].value === 0 && monthlyTrips[m]) {
@@ -143,6 +183,7 @@ export async function handleDashboardMetrics(req: VercelRequest, res: VercelResp
                 }
             }
 
+            // Merge Recycle
             if (matrix['RECYCLE_AMOUNT']) {
                 for (let m = 1; m <= 12; m++) {
                     if (matrix['RECYCLE_AMOUNT'].months[m].value === 0 && monthlyRecycle[m]) {
@@ -151,6 +192,7 @@ export async function handleDashboardMetrics(req: VercelRequest, res: VercelResp
                 }
             }
 
+            // Merge Scrap/Defect
             if (matrix['SF_DEFECT_AMOUNT']) {
                 for (let m = 1; m <= 12; m++) {
                     if (matrix['SF_DEFECT_AMOUNT'].months[m].value === 0 && monthlyDefect[m]) {
@@ -159,6 +201,7 @@ export async function handleDashboardMetrics(req: VercelRequest, res: VercelResp
                 }
             }
 
+            // Calculate Totals and Averages
             Object.values(matrix).forEach((row: any) => {
                 let sum = 0;
                 let count = 0;
@@ -171,6 +214,7 @@ export async function handleDashboardMetrics(req: VercelRequest, res: VercelResp
                 row.average = count > 0 ? Math.round(sum / count) : 0;
             });
 
+            // Sales Summary
             const salesSummary = {
                 autocount: matrix['AUTOCOUNT_SALES']?.total || 0,
                 shopee: matrix['SHOPEE_SALES']?.total || 0,
@@ -314,7 +358,7 @@ export async function handleLogs(req: VercelRequest, res: VercelResponse) {
 }
 
 // ----------------------------------------------------------------------
-// 4. PROCESS HANDLER (ROBUST GEMINI 2.5 FLASH EXTRACTION & ROUTING)
+// 4. PROCESS HANDLER (WITH MULTI-RECEIPT AUTO-SUM & EXTENDED TAGS)
 // ----------------------------------------------------------------------
 export async function handleProcess(req: VercelRequest, res: VercelResponse) {
     if (req.method !== 'POST') return res.status(405).json({ error: 'Method Not Allowed' });
@@ -350,7 +394,7 @@ export async function handleProcess(req: VercelRequest, res: VercelResponse) {
             .join('\n');
 
         const systemPrompt = `You are an AI Document Intelligence Agent for Packsecure OS.
-Analyze the provided document (invoice, bill, receipt, delivery order, toll statement, fuel card statement, or sales report) and extract structured data.
+Analyze the provided document (invoice, bill, receipt, workshop service voucher, fuel receipt, delivery order, or statement) and extract structured operational and financial data.
 Match with available categories:
 ${entityListStr}
 
@@ -359,11 +403,17 @@ CRITICAL RULES:
 - "period_month": 1 to 12 representing the operational/billing month.
 - "total_amount": Final positive float amount (no currency symbols).
 - "category_key": Must match one of the keys above, or "UNASSIGNED".
+- "vendor_name": Merchant or supplier name (e.g. "Petronas", "Tenaga Nasional Berhad", "Ban Lee Hin Workshop", "Lembaga Air Perak").
+- "vehicle_plate": Lorry registration plate if visible (e.g. "AKB 8821", "WVT 3122", "WUA 918", or null).
+- "location_tag": Factory or location if mentioned (e.g. "Plant 1", "Plant 2", "Ipoh HQ", or null).
 
 Respond with RAW JSON ONLY (no markdown fences):
 {
   "entity_name": "string",
   "category_key": "string",
+  "vendor_name": "string",
+  "vehicle_plate": "string or null",
+  "location_tag": "string or null",
   "doc_type": "INVOICE" | "BILL" | "RECEIPT" | "DELIVERY_ORDER" | "REPORT" | "STATEMENT",
   "doc_number": "string",
   "doc_date": "YYYY-MM-DD",
@@ -433,6 +483,9 @@ Respond with RAW JSON ONLY (no markdown fences):
             storage_path: finalStoragePath,
             category_key: matchedEntity ? matchedEntity.category_key : null,
             entity_name: extractedData.entity_name || (matchedEntity ? matchedEntity.name : 'Unknown Entity'),
+            vendor_name: extractedData.vendor_name || null,
+            vehicle_plate: extractedData.vehicle_plate || null,
+            location_tag: extractedData.location_tag || null,
             owner: matchedEntity ? matchedEntity.owner : null,
             doc_type: extractedData.doc_type || 'INVOICE',
             doc_number: extractedData.doc_number || null,
@@ -459,18 +512,29 @@ Respond with RAW JSON ONLY (no markdown fences):
             if (newDoc) savedDocId = newDoc.id;
         }
 
-        // Upsert into william_dashboard_metrics if valid
-        if (!isUnassigned && matchedEntity && periodYear && periodMonth && totalAmount > 0) {
+        // Multi-receipt sum calculation & dashboard metrics upsert
+        if (!isUnassigned && matchedEntity && periodYear && periodMonth) {
+            // Query all documents for this (year, month, category_key) to compute accumulated sum
+            const { data: allCatDocs } = await supabase
+                .from('extracted_documents')
+                .select('total_amount')
+                .eq('period_year', periodYear)
+                .eq('period_month', periodMonth)
+                .eq('category_key', matchedEntity.category_key);
+
+            const accumulatedSum = (allCatDocs || []).reduce((acc, d) => acc + (Number(d.total_amount) || 0), 0) || totalAmount;
+            const docCount = (allCatDocs || []).length || 1;
+
             await supabase.from('william_dashboard_metrics').upsert({
                 year: periodYear,
                 month: periodMonth,
                 category_key: matchedEntity.category_key,
-                metric_value: totalAmount,
+                metric_value: accumulatedSum,
                 unit: matchedEntity.unit || 'RM',
                 source_type: 'AUTO_EXTRACTED',
                 document_id: savedDocId || null,
                 file_url: finalPublicUrl,
-                notes: `Extracted from ${fileName}`,
+                notes: docCount > 1 ? `${docCount} receipts accumulated (Latest: ${fileName})` : `Extracted from ${fileName}`,
                 updated_at: new Date().toISOString()
             }, { onConflict: 'year,month,category_key' });
         }
@@ -490,6 +554,9 @@ Respond with RAW JSON ONLY (no markdown fences):
             documentId: savedDocId,
             category_key: matchedEntity ? matchedEntity.category_key : null,
             category_name: matchedEntity ? matchedEntity.name : 'Unassigned Review',
+            vendor_name: extractedData.vendor_name,
+            vehicle_plate: extractedData.vehicle_plate,
+            location_tag: extractedData.location_tag,
             period_year: periodYear,
             period_month: periodMonth,
             total_amount: totalAmount,

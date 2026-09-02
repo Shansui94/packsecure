@@ -525,6 +525,9 @@ export interface ExtractedDocument {
     total_amount?: number;
     payment_terms?: string;
     notes?: string;
+    vendor_name?: string;
+    vehicle_plate?: string;
+    location_tag?: string;
     confidence_score?: number;
     status: ExtractedDocStatus;
     raw_ai_response?: any;
