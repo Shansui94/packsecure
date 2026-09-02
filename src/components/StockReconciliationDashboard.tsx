@@ -53,6 +53,9 @@ interface SkuReconcileSummary {
     productionAccuracy: number;
     throughputAccuracy: number;
     healthStatus: 'excellent' | 'good' | 'warning' | 'alert';
+    durationDays: number;
+    dailyAvgProd: number;
+    dailyAvgDeliv: number;
     dailyBreakdown: Record<string, { prod: number; deliv: number }>;
 }
 
@@ -259,7 +262,14 @@ export const StockReconciliationDashboard: React.FC<Props> = ({
             );
             const currentActualStock = invMatch ? Number(invMatch.current_stock) || 0 : 0;
 
-            // 5. Compute Expected Stock & Accuracies
+            // 5. Compute Duration Days & Daily Averages
+            const startMs = new Date(activeWindowStart).getTime();
+            const endMs = new Date(activeWindowEnd).getTime();
+            const durationDays = Math.max(1, Math.round((endMs - startMs) / (1000 * 60 * 60 * 24)));
+            const dailyAvgProd = Math.round(productionQty / durationDays);
+            const dailyAvgDeliv = Math.round(deliveryQty / durationDays);
+
+            // 6. Compute Expected Stock & Accuracies
             const expectedStock = startAuditStock + productionQty + transferInQty - transferOutQty - deliveryQty;
             const variance = currentActualStock - expectedStock;
             const absVariance = Math.abs(variance);
@@ -302,6 +312,9 @@ export const StockReconciliationDashboard: React.FC<Props> = ({
                 productionAccuracy,
                 throughputAccuracy,
                 healthStatus,
+                durationDays,
+                dailyAvgProd,
+                dailyAvgDeliv,
                 dailyBreakdown
             };
         });
@@ -334,8 +347,8 @@ export const StockReconciliationDashboard: React.FC<Props> = ({
     const handleExportCSV = () => {
         if (!filteredSummaries.length) return;
         const headers = [
-            'SKU', '品名 (Name)', '类型 (Type)', '仓位 (Location)', 
-            '期初基准 (Base Stock)', '期间生产 (+Production)', '期间发货 (-Delivery)', 
+            'SKU', '品名 (Name)', '类型 (Type)', '仓位 (Location)', '核算天数 (Days)',
+            '期初基准 (Base Stock)', '期间生产 (+Production)', '日均生产 (Avg Prod/Day)', '期间发货 (-Delivery)', '日均发货 (Avg Deliv/Day)', 
             '理论库存 (Expected)', '实际实盘 (Actual)', '差异偏差 (Variance)', 
             '生产吻合率 (Prod Accuracy %)', '总吞吐吻合率 (Throughput Accuracy %)', '健康状态 (Status)'
         ];
@@ -345,9 +358,12 @@ export const StockReconciliationDashboard: React.FC<Props> = ({
             `"${r.name}"`,
             r.type,
             r.locId,
+            `${r.durationDays} 天`,
             r.startAuditStock,
             r.productionQty,
+            r.dailyAvgProd,
             r.deliveryQty,
+            r.dailyAvgDeliv,
             r.expectedStock,
             r.currentActualStock,
             r.variance,
@@ -486,8 +502,13 @@ export const StockReconciliationDashboard: React.FC<Props> = ({
                 )}
 
                 {activeSummary && (
-                    <div className="text-[11px] font-mono text-cyan-400 bg-cyan-500/10 px-3 py-1 rounded-xl border border-cyan-500/20">
-                        当前区间: {activeSummary.auditStartDate.slice(0, 10)} ~ {activeSummary.auditEndDate.slice(0, 10)}
+                    <div className="flex items-center gap-2 flex-wrap">
+                        <div className="text-[11px] font-mono text-cyan-400 bg-cyan-500/10 px-3 py-1.5 rounded-xl border border-cyan-500/20 flex items-center gap-2">
+                            <span>当前区间: {activeSummary.auditStartDate.slice(0, 10)} ~ {activeSummary.auditEndDate.slice(0, 10)}</span>
+                            <span className="px-2 py-0.5 bg-purple-500/30 text-purple-300 font-bold rounded-lg border border-purple-500/40 text-[10px]">
+                                🗓️ 共 {activeSummary.durationDays} 天
+                            </span>
+                        </div>
                     </div>
                 )}
             </div>
@@ -535,9 +556,20 @@ export const StockReconciliationDashboard: React.FC<Props> = ({
                                         📍 仓位: <strong className="text-white">{activeSummary.locId}</strong>
                                     </span>
                                 </div>
-                                <p className="text-xs text-gray-400 mt-1">
-                                    基准核算区间：{activeSummary.auditStartDate.slice(0, 10)}（基准盘点: {activeSummary.startAuditStock} {activeSummary.uom}） ~ 至今
-                                </p>
+                                <div className="flex items-center gap-2 mt-1.5 flex-wrap text-xs">
+                                    <span className="text-gray-400">
+                                        基准核算区间：{activeSummary.auditStartDate.slice(0, 10)}（基准实盘: {activeSummary.startAuditStock} {activeSummary.uom}） ~ {activeSummary.auditEndDate.slice(0, 10)}
+                                    </span>
+                                    <span className="px-2 py-0.5 rounded-md bg-purple-500/20 text-purple-300 font-bold border border-purple-500/30 font-mono text-[11px]">
+                                        🗓️ 核算周期：{activeSummary.durationDays} 天
+                                    </span>
+                                    <span className="px-2 py-0.5 rounded-md bg-emerald-500/20 text-emerald-300 font-bold border border-emerald-500/30 font-mono text-[11px]">
+                                        ⚡ 日均生产：~{activeSummary.dailyAvgProd} {activeSummary.uom}/天
+                                    </span>
+                                    <span className="px-2 py-0.5 rounded-md bg-blue-500/20 text-blue-300 font-bold border border-blue-500/30 font-mono text-[11px]">
+                                        🚚 日均发货：~{activeSummary.dailyAvgDeliv} {activeSummary.uom}/天
+                                    </span>
+                                </div>
                             </div>
                         </div>
 
@@ -583,8 +615,9 @@ export const StockReconciliationDashboard: React.FC<Props> = ({
                                 <span className="text-2xl font-black text-emerald-300 font-mono">+{activeSummary.productionQty}</span>
                                 <span className="text-[10px] text-emerald-400/80 ml-1">{activeSummary.uom}</span>
                             </div>
-                            <div className="text-[10px] text-emerald-400/70 font-mono">
-                                机台实际登记产出
+                            <div className="text-[10px] text-emerald-400/80 font-mono flex items-center justify-between">
+                                <span>机台实际产出</span>
+                                <span className="font-bold">~{activeSummary.dailyAvgProd}/天</span>
                             </div>
                         </div>
 
@@ -597,8 +630,9 @@ export const StockReconciliationDashboard: React.FC<Props> = ({
                                 <span className="text-2xl font-black text-blue-300 font-mono">-{activeSummary.deliveryQty}</span>
                                 <span className="text-[10px] text-blue-400/80 ml-1">{activeSummary.uom}</span>
                             </div>
-                            <div className="text-[10px] text-blue-400/70 font-mono">
-                                司机装车发货出库
+                            <div className="text-[10px] text-blue-400/80 font-mono flex items-center justify-between">
+                                <span>司机装车出库</span>
+                                <span className="font-bold">~{activeSummary.dailyAvgDeliv}/天</span>
                             </div>
                         </div>
 
@@ -868,7 +902,12 @@ export const StockReconciliationDashboard: React.FC<Props> = ({
                                                     </span>
                                                 )}
                                             </div>
-                                            <div className="text-[10px] font-mono text-gray-400">{item.sku}</div>
+                                            <div className="text-[10px] font-mono text-gray-400 flex items-center gap-1.5 mt-0.5">
+    <span>{item.sku}</span>
+    <span className="px-1.5 py-0.2 rounded bg-purple-500/20 text-purple-300 font-bold border border-purple-500/30 text-[9px]">
+        🗓️ {item.durationDays}天
+    </span>
+</div>
                                         </td>
                                         <td className="py-3 px-3 text-center">
                                             <span className="px-2 py-0.5 rounded text-[10px] font-mono bg-white/10 text-gray-300">
