@@ -62,6 +62,51 @@ interface SkuReconcileSummary {
     dailyBreakdown: Record<string, { prod: number; deliv: number }>;
 }
 
+// Helper: Format numerical quantity without floating point inaccuracies
+export const formatQty = (val: number | string | undefined | null): string => {
+    if (val === undefined || val === null || isNaN(Number(val))) return '0';
+    const num = Number(val);
+    if (Number.isInteger(num)) {
+        return num.toLocaleString();
+    }
+    const fixed = parseFloat(num.toFixed(2));
+    return fixed.toLocaleString(undefined, { minimumFractionDigits: 0, maximumFractionDigits: 2 });
+};
+
+// Helper: Format signed quantity (e.g. +100, -50, 0)
+export const formatSignedQty = (val: number | string | undefined | null): string => {
+    const num = Number(val) || 0;
+    if (Math.abs(num) < 0.0001) return '0';
+    const sign = num > 0 ? '+' : '-';
+    const absFormatted = formatQty(Math.abs(num));
+    return `${sign}${absFormatted}`;
+};
+
+// Robust Audit Parser for notes
+const parseAuditActual = (auditRow: any): number => {
+    if (!auditRow) return 0;
+    const notes = String(auditRow.notes || '');
+    
+    // Match "Actual: 150" or "Actual:150" or "Actual: 60.5"
+    const match = notes.match(/Actual\s*:\s*([\d.-]+)/i);
+    if (match && !isNaN(parseFloat(match[1]))) {
+        return parseFloat(match[1]);
+    }
+    
+    // Match "Base = 122" or "Base=122"
+    const matchBase = notes.match(/Base\s*=\s*([\d.-]+)/i);
+    if (matchBase && !isNaN(parseFloat(matchBase[1]))) {
+        return parseFloat(matchBase[1]);
+    }
+
+    // Fallback to balance_after or change_qty
+    if (auditRow.balance_after != null && !isNaN(Number(auditRow.balance_after))) {
+        return Number(auditRow.balance_after);
+    }
+    
+    return Number(auditRow.change_qty) || 0;
+};
+
 export const StockReconciliationDashboard: React.FC<Props> = ({
     initialSku = null,
     onBackToMatrix
@@ -187,11 +232,8 @@ export const StockReconciliationDashboard: React.FC<Props> = ({
                 const prevAudit = skuAudits[skuAudits.length - 2];
                 const latestAudit = skuAudits[skuAudits.length - 1];
 
-                const matchPrev = (prevAudit.notes || '').match(/Actual:s*([d.-]+)/i);
-                startAuditStock = matchPrev ? parseFloat(matchPrev[1]) : (prevAudit.balance_after ?? prevAudit.change_qty);
-
-                const matchLatest = (latestAudit.notes || '').match(/Actual:s*([d.-]+)/i);
-                endAuditActualStock = matchLatest ? parseFloat(matchLatest[1]) : (latestAudit.balance_after ?? latestAudit.change_qty);
+                startAuditStock = parseAuditActual(prevAudit);
+                endAuditActualStock = parseAuditActual(latestAudit);
 
                 startAuditDate = prevAudit.timestamp;
                 endAuditDate = latestAudit.timestamp;
@@ -199,8 +241,7 @@ export const StockReconciliationDashboard: React.FC<Props> = ({
 
             } else if (skuAudits.length === 1) {
                 const singleAudit = skuAudits[0];
-                const matchSingle = (singleAudit.notes || '').match(/Actual:s*([d.-]+)/i);
-                startAuditStock = matchSingle ? parseFloat(matchSingle[1]) : (singleAudit.balance_after ?? singleAudit.change_qty);
+                startAuditStock = parseAuditActual(singleAudit);
                 startAuditDate = singleAudit.timestamp;
                 endAuditDate = new Date().toISOString();
                 endAuditActualStock = startAuditStock;
@@ -215,8 +256,7 @@ export const StockReconciliationDashboard: React.FC<Props> = ({
             if (dateMode === 'AUDIT_TO_NOW') {
                 if (skuAudits.length > 0) {
                     const latestAudit = skuAudits[skuAudits.length - 1];
-                    const matchLatest = (latestAudit.notes || '').match(/Actual:s*([d.-]+)/i);
-                    startAuditStock = matchLatest ? parseFloat(matchLatest[1]) : (latestAudit.balance_after ?? latestAudit.change_qty);
+                    startAuditStock = parseAuditActual(latestAudit);
                     activeWindowStart = latestAudit.timestamp;
                 } else {
                     activeWindowStart = last30dStart;
@@ -288,12 +328,12 @@ export const StockReconciliationDashboard: React.FC<Props> = ({
             const startMs = new Date(activeWindowStart).getTime();
             const endMs = new Date(activeWindowEnd).getTime();
             const durationDays = Math.max(1, Math.round((endMs - startMs) / (1000 * 60 * 60 * 24)));
-            const dailyAvgProd = Math.round(productionQty / durationDays);
-            const dailyAvgDeliv = Math.round(deliveryQty / durationDays);
+            const dailyAvgProd = parseFloat((productionQty / durationDays).toFixed(1));
+            const dailyAvgDeliv = parseFloat((deliveryQty / durationDays).toFixed(1));
 
             // 6. Compute Expected Stock & Accuracies
-            const expectedStock = startAuditStock + productionQty + transferInQty - transferOutQty - deliveryQty;
-            const variance = isClosedAudit ? (currentActualStock - expectedStock) : 0;
+            const expectedStock = parseFloat((startAuditStock + productionQty + transferInQty - transferOutQty - deliveryQty).toFixed(2));
+            const variance = isClosedAudit ? parseFloat((currentActualStock - expectedStock).toFixed(2)) : 0;
             const absVariance = Math.abs(variance);
 
             let productionAccuracy = 100;
@@ -388,14 +428,14 @@ export const StockReconciliationDashboard: React.FC<Props> = ({
             r.locId,
             r.isClosedAudit ? '闭环实盘审计' : '动态推演',
             `${r.durationDays} 天`,
-            r.startAuditStock,
-            r.productionQty,
-            r.dailyAvgProd,
-            r.deliveryQty,
-            r.dailyAvgDeliv,
-            r.expectedStock,
-            r.currentActualStock,
-            r.isClosedAudit ? r.variance : '—',
+            formatQty(r.startAuditStock),
+            formatQty(r.productionQty),
+            formatQty(r.dailyAvgProd),
+            formatQty(r.deliveryQty),
+            formatQty(r.dailyAvgDeliv),
+            formatQty(r.expectedStock),
+            formatQty(r.currentActualStock),
+            r.isClosedAudit ? formatSignedQty(r.variance) : '—',
             r.isClosedAudit ? r.productionAccuracy.toFixed(2) + '%' : '动态推演中',
             r.isClosedAudit ? r.throughputAccuracy.toFixed(2) + '%' : '动态推演中',
             r.healthStatus
@@ -435,7 +475,7 @@ export const StockReconciliationDashboard: React.FC<Props> = ({
                             <h2 className="text-lg font-black tracking-wide text-white flex items-center gap-2">
                                 产销存平衡与盘点吻合率稽核
                                 <span className="text-xs font-mono px-2 py-0.5 rounded-full bg-cyan-500/20 text-cyan-300 border border-cyan-500/30">
-                                    Reconciliation v2.1
+                                    Reconciliation v2.2
                                 </span>
                             </h2>
                         </div>
@@ -588,16 +628,16 @@ export const StockReconciliationDashboard: React.FC<Props> = ({
                                 </div>
                                 <div className="flex items-center gap-2 mt-1.5 flex-wrap text-xs">
                                     <span className="text-gray-400">
-                                        基准核算区间：{activeSummary.auditStartDate.slice(0, 10)}（基准实盘: {activeSummary.startAuditStock} {activeSummary.uom}） ~ {activeSummary.auditEndDate.slice(0, 10)}
+                                        基准核算区间：{activeSummary.auditStartDate.slice(0, 10)}（基准实盘: {formatQty(activeSummary.startAuditStock)} {activeSummary.uom}） ~ {activeSummary.auditEndDate.slice(0, 10)}
                                     </span>
                                     <span className="px-2 py-0.5 rounded-md bg-purple-500/20 text-purple-300 font-bold border border-purple-500/30 font-mono text-[11px]">
                                         🗓️ 核算周期：{activeSummary.durationDays} 天
                                     </span>
                                     <span className="px-2 py-0.5 rounded-md bg-emerald-500/20 text-emerald-300 font-bold border border-emerald-500/30 font-mono text-[11px]">
-                                        ⚡ 日均生产：~{activeSummary.dailyAvgProd} {activeSummary.uom}/天
+                                        ⚡ 日均生产：~{formatQty(activeSummary.dailyAvgProd)} {activeSummary.uom}/天
                                     </span>
                                     <span className="px-2 py-0.5 rounded-md bg-blue-500/20 text-blue-300 font-bold border border-blue-500/30 font-mono text-[11px]">
-                                        🚚 日均发货：~{activeSummary.dailyAvgDeliv} {activeSummary.uom}/天
+                                        🚚 日均发货：~{formatQty(activeSummary.dailyAvgDeliv)} {activeSummary.uom}/天
                                     </span>
                                 </div>
                             </div>
@@ -628,7 +668,7 @@ export const StockReconciliationDashboard: React.FC<Props> = ({
                                 ① 上期实盘基准
                             </div>
                             <div className="my-2">
-                                <span className="text-2xl font-black text-white font-mono">{activeSummary.startAuditStock}</span>
+                                <span className="text-2xl font-black text-white font-mono">{formatQty(activeSummary.startAuditStock)}</span>
                                 <span className="text-[10px] text-gray-400 ml-1">{activeSummary.uom}</span>
                             </div>
                             <div className="text-[10px] text-gray-500 font-mono">
@@ -642,12 +682,12 @@ export const StockReconciliationDashboard: React.FC<Props> = ({
                                 <TrendingUp size={12} className="shrink-0" /> <span>② 期间生产入库</span>
                             </div>
                             <div className="my-2">
-                                <span className="text-2xl font-black text-emerald-300 font-mono">+{activeSummary.productionQty}</span>
+                                <span className="text-2xl font-black text-emerald-300 font-mono">+{formatQty(activeSummary.productionQty)}</span>
                                 <span className="text-[10px] text-emerald-400/80 ml-1">{activeSummary.uom}</span>
                             </div>
                             <div className="text-[10px] text-emerald-400/80 font-mono flex items-center justify-between">
                                 <span>机台实际产出</span>
-                                <span className="font-bold">~{activeSummary.dailyAvgProd}/天</span>
+                                <span className="font-bold">~{formatQty(activeSummary.dailyAvgProd)}/天</span>
                             </div>
                         </div>
 
@@ -657,12 +697,12 @@ export const StockReconciliationDashboard: React.FC<Props> = ({
                                 <TrendingDown size={12} className="shrink-0" /> <span>③ 期间发货出库</span>
                             </div>
                             <div className="my-2">
-                                <span className="text-2xl font-black text-blue-300 font-mono">-{activeSummary.deliveryQty}</span>
+                                <span className="text-2xl font-black text-blue-300 font-mono">-{formatQty(activeSummary.deliveryQty)}</span>
                                 <span className="text-[10px] text-blue-400/80 ml-1">{activeSummary.uom}</span>
                             </div>
                             <div className="text-[10px] text-blue-400/80 font-mono flex items-center justify-between">
                                 <span>司机装车出库</span>
-                                <span className="font-bold">~{activeSummary.dailyAvgDeliv}/天</span>
+                                <span className="font-bold">~{formatQty(activeSummary.dailyAvgDeliv)}/天</span>
                             </div>
                         </div>
 
@@ -673,8 +713,7 @@ export const StockReconciliationDashboard: React.FC<Props> = ({
                             </div>
                             <div className="my-2">
                                 <span className="text-2xl font-black text-purple-300 font-mono">
-                                    {activeSummary.transferInQty - activeSummary.transferOutQty >= 0 ? '+' : ''}
-                                    {activeSummary.transferInQty - activeSummary.transferOutQty}
+                                    {formatSignedQty(activeSummary.transferInQty - activeSummary.transferOutQty)}
                                 </span>
                                 <span className="text-[10px] text-purple-400/80 ml-1">{activeSummary.uom}</span>
                             </div>
@@ -689,7 +728,7 @@ export const StockReconciliationDashboard: React.FC<Props> = ({
                                 ⑤ 理论系统应有
                             </div>
                             <div className="my-2">
-                                <span className="text-2xl font-black text-cyan-300 font-mono">{activeSummary.expectedStock}</span>
+                                <span className="text-2xl font-black text-cyan-300 font-mono">{formatQty(activeSummary.expectedStock)}</span>
                                 <span className="text-[10px] text-cyan-400/80 ml-1">{activeSummary.uom}</span>
                             </div>
                             <div className="text-[10px] text-gray-500 font-mono">
@@ -703,7 +742,7 @@ export const StockReconciliationDashboard: React.FC<Props> = ({
                                 {activeSummary.isClosedAudit ? '⑥ 本期实盘库存' : '⑥ 当前账面结存'}
                             </div>
                             <div className="my-2">
-                                <span className="text-2xl font-black text-amber-300 font-mono">{activeSummary.currentActualStock}</span>
+                                <span className="text-2xl font-black text-amber-300 font-mono">{formatQty(activeSummary.currentActualStock)}</span>
                                 <span className="text-[10px] text-amber-400/80 ml-1">{activeSummary.uom}</span>
                             </div>
                             <div className="text-[10px] text-gray-500 font-mono">
@@ -726,7 +765,7 @@ export const StockReconciliationDashboard: React.FC<Props> = ({
                             </div>
                             <div className="my-2">
                                 <span className="text-2xl font-black font-mono">
-                                    {activeSummary.isClosedAudit ? (activeSummary.variance > 0 ? '+' : '') + activeSummary.variance : '待实盘'}
+                                    {activeSummary.isClosedAudit ? formatSignedQty(activeSummary.variance) : '待实盘'}
                                 </span>
                                 {activeSummary.isClosedAudit && <span className="text-[10px] ml-1">{activeSummary.uom}</span>}
                             </div>
@@ -765,7 +804,7 @@ export const StockReconciliationDashboard: React.FC<Props> = ({
                                 </div>
                                 <p className="text-[10px] text-gray-400 mt-1 font-mono">
                                     {activeSummary.isClosedAudit 
-                                        ? `公式: (1 - |差异 ${activeSummary.absVariance}| / 生产量 ${activeSummary.productionQty}) × 100%`
+                                        ? `公式: (1 - |差异 ${formatQty(activeSummary.absVariance)}| / 生产量 ${formatQty(activeSummary.productionQty)}) × 100%`
                                         : '当前处于动态推演期，需待下一次现场盘点校验真实吻合率'}
                                 </p>
                             </div>
@@ -792,15 +831,15 @@ export const StockReconciliationDashboard: React.FC<Props> = ({
                                         </>
                                     ) : (
                                         <>
-                                            <span className="text-xl text-cyan-300 font-mono font-bold">+{activeSummary.productionQty} / -{activeSummary.deliveryQty}</span>
+                                            <span className="text-xl text-cyan-300 font-mono font-bold">+{formatQty(activeSummary.productionQty)} / -{formatQty(activeSummary.deliveryQty)}</span>
                                             <span className="text-xs px-2 py-0.5 rounded-full font-bold bg-cyan-500/20 text-cyan-400">
-                                                净流入 +{activeSummary.productionQty - activeSummary.deliveryQty}
+                                                净流入 {formatSignedQty(activeSummary.productionQty - activeSummary.deliveryQty)}
                                             </span>
                                         </>
                                     )}
                                 </div>
                                 <p className="text-[10px] text-gray-400 mt-1 font-mono">
-                                    总吞吐流转: {activeSummary.productionQty + activeSummary.deliveryQty} {activeSummary.uom}
+                                    总吞吐流转: {formatQty(activeSummary.productionQty + activeSummary.deliveryQty)} {activeSummary.uom}
                                 </p>
                             </div>
                             <div className="w-12 h-12 rounded-2xl bg-cyan-500/20 flex items-center justify-center text-cyan-400 border border-cyan-500/30">
@@ -832,7 +871,7 @@ export const StockReconciliationDashboard: React.FC<Props> = ({
                                     )}
                                 </div>
                                 <p className="text-[10px] text-gray-400 mt-1 font-mono">
-                                    {activeSummary.isClosedAudit ? `差异绝对值: ${activeSummary.absVariance} ${activeSummary.uom}` : `推演应有库存: ${activeSummary.expectedStock} ${activeSummary.uom}`}
+                                    {activeSummary.isClosedAudit ? `差异绝对值: ${formatQty(activeSummary.absVariance)} ${activeSummary.uom}` : `推演应有库存: ${formatQty(activeSummary.expectedStock)} ${activeSummary.uom}`}
                                 </p>
                             </div>
                             <div className="w-12 h-12 rounded-2xl bg-purple-500/20 flex items-center justify-center text-purple-400 border border-purple-500/30">
@@ -864,13 +903,13 @@ export const StockReconciliationDashboard: React.FC<Props> = ({
                                     <div key={dateStr} className="bg-black/40 border border-white/10 rounded-xl p-2.5 flex flex-col items-center justify-between text-center">
                                         <span className="text-[10px] font-mono text-gray-400">{dateStr.slice(5)}</span>
                                         <div className="my-1.5 flex flex-col gap-0.5 items-center">
-                                            <span className="text-xs font-black font-mono text-emerald-400">+{d.prod}</span>
-                                            <span className="text-xs font-black font-mono text-blue-400">-{d.deliv}</span>
+                                            <span className="text-xs font-black font-mono text-emerald-400">+{formatQty(d.prod)}</span>
+                                            <span className="text-xs font-black font-mono text-blue-400">-{formatQty(d.deliv)}</span>
                                         </div>
                                         <span className={`text-[9px] font-mono px-1.5 py-0.2 rounded ${
                                             d.prod >= d.deliv ? 'bg-emerald-500/20 text-emerald-300' : 'bg-blue-500/20 text-blue-300'
                                         }`}>
-                                            {d.prod - d.deliv >= 0 ? `+${d.prod - d.deliv}` : `${d.prod - d.deliv}`}
+                                            {formatSignedQty(d.prod - d.deliv)}
                                         </span>
                                     </div>
                                 ))}
@@ -984,26 +1023,26 @@ export const StockReconciliationDashboard: React.FC<Props> = ({
                                             </span>
                                         </td>
                                         <td className="py-3 px-3 text-right font-mono text-gray-300">
-                                            {item.startAuditStock} {item.uom}
+                                            {formatQty(item.startAuditStock)} {item.uom}
                                         </td>
                                         <td className="py-3 px-3 text-right font-mono">
-                                            <div className="font-bold text-emerald-400">+{item.productionQty}</div>
-                                            <div className="text-[9px] text-emerald-400/70">~{item.dailyAvgProd}/天</div>
+                                            <div className="font-bold text-emerald-400">+{formatQty(item.productionQty)}</div>
+                                            <div className="text-[9px] text-emerald-400/70">~{formatQty(item.dailyAvgProd)}/天</div>
                                         </td>
                                         <td className="py-3 px-3 text-right font-mono">
-                                            <div className="font-bold text-blue-400">-{item.deliveryQty}</div>
-                                            <div className="text-[9px] text-blue-400/70">~{item.dailyAvgDeliv}/天</div>
+                                            <div className="font-bold text-blue-400">-{formatQty(item.deliveryQty)}</div>
+                                            <div className="text-[9px] text-blue-400/70">~{formatQty(item.dailyAvgDeliv)}/天</div>
                                         </td>
                                         <td className="py-3 px-3 text-right font-mono font-bold text-cyan-300">
-                                            {item.expectedStock}
+                                            {formatQty(item.expectedStock)}
                                         </td>
                                         <td className="py-3 px-3 text-right font-mono font-black text-amber-300">
-                                            {item.currentActualStock}
+                                            {formatQty(item.currentActualStock)}
                                         </td>
                                         <td className="py-3 px-3 text-right font-mono font-bold">
                                             {item.isClosedAudit ? (
                                                 <span className={item.variance === 0 ? 'text-gray-400' : item.variance > 0 ? 'text-emerald-400' : 'text-red-400'}>
-                                                    {item.variance > 0 ? '+' : ''}{item.variance}
+                                                    {formatSignedQty(item.variance)}
                                                 </span>
                                             ) : (
                                                 <span className="text-gray-500 font-normal text-[11px]">待实盘</span>
