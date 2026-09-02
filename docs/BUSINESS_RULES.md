@@ -62,6 +62,17 @@
 | **FACTORY_MODE_1** (厂级登录模式1) | RM 8.00 / hr | RM 12.00 / hr | 通用工人模式 |
 | **FACTORY_MODE_2** (厂级登录模式2) | RM 10.00 / hr | RM 10.00 / hr | 平行费率 |
 
+### 3.3 全勤奖发放标准与判定规则 (Full Attendance Bonus — RM 300 / Month)
+* **奖金金额**：**RM 300.00 / 月**（固定奖金标准，直接体现在司机与员工月度工资条及 William's Dashboard 大盘）。
+* **适用对象**：专职卡车司机 (Driver)、车间生产操作员 (Operator)。
+* **达标与发放条件 (Eligibility)**：
+  1. **出勤率 100%**：当月严格按照排班日历出勤打卡，无漏卡、无早退。
+  2. **0 旷工与未准缺勤**：当月 **0 次无故旷工 (Zero Unexcused Absence)**，0 次未经事先批准的紧急临时缺勤。
+  3. **法定假期与病假 (MC)**：政府医院/指定诊所合规 MC 或正常年假 (Annual Leave)，经 HR / Amy 批准后不扣发全勤奖。
+* **扣除规则 (Disqualification)**：
+  * 当月若发生任意 1 天无故旷工或未获批准的事假，当月全额扣除 RM 300.00 全勤奖金。
+  * 由 **AMY** 在 William's Dashboard 侧边抽屉及 HRPortal 中进行月度核验与名单确认。
+
 ---
 
 ## 4. 车队管理、排单与运费计算 (Logistics & Fleet Rules)
@@ -100,6 +111,12 @@ stateDiagram-v2
 > [!IMPORTANT]
 > **严禁在送货中途手动“完成”整趟行程**：行程只有在司机回厂并**再次扫描当前所开卡车的 QR 码**时，才会由系统自动更新为 `Selesai / Delivered` 并释放车辆。
 
+### 4.5 司机装车防差错与考核规则 (Driver Loading Quality & Misloading KPI)
+* **业务定义**：司机在出车装货（Naik Barang）及送达签收（POD）过程中，必须严格核验 DO 单号、产品规格与卷数。
+* **考核标准**：
+  * 🏆 **零失误标兵**：当月完成全月出车派送且 **0 次错发/少发/上错货**。
+  * ⚠️ **错装事故记录**：若因司机装错货物导致客户拒收、二次返工或退换补送，记录为 1 起错装事件，并自动归集至大盘错装排行榜，由 **AMY** 每月跟进与复盘。
+
 ---
 
 ## 5. 权限与安全规范 (Auth & Role Permissions)
@@ -119,3 +136,32 @@ stateDiagram-v2
 * **操作员/司机 PIN 码**：支持输入 **4 位数字 PIN**，后台系统自动向高位补齐为 6 位（如 `1234` 存为 `001234`）。
 * **IoT 免密模式**：以 `#/production/` 开头的机台固定终端绕过常规登录。
 * **数据安全性**：涉及生产库存扣减、历史订单状态变更，一律禁止静默无条件全量 UPDATE。
+
+---
+
+## 6. William 经营大盘与单据自动化体系 (William's Executive Dashboard)
+
+### 6.1 责任人矩阵与 14 项核心科目
+| 板块 (Section) | 核心科目 (Category) | 负责人 (Owner) | 数据源 (Source) | 计量单位 |
+| :--- | :--- | :---: | :--- | :---: |
+| **DRIVER** (置顶) | **谁拿到/没拿到全勤奖 (RM300)** | `AMY` | 考勤打卡自动判定 + 人工核验 | 人 / RM |
+| **DRIVER** (置顶) | **谁上错货最多/谁没上错货** | `AMY` | 物流 DO 异常 + 错装登记 | 次 |
+| **DRIVER** (置顶) | **Petrol history (油费支出)** | `AMY` | AI 发票提取 (多单累加) | RM |
+| **DRIVER** (置顶) | **TnGo history (过路费支出)** | `AMY` | AI 发票提取 (多单累加) | RM |
+| **DRIVER** (置顶) | **Service cost (保养维修)** | `AMY` | AI 发票提取 (多单累加) | RM |
+| **DRIVER** (置顶) | **Puspakom & Insurance (验车保费)** | `AMY` | AI 保单提取 | RM |
+| **COMPANY** | **TOTAL AUTO COUNT SALES (销售额)** | `WINNIE` | AI 月结提取 / ERP 对账 | RM |
+| **COMPANY** | **STOCK BALANCE (库存结存分析)** | `WINNIE` | 系统 `live_stock` 实时聚合 | Rolls |
+| **COMPANY** | **TRIP BY STATES (各州出车车次)** | `MAX TAN` | 系统 `logistics_trips` 实时聚合 | Trips |
+| **PRODUCTION** | **RECYCLE AMOUNT (回收造粒产出)** | `MAX TAN` | 系统 `production_logs` 实时聚合 | kg |
+| **PRODUCTION** | **SF DEFECT AMOUNT (废料损耗)** | `MAX TAN` | 系统 `production_logs` 实时聚合 | kg |
+| **PRODUCTION** | **ELECTRICITY BILL (TNB 电费账单)** | `WINNIE` | AI 电费账单提取 (月结单) | RM |
+| **PRODUCTION** | **WATER BILL (水费账单)** | `WINNIE` | AI 水费账单提取 (月结单) | RM |
+| **PRODUCTION** | **MYANMAR SALARY (外劳薪资分析)** | `AMY` | AI 薪资总表提取 (月结单) | RM |
+| **PRODUCTION** | **MACHINE EXPENSES (机台备件维修)** | `AMY` | AI 备件发票提取 (多单累加) | RM |
+
+### 6.2 月度流转与三色红绿灯规则
+* 🟡 **每月 1 ~ 10 号**：正常收集期（黄色待办提醒）。
+* 🔴 **每月 10 号后**：逾期未交（红色警报，激活 WhatsApp 一键催单）。
+* 🟢 **已上传核验**：绿色打勾，大盘自动求和累加并关联原件。
+
