@@ -156,6 +156,47 @@ Do not include markdown formatting. Return raw JSON only.`;
                 prompt += aliasList.map(a => `- Customer: ${a.customer || 'GLOBAL'} | Custom Name: ${a.alias_name} | Maps to SKU: ${a.sku}`).join('\n');
                 prompt += `\n\nIf the chat screenshot uses a custom name (e.g. "黑膜") that matches a known alias, map it directly to the corresponding standard SKU.`;
             }
+        } else if (type === 'stock_movement') {
+            prompt = `This image is a photo related to factory inventory and stock movement. It can be:
+1. A Delivery Order (DO), Purchase Order (PO), Receiving Slip, Warehouse Transfer Note, Delivery Sheet, or Handwritten Stock In/Out record.
+2. A photo of physical goods, pallets, boxes, or product labels (e.g. bubble wrap rolls, stretch film, shrink wrap, cartons) in a factory or warehouse.
+
+Please analyze the image carefully and extract all stock movement details into a STRICT JSON object.
+
+IMPORTANT IMAGE ORIENTATION NOTE:
+- The image might be rotated. Adjust your orientation to read text and numbers accurately.
+
+Return a STRICT JSON object with the following fields:
+{
+  "refDoc": string, // Document number (e.g. "DO-2026-0812", "PO-9912", "INV-102", or handwritten sheet title). If not found, return empty string "".
+  "location": string, // Warehouse or location mentioned (e.g. "Nilai", "Johor", "Taiping", "Kelantan", "OPM Lama", "SPD", "OPM Corner", "OPM Ali"). Match to the closest warehouse from the reference list if provided.
+  "notes": string, // Supplier name, customer name, date, carrier name, or any general remarks on the sheet/pallet.
+  "items": [
+    {
+      "sku": string, // The SKU code matched from the reference product list. If not matched, leave empty string "".
+      "product": string, // The product description or name extracted from the image.
+      "quantity": number, // Clean positive integer count of rolls, units, or boxes. Calculate sums like "10+5" into 15. Note that slash "/" is a delimiter, not "1" (e.g. "3/" is 3).
+      "confidence": number // Confidence score between 0.0 and 1.0 (e.g. 0.95)
+    }
+  ]
+}
+
+CRITICAL RULES:
+1. Quantities: If a line says "BW 50cm x 120" or "10 rolls", quantity is 120 or 10. Do not put the quantity into the product name.
+2. If multiple line items or pallets exist, extract each as a separate item in "items".
+3. Match against the Reference Product List below to assign the exact "sku" and standard "product" name whenever possible.
+4. Do not include markdown formatting (e.g. \`\`\`json). Return raw JSON only.`;
+
+            if (productsList && Array.isArray(productsList) && productsList.length > 0) {
+                prompt += `\n\nReference Product List (SKU and Name):\n`;
+                prompt += productsList.map(p => `- SKU: ${p.sku} | Name: ${p.name}`).join('\n');
+                prompt += `\n\nPlease match the extracted items to the closest product from the list above. If a match is found, use the exact "sku" and "product" name from the list.`;
+            }
+
+            if (aliasList && aliasList.length > 0) {
+                prompt += `\n\nKnown Product Aliases:\n`;
+                prompt += aliasList.map(a => `- Custom Name: ${a.alias_name} | Maps to SKU: ${a.sku}`).join('\n');
+            }
         } else {
             prompt = `Extract customer data from this image (e.g. invoice, delivery order, contact card).
         Return a STRICT JSON ARRAY of objects. 

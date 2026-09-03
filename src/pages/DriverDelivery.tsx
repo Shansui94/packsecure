@@ -6,8 +6,7 @@ import { Scanner } from '@yudiel/react-qr-scanner';
 import { parsePrepPhotos } from '../utils/prepPhotos';
 import { dataURLtoBlob } from '../utils/imageCompress';
 import { deductStockForOrder } from '../services/stockService';
-
-
+import { logActivity } from '../utils/logger';
 
 interface DriverDeliveryProps {
     user: any;
@@ -836,12 +835,63 @@ const DriverDelivery: React.FC<DriverDeliveryProps> = ({ user }) => {
             setUnloadProductPhotoBase64(null);
             setDeliveryNote('');
 
+            // Extract structured photos, GPS and items
+            const proofPhotos = [doUrl, prodUrl].filter(Boolean);
+            const orderItems = (selectedOrder.items || []).map(i => ({
+                sku: i.sku || 'N/A',
+                name: i.product || i.name || '商品',
+                quantity: i.quantity,
+                confirmedQty: (i as any).confirmedQty ?? i.quantity,
+                unit: (i as any).uom || '件'
+            }));
+            const totalQty = orderItems.reduce((acc, curr) => acc + (Number(curr.quantity) || 0), 0);
+
+            // Log successful delivery action with high precision 5W1H
+            logActivity(user, {
+                action: isFinalDrop ? 'DRIVER_COMPLETE_TRIP' : 'DRIVER_CONFIRM_DROP_POINT',
+                module: 'Logistics / DriverDelivery',
+                target: `Order #${selectedOrder.orderNumber || selectedOrder.id}`,
+                status: 'SUCCESS',
+                resultSummary: isFinalDrop 
+                    ? `司机完成并结束整个送货行程 (#${selectedOrder.orderNumber || ''})` 
+                    : `司机成功提交送货点签收 (#${selectedOrder.orderNumber || ''} - 客户: ${selectedOrder.customer || '客户'}, 共 ${orderItems.length} 项 / ${totalQty} 件)`,
+                location: selectedOrder.destination || selectedOrder.customer,
+                details: {
+                    orderId: selectedOrder.id,
+                    orderNumber: selectedOrder.orderNumber,
+                    customer: selectedOrder.customer,
+                    destination: selectedOrder.destination,
+                    isFinalDrop,
+                    photos: proofPhotos,
+                    photoUrl: prodUrl || doUrl || null,
+                    doUrl: doUrl || null,
+                    prodUrl: prodUrl || null,
+                    gps: gpsCoordinates && !gpsCoordinates.includes('Fetching') ? gpsCoordinates : null,
+                    items: orderItems,
+                    totalQuantity: totalQty,
+                    lorry_plate: currentLorry?.plate_number || undefined,
+                    extractedDoNumber: extractedDoNumber || null,
+                    note: deliveryNote || null
+                }
+            });
+
             if (isFinalDrop) {
                 alert("✅ Trip selesai sepenuhnya! / Trip completed fully!");
             } else {
                 alert("✅ Gambar & Catatan disimpan! Sila teruskan ke drop point seterusnya. / Photos & Note saved! Please proceed to the next drop point.");
             }
         } catch (err: any) {
+            logActivity(user, {
+                action: 'DRIVER_CONFIRM_DROP_POINT_FAILED',
+                module: 'Logistics / DriverDelivery',
+                target: `Order #${selectedOrder?.orderNumber || selectedOrder?.id || ''}`,
+                status: 'FAILED',
+                resultSummary: `送货签收失败: ${err.message}`,
+                details: {
+                    orderId: selectedOrder?.id,
+                    error: err.message
+                }
+            });
             alert("Ralat mengesahkan penghantaran / Error confirming delivery: " + err.message);
         } finally {
             setSubmitting(false);

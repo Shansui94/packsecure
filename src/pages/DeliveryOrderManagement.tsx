@@ -21,6 +21,7 @@ import { compressImage, dataUrlToBase64Payload } from '../utils/imageCompress';
 import * as XLSX from 'xlsx';
 import { useTranslation } from "react-i18next";
 import { deductStockForOrder, reverseStockForOrder, adjustStockForOrderDelta } from '../services/stockService';
+import { logActivity } from '../utils/logger';
 
 type ScannedTripDraft = {
     label: string;
@@ -485,7 +486,11 @@ const SearchableSelect: React.FC<SearchableSelectProps> = ({
     );
 };
 
-const DeliveryOrderManagement: React.FC = () => {
+interface DeliveryOrderManagementProps {
+    user?: User | null;
+}
+
+const DeliveryOrderManagement: React.FC<DeliveryOrderManagementProps> = ({ user }) => {
     const { t } = useTranslation();
     const getSafeOrigin = (o?: string) => (o || '').toUpperCase().trim();
 
@@ -1100,6 +1105,21 @@ const DeliveryOrderManagement: React.FC = () => {
 
             // Optimistic Remove (or move to Cancelled if checking that tab)
             setOrders(prev => prev.map(o => o.id === orderId ? { ...o, status: 'Cancelled' } : o));
+
+            logActivity(user, {
+                action: 'CANCEL_DELIVERY_ORDER',
+                module: '送货调度中心 (Trip & Delivery Orders)',
+                target: `DO #${orderNumber}`,
+                status: 'WARNING',
+                resultSummary: `${user?.name || '管理员'} 取消/作废送货单 #${orderNumber}`,
+                location: (target as any)?.destination || (target as any)?.deliveryAddress,
+                details: {
+                    orderId,
+                    orderNumber,
+                    customer: target?.customer,
+                    items: target?.items
+                }
+            });
 
             // Soft Refresh
             await fetchData();
@@ -2408,6 +2428,38 @@ const DeliveryOrderManagement: React.FC = () => {
 
             // Close Modal
             handleCloseModal();
+
+            // Log 5W1H Activity
+            const totalQty = finalizedItems.reduce((acc, curr) => acc + (Number(curr.quantity) || 0), 0);
+            const selectedDriverName = drivers.find(d => d.uid === selectedDriverId)?.name || '未指派';
+            const actionType = editingOrderId ? 'UPDATE_DELIVERY_ORDER' : 'CREATE_DELIVERY_ORDER';
+            
+            logActivity(user, {
+                action: actionType,
+                module: '送货调度中心 (Trip & Delivery Orders)',
+                target: `DO #${doNumber} - 客户: ${finalCustomer}`,
+                status: 'SUCCESS',
+                resultSummary: `${user?.name || '管理员'} ${editingOrderId ? '修改并保存' : '编制并创建'}送货单 #${doNumber} (客户: ${finalCustomer}，共 ${finalizedItems.length} 项 / ${totalQty} 件，指派司机: ${selectedDriverName})`,
+                location: newOrderAddress || tripOrigin,
+                details: {
+                    orderNumber: doNumber,
+                    customer: finalCustomer,
+                    driverId: selectedDriverId || null,
+                    driverName: selectedDriverName,
+                    destination: newOrderAddress,
+                    tripOrigin: tripOrigin,
+                    items: finalizedItems.map(i => ({
+                        sku: i.sku || 'N/A',
+                        name: i.name || i.product || '商品',
+                        quantity: i.quantity,
+                        unit: (i as any).uom || '件',
+                        sourceLocation: i.sourceLocation
+                    })),
+                    totalQuantity: totalQty,
+                    notes: newOrderNotes || null,
+                    isEdit: !!editingOrderId
+                }
+            });
 
             // Soft Refresh
             await fetchData();
@@ -3724,7 +3776,7 @@ const DeliveryOrderManagement: React.FC = () => {
             {/* --- CREATE / EDIT MODAL --- */}
             {
                 isCreateModalOpen && (
-                    <div className="fixed inset-0 z-[100] flex items-center justify-center p-0 sm:p-3 lg:p-6 bg-black/70 backdrop-blur-sm animate-in fade-in duration-200">
+                    <div role="dialog" aria-label={editingOrderId ? 'Edit Trip Modal' : 'Create Trip Modal'} className="fixed inset-0 z-[100] flex items-center justify-center p-0 sm:p-3 lg:p-6 bg-black/70 backdrop-blur-sm animate-in fade-in duration-200">
                         <div className="bg-slate-950 border-0 sm:border border-slate-800 rounded-none sm:rounded-2xl w-full max-w-6xl h-full sm:h-[min(96vh,920px)] overflow-hidden flex flex-col shadow-2xl shadow-black">
                             {/* Modal Header */}
                             <div className="py-3 px-4 sm:px-6 border-b border-slate-800 flex justify-between items-center gap-3 bg-slate-900/50">
@@ -4323,7 +4375,10 @@ const DeliveryOrderManagement: React.FC = () => {
                                 <button
                                     onClick={handleSubmitOrder}
                                     disabled={isSubmitting}
-                                    className="px-8 py-2 bg-gradient-to-r from-blue-600 to-blue-500 hover:from-blue-500 hover:to-blue-400 disabled:opacity-60 disabled:cursor-not-allowed text-white rounded-xl font-bold shadow-lg shadow-blue-900/30 transition-all active:scale-95 flex items-center gap-2"
+                                    data-action="SAVE_TRIP_ORDER"
+                                    data-action-name={editingOrderId ? '保存送货单修改' : '创建并确认送货单'}
+                                    data-target={editingOrderId ? `DO #${editingOrderId}` : `新建行程 (客户: ${orderCustomer || 'General Customer'})`}
+                                    className="px-8 py-2 bg-gradient-to-r from-blue-600 to-blue-500 hover:from-blue-500 hover:to-blue-400 disabled:opacity-60 disabled:cursor-not-allowed text-white rounded-xl font-bold shadow-lg shadow-blue-900/30 transition-all active:scale-95 flex items-center gap-2 cursor-pointer"
                                 >
                                     {isSubmitting ? (
                                         <><span className="w-4 h-4 border-2 border-white/30 border-t-white rounded-full animate-spin" />Saving...</>

@@ -391,11 +391,23 @@ export const MachineInspectionModal: React.FC<MachineInspectionModalProps> = ({
             const { data } = await supabase.from('mobile_inspection_logs').insert([newLog]).select();
             saveLogToLocalAndState(data && data[0] ? data[0] : newLog);
 
-            logActivity(currentUser, 'ADD_MATERIAL_ITEM', {
-                machine: machineName,
-                screw: selectedScrew,
-                material: name,
-                qty: newMatQty
+            logActivity(currentUser, {
+                action: 'ADD_MATERIAL_ITEM',
+                module: 'MachineInspectionModal',
+                target: `${machineName} (${selectedScrew}螺杆) - ${name}`,
+                status: 'SUCCESS',
+                resultSummary: `机台 ${machineName} 添加物料 [${name}]，用量: ${newMatQty} kg`,
+                location: activeFactoryId,
+                details: {
+                    machine: machineName,
+                    screw: selectedScrew,
+                    material: name,
+                    qty: newMatQty,
+                    items: [{ name, qty: newMatQty, unit: 'kg', screw: selectedScrew }],
+                    totalQuantity: newMatQty,
+                    photos: currentHopperPhoto ? [currentHopperPhoto] : [],
+                    photoUrl: currentHopperPhoto || null
+                }
             });
         } catch (e) {
             console.error('Log add material error:', e);
@@ -441,10 +453,20 @@ export const MachineInspectionModal: React.FC<MachineInspectionModalProps> = ({
             const { data } = await supabase.from('mobile_inspection_logs').insert([newLog]).select();
             saveLogToLocalAndState(data && data[0] ? data[0] : newLog);
 
-            logActivity(currentUser, 'DELETE_MATERIAL_ITEM', {
-                machine: machineName,
-                screw: selectedScrew,
-                material: matName
+            logActivity(currentUser, {
+                action: 'DELETE_MATERIAL_ITEM',
+                module: 'MachineInspectionModal',
+                target: `${machineName} (${selectedScrew}螺杆) - ${matName}`,
+                status: 'SUCCESS',
+                resultSummary: `机台 ${machineName} 删除物料 [${matName}]`,
+                location: activeFactoryId,
+                details: {
+                    machine: machineName,
+                    screw: selectedScrew,
+                    material: matName,
+                    photos: currentHopperPhoto ? [currentHopperPhoto] : [],
+                    photoUrl: currentHopperPhoto || null
+                }
             });
         } catch (e) {
             console.error('Log delete material error:', e);
@@ -493,12 +515,25 @@ export const MachineInspectionModal: React.FC<MachineInspectionModalProps> = ({
             const { data } = await supabase.from('mobile_inspection_logs').insert([newLog]).select();
             saveLogToLocalAndState(data && data[0] ? data[0] : newLog);
 
-            logActivity(currentUser, 'UPDATE_MATERIAL_QTY', {
-                machine: machineName,
-                screw: selectedScrew,
-                material: targetMat.name,
-                oldQty: oldQty,
-                newQty: validQty
+            logActivity(currentUser, {
+                action: 'UPDATE_MATERIAL_QTY',
+                module: 'MachineInspectionModal',
+                target: `${machineName} (${selectedScrew}螺杆) - ${targetMat.name}`,
+                status: 'SUCCESS',
+                resultSummary: `机台 ${machineName} 调整物料 [${targetMat.name}] 用量: ${oldQty} ➔ ${validQty} ${targetMat.unit || 'kg'}`,
+                location: activeFactoryId,
+                details: {
+                    machine: machineName,
+                    screw: selectedScrew,
+                    material: targetMat.name,
+                    oldQty: oldQty,
+                    newQty: validQty,
+                    items: [{ name: targetMat.name, oldQty, qty: validQty, unit: targetMat.unit || 'kg' }],
+                    totalQuantity: validQty,
+                    changes: { before: { qty: oldQty }, after: { qty: validQty } },
+                    photos: currentHopperPhoto ? [currentHopperPhoto] : [],
+                    photoUrl: currentHopperPhoto || null
+                }
             });
         } catch (e) {
             console.error('Log update qty error:', e);

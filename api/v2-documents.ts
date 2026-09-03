@@ -61,26 +61,28 @@ export async function handleDashboardMetrics(req: VercelRequest, res: VercelResp
             // 4. Aggregate live system operational data
             let currentLiveStock = 0;
             try {
-                const { data: stockData } = await supabase.from('live_stock').select('quantity');
+                const { data: stockData } = await supabase.from('v2_inventory_view').select('current_stock');
                 if (stockData) {
-                    currentLiveStock = stockData.reduce((acc, row) => acc + (Number(row.quantity) || 0), 0);
+                    currentLiveStock = stockData.reduce((acc, row) => acc + (Number(row.current_stock) || 0), 0);
                 }
             } catch (err) {
-                console.warn('Failed to aggregate live_stock:', err);
+                console.warn('Failed to aggregate live stock:', err);
             }
 
             const monthlyTrips: Record<number, number> = {};
             try {
                 const { data: tripData } = await supabase
-                    .from('logistics_trips')
-                    .select('created_at')
+                    .from('sales_orders')
+                    .select('created_at, order_date, deadline, status')
+                    .eq('status', 'Delivered')
                     .gte('created_at', `${year}-01-01`)
                     .lte('created_at', `${year}-12-31`);
 
                 if (tripData) {
                     tripData.forEach(t => {
-                        if (t.created_at) {
-                            const m = new Date(t.created_at).getMonth() + 1;
+                        const dateStr = t.order_date || t.deadline || t.created_at;
+                        if (dateStr) {
+                            const m = new Date(dateStr).getMonth() + 1;
                             monthlyTrips[m] = (monthlyTrips[m] || 0) + 1;
                         }
                     });

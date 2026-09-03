@@ -87,6 +87,21 @@ function App() {
         }
     }, []);
 
+    // Global client geolocation background listener
+    useEffect(() => {
+        if (typeof navigator !== 'undefined' && 'geolocation' in navigator) {
+            navigator.geolocation.getCurrentPosition(
+                (pos) => {
+                    const gpsStr = `${pos.coords.latitude.toFixed(6)}, ${pos.coords.longitude.toFixed(6)}`;
+                    sessionStorage.setItem('last_known_gps', gpsStr);
+                    (window as any).__CURRENT_GPS__ = gpsStr;
+                },
+                () => {},
+                { enableHighAccuracy: false, timeout: 6000, maximumAge: 300000 }
+            );
+        }
+    }, []);
+
     // Persist activePage and Log Activity
     useEffect(() => {
         localStorage.setItem('lastActivePage', activePage);
@@ -107,20 +122,41 @@ function App() {
             
             if (clickable) {
                 // Extract identifying information about what was clicked
-                const actionText = (clickable.innerText || clickable.textContent || clickable.getAttribute('aria-label') || clickable.title || '').trim().substring(0, 50);
+                const rawText = (clickable.innerText || clickable.textContent || clickable.getAttribute('aria-label') || clickable.title || '').trim().replace(/\s+/g, ' ').substring(0, 60);
                 const actionId = clickable.id || 'unknown_node';
                 
+                // Extract surrounding modal or container context
+                const modalContainer = clickable.closest('[role="dialog"], .modal, [class*="modal"], [class*="drawer"], form, [class*="fixed inset-0"]');
+                let modalTitle = '';
+                let contextTarget = '';
+                if (modalContainer) {
+                    const titleEl = modalContainer.querySelector('h1, h2, h3, h4, [class*="title"], legend');
+                    if (titleEl && titleEl !== clickable) {
+                        modalTitle = (titleEl.textContent || '').trim().replace(/\s+/g, ' ').slice(0, 50);
+                    }
+                    const activeInput = modalContainer.querySelector('input[name*="customer"], select[name*="customer"], input[placeholder*="Customer"], input[placeholder*="customer"]') as HTMLInputElement;
+                    if (activeInput && activeInput.value && activeInput.value.toLowerCase() !== 'general customer') {
+                        contextTarget = `客户: ${activeInput.value}`;
+                    }
+                }
+
+                const customAction = clickable.getAttribute('data-action') || clickable.getAttribute('data-action-name') || clickable.getAttribute('aria-label');
+                const customTarget = clickable.getAttribute('data-target');
+                
                 // We only want to log 'action-oriented' clicks to avoid flooding the DB
-                const textLower = actionText.toLowerCase();
-                const keywords = ['save', 'submit', 'create', 'delete', 'add', 'update', 'complete', 'start', 'stop', 'confirm', 'print', 'finish', 'post', 'allow', 'reject', 'approve'];
+                const textLower = (rawText + ' ' + (customAction || '')).toLowerCase();
+                const keywords = ['save', 'submit', 'create', 'delete', 'add', 'update', 'complete', 'start', 'stop', 'confirm', 'print', 'finish', 'post', 'allow', 'reject', 'approve', 'sahkan', 'hantar', 'simpan', 'gambar'];
                 
                 const isActionable = keywords.some(k => textLower.includes(k));
                 
-                if (isActionable && actionText.length > 0) {
+                if (isActionable && rawText.length > 0) {
                     logActivity(user, `BUTTON_CLICK`, {
                         page: activePage,
-                        button_text: actionText,
-                        element_id: actionId
+                        button_text: rawText,
+                        element_id: actionId,
+                        modal_title: modalTitle || undefined,
+                        target: customTarget || contextTarget || (modalTitle ? `【${modalTitle}】` : undefined),
+                        custom_action: customAction || undefined
                     });
                 }
             }
@@ -395,14 +431,22 @@ function App() {
             setIsLoggedIn(true);
 
             // Log successful Login once per session
-            const userObj = { email: currentUser.email || '', name, role: role as UserRole, uid: currentUser.id, status: status as any, loginTime: new Date().toLocaleTimeString(), gps: 'Unknown' };
+            const currentGps = (typeof window !== 'undefined' && ((window as any).__CURRENT_GPS__ || sessionStorage.getItem('last_known_gps'))) || 'Unknown';
+            const userObj = { email: currentUser.email || '', name, role: role as UserRole, uid: currentUser.id, status: status as any, loginTime: new Date().toLocaleTimeString(), gps: currentGps };
             if (!sessionStorage.getItem('hasLoggedSessionIn')) {
-                logActivity(userObj, 'LOGIN', { method: 'auth_success' });
+                logActivity(userObj, 'LOGIN', { 
+                    method: 'auth_success',
+                    gps: currentGps !== 'Unknown' ? currentGps : null,
+                    location: resolvedFactoryId || null
+                });
                 sessionStorage.setItem('hasLoggedSessionIn', 'true');
             }
 
             // Initial Routing Logic (Force correct landing page)
-            if (!localStorage.getItem('lastActivePage')) {
+            const isAppMode = window.location.search.includes('mode=app');
+            if (isAppMode) {
+                setActivePage('delivery-driver');
+            } else if (!localStorage.getItem('lastActivePage')) {
                 if (employeeId === '009') setActivePage('order-summary');
                 else if (role === 'SuperAdmin') setActivePage('dashboard');
                 else if (role === 'Operator') setActivePage('scanner');
@@ -720,7 +764,7 @@ function App() {
             case 'recipes':
                 return <YieldControl />;
             case 'delivery':
-                return <DeliveryOrderManagement />;
+                return <DeliveryOrderManagement user={user} />;
             case 'live-fleet':
                 return <LiveFleet />;
             case 'order-summary':
@@ -823,6 +867,36 @@ function App() {
             console.error("Error logging out:", error);
         }
     };
+
+    const isAppMode = window.location.search.includes('mode=app');
+
+    if (isAppMode) {
+        return (
+            <ErrorBoundary>
+                <div className="h-screen w-screen flex flex-col bg-apple-bg text-apple-textMain font-sans overflow-hidden">
+                    {/* Minimal App Header */}
+                    <div className="shrink-0 h-14 bg-apple-bg/90 backdrop-blur-md border-b border-apple-border flex justify-between items-center px-4 z-50">
+                        <div className="flex items-center gap-2">
+                            <div className="w-6 h-6 rounded flex items-center justify-center font-bold text-white bg-green-600 text-xs shadow-md">
+                                P
+                            </div>
+                            <span className="font-bold text-sm tracking-tight text-white">PackSecure App</span>
+                        </div>
+                        <button 
+                            onClick={handleLogout}
+                            className="text-xs font-bold text-red-400 bg-red-500/10 px-3 py-1.5 rounded-lg active:scale-95 transition-all"
+                        >
+                            Log Keluar
+                        </button>
+                    </div>
+                    {/* Main Content Area */}
+                    <div className="flex-1 overflow-y-auto relative custom-scrollbar bg-[#09090b]">
+                        {renderContent()}
+                    </div>
+                </div>
+            </ErrorBoundary>
+        );
+    }
 
     return (
         <ErrorBoundary>

@@ -18,6 +18,7 @@ import {
     deleteSystemBadge, 
     awardBadgeToEmployee 
 } from '../services/badgeService';
+import { logActivity } from '../utils/logger';
 
 const formatYYYYMMDD = (dateStr: string | null | undefined): string => {
     if (!dateStr) return '';
@@ -323,8 +324,17 @@ const EmployeeModal: React.FC<{
             ? await supabase.from('sys_users_v2').insert(payload)
             : await supabase.from('sys_users_v2').update(payload).eq('id', form.id);
 
-        if (err) setError(err.message);
-        else {
+        if (err) {
+            setError(err.message);
+            logActivity(currentUser, {
+                action: isNew ? 'USER_CREATE_FAILED' : 'USER_UPDATE_FAILED',
+                module: 'HR / HRPortal',
+                target: `员工: ${form.name || validEmail}`,
+                status: 'FAILED',
+                resultSummary: `保存员工资料失败: ${err.message}`,
+                details: { error: err.message, email: validEmail }
+            });
+        } else {
             // Dual-table sync to users_public (Status, Role, Employee ID, Location)
             if (targetAuthId) {
                 const { error: pubErr } = await supabase.from('users_public').upsert({
@@ -338,6 +348,25 @@ const EmployeeModal: React.FC<{
                 });
                 if (pubErr) console.warn("Failed to sync profile to users_public:", pubErr.message);
             }
+
+            logActivity(currentUser, {
+                action: isNew ? 'USER_CREATE' : 'USER_UPDATE',
+                module: 'HR / HRPortal',
+                target: `员工: ${form.name || validEmail} (${form.role})`,
+                status: 'SUCCESS',
+                resultSummary: isNew 
+                    ? `新增员工档案 [${form.name}] (角色: ${form.role}, 状态: ${normalizedStatus})` 
+                    : `更新员工资料 [${form.name}] (角色: ${form.role}, 状态: ${normalizedStatus})`,
+                location: form.base_location || 'Taiping',
+                details: {
+                    name: form.name,
+                    email: validEmail,
+                    role: form.role,
+                    status: normalizedStatus,
+                    baseLocation: form.base_location
+                }
+            });
+
             onSave();
             onClose();
         }
@@ -1043,10 +1072,34 @@ const HRPortal: React.FC<HRPortalProps> = ({ user, initialTab, initialRoleFilter
 
             if (pubErr) throw pubErr;
 
+            logActivity(user, {
+                action: 'USER_APPROVE_REGISTRATION',
+                module: 'HR / HRPortal',
+                target: `员工注册: ${emp.name} (${assignedRole})`,
+                status: 'SUCCESS',
+                resultSummary: `审批通过员工 [${emp.name}] 的注册申请，分配角色: ${assignedRole}，驻地: ${assignedLocation}`,
+                location: assignedLocation || 'Taiping',
+                details: {
+                    name: emp.name,
+                    email: emp.email,
+                    assignedRole,
+                    assignedLocation,
+                    factoryId: resolvedFactoryId
+                }
+            });
+
             alert(t('✅ Employee "{{var0}}" has been successfully approved and activated!\nRole: {{var1}}\nJob number/PIN: {{var2}}\nResidence: {{var3}}', { var0: emp.name, var1: assignedRole, var2: cleanPin || emp.employee_id || 'N/A', var3: assignedLocation }));
             await fetchEmployees();
         } catch (err: any) {
             console.error("Approve Registration Error:", err);
+            logActivity(user, {
+                action: 'USER_APPROVE_REGISTRATION_FAILED',
+                module: 'HR / HRPortal',
+                target: `员工注册: ${emp.name}`,
+                status: 'FAILED',
+                resultSummary: `审批员工注册失败: ${err.message}`,
+                details: { error: err.message, name: emp.name, email: emp.email }
+            });
             alert(t('❌ Approval activation failed: {{var0}}', { var0: err.message }));
         } finally {
             setProcessingApprovalId(null);
@@ -1062,10 +1115,28 @@ const HRPortal: React.FC<HRPortalProps> = ({ user, initialTab, initialRoleFilter
         try {
             await supabase.from('sys_users_v2').update({ status: 'Rejected' }).eq('auth_user_id', targetAuthId);
             await supabase.from('users_public').update({ status: 'Rejected' }).eq('id', targetAuthId);
+
+            logActivity(user, {
+                action: 'USER_REJECT_REGISTRATION',
+                module: 'HR / HRPortal',
+                target: `员工注册: ${emp.name}`,
+                status: 'SUCCESS',
+                resultSummary: `拒绝了员工 [${emp.name}] 的注册申请`,
+                details: { name: emp.name, email: emp.email, authId: targetAuthId }
+            });
+
             alert(t('❌ The registration application of employee "{{var0}}" has been rejected.', { var0: emp.name }));
             await fetchEmployees();
         } catch (err: any) {
             console.error("Reject Registration Error:", err);
+            logActivity(user, {
+                action: 'USER_REJECT_REGISTRATION_FAILED',
+                module: 'HR / HRPortal',
+                target: `员工注册: ${emp.name}`,
+                status: 'FAILED',
+                resultSummary: `拒绝员工注册失败: ${err.message}`,
+                details: { error: err.message, name: emp.name }
+            });
             alert(t('❌ Reject failed: {{var0}}', { var0: err.message }));
         } finally {
             setProcessingApprovalId(null);

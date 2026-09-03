@@ -20,8 +20,11 @@ import {
     ChevronRight,
     Play,
     Filter,
-    RefreshCw
+    RefreshCw,
+    Download,
+    RotateCcw
 } from 'lucide-react';
+import * as XLSX from 'xlsx';
 import { supabase } from '../services/supabase';
 import { User } from '../types';
 import { compressImage } from '../utils/imageCompress';
@@ -52,6 +55,18 @@ interface RecycleBatchLog {
     operatorName: string;
     photoUrl?: string;
     userNote?: string;
+    aiRawJson?: {
+        weight?: number;
+        ai_detected_weight?: number;
+        manual_input?: number;
+        discrepancy?: boolean;
+        diff_amount?: number;
+        needs_review?: boolean;
+        review_status?: string;
+        reviewed_by?: string;
+        reviewed_at?: string;
+        [key: string]: any;
+    };
 }
 
 const RECYCLE_MATERIALS = [
@@ -85,10 +100,16 @@ export const RecycleMachineControl: React.FC<RecycleMachineControlProps> = ({
     // Active Material Selection
     const [selectedMaterialKey, setSelectedMaterialKey] = useState<string>('SF.W');
 
-    // Input States (default 15.0 KG for fast logging)
+    // Input States (Manual typing - default empty/15.0 KG)
     const [weightInput, setWeightInput] = useState<string>('15.0');
     const [userNote, setUserNote] = useState<string>('');
     const [downtimeReason, setDowntimeReason] = useState<string>('');
+
+    // AI Shadow Check States
+    const [aiDetectedWeight, setAiDetectedWeight] = useState<number | null>(null);
+    const [showDiscrepancyModal, setShowDiscrepancyModal] = useState<boolean>(false);
+    const [discrepancyData, setDiscrepancyData] = useState<{ manualWeight: number; aiWeight: number; diff: number } | null>(null);
+    const [showOnlyDiscrepancies, setShowOnlyDiscrepancies] = useState<boolean>(false);
 
     // Photo Capture States
     const [showWebcam, setShowWebcam] = useState(false);
@@ -107,8 +128,8 @@ export const RecycleMachineControl: React.FC<RecycleMachineControlProps> = ({
     const [loadingLogs, setLoadingLogs] = useState(true);
     const [selectedDateFilter, setSelectedDateFilter] = useState<string>('ALL'); // 'ALL' | 'TODAY' | 'YYYY-MM-DD'
 
-    // Lightbox modal for photos
-    const [lightboxPhoto, setLightboxPhoto] = useState<string | null>(null);
+    // Lightbox modal for photos with rich metadata
+    const [lightboxLog, setLightboxLog] = useState<RecycleBatchLog | null>(null);
 
     // Fetch Logs for this Recycle Machine (Loads all historical logs)
     const fetchRecycleLogs = async () => {
@@ -165,12 +186,24 @@ export const RecycleMachineControl: React.FC<RecycleMachineControlProps> = ({
 
                     const matConfig = RECYCLE_MATERIALS.find(m => m.key === matKey) || RECYCLE_MATERIALS[0];
 
-                    // Calculate interval from previous batch
+                    // Calculate interval from previous batch accurately in chronological order
                     let intervalMin = 0;
+                    let isShiftStart = false;
                     if (idx > 0) {
-                        const prevTime = new Date(data[idx - 1].created_at).getTime();
+                        const prevItem = chronoData[idx - 1];
+                        const prevTime = new Date(prevItem.created_at).getTime();
                         const currTime = new Date(p.created_at).getTime();
-                        intervalMin = Math.round((currTime - prevTime) / 60000);
+                        intervalMin = Math.max(0, Math.round((currTime - prevTime) / 60000));
+
+                        const prevLocalDateStr = new Date(prevTime + 8 * 3600000).toISOString().substring(0, 10);
+                        const currLocalDateStr = new Date(currTime + 8 * 3600000).toISOString().substring(0, 10);
+
+                        // If gap > 180 min (3h) or cross calendar day, it's a shift startup
+                        if (intervalMin > 180 || prevLocalDateStr !== currLocalDateStr) {
+                            isShiftStart = true;
+                        }
+                    } else {
+                        isShiftStart = true;
                     }
 
                     const localDate = new Date(new Date(p.created_at).getTime() + 8 * 3600000);
@@ -187,7 +220,7 @@ export const RecycleMachineControl: React.FC<RecycleMachineControlProps> = ({
                         materialColor: matConfig.color,
                         weight: weight > 0 ? weight : 14.5,
                         intervalMinutes: intervalMin,
-                        downtimeReason: p.ai_raw_json?.downtimeReason,
+                        downtimeReason: p.ai_raw_json?.downtimeReason || (isShiftStart ? '新班次首包' : undefined),
                         operatorName: p.employee_name || 'Operator',
                         photoUrl: p.photo_url,
                         userNote: p.user_note
@@ -218,12 +251,17 @@ export const RecycleMachineControl: React.FC<RecycleMachineControlProps> = ({
         };
     }, [machineId]);
 
-    // Available Distinct Dates
-    const distinctDates = Array.from(new Set(logs.map(l => l.dateStr))).sort().reverse();
     const todayStr = new Date(Date.now() + 8 * 3600000).toISOString().substring(0, 10);
+    // Available Distinct Dates (exclude today to prevent duplicate pills)
+    const distinctDates = Array.from(new Set(logs.map(l => l.dateStr))).filter(d => d !== todayStr).sort().reverse();
+
+    const pendingDiscrepancyCount = logs.filter(l => l.aiRawJson?.needs_review === true || l.aiRawJson?.discrepancy === true).length;
 
     // Filtered logs to display
     const displayedLogs = logs.filter(l => {
+        if (showOnlyDiscrepancies) {
+            return l.aiRawJson?.needs_review === true || l.aiRawJson?.discrepancy === true;
+        }
         if (selectedDateFilter === 'ALL') return true;
         if (selectedDateFilter === 'TODAY') return l.dateStr === todayStr;
         return l.dateStr === selectedDateFilter;
@@ -232,6 +270,17 @@ export const RecycleMachineControl: React.FC<RecycleMachineControlProps> = ({
     // Compute Metrics based on displayed scope
     const totalKg = displayedLogs.reduce((sum, item) => sum + item.weight, 0);
     const totalBags = displayedLogs.length;
+
+    // Material breakdown summary for active scope
+    const materialBreakdown = RECYCLE_MATERIALS.map(mat => {
+        const filtered = displayedLogs.filter(l => l.materialKey === mat.key);
+        const kg = filtered.reduce((sum, l) => sum + l.weight, 0);
+        return {
+            ...mat,
+            count: filtered.length,
+            kg
+        };
+    }).filter(m => m.count > 0);
 
     // Time calculations
     const earliestTime = displayedLogs.length > 0 ? new Date(displayedLogs[displayedLogs.length - 1].created_at) : null;
@@ -253,31 +302,144 @@ export const RecycleMachineControl: React.FC<RecycleMachineControlProps> = ({
         chronoLogs.forEach((item, i) => {
             if (i > 0) {
                 const diff = item.intervalMinutes;
-                validIntervals.push(diff);
-                if (diff <= 60) {
-                    activeMin += diff;
-                } else {
-                    downMin += diff;
+                // Exclude multi-day or cross-shift startup gaps from average production cycle
+                if (diff > 0 && diff <= 180) {
+                    validIntervals.push(diff);
+                    if (diff <= 60) {
+                        activeMin += diff;
+                    } else {
+                        downMin += (diff - 35);
+                        activeMin += 35;
+                    }
                 }
             }
         });
 
-        avgCycleMinutes = validIntervals.length > 0 ? Math.round(validIntervals.reduce((a, b) => a + b, 0) / validIntervals.length) : 0;
+        avgCycleMinutes = validIntervals.length > 0 ? Math.round(validIntervals.reduce((a, b) => a + b, 0) / validIntervals.length) : 32;
         activeHours = Math.max(0.1, (activeMin + (avgCycleMinutes || 30)) / 60);
         downtimeHours = Math.round((downMin / 60) * 10) / 10;
     } else if (displayedLogs.length === 1) {
         totalSpanHours = 0.5;
         activeHours = 0.5;
-        avgCycleMinutes = 35;
+        avgCycleMinutes = 32;
     }
 
     const currentSpeedKgPerHour = activeHours > 0 ? Math.round((totalKg / activeHours) * 10) / 10 : 0;
 
     // Last Bag Cycle Time
-    const lastBagInterval = logs.length >= 2 ? logs[0].intervalMinutes : 35;
-    const showDowntimeWarning = lastBagInterval > 60;
+    const lastBagInterval = logs.length >= 2 ? logs[0].intervalMinutes : 32;
+    const showDowntimeWarning = lastBagInterval > 60 && lastBagInterval <= 180;
 
-    // Trigger AI OCR on scale photo
+    // Excel Export
+    const handleExportExcel = () => {
+        const rows = displayedLogs.map((log, idx) => ({
+            '序号 / No.': displayedLogs.length - idx,
+            '日期 / Date': log.dateStr,
+            '时间 / Time': log.timeLocal,
+            '机台 / Machine': machineName,
+            '物料代码 / SKU': log.materialKey,
+            '物料名称 / Material': log.materialLabel,
+            '单包重量 / Weight (KG)': log.weight,
+            'AI识别秤读数 / AI OCR (KG)': log.aiRawJson?.ai_detected_weight || '-',
+            '手动填报 / Manual Input (KG)': log.aiRawJson?.manual_input || log.weight,
+            '差异复核状态 / Discrepancy Status': log.aiRawJson?.needs_review ? '⚠️ 待主管复核' : (log.aiRawJson?.review_status || '已核验'),
+            '产出耗时 / Cycle (Min)': log.intervalMinutes > 180 ? '新班次首包' : `${log.intervalMinutes} min`,
+            '状态/备注 / Status': log.downtimeReason || (log.intervalMinutes > 180 ? '新班次首包' : '正常造粒'),
+            '操作员 / Operator': log.operatorName,
+            '照片链接 / Photo URL': log.photoUrl || ''
+        }));
+        const ws = XLSX.utils.json_to_sheet(rows);
+        const wb = XLSX.utils.book_new();
+        XLSX.utils.book_append_sheet(wb, ws, "Recycle_Logs");
+        XLSX.writeFile(wb, `Recycle_Logs_${machineId}_${selectedDateFilter}_${Date.now()}.xlsx`);
+    };
+
+    // Quick Undo for latest log
+    const handleUndoLatestLog = async (logItem: RecycleBatchLog) => {
+        if (!window.confirm(`⚠️ 确定要撤销这包称重记录吗？\n\n序号: #${displayedLogs.length}\n重量: ${logItem.weight.toFixed(2)} KG (${logItem.materialLabel})\n时间: ${logItem.dateStr} ${logItem.timeLocal}\n\n撤销后将自动冲销库存流水与生产日志！`)) return;
+        try {
+            setIsUploading(true);
+            // 1. Delete from work_photos
+            await supabase.from('work_photos').delete().eq('id', logItem.id);
+            // 2. Delete from production_logs_v2
+            await supabase.from('production_logs_v2').delete().eq('batch_code', logItem.id);
+            // 3. Reverse stock_ledger_v2
+            const locId = machineId.startsWith('N') ? 'Nilai' : 'OPM Lama';
+            const selectedConfig = RECYCLE_MATERIALS.find(m => m.key === logItem.materialKey) || RECYCLE_MATERIALS[0];
+            await supabase.from('stock_ledger_v2').insert([{
+                sku: selectedConfig.sku,
+                loc_id: locId,
+                change_qty: -logItem.weight,
+                event_type: 'Transfer Out',
+                ref_doc: `REV-${logItem.id}`,
+                notes: `Undo Recycle Batch: ${machineId} (${logItem.weight}kg)`
+            }]);
+            alert("✅ 已成功撤销该批次称重记录！");
+            fetchRecycleLogs();
+        } catch (err: any) {
+            alert("撤销失败: " + err.message);
+        } finally {
+            setIsUploading(false);
+        }
+    };
+
+    // Supervisor Quick-Correction (Adopts AI Scale Reading to adjust stock & logs)
+    const handleSupervisorCorrectLog = async (logItem: RecycleBatchLog) => {
+        const aiWeight = logItem.aiRawJson?.ai_detected_weight || logItem.aiRawJson?.weight;
+        if (!aiWeight || aiWeight <= 0) {
+            alert("未检测到该记录有效的电子秤读数，无法自动纠偏！");
+            return;
+        }
+        const currentWeight = logItem.weight;
+        const diff = Math.round((aiWeight - currentWeight) * 100) / 100;
+        if (!window.confirm(`⚠️ 确认执行主管纠偏？\n\n当前记录重量: ${currentWeight.toFixed(2)} KG\n纠偏为 AI 秤读数: ${aiWeight.toFixed(2)} KG (差额: ${diff > 0 ? '+' : ''}${diff.toFixed(2)} KG)\n\n系统将自动更新生产日志并补录库存流水！`)) return;
+
+        try {
+            setIsUploading(true);
+            // 1. Update work_photos
+            const updatedJson = {
+                ...logItem.aiRawJson,
+                weight: aiWeight,
+                corrected_from_manual: currentWeight,
+                review_status: 'adopted_ai',
+                needs_review: false,
+                reviewed_by: user?.name || 'Supervisor',
+                reviewed_at: new Date().toISOString()
+            };
+            await supabase.from('work_photos').update({
+                ai_raw_json: updatedJson,
+                user_note: `${logItem.materialKey} | ${aiWeight.toFixed(2)} KG (主管已纠偏)`
+            }).eq('id', logItem.id);
+
+            // 2. Update production_logs_v2
+            await supabase.from('production_logs_v2').update({
+                output_qty: aiWeight,
+                note: `${logItem.materialKey} | ${aiWeight.toFixed(2)} KG (主管已纠偏)`
+            }).eq('batch_code', logItem.id);
+
+            // 3. Insert stock_ledger_v2 adjustment delta
+            const locId = machineId.startsWith('N') ? 'Nilai' : 'OPM Lama';
+            const selectedConfig = RECYCLE_MATERIALS.find(m => m.key === logItem.materialKey) || RECYCLE_MATERIALS[0];
+            await supabase.from('stock_ledger_v2').insert([{
+                sku: selectedConfig.sku,
+                loc_id: locId,
+                change_qty: diff,
+                event_type: 'Adjustment',
+                ref_doc: `CORR-${logItem.id}`,
+                notes: `Supervisor Correction: ${machineId} (${currentWeight}kg -> ${aiWeight}kg)`
+            }]);
+
+            alert(`✅ 已成功纠偏并同步库存！当前重量已更新为 ${aiWeight.toFixed(2)} KG`);
+            setLightboxLog(null);
+            fetchRecycleLogs();
+        } catch (err: any) {
+            alert("纠偏失败: " + err.message);
+        } finally {
+            setIsUploading(false);
+        }
+    };
+
+    // Trigger AI OCR on scale photo in background (Shadow Verification)
     const runAIOCRScan = async (base64Img: string) => {
         setIsAiScanning(true);
         try {
@@ -289,14 +451,12 @@ export const RecycleMachineControl: React.FC<RecycleMachineControlProps> = ({
             if (res.ok) {
                 const data = await res.json();
                 if (data.weight !== undefined && Number(data.weight) > 0) {
-                    const cleanWeight = Number(data.weight).toFixed(2);
-                    setWeightInput(cleanWeight);
-                }
-                if (data.material_type && ['SF.W', 'SF.B', 'BW.W', 'BW.B', 'MIX'].includes(data.material_type)) {
-                    setSelectedMaterialKey(data.material_type);
+                    const detectedNum = parseFloat(Number(data.weight).toFixed(2));
+                    setAiDetectedWeight(detectedNum);
+                    // NOTE: NEVER auto-fill weightInput! Worker must manually input the weight.
                 }
                 if (data.digits_raw_seen || data.description) {
-                    setAiAnalysis(`电子秤读数: ${data.weight} kg (仪表显示: ${data.digits_raw_seen || data.weight})`);
+                    setAiAnalysis(`AI 秤盘核验读数: ${data.weight} kg (仪表显示: ${data.digits_raw_seen || data.weight})`);
                 }
             }
         } catch (e) {
@@ -350,22 +510,44 @@ export const RecycleMachineControl: React.FC<RecycleMachineControlProps> = ({
         setPhotoPreview(null);
         setPhotoBlob(null);
         setPhotoBase64(null);
-        setWeightInput('15.0');
+        setWeightInput('');
         setUserNote('');
         setDowntimeReason('');
         setAiAnalysis(null);
+        setAiDetectedWeight(null);
         setShowWebcam(false);
+        setShowDiscrepancyModal(false);
+        setDiscrepancyData(null);
     };
 
-    // Submit Recycle Output Log
+    // Submit Recycle Output Log (Worker triggers manual submit)
     const handleSubmitRecycleOutput = async () => {
         const parsedWeight = parseFloat(weightInput);
-        if (!parsedWeight || parsedWeight <= 0) {
-            alert("请输入有效称重重量（如 15.6 KG）！\nPlease enter a valid weight!");
+        if (isNaN(parsedWeight) || parsedWeight <= 0) {
+            alert("请手动输入实测称重重量（如 14.5 KG）！\nPlease manually enter the scale weight!");
             return;
         }
 
-        // Accurately resolve who is submitting: Logged-in User (Admin/SuperAdmin/Operator) or bound Operator
+        // Shadow Check: If AI recognized a scale reading, check discrepancy (> 0.2 KG)
+        if (aiDetectedWeight !== null && aiDetectedWeight > 0) {
+            const diff = Math.round(Math.abs(parsedWeight - aiDetectedWeight) * 100) / 100;
+            if (diff > 0.2) {
+                setDiscrepancyData({
+                    manualWeight: parsedWeight,
+                    aiWeight: aiDetectedWeight,
+                    diff
+                });
+                setShowDiscrepancyModal(true);
+                return;
+            }
+        }
+
+        // Within 0.2 KG or no OCR detected -> execute normal clean save
+        await executeFinalSubmission(parsedWeight, false);
+    };
+
+    // Final database saving function
+    const executeFinalSubmission = async (targetWeight: number, isDiscrepantSubmitted: boolean) => {
         const effectiveOpName = (user?.name) 
             ? user.name 
             : (operatorName || user?.email?.split('@')[0] || 'Operator');
@@ -377,6 +559,7 @@ export const RecycleMachineControl: React.FC<RecycleMachineControlProps> = ({
 
         try {
             setIsUploading(true);
+            setShowDiscrepancyModal(false);
 
             let uploadedPhotoUrl = 'https://images.unsplash.com/photo-1581091226825-a6a2a5aee158?w=300&q=80';
 
@@ -399,10 +582,21 @@ export const RecycleMachineControl: React.FC<RecycleMachineControlProps> = ({
                 }
             }
 
-            const formattedNote = `${selectedConfig.key} | ${parsedWeight.toFixed(2)} KG`;
-            const formattedDesc = `电子秤称量读数: ${parsedWeight.toFixed(2)} 公斤 (显示 ${parsedWeight.toFixed(2)})`;
+            const formattedNote = isDiscrepantSubmitted 
+                ? `${selectedConfig.key} | ${targetWeight.toFixed(2)} KG ⚠️[差异待复核]`
+                : `${selectedConfig.key} | ${targetWeight.toFixed(2)} KG`;
 
-            // 2. Insert into work_photos table for historical tracking (CLEAN SCHEMA ONLY)
+            const aiRawData = {
+                weight: targetWeight,
+                ai_detected_weight: aiDetectedWeight || targetWeight,
+                manual_input: parseFloat(weightInput) || targetWeight,
+                discrepancy: isDiscrepantSubmitted,
+                diff_amount: aiDetectedWeight ? Math.abs((parseFloat(weightInput) || targetWeight) - aiDetectedWeight) : 0,
+                needs_review: isDiscrepantSubmitted,
+                review_status: isDiscrepantSubmitted ? 'pending' : 'verified'
+            };
+
+            // 2. Insert into work_photos table for historical tracking
             const { data: insertedPhoto, error: photoErr } = await supabase.from('work_photos').insert([{
                 employee_id: effectiveOpEmpId,
                 employee_name: effectiveOpName,
@@ -410,7 +604,8 @@ export const RecycleMachineControl: React.FC<RecycleMachineControlProps> = ({
                 category: 'qc',
                 photo_url: uploadedPhotoUrl,
                 user_note: formattedNote,
-                ai_description: formattedDesc
+                ai_description: `手动填报: ${targetWeight.toFixed(2)} KG, AI核验: ${aiDetectedWeight || targetWeight} KG`,
+                ai_raw_json: aiRawData
             }]).select().single();
 
             if (photoErr) {
@@ -418,21 +613,35 @@ export const RecycleMachineControl: React.FC<RecycleMachineControlProps> = ({
                 throw photoErr;
             }
 
-            // 3. Optional ledger sync with error tolerance
+            // 3. Reliable production_logs_v2 & stock_ledger_v2 sync
             try {
-                if (user && (user.uid || (user as any).id)) {
-                    const validUid = user.uid || (user as any).id;
-                    await supabase.from('production_logs_v2').insert([{
-                        machine_id: machineId,
-                        sku: selectedConfig.sku,
-                        output_qty: parsedWeight,
-                        operator_id: validUid,
-                        reject_qty: 0,
-                        note: formattedNote
-                    }]);
-                }
+                const locId = machineId.startsWith('N') ? 'Nilai' : 'OPM Lama';
+                const operatorUid = user?.uid || (user as any)?.id || operatorId || null;
+
+                // Sync to production_logs_v2
+                await supabase.from('production_logs_v2').insert([{
+                    machine_id: machineId,
+                    sku: selectedConfig.sku,
+                    output_qty: targetWeight,
+                    operator_id: operatorUid,
+                    reject_qty: 0,
+                    note: formattedNote,
+                    batch_code: insertedPhoto?.id || null
+                }]);
+
+                // Sync to stock_ledger_v2 (Raw Material Inflow)
+                await supabase.from('stock_ledger_v2').insert([{
+                    sku: selectedConfig.sku,
+                    loc_id: locId,
+                    change_qty: targetWeight,
+                    event_type: 'Production',
+                    ref_doc: insertedPhoto?.id || `REC-${Date.now()}`,
+                    notes: isDiscrepantSubmitted 
+                        ? `Recycle Output (⚠️Discrepant): ${machineId} (${effectiveOpName})`
+                        : `Recycle Output: ${machineId} (${effectiveOpName})`
+                }]);
             } catch (logErr) {
-                console.warn("Optional production_logs_v2 sync skipped:", logErr);
+                console.warn("Production & ledger sync warning:", logErr);
             }
 
             // 4. Optimistic UI update: instantly prepend the new record to table
@@ -445,17 +654,21 @@ export const RecycleMachineControl: React.FC<RecycleMachineControlProps> = ({
                 materialKey: selectedConfig.key,
                 materialLabel: selectedConfig.label,
                 materialColor: selectedConfig.color,
-                weight: parsedWeight,
+                weight: targetWeight,
                 intervalMinutes: logs.length > 0 ? Math.round((Date.now() - new Date(logs[0].created_at).getTime()) / 60000) : 0,
                 downtimeReason: downtimeReason || undefined,
                 operatorName: effectiveOpName,
                 photoUrl: uploadedPhotoUrl,
-                userNote: formattedNote
+                userNote: formattedNote,
+                aiRawJson: aiRawData
             };
 
             setLogs(prev => [newLogItem, ...prev]);
             resetForm();
-            alert(`✅ 成功登记入库！\n第 ${logs.length + 1} 包: ${parsedWeight.toFixed(2)} KG (${selectedConfig.label})`);
+            alert(isDiscrepantSubmitted 
+                ? `⚠️ 已保存入库并标记差异待主管复核！\n第 ${logs.length + 1} 包: ${targetWeight.toFixed(2)} KG (${selectedConfig.label})`
+                : `✅ 成功核验并登记入库！\n第 ${logs.length + 1} 包: ${targetWeight.toFixed(2)} KG (${selectedConfig.label})`
+            );
         } catch (err: any) {
             console.error("Failed to submit recycle output:", err);
             alert("提交失败: " + (err.message || JSON.stringify(err)));
@@ -506,7 +719,9 @@ export const RecycleMachineControl: React.FC<RecycleMachineControlProps> = ({
                         <div className="text-3xl font-black text-white tabular-nums">
                             {avgCycleMinutes || '--'} <span className="text-xs font-normal text-purple-300">min/包</span>
                         </div>
-                        <div className="text-[10px] text-gray-400 mt-0.5">上一包耗时: {lastBagInterval} min</div>
+                        <div className="text-[10px] text-gray-400 mt-0.5">
+                            上一包耗时: {lastBagInterval > 180 ? '跨班首包' : `${lastBagInterval} min`}
+                        </div>
                     </div>
                 </div>
 
@@ -527,18 +742,30 @@ export const RecycleMachineControl: React.FC<RecycleMachineControlProps> = ({
                 {/* 首尾时间窗口 */}
                 <div className="col-span-2 md:col-span-1 apple-glass rounded-2xl p-4 border border-white/10 flex flex-col justify-between relative overflow-hidden bg-white/5">
                     <div className="flex items-center justify-between text-gray-400 text-xs font-bold uppercase tracking-wider">
-                        <span>作业时间窗口</span>
+                        <span>{selectedDateFilter === 'ALL' ? '历史跨度' : '作业时间窗口'}</span>
                         <Calendar size={16} />
                     </div>
                     <div className="mt-2">
                         <div className="text-sm font-mono font-bold text-white">
-                            {earliestTime ? new Date(earliestTime.getTime() + 8*3600000).toISOString().substring(11, 16) : '--:--'}
-                            <span className="text-gray-500 mx-1">~</span>
-                            {latestTime ? new Date(latestTime.getTime() + 8*3600000).toISOString().substring(11, 16) : '--:--'}
+                            {earliestTime && latestTime ? (
+                                selectedDateFilter === 'ALL' ? (
+                                    <>
+                                        {new Date(earliestTime.getTime() + 8 * 3600000).toISOString().substring(5, 10)}
+                                        <span className="text-gray-500 mx-1">~</span>
+                                        {new Date(latestTime.getTime() + 8 * 3600000).toISOString().substring(5, 10)}
+                                    </>
+                                ) : (
+                                    <>
+                                        {new Date(earliestTime.getTime() + 8 * 3600000).toISOString().substring(11, 16)}
+                                        <span className="text-gray-500 mx-1">~</span>
+                                        {new Date(latestTime.getTime() + 8 * 3600000).toISOString().substring(11, 16)}
+                                    </>
+                                )
+                            ) : '--:--'}
                         </div>
                         <div className="text-[10px] text-gray-300 mt-1 truncate flex items-center gap-1 font-medium">
-                            <span className="w-1.5 h-1.5 rounded-full bg-emerald-400"></span>
-                            <span>当班操作员: {operatorName || (logs.length > 0 ? logs[0].operatorName : 'Aung Naing (6075)')}</span>
+                            <span className="w-1.5 h-1.5 rounded-full bg-emerald-400 shrink-0"></span>
+                            <span className="truncate">当班操作: {operatorName || user?.name || (logs.length > 0 ? logs[0].operatorName : 'Aung Naing')}</span>
                         </div>
                     </div>
                 </div>
@@ -797,67 +1024,121 @@ export const RecycleMachineControl: React.FC<RecycleMachineControlProps> = ({
                 </div>
             </div>
 
-            {/* 3. RECYCLE TIMELINE & BATCH HISTORY (全量历史流水明细表 + 智能日期筛选) */}
-            <div className="apple-glass rounded-3xl p-6 border border-white/10 shadow-xl">
-                <div className="flex flex-col md:flex-row md:items-center justify-between gap-3 mb-4">
-                    <div className="flex items-center gap-2">
-                        <History size={18} className="text-cyan-400" />
-                        <h3 className="text-sm font-black uppercase tracking-wider text-white">
-                            造粒称重流水明细 ({displayedLogs.length} 条记录 / 总库 {logs.length} 条)
-                        </h3>
+            {/* 3. RECYCLE TIMELINE & BATCH HISTORY (全量历史流水明细表 + 智能日期筛选 + 汇总条 + Excel导出 + 快速撤销) */}
+            <div className="apple-glass rounded-3xl p-6 border border-white/10 shadow-xl space-y-4">
+                {/* Header & Actions Bar */}
+                <div className="flex flex-col lg:flex-row lg:items-center justify-between gap-4">
+                    <div>
+                        <div className="flex items-center gap-2">
+                            <History size={20} className="text-cyan-400" />
+                            <h3 className="text-base font-black uppercase tracking-wider text-white">
+                                造粒称重流水明细
+                            </h3>
+                            <span className="text-xs bg-cyan-500/10 border border-cyan-500/30 text-cyan-300 font-bold px-2.5 py-0.5 rounded-full">
+                                {displayedLogs.length} 包 · {totalKg.toFixed(1)} KG
+                            </span>
+                        </div>
+                        <p className="text-[11px] text-gray-400 mt-1 font-mono">
+                            {selectedDateFilter === 'ALL' ? '全部历史总库记录' : (selectedDateFilter === 'TODAY' ? `今日实时流水 (${todayStr})` : `${selectedDateFilter} 班次流水`)}
+                            {displayedLogs.length > 0 && ` · 平均单包 ${(totalKg / displayedLogs.length).toFixed(2)} KG`}
+                        </p>
                     </div>
 
-                    {/* Date Selector Pills */}
-                    <div className="flex items-center gap-1.5 overflow-x-auto custom-scrollbar py-1">
-                        <button
-                            type="button"
-                            onClick={() => setSelectedDateFilter('ALL')}
-                            className={`px-3 py-1.5 rounded-xl text-xs font-bold transition shrink-0 border ${
-                                selectedDateFilter === 'ALL'
-                                    ? 'bg-cyan-500 text-black border-cyan-400 shadow-md'
-                                    : 'bg-white/5 border-white/10 text-gray-400 hover:text-white'
-                            }`}
-                        >
-                            全部历史 ({logs.length})
-                        </button>
-
-                        <button
-                            type="button"
-                            onClick={() => setSelectedDateFilter('TODAY')}
-                            className={`px-3 py-1.5 rounded-xl text-xs font-bold transition shrink-0 border ${
-                                selectedDateFilter === 'TODAY'
-                                    ? 'bg-cyan-500 text-black border-cyan-400 shadow-md'
-                                    : 'bg-white/5 border-white/10 text-gray-400 hover:text-white'
-                            }`}
-                        >
-                            今日 ({logs.filter(l => l.dateStr === todayStr).length})
-                        </button>
-
-                        {distinctDates.slice(0, 7).map(d => (
+                    {/* Date Selector Pills & Excel Export */}
+                    <div className="flex items-center gap-2 flex-wrap">
+                        <div className="flex items-center gap-1.5 overflow-x-auto custom-scrollbar py-1">
                             <button
-                                key={d}
                                 type="button"
-                                onClick={() => setSelectedDateFilter(d)}
-                                className={`px-2.5 py-1.5 rounded-xl text-xs font-mono transition shrink-0 border ${
-                                    selectedDateFilter === d
-                                        ? 'bg-purple-600 text-white border-purple-400 font-bold shadow-md'
+                                onClick={() => { setShowOnlyDiscrepancies(false); setSelectedDateFilter('ALL'); }}
+                                className={`px-3 py-1.5 rounded-xl text-xs font-bold transition shrink-0 border ${
+                                    !showOnlyDiscrepancies && selectedDateFilter === 'ALL'
+                                        ? 'bg-cyan-500 text-black border-cyan-400 shadow-md font-black'
                                         : 'bg-white/5 border-white/10 text-gray-400 hover:text-white'
                                 }`}
                             >
-                                {d.slice(5)} ({logs.filter(l => l.dateStr === d).length})
+                                全部历史 ({logs.length})
                             </button>
-                        ))}
 
+                            <button
+                                type="button"
+                                onClick={() => { setShowOnlyDiscrepancies(false); setSelectedDateFilter('TODAY'); }}
+                                className={`px-3 py-1.5 rounded-xl text-xs font-bold transition shrink-0 border ${
+                                    !showOnlyDiscrepancies && selectedDateFilter === 'TODAY'
+                                        ? 'bg-cyan-500 text-black border-cyan-400 shadow-md font-black'
+                                        : 'bg-white/5 border-white/10 text-gray-400 hover:text-white'
+                                }`}
+                            >
+                                今日 ({logs.filter(l => l.dateStr === todayStr).length})
+                            </button>
+
+                            {distinctDates.slice(0, 5).map(d => (
+                                <button
+                                    key={d}
+                                    type="button"
+                                    onClick={() => { setShowOnlyDiscrepancies(false); setSelectedDateFilter(d); }}
+                                    className={`px-2.5 py-1.5 rounded-xl text-xs font-mono transition shrink-0 border ${
+                                        !showOnlyDiscrepancies && selectedDateFilter === d
+                                            ? 'bg-purple-600 text-white border-purple-400 font-bold shadow-md'
+                                            : 'bg-white/5 border-white/10 text-gray-400 hover:text-white'
+                                    }`}
+                                >
+                                    {d.slice(5)} ({logs.filter(l => l.dateStr === d).length})
+                                </button>
+                            ))}
+
+                            {/* Discrepancy Filter Pill */}
+                            {pendingDiscrepancyCount > 0 && (
+                                <button
+                                    type="button"
+                                    onClick={() => setShowOnlyDiscrepancies(prev => !prev)}
+                                    className={`px-3 py-1.5 rounded-xl text-xs font-bold transition shrink-0 border flex items-center gap-1 cursor-pointer ${
+                                        showOnlyDiscrepancies
+                                            ? 'bg-amber-500 text-black border-amber-400 font-black shadow-lg shadow-amber-500/20 animate-pulse'
+                                            : 'bg-amber-500/10 border-amber-500/30 text-amber-300 hover:bg-amber-500/20'
+                                    }`}
+                                >
+                                    <AlertTriangle size={12} />
+                                    <span>差异待复核 ({pendingDiscrepancyCount})</span>
+                                </button>
+                            )}
+
+                            <button
+                                type="button"
+                                onClick={fetchRecycleLogs}
+                                className="p-2 bg-white/5 hover:bg-white/10 text-cyan-400 rounded-xl border border-white/10 shrink-0 cursor-pointer"
+                                title="刷新最新数据"
+                            >
+                                <RefreshCw size={14} />
+                            </button>
+                        </div>
+
+                        {/* Excel Export Button */}
                         <button
                             type="button"
-                            onClick={fetchRecycleLogs}
-                            className="p-1.5 bg-white/5 hover:bg-white/10 text-cyan-400 rounded-xl border border-white/10 shrink-0"
-                            title="刷新最新数据"
+                            onClick={handleExportExcel}
+                            disabled={displayedLogs.length === 0}
+                            className="px-3.5 py-1.5 bg-emerald-600/20 hover:bg-emerald-600/30 border border-emerald-500/30 text-emerald-300 rounded-xl text-xs font-bold flex items-center gap-1.5 transition shrink-0 cursor-pointer"
                         >
-                            <RefreshCw size={14} />
+                            <Download size={14} />
+                            <span>导出 Excel</span>
                         </button>
                     </div>
                 </div>
+
+                {/* Material Breakdown Summary Chips */}
+                {materialBreakdown.length > 0 && (
+                    <div className="flex items-center gap-2 flex-wrap pt-2 pb-1 border-t border-white/5">
+                        <span className="text-[11px] font-bold text-gray-400">品类小计:</span>
+                        {materialBreakdown.map(mb => (
+                            <div key={mb.key} className={`px-2.5 py-1 rounded-xl text-[11px] font-bold border flex items-center gap-1.5 ${mb.color}`}>
+                                <span className={`w-1.5 h-1.5 rounded-full ${mb.dot}`} />
+                                <span>{mb.label}:</span>
+                                <span className="text-white font-mono font-black">{mb.kg.toFixed(1)} KG</span>
+                                <span className="opacity-70 text-[10px]">({mb.count}包)</span>
+                            </div>
+                        ))}
+                    </div>
+                )}
 
                 {loadingLogs ? (
                     <div className="py-16 flex flex-col justify-center items-center gap-2 text-gray-400 text-xs">
@@ -866,7 +1147,7 @@ export const RecycleMachineControl: React.FC<RecycleMachineControlProps> = ({
                     </div>
                 ) : displayedLogs.length === 0 ? (
                     <div className="py-16 text-center text-gray-500 text-xs font-mono">
-                        未查询到选定日期的称重记录。请切换至「全部历史」或在上方登记新批次！
+                        未查询到选定条件的称重记录。请切换至「全部历史」或在上方登记新批次！
                     </div>
                 ) : (
                     <div className="overflow-x-auto">
@@ -878,22 +1159,37 @@ export const RecycleMachineControl: React.FC<RecycleMachineControlProps> = ({
                                     <th className="pb-3 px-3">物料类别</th>
                                     <th className="pb-3 px-3">单包重量</th>
                                     <th className="pb-3 px-3">产出耗时</th>
+                                    <th className="pb-3 px-3">核验状态</th>
                                     <th className="pb-3 px-3">操作员</th>
-                                    <th className="pb-3 px-3 text-right">现场称重照片</th>
+                                    <th className="pb-3 px-3 text-right">现场称重照片 / 操作</th>
                                 </tr>
                             </thead>
                             <tbody className="divide-y divide-white/5 font-mono">
                                 {displayedLogs.map((log, idx) => {
-                                    const bagIndex = displayedLogs.length - idx;
-                                    const isDowntime = log.intervalMinutes > 60;
+                                    const globalBagIndex = logs.length - logs.findIndex(l => l.id === log.id);
+                                    const isFirstBagOfList = idx === displayedLogs.length - 1;
+                                    const isShiftStartup = log.intervalMinutes > 180 || isFirstBagOfList;
+                                    const isDowntime = log.intervalMinutes > 60 && log.intervalMinutes <= 180;
+                                    const isLatest = idx === 0;
+                                    const hasDiscrepancy = log.aiRawJson?.needs_review === true || log.aiRawJson?.discrepancy === true;
+                                    const isCorrected = log.aiRawJson?.review_status === 'adopted_ai';
+
                                     return (
-                                        <tr key={log.id} className="hover:bg-white/[0.02] transition">
-                                            <td className="py-3 px-3 text-gray-400 font-bold">
-                                                #{bagIndex}
+                                        <tr key={log.id} className={`hover:bg-white/[0.02] transition ${hasDiscrepancy ? 'bg-amber-500/5' : ''}`}>
+                                            <td className="py-3 px-3 font-bold">
+                                                <span className="text-gray-300">#{globalBagIndex}</span>
+                                                {selectedDateFilter !== 'ALL' && !showOnlyDiscrepancies && (
+                                                    <span className="text-[10px] text-cyan-400 ml-1 font-normal">
+                                                        (第{displayedLogs.length - idx}包)
+                                                    </span>
+                                                )}
                                             </td>
                                             <td className="py-3 px-3 text-white font-bold">
                                                 <span className="text-[10px] text-gray-400 mr-1.5 font-normal">{log.dateStr}</span>
                                                 <span>{log.timeLocal}</span>
+                                                {log.dateStr === todayStr && (
+                                                    <span className="ml-1 text-[9px] px-1 py-0.2 bg-emerald-500/20 text-emerald-300 rounded font-normal">今日</span>
+                                                )}
                                             </td>
                                             <td className="py-3 px-3">
                                                 <span className={`px-2.5 py-1 rounded-lg text-[10px] font-bold border ${log.materialColor}`}>
@@ -904,12 +1200,32 @@ export const RecycleMachineControl: React.FC<RecycleMachineControlProps> = ({
                                                 {log.weight.toFixed(2)} <span className="text-[10px] text-gray-400">KG</span>
                                             </td>
                                             <td className="py-3 px-3">
-                                                {idx === displayedLogs.length - 1 ? (
-                                                    <span className="text-[10px] text-gray-500">首包开机</span>
+                                                {isShiftStartup ? (
+                                                    <span className="text-[10px] text-cyan-400 bg-cyan-500/10 border border-cyan-500/20 px-2 py-0.5 rounded-md font-bold">
+                                                        🌅 跨班首包
+                                                    </span>
+                                                ) : isDowntime ? (
+                                                    <span className="text-[11px] font-bold text-amber-300 bg-amber-500/10 border border-amber-500/20 px-2 py-0.5 rounded-md">
+                                                        {log.intervalMinutes} min <span className="text-[9px] opacity-80">({log.downtimeReason || '间歇'})</span>
+                                                    </span>
                                                 ) : (
-                                                    <span className={`text-[11px] font-bold ${isDowntime ? 'text-amber-400' : 'text-purple-300'}`}>
+                                                    <span className="text-[11px] font-bold text-purple-300">
                                                         {log.intervalMinutes} min
-                                                        {isDowntime && <span className="text-[9px] ml-1 opacity-80">({log.downtimeReason || '间歇'})</span>}
+                                                    </span>
+                                                )}
+                                            </td>
+                                            <td className="py-3 px-3">
+                                                {hasDiscrepancy ? (
+                                                    <span className="inline-flex items-center gap-1 text-[10px] font-bold text-amber-300 bg-amber-500/15 border border-amber-500/30 px-2 py-0.5 rounded-md" title={`填: ${log.aiRawJson?.manual_input || log.weight}kg | 秤: ${log.aiRawJson?.ai_detected_weight || log.weight}kg`}>
+                                                        <AlertTriangle size={11} /> 差异需复核
+                                                    </span>
+                                                ) : isCorrected ? (
+                                                    <span className="inline-flex items-center gap-1 text-[10px] font-bold text-cyan-300 bg-cyan-500/10 border border-cyan-500/30 px-2 py-0.5 rounded-md">
+                                                        <CheckCircle2 size={11} /> 主管已纠偏
+                                                    </span>
+                                                ) : (
+                                                    <span className="text-[10px] text-emerald-400 flex items-center gap-1">
+                                                        <CheckCircle2 size={11} /> 已核验
                                                     </span>
                                                 )}
                                             </td>
@@ -917,17 +1233,39 @@ export const RecycleMachineControl: React.FC<RecycleMachineControlProps> = ({
                                                 {log.operatorName}
                                             </td>
                                             <td className="py-3 px-3 text-right">
-                                                {log.photoUrl && !log.photoUrl.includes('unsplash') ? (
-                                                    <button
-                                                        type="button"
-                                                        onClick={() => setLightboxPhoto(log.photoUrl!)}
-                                                        className="inline-flex items-center gap-1 text-[10px] font-bold text-purple-400 hover:text-purple-300 bg-purple-500/10 px-2.5 py-1 rounded-lg border border-purple-500/20 transition"
-                                                    >
-                                                        <ImageIcon size={11} /> 称重照片
-                                                    </button>
-                                                ) : (
-                                                    <span className="text-[10px] text-gray-600">已入库</span>
-                                                )}
+                                                <div className="flex items-center justify-end gap-2">
+                                                    {hasDiscrepancy && user && ['Admin', 'SuperAdmin', 'Director', 'Manager'].includes(user.role) && (
+                                                        <button
+                                                            type="button"
+                                                            onClick={() => handleSupervisorCorrectLog(log)}
+                                                            className="inline-flex items-center gap-1 text-[10px] font-bold text-cyan-300 hover:text-cyan-200 bg-cyan-500/20 hover:bg-cyan-500/30 px-2 py-1 rounded-lg border border-cyan-500/40 transition cursor-pointer"
+                                                            title="主管一键采纳 AI 秤读数纠偏"
+                                                        >
+                                                            ⚡ 纠偏
+                                                        </button>
+                                                    )}
+                                                    {isLatest && (
+                                                        <button
+                                                            type="button"
+                                                            onClick={() => handleUndoLatestLog(log)}
+                                                            className="inline-flex items-center gap-1 text-[10px] font-bold text-rose-400 hover:text-rose-300 bg-rose-500/10 hover:bg-rose-500/20 px-2 py-1 rounded-lg border border-rose-500/20 transition cursor-pointer"
+                                                            title="撤销最近录入的这包数据"
+                                                        >
+                                                            <RotateCcw size={11} /> 撤销
+                                                        </button>
+                                                    )}
+                                                    {log.photoUrl && !log.photoUrl.includes('unsplash') ? (
+                                                        <button
+                                                            type="button"
+                                                            onClick={() => setLightboxLog(log)}
+                                                            className="inline-flex items-center gap-1 text-[10px] font-bold text-purple-400 hover:text-purple-300 bg-purple-500/10 px-2.5 py-1 rounded-lg border border-purple-500/20 transition cursor-pointer"
+                                                        >
+                                                            <ImageIcon size={11} /> 称重照片
+                                                        </button>
+                                                    ) : (
+                                                        <span className="text-[10px] text-gray-600">已入库</span>
+                                                    )}
+                                                </div>
                                             </td>
                                         </tr>
                                     );
@@ -938,25 +1276,103 @@ export const RecycleMachineControl: React.FC<RecycleMachineControlProps> = ({
                 )}
             </div>
 
-            {/* LIGHTBOX MODAL (Portaled to document.body to avoid parent CSS transform clipping) */}
-            {lightboxPhoto && typeof document !== 'undefined' && createPortal(
+            {/* 4. DISCREPANCY CONFIRMATION MODAL (工人手动填报 vs 电子秤照片读数差异核对弹窗) */}
+            {showDiscrepancyModal && discrepancyData && typeof document !== 'undefined' && createPortal(
                 <div
-                    onClick={() => setLightboxPhoto(null)}
+                    className="fixed inset-0 z-[99999] bg-black/90 backdrop-blur-md flex items-center justify-center p-4 sm:p-6 animate-fade-in select-none"
+                    style={{ position: 'fixed', top: 0, left: 0, right: 0, bottom: 0, width: '100vw', height: '100vh' }}
+                >
+                    <div className="bg-[#1c1c1f] border border-amber-500/40 p-6 rounded-3xl w-full max-w-lg shadow-2xl relative animate-scale-in flex flex-col gap-4 text-white">
+                        {/* Header */}
+                        <div className="flex items-center justify-between border-b border-white/10 pb-3">
+                            <div className="flex items-center gap-2 text-amber-400 font-bold text-sm">
+                                <AlertTriangle size={18} className="animate-bounce" />
+                                <span>称重数据差异核对 / Scale Discrepancy Check</span>
+                            </div>
+                            <button
+                                type="button"
+                                onClick={() => setShowDiscrepancyModal(false)}
+                                className="p-1 rounded-lg text-gray-400 hover:text-white hover:bg-white/10"
+                            >
+                                <X size={16} />
+                            </button>
+                        </div>
+
+                        {/* Photo Thumbnail */}
+                        {photoPreview && (
+                            <div className="relative aspect-video max-h-[160px] rounded-2xl overflow-hidden bg-black border border-white/10 flex items-center justify-center">
+                                <img src={photoPreview} alt="Scale Reading Check" className="w-full h-full object-contain" />
+                            </div>
+                        )}
+
+                        {/* Value Comparison Cards */}
+                        <div className="grid grid-cols-2 gap-3">
+                            <div className="p-3.5 rounded-2xl bg-white/5 border border-white/10 text-center">
+                                <span className="text-[10px] text-gray-400 font-bold uppercase block">✍️ 您手动填写的重量</span>
+                                <span className="text-2xl font-black text-white mt-1 block font-mono">{discrepancyData.manualWeight.toFixed(2)} <span className="text-xs font-normal text-gray-400">KG</span></span>
+                            </div>
+                            <div className="p-3.5 rounded-2xl bg-cyan-500/10 border border-cyan-500/30 text-center">
+                                <span className="text-[10px] text-cyan-300 font-bold uppercase block">🤖 AI 照片识别秤读数</span>
+                                <span className="text-2xl font-black text-cyan-300 mt-1 block font-mono">{discrepancyData.aiWeight.toFixed(2)} <span className="text-xs font-normal text-cyan-400">KG</span></span>
+                            </div>
+                        </div>
+
+                        <div className="p-3 bg-amber-500/10 border border-amber-500/20 rounded-2xl text-xs text-amber-200 leading-relaxed font-mono">
+                            ⚠️ 检测到手动填报与秤上照片相差 <b className="text-white text-sm">±{discrepancyData.diff.toFixed(2)} KG</b>（超过 ±0.2 KG 正常容差），请确认是否以秤为准！
+                        </div>
+
+                        {/* Actions */}
+                        <div className="flex flex-col gap-2 pt-2">
+                            <button
+                                type="button"
+                                onClick={() => executeFinalSubmission(discrepancyData.aiWeight, false)}
+                                className="w-full py-3 bg-gradient-to-r from-cyan-600 to-teal-600 hover:from-cyan-500 hover:to-teal-500 text-white font-black text-xs rounded-xl shadow-lg flex items-center justify-center gap-1.5 transition-all active:scale-95 cursor-pointer"
+                            >
+                                <CheckCircle2 size={15} />
+                                <span>✅ 采纳电子秤读数并入库 ({discrepancyData.aiWeight.toFixed(2)} KG)</span>
+                            </button>
+
+                            <button
+                                type="button"
+                                onClick={() => { setShowDiscrepancyModal(false); setShowWebcam(true); }}
+                                className="w-full py-2.5 bg-white/5 hover:bg-white/10 border border-white/10 text-gray-300 font-bold text-xs rounded-xl flex items-center justify-center gap-1.5 transition-all active:scale-95 cursor-pointer"
+                            >
+                                <Camera size={14} />
+                                <span>📷 重新拍照核对 (Re-take Photo)</span>
+                            </button>
+
+                            <button
+                                type="button"
+                                onClick={() => executeFinalSubmission(discrepancyData.manualWeight, true)}
+                                className="w-full py-2 bg-rose-500/10 hover:bg-rose-500/20 border border-rose-500/20 text-rose-300 font-bold text-[11px] rounded-xl flex items-center justify-center gap-1 transition-all active:scale-95 cursor-pointer"
+                            >
+                                <span>⚠️ 坚持以我填写的为准 ({discrepancyData.manualWeight.toFixed(2)} KG，标记待主管复核)</span>
+                            </button>
+                        </div>
+                    </div>
+                </div>,
+                document.body
+            )}
+
+            {/* LIGHTBOX MODAL WITH COMPLETE AUDIT METADATA */}
+            {lightboxLog && typeof document !== 'undefined' && createPortal(
+                <div
+                    onClick={() => setLightboxLog(null)}
                     className="fixed inset-0 z-[99999] bg-black/95 backdrop-blur-lg flex flex-col items-center justify-center p-4 sm:p-6 animate-fade-in select-none"
                     style={{ position: 'fixed', top: 0, left: 0, right: 0, bottom: 0, width: '100vw', height: '100vh' }}
                 >
                     {/* Header Controls */}
                     <div 
-                        className="w-full max-w-3xl flex items-center justify-between py-2 px-4 mb-2 bg-white/10 rounded-2xl border border-white/10 text-white"
+                        className="w-full max-w-3xl flex items-center justify-between py-2.5 px-4 mb-2 bg-white/10 rounded-2xl border border-white/10 text-white shadow-xl"
                         onClick={(e) => e.stopPropagation()}
                     >
                         <div className="flex items-center gap-2 text-xs font-bold text-cyan-400">
                             <Scale size={16} />
-                            <span>现场电子秤实拍照片 / Weighing Scale Photo</span>
+                            <span>现场电子秤称重存证 · {lightboxLog.materialLabel} ({lightboxLog.materialKey})</span>
                         </div>
                         <button
                             type="button"
-                            onClick={() => setLightboxPhoto(null)}
+                            onClick={() => setLightboxLog(null)}
                             className="px-3 py-1 bg-red-600/80 hover:bg-red-600 text-white font-bold text-xs rounded-xl flex items-center gap-1 transition-all active:scale-95 cursor-pointer shadow"
                         >
                             <X size={14} />
@@ -967,17 +1383,40 @@ export const RecycleMachineControl: React.FC<RecycleMachineControlProps> = ({
                     {/* Image Container */}
                     <div 
                         onClick={(e) => e.stopPropagation()} 
-                        className="relative max-w-3xl max-h-[80vh] w-full flex items-center justify-center bg-black/80 rounded-3xl overflow-hidden border border-white/10 shadow-2xl p-2"
+                        className="relative max-w-3xl max-h-[65vh] w-full flex items-center justify-center bg-black/80 rounded-3xl overflow-hidden border border-white/10 shadow-2xl p-2"
                     >
                         <img 
-                            src={lightboxPhoto} 
+                            src={lightboxLog.photoUrl} 
                             alt="Scale Full Photo" 
-                            className="max-h-[75vh] w-auto max-w-full object-contain rounded-2xl shadow-inner" 
+                            className="max-h-[60vh] w-auto max-w-full object-contain rounded-2xl shadow-inner" 
                         />
                     </div>
 
-                    <div className="text-[11px] text-gray-400 mt-2 font-mono">
-                        点击遮罩任意区域或右上角按钮即可关闭
+                    {/* Metadata Footer Bar */}
+                    <div 
+                        onClick={(e) => e.stopPropagation()}
+                        className="w-full max-w-3xl mt-2 p-3.5 bg-slate-900/95 border border-white/10 rounded-2xl flex flex-col sm:flex-row items-center justify-between text-xs text-gray-300 font-mono gap-3 shadow-2xl"
+                    >
+                        <div className="flex items-center gap-4 flex-wrap">
+                            <div><span className="text-gray-500">记录重量:</span> <b className="text-white text-sm">{lightboxLog.weight.toFixed(2)} KG</b></div>
+                            {lightboxLog.aiRawJson?.ai_detected_weight && (
+                                <div><span className="text-gray-500">AI秤读数:</span> <b className="text-cyan-400 text-sm">{lightboxLog.aiRawJson.ai_detected_weight.toFixed(2)} KG</b></div>
+                            )}
+                            <div><span className="text-gray-500">时间:</span> <b className="text-gray-200">{lightboxLog.dateStr} {lightboxLog.timeLocal}</b></div>
+                            <div><span className="text-gray-500">操作员:</span> <b className="text-purple-300">{lightboxLog.operatorName}</b></div>
+                        </div>
+
+                        {/* Supervisor One-Click Correction */}
+                        {lightboxLog.aiRawJson?.ai_detected_weight && Math.abs(lightboxLog.weight - lightboxLog.aiRawJson.ai_detected_weight) > 0.05 && user && ['Admin', 'SuperAdmin', 'Director', 'Manager'].includes(user.role) && (
+                            <button
+                                type="button"
+                                onClick={() => handleSupervisorCorrectLog(lightboxLog)}
+                                className="px-3.5 py-1.5 bg-gradient-to-r from-cyan-600 to-teal-600 hover:from-cyan-500 hover:to-teal-500 text-white font-bold text-xs rounded-xl shadow flex items-center gap-1.5 transition active:scale-95 shrink-0 cursor-pointer"
+                            >
+                                <Zap size={13} />
+                                <span>采纳 AI 秤读数纠偏 ({lightboxLog.aiRawJson.ai_detected_weight.toFixed(2)} KG)</span>
+                            </button>
+                        )}
                     </div>
                 </div>,
                 document.body

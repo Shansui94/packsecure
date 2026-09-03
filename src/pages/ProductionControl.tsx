@@ -2274,8 +2274,8 @@ const ProductionControl: React.FC<ProductionControlProps> = ({ user, jobs = [], 
                     </div>
                 ) : (
                     <div className="flex-1 grid grid-cols-1 lg:grid-cols-12 gap-6 items-start">
-                        {/* LEFT COLUMN: COCKPIT LANES & MANAGER SCHEDULES (8 cols) */}
-                        <div className="lg:col-span-8 flex flex-col gap-6">
+                        {/* LEFT COLUMN: COCKPIT LANES & MANAGER SCHEDULES (8 cols on standard lanes, 12 cols on Recycle) */}
+                        <div className={`${isRecycleMachine ? 'lg:col-span-12' : 'lg:col-span-8'} flex flex-col gap-6`}>
 
                             {/* OPERATOR STATUS BANNER */}
                             {machineOperator ? (
@@ -2562,9 +2562,10 @@ const ProductionControl: React.FC<ProductionControlProps> = ({ user, jobs = [], 
                         </div>
 
                         {/* RIGHT COLUMN: WORK PHOTO LOGGER, RECENT PHOTOS, TASKS, ACTIVITY LOGS (4 cols) */}
-                        <div className="lg:col-span-4 flex flex-col gap-6">
+                        {!isRecycleMachine && (
+                            <div className="lg:col-span-4 flex flex-col gap-6">
 
-                            {/* 1. WORK PHOTO LOGGER (Only on bubble wrap lanes; Stretch Film & Recycle have photo logger in the main column) */}
+                                {/* 1. WORK PHOTO LOGGER (Only on bubble wrap lanes; Stretch Film & Recycle have photo logger in the main column) */}
                             {!isSfOrRecycle && (
                                 <div className="bg-white/5 border border-white/10 rounded-2xl p-4 backdrop-blur-md">
                                     <h3 className="text-xs font-semibold text-purple-400 flex items-center gap-1.5 mb-3">
@@ -2829,10 +2830,11 @@ const ProductionControl: React.FC<ProductionControlProps> = ({ user, jobs = [], 
                                 </div>
                             </div>
                         </div>
-                    </div>
-                )}
-            </div>
+                    )}
+                </div>
+            )}
         </div>
+    </div>
 
             {/* TAKEOVER WARNING MODAL */}
             <div 

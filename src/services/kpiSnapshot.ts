@@ -66,7 +66,7 @@ export async function fetchKpiSnapshot(
             .gte('timestamp', rangeStart)
             .lte('timestamp', rangeEnd),
         supabase
-            .from('attendance')
+            .from('operator_attendance')
             .select('id')
             .gte('date', start)
             .lte('date', end),

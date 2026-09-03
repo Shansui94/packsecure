@@ -347,7 +347,12 @@ export default function DataManagement() {
                     break;
                 case 'factories':
                     query = supabase.from('sys_locations_v2').select('*').order('loc_id');
-                    mapFn = (i) => ({ ...i, id: i.factory_id, title: i.name, subtitle: i.location_name });
+                    mapFn = (i) => ({
+                        ...i,
+                        id: i.loc_id || i.factory_id || i.name,
+                        title: i.name || i.location_name || i.loc_id,
+                        subtitle: i.factory_id ? `ID: ${i.factory_id}` : (i.location_name ? `${i.location_name}` : `ID: ${i.loc_id}`)
+                    });
                     break;
             }
 
@@ -427,6 +432,9 @@ export default function DataManagement() {
                 const { error } = await supabase.from(table).insert(payload);
                 if (error) throw error;
             } else {
+                if (activeTab === 'factories' && !payload.loc_id) {
+                    payload.loc_id = payload.factory_id || (payload.name ? payload.name.toUpperCase().replace(/\s+/g, '_') : `LOC_${Date.now()}`);
+                }
                 // Use Upsert
                 // Ensure PK is present
                 if (activeTab !== 'customers' && !payload[pk]) {
@@ -527,6 +535,11 @@ export default function DataManagement() {
                     delete newR.pack_dims;
                     return newR;
                 });
+            } else if (activeTab === 'factories') {
+                finalRows = rows.map((r: any) => ({
+                    ...r,
+                    loc_id: r.loc_id || r.factory_id || (r.name ? r.name.toUpperCase().replace(/\s+/g, '_') : undefined)
+                })).filter((r: any) => r.loc_id || r.name);
             }
 
             const { error } = await supabase.from(table).upsert(finalRows);
@@ -738,7 +751,7 @@ export default function DataManagement() {
                                     {selectedItem.id === 'NEW' ? 'Create New Record' : (form.title || selectedItem.title)}
                                     {selectedItem.id === 'NEW' && <span className="text-xs bg-indigo-500 text-white px-2 py-0.5 rounded uppercase tracking-wider">New</span>}
                                 </h3>
-                                <p className="text-gray-500 text-sm font-mono mt-1">ID: {form.id || selectedItem.id}</p>
+                                <p className="text-gray-500 text-sm font-mono mt-1">ID: {form.factory_id || form.loc_id || form.sku || form.machine_id || form.id || selectedItem.id || '-'}</p>
                             </div>
                             <div className="flex gap-3">
                                 {selectedItem.id !== 'NEW' && (
@@ -829,7 +842,13 @@ export default function DataManagement() {
 
                                 {activeTab === 'factories' && (
                                     <div className="grid grid-cols-2 gap-6">
-                                        <InputGroup label="Factory ID" value={form.factory_id} onChange={(v: any) => setForm({ ...form, factory_id: v })} disabled={selectedItem.id !== 'NEW'} required />
+                                        <InputGroup 
+                                            label="Factory ID" 
+                                            value={form.factory_id} 
+                                            onChange={(v: any) => setForm({ ...form, factory_id: v })} 
+                                            placeholder="e.g. N1, T1, J1, K1"
+                                            required 
+                                        />
                                         <InputGroup label="Factory Name" value={form.name} onChange={(v: any) => setForm({ ...form, name: v })} required />
                                         <InputGroup label="Location Name" value={form.location_name} onChange={(v: any) => setForm({ ...form, location_name: v })} colSpan={2} />
 

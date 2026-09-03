@@ -191,7 +191,7 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
             
             promises.push(
                 supabase
-                    .from('production_logs')
+                    .from('production_logs_v2')
                     .select('*')
                     .gte('created_at', queryDate)
                     .order('created_at', { ascending: false })
@@ -200,14 +200,15 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
                         contextData.recentProductionPulses = data?.map(log => ({
                             Timestamp: new Date(log.created_at).toLocaleTimeString("en-US", sgTimeOption),
                             Machine: log.machine_id,
-                            Produced_Units: log.alarm_count
+                            Produced_Units: log.output_qty || 1,
+                            SKU: log.sku
                         })) || [];
                     })
             );
 
             promises.push(
                 supabase
-                    .from('production_logs')
+                    .from('production_logs_v2')
                     .select('*', { count: 'exact', head: true })
                     .gte('created_at', queryDate)
                     .then(({ count }) => {

@@ -2,6 +2,7 @@ import React, { useState, useEffect } from 'react';
 import { supabase } from '../services/supabase';
 import { Calendar as CalendarIcon, ChevronLeft, ChevronRight, User as UserIcon, CalendarDays, Loader, Send, History, CheckCircle, XCircle, FileText, ClipboardList, Undo2, DollarSign, AlertCircle, Users } from 'lucide-react';
 import { getSalaryAdvancesForDriver, createSalaryAdvance } from '../services/apiV2';
+import { logActivity } from '../utils/logger';
 
 interface LeaveRecord {
     id: string;
@@ -404,6 +405,20 @@ const LeaveCalendar: React.FC<Props> = ({ user, onNavigate }) => {
 
             if (error) throw error;
 
+            logActivity(user, {
+                action: 'LEAVE_SUBMIT',
+                module: 'HR / LeaveCalendar',
+                target: `请假申请: ${startDate} 至 ${endDate} (${diffDays} 天)`,
+                status: 'SUCCESS',
+                resultSummary: `成功提交 ${diffDays} 天请假申请 (${startDate} 至 ${endDate})，等待 HR 审批`,
+                details: {
+                    startDate,
+                    endDate,
+                    countDays: diffDays,
+                    reason: reason.trim() || null
+                }
+            });
+
             alert('✅ Permohonan cuti berjaya dihantar! Menunggu kelulusan HR. (Leave application submitted! Pending HR approval.)');
             setStartDate('');
             setEndDate('');
@@ -411,6 +426,14 @@ const LeaveCalendar: React.FC<Props> = ({ user, onNavigate }) => {
             fetchLeaves(); // Refresh global list
             setActiveTab('my-leave'); // Stay or go to history
         } catch (err: any) {
+            logActivity(user, {
+                action: 'LEAVE_SUBMIT_FAILED',
+                module: 'HR / LeaveCalendar',
+                target: `请假申请: ${startDate} 至 ${endDate}`,
+                status: 'FAILED',
+                resultSummary: `提交请假申请失败: ${err.message}`,
+                details: { error: err.message }
+            });
             alert('Error: ' + err.message);
         } finally {
             setSubmitting(false);
@@ -437,9 +460,27 @@ const LeaveCalendar: React.FC<Props> = ({ user, onNavigate }) => {
         }).eq('id', id);
 
         if (error) {
+            logActivity(user, {
+                action: 'LEAVE_REVIEW_FAILED',
+                module: 'HR / LeaveCalendar',
+                target: `Leave Application #${id}`,
+                status: 'FAILED',
+                resultSummary: `审批请假申请失败: ${error.message}`,
+                details: { leaveId: id, status: newStatus, error: error.message }
+            });
             alert('Failed to update leave: ' + error.message);
             return;
         }
+
+        logActivity(user, {
+            action: newStatus === 'Approved' ? 'LEAVE_APPROVE' : 'LEAVE_REJECT',
+            module: 'HR / LeaveCalendar',
+            target: `Leave Application #${id}`,
+            status: 'SUCCESS',
+            resultSummary: `审批请假申请: 状态变更为 [${newStatus}]`,
+            details: { leaveId: id, status: newStatus }
+        });
+
         fetchLeaves();
     };
 
@@ -462,6 +503,16 @@ const LeaveCalendar: React.FC<Props> = ({ user, onNavigate }) => {
             }).eq('id', leave.id);
 
             if (error) throw error;
+
+            logActivity(user, {
+                action: 'LEAVE_REVOKE',
+                module: 'HR / LeaveCalendar',
+                target: `Leave Application #${leave.id} (${name})`,
+                status: 'SUCCESS',
+                resultSummary: `撤销已审批的请假申请 (${name}: ${leave.start_date} 至 ${leave.end_date})`,
+                details: { leaveId: leave.id, employeeName: name }
+            });
+
             await fetchLeaves();
             alert(`Leave revoked for ${name}. They can be assigned trips on those dates again.`);
         } catch (err: unknown) {

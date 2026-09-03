@@ -671,24 +671,21 @@ const PersonalMonthlyReport: React.FC<Props> = ({ user }) => {
 
             // Fetch Planned Schedules / Machines
             try {
-                const { data: schedData } = await supabase
-                    .from('operator_schedules')
+                const { data: mSchedData } = await supabase
+                    .from('machine_schedules')
                     .select('*')
                     .gte('shift_date', firstDay)
                     .lte('shift_date', lastDayStr);
 
-                if (schedData && schedData.length > 0) {
-                    const myScheds = schedData.filter((s: any) => 
-                        (activeEmpId && s.operator_id === activeEmpId) || s.employee_id === selectedEmployeeId || s.operator_id === selectedEmployeeId
+                if (mSchedData && mSchedData.length > 0) {
+                    const myScheds = mSchedData.filter((s: any) => 
+                        (activeEmpId && s.operator_id === activeEmpId) || 
+                        s.employee_id === selectedEmployeeId || 
+                        s.operator_id === selectedEmployeeId
                     );
-                    setPlannedMachines(myScheds);
+                    setPlannedMachines(myScheds.length > 0 ? myScheds : mSchedData);
                 } else {
-                    const { data: mSchedData } = await supabase
-                        .from('machine_schedule')
-                        .select('*')
-                        .gte('scheduled_date', firstDay)
-                        .lte('scheduled_date', lastDayStr);
-                    setPlannedMachines(mSchedData || []);
+                    setPlannedMachines([]);
                 }
             } catch (sErr) {
                 console.warn("Schedule query fallback:", sErr);
@@ -2483,11 +2480,11 @@ const PersonalMonthlyReport: React.FC<Props> = ({ user }) => {
                                                                         const isPending = isTripPending(td);
                                                                         return (
                                                                             <span key={tidx} className={`font-bold px-1.5 py-0.5 rounded border ${
-                                                                                isTripPending 
+                                                                                isPending 
                                                                                     ? 'text-amber-300 bg-amber-500/10 border-amber-500/30 animate-pulse' 
                                                                                     : 'text-emerald-400 bg-emerald-500/10 border-emerald-500/20'
                                                                             }`} title={`Trip ${tidx+1}: Base RM${(td.baseRate||td.earnings||0).toFixed(2)} + Extra Drop RM${(td.extraRate||0).toFixed(2)}`}>
-                                                                                {isTripPending ? `Trip #${tidx + 1}: ⏳ 待审核 (RM ${(td.earnings || 0).toFixed(2)})` : `Trip #${tidx + 1}: RM ${(td.earnings || 0).toFixed(2)}`}
+                                                                                {isPending ? `Trip #${tidx + 1}: ⏳ 待审核 (RM ${(td.earnings || 0).toFixed(2)})` : `Trip #${tidx + 1}: RM ${(td.earnings || 0).toFixed(2)}`}
                                                                             </span>
                                                                         );
                                                                     })}

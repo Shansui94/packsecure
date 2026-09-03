@@ -21,7 +21,7 @@ export const reportService = {
 
         // 2. Fetch logs
         const { data: logs, error } = await supabase
-            .from('production_logs')
+            .from('production_logs_v2')
             .select('*')
             .gte('created_at', startOfDay.toISOString())
             .lte('created_at', endOfDay.toISOString())
@@ -57,10 +57,10 @@ export const reportService = {
         const breakdown: Record<string, number> = {};
 
         logs.forEach(log => {
-            const qty = Number(log.quantity_produced) || 0;
+            const qty = Number(log.output_qty || (log as any).quantity_produced) || 0;
             totalQuantity += qty;
 
-            const key = log.product_name || log.sku || 'Unknown';
+            const key = log.sku || (log as any).product_name || 'Unknown';
             breakdown[key] = (breakdown[key] || 0) + qty;
         });
 
