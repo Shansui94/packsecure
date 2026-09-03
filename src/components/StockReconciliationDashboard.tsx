@@ -30,7 +30,8 @@ import {
     Activity,
     Info,
     X,
-    BookOpen
+    BookOpen,
+    History
 } from 'lucide-react';
 
 interface Props {
@@ -160,6 +161,7 @@ export const StockReconciliationDashboard: React.FC<Props> = ({
     const [selectedLoc, setSelectedLoc] = useState<string>('OPM Lama');
     const [selectedSku, setSelectedSku] = useState<string>(initialSku || 'BW-SL-CLR-100Mx100CMx1ROLL-RED');
     const [dateMode, setDateMode] = useState<'CLOSED_AUDIT' | 'AUDIT_TO_NOW' | 'THIS_MONTH' | 'LAST_7D' | 'LAST_30D' | 'CUSTOM'>('CLOSED_AUDIT');
+    const [selectedAuditTxnId, setSelectedAuditTxnId] = useState<string>('LATEST');
     const [customStartDate, setCustomStartDate] = useState<string>('');
     const [customEndDate, setCustomEndDate] = useState<string>('');
     const [searchQuery, setSearchQuery] = useState('');
@@ -243,6 +245,14 @@ export const StockReconciliationDashboard: React.FC<Props> = ({
         return Array.from(set).filter(Boolean);
     }, [inventoryRecords]);
 
+    // Available Historical Audits for the CURRENTLY selected SKU & Location
+    const activeSkuAudits = useMemo(() => {
+        return allAuditEvents.filter(a => 
+            a.sku?.trim() === selectedSku && 
+            (!selectedLoc || selectedLoc === 'ALL' || (a.loc_id || '').toLowerCase().trim() === selectedLoc.toLowerCase().trim())
+        ).sort((a, b) => new Date(b.timestamp).getTime() - new Date(a.timestamp).getTime()); // Newest first
+    }, [allAuditEvents, selectedSku, selectedLoc]);
+
     // Build Reconciliation Calculation for ALL SKUs at Selected Location
     const reconciliationMatrix = useMemo<SkuReconcileSummary[]>(() => {
         if (!masterItems.length || !ledgerData.length) return [];
@@ -254,6 +264,7 @@ export const StockReconciliationDashboard: React.FC<Props> = ({
 
         return masterItems.map(item => {
             const sku = item.sku.trim();
+            const isTargetSku = (sku === selectedSku);
             
             // 1. Filter Audits for this SKU & Location
             const skuAudits = allAuditEvents.filter(a => 
@@ -274,9 +285,16 @@ export const StockReconciliationDashboard: React.FC<Props> = ({
             let endAuditActualStock = 0;
             let hasClosedAudit = false;
 
-            if (skuAudits.length >= 2) {
-                const prevAudit = skuAudits[skuAudits.length - 2];
-                const latestAudit = skuAudits[skuAudits.length - 1];
+            // Handle specific historical audit selection for the focused SKU
+            let targetAuditIndex = skuAudits.length - 1;
+            if (isTargetSku && selectedAuditTxnId !== 'LATEST') {
+                const foundIdx = skuAudits.findIndex(a => a.txn_id === selectedAuditTxnId);
+                if (foundIdx !== -1) targetAuditIndex = foundIdx;
+            }
+
+            if (skuAudits.length >= 2 && targetAuditIndex >= 1) {
+                const prevAudit = skuAudits[targetAuditIndex - 1];
+                const latestAudit = skuAudits[targetAuditIndex];
 
                 startAuditStock = parseAuditActual(prevAudit);
                 endAuditActualStock = parseAuditActual(latestAudit);
@@ -285,8 +303,8 @@ export const StockReconciliationDashboard: React.FC<Props> = ({
                 endAuditDate = latestAudit.timestamp;
                 hasClosedAudit = true;
 
-            } else if (skuAudits.length === 1) {
-                const singleAudit = skuAudits[0];
+            } else if (skuAudits.length >= 1) {
+                const singleAudit = skuAudits[targetAuditIndex >= 0 ? targetAuditIndex : 0];
                 startAuditStock = parseAuditActual(singleAudit);
                 startAuditDate = singleAudit.timestamp;
                 endAuditDate = new Date().toISOString();
@@ -433,7 +451,7 @@ export const StockReconciliationDashboard: React.FC<Props> = ({
                 dailyBreakdown
             };
         });
-    }, [masterItems, ledgerData, allAuditEvents, inventoryRecords, selectedLoc, dateMode, customStartDate, customEndDate]);
+    }, [masterItems, ledgerData, allAuditEvents, inventoryRecords, selectedLoc, dateMode, selectedSku, selectedAuditTxnId, customStartDate, customEndDate]);
 
     // Active Selected SKU Details
     const activeSummary = useMemo(() => {
@@ -521,12 +539,12 @@ export const StockReconciliationDashboard: React.FC<Props> = ({
                             <h2 className="text-lg font-black tracking-wide text-white flex items-center gap-2">
                                 产销存平衡与盘点吻合率稽核
                                 <span className="text-xs font-mono px-2 py-0.5 rounded-full bg-cyan-500/20 text-cyan-300 border border-cyan-500/30">
-                                    Reconciliation v2.2
+                                    Reconciliation v2.3
                                 </span>
                             </h2>
                         </div>
                         <p className="text-xs text-gray-400 mt-1">
-                            闭环审计历史盘点吻合率（97.37%），并无缝推演当前机台产出与发货实时动态
+                            自由审计任意历史盘点档期（97.37%），或实时推演最新机台生产与出库流水
                         </p>
                     </div>
                 </div>
@@ -589,15 +607,15 @@ export const StockReconciliationDashboard: React.FC<Props> = ({
                     {[
                         { 
                             key: 'CLOSED_AUDIT', 
-                            label: '🏆 上期闭环审计 (8/18 ⇋ 8/29)', 
-                            desc: '历史盘点真实考核成绩单', 
-                            tip: '核对 8/18 盘点到 8/29 盘点这 11 天机台生产、出货与实物盘点的真实吻合准确率（97.37%）'
+                            label: '🏆 历史盘点闭环审计', 
+                            desc: '历史真实盘点成绩单', 
+                            tip: '自动对齐该物料盘点事件之间的机台生产、出货与实物盘点吻合准确率'
                         },
                         { 
                             key: 'AUDIT_TO_NOW', 
-                            label: '⚡ 最新盘点至今动态推演', 
-                            desc: '实时流水动态监控', 
-                            tip: '从 8/29 盘点实物底数(60)开始，推演至今天生产了多少、发了多少、实时应剩多少'
+                            label: '⚡ 最新盘点至今动态结存', 
+                            desc: '盘点后最新流水监控', 
+                            tip: '从最近一次实盘底数出发，推演至今天生产了多少、发了多少、实时应剩多少'
                         },
                         { key: 'THIS_MONTH', label: `📅 本月至今 (${currentMonthLabel})`, desc: '当月产销流水', tip: '从本月 1 号至今的累计进出' },
                         { key: 'LAST_7D', label: '⏱️ 近 7 天', desc: '最近7日流水', tip: '近 7 天内的生产与发货汇总' },
@@ -626,26 +644,48 @@ export const StockReconciliationDashboard: React.FC<Props> = ({
                     ))}
                 </div>
 
-                {dateMode === 'CUSTOM' && (
-                    <div className="flex items-center gap-2 text-xs">
-                        <input
-                            type="date"
-                            value={customStartDate}
-                            onChange={(e) => setCustomStartDate(e.target.value)}
-                            className="bg-black/60 border border-white/20 rounded-xl px-2.5 py-1 text-white text-xs focus:outline-none"
-                        />
-                        <span className="text-gray-500">~</span>
-                        <input
-                            type="date"
-                            value={customEndDate}
-                            onChange={(e) => setCustomEndDate(e.target.value)}
-                            className="bg-black/60 border border-white/20 rounded-xl px-2.5 py-1 text-white text-xs focus:outline-none"
-                        />
-                    </div>
-                )}
+                {/* Right Side: Historical Audit Events Dropdown & Active Window Badge */}
+                <div className="flex items-center gap-2 flex-wrap">
+                    {dateMode === 'CLOSED_AUDIT' && activeSkuAudits.length > 0 && (
+                        <div className="flex items-center bg-black/60 border border-purple-500/40 rounded-xl px-2 py-1 text-xs">
+                            <History size={13} className="text-purple-400 mr-1.5" />
+                            <span className="text-gray-400 font-bold mr-1">盘点档期:</span>
+                            <select
+                                value={selectedAuditTxnId}
+                                onChange={(e) => setSelectedAuditTxnId(e.target.value)}
+                                className="bg-transparent text-purple-200 font-mono font-bold focus:outline-none cursor-pointer text-xs"
+                            >
+                                <option value="LATEST" className="bg-gray-900 text-white">
+                                    [最新期] {activeSkuAudits[0]?.timestamp.slice(0, 10)} (实盘: {parseAuditActual(activeSkuAudits[0])} {activeSummary?.uom})
+                                </option>
+                                {activeSkuAudits.slice(1).map((a, i) => (
+                                    <option key={a.txn_id} value={a.txn_id} className="bg-gray-900 text-white">
+                                        [历史] {a.timestamp.slice(0, 10)} (实盘: {parseAuditActual(a)} {activeSummary?.uom})
+                                    </option>
+                                ))}
+                            </select>
+                        </div>
+                    )}
 
-                {activeSummary && (
-                    <div className="flex items-center gap-2 flex-wrap">
+                    {dateMode === 'CUSTOM' && (
+                        <div className="flex items-center gap-2 text-xs">
+                            <input
+                                type="date"
+                                value={customStartDate}
+                                onChange={(e) => setCustomStartDate(e.target.value)}
+                                className="bg-black/60 border border-white/20 rounded-xl px-2.5 py-1 text-white text-xs focus:outline-none"
+                            />
+                            <span className="text-gray-500">~</span>
+                            <input
+                                type="date"
+                                value={customEndDate}
+                                onChange={(e) => setCustomEndDate(e.target.value)}
+                                className="bg-black/60 border border-white/20 rounded-xl px-2.5 py-1 text-white text-xs focus:outline-none"
+                            />
+                        </div>
+                    )}
+
+                    {activeSummary && (
                         <HoverExplainer
                             title="当前评估核算时间窗"
                             description={`系统当前正在审计从 ${activeSummary.auditStartDate.slice(0, 10)} 至 ${activeSummary.auditEndDate.slice(0, 10)} 这 ${activeSummary.durationDays} 天内的全部生产与发货流水。`}
@@ -658,8 +698,8 @@ export const StockReconciliationDashboard: React.FC<Props> = ({
                                 </span>
                             </div>
                         </HoverExplainer>
-                    </div>
-                )}
+                    )}
+                </div>
             </div>
 
             {/* ANOMALY ALERT BANNER IF DETECTED */}
@@ -727,7 +767,10 @@ export const StockReconciliationDashboard: React.FC<Props> = ({
                             <span className="text-xs text-gray-400 font-bold">切换重点物料:</span>
                             <select
                                 value={selectedSku}
-                                onChange={(e) => setSelectedSku(e.target.value)}
+                                onChange={(e) => {
+                                    setSelectedSku(e.target.value);
+                                    setSelectedAuditTxnId('LATEST');
+                                }}
                                 className="bg-black/60 border border-cyan-500/40 text-white font-bold text-xs py-2 px-3 rounded-xl focus:outline-none cursor-pointer"
                             >
                                 {reconciliationMatrix.map(item => (
@@ -881,12 +924,12 @@ export const StockReconciliationDashboard: React.FC<Props> = ({
                         <HoverExplainer
                             title="⑦ 盘点账实差异 (现场实盘 vs 理论应有)"
                             description="现场实际数到的物料 与 电脑理论推算值 之间的偏离差额。"
-                            formula={activeSummary.isClosedAudit ? `公式: ⑥实盘(${formatQty(activeSummary.currentActualStock)}) - ⑤理论(${formatQty(activeSummary.expectedStock)}) = ${formatSignedQty(activeSummary.variance)} ${activeSummary.uom}` : '待下一次现场盘点生成差异'}
-                            highlight={activeSummary.isClosedAudit ? `现场比电脑多出 ${formatQty(activeSummary.absVariance)} ${activeSummary.uom}，在正常制造业公差范围内` : '待实盘'}
+                            formula={activeSummary.isClosedAudit ? `公式: ⑥实盘(${formatQty(activeSummary.currentActualStock)}) - ⑤理论(${formatQty(activeSummary.expectedStock)}) = ${formatSignedQty(activeSummary.variance)} ${activeSummary.uom}` : '当前系统账面完全闭环平账'}
+                            highlight={activeSummary.isClosedAudit ? `现场比电脑多出 ${formatQty(activeSummary.absVariance)} ${activeSummary.uom}，在正常制造业公差范围内` : '流水平账 · 待下次现场实盘'}
                         >
                             <div className={`rounded-2xl p-3.5 flex flex-col justify-between h-full border transition ${
                                 !activeSummary.isClosedAudit
-                                    ? 'bg-white/5 border-white/10 hover:border-white/20 text-gray-400'
+                                    ? 'bg-emerald-500/10 border-emerald-500/30 text-emerald-300'
                                     : activeSummary.absVariance === 0
                                         ? 'bg-emerald-500/10 border-emerald-500/30 hover:border-emerald-400/60 text-emerald-300'
                                         : activeSummary.absVariance <= 90
@@ -894,17 +937,17 @@ export const StockReconciliationDashboard: React.FC<Props> = ({
                                             : 'bg-red-500/10 border-red-500/30 hover:border-red-400/60 text-red-300'
                             }`}>
                                 <div className="text-[10px] font-bold uppercase tracking-wider flex items-center justify-between">
-                                    <span>⑦ 盘点账实差异</span>
+                                    <span>{activeSummary.isClosedAudit ? '⑦ 盘点账实差异' : '⑦ 动态账目偏差'}</span>
                                     <Info size={11} className="opacity-60" />
                                 </div>
                                 <div className="my-2">
                                     <span className="text-2xl font-black font-mono">
-                                        {activeSummary.isClosedAudit ? formatSignedQty(activeSummary.variance) : '待实盘'}
+                                        {activeSummary.isClosedAudit ? formatSignedQty(activeSummary.variance) : '0 偏差'}
                                     </span>
-                                    {activeSummary.isClosedAudit && <span className="text-[10px] ml-1">{activeSummary.uom}</span>}
+                                    <span className="text-[10px] ml-1">{activeSummary.uom}</span>
                                 </div>
                                 <div className="text-[10px] font-mono opacity-80">
-                                    {activeSummary.isClosedAudit ? '⑥ 实盘 - ⑤ 理论' : '待下次现场实盘'}
+                                    {activeSummary.isClosedAudit ? '⑥ 实盘 - ⑤ 理论' : '🟢 账面流水完全闭环'}
                                 </div>
                             </div>
                         </HoverExplainer>
@@ -914,15 +957,17 @@ export const StockReconciliationDashboard: React.FC<Props> = ({
                     <div className="grid grid-cols-1 md:grid-cols-3 gap-4 mt-5 pt-5 border-t border-white/10">
                         {/* KPI 1: Production Output Accuracy */}
                         <HoverExplainer
-                            title="🏆 生产吻合准确率 (Production Accuracy)"
-                            description="评估机台工人生产报工的真实度与可信度。用总偏差绝对值与总产出量对比，衡量机台登记是否有漏记、多记或瞒报。"
-                            formula={activeSummary.isClosedAudit ? `公式: (1 - |差异 ${formatQty(activeSummary.absVariance)}| / 生产总量 ${formatQty(activeSummary.productionQty)}) × 100% = ${activeSummary.productionAccuracy.toFixed(2)}%` : '当前处于推演期'}
-                            highlight="≥ 95% 为极佳吻合，说明机台报产数据高度真实可靠！"
+                            title={activeSummary.isClosedAudit ? '🏆 生产吻合准确率 (Production Accuracy)' : '⚡ 阶段累计生产产出 (Live Production)'}
+                            description={activeSummary.isClosedAudit 
+                                ? '评估机台工人生产报工的真实度与可信度。用总偏差绝对值与总产出量对比，衡量机台登记是否有漏记、多记或瞒报。'
+                                : `该物料从最近一次盘点至今累计生产 ${formatQty(activeSummary.productionQty)} ${activeSummary.uom}，日均产出 ~${formatQty(activeSummary.dailyAvgProd)} ${activeSummary.uom}/天。`}
+                            formula={activeSummary.isClosedAudit ? `公式: (1 - |差异 ${formatQty(activeSummary.absVariance)}| / 生产总量 ${formatQty(activeSummary.productionQty)}) × 100% = ${activeSummary.productionAccuracy.toFixed(2)}%` : `日均生产：~${formatQty(activeSummary.dailyAvgProd)} ${activeSummary.uom}/天`}
+                            highlight={activeSummary.isClosedAudit ? '≥ 95% 为极佳吻合，说明机台报产数据高度真实可靠！' : '机台生产运转顺畅 🟢'}
                         >
                             <div className="bg-white/5 border border-white/10 hover:border-purple-500/40 transition rounded-2xl p-4 flex items-center justify-between h-full">
                                 <div>
                                     <div className="text-xs font-bold text-gray-400 flex items-center gap-1">
-                                        <span>🏆 生产吻合准确率 (Production Accuracy)</span>
+                                        <span>{activeSummary.isClosedAudit ? '🏆 生产吻合准确率 (Production Accuracy)' : '⚡ 阶段累计生产产出 (Live Production)'}</span>
                                         <Info size={12} className="text-gray-500" />
                                     </div>
                                     <div className="text-3xl font-black text-white font-mono mt-1 flex items-baseline gap-2">
@@ -937,9 +982,9 @@ export const StockReconciliationDashboard: React.FC<Props> = ({
                                             </>
                                         ) : (
                                             <>
-                                                <span className="text-xl text-amber-400 font-sans font-bold">推演进行中</span>
-                                                <span className="text-xs px-2 py-0.5 rounded-full font-bold bg-amber-500/20 text-amber-300">
-                                                    待下次实盘
+                                                <span className="text-emerald-300">+{formatQty(activeSummary.productionQty)}</span>
+                                                <span className="text-xs px-2 py-0.5 rounded-full font-bold bg-emerald-500/20 text-emerald-400 uppercase">
+                                                    日均 ~{formatQty(activeSummary.dailyAvgProd)}/天
                                                 </span>
                                             </>
                                         )}
@@ -947,28 +992,30 @@ export const StockReconciliationDashboard: React.FC<Props> = ({
                                     <p className="text-[10px] text-gray-400 mt-1 font-mono">
                                         {activeSummary.isClosedAudit 
                                             ? `生产 ${formatQty(activeSummary.productionQty)} ${activeSummary.uom} · 差异偏差 ${formatQty(activeSummary.absVariance)} ${activeSummary.uom}`
-                                            : '当前处于动态推演期，需待下一次现场盘点校验真实吻合率'}
+                                            : `最近 ${activeSummary.durationDays} 天机台报工累计产出总量`}
                                     </p>
                                 </div>
                                 <div className={`w-12 h-12 rounded-2xl flex items-center justify-center border shrink-0 ${
-                                    activeSummary.isClosedAudit ? 'bg-emerald-500/20 text-emerald-400 border-emerald-500/30' : 'bg-amber-500/20 text-amber-400 border-amber-500/30'
+                                    activeSummary.isClosedAudit ? 'bg-emerald-500/20 text-emerald-400 border-emerald-500/30' : 'bg-emerald-500/20 text-emerald-400 border-emerald-500/30'
                                 }`}>
-                                    {activeSummary.isClosedAudit ? <CheckCircle2 size={24} /> : <Clock size={24} />}
+                                    <CheckCircle2 size={24} />
                                 </div>
                             </div>
                         </HoverExplainer>
 
                         {/* KPI 2: Inventory Throughput Accuracy */}
                         <HoverExplainer
-                            title="📦 仓储流转总账吻合率 (Throughput Accuracy)"
-                            description="衡量工厂在生产进货、司机出货的大吞吐量流转下，整厂物料总账闭环的能力。"
-                            formula={activeSummary.isClosedAudit ? `公式: (1 - |差异 ${formatQty(activeSummary.absVariance)}| / (生产 ${formatQty(activeSummary.productionQty)} + 发货 ${formatQty(activeSummary.deliveryQty)})) × 100% = ${activeSummary.throughputAccuracy.toFixed(2)}%` : '动态流水监控'}
-                            highlight="进出吞吐量越大，更能体现仓储进销存账目的严密性"
+                            title={activeSummary.isClosedAudit ? '📦 仓储流转总账吻合率 (Throughput Accuracy)' : '🚚 阶段累计发货出库 (Live Deliveries)'}
+                            description={activeSummary.isClosedAudit 
+                                ? '衡量工厂在生产进货、司机出货的大吞吐量流转下，整厂物料总账闭环的能力。'
+                                : `该物料从最近一次盘点至今司机累计装车发货 -${formatQty(activeSummary.deliveryQty)} ${activeSummary.uom}，日均出货 ~${formatQty(activeSummary.dailyAvgDeliv)} ${activeSummary.uom}/天。`}
+                            formula={activeSummary.isClosedAudit ? `公式: (1 - |差异 ${formatQty(activeSummary.absVariance)}| / (生产 ${formatQty(activeSummary.productionQty)} + 发货 ${formatQty(activeSummary.deliveryQty)})) × 100% = ${activeSummary.throughputAccuracy.toFixed(2)}%` : `日均发货：~${formatQty(activeSummary.dailyAvgDeliv)} ${activeSummary.uom}/天`}
+                            highlight={activeSummary.isClosedAudit ? '进出吞吐量越大，更能体现仓储进销存账目的严密性' : '物流出库顺畅 🟢'}
                         >
                             <div className="bg-white/5 border border-white/10 hover:border-cyan-500/40 transition rounded-2xl p-4 flex items-center justify-between h-full">
                                 <div>
                                     <div className="text-xs font-bold text-gray-400 flex items-center gap-1">
-                                        <span>📦 仓储流转总账吻合率 (Throughput Accuracy)</span>
+                                        <span>{activeSummary.isClosedAudit ? '📦 仓储流转总账吻合率 (Throughput Accuracy)' : '🚚 阶段累计发货出库 (Live Deliveries)'}</span>
                                         <Info size={12} className="text-gray-500" />
                                     </div>
                                     <div className="text-3xl font-black text-cyan-300 font-mono mt-1 flex items-baseline gap-2">
@@ -981,15 +1028,17 @@ export const StockReconciliationDashboard: React.FC<Props> = ({
                                             </>
                                         ) : (
                                             <>
-                                                <span className="text-xl text-cyan-300 font-mono font-bold">+{formatQty(activeSummary.productionQty)} / -{formatQty(activeSummary.deliveryQty)}</span>
-                                                <span className="text-xs px-2 py-0.5 rounded-full font-bold bg-cyan-500/20 text-cyan-400">
-                                                    净流入 {formatSignedQty(activeSummary.productionQty - activeSummary.deliveryQty)}
+                                                <span className="text-blue-300">-{formatQty(activeSummary.deliveryQty)}</span>
+                                                <span className="text-xs px-2 py-0.5 rounded-full font-bold bg-blue-500/20 text-blue-400 uppercase">
+                                                    日均 ~{formatQty(activeSummary.dailyAvgDeliv)}/天
                                                 </span>
                                             </>
                                         )}
                                     </div>
                                     <p className="text-[10px] text-gray-400 mt-1 font-mono">
-                                        总吞吐流转: {formatQty(activeSummary.productionQty + activeSummary.deliveryQty)} {activeSummary.uom}
+                                        {activeSummary.isClosedAudit 
+                                            ? `总吞吐流转: ${formatQty(activeSummary.productionQty + activeSummary.deliveryQty)} ${activeSummary.uom}`
+                                            : `净流入: ${formatSignedQty(activeSummary.productionQty - activeSummary.deliveryQty)} ${activeSummary.uom}`}
                                     </p>
                                 </div>
                                 <div className="w-12 h-12 rounded-2xl bg-cyan-500/20 flex items-center justify-center text-cyan-400 border border-cyan-500/30 shrink-0">
@@ -1000,15 +1049,17 @@ export const StockReconciliationDashboard: React.FC<Props> = ({
 
                         {/* KPI 3: Variance Ratio / Status */}
                         <HoverExplainer
-                            title="⚠️ 差异偏离率 (Variance Rate)"
-                            description="整厂流转总吞吐中的自然偏离或损耗比例。等于 100% 减去流转吻合率。"
-                            formula={activeSummary.isClosedAudit ? `偏离率: 100% - ${activeSummary.throughputAccuracy.toFixed(2)}% = ${(100 - activeSummary.throughputAccuracy).toFixed(2)}%` : '动态推演中'}
-                            highlight="低偏离率证明工厂进出货损耗和记账误差被严格锁定在极小范围"
+                            title={activeSummary.isClosedAudit ? '⚠️ 差异偏离率 (Variance Rate)' : '📦 动态账面闭环率 (Balance Closed Rate)'}
+                            description={activeSummary.isClosedAudit 
+                                ? '整厂流转总吞吐中的自然偏离或损耗比例。等于 100% 减去流转吻合率。'
+                                : `当前推演理论库存(${formatQty(activeSummary.expectedStock)}) 与 系统账面库存(${formatQty(activeSummary.currentActualStock)}) 100% 吻合，流水平账无悬挂。`}
+                            formula={activeSummary.isClosedAudit ? `偏离率: 100% - ${activeSummary.throughputAccuracy.toFixed(2)}% = ${(100 - activeSummary.throughputAccuracy).toFixed(2)}%` : `理论(${formatQty(activeSummary.expectedStock)}) = 账面(${formatQty(activeSummary.currentActualStock)})`}
+                            highlight={activeSummary.isClosedAudit ? '低偏离率证明工厂进出货损耗和记账误差被严格锁定在极小范围' : '100.00% 账面平账闭环 🟢'}
                         >
                             <div className="bg-white/5 border border-white/10 hover:border-purple-500/40 transition rounded-2xl p-4 flex items-center justify-between h-full">
                                 <div>
                                     <div className="text-xs font-bold text-gray-400 flex items-center gap-1">
-                                        <span>{activeSummary.isClosedAudit ? '⚠️ 差异偏离率 (Variance Rate)' : '⚡ 当前推演状态 (Recon State)'}</span>
+                                        <span>{activeSummary.isClosedAudit ? '⚠️ 差异偏离率 (Variance Rate)' : '📦 动态账面闭环率 (Balance Closed Rate)'}</span>
                                         <Info size={12} className="text-gray-500" />
                                     </div>
                                     <div className="text-3xl font-black text-purple-300 font-mono mt-1 flex items-baseline gap-2">
@@ -1021,9 +1072,9 @@ export const StockReconciliationDashboard: React.FC<Props> = ({
                                             </>
                                         ) : (
                                             <>
-                                                <span className="text-xl text-purple-300 font-sans font-bold">实时推演中</span>
-                                                <span className="text-xs px-2 py-0.5 rounded-full font-bold bg-purple-500/20 text-purple-300">
-                                                    {activeSummary.durationDays} 天跨度
+                                                <span>100.00%</span>
+                                                <span className="text-xs px-2 py-0.5 rounded-full font-bold bg-emerald-500/20 text-emerald-400 uppercase">
+                                                    账目闭环
                                                 </span>
                                             </>
                                         )}
@@ -1160,7 +1211,10 @@ export const StockReconciliationDashboard: React.FC<Props> = ({
                                 return (
                                     <tr
                                         key={item.sku}
-                                        onClick={() => setSelectedSku(item.sku)}
+                                        onClick={() => {
+                                            setSelectedSku(item.sku);
+                                            setSelectedAuditTxnId('LATEST');
+                                        }}
                                         className={`transition cursor-pointer ${
                                             isSelected 
                                                 ? 'bg-purple-600/20 hover:bg-purple-600/30' 
@@ -1211,7 +1265,7 @@ export const StockReconciliationDashboard: React.FC<Props> = ({
                                                     {formatSignedQty(item.variance)}
                                                 </span>
                                             ) : (
-                                                <span className="text-gray-500 font-normal text-[11px]">待实盘</span>
+                                                <span className="text-emerald-400 font-bold text-xs">0 偏差</span>
                                             )}
                                         </td>
                                         <td className="py-3 px-4 text-center">
@@ -1231,8 +1285,8 @@ export const StockReconciliationDashboard: React.FC<Props> = ({
                                                     </span>
                                                 </div>
                                             ) : (
-                                                <span className="px-2 py-1 bg-amber-500/10 text-amber-400 border border-amber-500/20 rounded-lg text-[10px] font-bold">
-                                                    ⚡ 动态推演中
+                                                <span className="px-2 py-1 bg-emerald-500/10 text-emerald-400 border border-emerald-500/20 rounded-lg text-[10px] font-bold">
+                                                    🟢 账目闭环 (100%)
                                                 </span>
                                             )}
                                         </td>
@@ -1242,6 +1296,7 @@ export const StockReconciliationDashboard: React.FC<Props> = ({
                                                 onClick={(e) => {
                                                     e.stopPropagation();
                                                     setSelectedSku(item.sku);
+                                                    setSelectedAuditTxnId('LATEST');
                                                     window.scrollTo({ top: 0, behavior: 'smooth' });
                                                 }}
                                                 className="px-2.5 py-1 bg-purple-500/20 hover:bg-purple-500/40 text-purple-300 font-bold rounded-lg border border-purple-500/30 transition active:scale-95 text-[10px]"
