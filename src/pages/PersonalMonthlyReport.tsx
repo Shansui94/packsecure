@@ -1373,7 +1373,7 @@ const PersonalMonthlyReport: React.FC<Props> = ({ user }) => {
 
             // Fetch drivers from both tables
             const [v2Res, pubRes] = await Promise.all([
-                supabase.from('sys_users_v2').select('auth_user_id, name, employee_id, role, base_location').eq('role', 'Driver').in('status', ['Active', 'active']),
+                supabase.from('sys_users_v2').select('auth_user_id, name, employee_id, role').eq('role', 'Driver').in('status', ['Active', 'active']),
                 supabase.from('users_public').select('id, name, employee_id, role, base_location').eq('role', 'Driver').in('status', ['Active', 'active'])
             ]);
 
@@ -1383,8 +1383,11 @@ const PersonalMonthlyReport: React.FC<Props> = ({ user }) => {
             }
             if (pubRes.data) {
                 pubRes.data.forEach(p => {
-                    if (!mergedDrivers.find(m => m.uid === p.id)) {
+                    const existing = mergedDrivers.find(m => m.uid === p.id);
+                    if (!existing) {
                         mergedDrivers.push({ ...p, uid: p.id, auth_user_id: p.id });
+                    } else if (p.base_location) {
+                        existing.base_location = p.base_location;
                     }
                 });
             }
@@ -1417,7 +1420,7 @@ const PersonalMonthlyReport: React.FC<Props> = ({ user }) => {
             while (hasMore) {
                 const { data, error } = await supabase
                     .from('sales_orders')
-                    .select('id, order_number, customer, items, notes, order_date, pod_timestamp, deadline, zone, delivery_address, created_at, trip_origin, trip_drop_count, driver_id, job_type, earnings, trip_allowance')
+                    .select('id, order_number, customer, items, notes, order_date, pod_timestamp, deadline, zone, delivery_address, created_at, trip_origin, trip_drop_count, driver_id, job_type')
                     .in('driver_id', driverIds)
                     .eq('status', 'Delivered')
                     .or(`deadline.gte.${firstDay},created_at.gte.${startDateTs},pod_timestamp.gte.${startDateTs}`)
@@ -1471,8 +1474,6 @@ const PersonalMonthlyReport: React.FC<Props> = ({ user }) => {
                         const extraPlaces = Math.max(0, drops - maxPlaces);
                         const extraRate = extraPlaces * (Number(rateInfo.extra_rate_per_place) || 0);
                         tEarnings = base + extraRate;
-                    } else if (t.earnings || t.trip_allowance) {
-                        tEarnings = Number(t.earnings || t.trip_allowance || 0);
                     }
 
                     totalEarnings += tEarnings;
