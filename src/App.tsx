@@ -824,7 +824,7 @@ function App() {
             case 'leave-calendar':
                 return <LeaveCalendar user={user} onNavigate={setActivePage} />;
             case 'sop-center':
-                return <SOPCenter userRole={user?.role} user={user} />;
+                return <SOPCenter userRole={user?.role} user={user} onNavigate={setActivePage} />;
             case 'work-photos':
                 return <WorkPhotoLog user={user} />;
             case 'raw_material_mobile':

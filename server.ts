@@ -3,6 +3,7 @@ import 'dotenv/config';
 import express from 'express';
 import cors from 'cors';
 import chatHandler from './api/agent/chat';
+import sopAssistantHandler from './api/agent/sop-assistant';
 import manageEmployeeHandler from './api/manage-employee';
 import visionHandler from './api/agent/vision';
 import geocodeHandler from './api/geocode';
@@ -44,6 +45,7 @@ mountVercelHandler('/api/v2/documents/process', documentProcessHandler);
 mountVercelHandler('/api/v2/documents/dashboard-metrics', dashboardMetricsHandler);
 mountVercelHandler('/api/v2/documents/entities', documentEntitiesHandler);
 mountVercelHandler('/api/v2/documents/logs', documentLogsHandler);
+mountVercelHandler('/api/agent/sop-assistant', sopAssistantHandler);
 
 // Mimic Vercel Request/Response for the handler
 app.post('/api/agent/chat', async (req, res) => {
@@ -62,6 +64,7 @@ app.post('/api/agent/chat', async (req, res) => {
 app.listen(PORT, () => {
     console.log(`\n✅ Local API Server running at http://localhost:${PORT}`);
     console.log(`   - Chat:           http://localhost:${PORT}/api/agent/chat`);
+    console.log(`   - SOP Assistant:  http://localhost:${PORT}/api/agent/sop-assistant`);
     console.log(`   - Vision:         http://localhost:${PORT}/api/agent/vision`);
     console.log(`   - HR / Drivers:   /api/manage-employee, /api/create-driver, /api/delete-driver`);
     console.log(`   - AI Model: Gemini 2.0 Flash (Validated)\n`);

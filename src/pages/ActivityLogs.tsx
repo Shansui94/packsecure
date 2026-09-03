@@ -363,15 +363,15 @@ function parse5W1HLog(raw: ActivityLogRaw, metadata?: AuditMetadataContext): Par
         actionName = `浏览页面: ${moduleName}`;
     } else if (actionUpper === 'BUTTON_CLICK') {
         // High-Value Confirmed Delivery Actions
-        if (btnUpper.includes('SAHKAN HANTARAN') || btnUpper.includes('CONFIRM DELIVERY')) {
+        if (btnUpper.includes('SAHKAN HANTARAN') || btnUpper.includes('CONFIRM DELIVERY') || details.custom_action === 'OPEN_UNLOAD_MODAL') {
             category = 'DELIVERY';
-            isBusinessAction = true;
-            actionName = '确认送货签收 (Confirm Delivery)';
+            isBusinessAction = false;
+            actionName = '准备送货签收: 打开卸货交接窗口';
             if (!target && details.orderNumber) target = `工单 #${details.orderNumber}`;
-        } else if (btnUpper.includes('HANTAR DROP POINT') || btnUpper.includes('SUBMIT THIS DROP POINT')) {
+        } else if (btnUpper.includes('HANTAR DROP POINT') || btnUpper.includes('SUBMIT THIS DROP POINT') || details.custom_action === 'SUBMIT_DROP_POINT') {
             category = 'DELIVERY';
-            isBusinessAction = true;
-            actionName = '提交送货点交接 (Submit Drop Point)';
+            isBusinessAction = false;
+            actionName = '提交送货签收: 点击【提交交接】';
             if (!target && details.orderNumber) target = `工单 #${details.orderNumber}`;
         } else if (btnUpper.includes('AMBIL GAMBAR') || btnUpper.includes('PHOTO')) {
             category = 'DELIVERY';
@@ -566,10 +566,10 @@ function parse5W1HLog(raw: ActivityLogRaw, metadata?: AuditMetadataContext): Par
     let summary = details.result_summary || details.resultSummary;
     if (!summary) {
         if (actionUpper === 'BUTTON_CLICK') {
-            if (btnUpper.includes('SAHKAN HANTARAN') || btnUpper.includes('CONFIRM DELIVERY')) {
-                summary = `司机 ${who.name} 确认送货签收与物料交付`;
-            } else if (btnUpper.includes('HANTAR DROP POINT') || btnUpper.includes('SUBMIT THIS DROP POINT')) {
-                summary = `司机 ${who.name} 提交送货点交接并上传签收记录`;
+            if (btnUpper.includes('SAHKAN HANTARAN') || btnUpper.includes('CONFIRM DELIVERY') || details.custom_action === 'OPEN_UNLOAD_MODAL') {
+                summary = `司机 ${who.name} 点击准备送货签收，打开卸货交接与单据拍照窗口`;
+            } else if (btnUpper.includes('HANTAR DROP POINT') || btnUpper.includes('SUBMIT THIS DROP POINT') || details.custom_action === 'SUBMIT_DROP_POINT') {
+                summary = `司机 ${who.name} 点击提交送货点交接`;
             } else if (btnUpper.includes('AMBIL GAMBAR') || btnUpper.includes('PHOTO')) {
                 summary = `司机 ${who.name} 拍摄并上传货物/DO送货凭证`;
             } else if (btnUpper === 'ADD' || btnUpper === '+ ADD' || btnUpper === '+' || btnUpper === 'TAMBAH') {
@@ -615,7 +615,8 @@ function parse5W1HLog(raw: ActivityLogRaw, metadata?: AuditMetadataContext): Par
     }
 
     // Compliance Check (Missing proof alert for field operations)
-    const isFieldAction = (category === 'DELIVERY' && isBusinessAction) || actionUpper.includes('DROP_POINT');
+    // IMPORTANT: Only check when a real business delivery is submitted, NEVER on intermediate UI button clicks!
+    const isFieldAction = actionUpper === 'DRIVER_CONFIRM_DROP_POINT' || actionUpper === 'DRIVER_COMPLETE_TRIP' || (category === 'DELIVERY' && isBusinessAction && actionUpper !== 'BUTTON_CLICK');
     const hasMissingProofAlert = isFieldAction && (photos.length === 0 || !gps);
     let missingProofMessage: string | undefined = undefined;
     if (hasMissingProofAlert) {

@@ -1184,31 +1184,39 @@ const DriverDelivery: React.FC<DriverDeliveryProps> = ({ user }) => {
                 // Fetch previous mileage log for discrepancy check
                 const lastLog = await getLatestMileage(scannedLorryData.id);
 
-                if (lastLog && lastLog.mileage !== mileageVal) {
+                // When starting shift (bind), expected mileage should be the last parked reading.
+                // An anomaly occurs if:
+                // 1. diff < 0 (odometer rolled back or entered smaller number)
+                // 2. diff > 100 (vehicle moved >100 km off-the-record without driver binding)
+                if (lastLog) {
                     const diff = mileageVal - lastLog.mileage;
-                    // If discrepancy is > 2000 km, warn driver with a confirm dialog so legitimate handovers are not permanently blocked
-                    if (Math.abs(diff) > 2000) {
-                        const proceed = window.confirm(`⚠️ PERBEZAAN PERBATUAN BESAR / LARGE MILEAGE DIFFERENCE\n\nRekod terdahulu / Previous record: ${lastLog.mileage} km\nBacaan semasa / Current reading: ${mileageVal} km\nPerbezaan / Difference: ${diff > 0 ? '+' : ''}${diff} km\n\nAdakah anda pasti bacaan meter ini betul? Rekod amaran akan dihantar kepada Admin.\n(Are you sure this odometer reading is correct? An alert will be recorded for Admin.)\n\nTeruskan? / Proceed?`);
-                        if (!proceed) {
-                            setSubmittingOdometer(false);
-                            return;
+                    const isDiscrepancy = diff < 0 || diff > 100;
+
+                    if (isDiscrepancy) {
+                        // If discrepancy is > 2000 km, warn driver with a confirm dialog so legitimate handovers are not permanently blocked
+                        if (Math.abs(diff) > 2000) {
+                            const proceed = window.confirm(`⚠️ PERBEZAAN PERBATUAN BESAR / LARGE MILEAGE DIFFERENCE\n\nRekod terdahulu / Previous record: ${lastLog.mileage} km\nBacaan semasa / Current reading: ${mileageVal} km\nPerbezaan / Difference: ${diff > 0 ? '+' : ''}${diff} km\n\nAdakah anda pasti bacaan meter ini betul? Rekod amaran akan dihantar kepada Admin.\n(Are you sure this odometer reading is correct? An alert will be recorded for Admin.)\n\nTeruskan? / Proceed?`);
+                            if (!proceed) {
+                                setSubmittingOdometer(false);
+                                return;
+                            }
                         }
+
+                        // Create discrepancy alert!
+                        const { error: alertErr } = await supabase
+                            .from('lorry_mileage_alerts')
+                            .insert({
+                                lorry_id: scannedLorryData.id,
+                                driver_id: user.uid,
+                                logged_mileage: mileageVal,
+                                expected_mileage: lastLog.mileage,
+                                difference: diff,
+                                photo_url: photoUrl,
+                                resolved: false
+                            });
+
+                        if (alertErr) console.error("Failed to create discrepancy alert:", alertErr);
                     }
-
-                    // Create discrepancy alert!
-                    const { error: alertErr } = await supabase
-                        .from('lorry_mileage_alerts')
-                        .insert({
-                            lorry_id: scannedLorryData.id,
-                            driver_id: user.uid,
-                            logged_mileage: mileageVal,
-                            expected_mileage: lastLog.mileage,
-                            difference: diff,
-                            photo_url: photoUrl,
-                            resolved: false
-                        });
-
-                    if (alertErr) console.error("Failed to create discrepancy alert:", alertErr);
                 }
 
                 // Insert new start log
@@ -1248,31 +1256,39 @@ const DriverDelivery: React.FC<DriverDeliveryProps> = ({ user }) => {
                 // Fetch previous mileage log for discrepancy check
                 const lastLog = await getLatestMileage(scannedLorryData.id);
 
-                if (lastLog && lastLog.mileage !== mileageVal) {
+                // When ending shift (unbind), mileage MUST increase due to normal delivery driving.
+                // An anomaly ONLY occurs if:
+                // 1. diff < 0 (entered smaller number than shift start, e.g. 2412 instead of 24121)
+                // 2. diff > 1200 (unrealistically huge distance for a single shift, e.g. extra digit typed)
+                if (lastLog) {
                     const diff = mileageVal - lastLog.mileage;
-                    // If discrepancy is > 2000 km, warn driver with a confirm dialog so legitimate handovers are not permanently blocked
-                    if (Math.abs(diff) > 2000) {
-                        const proceed = window.confirm(`⚠️ PERBEZAAN PERBATUAN BESAR / LARGE MILEAGE DIFFERENCE\n\nRekod terdahulu / Previous record: ${lastLog.mileage} km\nBacaan semasa / Current reading: ${mileageVal} km\nPerbezaan / Difference: ${diff > 0 ? '+' : ''}${diff} km\n\nAdakah anda pasti bacaan meter ini betul? Rekod amaran akan dihantar kepada Admin.\n(Are you sure this odometer reading is correct? An alert will be recorded for Admin.)\n\nTeruskan? / Proceed?`);
-                        if (!proceed) {
-                            setSubmittingOdometer(false);
-                            return;
+                    const isDiscrepancy = diff < 0 || diff > 1200;
+
+                    if (isDiscrepancy) {
+                        // If discrepancy is > 2000 km, warn driver with a confirm dialog so legitimate handovers are not permanently blocked
+                        if (Math.abs(diff) > 2000) {
+                            const proceed = window.confirm(`⚠️ PERBEZAAN PERBATUAN BESAR / LARGE MILEAGE DIFFERENCE\n\nRekod terdahulu / Previous record: ${lastLog.mileage} km\nBacaan semasa / Current reading: ${mileageVal} km\nPerbezaan / Difference: ${diff > 0 ? '+' : ''}${diff} km\n\nAdakah anda pasti bacaan meter ini betul? Rekod amaran akan dihantar kepada Admin.\n(Are you sure this odometer reading is correct? An alert will be recorded for Admin.)\n\nTeruskan? / Proceed?`);
+                            if (!proceed) {
+                                setSubmittingOdometer(false);
+                                return;
+                            }
                         }
+
+                        // Create discrepancy alert!
+                        const { error: alertErr } = await supabase
+                            .from('lorry_mileage_alerts')
+                            .insert({
+                                lorry_id: scannedLorryData.id,
+                                driver_id: user.uid,
+                                logged_mileage: mileageVal,
+                                expected_mileage: lastLog.mileage,
+                                difference: diff,
+                                photo_url: photoUrl,
+                                resolved: false
+                            });
+
+                        if (alertErr) console.error("Failed to create discrepancy alert:", alertErr);
                     }
-
-                    // Create discrepancy alert!
-                    const { error: alertErr } = await supabase
-                        .from('lorry_mileage_alerts')
-                        .insert({
-                            lorry_id: scannedLorryData.id,
-                            driver_id: user.uid,
-                            logged_mileage: mileageVal,
-                            expected_mileage: lastLog.mileage,
-                            difference: diff,
-                            photo_url: photoUrl,
-                            resolved: false
-                        });
-
-                    if (alertErr) console.error("Failed to create discrepancy alert:", alertErr);
                 }
 
                 // Insert ending log
@@ -1855,6 +1871,9 @@ const DriverDelivery: React.FC<DriverDeliveryProps> = ({ user }) => {
                                 (order.status === 'Loaded' || order.status === 'Pending Approval') ? (
                                     <button
                                         onClick={() => handleOpenUnloadModal(order)}
+                                        data-action="OPEN_UNLOAD_MODAL"
+                                        data-action-name="打开送货签收窗口"
+                                        data-target={`工单 #${order.orderNumber || order.id}`}
                                         className="w-full py-4 bg-emerald-600 hover:bg-emerald-500 text-white rounded-xl font-bold uppercase text-sm tracking-widest flex items-center justify-center gap-3 shadow-lg shadow-emerald-950/30 active:scale-95 transition-all"
                                     >
                                         <CheckCircle size={18} /> Sahkan Hantaran / Confirm Delivery

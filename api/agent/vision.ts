@@ -169,8 +169,10 @@ IMPORTANT IMAGE ORIENTATION NOTE:
 Return a STRICT JSON object with the following fields:
 {
   "refDoc": string, // Document number (e.g. "DO-2026-0812", "PO-9912", "INV-102", or handwritten sheet title). If not found, return empty string "".
-  "location": string, // Warehouse or location mentioned (e.g. "Nilai", "Johor", "Taiping", "Kelantan", "OPM Lama", "SPD", "OPM Corner", "OPM Ali"). Match to the closest warehouse from the reference list if provided.
-  "notes": string, // Supplier name, customer name, date, carrier name, or any general remarks on the sheet/pallet.
+  "location": string, // Default warehouse or location mentioned. Match to the closest warehouse from the reference list if provided.
+  "fromLocation": string, // Source warehouse/location for stock transfer/dispatch if mentioned (e.g. "Taiping", "Nilai", "Johor").
+  "toLocation": string, // Destination warehouse/location for stock transfer/receipt if mentioned (e.g. "Nilai", "Johor", "Kelantan").
+  "notes": string, // Supplier name, customer name, date, carrier name, driver, vehicle plate, or any general remarks on the sheet/pallet.
   "items": [
     {
       "sku": string, // The SKU code matched from the reference product list. If not matched, leave empty string "".

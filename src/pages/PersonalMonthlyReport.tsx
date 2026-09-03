@@ -856,7 +856,8 @@ const PersonalMonthlyReport: React.FC<Props> = ({ user }) => {
             const { data: rawDeliveryData } = await supabase
                 .from('sales_orders')
                 .select('*')
-                .eq('driver_id', selectedEmployeeId);
+                .eq('driver_id', selectedEmployeeId)
+                .or(`deadline.gte.${firstDay},created_at.gte.${startDateTs},pod_timestamp.gte.${startDateTs}`);
 
             const monthlyDeliveries = (rawDeliveryData || []).filter(d => {
                 if (d.status !== 'Delivered') return false; // 🔒 仅统计已实际送达完成的 Trip（排除未完成/未进行的计划单与装车单）
@@ -1408,11 +1409,34 @@ const PersonalMonthlyReport: React.FC<Props> = ({ user }) => {
             });
 
             const driverIds = driversList.map(d => d.uid || d.auth_user_id || d.id).filter(Boolean);
-            const { data: rawDeliveryData } = await supabase
-                .from('sales_orders')
-                .select('id, order_number, customer, items, notes, order_date, pod_timestamp, deadline, zone, delivery_address, created_at, trip_origin, trip_drop_count, driver_id')
-                .in('driver_id', driverIds)
-                .eq('status', 'Delivered');
+            const startDateTs = `${firstDay}T00:00:00.000Z`;
+            let rawDeliveryData: any[] = [];
+            let hasMore = true;
+            let offset = 0;
+
+            while (hasMore) {
+                const { data, error } = await supabase
+                    .from('sales_orders')
+                    .select('id, order_number, customer, items, notes, order_date, pod_timestamp, deadline, zone, delivery_address, created_at, trip_origin, trip_drop_count, driver_id, job_type, earnings, trip_allowance')
+                    .in('driver_id', driverIds)
+                    .eq('status', 'Delivered')
+                    .or(`deadline.gte.${firstDay},created_at.gte.${startDateTs},pod_timestamp.gte.${startDateTs}`)
+                    .order('created_at', { ascending: true })
+                    .range(offset, offset + 999);
+
+                if (error) {
+                    console.error("Fetch batch delivery orders error:", error);
+                    break;
+                }
+
+                if (data && data.length > 0) {
+                    rawDeliveryData.push(...data);
+                    offset += 1000;
+                    if (data.length < 1000) hasMore = false;
+                } else {
+                    hasMore = false;
+                }
+            }
 
             const allDeliveries = (rawDeliveryData || []).filter(order => {
                 const rawDate = order.deadline || (order.pod_timestamp ? order.pod_timestamp.split('T')[0] : (order.created_at ? order.created_at.split('T')[0] : null));
@@ -1437,13 +1461,18 @@ const PersonalMonthlyReport: React.FC<Props> = ({ user }) => {
                     const rateInfo = rateMap[key];
                     const drops = Math.max(1, t.trip_drop_count || 1);
 
+                    const approvedAmountMatch = t.notes?.match(/\[APPROVED_AMOUNT:\s*([\d.]+)\]/);
                     let tEarnings = 0;
-                    if (rateInfo) {
+                    if (approvedAmountMatch) {
+                        tEarnings = parseFloat(approvedAmountMatch[1]) || 0;
+                    } else if (rateInfo) {
                         const base = Number(rateInfo.base_rate) || 0;
                         const maxPlaces = Number(rateInfo.max_places) || 0;
                         const extraPlaces = Math.max(0, drops - maxPlaces);
                         const extraRate = extraPlaces * (Number(rateInfo.extra_rate_per_place) || 0);
                         tEarnings = base + extraRate;
+                    } else if (t.earnings || t.trip_allowance) {
+                        tEarnings = Number(t.earnings || t.trip_allowance || 0);
                     }
 
                     totalEarnings += tEarnings;

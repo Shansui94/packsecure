@@ -4,13 +4,13 @@ import { getV2Items } from '../services/apiV2';
 import { V2Item } from '../types/v2';
 import { WAREHOUSES } from '../data/factoryData';
 import { 
-    ArrowDownCircle, ArrowUpCircle, ClipboardList, Search, Check, AlertCircle, 
+    ArrowDownCircle, ArrowUpCircle, ArrowRightLeft, ClipboardList, Search, Check, AlertCircle, 
     Plus, Minus, X, ShoppingCart, Camera, Sparkles, RefreshCw, Image as ImageIcon,
-    CheckCircle2, Trash2, Eye
+    CheckCircle2, Trash2, Eye, ArrowRight
 } from 'lucide-react';
 import { compressImage, dataUrlToBase64Payload, dataURLtoBlob } from '../utils/imageCompress';
 
-type Mode = 'in' | 'out';
+type Mode = 'in' | 'out' | 'transfer';
 
 interface LedgerRow {
     txn_id: string;
@@ -18,6 +18,7 @@ interface LedgerRow {
     timestamp: string;
     event_type: string;
     change_qty: number;
+    loc_id?: string;
     ref_doc?: string;
     notes?: string;
     created_by_name?: string;
@@ -44,12 +45,17 @@ const StockMovement: React.FC<{ user?: any }> = ({ user }) => {
     const [loading, setLoading] = useState(false);
     const [toast, setToast] = useState<{ msg: string; type: 'ok' | 'err' } | null>(null);
 
+    // Live inventory map for stock availability: key = `${sku.toLowerCase()}__${loc.toLowerCase()}`
+    const [stockBalances, setStockBalances] = useState<Record<string, number>>({});
+
     // Form state
     const [skuSearch, setSkuSearch] = useState('');
     const [cart, setCart] = useState<CartItem[]>([]);
     const [refDoc, setRefDoc] = useState('');
     const [notes, setNotes] = useState('');
     const [selectedLocation, setSelectedLocation] = useState<string>('');
+    const [fromLocation, setFromLocation] = useState<string>('');
+    const [toLocation, setToLocation] = useState<string>('');
     const [showDropdown, setShowDropdown] = useState(false);
     const dropdownRef = useRef<HTMLDivElement>(null);
     const searchInputRef = useRef<HTMLInputElement>(null);
@@ -60,6 +66,8 @@ const StockMovement: React.FC<{ user?: any }> = ({ user }) => {
     const [scanPhotoUrl, setScanPhotoUrl] = useState<string | null>(null);
     const [scannedRefDoc, setScannedRefDoc] = useState('');
     const [scannedLocation, setScannedLocation] = useState('');
+    const [scannedFromLocation, setScannedFromLocation] = useState('');
+    const [scannedToLocation, setScannedToLocation] = useState('');
     const [scannedNotes, setScannedNotes] = useState('');
     const [scannedItems, setScannedItems] = useState<ScannedItem[]>([]);
     const [proofPhotoUrl, setProofPhotoUrl] = useState<string | null>(null);
@@ -68,10 +76,11 @@ const StockMovement: React.FC<{ user?: any }> = ({ user }) => {
 
     const fileInputRef = useRef<HTMLInputElement>(null);
 
-    // Load items + ledger
+    // Load items + ledger + stock balances
     useEffect(() => {
         getV2Items().then(setItems);
         fetchLedger();
+        fetchBalances();
 
         const handleClickOutside = (event: MouseEvent) => {
             if (dropdownRef.current && !dropdownRef.current.contains(event.target as Node)) {
@@ -82,20 +91,37 @@ const StockMovement: React.FC<{ user?: any }> = ({ user }) => {
         return () => document.removeEventListener('mousedown', handleClickOutside);
     }, []);
 
+    const fetchBalances = async () => {
+        try {
+            const { data } = await supabase.from('v2_inventory_view').select('sku, loc_id, current_stock');
+            if (data) {
+                const map: Record<string, number> = {};
+                data.forEach((r: any) => {
+                    if (r.sku && r.loc_id) {
+                        const key = `${r.sku.trim().toLowerCase()}__${r.loc_id.trim().toLowerCase()}`;
+                        map[key] = (map[key] || 0) + (Number(r.current_stock) || 0);
+                    }
+                });
+                setStockBalances(map);
+            }
+        } catch (e) {
+            console.warn('Failed to fetch stock balances:', e);
+        }
+    };
+
     const fetchLedger = async () => {
         const { data } = await supabase
             .from('stock_ledger_v2')
-            .select('txn_id, sku, timestamp, event_type, change_qty, ref_doc, notes, created_by_name')
-            .in('event_type', ['Stock In', 'Stock Out'])
+            .select('txn_id, sku, timestamp, event_type, change_qty, loc_id, ref_doc, notes, created_by_name')
+            .in('event_type', ['Stock In', 'Stock Out', 'Transfer In', 'Transfer Out'])
             .order('timestamp', { ascending: false })
-            .limit(80);
+            .limit(100);
         setLedger(data || []);
 
-        // My history: only current user's stock outs
         if (user?.uid) {
             const { data: mine } = await supabase
                 .from('stock_ledger_v2')
-                .select('txn_id, sku, timestamp, event_type, change_qty, ref_doc, notes, created_by_name')
+                .select('txn_id, sku, timestamp, event_type, change_qty, loc_id, ref_doc, notes, created_by_name')
                 .eq('created_by', user.uid)
                 .order('timestamp', { ascending: false })
                 .limit(100);
@@ -107,6 +133,13 @@ const StockMovement: React.FC<{ user?: any }> = ({ user }) => {
     const getItemName = (sku: string) => {
         const item = items.find(i => i.sku === sku);
         return item ? item.name : (sku || 'Unknown Product');
+    };
+
+    // Helper to get available stock for SKU at specific location
+    const getAvailableStock = (sku: string, loc: string): number | undefined => {
+        if (!sku || !loc) return undefined;
+        const key = `${sku.trim().toLowerCase()}__${loc.trim().toLowerCase()}`;
+        return stockBalances[key] ?? 0;
     };
 
     // Helper to parse photo url from notes/refDoc
@@ -178,14 +211,11 @@ const StockMovement: React.FC<{ user?: any }> = ({ user }) => {
             setIsAnalyzing(true);
             showToast('AI is analyzing photo and extracting items...', 'ok');
 
-            // 1. Compress Image
             const compressedDataUrl = await compressImage(file, 2048, 0.85);
             setScanPhotoUrl(compressedDataUrl);
 
-            // 2. Prepare Payload
             const { base64, mimeType } = dataUrlToBase64Payload(compressedDataUrl);
 
-            // 3. Call Vision API
             const response = await fetch('/api/agent/vision', {
                 method: 'POST',
                 headers: { 'Content-Type': 'application/json' },
@@ -204,20 +234,23 @@ const StockMovement: React.FC<{ user?: any }> = ({ user }) => {
 
             const result = await response.json();
 
-            // 4. Process result
             setScannedRefDoc(result.refDoc || '');
 
-            // Auto-match warehouse location
-            let matchedLocation = '';
-            if (result.location) {
-                const lowerLoc = result.location.toLowerCase();
-                const found = WAREHOUSES.find(w => w.toLowerCase().includes(lowerLoc) || lowerLoc.includes(w.toLowerCase()));
-                if (found) matchedLocation = found;
-            }
-            setScannedLocation(matchedLocation || selectedLocation || '');
+            const matchLoc = (val?: string) => {
+                if (!val) return '';
+                const lower = val.toLowerCase();
+                return WAREHOUSES.find(w => w.toLowerCase().includes(lower) || lower.includes(w.toLowerCase())) || '';
+            };
+
+            const matchedDefaultLoc = matchLoc(result.location);
+            const matchedFrom = matchLoc(result.fromLocation) || (mode === 'transfer' ? fromLocation : matchedDefaultLoc);
+            const matchedTo = matchLoc(result.toLocation) || (mode === 'transfer' ? toLocation : '');
+
+            setScannedLocation(matchedDefaultLoc || selectedLocation || '');
+            setScannedFromLocation(matchedFrom || '');
+            setScannedToLocation(matchedTo || '');
             setScannedNotes(result.notes || '');
 
-            // Match items with catalog
             const rawItemsList = Array.isArray(result.items) ? result.items : (Array.isArray(result) ? result : []);
             const parsedItems: ScannedItem[] = rawItemsList.map((it: any, index: number) => {
                 const matched = items.find(catalogItem => 
@@ -303,14 +336,17 @@ const StockMovement: React.FC<{ user?: any }> = ({ user }) => {
         if (scannedRefDoc && !refDoc) {
             setRefDoc(scannedRefDoc);
         }
-        if (scannedLocation) {
-            setSelectedLocation(scannedLocation);
-        }
         if (scannedNotes && !notes) {
             setNotes(scannedNotes);
         }
 
-        // Attach proof photo
+        if (mode === 'transfer') {
+            if (scannedFromLocation) setFromLocation(scannedFromLocation);
+            if (scannedToLocation) setToLocation(scannedToLocation);
+        } else {
+            if (scannedLocation) setSelectedLocation(scannedLocation);
+        }
+
         if (scanPhotoUrl) {
             setProofPhotoUrl(scanPhotoUrl);
         }
@@ -324,13 +360,18 @@ const StockMovement: React.FC<{ user?: any }> = ({ user }) => {
         e.preventDefault();
         const validItems = cart.filter(item => item.qty > 0);
         if (validItems.length === 0) return showToast('No items with a valid quantity to submit.', 'err');
-        if (!selectedLocation) return showToast('Please select a warehouse location.', 'err');
+
+        // Validation based on mode
+        if (mode === 'transfer') {
+            if (!fromLocation) return showToast('Please select Source Location (调出仓库).', 'err');
+            if (!toLocation) return showToast('Please select Destination Location (调入仓库).', 'err');
+            if (fromLocation === toLocation) return showToast('Source and Destination locations must be different.', 'err');
+        } else {
+            if (!selectedLocation) return showToast('Please select a warehouse location.', 'err');
+        }
 
         setLoading(true);
         try {
-            const txnType = mode === 'in' ? 'Stock In' : 'Stock Out';
-            const multiplier = mode === 'in' ? 1 : -1;
-
             // Upload proof photo to Supabase storage if present
             let uploadedPhotoUrl: string | null = null;
             if (proofPhotoUrl) {
@@ -354,28 +395,69 @@ const StockMovement: React.FC<{ user?: any }> = ({ user }) => {
                 }
             }
 
-            // Format notes with proof photo link if uploaded
-            let finalNotes = notes || '';
-            if (uploadedPhotoUrl) {
-                finalNotes = finalNotes ? `${finalNotes} [Photo: ${uploadedPhotoUrl}]` : `[Photo: ${uploadedPhotoUrl}]`;
-            }
+            let photoSuffix = uploadedPhotoUrl ? `[Photo: ${uploadedPhotoUrl}]` : '';
 
-            const inserts = validItems.map(item => ({
-                sku: item.sku,
-                change_qty: item.qty * multiplier,
-                event_type: txnType,
-                loc_id: selectedLocation,
-                ref_doc: refDoc || null,
-                notes: finalNotes || null,
-                created_by: user?.uid || null,
-                created_by_name: user?.name || null,
-            }));
+            let inserts: any[] = [];
+
+            if (mode === 'transfer') {
+                // Generate paired records for Stock Transfer (Transfer Out + Transfer In)
+                validItems.forEach(item => {
+                    const outNote = notes ? `Transfer to ${toLocation}. ${notes} ${photoSuffix}`.trim() : `Transfer to ${toLocation} ${photoSuffix}`.trim();
+                    const inNote = notes ? `Transfer from ${fromLocation}. ${notes} ${photoSuffix}`.trim() : `Transfer from ${fromLocation} ${photoSuffix}`.trim();
+
+                    // 1. Transfer Out from Source
+                    inserts.push({
+                        sku: item.sku,
+                        change_qty: -item.qty,
+                        event_type: 'Transfer Out',
+                        loc_id: fromLocation,
+                        ref_doc: refDoc || null,
+                        notes: outNote || null,
+                        created_by: user?.uid || null,
+                        created_by_name: user?.name || null,
+                    });
+
+                    // 2. Transfer In to Destination
+                    inserts.push({
+                        sku: item.sku,
+                        change_qty: item.qty,
+                        event_type: 'Transfer In',
+                        loc_id: toLocation,
+                        ref_doc: refDoc || null,
+                        notes: inNote || null,
+                        created_by: user?.uid || null,
+                        created_by_name: user?.name || null,
+                    });
+                });
+            } else {
+                const txnType = mode === 'in' ? 'Stock In' : 'Stock Out';
+                const multiplier = mode === 'in' ? 1 : -1;
+                let finalNotes = notes || '';
+                if (uploadedPhotoUrl) {
+                    finalNotes = finalNotes ? `${finalNotes} ${photoSuffix}` : photoSuffix;
+                }
+
+                inserts = validItems.map(item => ({
+                    sku: item.sku,
+                    change_qty: item.qty * multiplier,
+                    event_type: txnType,
+                    loc_id: selectedLocation,
+                    ref_doc: refDoc || null,
+                    notes: finalNotes || null,
+                    created_by: user?.uid || null,
+                    created_by_name: user?.name || null,
+                }));
+            }
 
             const { error } = await supabase.from('stock_ledger_v2').insert(inserts);
 
             if (error) throw error;
 
-            showToast(`${txnType} recorded for ${validItems.length} items!`, 'ok');
+            if (mode === 'transfer') {
+                showToast(`Transferred ${validItems.length} items from ${fromLocation} to ${toLocation}!`, 'ok');
+            } else {
+                showToast(`${mode === 'in' ? 'Stock In' : 'Stock Out'} recorded for ${validItems.length} items!`, 'ok');
+            }
 
             setCart([]);
             setSkuSearch('');
@@ -384,6 +466,7 @@ const StockMovement: React.FC<{ user?: any }> = ({ user }) => {
             setProofPhotoUrl(null);
             setScanPhotoUrl(null);
             fetchLedger();
+            fetchBalances();
         } catch (err: any) {
             showToast('Error: ' + err.message, 'err');
         } finally {
@@ -391,10 +474,28 @@ const StockMovement: React.FC<{ user?: any }> = ({ user }) => {
         }
     };
 
+    // Styling helpers by mode
     const isIn = mode === 'in';
-    const borderClass = isIn ? 'border-green-500/30' : 'border-orange-500/30';
-    const textClass = isIn ? 'text-green-400' : 'text-orange-400';
-    const bgClass = isIn ? 'bg-green-500/10' : 'bg-orange-500/10';
+    const isOut = mode === 'out';
+    const isTransfer = mode === 'transfer';
+
+    const borderClass = isIn 
+        ? 'border-green-500/30' 
+        : isOut 
+            ? 'border-orange-500/30' 
+            : 'border-indigo-500/30';
+
+    const textClass = isIn 
+        ? 'text-green-400' 
+        : isOut 
+            ? 'text-orange-400' 
+            : 'text-indigo-400';
+
+    const bgClass = isIn 
+        ? 'bg-green-500/10' 
+        : isOut 
+            ? 'bg-orange-500/10' 
+            : 'bg-indigo-500/10';
 
     return (
         <div className="min-h-screen bg-[#07070a] text-white p-4 md:p-8 pb-24 font-sans relative">
@@ -424,30 +525,44 @@ const StockMovement: React.FC<{ user?: any }> = ({ user }) => {
                 <div className="mb-6 flex flex-col md:flex-row md:items-end justify-between gap-4">
                     <div>
                         <h1 className="text-2xl md:text-3xl font-black tracking-tighter text-white mb-1 md:mb-2 flex items-center gap-2 md:gap-3">
-                            <ShoppingCart className={textClass} size={28} />
-                            Stock Movement
+                            {isTransfer ? (
+                                <ArrowRightLeft className={textClass} size={28} />
+                            ) : (
+                                <ShoppingCart className={textClass} size={28} />
+                            )}
+                            Stock Movement & Transfer
                         </h1>
-                        <p className="text-gray-500 text-xs md:text-sm">Batch process multi-SKU inward and outward movements with AI photo recognition.</p>
+                        <p className="text-gray-500 text-xs md:text-sm">Batch process multi-SKU inward, outward, and cross-warehouse transfers with AI recognition.</p>
                     </div>
-                    {/* Mode Toggle */}
+                    
+                    {/* Mode Toggle (Inward / Outward / Transfer) */}
                     <div className="flex bg-black/40 rounded-xl p-1 border border-white/5 shadow-xl w-full md:w-auto">
                         <button
                             onClick={() => setMode('in')}
-                            className={`flex flex-1 md:flex-none justify-center items-center gap-2 px-4 md:px-6 py-2.5 rounded-lg font-bold text-xs md:text-sm uppercase tracking-wider transition-all ${isIn
+                            className={`flex flex-1 md:flex-none justify-center items-center gap-2 px-3.5 md:px-5 py-2.5 rounded-lg font-bold text-xs uppercase tracking-wider transition-all ${isIn
                                 ? 'bg-green-600/20 text-green-400 border border-green-500/30 shadow-lg shadow-green-900/20'
                                 : 'text-gray-500 hover:text-gray-300 border border-transparent'
                                 }`}
                         >
-                            <ArrowDownCircle size={16} /> INWARD
+                            <ArrowDownCircle size={15} /> INWARD
                         </button>
                         <button
                             onClick={() => setMode('out')}
-                            className={`flex flex-1 md:flex-none justify-center items-center gap-2 px-4 md:px-6 py-2.5 rounded-lg font-bold text-xs md:text-sm uppercase tracking-wider transition-all ${!isIn
+                            className={`flex flex-1 md:flex-none justify-center items-center gap-2 px-3.5 md:px-5 py-2.5 rounded-lg font-bold text-xs uppercase tracking-wider transition-all ${isOut
                                 ? 'bg-orange-600/20 text-orange-400 border border-orange-500/30 shadow-lg shadow-orange-900/20'
                                 : 'text-gray-500 hover:text-gray-300 border border-transparent'
                                 }`}
                         >
-                            <ArrowUpCircle size={16} /> OUTWARD
+                            <ArrowUpCircle size={15} /> OUTWARD
+                        </button>
+                        <button
+                            onClick={() => setMode('transfer')}
+                            className={`flex flex-1 md:flex-none justify-center items-center gap-2 px-3.5 md:px-5 py-2.5 rounded-lg font-bold text-xs uppercase tracking-wider transition-all ${isTransfer
+                                ? 'bg-indigo-600/25 text-indigo-400 border border-indigo-500/40 shadow-lg shadow-indigo-900/30'
+                                : 'text-gray-500 hover:text-gray-300 border border-transparent'
+                                }`}
+                        >
+                            <ArrowRightLeft size={15} /> TRANSFER
                         </button>
                     </div>
                 </div>
@@ -513,7 +628,7 @@ const StockMovement: React.FC<{ user?: any }> = ({ user }) => {
                                     text-white font-bold text-sm flex items-center justify-center gap-2.5 shadow-xl shadow-pink-900/30 ring-1 ring-white/20 
                                     transition-all transform active:scale-95 shrink-0 ${isAnalyzing ? 'opacity-75 cursor-wait' : ''}
                                 `}
-                                title="Snap photo of DO, Invoices, Pallets or goods to Auto-Fill with AI"
+                                title="Snap photo of Transfer Sheet, DO, Pallets or goods to Auto-Fill with AI"
                             >
                                 {isAnalyzing ? (
                                     <>
@@ -533,7 +648,7 @@ const StockMovement: React.FC<{ user?: any }> = ({ user }) => {
                         </div>
 
                         {/* Cart List */}
-                        <div className={`flex-1 bg-[#0d0d12] border border-white/5 rounded-2xl flex flex-col overflow-hidden shadow-xl ${cart.length > 0 ? `ring-1 ring-inset ${isIn ? 'ring-green-500/10' : 'ring-orange-500/10'}` : ''}`}>
+                        <div className={`flex-1 bg-[#0d0d12] border border-white/5 rounded-2xl flex flex-col overflow-hidden shadow-xl ${cart.length > 0 ? `ring-1 ring-inset ${isIn ? 'ring-green-500/10' : isOut ? 'ring-orange-500/10' : 'ring-indigo-500/10'}` : ''}`}>
                             <div className={`px-6 py-4 border-b border-white/5 flex justify-between items-center bg-black/20`}>
                                 <div className="flex items-center gap-3">
                                     <h2 className="text-xs font-bold text-gray-400 uppercase tracking-widest flex items-center gap-2">
@@ -578,61 +693,77 @@ const StockMovement: React.FC<{ user?: any }> = ({ user }) => {
                                     </div>
                                 ) : (
                                     <div className="space-y-2">
-                                        {cart.map((item, index) => (
-                                            <div key={`${item.sku}-${index}`} className="group flex flex-col sm:flex-row sm:items-center bg-white/5 hover:bg-white-[0.07] border border-transparent hover:border-white/10 rounded-xl p-3 sm:pr-4 gap-3 sm:gap-0 transition-all duration-200">
+                                        {cart.map((item, index) => {
+                                            // Calculate current available stock in source location if applicable
+                                            const sourceLoc = isTransfer ? fromLocation : (isOut ? selectedLocation : '');
+                                            const currentStock = sourceLoc ? getAvailableStock(item.sku, sourceLoc) : undefined;
+                                            const isExceeded = currentStock !== undefined && item.qty > currentStock;
 
-                                                {/* Top Row on Mobile / Left Side on Desktop */}
-                                                <div className="flex items-center justify-between w-full sm:w-auto sm:flex-1 min-w-0 pr-0 sm:pr-6">
-                                                    <div className="flex items-center min-w-0 flex-1">
-                                                        {/* Number */}
-                                                        <div className="w-8 shrink-0 text-center text-[10px] sm:text-xs font-mono text-gray-600 font-bold">
-                                                            {(index + 1).toString().padStart(2, '0')}
-                                                        </div>
-                                                        {/* Info */}
-                                                        <div className="flex-1 min-w-0 pl-2">
-                                                            <div className="font-bold text-white text-sm sm:text-base truncate">{item.name}</div>
-                                                            <div className="text-[10px] sm:text-xs text-gray-300 truncate mt-0.5 font-mono">{item.sku}</div>
-                                                        </div>
-                                                    </div>
-                                                    
-                                                    {/* Mobile-only Remove (top right) */}
-                                                    <button type="button" onClick={() => removeFromCart(item.sku)} className="sm:hidden w-8 h-8 shrink-0 flex items-center justify-center rounded-full bg-red-500/10 hover:bg-red-500/20 text-red-500 hover:text-red-400 transition-colors ml-2">
-                                                        <X size={16} />
-                                                    </button>
-                                                </div>
+                                            return (
+                                                <div key={`${item.sku}-${index}`} className="group flex flex-col sm:flex-row sm:items-center bg-white/5 hover:bg-white-[0.07] border border-transparent hover:border-white/10 rounded-xl p-3 sm:pr-4 gap-3 sm:gap-0 transition-all duration-200">
 
-                                                {/* Bottom Row on Mobile / Right Side on Desktop */}
-                                                <div className="flex items-center justify-between sm:justify-end w-full sm:w-auto pl-10 sm:pl-0">
-                                                    {/* Qty Controls */}
-                                                    <div className="flex items-center bg-black/40 rounded-lg p-1 border border-white/5 sm:mr-4 ring-1 ring-inset ring-transparent focus-within:ring-white/20 transition-all">
-                                                        <button type="button" onClick={() => updateCartQty(item.sku, -1)} className="w-8 sm:w-9 h-8 sm:h-9 flex items-center justify-center rounded-md hover:bg-white/10 text-gray-400 hover:text-white transition-colors">
-                                                            <Minus size={14} className="sm:hidden" />
-                                                            <Minus size={16} className="hidden sm:block" />
-                                                        </button>
-                                                        <input
-                                                            type="text"
-                                                            value={item.qty}
-                                                            onChange={(e) => setManualQty(item.sku, e.target.value)}
-                                                            className="w-12 sm:w-14 text-center bg-transparent border-none text-base sm:text-lg font-black font-mono focus:outline-none text-white"
-                                                        />
-                                                        <button type="button" onClick={() => updateCartQty(item.sku, 1)} className="w-8 sm:w-9 h-8 sm:h-9 flex items-center justify-center rounded-md hover:bg-white/10 text-gray-400 hover:text-white transition-colors">
-                                                            <Plus size={14} className="sm:hidden" />
-                                                            <Plus size={16} className="hidden sm:block" />
+                                                    {/* Left Side info */}
+                                                    <div className="flex items-center justify-between w-full sm:w-auto sm:flex-1 min-w-0 pr-0 sm:pr-6">
+                                                        <div className="flex items-center min-w-0 flex-1">
+                                                            <div className="w-8 shrink-0 text-center text-[10px] sm:text-xs font-mono text-gray-600 font-bold">
+                                                                {(index + 1).toString().padStart(2, '0')}
+                                                            </div>
+                                                            <div className="flex-1 min-w-0 pl-2">
+                                                                <div className="font-bold text-white text-sm sm:text-base truncate">{item.name}</div>
+                                                                <div className="flex items-center gap-2 mt-0.5 flex-wrap">
+                                                                    <span className="text-[10px] sm:text-xs text-gray-400 font-mono">{item.sku}</span>
+                                                                    {currentStock !== undefined && (
+                                                                        <span className={`text-[10px] font-mono px-2 py-0.5 rounded-full border ${
+                                                                            isExceeded
+                                                                                ? 'bg-amber-500/20 text-amber-300 border-amber-500/40 font-bold'
+                                                                                : 'bg-white/5 text-gray-400 border-white/5'
+                                                                        }`}>
+                                                                            {sourceLoc} Stock: <span className="font-bold">{currentStock}</span>
+                                                                            {isExceeded && ' ⚠️ Exceeds'}
+                                                                        </span>
+                                                                    )}
+                                                                </div>
+                                                            </div>
+                                                        </div>
+                                                        
+                                                        {/* Mobile remove */}
+                                                        <button type="button" onClick={() => removeFromCart(item.sku)} className="sm:hidden w-8 h-8 shrink-0 flex items-center justify-center rounded-full bg-red-500/10 hover:bg-red-500/20 text-red-500 hover:text-red-400 transition-colors ml-2">
+                                                            <X size={16} />
                                                         </button>
                                                     </div>
 
-                                                    {/* Total Change visual */}
-                                                    <div className={`text-right font-black font-mono text-base sm:text-lg ${textClass} sm:mr-6`}>
-                                                        {isIn ? '+' : '-'}{item.qty}
-                                                    </div>
+                                                    {/* Right Side quantity controls */}
+                                                    <div className="flex items-center justify-between sm:justify-end w-full sm:w-auto pl-10 sm:pl-0">
+                                                        <div className="flex items-center bg-black/40 rounded-lg p-1 border border-white/5 sm:mr-4 ring-1 ring-inset ring-transparent focus-within:ring-white/20 transition-all">
+                                                            <button type="button" onClick={() => updateCartQty(item.sku, -1)} className="w-8 sm:w-9 h-8 sm:h-9 flex items-center justify-center rounded-md hover:bg-white/10 text-gray-400 hover:text-white transition-colors">
+                                                                <Minus size={14} className="sm:hidden" />
+                                                                <Minus size={16} className="hidden sm:block" />
+                                                            </button>
+                                                            <input
+                                                                type="text"
+                                                                value={item.qty}
+                                                                onChange={(e) => setManualQty(item.sku, e.target.value)}
+                                                                className="w-12 sm:w-14 text-center bg-transparent border-none text-base sm:text-lg font-black font-mono focus:outline-none text-white"
+                                                            />
+                                                            <button type="button" onClick={() => updateCartQty(item.sku, 1)} className="w-8 sm:w-9 h-8 sm:h-9 flex items-center justify-center rounded-md hover:bg-white/10 text-gray-400 hover:text-white transition-colors">
+                                                                <Plus size={14} className="sm:hidden" />
+                                                                <Plus size={16} className="hidden sm:block" />
+                                                            </button>
+                                                        </div>
 
-                                                    {/* Desktop Remove */}
-                                                    <button type="button" onClick={() => removeFromCart(item.sku)} className="hidden sm:flex w-8 h-8 shrink-0 flex items-center justify-center rounded-full hover:bg-red-500/20 text-gray-600 hover:text-red-400 transition-colors opacity-50 group-hover:opacity-100 ml-4 lg:ml-0">
-                                                        <X size={16} />
-                                                    </button>
+                                                        {/* Quantity Indicator */}
+                                                        <div className={`text-right font-black font-mono text-base sm:text-lg ${textClass} sm:mr-6`}>
+                                                            {isIn ? '+' : isOut ? '-' : '⇄'}{item.qty}
+                                                        </div>
+
+                                                        {/* Desktop Remove */}
+                                                        <button type="button" onClick={() => removeFromCart(item.sku)} className="hidden sm:flex w-8 h-8 shrink-0 flex items-center justify-center rounded-full hover:bg-red-500/20 text-gray-600 hover:text-red-400 transition-colors opacity-50 group-hover:opacity-100 ml-4 lg:ml-0">
+                                                            <X size={16} />
+                                                        </button>
+                                                    </div>
                                                 </div>
-                                            </div>
-                                        ))}
+                                            );
+                                        })}
                                     </div>
                                 )}
                             </div>
@@ -650,7 +781,9 @@ const StockMovement: React.FC<{ user?: any }> = ({ user }) => {
                             <div className={`absolute -top-24 -right-24 w-48 h-48 ${bgClass} blur-3xl rounded-full opacity-50 pointer-events-none transition-all duration-500`} />
 
                             <div className="flex justify-between items-center border-b border-white/5 pb-3">
-                                <h2 className="text-xs font-bold text-gray-400 uppercase tracking-widest">Transaction Details</h2>
+                                <h2 className="text-xs font-bold text-gray-400 uppercase tracking-widest">
+                                    {isTransfer ? 'Transfer Details' : 'Transaction Details'}
+                                </h2>
                                 {proofPhotoUrl && (
                                     <span className="text-[10px] text-pink-400 flex items-center gap-1 font-mono">
                                         <ImageIcon size={12} /> Photo Attached
@@ -658,42 +791,99 @@ const StockMovement: React.FC<{ user?: any }> = ({ user }) => {
                                 )}
                             </div>
 
-                            {/* Location (Required) */}
-                            <div>
-                                <label className="block text-[10px] font-bold text-gray-500 uppercase tracking-widest mb-2">Location <span className="text-red-500">*</span></label>
-                                <select
-                                    value={selectedLocation}
-                                    onChange={(e) => setSelectedLocation(e.target.value)}
-                                    className="w-full bg-black/40 border border-white/10 rounded-xl px-4 py-3 text-sm focus:outline-none focus:border-white/30 text-white transition-colors cursor-pointer appearance-none"
-                                    required
-                                >
-                                    <option value="" disabled>Select Warehouse...</option>
-                                    {WAREHOUSES.map(w => (
-                                        <option key={w} value={w}>{w}</option>
-                                    ))}
-                                </select>
-                            </div>
+                            {/* LOCATION INPUTS */}
+                            {isTransfer ? (
+                                <div className="space-y-4">
+                                    {/* Source Location */}
+                                    <div>
+                                        <label className="block text-[10px] font-bold text-gray-500 uppercase tracking-widest mb-1.5 flex items-center gap-1.5">
+                                            <span className="w-2 h-2 rounded-full bg-orange-400" />
+                                            Source / From Warehouse <span className="text-red-500">*</span>
+                                        </label>
+                                        <select
+                                            value={fromLocation}
+                                            onChange={(e) => setFromLocation(e.target.value)}
+                                            className="w-full bg-black/40 border border-white/10 rounded-xl px-4 py-3 text-sm focus:outline-none focus:border-indigo-500 text-white transition-colors cursor-pointer appearance-none"
+                                            required
+                                        >
+                                            <option value="" disabled>Select Source Location...</option>
+                                            {WAREHOUSES.map(w => (
+                                                <option key={w} value={w} disabled={w === toLocation}>
+                                                    {w} {w === toLocation ? '(Destination)' : ''}
+                                                </option>
+                                            ))}
+                                        </select>
+                                    </div>
+
+                                    {/* Transfer Arrow Indicator */}
+                                    <div className="flex items-center justify-center -my-2">
+                                        <div className="w-7 h-7 rounded-full bg-indigo-500/20 border border-indigo-500/30 flex items-center justify-center text-indigo-400">
+                                            <ArrowRight size={14} className="rotate-90 sm:rotate-0" />
+                                        </div>
+                                    </div>
+
+                                    {/* Destination Location */}
+                                    <div>
+                                        <label className="block text-[10px] font-bold text-gray-500 uppercase tracking-widest mb-1.5 flex items-center gap-1.5">
+                                            <span className="w-2 h-2 rounded-full bg-green-400" />
+                                            Destination / To Warehouse <span className="text-red-500">*</span>
+                                        </label>
+                                        <select
+                                            value={toLocation}
+                                            onChange={(e) => setToLocation(e.target.value)}
+                                            className="w-full bg-black/40 border border-white/10 rounded-xl px-4 py-3 text-sm focus:outline-none focus:border-indigo-500 text-white transition-colors cursor-pointer appearance-none"
+                                            required
+                                        >
+                                            <option value="" disabled>Select Destination Location...</option>
+                                            {WAREHOUSES.map(w => (
+                                                <option key={w} value={w} disabled={w === fromLocation}>
+                                                    {w} {w === fromLocation ? '(Source)' : ''}
+                                                </option>
+                                            ))}
+                                        </select>
+                                    </div>
+                                </div>
+                            ) : (
+                                <div>
+                                    <label className="block text-[10px] font-bold text-gray-500 uppercase tracking-widest mb-2">Location <span className="text-red-500">*</span></label>
+                                    <select
+                                        value={selectedLocation}
+                                        onChange={(e) => setSelectedLocation(e.target.value)}
+                                        className="w-full bg-black/40 border border-white/10 rounded-xl px-4 py-3 text-sm focus:outline-none focus:border-white/30 text-white transition-colors cursor-pointer appearance-none"
+                                        required
+                                    >
+                                        <option value="" disabled>Select Warehouse...</option>
+                                        {WAREHOUSES.map(w => (
+                                            <option key={w} value={w}>{w}</option>
+                                        ))}
+                                    </select>
+                                </div>
+                            )}
 
                             {/* Ref Doc */}
                             <div>
-                                <label className="block text-[10px] font-bold text-gray-500 uppercase tracking-widest mb-2">Reference Document (Optional)</label>
+                                <label className="block text-[10px] font-bold text-gray-500 uppercase tracking-widest mb-2">
+                                    {isTransfer ? 'Transfer Document / DO No. (Optional)' : 'Reference Document (Optional)'}
+                                </label>
                                 <input
                                     type="text"
                                     value={refDoc}
                                     onChange={e => setRefDoc(e.target.value)}
-                                    placeholder="e.g. PO-8890, DO-123, Transfer Slip"
+                                    placeholder={isTransfer ? "e.g. TRF-2026-081, DO-123" : "e.g. PO-8890, DO-123"}
                                     className="w-full bg-black/40 border border-white/10 rounded-xl px-4 py-3 text-sm focus:outline-none focus:border-white/30 text-white placeholder-gray-700 transition-colors"
                                 />
                             </div>
 
                             {/* Notes */}
                             <div>
-                                <label className="block text-[10px] font-bold text-gray-500 uppercase tracking-widest mb-2">Internal Notes (Optional)</label>
+                                <label className="block text-[10px] font-bold text-gray-500 uppercase tracking-widest mb-2">
+                                    {isTransfer ? 'Transfer Notes / Driver Info (Optional)' : 'Internal Notes (Optional)'}
+                                </label>
                                 <textarea
                                     value={notes}
                                     onChange={e => setNotes(e.target.value)}
                                     rows={3}
-                                    placeholder="Remarks, supplier info, reason for adjustment..."
+                                    placeholder={isTransfer ? "Vehicle plate, driver, reason for transfer..." : "Remarks, supplier info, reason for adjustment..."}
                                     className="w-full bg-black/40 border border-white/10 rounded-xl px-4 py-3 text-sm focus:outline-none focus:border-white/30 text-white placeholder-gray-700 resize-none transition-colors"
                                 />
                             </div>
@@ -706,7 +896,9 @@ const StockMovement: React.FC<{ user?: any }> = ({ user }) => {
                                     ? 'bg-white/5 text-gray-500 cursor-not-allowed'
                                     : isIn
                                         ? 'bg-green-600 hover:bg-green-500 text-white shadow-xl shadow-green-900/30 hover:shadow-green-900/50 hover:-translate-y-0.5'
-                                        : 'bg-orange-600 hover:bg-orange-500 text-white shadow-xl shadow-orange-900/30 hover:shadow-orange-900/50 hover:-translate-y-0.5'
+                                        : isOut
+                                            ? 'bg-orange-600 hover:bg-orange-500 text-white shadow-xl shadow-orange-900/30 hover:shadow-orange-900/50 hover:-translate-y-0.5'
+                                            : 'bg-indigo-600 hover:bg-indigo-500 text-white shadow-xl shadow-indigo-900/30 hover:shadow-indigo-900/50 hover:-translate-y-0.5'
                                     }`}
                             >
                                 {loading ? (
@@ -717,7 +909,7 @@ const StockMovement: React.FC<{ user?: any }> = ({ user }) => {
                                 ) : (
                                     <>
                                         <Check size={18} />
-                                        SUBMIT {cart.length} ITEMS
+                                        {isTransfer ? `TRANSFER ${cart.length} ITEMS` : `SUBMIT ${cart.length} ITEMS`}
                                     </>
                                 )}
                             </button>
@@ -748,17 +940,40 @@ const StockMovement: React.FC<{ user?: any }> = ({ user }) => {
                                         <div className="space-y-1">
                                             {rows.map(row => {
                                                 const isPositive = row.change_qty > 0;
+                                                const isTransferEvent = row.event_type.startsWith('Transfer');
                                                 const photoUrl = extractPhotoUrl(row.notes, row.ref_doc);
+
                                                 return (
                                                     <div key={row.txn_id} className="px-4 py-3 rounded-xl hover:bg-white/5 transition-colors flex items-start gap-3">
-                                                        <div className={`mt-1.5 w-2 h-2 rounded-full shrink-0 ${isPositive ? 'bg-green-500' : 'bg-orange-500'}`} />
+                                                        <div className={`mt-1.5 w-2 h-2 rounded-full shrink-0 ${
+                                                            isTransferEvent
+                                                                ? 'bg-indigo-400'
+                                                                : isPositive ? 'bg-green-500' : 'bg-orange-500'
+                                                        }`} />
                                                         <div className="flex-1 min-w-0">
                                                             <div className="flex justify-between items-start mb-0.5 gap-2">
                                                                 <div className="flex flex-col flex-1 min-w-0">
                                                                     <span className="font-bold text-white text-sm truncate" title={getItemName(row.sku)}>{getItemName(row.sku)}</span>
-                                                                    <span className="text-[10px] text-gray-500 font-mono truncate">{row.sku}</span>
+                                                                    <div className="flex items-center gap-2 mt-0.5">
+                                                                        <span className="text-[10px] text-gray-500 font-mono truncate">{row.sku}</span>
+                                                                        {row.loc_id && (
+                                                                            <span className="text-[9px] px-1.5 py-0.2 rounded bg-white/5 text-gray-400 font-mono">
+                                                                                {row.loc_id}
+                                                                            </span>
+                                                                        )}
+                                                                        <span className={`text-[9px] px-1.5 py-0.2 rounded font-bold uppercase ${
+                                                                            row.event_type === 'Stock In' ? 'bg-green-500/10 text-green-400' :
+                                                                            row.event_type === 'Stock Out' ? 'bg-orange-500/10 text-orange-400' :
+                                                                            row.event_type === 'Transfer In' ? 'bg-cyan-500/10 text-cyan-400' :
+                                                                            'bg-indigo-500/10 text-indigo-400'
+                                                                        }`}>
+                                                                            {row.event_type}
+                                                                        </span>
+                                                                    </div>
                                                                 </div>
-                                                                <span className={`font-black font-mono text-sm shrink-0 ${isPositive ? 'text-green-400' : 'text-orange-400'}`}>
+                                                                <span className={`font-black font-mono text-sm shrink-0 ${
+                                                                    isPositive ? 'text-green-400' : 'text-orange-400'
+                                                                }`}>
                                                                     {isPositive ? '+' : ''}{row.change_qty.toLocaleString()}
                                                                 </span>
                                                             </div>
@@ -854,7 +1069,7 @@ const StockMovement: React.FC<{ user?: any }> = ({ user }) => {
                                     </button>
                                 </div>
 
-                                {/* Form Fields: RefDoc, Location, Notes */}
+                                {/* Form Fields: RefDoc, Locations, Notes */}
                                 <div className="md:col-span-8 grid grid-cols-1 sm:grid-cols-2 gap-4">
                                     <div>
                                         <label className="block text-[10px] font-bold text-gray-400 uppercase tracking-wider mb-1">
@@ -864,26 +1079,61 @@ const StockMovement: React.FC<{ user?: any }> = ({ user }) => {
                                             type="text"
                                             value={scannedRefDoc}
                                             onChange={e => setScannedRefDoc(e.target.value)}
-                                            placeholder="e.g. DO-99881"
+                                            placeholder="e.g. DO-99881, TRF-01"
                                             className="w-full bg-[#16161c] border border-white/10 focus:border-pink-500/50 rounded-xl px-3 py-2 text-sm text-white focus:outline-none"
                                         />
                                     </div>
 
-                                    <div>
-                                        <label className="block text-[10px] font-bold text-gray-400 uppercase tracking-wider mb-1">
-                                            Warehouse Location
-                                        </label>
-                                        <select
-                                            value={scannedLocation}
-                                            onChange={e => setScannedLocation(e.target.value)}
-                                            className="w-full bg-[#16161c] border border-white/10 focus:border-pink-500/50 rounded-xl px-3 py-2 text-sm text-white focus:outline-none cursor-pointer"
-                                        >
-                                            <option value="">Select Location...</option>
-                                            {WAREHOUSES.map(w => (
-                                                <option key={w} value={w}>{w}</option>
-                                            ))}
-                                        </select>
-                                    </div>
+                                    {isTransfer ? (
+                                        <div className="grid grid-cols-2 gap-2">
+                                            <div>
+                                                <label className="block text-[10px] font-bold text-orange-400 uppercase tracking-wider mb-1">
+                                                    From Warehouse
+                                                </label>
+                                                <select
+                                                    value={scannedFromLocation}
+                                                    onChange={e => setScannedFromLocation(e.target.value)}
+                                                    className="w-full bg-[#16161c] border border-white/10 focus:border-pink-500/50 rounded-xl px-2 py-2 text-xs text-white focus:outline-none cursor-pointer"
+                                                >
+                                                    <option value="">Select From...</option>
+                                                    {WAREHOUSES.map(w => (
+                                                        <option key={w} value={w}>{w}</option>
+                                                    ))}
+                                                </select>
+                                            </div>
+                                            <div>
+                                                <label className="block text-[10px] font-bold text-green-400 uppercase tracking-wider mb-1">
+                                                    To Warehouse
+                                                </label>
+                                                <select
+                                                    value={scannedToLocation}
+                                                    onChange={e => setScannedToLocation(e.target.value)}
+                                                    className="w-full bg-[#16161c] border border-white/10 focus:border-pink-500/50 rounded-xl px-2 py-2 text-xs text-white focus:outline-none cursor-pointer"
+                                                >
+                                                    <option value="">Select To...</option>
+                                                    {WAREHOUSES.map(w => (
+                                                        <option key={w} value={w}>{w}</option>
+                                                    ))}
+                                                </select>
+                                            </div>
+                                        </div>
+                                    ) : (
+                                        <div>
+                                            <label className="block text-[10px] font-bold text-gray-400 uppercase tracking-wider mb-1">
+                                                Warehouse Location
+                                            </label>
+                                            <select
+                                                value={scannedLocation}
+                                                onChange={e => setScannedLocation(e.target.value)}
+                                                className="w-full bg-[#16161c] border border-white/10 focus:border-pink-500/50 rounded-xl px-3 py-2 text-sm text-white focus:outline-none cursor-pointer"
+                                            >
+                                                <option value="">Select Location...</option>
+                                                {WAREHOUSES.map(w => (
+                                                    <option key={w} value={w}>{w}</option>
+                                                ))}
+                                            </select>
+                                        </div>
+                                    )}
 
                                     <div className="sm:col-span-2">
                                         <label className="block text-[10px] font-bold text-gray-400 uppercase tracking-wider mb-1">

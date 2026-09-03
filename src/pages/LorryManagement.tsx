@@ -1,7 +1,13 @@
 
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useMemo } from 'react';
 import { supabase } from '../services/supabase';
-import { Truck, Plus, Trash2, Edit2, Search, User, MapPin, QrCode as QrIcon, Printer, X, AlertTriangle, Check, FileText, Image as ImageIcon, FileSpreadsheet, LayoutGrid, Table as TableIcon, ChevronLeft, ChevronRight } from 'lucide-react';
+import { 
+    Truck, Plus, Trash2, Edit2, Search, User, MapPin, QrCode as QrIcon, 
+    Printer, X, AlertTriangle, Check, FileText, Image as ImageIcon, 
+    FileSpreadsheet, LayoutGrid, Table as TableIcon, ChevronLeft, ChevronRight,
+    Calendar, ArrowRight, TrendingUp, RefreshCw, Eye, Copy, 
+    CheckCircle2, AlertCircle, Info, ExternalLink, Filter, SlidersHorizontal
+} from 'lucide-react';
 import QRCode from 'react-qr-code';
 import * as XLSX from 'xlsx';
 import { useTranslation } from 'react-i18next';
@@ -14,8 +20,35 @@ const LorryManagement: React.FC = () => {
     const [searchTerm, setSearchTerm] = useState('');
     const [viewMode, setViewMode] = useState<'grid' | 'table'>('grid');
 
+    // Current Date Defaults
+    const now = new Date();
+    const currentRealMonth = now.getMonth() + 1;
+    const currentRealYear = now.getFullYear();
+
+    // Tabs: 'fleet' (车队列表) | 'monthly-odoo' (全月里程追踪) | 'mileage' (日志与预警)
+    const [activeTab, setActiveTab] = useState<'fleet' | 'monthly-odoo' | 'mileage'>('fleet');
+
+    // Monthly Odometer Tracker State
+    const [selectedOdoMonth, setSelectedOdoMonth] = useState<number>(currentRealMonth);
+    const [selectedOdoYear, setSelectedOdoYear] = useState<number>(currentRealYear);
+    const [monthlyLogs, setMonthlyLogs] = useState<any[]>([]);
+    const [loadingMonthly, setLoadingMonthly] = useState(false);
+    const [monthlySearchTerm, setMonthlySearchTerm] = useState('');
+    const [monthlyFilterStatus, setMonthlyFilterStatus] = useState<'all' | 'active' | 'no-logs' | 'discrepancy'>('all');
+    const [copySuccess, setCopySuccess] = useState(false);
+
+    // Timeline & Calibration Modals
+    const [timelineModalLorry, setTimelineModalLorry] = useState<any | null>(null);
+    const [calibrationModalLorry, setCalibrationModalLorry] = useState<any | null>(null);
+    const [calibrationData, setCalibrationData] = useState({
+        mileage: '',
+        log_type: 'start' as 'start' | 'end',
+        date: `${currentRealYear}-${String(currentRealMonth).padStart(2, '0')}-01T08:00`,
+        notes: ''
+    });
+    const [isSavingCalibration, setIsSavingCalibration] = useState(false);
+
     // Odometer Logs & Alerts State
-    const [activeTab, setActiveTab] = useState<'fleet' | 'mileage'>('fleet');
     const [mileageLogs, setMileageLogs] = useState<any[]>([]);
     const [mileageAlerts, setMileageAlerts] = useState<any[]>([]);
     const [resolvingAlertId, setResolvingAlertId] = useState<string | null>(null);
@@ -38,9 +71,6 @@ const LorryManagement: React.FC = () => {
 
     // Monthly Odometer Summary Modal State
     const [isMonthlyOdoModalOpen, setIsMonthlyOdoModalOpen] = useState(false);
-    const [selectedOdoMonth, setSelectedOdoMonth] = useState<number>(7); // Default July or current month
-    const [selectedOdoYear, setSelectedOdoYear] = useState<number>(2026);
-    const [copySuccess, setCopySuccess] = useState(false);
 
     // Modal State
     const [isModalOpen, setIsModalOpen] = useState(false);
@@ -129,58 +159,213 @@ const LorryManagement: React.FC = () => {
         XLSX.writeFile(wb, fileName);
     };
 
+    const normalizePlate = (plate: string) => (plate || '').replace(/\s+/g, '').toUpperCase();
+
+    // Fetch monthly logs specifically for the selected month/year without 1000 limit truncations
+    const fetchMonthlyLogs = async (year: number, month: number) => {
+        setLoadingMonthly(true);
+        try {
+            // Precise local month boundary (handles UTC+8 local time without cross-month overlap)
+            const startDate = new Date(year, month - 1, 1, 0, 0, 0, 0);
+            const endDate = new Date(year, month, 0, 23, 59, 59, 999);
+            const startStr = startDate.toISOString();
+            const endStr = endDate.toISOString();
+
+            const { data, error } = await supabase
+                .from('lorry_mileage_logs')
+                .select('*, lorries(id, plate_number, driver_name), driver:driver_id(name, email)')
+                .gte('created_at', startStr)
+                .lte('created_at', endStr)
+                .order('created_at', { ascending: true });
+
+            if (error) throw error;
+            setMonthlyLogs(data || []);
+        } catch (err) {
+            console.error("Error fetching monthly logs:", err);
+        } finally {
+            setLoadingMonthly(false);
+        }
+    };
+
+    useEffect(() => {
+        fetchMonthlyLogs(selectedOdoYear, selectedOdoMonth);
+    }, [selectedOdoYear, selectedOdoMonth]);
+
+    const defaultPlates = [
+        "ANW 9821", "ANX 9821", "APD 9821", "APH 9821", "BSQ 9821", 
+        "DFK 9821", "JYH 9821", "KGG 9821", "NEH 9821", "PETRA 9821", 
+        "RAU 9821", "RBC 9821", "TDE 9821", "VPC 9821"
+    ];
+
+    const monthlySummaries = useMemo(() => {
+        const plateMap = new Map<string, any>();
+
+        lorries.forEach(l => {
+            const norm = normalizePlate(l.plate_number);
+            if (norm) {
+                plateMap.set(norm, {
+                    id: l.id,
+                    plate_number: l.plate_number,
+                    driver_name: l.driver_name,
+                    preferred_zone: l.preferred_zone || 'Not Specified',
+                    status: l.status || 'Available',
+                    max_volume_m3: l.max_volume_m3,
+                    max_weight_kg: l.max_weight_kg
+                });
+            }
+        });
+
+        defaultPlates.forEach(p => {
+            const norm = normalizePlate(p);
+            if (!plateMap.has(norm)) {
+                plateMap.set(norm, {
+                    id: null,
+                    plate_number: p,
+                    driver_name: null,
+                    preferred_zone: 'Not Specified',
+                    status: 'Available',
+                    max_volume_m3: 36.8098,
+                    max_weight_kg: 3000
+                });
+            }
+        });
+
+        const list = Array.from(plateMap.values()).map(l => {
+            const norm = normalizePlate(l.plate_number);
+            const pLogs = monthlyLogs.filter(log => {
+                const logPlate = normalizePlate(log.lorries?.plate_number || '');
+                const directMatch = l.id && log.lorry_id === l.id;
+                return directMatch || (logPlate && logPlate === norm);
+            });
+
+            pLogs.sort((a, b) => new Date(a.created_at).getTime() - new Date(b.created_at).getTime());
+
+            const startLog = pLogs.length > 0 ? pLogs[0] : null;
+            const endLog = pLogs.length > 0 ? pLogs[pLogs.length - 1] : null;
+
+            const startMileage = startLog ? (startLog.mileage != null ? Number(startLog.mileage) : (startLog.mileage_km != null ? Number(startLog.mileage_km) : null)) : null;
+            const endMileage = endLog ? (endLog.mileage != null ? Number(endLog.mileage) : (endLog.mileage_km != null ? Number(endLog.mileage_km) : null)) : null;
+
+            const diff = (startMileage !== null && endMileage !== null) ? (endMileage - startMileage) : null;
+            const isDiscrepancy = diff !== null && diff < 0;
+
+            const activeDriver = endLog?.driver?.name || endLog?.driver?.email || startLog?.driver?.name || startLog?.driver?.email || l.driver_name || '未分配';
+
+            return {
+                ...l,
+                normalizedPlate: norm,
+                logs: pLogs,
+                logCount: pLogs.length,
+                startLog: startLog ? {
+                    ...startLog,
+                    mileage: startMileage,
+                    timeFormatted: new Date(startLog.created_at).toLocaleString('zh-CN', { month: '2-digit', day: '2-digit', hour: '2-digit', minute: '2-digit', hour12: false }),
+                    driverName: startLog.driver?.name || startLog.driver?.email || 'N/A'
+                } : null,
+                endLog: endLog ? {
+                    ...endLog,
+                    mileage: endMileage,
+                    timeFormatted: new Date(endLog.created_at).toLocaleString('zh-CN', { month: '2-digit', day: '2-digit', hour: '2-digit', minute: '2-digit', hour12: false }),
+                    driverName: endLog.driver?.name || endLog.driver?.email || 'N/A'
+                } : null,
+                diff,
+                isDiscrepancy,
+                activeDriver
+            };
+        });
+
+        list.sort((a, b) => a.plate_number.localeCompare(b.plate_number));
+        return list;
+    }, [lorries, monthlyLogs]);
+
+    const totalTrackedLorries = monthlySummaries.length;
+    const activeLorriesCount = monthlySummaries.filter(s => s.logCount > 0).length;
+    const totalNetDistance = monthlySummaries.reduce((sum, s) => (s.diff !== null && s.diff > 0 ? sum + s.diff : sum), 0);
+    const discrepanciesCount = monthlySummaries.filter(s => s.isDiscrepancy).length;
+
+    const filteredMonthlySummaries = useMemo(() => {
+        return monthlySummaries.filter(item => {
+            const matchesSearch = 
+                item.plate_number.toLowerCase().includes(monthlySearchTerm.toLowerCase()) ||
+                item.activeDriver.toLowerCase().includes(monthlySearchTerm.toLowerCase());
+            
+            if (!matchesSearch) return false;
+
+            if (monthlyFilterStatus === 'active') return item.logCount > 0;
+            if (monthlyFilterStatus === 'no-logs') return item.logCount === 0;
+            if (monthlyFilterStatus === 'discrepancy') return item.isDiscrepancy;
+            return true;
+        });
+    }, [monthlySummaries, monthlySearchTerm, monthlyFilterStatus]);
+
+    const handleSaveCalibration = async (e: React.FormEvent) => {
+        e.preventDefault();
+        if (!calibrationModalLorry) return;
+        const mileageNum = parseInt(calibrationData.mileage, 10);
+        if (isNaN(mileageNum) || mileageNum < 0) {
+            alert("请输入有效的里程读数 (公里数)！");
+            return;
+        }
+
+        setIsSavingCalibration(true);
+        try {
+            const { data: { user: authUser } } = await supabase.auth.getUser();
+            const targetLorryId = calibrationModalLorry.id || lorries.find(l => normalizePlate(l.plate_number) === calibrationModalLorry.normalizedPlate)?.id;
+            
+            if (!targetLorryId) {
+                alert("未找到该车辆数据库ID，请先确保车辆已保存在系统中！");
+                setIsSavingCalibration(false);
+                return;
+            }
+
+            const { error } = await supabase
+                .from('lorry_mileage_logs')
+                .insert({
+                    lorry_id: targetLorryId,
+                    driver_id: authUser?.id || targetLorryId,
+                    mileage: mileageNum,
+                    photo_url: '',
+                    log_type: calibrationData.log_type,
+                    created_at: new Date(calibrationData.date).toISOString()
+                });
+
+            if (error) throw error;
+
+            alert("✅ 里程校准/补录成功！");
+            setCalibrationModalLorry(null);
+            fetchMonthlyLogs(selectedOdoYear, selectedOdoMonth);
+            fetchData();
+        } catch (err: any) {
+            alert("校准失败: " + err.message);
+        } finally {
+            setIsSavingCalibration(false);
+        }
+    };
+
     const handleGenerateMonthlyOdometerReport = () => {
         const lastDayObj = new Date(selectedOdoYear, selectedOdoMonth, 0);
         const lastDay = lastDayObj.getDate();
 
-        const firstDayStr = `${selectedOdoYear}-${String(selectedOdoMonth).padStart(2, '0')}-01`;
-        const lastDayStr = `${selectedOdoYear}-${String(selectedOdoMonth).padStart(2, '0')}-${String(lastDay).padStart(2, '0')}`;
+        const summaryRows = monthlySummaries.map(s => {
+            const startStr = s.startLog?.mileage != null ? s.startLog.mileage : '_____';
+            const endStr = s.endLog?.mileage != null ? s.endLog.mileage : '_____';
+            const diffStr = s.diff != null ? s.diff : '-';
+            const formattedSummary = `${s.plate_number}: 1/${selectedOdoMonth} ODO ${startStr} , ${lastDay}/${selectedOdoMonth} ODO ${endStr}`;
 
-        const defaultPlates = [
-            "ANW9821", "ANX9821", "APD9821", "APH9821", "BSQ9821", 
-            "DFK9821", "JYH9821", "KGG9821", "NEH9821", "PETRA9821", 
-            "RAU9821", "RBC9821", "TDE9821", "VPC9821"
-        ];
-
-        const allDbPlates = lorries.map(l => (l.plate_number || '').trim().toUpperCase()).filter(Boolean);
-        const mergedPlates = Array.from(new Set([...defaultPlates, ...allDbPlates])).sort();
-
-        const monthLogs = mileageLogs.filter(log => {
-            const logDate = log.created_at.split('T')[0];
-            return logDate >= firstDayStr && logDate <= lastDayStr;
-        });
-
-        const summaryRows: any[] = [];
-        const textLines: string[] = [];
-
-        mergedPlates.forEach(plate => {
-            const plateLogs = monthLogs.filter(log => {
-                const logPlate = (log.lorries?.plate_number || '').trim().toUpperCase();
-                return logPlate === plate;
-            });
-
-            plateLogs.sort((a, b) => new Date(a.created_at).getTime() - new Date(b.created_at).getTime());
-
-            const startLog = plateLogs.length > 0 ? (plateLogs[0].mileage != null ? plateLogs[0].mileage : plateLogs[0].mileage_km) : null;
-            const endLog = plateLogs.length > 0 ? (plateLogs[plateLogs.length - 1].mileage != null ? plateLogs[plateLogs.length - 1].mileage : plateLogs[plateLogs.length - 1].mileage_km) : null;
-
-            const startStr = startLog != null ? String(startLog) : '________';
-            const endStr = endLog != null ? String(endLog) : '________';
-
-            const distanceTraveled = (startLog != null && endLog != null && Number(endLog) >= Number(startLog)) 
-                ? (Number(endLog) - Number(startLog)) 
-                : '-';
-
-            const formattedSummary = `${plate}: 1/${selectedOdoMonth} ODO ${startStr} , ${lastDay}/${selectedOdoMonth} ODO ${endStr}`;
-            textLines.push(formattedSummary);
-
-            summaryRows.push({
-                'No. Plate Lori / Lorry Plate': plate,
-                [`1/${selectedOdoMonth} ODO (Awal Bulan / Start)`]: startLog != null ? startLog : '_____',
-                [`${lastDay}/${selectedOdoMonth} ODO (Akhir Bulan / End)`]: endLog != null ? endLog : '_____',
-                'Jumlah Jarak / Distance (KM)': distanceTraveled,
+            return {
+                'No. Plate Lori / Lorry Plate': s.plate_number,
+                'Pemandu / Driver': s.activeDriver,
+                [`1/${selectedOdoMonth} ODO (Awal Bulan / Start KM)`]: startStr,
+                'Tarikh & Masa Mula / Start Time': s.startLog?.timeFormatted || 'N/A',
+                [`${lastDay}/${selectedOdoMonth} ODO (Akhir Bulan / End KM)`]: endStr,
+                'Tarikh & Masa Tamat / End Time': s.endLog?.timeFormatted || 'N/A',
+                'Jumlah Jarak / Net Distance (KM)': diffStr,
+                'Bilangan Log / Total Logs': s.logCount,
+                'Status': s.logCount === 0 ? 'Tiada Rekod' : (s.isDiscrepancy ? 'Amaran Tidak Konsisten' : 'Lengkap'),
+                'Gambar Mula / Start Photo': s.startLog?.photo_url || '',
+                'Gambar Tamat / End Photo': s.endLog?.photo_url || '',
                 'Format Ringkasan Teks': formattedSummary
-            });
+            };
         });
 
         const ws = XLSX.utils.json_to_sheet(summaryRows);
@@ -189,13 +374,20 @@ const LorryManagement: React.FC = () => {
 
         ws['!cols'] = [
             { wch: 18 },
+            { wch: 20 },
+            { wch: 24 },
             { wch: 22 },
+            { wch: 24 },
             { wch: 22 },
             { wch: 20 },
+            { wch: 16 },
+            { wch: 20 },
+            { wch: 35 },
+            { wch: 35 },
             { wch: 45 }
         ];
 
-        const fileName = `Ringkasan_Odometer_Bulanan_${selectedOdoYear}_Bulan_${String(selectedOdoMonth).padStart(2, '0')}.xlsx`;
+        const fileName = `Laporan_Odometer_Bulanan_${selectedOdoYear}_Bulan_${String(selectedOdoMonth).padStart(2, '0')}.xlsx`;
         XLSX.writeFile(wb, fileName);
     };
 
@@ -203,38 +395,22 @@ const LorryManagement: React.FC = () => {
         const lastDayObj = new Date(selectedOdoYear, selectedOdoMonth, 0);
         const lastDay = lastDayObj.getDate();
 
-        const firstDayStr = `${selectedOdoYear}-${String(selectedOdoMonth).padStart(2, '0')}-01`;
-        const lastDayStr = `${selectedOdoYear}-${String(selectedOdoMonth).padStart(2, '0')}-${String(lastDay).padStart(2, '0')}`;
-
-        const defaultPlates = [
-            "ANW9821", "ANX9821", "APD9821", "APH9821", "BSQ9821", 
-            "DFK9821", "JYH9821", "KGG9821", "NEH9821", "PETRA9821", 
-            "RAU9821", "RBC9821", "TDE9821", "VPC9821"
+        const lines = [
+            `【${selectedOdoYear}年${selectedOdoMonth}月 车队罗里起止里程汇报 / LORRY FLEET ODOMETER REPORT】`,
+            `统计区间: 1/${selectedOdoMonth}/${selectedOdoYear} ~ ${lastDay}/${selectedOdoMonth}/${selectedOdoYear}`,
+            `--------------------------------------------------`
         ];
 
-        const allDbPlates = lorries.map(l => (l.plate_number || '').trim().toUpperCase()).filter(Boolean);
-        const mergedPlates = Array.from(new Set([...defaultPlates, ...allDbPlates])).sort();
-
-        const monthLogs = mileageLogs.filter(log => {
-            const logDate = log.created_at.split('T')[0];
-            return logDate >= firstDayStr && logDate <= lastDayStr;
+        monthlySummaries.forEach(s => {
+            const startStr = s.startLog?.mileage != null ? Number(s.startLog.mileage).toLocaleString() : '________';
+            const endStr = s.endLog?.mileage != null ? Number(s.endLog.mileage).toLocaleString() : '________';
+            const diffStr = s.diff != null ? (s.diff >= 0 ? `+${s.diff.toLocaleString()} km` : `${s.diff.toLocaleString()} km ⚠️`) : '—';
+            lines.push(`${s.plate_number}: 1/${selectedOdoMonth} ODO ${startStr} , ${lastDay}/${selectedOdoMonth} ODO ${endStr} (${diffStr})`);
         });
 
-        return mergedPlates.map(plate => {
-            const plateLogs = monthLogs.filter(log => {
-                const logPlate = (log.lorries?.plate_number || '').trim().toUpperCase();
-                return logPlate === plate;
-            });
-            plateLogs.sort((a, b) => new Date(a.created_at).getTime() - new Date(b.created_at).getTime());
-
-            const startLog = plateLogs.length > 0 ? (plateLogs[0].mileage != null ? plateLogs[0].mileage : plateLogs[0].mileage_km) : null;
-            const endLog = plateLogs.length > 0 ? (plateLogs[plateLogs.length - 1].mileage != null ? plateLogs[plateLogs.length - 1].mileage : plateLogs[plateLogs.length - 1].mileage_km) : null;
-
-            const startStr = startLog != null ? String(startLog) : '________';
-            const endStr = endLog != null ? String(endLog) : '________';
-
-            return `${plate}: 1/${selectedOdoMonth} ODO ${startStr} , ${lastDay}/${selectedOdoMonth} ODO ${endStr}`;
-        }).join('\n');
+        lines.push(`--------------------------------------------------`);
+        lines.push(`车队全月累计净行驶: ${totalNetDistance.toLocaleString()} KM (打卡车辆: ${activeLorriesCount}/${totalTrackedLorries} 辆)`);
+        return lines.join('\n');
     };
 
     const handleResolveAlert = async (alertId: string) => {
@@ -346,17 +522,21 @@ const LorryManagement: React.FC = () => {
                         {t('货车车队管理')}
                     </h1>
                     <p className="text-slate-400 mt-1 uppercase text-[10px] font-bold tracking-[0.15em]">
-                        {t('管理车队车辆、分配司机与里程日志')}
+                        {t('管理车队车辆、分配司机与全月里程日志')}
                     </p>
                 </div>
                 <div className="grid grid-cols-2 sm:flex items-center gap-2 sm:gap-3 w-full lg:w-auto">
                     <button
-                        onClick={() => setIsMonthlyOdoModalOpen(true)}
-                        className="bg-indigo-600 hover:bg-indigo-500 active:scale-95 text-white px-2.5 py-2.5 sm:px-5 sm:py-3 rounded-xl sm:rounded-2xl font-black uppercase text-[11px] sm:text-xs tracking-wider transition-all flex items-center justify-center gap-1.5 shadow-lg shadow-indigo-950/40 min-h-[44px]"
-                        title={t('月度总结')}
+                        onClick={() => setActiveTab('monthly-odoo')}
+                        className={`px-2.5 py-2.5 sm:px-5 sm:py-3 rounded-xl sm:rounded-2xl font-black uppercase text-[11px] sm:text-xs tracking-wider transition-all flex items-center justify-center gap-1.5 shadow-lg min-h-[44px] ${
+                            activeTab === 'monthly-odoo' 
+                                ? 'bg-blue-600 text-white shadow-blue-900/40' 
+                                : 'bg-indigo-600 hover:bg-indigo-500 active:scale-95 text-white shadow-indigo-950/40'
+                        }`}
+                        title={t('全月里程追踪')}
                     >
-                        <FileText size={16} className="shrink-0" />
-                        <span className="truncate">{t('月度总结')}</span>
+                        <Calendar size={16} className="shrink-0" />
+                        <span className="truncate">{t('全月里程追踪')}</span>
                     </button>
                     <button
                         onClick={handleExportExcel}
@@ -389,6 +569,25 @@ const LorryManagement: React.FC = () => {
                     {activeTab === 'fleet' && <span className="absolute bottom-0 left-0 right-0 h-0.5 bg-blue-500 rounded-full" />}
                 </button>
                 <button
+                    onClick={() => setActiveTab('monthly-odoo')}
+                    className={`pb-4 px-2 font-black uppercase text-xs tracking-widest transition-all relative shrink-0 ${activeTab === 'monthly-odoo' ? 'text-blue-500' : 'text-slate-500 hover:text-slate-300'}`}
+                >
+                    <div className="flex items-center gap-2">
+                        <Calendar size={14} />
+                        {t('全月里程追踪 (Start/End ODO)')}
+                        {discrepanciesCount > 0 ? (
+                            <span className="bg-red-500 text-white text-[9px] font-black px-2 py-0.5 rounded-full animate-pulse">
+                                {discrepanciesCount} 异常
+                            </span>
+                        ) : activeLorriesCount > 0 ? (
+                            <span className="bg-blue-500/20 text-blue-400 text-[9px] font-black px-2 py-0.5 rounded-full">
+                                {activeLorriesCount}/{totalTrackedLorries}
+                            </span>
+                        ) : null}
+                    </div>
+                    {activeTab === 'monthly-odoo' && <span className="absolute bottom-0 left-0 right-0 h-0.5 bg-blue-500 rounded-full" />}
+                </button>
+                <button
                     onClick={() => setActiveTab('mileage')}
                     className={`pb-4 px-2 font-black uppercase text-xs tracking-widest transition-all relative shrink-0 ${activeTab === 'mileage' ? 'text-blue-500' : 'text-slate-500 hover:text-slate-300'}`}
                 >
@@ -405,7 +604,7 @@ const LorryManagement: React.FC = () => {
                 </button>
             </div>
 
-            {activeTab === 'fleet' ? (
+            {activeTab === 'fleet' && (
                 <>
                     {/* Filters & View Toggle */}
                     <div className="flex flex-col sm:flex-row items-stretch sm:items-center justify-between gap-3 mb-6">
@@ -466,6 +665,7 @@ const LorryManagement: React.FC = () => {
                                             <th className="px-6 py-4">{t('Main driver / Driver')}</th>
                                             <th className="px-6 py-4">{t('Departure area/Zone')}</th>
                                             <th className="px-6 py-4">{t('Status / Status')}</th>
+                                            <th className="px-6 py-4 text-center">{t('本月里程 (Start → End)')}</th>
                                             <th className="px-6 py-4 text-right">{t('Maximum volume / Vol (m³)')}</th>
                                             <th className="px-6 py-4 text-right">{t('Maximum load / Weight (kg)')}</th>
                                             <th className="px-6 py-4 text-center">{t('Actions')}</th>
@@ -503,6 +703,37 @@ const LorryManagement: React.FC = () => {
                                                     }`}>
                                                         {lorry.status}
                                                     </span>
+                                                </td>
+                                                <td className="px-6 py-4 whitespace-nowrap text-center">
+                                                    {(() => {
+                                                        const summary = monthlySummaries.find(s => s.normalizedPlate === normalizePlate(lorry.plate_number));
+                                                        if (!summary || summary.logCount === 0) {
+                                                            return <span className="text-slate-600 text-xs font-mono">—</span>;
+                                                        }
+                                                        return (
+                                                            <div className="inline-flex flex-col items-center">
+                                                                <div className="flex items-center gap-1.5 font-mono text-xs font-bold text-slate-200">
+                                                                    <span>{summary.startLog ? `${summary.startLog.mileage.toLocaleString()} km` : '—'}</span>
+                                                                    <ArrowRight size={12} className="text-slate-500" />
+                                                                    <span>{summary.endLog ? `${summary.endLog.mileage.toLocaleString()} km` : '—'}</span>
+                                                                </div>
+                                                                <div className="flex items-center gap-1 text-[10px] mt-0.5">
+                                                                    <span className={`font-mono font-black ${summary.diff != null ? (summary.diff >= 0 ? 'text-emerald-400' : 'text-red-400') : 'text-slate-500'}`}>
+                                                                        {summary.diff != null ? `${summary.diff >= 0 ? '+' : ''}${summary.diff.toLocaleString()} km` : ''}
+                                                                    </span>
+                                                                    <button 
+                                                                        onClick={() => {
+                                                                            setMonthlySearchTerm(lorry.plate_number);
+                                                                            setActiveTab('monthly-odoo');
+                                                                        }}
+                                                                        className="text-[9px] text-blue-400 hover:underline ml-1"
+                                                                    >
+                                                                        详情 →
+                                                                    </button>
+                                                                </div>
+                                                            </div>
+                                                        );
+                                                    })()}
                                                 </td>
                                                 <td className="px-6 py-4 whitespace-nowrap text-right font-mono font-bold text-blue-400">
                                                     {lorry.max_volume_m3 != null ? Number(lorry.max_volume_m3).toFixed(2) : '36.81'} m³
@@ -602,6 +833,40 @@ const LorryManagement: React.FC = () => {
                                         </div>
                                     </div>
 
+                                    {/* Monthly Odometer Summary Box */}
+                                    {(() => {
+                                        const summary = monthlySummaries.find(s => s.normalizedPlate === normalizePlate(lorry.plate_number));
+                                        return (
+                                            <div className="bg-slate-950/70 p-3.5 rounded-2xl border border-slate-800/80 mb-6">
+                                                <div className="flex items-center justify-between text-[10px] font-black uppercase tracking-widest text-slate-500 mb-1.5">
+                                                    <span className="flex items-center gap-1">
+                                                        <Calendar size={12} className="text-blue-400" />
+                                                        {selectedOdoMonth}月里程概况
+                                                    </span>
+                                                    {summary && summary.logCount > 0 ? (
+                                                        <span className="bg-blue-500/10 text-blue-400 border border-blue-500/20 px-1.5 py-0.5 rounded text-[9px] font-bold">
+                                                            {summary.logCount} 次打卡
+                                                        </span>
+                                                    ) : (
+                                                        <span className="text-slate-600 text-[9px]">本月未打卡</span>
+                                                    )}
+                                                </div>
+                                                <div className="flex items-center justify-between">
+                                                    <div className="font-mono text-xs font-bold text-slate-300">
+                                                        <span>{summary?.startLog ? `${summary.startLog.mileage.toLocaleString()} km` : '—'}</span>
+                                                        <span className="text-slate-600 mx-1.5">→</span>
+                                                        <span>{summary?.endLog ? `${summary.endLog.mileage.toLocaleString()} km` : '—'}</span>
+                                                    </div>
+                                                    <div className="text-right">
+                                                        <span className={`text-xs font-mono font-black block ${summary?.diff != null ? (summary.diff >= 0 ? 'text-emerald-400' : 'text-red-400') : 'text-slate-600'}`}>
+                                                            {summary?.diff != null ? `${summary.diff >= 0 ? '+' : ''}${summary.diff.toLocaleString()} km` : '—'}
+                                                        </span>
+                                                    </div>
+                                                </div>
+                                            </div>
+                                        );
+                                    })()}
+
                                     <div className="flex gap-2">
                                         <button
                                             onClick={() => handleOpenModal(lorry)}
@@ -628,7 +893,442 @@ const LorryManagement: React.FC = () => {
                         </div>
                     )}
                 </>
-            ) : (
+            )}
+
+            {/* TAB 2: MONTHLY ODOMETER TRACKER */}
+            {activeTab === 'monthly-odoo' && (
+                <div className="space-y-6 animate-in fade-in-50 duration-200">
+                    {/* Month Selector & Action Bar */}
+                    <div className="bg-slate-900/80 border border-slate-800 rounded-3xl p-4 sm:p-6 shadow-xl flex flex-col xl:flex-row items-stretch xl:items-center justify-between gap-4">
+                        <div className="flex flex-wrap items-center gap-3">
+                            <div className="flex items-center gap-2 bg-slate-950 px-3.5 py-2 rounded-2xl border border-slate-800">
+                                <Calendar size={18} className="text-blue-500" />
+                                <select
+                                    value={selectedOdoYear}
+                                    onChange={(e) => setSelectedOdoYear(Number(e.target.value))}
+                                    className="bg-transparent text-white font-black text-sm outline-none cursor-pointer"
+                                >
+                                    {[2025, 2026, 2027].map(y => (
+                                        <option key={y} value={y} className="bg-slate-900">{y}年</option>
+                                    ))}
+                                </select>
+                                <span className="text-slate-600">/</span>
+                                <select
+                                    value={selectedOdoMonth}
+                                    onChange={(e) => setSelectedOdoMonth(Number(e.target.value))}
+                                    className="bg-transparent text-white font-black text-sm outline-none cursor-pointer"
+                                >
+                                    {[1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12].map(m => (
+                                        <option key={m} value={m} className="bg-slate-900">{m}月 ({new Date(2026, m - 1, 1).toLocaleString('zh-CN', { month: 'short' })})</option>
+                                    ))}
+                                </select>
+                            </div>
+
+                            {/* Quick jump pills */}
+                            <div className="flex items-center gap-1.5 overflow-x-auto py-1">
+                                <button
+                                    onClick={() => {
+                                        setSelectedOdoYear(currentRealYear);
+                                        setSelectedOdoMonth(currentRealMonth);
+                                    }}
+                                    className={`px-3 py-1.5 rounded-xl text-xs font-black uppercase tracking-wider transition-all ${
+                                        selectedOdoYear === currentRealYear && selectedOdoMonth === currentRealMonth
+                                            ? 'bg-blue-600 text-white shadow-md shadow-blue-900/30'
+                                            : 'bg-slate-950 text-slate-400 hover:text-white border border-slate-800'
+                                    }`}
+                                >
+                                    本月 ({currentRealMonth}月)
+                                </button>
+                                {currentRealMonth > 1 && (
+                                    <button
+                                        onClick={() => {
+                                            setSelectedOdoYear(currentRealYear);
+                                            setSelectedOdoMonth(currentRealMonth - 1);
+                                        }}
+                                        className={`px-3 py-1.5 rounded-xl text-xs font-black uppercase tracking-wider transition-all ${
+                                            selectedOdoYear === currentRealYear && selectedOdoMonth === currentRealMonth - 1
+                                                ? 'bg-blue-600 text-white shadow-md shadow-blue-900/30'
+                                                : 'bg-slate-950 text-slate-400 hover:text-white border border-slate-800'
+                                        }`}
+                                    >
+                                        上月 ({currentRealMonth - 1}月)
+                                    </button>
+                                )}
+                                <button
+                                    onClick={() => {
+                                        setSelectedOdoYear(2026);
+                                        setSelectedOdoMonth(8);
+                                    }}
+                                    className={`px-3 py-1.5 rounded-xl text-xs font-black uppercase tracking-wider transition-all ${
+                                        selectedOdoYear === 2026 && selectedOdoMonth === 8
+                                            ? 'bg-blue-600 text-white shadow-md shadow-blue-900/30'
+                                            : 'bg-slate-950 text-slate-400 hover:text-white border border-slate-800'
+                                    }`}
+                                >
+                                    8月 (完整历史)
+                                </button>
+                                <button
+                                    onClick={() => fetchMonthlyLogs(selectedOdoYear, selectedOdoMonth)}
+                                    className="p-2 bg-slate-950 hover:bg-slate-800 text-slate-400 hover:text-slate-200 rounded-xl border border-slate-800 transition-all ml-1"
+                                    title="刷新当月数据"
+                                >
+                                    <RefreshCw size={14} className={loadingMonthly ? 'animate-spin text-blue-400' : ''} />
+                                </button>
+                            </div>
+
+                            <div className="text-[11px] font-bold text-slate-400 hidden lg:block bg-slate-950/60 px-3 py-2 rounded-xl border border-slate-800/60">
+                                统计区间: <span className="text-slate-200">{selectedOdoYear}-0{selectedOdoMonth}-01</span> 至 <span className="text-slate-200">{selectedOdoYear}-0{selectedOdoMonth}-{new Date(selectedOdoYear, selectedOdoMonth, 0).getDate()}</span> (共 {new Date(selectedOdoYear, selectedOdoMonth, 0).getDate()} 天)
+                            </div>
+                        </div>
+
+                        {/* Right Action Buttons */}
+                        <div className="flex items-center gap-2.5">
+                            <button
+                                onClick={() => {
+                                    navigator.clipboard.writeText(getFormattedSummaryText());
+                                    setCopySuccess(true);
+                                    setTimeout(() => setCopySuccess(false), 2500);
+                                }}
+                                className="flex-1 sm:flex-none py-2.5 px-4 bg-slate-800 hover:bg-slate-700 active:scale-95 text-white rounded-xl font-black text-xs uppercase tracking-wider flex items-center justify-center gap-2 transition-all border border-slate-700/60 shadow-md min-h-[42px]"
+                            >
+                                <Copy size={15} className="text-indigo-400" />
+                                <span>{copySuccess ? '✓ 已复制汇报文本' : '复制汇报文本'}</span>
+                            </button>
+                            <button
+                                onClick={handleGenerateMonthlyOdometerReport}
+                                className="flex-1 sm:flex-none py-2.5 px-4 bg-emerald-600 hover:bg-emerald-500 active:scale-95 text-white rounded-xl font-black text-xs uppercase tracking-wider flex items-center justify-center gap-2 transition-all shadow-lg shadow-emerald-950/40 min-h-[42px]"
+                            >
+                                <FileSpreadsheet size={16} />
+                                <span>下载月度表格 (.xlsx)</span>
+                            </button>
+                        </div>
+                    </div>
+
+                    {/* 4 KPI Summary Cards */}
+                    <div className="grid grid-cols-2 lg:grid-cols-4 gap-4">
+                        <div className="bg-slate-900 border border-slate-800 rounded-3xl p-5 relative overflow-hidden">
+                            <div className="flex items-center justify-between mb-3">
+                                <span className="text-[10px] font-black uppercase tracking-widest text-slate-500">车队车辆总数</span>
+                                <div className="p-2 bg-blue-500/10 rounded-xl text-blue-400"><Truck size={16} /></div>
+                            </div>
+                            <div className="text-2xl sm:text-3xl font-black text-white font-mono">{totalTrackedLorries} <span className="text-xs font-sans text-slate-400">辆</span></div>
+                            <div className="text-[11px] font-bold text-slate-400 mt-1 flex items-center gap-1">
+                                <span className="text-emerald-400 font-bold">{activeLorriesCount}</span> 辆本月已有打卡记录
+                            </div>
+                        </div>
+
+                        <div className="bg-slate-900 border border-slate-800 rounded-3xl p-5 relative overflow-hidden">
+                            <div className="flex items-center justify-between mb-3">
+                                <span className="text-[10px] font-black uppercase tracking-widest text-slate-500">全月车队净行驶</span>
+                                <div className="p-2 bg-emerald-500/10 rounded-xl text-emerald-400"><TrendingUp size={16} /></div>
+                            </div>
+                            <div className="text-2xl sm:text-3xl font-black text-emerald-400 font-mono">
+                                {totalNetDistance > 0 ? `+${totalNetDistance.toLocaleString()}` : totalNetDistance.toLocaleString()} <span className="text-xs font-sans text-slate-400">KM</span>
+                            </div>
+                            <div className="text-[11px] font-bold text-slate-400 mt-1">
+                                平均每车 {activeLorriesCount > 0 ? Math.round(totalNetDistance / activeLorriesCount).toLocaleString() : 0} KM
+                            </div>
+                        </div>
+
+                        <div className="bg-slate-900 border border-slate-800 rounded-3xl p-5 relative overflow-hidden">
+                            <div className="flex items-center justify-between mb-3">
+                                <span className="text-[10px] font-black uppercase tracking-widest text-slate-500">当月打卡总次数</span>
+                                <div className="p-2 bg-indigo-500/10 rounded-xl text-indigo-400"><FileText size={16} /></div>
+                            </div>
+                            <div className="text-2xl sm:text-3xl font-black text-white font-mono">{monthlyLogs.length} <span className="text-xs font-sans text-slate-400">次</span></div>
+                            <div className="text-[11px] font-bold text-slate-400 mt-1">
+                                包含上班起步与下班交车
+                            </div>
+                        </div>
+
+                        <div className="bg-slate-900 border border-slate-800 rounded-3xl p-5 relative overflow-hidden">
+                            <div className="flex items-center justify-between mb-3">
+                                <span className="text-[10px] font-black uppercase tracking-widest text-slate-500">读数异常车次</span>
+                                <div className={`p-2 rounded-xl ${discrepanciesCount > 0 ? 'bg-red-500/10 text-red-400' : 'bg-emerald-500/10 text-emerald-400'}`}>
+                                    <AlertTriangle size={16} />
+                                </div>
+                            </div>
+                            <div className={`text-2xl sm:text-3xl font-black font-mono ${discrepanciesCount > 0 ? 'text-red-400' : 'text-emerald-400'}`}>
+                                {discrepanciesCount} <span className="text-xs font-sans text-slate-400">辆</span>
+                            </div>
+                            <div className="text-[11px] font-bold text-slate-400 mt-1">
+                                {discrepanciesCount > 0 ? '⚠️ 存在结束读数小于起步读数' : '✅ 全部读数正常递增'}
+                            </div>
+                        </div>
+                    </div>
+
+                    {/* Filter & Search Bar */}
+                    <div className="flex flex-col sm:flex-row items-stretch sm:items-center justify-between gap-3">
+                        <div className="relative flex-1 max-w-md">
+                            <Search className="absolute left-4 top-1/2 -translate-y-1/2 text-slate-500" size={18} />
+                            <input
+                                type="text"
+                                placeholder="搜索车牌号 (例如 ANW 9821) 或司机姓名..."
+                                className="w-full bg-slate-900/70 border border-slate-800 rounded-2xl py-3 pl-12 pr-4 text-xs sm:text-sm focus:border-blue-500 outline-none transition-all text-white placeholder-slate-500"
+                                value={monthlySearchTerm}
+                                onChange={(e) => setMonthlySearchTerm(e.target.value)}
+                            />
+                        </div>
+
+                        <div className="flex items-center gap-1.5 bg-slate-900 border border-slate-800 p-1.5 rounded-2xl overflow-x-auto shrink-0">
+                            <button
+                                onClick={() => setMonthlyFilterStatus('all')}
+                                className={`px-3 py-1.5 rounded-xl text-xs font-bold transition-all ${
+                                    monthlyFilterStatus === 'all' ? 'bg-blue-600 text-white shadow' : 'text-slate-400 hover:text-slate-200'
+                                }`}
+                            >
+                                全部 ({monthlySummaries.length})
+                            </button>
+                            <button
+                                onClick={() => setMonthlyFilterStatus('active')}
+                                className={`px-3 py-1.5 rounded-xl text-xs font-bold transition-all ${
+                                    monthlyFilterStatus === 'active' ? 'bg-blue-600 text-white shadow' : 'text-slate-400 hover:text-slate-200'
+                                }`}
+                            >
+                                有记录 ({activeLorriesCount})
+                            </button>
+                            <button
+                                onClick={() => setMonthlyFilterStatus('no-logs')}
+                                className={`px-3 py-1.5 rounded-xl text-xs font-bold transition-all ${
+                                    monthlyFilterStatus === 'no-logs' ? 'bg-blue-600 text-white shadow' : 'text-slate-400 hover:text-slate-200'
+                                }`}
+                            >
+                                无记录 ({totalTrackedLorries - activeLorriesCount})
+                            </button>
+                            {discrepanciesCount > 0 && (
+                                <button
+                                    onClick={() => setMonthlyFilterStatus('discrepancy')}
+                                    className={`px-3 py-1.5 rounded-xl text-xs font-bold transition-all ${
+                                        monthlyFilterStatus === 'discrepancy' ? 'bg-red-600 text-white shadow' : 'text-red-400 hover:text-red-300'
+                                    }`}
+                                >
+                                    异常 ({discrepanciesCount})
+                                </button>
+                            )}
+                        </div>
+                    </div>
+
+                    {/* Main Monthly Odometer Table */}
+                    <div className="bg-slate-900 border border-slate-800 rounded-[28px] overflow-hidden shadow-2xl">
+                        {loadingMonthly ? (
+                            <div className="text-center py-24 text-slate-500 font-bold uppercase tracking-widest animate-pulse flex flex-col items-center gap-3">
+                                <RefreshCw size={24} className="animate-spin text-blue-500" />
+                                正在拉取 {selectedOdoYear}年{selectedOdoMonth}月 完整里程日志...
+                            </div>
+                        ) : filteredMonthlySummaries.length === 0 ? (
+                            <div className="text-center py-20 text-slate-500 font-bold text-sm tracking-wide">
+                                未找到匹配的罗里里程数据
+                            </div>
+                        ) : (
+                            <div className="overflow-x-auto">
+                                <table className="w-full text-sm text-left align-middle text-slate-300">
+                                    <thead className="text-[10px] text-slate-400 uppercase bg-slate-950 border-b border-slate-800 font-black tracking-widest">
+                                        <tr>
+                                            <th className="px-6 py-4">罗里车牌 (Lorry Plate)</th>
+                                            <th className="px-6 py-4">主司机 (Driver)</th>
+                                            <th className="px-6 py-4">🟢 月初起步里程 (Start ODO)</th>
+                                            <th className="px-6 py-4">🔴 月末/最新里程 (End ODO)</th>
+                                            <th className="px-6 py-4 text-center">🛣️ 全月净行驶 (Net KM)</th>
+                                            <th className="px-6 py-4 text-center">打卡次数</th>
+                                            <th className="px-6 py-4 text-center">数据状态</th>
+                                            <th className="px-6 py-4 text-center">操作</th>
+                                        </tr>
+                                    </thead>
+                                    <tbody className="divide-y divide-slate-800/50">
+                                        {filteredMonthlySummaries.map((s) => (
+                                            <tr key={s.normalizedPlate} className="hover:bg-slate-950/40 transition-colors">
+                                                {/* Plate */}
+                                                <td className="px-6 py-4 whitespace-nowrap">
+                                                    <div className="flex items-center gap-3">
+                                                        <div className="w-10 h-10 bg-slate-950 rounded-xl border border-slate-800 flex items-center justify-center text-blue-400 shrink-0">
+                                                            <Truck size={20} />
+                                                        </div>
+                                                        <div>
+                                                            <span className="text-base font-black text-white uppercase tracking-tight block">
+                                                                {s.plate_number}
+                                                            </span>
+                                                            <div className="flex items-center gap-1.5 text-[10px] text-slate-500 mt-0.5">
+                                                                <span className="bg-slate-950 px-1.5 py-0.5 rounded border border-slate-800">{s.preferred_zone}</span>
+                                                                <span className={`px-1.5 py-0.5 rounded font-bold ${
+                                                                    s.status === 'Available' ? 'text-emerald-400' :
+                                                                    s.status === 'On-Route' ? 'text-blue-400' : 'text-amber-400'
+                                                                }`}>
+                                                                    {s.status}
+                                                                </span>
+                                                            </div>
+                                                        </div>
+                                                    </div>
+                                                </td>
+
+                                                {/* Driver */}
+                                                <td className="px-6 py-4 whitespace-nowrap">
+                                                    <div className="flex items-center gap-2">
+                                                        <div className="w-7 h-7 rounded-full bg-slate-800 flex items-center justify-center text-slate-400 shrink-0">
+                                                            <User size={13} />
+                                                        </div>
+                                                        <span className="font-bold text-slate-200 text-xs sm:text-sm">
+                                                            {s.activeDriver}
+                                                        </span>
+                                                    </div>
+                                                </td>
+
+                                                {/* Start ODO */}
+                                                <td className="px-6 py-4 whitespace-nowrap">
+                                                    {s.startLog ? (
+                                                        <div className="flex items-center gap-3">
+                                                            {s.startLog.photo_url ? (
+                                                                <div
+                                                                    onClick={() => setPreviewImageUrl(s.startLog.photo_url)}
+                                                                    className="relative w-12 h-10 rounded-lg overflow-hidden bg-slate-950 border border-slate-800 cursor-zoom-in group shrink-0"
+                                                                    title="点击查看打卡仪表盘照片"
+                                                                >
+                                                                    <img src={s.startLog.photo_url} loading="lazy" className="w-full h-full object-cover group-hover:scale-110 transition-all" alt="Start ODO" />
+                                                                    <div className="absolute inset-0 bg-black/40 opacity-0 group-hover:opacity-100 transition-all flex items-center justify-center text-white">
+                                                                        <Eye size={12} />
+                                                                    </div>
+                                                                </div>
+                                                            ) : (
+                                                                <div className="w-12 h-10 rounded-lg bg-slate-950/60 border border-slate-800/60 flex items-center justify-center text-slate-600 shrink-0">
+                                                                    <ImageIcon size={14} />
+                                                                </div>
+                                                            )}
+                                                            <div>
+                                                                <span className="text-base font-black text-emerald-400 font-mono tracking-tight block">
+                                                                    {s.startLog.mileage.toLocaleString()} <span className="text-[10px] text-slate-500 font-sans font-normal">km</span>
+                                                                </span>
+                                                                <span className="text-[10px] text-slate-400 font-semibold block mt-0.5">
+                                                                    {s.startLog.timeFormatted} ({s.startLog.driverName})
+                                                                </span>
+                                                            </div>
+                                                        </div>
+                                                    ) : (
+                                                        <span className="text-slate-600 font-mono font-bold">—</span>
+                                                    )}
+                                                </td>
+
+                                                {/* End ODO */}
+                                                <td className="px-6 py-4 whitespace-nowrap">
+                                                    {s.endLog ? (
+                                                        <div className="flex items-center gap-3">
+                                                            {s.endLog.photo_url ? (
+                                                                <div
+                                                                    onClick={() => setPreviewImageUrl(s.endLog.photo_url)}
+                                                                    className="relative w-12 h-10 rounded-lg overflow-hidden bg-slate-950 border border-slate-800 cursor-zoom-in group shrink-0"
+                                                                    title="点击查看打卡仪表盘照片"
+                                                                >
+                                                                    <img src={s.endLog.photo_url} loading="lazy" className="w-full h-full object-cover group-hover:scale-110 transition-all" alt="End ODO" />
+                                                                    <div className="absolute inset-0 bg-black/40 opacity-0 group-hover:opacity-100 transition-all flex items-center justify-center text-white">
+                                                                        <Eye size={12} />
+                                                                    </div>
+                                                                </div>
+                                                            ) : (
+                                                                <div className="w-12 h-10 rounded-lg bg-slate-950/60 border border-slate-800/60 flex items-center justify-center text-slate-600 shrink-0">
+                                                                    <ImageIcon size={14} />
+                                                                </div>
+                                                            )}
+                                                            <div>
+                                                                <span className="text-base font-black text-blue-400 font-mono tracking-tight block">
+                                                                    {s.endLog.mileage.toLocaleString()} <span className="text-[10px] text-slate-500 font-sans font-normal">km</span>
+                                                                </span>
+                                                                <span className="text-[10px] text-slate-400 font-semibold block mt-0.5">
+                                                                    {s.endLog.timeFormatted} ({s.endLog.driverName})
+                                                                </span>
+                                                            </div>
+                                                        </div>
+                                                    ) : (
+                                                        <span className="text-slate-600 font-mono font-bold">—</span>
+                                                    )}
+                                                </td>
+
+                                                {/* Net Distance */}
+                                                <td className="px-6 py-4 whitespace-nowrap text-center">
+                                                    {s.diff !== null ? (
+                                                        s.isDiscrepancy ? (
+                                                            <div className="inline-flex items-center gap-1 bg-red-500/10 border border-red-500/20 text-red-400 px-2.5 py-1 rounded-xl text-xs font-black font-mono">
+                                                                <AlertTriangle size={13} />
+                                                                {s.diff.toLocaleString()} km
+                                                            </div>
+                                                        ) : (
+                                                            <span className="text-base font-black text-white font-mono">
+                                                                +{s.diff.toLocaleString()} <span className="text-[10px] text-slate-500 font-sans font-normal">km</span>
+                                                            </span>
+                                                        )
+                                                    ) : (
+                                                        <span className="text-slate-600 font-mono font-bold">—</span>
+                                                    )}
+                                                </td>
+
+                                                {/* Logs Count */}
+                                                <td className="px-6 py-4 whitespace-nowrap text-center">
+                                                    <span className={`inline-flex items-center px-2 py-0.5 rounded-lg text-xs font-mono font-bold ${
+                                                        s.logCount > 0 ? 'bg-slate-800 text-slate-200 border border-slate-700' : 'text-slate-600'
+                                                    }`}>
+                                                        {s.logCount} 次
+                                                    </span>
+                                                </td>
+
+                                                {/* Status Badge */}
+                                                <td className="px-6 py-4 whitespace-nowrap text-center">
+                                                    {s.logCount === 0 ? (
+                                                        <span className="inline-flex items-center px-2.5 py-1 rounded-lg text-[10px] font-black uppercase tracking-wider bg-slate-800/60 text-slate-500 border border-slate-800">
+                                                            无记录
+                                                        </span>
+                                                    ) : s.isDiscrepancy ? (
+                                                        <span className="inline-flex items-center gap-1 px-2.5 py-1 rounded-lg text-[10px] font-black uppercase tracking-wider bg-red-500/10 text-red-400 border border-red-500/20">
+                                                            <AlertTriangle size={11} /> 读数异常
+                                                        </span>
+                                                    ) : selectedOdoMonth === currentRealMonth ? (
+                                                        <span className="inline-flex items-center px-2.5 py-1 rounded-lg text-[10px] font-black uppercase tracking-wider bg-blue-500/10 text-blue-400 border border-blue-500/20">
+                                                            运行中
+                                                        </span>
+                                                    ) : (
+                                                        <span className="inline-flex items-center gap-1 px-2.5 py-1 rounded-lg text-[10px] font-black uppercase tracking-wider bg-emerald-500/10 text-emerald-400 border border-emerald-500/20">
+                                                            <CheckCircle2 size={11} /> 已完成
+                                                        </span>
+                                                    )}
+                                                </td>
+
+                                                {/* Actions */}
+                                                <td className="px-6 py-4 whitespace-nowrap text-center">
+                                                    <div className="flex items-center justify-center gap-1.5">
+                                                        <button
+                                                            onClick={() => setTimelineModalLorry(s)}
+                                                            className="p-2 bg-slate-800 hover:bg-slate-700 text-slate-200 rounded-xl transition-all font-bold text-xs flex items-center gap-1"
+                                                            title="查看该车当月全部打卡流水"
+                                                        >
+                                                            <Eye size={13} />
+                                                            <span className="hidden xl:inline">流水</span>
+                                                        </button>
+                                                        <button
+                                                            onClick={() => {
+                                                                setCalibrationModalLorry(s);
+                                                                setCalibrationData({
+                                                                    mileage: s.endLog?.mileage ? String(s.endLog.mileage) : '',
+                                                                    log_type: 'end',
+                                                                    date: `${selectedOdoYear}-${String(selectedOdoMonth).padStart(2, '0')}-${String(new Date(selectedOdoYear, selectedOdoMonth, 0).getDate()).padStart(2, '0')}T18:00`,
+                                                                    notes: '管理员校准里程'
+                                                                });
+                                                            }}
+                                                            className="p-2 bg-blue-500/10 hover:bg-blue-500/20 text-blue-400 rounded-xl transition-all font-bold text-xs flex items-center gap-1 border border-blue-500/20"
+                                                            title="校准/补录起止里程"
+                                                        >
+                                                            <SlidersHorizontal size={13} />
+                                                            <span className="hidden xl:inline">校准</span>
+                                                        </button>
+                                                    </div>
+                                                </td>
+                                            </tr>
+                                        ))}
+                                    </tbody>
+                                </table>
+                            </div>
+                        )}
+                    </div>
+                </div>
+            )}
+
+            {/* TAB 3: MILEAGE ALERTS & LOGS */}
+            {activeTab === 'mileage' && (
                 <div className="space-y-6">
                     {/* Mobile Sub-tabs switch */}
                     <div className="flex lg:hidden gap-2 bg-slate-900 border border-slate-800 p-1.5 rounded-2xl">
@@ -994,6 +1694,200 @@ const LorryManagement: React.FC = () => {
                 </div>
             </div>
         )}
+
+            {/* TIMELINE DRILLDOWN MODAL */}
+            {timelineModalLorry && (
+                <div className="fixed inset-0 z-[110] flex items-center justify-center p-4">
+                    <div className="absolute inset-0 bg-black/80 backdrop-blur-sm" onClick={() => setTimelineModalLorry(null)} />
+                    <div className="relative bg-slate-900 border border-slate-800 w-full max-w-3xl rounded-[32px] p-6 sm:p-8 shadow-2xl flex flex-col max-h-[85vh] animate-in zoom-in-95 duration-200 text-slate-200">
+                        <div className="flex justify-between items-center pb-4 border-b border-slate-800 mb-4">
+                            <div className="flex items-center gap-3">
+                                <div className="p-3 bg-blue-500/10 rounded-2xl text-blue-400">
+                                    <Truck size={24} />
+                                </div>
+                                <div>
+                                    <div className="flex items-center gap-2">
+                                        <h2 className="text-xl font-black text-white uppercase tracking-tight">{timelineModalLorry.plate_number}</h2>
+                                        <span className="bg-slate-800 text-slate-400 text-[10px] font-bold px-2 py-0.5 rounded-full">
+                                            {selectedOdoYear}年{selectedOdoMonth}月打卡明细
+                                        </span>
+                                    </div>
+                                    <p className="text-xs text-slate-400 font-medium mt-0.5">
+                                        共计 {timelineModalLorry.logs.length} 条打卡记录 (月初起步: {timelineModalLorry.startLog ? `${timelineModalLorry.startLog.mileage.toLocaleString()} km` : '无'} → 月末/最新: {timelineModalLorry.endLog ? `${timelineModalLorry.endLog.mileage.toLocaleString()} km` : '无'})
+                                    </p>
+                                </div>
+                            </div>
+                            <button 
+                                onClick={() => setTimelineModalLorry(null)}
+                                className="p-2.5 bg-slate-800 hover:bg-slate-700 text-slate-400 rounded-xl transition-all"
+                            >
+                                <X size={18} />
+                            </button>
+                        </div>
+
+                        {/* Logs timeline list */}
+                        <div className="flex-1 overflow-y-auto space-y-3 pr-1 custom-scrollbar">
+                            {timelineModalLorry.logs.length === 0 ? (
+                                <div className="text-center py-16 text-slate-500 font-bold text-xs uppercase tracking-widest">
+                                    该车辆在 {selectedOdoYear}年{selectedOdoMonth}月 尚无任何里程打卡记录
+                                </div>
+                            ) : (
+                                timelineModalLorry.logs.map((item, idx) => (
+                                    <div key={item.id || idx} className="bg-slate-950/60 border border-slate-800/80 rounded-2xl p-4 flex items-center justify-between gap-4">
+                                        <div className="flex items-center gap-3">
+                                            <span className={`px-2.5 py-1 rounded-xl text-[10px] font-black uppercase tracking-wider shrink-0 ${
+                                                item.log_type === 'start'
+                                                    ? 'bg-emerald-500/10 text-emerald-400 border border-emerald-500/20'
+                                                    : 'bg-blue-500/10 text-blue-400 border border-blue-500/20'
+                                            }`}>
+                                                {item.log_type === 'start' ? '🟢 上班起步' : '🔴 下班交车'}
+                                            </span>
+                                            <div>
+                                                <div className="text-base font-black text-white font-mono">
+                                                    {(item.mileage != null ? Number(item.mileage) : (item.mileage_km != null ? Number(item.mileage_km) : 0)).toLocaleString()} <span className="text-xs font-sans text-slate-500">km</span>
+                                                </div>
+                                                <div className="text-[11px] text-slate-400 font-medium flex items-center gap-2 mt-0.5">
+                                                    <span>{new Date(item.created_at).toLocaleString('zh-CN')}</span>
+                                                    <span>•</span>
+                                                    <span>司机: {item.driver?.name || item.driver?.email || '未记录'}</span>
+                                                </div>
+                                            </div>
+                                        </div>
+                                        {item.photo_url && (
+                                            <button
+                                                onClick={() => setPreviewImageUrl(item.photo_url)}
+                                                className="relative w-14 h-12 rounded-xl overflow-hidden bg-slate-900 border border-slate-800 cursor-zoom-in group shrink-0"
+                                                title="放大查看照片"
+                                            >
+                                                <img src={item.photo_url} loading="lazy" className="w-full h-full object-cover group-hover:scale-110 transition-all" alt="Odometer" />
+                                                <div className="absolute inset-0 bg-black/40 opacity-0 group-hover:opacity-100 transition-all flex items-center justify-center text-white">
+                                                    <Eye size={14} />
+                                                </div>
+                                            </button>
+                                        )}
+                                    </div>
+                                ))
+                            )}
+                        </div>
+
+                        <div className="pt-4 border-t border-slate-800 flex justify-end">
+                            <button
+                                onClick={() => setTimelineModalLorry(null)}
+                                className="px-6 py-2.5 bg-slate-800 hover:bg-slate-700 text-slate-200 rounded-xl font-bold text-xs uppercase tracking-wider transition-all"
+                            >
+                                关闭
+                            </button>
+                        </div>
+                    </div>
+                </div>
+            )}
+
+            {/* CALIBRATION / MANUAL OVERRIDE MODAL */}
+            {calibrationModalLorry && (
+                <div className="fixed inset-0 z-[120] flex items-center justify-center p-4">
+                    <div className="absolute inset-0 bg-black/80 backdrop-blur-sm" onClick={() => setCalibrationModalLorry(null)} />
+                    <div className="relative bg-slate-900 border border-slate-800 w-full max-w-md rounded-[32px] p-6 sm:p-8 shadow-2xl flex flex-col animate-in zoom-in-95 duration-200 text-slate-200">
+                        <div className="flex justify-between items-center pb-4 border-b border-slate-800 mb-6">
+                            <div className="flex items-center gap-3">
+                                <div className="p-3 bg-blue-500/10 rounded-2xl text-blue-400">
+                                    <SlidersHorizontal size={22} />
+                                </div>
+                                <div>
+                                    <h2 className="text-lg font-black text-white uppercase tracking-tight">校准/补录里程</h2>
+                                    <p className="text-xs text-slate-400 font-bold">{calibrationModalLorry.plate_number}</p>
+                                </div>
+                            </div>
+                            <button 
+                                onClick={() => setCalibrationModalLorry(null)}
+                                className="p-2 bg-slate-800 hover:bg-slate-700 text-slate-400 rounded-xl transition-all"
+                            >
+                                <X size={18} />
+                            </button>
+                        </div>
+
+                        <form onSubmit={handleSaveCalibration} className="space-y-4">
+                            <div>
+                                <label className="block text-[11px] font-black text-slate-400 uppercase tracking-wider mb-1.5">打卡类型 (Log Type)</label>
+                                <div className="grid grid-cols-2 gap-2">
+                                    <button
+                                        type="button"
+                                        onClick={() => setCalibrationData({ ...calibrationData, log_type: 'start' })}
+                                        className={`py-2.5 px-3 rounded-xl font-black text-xs transition-all ${
+                                            calibrationData.log_type === 'start'
+                                                ? 'bg-emerald-600 text-white shadow-md'
+                                                : 'bg-slate-950 text-slate-400 border border-slate-800'
+                                        }`}
+                                    >
+                                        🟢 月初起步打卡 (Start)
+                                    </button>
+                                    <button
+                                        type="button"
+                                        onClick={() => setCalibrationData({ ...calibrationData, log_type: 'end' })}
+                                        className={`py-2.5 px-3 rounded-xl font-black text-xs transition-all ${
+                                            calibrationData.log_type === 'end'
+                                                ? 'bg-blue-600 text-white shadow-md'
+                                                : 'bg-slate-950 text-slate-400 border border-slate-800'
+                                        }`}
+                                    >
+                                        🔴 月末结束打卡 (End)
+                                    </button>
+                                </div>
+                            </div>
+
+                            <div>
+                                <label className="block text-[11px] font-black text-slate-400 uppercase tracking-wider mb-1.5">里程仪表读数 (KM)</label>
+                                <input
+                                    required
+                                    type="number"
+                                    placeholder="例如 84286"
+                                    value={calibrationData.mileage}
+                                    onChange={(e) => setCalibrationData({ ...calibrationData, mileage: e.target.value })}
+                                    className="w-full bg-slate-950 border border-slate-800 rounded-xl p-3.5 text-white font-mono font-bold text-base focus:border-blue-500 outline-none"
+                                />
+                            </div>
+
+                            <div>
+                                <label className="block text-[11px] font-black text-slate-400 uppercase tracking-wider mb-1.5">记录时间 (Timestamp)</label>
+                                <input
+                                    required
+                                    type="datetime-local"
+                                    value={calibrationData.date}
+                                    onChange={(e) => setCalibrationData({ ...calibrationData, date: e.target.value })}
+                                    className="w-full bg-slate-950 border border-slate-800 rounded-xl p-3 text-white font-bold text-xs focus:border-blue-500 outline-none"
+                                />
+                            </div>
+
+                            <div>
+                                <label className="block text-[11px] font-black text-slate-400 uppercase tracking-wider mb-1.5">校准说明/备注</label>
+                                <input
+                                    type="text"
+                                    placeholder="例如：修正司机误录数字 / 月初补录"
+                                    value={calibrationData.notes}
+                                    onChange={(e) => setCalibrationData({ ...calibrationData, notes: e.target.value })}
+                                    className="w-full bg-slate-950 border border-slate-800 rounded-xl p-3 text-white text-xs focus:border-blue-500 outline-none"
+                                />
+                            </div>
+
+                            <div className="flex gap-3 pt-4">
+                                <button
+                                    type="button"
+                                    onClick={() => setCalibrationModalLorry(null)}
+                                    className="flex-1 py-3 bg-slate-800 hover:bg-slate-700 text-slate-400 rounded-xl font-bold text-xs uppercase tracking-wider transition-all"
+                                >
+                                    取消
+                                </button>
+                                <button
+                                    type="submit"
+                                    disabled={isSavingCalibration}
+                                    className="flex-1 py-3 bg-blue-600 hover:bg-blue-500 disabled:bg-slate-800 text-white rounded-xl font-black text-xs uppercase tracking-wider transition-all shadow-lg shadow-blue-900/30"
+                                >
+                                    {isSavingCalibration ? '保存中...' : '确认保存'}
+                                </button>
+                            </div>
+                        </form>
+                    </div>
+                </div>
+            )}
 
             {/* Modal */}
             {isModalOpen && (
