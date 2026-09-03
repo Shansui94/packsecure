@@ -27,7 +27,10 @@ import {
     ArrowLeft,
     HelpCircle,
     Clock,
-    Activity
+    Activity,
+    Info,
+    X,
+    BookOpen
 } from 'lucide-react';
 
 interface Props {
@@ -107,6 +110,48 @@ const parseAuditActual = (auditRow: any): number => {
     return Number(auditRow.change_qty) || 0;
 };
 
+// Interactive Tooltip Component with Sleek Cyberpunk Styling
+const HoverExplainer: React.FC<{
+    title: string;
+    formula?: string;
+    description: string;
+    highlight?: string;
+    children: React.ReactNode;
+    position?: 'top' | 'bottom';
+}> = ({ title, formula, description, highlight, children, position = 'top' }) => {
+    return (
+        <div className="group relative cursor-help">
+            {children}
+            <div className={`pointer-events-none absolute z-50 left-1/2 -translate-x-1/2 opacity-0 group-hover:opacity-100 transition-all duration-200 ease-out transform group-hover:scale-100 scale-95 w-72 sm:w-80 p-3.5 rounded-2xl bg-gray-950/95 border border-purple-500/40 text-left shadow-2xl backdrop-blur-xl ${
+                position === 'top' ? 'bottom-full mb-2.5' : 'top-full mt-2.5'
+            }`}>
+                <div className="flex items-center gap-1.5 pb-1.5 border-b border-white/10 text-xs font-bold text-white">
+                    <Info size={13} className="text-purple-400 shrink-0" />
+                    <span>{title}</span>
+                </div>
+                <p className="text-[11px] text-gray-300 mt-2 leading-relaxed">
+                    {description}
+                </p>
+                {formula && (
+                    <div className="mt-2 p-1.5 rounded-lg bg-white/5 border border-white/10 font-mono text-[10px] text-cyan-300 leading-snug">
+                        {formula}
+                    </div>
+                )}
+                {highlight && (
+                    <div className="mt-1.5 text-[10px] text-amber-300/90 font-medium flex items-center gap-1">
+                        <span>💡</span>
+                        <span>{highlight}</span>
+                    </div>
+                )}
+                {/* Arrow Pointer */}
+                <div className={`absolute left-1/2 -translate-x-1/2 w-2.5 h-2.5 bg-gray-950 border-purple-500/40 rotate-45 ${
+                    position === 'top' ? 'top-full -mt-1.5 border-r border-b' : 'bottom-full -mb-1.5 border-l border-t'
+                }`}></div>
+            </div>
+        </div>
+    );
+};
+
 export const StockReconciliationDashboard: React.FC<Props> = ({
     initialSku = null,
     onBackToMatrix
@@ -119,6 +164,7 @@ export const StockReconciliationDashboard: React.FC<Props> = ({
     const [customEndDate, setCustomEndDate] = useState<string>('');
     const [searchQuery, setSearchQuery] = useState('');
     const [filterStatus, setFilterStatus] = useState<'all' | 'warning' | 'healthy'>('all');
+    const [showGuideModal, setShowGuideModal] = useState(false);
 
     // Raw datasets
     const [ledgerData, setLedgerData] = useState<any[]>([]);
@@ -480,13 +526,23 @@ export const StockReconciliationDashboard: React.FC<Props> = ({
                             </h2>
                         </div>
                         <p className="text-xs text-gray-400 mt-1">
-                            闭环审计历史盘点吻合率（98.07%），并无缝推演当前机台产出与发货实时动态
+                            闭环审计历史盘点吻合率（97.37%），并无缝推演当前机台产出与发货实时动态
                         </p>
                     </div>
                 </div>
 
-                {/* Warehouse Location Selector & Refresh */}
+                {/* Warehouse Location Selector, Guide & Refresh */}
                 <div className="flex items-center gap-2 flex-wrap">
+                    {/* Visual Guide Button */}
+                    <button
+                        type="button"
+                        onClick={() => setShowGuideModal(true)}
+                        className="px-3 py-2 bg-purple-600/30 hover:bg-purple-600/50 text-purple-200 rounded-2xl text-xs font-bold flex items-center gap-1.5 transition active:scale-95 cursor-pointer border border-purple-500/40 shadow-lg shadow-purple-950/40"
+                    >
+                        <BookOpen size={14} className="text-purple-300" />
+                        <span>💡 看板新手指南</span>
+                    </button>
+
                     <div className="flex items-center bg-black/40 border border-white/10 rounded-2xl p-1 text-xs">
                         <Building2 size={14} className="text-gray-400 ml-2 mr-1" />
                         <select
@@ -531,25 +587,42 @@ export const StockReconciliationDashboard: React.FC<Props> = ({
                     </span>
 
                     {[
-                        { key: 'CLOSED_AUDIT', label: '🏆 上期闭环审计 (8/18 ⇋ 8/29)', desc: 'Audit-to-Audit Closed Loop' },
-                        { key: 'AUDIT_TO_NOW', label: '⚡ 最新盘点至今动态推演', desc: 'Audit-to-Live Tracking' },
-                        { key: 'THIS_MONTH', label: `📅 本月至今 (${currentMonthLabel})`, desc: 'This Month' },
-                        { key: 'LAST_7D', label: '⏱️ 近 7 天', desc: 'Last 7 Days' },
-                        { key: 'LAST_30D', label: '📦 近 30 天', desc: 'Last 30 Days' },
-                        { key: 'CUSTOM', label: '⚙️ 自定义日期', desc: 'Custom Date' }
+                        { 
+                            key: 'CLOSED_AUDIT', 
+                            label: '🏆 上期闭环审计 (8/18 ⇋ 8/29)', 
+                            desc: '历史盘点真实考核成绩单', 
+                            tip: '核对 8/18 盘点到 8/29 盘点这 11 天机台生产、出货与实物盘点的真实吻合准确率（97.37%）'
+                        },
+                        { 
+                            key: 'AUDIT_TO_NOW', 
+                            label: '⚡ 最新盘点至今动态推演', 
+                            desc: '实时流水动态监控', 
+                            tip: '从 8/29 盘点实物底数(60)开始，推演至今天生产了多少、发了多少、实时应剩多少'
+                        },
+                        { key: 'THIS_MONTH', label: `📅 本月至今 (${currentMonthLabel})`, desc: '当月产销流水', tip: '从本月 1 号至今的累计进出' },
+                        { key: 'LAST_7D', label: '⏱️ 近 7 天', desc: '最近7日流水', tip: '近 7 天内的生产与发货汇总' },
+                        { key: 'LAST_30D', label: '📦 近 30 天', desc: '最近30日全貌', tip: '近 30 天内的总产出与出库' },
+                        { key: 'CUSTOM', label: '⚙️ 自定义日期', desc: '自定义起止日期', tip: '自由指定任意起始与截止日期' }
                     ].map(tab => (
-                        <button
+                        <HoverExplainer
                             key={tab.key}
-                            type="button"
-                            onClick={() => setDateMode(tab.key as any)}
-                            className={`px-3 py-1.5 rounded-xl text-xs font-bold transition active:scale-95 cursor-pointer border ${
-                                dateMode === tab.key
-                                    ? 'bg-purple-600 text-white border-purple-400 shadow-md shadow-purple-900/50 font-black'
-                                    : 'bg-white/5 border-white/10 text-gray-400 hover:text-white hover:bg-white/10'
-                            }`}
+                            title={tab.label}
+                            description={tab.tip}
+                            highlight={tab.desc}
+                            position="bottom"
                         >
-                            {tab.label}
-                        </button>
+                            <button
+                                type="button"
+                                onClick={() => setDateMode(tab.key as any)}
+                                className={`px-3 py-1.5 rounded-xl text-xs font-bold transition active:scale-95 cursor-pointer border ${
+                                    dateMode === tab.key
+                                        ? 'bg-purple-600 text-white border-purple-400 shadow-md shadow-purple-900/50 font-black'
+                                        : 'bg-white/5 border-white/10 text-gray-400 hover:text-white hover:bg-white/10'
+                                }`}
+                            >
+                                {tab.label}
+                            </button>
+                        </HoverExplainer>
                     ))}
                 </div>
 
@@ -573,12 +646,18 @@ export const StockReconciliationDashboard: React.FC<Props> = ({
 
                 {activeSummary && (
                     <div className="flex items-center gap-2 flex-wrap">
-                        <div className="text-[11px] font-mono text-cyan-400 bg-cyan-500/10 px-3 py-1.5 rounded-xl border border-cyan-500/20 flex items-center gap-2">
-                            <span>当前区间: {activeSummary.auditStartDate.slice(0, 10)} ~ {activeSummary.auditEndDate.slice(0, 10)}</span>
-                            <span className="px-2 py-0.5 bg-purple-500/30 text-purple-300 font-bold rounded-lg border border-purple-500/40 text-[10px]">
-                                🗓️ 共 {activeSummary.durationDays} 天
-                            </span>
-                        </div>
+                        <HoverExplainer
+                            title="当前评估核算时间窗"
+                            description={`系统当前正在审计从 ${activeSummary.auditStartDate.slice(0, 10)} 至 ${activeSummary.auditEndDate.slice(0, 10)} 这 ${activeSummary.durationDays} 天内的全部生产与发货流水。`}
+                            position="bottom"
+                        >
+                            <div className="text-[11px] font-mono text-cyan-400 bg-cyan-500/10 px-3 py-1.5 rounded-xl border border-cyan-500/20 flex items-center gap-2">
+                                <span>当前区间: {activeSummary.auditStartDate.slice(0, 10)} ~ {activeSummary.auditEndDate.slice(0, 10)}</span>
+                                <span className="px-2 py-0.5 bg-purple-500/30 text-purple-300 font-bold rounded-lg border border-purple-500/40 text-[10px]">
+                                    🗓️ 共 {activeSummary.durationDays} 天
+                                </span>
+                            </div>
+                        </HoverExplainer>
                     </div>
                 )}
             </div>
@@ -660,224 +739,304 @@ export const StockReconciliationDashboard: React.FC<Props> = ({
                         </div>
                     </div>
 
-                    {/* FOUR PILLARS BALANCE FLOW CARDS */}
+                    {/* FOUR PILLARS BALANCE FLOW CARDS WITH INTERACTIVE HOVER EXPLAINERS */}
                     <div className="grid grid-cols-2 md:grid-cols-4 lg:grid-cols-7 gap-3 mt-6">
                         {/* 1. Base Stock */}
-                        <div className="bg-black/40 border border-white/10 rounded-2xl p-3.5 flex flex-col justify-between">
-                            <div className="text-[10px] font-bold uppercase tracking-wider text-gray-400">
-                                ① 上期实盘基准
+                        <HoverExplainer
+                            title="① 上期实盘基准 (期初底数)"
+                            description={`上一次现场物理盘点数出来的底数基准（相当于银行账户的期初本金）。${activeSummary.auditStartDate.slice(5, 10)} 现场清点实盘为 ${formatQty(activeSummary.startAuditStock)} ${activeSummary.uom}。`}
+                            highlight="作为本次核算区间的推演起点"
+                        >
+                            <div className="bg-black/40 border border-white/10 hover:border-purple-400/50 transition rounded-2xl p-3.5 flex flex-col justify-between h-full">
+                                <div className="text-[10px] font-bold uppercase tracking-wider text-gray-400 flex items-center justify-between">
+                                    <span>① 上期实盘基准</span>
+                                    <Info size={11} className="text-gray-500" />
+                                </div>
+                                <div className="my-2">
+                                    <span className="text-2xl font-black text-white font-mono">{formatQty(activeSummary.startAuditStock)}</span>
+                                    <span className="text-[10px] text-gray-400 ml-1">{activeSummary.uom}</span>
+                                </div>
+                                <div className="text-[10px] text-gray-500 font-mono">
+                                    {activeSummary.auditStartDate.slice(5, 10)} 盘点基准
+                                </div>
                             </div>
-                            <div className="my-2">
-                                <span className="text-2xl font-black text-white font-mono">{formatQty(activeSummary.startAuditStock)}</span>
-                                <span className="text-[10px] text-gray-400 ml-1">{activeSummary.uom}</span>
-                            </div>
-                            <div className="text-[10px] text-gray-500 font-mono">
-                                {activeSummary.auditStartDate.slice(5, 10)} 盘点基准
-                            </div>
-                        </div>
+                        </HoverExplainer>
 
                         {/* 2. Production Inflow */}
-                        <div className="bg-emerald-500/10 border border-emerald-500/30 rounded-2xl p-3.5 flex flex-col justify-between">
-                            <div className="text-[10px] font-bold uppercase tracking-wider text-emerald-400 flex items-center gap-1 shrink-0">
-                                <TrendingUp size={12} className="shrink-0" /> <span>② 期间生产入库</span>
+                        <HoverExplainer
+                            title="② 期间生产入库 (机台实际产出)"
+                            description={`该核算周期（${activeSummary.durationDays}天）内，机台工人实际登记做出来的物料总数（相当于进账）。期间累计产出 +${formatQty(activeSummary.productionQty)} ${activeSummary.uom}。`}
+                            formula={`日均生产产出：~${formatQty(activeSummary.dailyAvgProd)} ${activeSummary.uom}/天`}
+                            highlight="真实反映工厂机台在此区间的生产速度"
+                        >
+                            <div className="bg-emerald-500/10 border border-emerald-500/30 hover:border-emerald-400/60 transition rounded-2xl p-3.5 flex flex-col justify-between h-full">
+                                <div className="text-[10px] font-bold uppercase tracking-wider text-emerald-400 flex items-center justify-between">
+                                    <span className="flex items-center gap-1 shrink-0"><TrendingUp size={12} /> ② 期间生产入库</span>
+                                    <Info size={11} className="text-emerald-500" />
+                                </div>
+                                <div className="my-2">
+                                    <span className="text-2xl font-black text-emerald-300 font-mono">+{formatQty(activeSummary.productionQty)}</span>
+                                    <span className="text-[10px] text-emerald-400/80 ml-1">{activeSummary.uom}</span>
+                                </div>
+                                <div className="text-[10px] text-emerald-400/80 font-mono flex items-center justify-between">
+                                    <span>机台实际产出</span>
+                                    <span className="font-bold">~{formatQty(activeSummary.dailyAvgProd)}/天</span>
+                                </div>
                             </div>
-                            <div className="my-2">
-                                <span className="text-2xl font-black text-emerald-300 font-mono">+{formatQty(activeSummary.productionQty)}</span>
-                                <span className="text-[10px] text-emerald-400/80 ml-1">{activeSummary.uom}</span>
-                            </div>
-                            <div className="text-[10px] text-emerald-400/80 font-mono flex items-center justify-between">
-                                <span>机台实际产出</span>
-                                <span className="font-bold">~{formatQty(activeSummary.dailyAvgProd)}/天</span>
-                            </div>
-                        </div>
+                        </HoverExplainer>
 
                         {/* 3. Delivery Outflow */}
-                        <div className="bg-blue-500/10 border border-blue-500/30 rounded-2xl p-3.5 flex flex-col justify-between">
-                            <div className="text-[10px] font-bold uppercase tracking-wider text-blue-400 flex items-center gap-1 shrink-0">
-                                <TrendingDown size={12} className="shrink-0" /> <span>③ 期间发货出库</span>
+                        <HoverExplainer
+                            title="③ 期间发货出库 (司机装车出库)"
+                            description={`该核算周期（${activeSummary.durationDays}天）内，司机装车配送完成、从仓库实地拉走扣账的总量（相当于出账消费）。期间累计出货 -${formatQty(activeSummary.deliveryQty)} ${activeSummary.uom}。`}
+                            formula={`日均发货出库：~${formatQty(activeSummary.dailyAvgDeliv)} ${activeSummary.uom}/天`}
+                            highlight="真实反映客户拉货与物流流转速度"
+                        >
+                            <div className="bg-blue-500/10 border border-blue-500/30 hover:border-blue-400/60 transition rounded-2xl p-3.5 flex flex-col justify-between h-full">
+                                <div className="text-[10px] font-bold uppercase tracking-wider text-blue-400 flex items-center justify-between">
+                                    <span className="flex items-center gap-1 shrink-0"><TrendingDown size={12} /> ③ 期间发货出库</span>
+                                    <Info size={11} className="text-blue-500" />
+                                </div>
+                                <div className="my-2">
+                                    <span className="text-2xl font-black text-blue-300 font-mono">-{formatQty(activeSummary.deliveryQty)}</span>
+                                    <span className="text-[10px] text-blue-400/80 ml-1">{activeSummary.uom}</span>
+                                </div>
+                                <div className="text-[10px] text-blue-400/80 font-mono flex items-center justify-between">
+                                    <span>司机装车出库</span>
+                                    <span className="font-bold">~{formatQty(activeSummary.dailyAvgDeliv)}/天</span>
+                                </div>
                             </div>
-                            <div className="my-2">
-                                <span className="text-2xl font-black text-blue-300 font-mono">-{formatQty(activeSummary.deliveryQty)}</span>
-                                <span className="text-[10px] text-blue-400/80 ml-1">{activeSummary.uom}</span>
-                            </div>
-                            <div className="text-[10px] text-blue-400/80 font-mono flex items-center justify-between">
-                                <span>司机装车出库</span>
-                                <span className="font-bold">~{formatQty(activeSummary.dailyAvgDeliv)}/天</span>
-                            </div>
-                        </div>
+                        </HoverExplainer>
 
                         {/* 4. Net Transfer */}
-                        <div className="bg-purple-500/10 border border-purple-500/30 rounded-2xl p-3.5 flex flex-col justify-between">
-                            <div className="text-[10px] font-bold uppercase tracking-wider text-purple-400">
-                                ④ 移库调拨净流入
+                        <HoverExplainer
+                            title="④ 移库调拨净流入 (跨仓流动)"
+                            description="核算期间内从其他工厂/仓库（如 Nilai、SPD、Taiping）调入本仓，减去从本仓调出到其他仓的净轧差额。"
+                            formula="净调拨 = 调入总量 - 调出总量"
+                            highlight="确保跨工厂移库时总账不漏不重"
+                        >
+                            <div className="bg-purple-500/10 border border-purple-500/30 hover:border-purple-400/60 transition rounded-2xl p-3.5 flex flex-col justify-between h-full">
+                                <div className="text-[10px] font-bold uppercase tracking-wider text-purple-400 flex items-center justify-between">
+                                    <span>④ 移库调拨净流入</span>
+                                    <Info size={11} className="text-purple-500" />
+                                </div>
+                                <div className="my-2">
+                                    <span className="text-2xl font-black text-purple-300 font-mono">
+                                        {formatSignedQty(activeSummary.transferInQty - activeSummary.transferOutQty)}
+                                    </span>
+                                    <span className="text-[10px] text-purple-400/80 ml-1">{activeSummary.uom}</span>
+                                </div>
+                                <div className="text-[10px] text-purple-400/70 font-mono">
+                                    内部仓位调入调出
+                                </div>
                             </div>
-                            <div className="my-2">
-                                <span className="text-2xl font-black text-purple-300 font-mono">
-                                    {formatSignedQty(activeSummary.transferInQty - activeSummary.transferOutQty)}
-                                </span>
-                                <span className="text-[10px] text-purple-400/80 ml-1">{activeSummary.uom}</span>
-                            </div>
-                            <div className="text-[10px] text-purple-400/70 font-mono">
-                                内部仓位调入调出
-                            </div>
-                        </div>
+                        </HoverExplainer>
 
                         {/* 5. Expected Stock */}
-                        <div className="bg-black/50 border border-cyan-500/30 rounded-2xl p-3.5 flex flex-col justify-between">
-                            <div className="text-[10px] font-bold uppercase tracking-wider text-cyan-400">
-                                ⑤ 理论系统应有
+                        <HoverExplainer
+                            title="⑤ 理论系统应有 (电脑公式计算值)"
+                            description="电脑根据数学公式推演，仓库在盘点日理应剩余的理论库存。"
+                            formula={`公式: ①(${formatQty(activeSummary.startAuditStock)}) + ②(+${formatQty(activeSummary.productionQty)}) - ③(${formatQty(activeSummary.deliveryQty)}) + ④(${formatSignedQty(activeSummary.transferInQty - activeSummary.transferOutQty)}) = ${formatQty(activeSummary.expectedStock)} ${activeSummary.uom}`}
+                            highlight="若出现负数通常因司机提前扣单或机台录入轻微滞后"
+                        >
+                            <div className="bg-black/50 border border-cyan-500/30 hover:border-cyan-400/60 transition rounded-2xl p-3.5 flex flex-col justify-between h-full">
+                                <div className="text-[10px] font-bold uppercase tracking-wider text-cyan-400 flex items-center justify-between">
+                                    <span>⑤ 理论系统应有</span>
+                                    <Info size={11} className="text-cyan-500" />
+                                </div>
+                                <div className="my-2">
+                                    <span className="text-2xl font-black text-cyan-300 font-mono">{formatQty(activeSummary.expectedStock)}</span>
+                                    <span className="text-[10px] text-cyan-400/80 ml-1">{activeSummary.uom}</span>
+                                </div>
+                                <div className="text-[10px] text-gray-500 font-mono">
+                                    ① + ② - ③ + ④
+                                </div>
                             </div>
-                            <div className="my-2">
-                                <span className="text-2xl font-black text-cyan-300 font-mono">{formatQty(activeSummary.expectedStock)}</span>
-                                <span className="text-[10px] text-cyan-400/80 ml-1">{activeSummary.uom}</span>
-                            </div>
-                            <div className="text-[10px] text-gray-500 font-mono">
-                                ① + ② - ③ + ④
-                            </div>
-                        </div>
+                        </HoverExplainer>
 
                         {/* 6. Physical Actual Stock */}
-                        <div className="bg-black/50 border border-amber-500/30 rounded-2xl p-3.5 flex flex-col justify-between">
-                            <div className="text-[10px] font-bold uppercase tracking-wider text-amber-400">
-                                {activeSummary.isClosedAudit ? '⑥ 本期实盘库存' : '⑥ 当前账面结存'}
+                        <HoverExplainer
+                            title={activeSummary.isClosedAudit ? '⑥ 本期实盘库存 (现场实地清点)' : '⑥ 当前账面结存 (动态流水)'}
+                            description={activeSummary.isClosedAudit 
+                                ? `在盘点截止日（${activeSummary.auditEndDate.slice(5, 10)}），工人在仓库现场实地清点数出的物理真实现存量。现场数出 ${formatQty(activeSummary.currentActualStock)} ${activeSummary.uom}。`
+                                : `当前数据库根据实时流水计算的最新结存库存（${formatQty(activeSummary.currentActualStock)} ${activeSummary.uom}），等待下一次现场盘点核实。`}
+                            highlight={activeSummary.isClosedAudit ? '作为期末真实考核的最终依据' : '动态推演中'}
+                        >
+                            <div className="bg-black/50 border border-amber-500/30 hover:border-amber-400/60 transition rounded-2xl p-3.5 flex flex-col justify-between h-full">
+                                <div className="text-[10px] font-bold uppercase tracking-wider text-amber-400 flex items-center justify-between">
+                                    <span>{activeSummary.isClosedAudit ? '⑥ 本期实盘库存' : '⑥ 当前账面结存'}</span>
+                                    <Info size={11} className="text-amber-500" />
+                                </div>
+                                <div className="my-2">
+                                    <span className="text-2xl font-black text-amber-300 font-mono">{formatQty(activeSummary.currentActualStock)}</span>
+                                    <span className="text-[10px] text-amber-400/80 ml-1">{activeSummary.uom}</span>
+                                </div>
+                                <div className="text-[10px] text-gray-500 font-mono">
+                                    {activeSummary.isClosedAudit ? '本期现场实盘复核' : '动态流水运行结余'}
+                                </div>
                             </div>
-                            <div className="my-2">
-                                <span className="text-2xl font-black text-amber-300 font-mono">{formatQty(activeSummary.currentActualStock)}</span>
-                                <span className="text-[10px] text-amber-400/80 ml-1">{activeSummary.uom}</span>
-                            </div>
-                            <div className="text-[10px] text-gray-500 font-mono">
-                                {activeSummary.isClosedAudit ? '本期现场实盘复核' : '动态流水运行结余'}
-                            </div>
-                        </div>
+                        </HoverExplainer>
 
                         {/* 7. Discrepancy Variance */}
-                        <div className={`rounded-2xl p-3.5 flex flex-col justify-between border ${
-                            !activeSummary.isClosedAudit
-                                ? 'bg-white/5 border-white/10 text-gray-400'
-                                : activeSummary.absVariance === 0
-                                    ? 'bg-emerald-500/10 border-emerald-500/30 text-emerald-300'
-                                    : activeSummary.absVariance <= 70
-                                        ? 'bg-purple-500/10 border-purple-500/30 text-purple-300'
-                                        : 'bg-red-500/10 border-red-500/30 text-red-300'
-                        }`}>
-                            <div className="text-[10px] font-bold uppercase tracking-wider">
-                                ⑦ 盘点账实差异
+                        <HoverExplainer
+                            title="⑦ 盘点账实差异 (现场实盘 vs 理论应有)"
+                            description="现场实际数到的物料 与 电脑理论推算值 之间的偏离差额。"
+                            formula={activeSummary.isClosedAudit ? `公式: ⑥实盘(${formatQty(activeSummary.currentActualStock)}) - ⑤理论(${formatQty(activeSummary.expectedStock)}) = ${formatSignedQty(activeSummary.variance)} ${activeSummary.uom}` : '待下一次现场盘点生成差异'}
+                            highlight={activeSummary.isClosedAudit ? `现场比电脑多出 ${formatQty(activeSummary.absVariance)} ${activeSummary.uom}，在正常制造业公差范围内` : '待实盘'}
+                        >
+                            <div className={`rounded-2xl p-3.5 flex flex-col justify-between h-full border transition ${
+                                !activeSummary.isClosedAudit
+                                    ? 'bg-white/5 border-white/10 hover:border-white/20 text-gray-400'
+                                    : activeSummary.absVariance === 0
+                                        ? 'bg-emerald-500/10 border-emerald-500/30 hover:border-emerald-400/60 text-emerald-300'
+                                        : activeSummary.absVariance <= 90
+                                            ? 'bg-purple-500/10 border-purple-500/30 hover:border-purple-400/60 text-purple-300'
+                                            : 'bg-red-500/10 border-red-500/30 hover:border-red-400/60 text-red-300'
+                            }`}>
+                                <div className="text-[10px] font-bold uppercase tracking-wider flex items-center justify-between">
+                                    <span>⑦ 盘点账实差异</span>
+                                    <Info size={11} className="opacity-60" />
+                                </div>
+                                <div className="my-2">
+                                    <span className="text-2xl font-black font-mono">
+                                        {activeSummary.isClosedAudit ? formatSignedQty(activeSummary.variance) : '待实盘'}
+                                    </span>
+                                    {activeSummary.isClosedAudit && <span className="text-[10px] ml-1">{activeSummary.uom}</span>}
+                                </div>
+                                <div className="text-[10px] font-mono opacity-80">
+                                    {activeSummary.isClosedAudit ? '⑥ 实盘 - ⑤ 理论' : '待下次现场实盘'}
+                                </div>
                             </div>
-                            <div className="my-2">
-                                <span className="text-2xl font-black font-mono">
-                                    {activeSummary.isClosedAudit ? formatSignedQty(activeSummary.variance) : '待实盘'}
-                                </span>
-                                {activeSummary.isClosedAudit && <span className="text-[10px] ml-1">{activeSummary.uom}</span>}
-                            </div>
-                            <div className="text-[10px] font-mono opacity-80">
-                                {activeSummary.isClosedAudit ? '⑥ 实盘 - ⑤ 理论' : '待下次现场实盘'}
-                            </div>
-                        </div>
+                        </HoverExplainer>
                     </div>
 
-                    {/* THREE KEY METRICS KPI STRIP */}
+                    {/* THREE KEY METRICS KPI STRIP WITH INTERACTIVE HOVER EXPLAINERS */}
                     <div className="grid grid-cols-1 md:grid-cols-3 gap-4 mt-5 pt-5 border-t border-white/10">
                         {/* KPI 1: Production Output Accuracy */}
-                        <div className="bg-white/5 border border-white/10 rounded-2xl p-4 flex items-center justify-between">
-                            <div>
-                                <div className="text-xs font-bold text-gray-400 flex items-center gap-1">
-                                    <span>🏆 生产吻合准确率 (Production Accuracy)</span>
+                        <HoverExplainer
+                            title="🏆 生产吻合准确率 (Production Accuracy)"
+                            description="评估机台工人生产报工的真实度与可信度。用总偏差绝对值与总产出量对比，衡量机台登记是否有漏记、多记或瞒报。"
+                            formula={activeSummary.isClosedAudit ? `公式: (1 - |差异 ${formatQty(activeSummary.absVariance)}| / 生产总量 ${formatQty(activeSummary.productionQty)}) × 100% = ${activeSummary.productionAccuracy.toFixed(2)}%` : '当前处于推演期'}
+                            highlight="≥ 95% 为极佳吻合，说明机台报产数据高度真实可靠！"
+                        >
+                            <div className="bg-white/5 border border-white/10 hover:border-purple-500/40 transition rounded-2xl p-4 flex items-center justify-between h-full">
+                                <div>
+                                    <div className="text-xs font-bold text-gray-400 flex items-center gap-1">
+                                        <span>🏆 生产吻合准确率 (Production Accuracy)</span>
+                                        <Info size={12} className="text-gray-500" />
+                                    </div>
+                                    <div className="text-3xl font-black text-white font-mono mt-1 flex items-baseline gap-2">
+                                        {activeSummary.isClosedAudit ? (
+                                            <>
+                                                <span>{activeSummary.productionAccuracy.toFixed(2)}%</span>
+                                                <span className={`text-xs px-2 py-0.5 rounded-full font-bold uppercase ${
+                                                    activeSummary.productionAccuracy >= 95 ? 'bg-emerald-500/20 text-emerald-400' : 'bg-amber-500/20 text-amber-400'
+                                                }`}>
+                                                    {activeSummary.productionAccuracy >= 95 ? '极佳吻合' : '正常波动'}
+                                                </span>
+                                            </>
+                                        ) : (
+                                            <>
+                                                <span className="text-xl text-amber-400 font-sans font-bold">推演进行中</span>
+                                                <span className="text-xs px-2 py-0.5 rounded-full font-bold bg-amber-500/20 text-amber-300">
+                                                    待下次实盘
+                                                </span>
+                                            </>
+                                        )}
+                                    </div>
+                                    <p className="text-[10px] text-gray-400 mt-1 font-mono">
+                                        {activeSummary.isClosedAudit 
+                                            ? `生产 ${formatQty(activeSummary.productionQty)} ${activeSummary.uom} · 差异偏差 ${formatQty(activeSummary.absVariance)} ${activeSummary.uom}`
+                                            : '当前处于动态推演期，需待下一次现场盘点校验真实吻合率'}
+                                    </p>
                                 </div>
-                                <div className="text-3xl font-black text-white font-mono mt-1 flex items-baseline gap-2">
-                                    {activeSummary.isClosedAudit ? (
-                                        <>
-                                            <span>{activeSummary.productionAccuracy.toFixed(2)}%</span>
-                                            <span className={`text-xs px-2 py-0.5 rounded-full font-bold uppercase ${
-                                                activeSummary.productionAccuracy >= 95 ? 'bg-emerald-500/20 text-emerald-400' : 'bg-amber-500/20 text-amber-400'
-                                            }`}>
-                                                {activeSummary.productionAccuracy >= 95 ? '极佳吻合' : '正常波动'}
-                                            </span>
-                                        </>
-                                    ) : (
-                                        <>
-                                            <span className="text-xl text-amber-400 font-sans font-bold">推演进行中</span>
-                                            <span className="text-xs px-2 py-0.5 rounded-full font-bold bg-amber-500/20 text-amber-300">
-                                                待下次实盘
-                                            </span>
-                                        </>
-                                    )}
+                                <div className={`w-12 h-12 rounded-2xl flex items-center justify-center border shrink-0 ${
+                                    activeSummary.isClosedAudit ? 'bg-emerald-500/20 text-emerald-400 border-emerald-500/30' : 'bg-amber-500/20 text-amber-400 border-amber-500/30'
+                                }`}>
+                                    {activeSummary.isClosedAudit ? <CheckCircle2 size={24} /> : <Clock size={24} />}
                                 </div>
-                                <p className="text-[10px] text-gray-400 mt-1 font-mono">
-                                    {activeSummary.isClosedAudit 
-                                        ? `公式: (1 - |差异 ${formatQty(activeSummary.absVariance)}| / 生产量 ${formatQty(activeSummary.productionQty)}) × 100%`
-                                        : '当前处于动态推演期，需待下一次现场盘点校验真实吻合率'}
-                                </p>
                             </div>
-                            <div className={`w-12 h-12 rounded-2xl flex items-center justify-center border ${
-                                activeSummary.isClosedAudit ? 'bg-emerald-500/20 text-emerald-400 border-emerald-500/30' : 'bg-amber-500/20 text-amber-400 border-amber-500/30'
-                            }`}>
-                                {activeSummary.isClosedAudit ? <CheckCircle2 size={24} /> : <Clock size={24} />}
-                            </div>
-                        </div>
+                        </HoverExplainer>
 
                         {/* KPI 2: Inventory Throughput Accuracy */}
-                        <div className="bg-white/5 border border-white/10 rounded-2xl p-4 flex items-center justify-between">
-                            <div>
-                                <div className="text-xs font-bold text-gray-400 flex items-center gap-1">
-                                    <span>📦 仓储流转总账吻合率 (Throughput Accuracy)</span>
+                        <HoverExplainer
+                            title="📦 仓储流转总账吻合率 (Throughput Accuracy)"
+                            description="衡量工厂在生产进货、司机出货的大吞吐量流转下，整厂物料总账闭环的能力。"
+                            formula={activeSummary.isClosedAudit ? `公式: (1 - |差异 ${formatQty(activeSummary.absVariance)}| / (生产 ${formatQty(activeSummary.productionQty)} + 发货 ${formatQty(activeSummary.deliveryQty)})) × 100% = ${activeSummary.throughputAccuracy.toFixed(2)}%` : '动态流水监控'}
+                            highlight="进出吞吐量越大，更能体现仓储进销存账目的严密性"
+                        >
+                            <div className="bg-white/5 border border-white/10 hover:border-cyan-500/40 transition rounded-2xl p-4 flex items-center justify-between h-full">
+                                <div>
+                                    <div className="text-xs font-bold text-gray-400 flex items-center gap-1">
+                                        <span>📦 仓储流转总账吻合率 (Throughput Accuracy)</span>
+                                        <Info size={12} className="text-gray-500" />
+                                    </div>
+                                    <div className="text-3xl font-black text-cyan-300 font-mono mt-1 flex items-baseline gap-2">
+                                        {activeSummary.isClosedAudit ? (
+                                            <>
+                                                <span>{activeSummary.throughputAccuracy.toFixed(2)}%</span>
+                                                <span className="text-xs px-2 py-0.5 rounded-full font-bold bg-cyan-500/20 text-cyan-400 uppercase">
+                                                    流转闭环
+                                                </span>
+                                            </>
+                                        ) : (
+                                            <>
+                                                <span className="text-xl text-cyan-300 font-mono font-bold">+{formatQty(activeSummary.productionQty)} / -{formatQty(activeSummary.deliveryQty)}</span>
+                                                <span className="text-xs px-2 py-0.5 rounded-full font-bold bg-cyan-500/20 text-cyan-400">
+                                                    净流入 {formatSignedQty(activeSummary.productionQty - activeSummary.deliveryQty)}
+                                                </span>
+                                            </>
+                                        )}
+                                    </div>
+                                    <p className="text-[10px] text-gray-400 mt-1 font-mono">
+                                        总吞吐流转: {formatQty(activeSummary.productionQty + activeSummary.deliveryQty)} {activeSummary.uom}
+                                    </p>
                                 </div>
-                                <div className="text-3xl font-black text-cyan-300 font-mono mt-1 flex items-baseline gap-2">
-                                    {activeSummary.isClosedAudit ? (
-                                        <>
-                                            <span>{activeSummary.throughputAccuracy.toFixed(2)}%</span>
-                                            <span className="text-xs px-2 py-0.5 rounded-full font-bold bg-cyan-500/20 text-cyan-400 uppercase">
-                                                流转闭环
-                                            </span>
-                                        </>
-                                    ) : (
-                                        <>
-                                            <span className="text-xl text-cyan-300 font-mono font-bold">+{formatQty(activeSummary.productionQty)} / -{formatQty(activeSummary.deliveryQty)}</span>
-                                            <span className="text-xs px-2 py-0.5 rounded-full font-bold bg-cyan-500/20 text-cyan-400">
-                                                净流入 {formatSignedQty(activeSummary.productionQty - activeSummary.deliveryQty)}
-                                            </span>
-                                        </>
-                                    )}
+                                <div className="w-12 h-12 rounded-2xl bg-cyan-500/20 flex items-center justify-center text-cyan-400 border border-cyan-500/30 shrink-0">
+                                    <Layers size={24} />
                                 </div>
-                                <p className="text-[10px] text-gray-400 mt-1 font-mono">
-                                    总吞吐流转: {formatQty(activeSummary.productionQty + activeSummary.deliveryQty)} {activeSummary.uom}
-                                </p>
                             </div>
-                            <div className="w-12 h-12 rounded-2xl bg-cyan-500/20 flex items-center justify-center text-cyan-400 border border-cyan-500/30">
-                                <Layers size={24} />
-                            </div>
-                        </div>
+                        </HoverExplainer>
 
                         {/* KPI 3: Variance Ratio / Status */}
-                        <div className="bg-white/5 border border-white/10 rounded-2xl p-4 flex items-center justify-between">
-                            <div>
-                                <div className="text-xs font-bold text-gray-400 flex items-center gap-1">
-                                    <span>{activeSummary.isClosedAudit ? '⚠️ 差异偏离率 (Variance Rate)' : '⚡ 当前推演状态 (Recon State)'}</span>
+                        <HoverExplainer
+                            title="⚠️ 差异偏离率 (Variance Rate)"
+                            description="整厂流转总吞吐中的自然偏离或损耗比例。等于 100% 减去流转吻合率。"
+                            formula={activeSummary.isClosedAudit ? `偏离率: 100% - ${activeSummary.throughputAccuracy.toFixed(2)}% = ${(100 - activeSummary.throughputAccuracy).toFixed(2)}%` : '动态推演中'}
+                            highlight="低偏离率证明工厂进出货损耗和记账误差被严格锁定在极小范围"
+                        >
+                            <div className="bg-white/5 border border-white/10 hover:border-purple-500/40 transition rounded-2xl p-4 flex items-center justify-between h-full">
+                                <div>
+                                    <div className="text-xs font-bold text-gray-400 flex items-center gap-1">
+                                        <span>{activeSummary.isClosedAudit ? '⚠️ 差异偏离率 (Variance Rate)' : '⚡ 当前推演状态 (Recon State)'}</span>
+                                        <Info size={12} className="text-gray-500" />
+                                    </div>
+                                    <div className="text-3xl font-black text-purple-300 font-mono mt-1 flex items-baseline gap-2">
+                                        {activeSummary.isClosedAudit ? (
+                                            <>
+                                                <span>{(100 - activeSummary.throughputAccuracy).toFixed(2)}%</span>
+                                                <span className="text-xs px-2 py-0.5 rounded-full font-bold bg-purple-500/20 text-purple-400 uppercase">
+                                                    自然轻微溢出
+                                                </span>
+                                            </>
+                                        ) : (
+                                            <>
+                                                <span className="text-xl text-purple-300 font-sans font-bold">实时推演中</span>
+                                                <span className="text-xs px-2 py-0.5 rounded-full font-bold bg-purple-500/20 text-purple-300">
+                                                    {activeSummary.durationDays} 天跨度
+                                                </span>
+                                            </>
+                                        )}
+                                    </div>
+                                    <p className="text-[10px] text-gray-400 mt-1 font-mono">
+                                        {activeSummary.isClosedAudit ? `差异绝对值: ${formatQty(activeSummary.absVariance)} ${activeSummary.uom}` : `推演应有库存: ${formatQty(activeSummary.expectedStock)} ${activeSummary.uom}`}
+                                    </p>
                                 </div>
-                                <div className="text-3xl font-black text-purple-300 font-mono mt-1 flex items-baseline gap-2">
-                                    {activeSummary.isClosedAudit ? (
-                                        <>
-                                            <span>{(100 - activeSummary.throughputAccuracy).toFixed(2)}%</span>
-                                            <span className="text-xs px-2 py-0.5 rounded-full font-bold bg-purple-500/20 text-purple-400 uppercase">
-                                                自然轻微溢出
-                                            </span>
-                                        </>
-                                    ) : (
-                                        <>
-                                            <span className="text-xl text-purple-300 font-sans font-bold">实时推演中</span>
-                                            <span className="text-xs px-2 py-0.5 rounded-full font-bold bg-purple-500/20 text-purple-300">
-                                                {activeSummary.durationDays} 天跨度
-                                            </span>
-                                        </>
-                                    )}
+                                <div className="w-12 h-12 rounded-2xl bg-purple-500/20 flex items-center justify-center text-purple-400 border border-purple-500/30 shrink-0">
+                                    <Scale size={24} />
                                 </div>
-                                <p className="text-[10px] text-gray-400 mt-1 font-mono">
-                                    {activeSummary.isClosedAudit ? `差异绝对值: ${formatQty(activeSummary.absVariance)} ${activeSummary.uom}` : `推演应有库存: ${formatQty(activeSummary.expectedStock)} ${activeSummary.uom}`}
-                                </p>
                             </div>
-                            <div className="w-12 h-12 rounded-2xl bg-purple-500/20 flex items-center justify-center text-purple-400 border border-purple-500/30">
-                                <Scale size={24} />
-                            </div>
-                        </div>
+                        </HoverExplainer>
                     </div>
 
                     {/* DAILY INFLOW VS OUTFLOW TREND CHART */}
@@ -900,18 +1059,25 @@ export const StockReconciliationDashboard: React.FC<Props> = ({
 
                             <div className="grid grid-cols-2 sm:grid-cols-4 md:grid-cols-6 lg:grid-cols-12 gap-2">
                                 {Object.entries(activeSummary.dailyBreakdown).sort().map(([dateStr, d]) => (
-                                    <div key={dateStr} className="bg-black/40 border border-white/10 rounded-xl p-2.5 flex flex-col items-center justify-between text-center">
-                                        <span className="text-[10px] font-mono text-gray-400">{dateStr.slice(5)}</span>
-                                        <div className="my-1.5 flex flex-col gap-0.5 items-center">
-                                            <span className="text-xs font-black font-mono text-emerald-400">+{formatQty(d.prod)}</span>
-                                            <span className="text-xs font-black font-mono text-blue-400">-{formatQty(d.deliv)}</span>
+                                    <HoverExplainer
+                                        key={dateStr}
+                                        title={`${dateStr} 产销日报`}
+                                        description={`当日机台生产入库 +${formatQty(d.prod)} ${activeSummary.uom}，司机发货出库 -${formatQty(d.deliv)} ${activeSummary.uom}。`}
+                                        formula={`当日净变动: ${formatSignedQty(d.prod - d.deliv)} ${activeSummary.uom}`}
+                                    >
+                                        <div className="bg-black/40 border border-white/10 hover:border-purple-400/40 transition rounded-xl p-2.5 flex flex-col items-center justify-between text-center h-full">
+                                            <span className="text-[10px] font-mono text-gray-400">{dateStr.slice(5)}</span>
+                                            <div className="my-1.5 flex flex-col gap-0.5 items-center">
+                                                <span className="text-xs font-black font-mono text-emerald-400">+{formatQty(d.prod)}</span>
+                                                <span className="text-xs font-black font-mono text-blue-400">-{formatQty(d.deliv)}</span>
+                                            </div>
+                                            <span className={`text-[9px] font-mono px-1.5 py-0.2 rounded ${
+                                                d.prod >= d.deliv ? 'bg-emerald-500/20 text-emerald-300' : 'bg-blue-500/20 text-blue-300'
+                                            }`}>
+                                                {formatSignedQty(d.prod - d.deliv)}
+                                            </span>
                                         </div>
-                                        <span className={`text-[9px] font-mono px-1.5 py-0.2 rounded ${
-                                            d.prod >= d.deliv ? 'bg-emerald-500/20 text-emerald-300' : 'bg-blue-500/20 text-blue-300'
-                                        }`}>
-                                            {formatSignedQty(d.prod - d.deliv)}
-                                        </span>
-                                    </div>
+                                    </HoverExplainer>
                                 ))}
                             </div>
                         </div>
@@ -1090,6 +1256,95 @@ export const StockReconciliationDashboard: React.FC<Props> = ({
                     </table>
                 </div>
             </div>
+
+            {/* VISUAL GUIDE POPUP MODAL */}
+            {showGuideModal && (
+                <div className="fixed inset-0 z-50 bg-black/80 backdrop-blur-md flex items-center justify-center p-4 animate-fade-in">
+                    <div className="bg-gradient-to-b from-gray-900 to-black border border-purple-500/40 rounded-3xl max-w-2xl w-full p-6 shadow-2xl relative max-h-[90vh] overflow-y-auto">
+                        <button
+                            type="button"
+                            onClick={() => setShowGuideModal(false)}
+                            className="absolute right-5 top-5 p-2 rounded-xl bg-white/10 hover:bg-white/20 text-gray-300 transition"
+                        >
+                            <X size={18} />
+                        </button>
+
+                        <div className="flex items-center gap-3 pb-4 border-b border-white/10">
+                            <span className="p-2.5 rounded-2xl bg-purple-500/20 text-purple-400 border border-purple-500/30">
+                                <BookOpen size={22} />
+                            </span>
+                            <div>
+                                <h3 className="text-base font-black text-white">产销存平衡看板 · 极简通俗指南</h3>
+                                <p className="text-xs text-gray-400">像看银行流水账单一样，轻松读懂工厂实盘对账</p>
+                            </div>
+                        </div>
+
+                        <div className="mt-5 space-y-4 text-xs text-gray-300 leading-relaxed">
+                            <div className="p-3.5 rounded-2xl bg-purple-500/10 border border-purple-500/30 text-purple-200">
+                                <strong className="text-white block mb-1">🎯 这张大屏帮您解决什么？</strong>
+                                帮助老板与管理层核算：<strong>“从上一次盘点到这一次盘点期间，机台报的产量、司机拉走的货，和仓库现场数出来的实物到底能不能对得上？”</strong>
+                            </div>
+
+                            <div className="space-y-2.5">
+                                <h4 className="font-bold text-cyan-300 flex items-center gap-1.5">
+                                    <span>🔢 七步平衡流转链条（步步相扣）：</span>
+                                </h4>
+                                <div className="grid grid-cols-1 sm:grid-cols-2 gap-2 text-[11px]">
+                                    <div className="p-2.5 rounded-xl bg-white/5 border border-white/10">
+                                        <strong className="text-white">① 上期实盘基准</strong>
+                                        <p className="text-gray-400 mt-0.5">上一次现场盘点数出来的底数（期初本金）。</p>
+                                    </div>
+                                    <div className="p-2.5 rounded-xl bg-white/5 border border-white/10">
+                                        <strong className="text-emerald-400">② 期间生产入库</strong>
+                                        <p className="text-gray-400 mt-0.5">机台工人实际登记做出来的总产量（进账）。</p>
+                                    </div>
+                                    <div className="p-2.5 rounded-xl bg-white/5 border border-white/10">
+                                        <strong className="text-blue-400">③ 期间发货出库</strong>
+                                        <p className="text-gray-400 mt-0.5">司机装车配送完成、扣账拉走的总量（出账）。</p>
+                                    </div>
+                                    <div className="p-2.5 rounded-xl bg-white/5 border border-white/10">
+                                        <strong className="text-purple-400">④ 移库调拨净流入</strong>
+                                        <p className="text-gray-400 mt-0.5">从其他工厂（如 Nilai/SPD）转入转出的净货。</p>
+                                    </div>
+                                    <div className="p-2.5 rounded-xl bg-white/5 border border-white/10 sm:col-span-2">
+                                        <strong className="text-cyan-400">⑤ 理论系统应有 = ① + ② - ③ + ④</strong>
+                                        <p className="text-gray-400 mt-0.5">电脑按纯数学公式推算的仓库理论应剩库存。</p>
+                                    </div>
+                                    <div className="p-2.5 rounded-xl bg-white/5 border border-white/10">
+                                        <strong className="text-amber-400">⑥ 本期现场实盘</strong>
+                                        <p className="text-gray-400 mt-0.5">工人拿盘点单在现场实地清点数出的实物。</p>
+                                    </div>
+                                    <div className="p-2.5 rounded-xl bg-white/5 border border-white/10">
+                                        <strong className="text-purple-300">⑦ 盘点账实差异 = ⑥ - ⑤</strong>
+                                        <p className="text-gray-400 mt-0.5">现场实物与电脑理论值的差额（正数代表现场多出）。</p>
+                                    </div>
+                                </div>
+                            </div>
+
+                            <div className="p-3.5 rounded-2xl bg-white/5 border border-white/10 space-y-2">
+                                <h4 className="font-bold text-emerald-400 flex items-center gap-1.5">
+                                    <span>🏆 三大核心成绩单指标：</span>
+                                </h4>
+                                <ul className="list-disc list-inside space-y-1 text-[11px] text-gray-300">
+                                    <li><strong className="text-white">生产吻合准确率（≥95% 为极佳）</strong>：证明机台生产报工真实可信，无严重瞒报漏记。</li>
+                                    <li><strong className="text-white">仓储流转总账吻合率（接近 99%）</strong>：证明进出大吞吐量下，整厂物料闭环受控。</li>
+                                    <li><strong className="text-white">差异偏离率（&lt; 2%）</strong>：证明自然损耗或记账公差被严格锁定在极小范围内。</li>
+                                </ul>
+                            </div>
+
+                            <div className="text-center pt-2">
+                                <button
+                                    type="button"
+                                    onClick={() => setShowGuideModal(false)}
+                                    className="px-6 py-2.5 bg-purple-600 hover:bg-purple-500 text-white rounded-xl font-bold transition shadow-lg shadow-purple-900/40"
+                                >
+                                    我知道了，开始使用
+                                </button>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+            )}
         </div>
     );
 };
