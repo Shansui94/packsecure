@@ -58,7 +58,7 @@ interface SkuReconcileSummary {
     absVariance: number;
     productionAccuracy: number;
     throughputAccuracy: number;
-    isClosedAudit: boolean; // true = 两次实盘闭环对账, false = 动态推演中
+    isClosedAudit: boolean; // true = 拥有真实历史盘点闭环
     healthStatus: 'excellent' | 'good' | 'warning' | 'alert' | 'tracking';
     durationDays: number;
     dailyAvgProd: number;
@@ -454,14 +454,14 @@ export const StockReconciliationDashboard: React.FC<Props> = ({
         });
     }, [masterItems, ledgerData, allAuditEvents, inventoryRecords, selectedLoc, dateMode, selectedSku, selectedAuditTxnId, customStartDate, customEndDate]);
 
-    // Active Selected SKU Details
-    const activeSummary = useMemo(() => {
-        return reconciliationMatrix.find(m => m.sku === selectedSku) || reconciliationMatrix[0] || null;
-    }, [reconciliationMatrix, selectedSku]);
-
-    // Filtered Table for Leaderboard
+    // Filtered Table for Leaderboard: In Mode 1 (CLOSED_AUDIT), ONLY show items with genuine audits!
     const filteredSummaries = useMemo(() => {
         return reconciliationMatrix.filter(row => {
+            // In Closed Audit Mode, strictly filter out items that do NOT have a closed audit cycle!
+            if (dateMode === 'CLOSED_AUDIT' && !row.isClosedAudit) {
+                return false;
+            }
+
             if (searchQuery) {
                 const q = searchQuery.toLowerCase();
                 if (!row.sku.toLowerCase().includes(q) && !row.name.toLowerCase().includes(q)) return false;
@@ -474,7 +474,16 @@ export const StockReconciliationDashboard: React.FC<Props> = ({
             const bThroughput = b.productionQty + b.deliveryQty;
             return bThroughput - aThroughput;
         });
-    }, [reconciliationMatrix, searchQuery, filterStatus]);
+    }, [reconciliationMatrix, dateMode, searchQuery, filterStatus]);
+
+    // Active Selected SKU Details (Auto fallback to first audited item if current has no audit)
+    const activeSummary = useMemo(() => {
+        const found = reconciliationMatrix.find(m => m.sku === selectedSku);
+        if (dateMode === 'CLOSED_AUDIT' && (!found || !found.isClosedAudit)) {
+            return filteredSummaries[0] || found || null;
+        }
+        return found || filteredSummaries[0] || null;
+    }, [reconciliationMatrix, filteredSummaries, selectedSku, dateMode]);
 
     // Export CSV
     const handleExportCSV = () => {
@@ -540,12 +549,12 @@ export const StockReconciliationDashboard: React.FC<Props> = ({
                             <h2 className="text-lg font-black tracking-wide text-white flex items-center gap-2">
                                 产销存平衡与盘点吻合率稽核
                                 <span className="text-xs font-mono px-2 py-0.5 rounded-full bg-cyan-500/20 text-cyan-300 border border-cyan-500/30">
-                                    Reconciliation v2.4 (Audit Mode 1)
+                                    Reconciliation v2.5 (Pure Audits Only)
                                 </span>
                             </h2>
                         </div>
                         <p className="text-xs text-gray-400 mt-1">
-                            严格按历史盘点对账，核算机台生产与出库真实准确率（97.37%）
+                            严格仅展示拥有真实物理盘点历史的物料，呈现最严谨的实盘吻合准确率（97.37%）
                         </p>
                     </div>
                 </div>
@@ -608,13 +617,13 @@ export const StockReconciliationDashboard: React.FC<Props> = ({
                     {[
                         { 
                             key: 'CLOSED_AUDIT', 
-                            label: '🏆 历史盘点闭环审计 (模式1)', 
-                            desc: '历史盘点真实考核成绩单', 
+                            label: '🏆 历史盘点闭环审计 (纯盘点物料)', 
+                            desc: '仅展示做过真实盘点的品类', 
                             tip: '严格对比两次实地盘点，核算此期间机台生产、出货与实物的吻合准确率'
                         },
                         { 
                             key: 'AUDIT_TO_NOW', 
-                            label: '⚡ 最新盘点至今动态结存 (模式2)', 
+                            label: '⚡ 最新盘点至今动态结存', 
                             desc: '盘点后最新流水监控', 
                             tip: '从最近一次实盘底数出发，推演至今天生产了多少、发了多少、实时应剩多少'
                         },
@@ -763,18 +772,18 @@ export const StockReconciliationDashboard: React.FC<Props> = ({
                             </div>
                         </div>
 
-                        {/* SKU Fast Switcher */}
+                        {/* SKU Fast Switcher (Only show audited items in Mode 1) */}
                         <div className="flex items-center gap-2">
                             <span className="text-xs text-gray-400 font-bold">切换重点物料:</span>
                             <select
-                                value={selectedSku}
+                                value={activeSummary.sku}
                                 onChange={(e) => {
                                     setSelectedSku(e.target.value);
                                     setSelectedAuditTxnId('LATEST');
                                 }}
                                 className="bg-black/60 border border-cyan-500/40 text-white font-bold text-xs py-2 px-3 rounded-xl focus:outline-none cursor-pointer"
                             >
-                                {reconciliationMatrix.map(item => (
+                                {filteredSummaries.map(item => (
                                     <option key={item.sku} value={item.sku} className="bg-gray-900 text-white">
                                         {item.name} ({item.sku})
                                     </option>
@@ -900,15 +909,13 @@ export const StockReconciliationDashboard: React.FC<Props> = ({
 
                         {/* 6. Physical Actual Stock */}
                         <HoverExplainer
-                            title={activeSummary.isClosedAudit ? '⑥ 本期实盘库存 (现场实地清点)' : '⑥ 当前系统账面 (实时结余)'}
-                            description={activeSummary.isClosedAudit 
-                                ? `在盘点截止日（${activeSummary.auditEndDate.slice(5, 10)}），工人在仓库现场实地清点数出的物理真实现存量。现场数出 ${formatQty(activeSummary.currentActualStock)} ${activeSummary.uom}。`
-                                : `当前数据库根据实时流水计算的最新账面库存（${formatQty(activeSummary.currentActualStock)} ${activeSummary.uom}）。`}
-                            highlight={activeSummary.isClosedAudit ? '作为期末真实考核的最终依据' : '动态流水运行中'}
+                            title="⑥ 本期实盘库存 (现场实地清点)"
+                            description={`在盘点截止日（${activeSummary.auditEndDate.slice(5, 10)}），工人在仓库现场实地清点数出的物理真实现存量。现场数出 ${formatQty(activeSummary.currentActualStock)} ${activeSummary.uom}。`}
+                            highlight="作为期末真实考核的最终依据"
                         >
                             <div className="bg-black/50 border border-amber-500/30 hover:border-amber-400/60 transition rounded-2xl p-3.5 flex flex-col justify-between h-full">
                                 <div className="text-[10px] font-bold uppercase tracking-wider text-amber-400 flex items-center justify-between">
-                                    <span>{activeSummary.isClosedAudit ? '⑥ 本期实盘库存' : '⑥ 当前系统账面'}</span>
+                                    <span>⑥ 本期实盘库存</span>
                                     <Info size={11} className="text-amber-500" />
                                 </div>
                                 <div className="my-2">
@@ -916,17 +923,17 @@ export const StockReconciliationDashboard: React.FC<Props> = ({
                                     <span className="text-[10px] text-amber-400/80 ml-1">{activeSummary.uom}</span>
                                 </div>
                                 <div className="text-[10px] text-gray-500 font-mono">
-                                    {activeSummary.isClosedAudit ? '本期现场实盘复核' : '数据库实时现存量'}
+                                    本期现场实盘复核
                                 </div>
                             </div>
                         </HoverExplainer>
 
                         {/* 7. Discrepancy Variance */}
                         <HoverExplainer
-                            title={activeSummary.isClosedAudit ? '⑦ 盘点账实差异 (现场实盘 vs 理论应有)' : '⑦ 动态账面偏差 (系统账面 vs 理论推演)'}
+                            title="⑦ 盘点账实差异 (现场实盘 vs 理论应有)"
                             description="实际数到的物料 与 电脑理论推算值 之间的偏离差额。"
                             formula={`公式: ⑥(${formatQty(activeSummary.currentActualStock)}) - ⑤(${formatQty(activeSummary.expectedStock)}) = ${formatSignedQty(activeSummary.variance)} ${activeSummary.uom}`}
-                            highlight={activeSummary.isClosedAudit ? `现场与理论相差 ${formatQty(activeSummary.absVariance)} ${activeSummary.uom}` : `推演与账面相差 ${formatQty(activeSummary.absVariance)} ${activeSummary.uom}`}
+                            highlight={`现场与理论相差 ${formatQty(activeSummary.absVariance)} ${activeSummary.uom}`}
                         >
                             <div className={`rounded-2xl p-3.5 flex flex-col justify-between h-full border transition ${
                                 activeSummary.absVariance === 0
@@ -936,7 +943,7 @@ export const StockReconciliationDashboard: React.FC<Props> = ({
                                         : 'bg-red-500/10 border-red-500/30 hover:border-red-400/60 text-red-300'
                             }`}>
                                 <div className="text-[10px] font-bold uppercase tracking-wider flex items-center justify-between">
-                                    <span>{activeSummary.isClosedAudit ? '⑦ 盘点账实差异' : '⑦ 动态账面偏差'}</span>
+                                    <span>⑦ 盘点账实差异</span>
                                     <Info size={11} className="opacity-60" />
                                 </div>
                                 <div className="my-2">
@@ -946,7 +953,7 @@ export const StockReconciliationDashboard: React.FC<Props> = ({
                                     <span className="text-[10px] ml-1">{activeSummary.uom}</span>
                                 </div>
                                 <div className="text-[10px] font-mono opacity-80">
-                                    {activeSummary.isClosedAudit ? '⑥ 实盘 - ⑤ 理论' : '⑥ 账面 - ⑤ 理论'}
+                                    ⑥ 实盘 - ⑤ 理论
                                 </div>
                             </div>
                         </HoverExplainer>
@@ -1090,16 +1097,16 @@ export const StockReconciliationDashboard: React.FC<Props> = ({
                 </div>
             )}
 
-            {/* ALL SKUS OVERVIEW & HEALTH LEADERBOARD TABLE */}
+            {/* ALL SKUS OVERVIEW & HEALTH LEADERBOARD TABLE (Pure Audits Only in Mode 1) */}
             <div className="bg-white/5 border border-white/10 rounded-3xl p-5 backdrop-blur-md">
                 <div className="flex flex-col md:flex-row md:items-center justify-between gap-4 mb-4">
                     <div>
                         <h3 className="text-sm font-black text-white flex items-center gap-2 uppercase tracking-wider">
                             <Layers size={16} className="text-cyan-400" />
-                            <span>全品类产销平衡与准确率排行榜 ({selectedLoc})</span>
+                            <span>实盘闭环对账排行榜 ({selectedLoc}) · 共 {filteredSummaries.length} 个已盘点品类</span>
                         </h3>
                         <p className="text-xs text-gray-400 mt-0.5">
-                            点击表格任意一行，可在上方展开该物料从基准至今的完整平衡推演轨迹
+                            严格仅列出拥有真实历史物理盘点闭环的物料，考核机台报产真实准确率
                         </p>
                     </div>
 
@@ -1122,7 +1129,7 @@ export const StockReconciliationDashboard: React.FC<Props> = ({
                                 onClick={() => setFilterStatus('all')}
                                 className={`px-2.5 py-1 rounded-lg font-bold transition ${filterStatus === 'all' ? 'bg-white/20 text-white' : 'text-gray-400 hover:text-white'}`}
                             >
-                                全部
+                                全部 ({filteredSummaries.length})
                             </button>
                             <button
                                 type="button"
@@ -1160,66 +1167,72 @@ export const StockReconciliationDashboard: React.FC<Props> = ({
                             </tr>
                         </thead>
                         <tbody className="divide-y divide-white/5">
-                            {filteredSummaries.map((item, idx) => {
-                                const isSelected = item.sku === selectedSku;
-                                return (
-                                    <tr
-                                        key={item.sku}
-                                        onClick={() => {
-                                            setSelectedSku(item.sku);
-                                            setSelectedAuditTxnId('LATEST');
-                                        }}
-                                        className={`transition cursor-pointer ${
-                                            isSelected 
-                                                ? 'bg-purple-600/20 hover:bg-purple-600/30' 
-                                                : 'hover:bg-white/5'
-                                        }`}
-                                    >
-                                        <td className="py-3 px-4">
-                                            <div className="font-bold text-white flex items-center gap-2">
-                                                <span>{item.name}</span>
-                                                {isSelected && (
-                                                    <span className="px-1.5 py-0.2 bg-purple-500 text-white rounded text-[9px] font-mono">
-                                                        当前聚焦
+                            {filteredSummaries.length === 0 ? (
+                                <tr>
+                                    <td colSpan={10} className="py-8 text-center text-gray-500 text-xs font-medium">
+                                        暂无符合条件的盘点对账数据
+                                    </td>
+                                </tr>
+                            ) : (
+                                filteredSummaries.map((item) => {
+                                    const isSelected = item.sku === activeSummary?.sku;
+                                    return (
+                                        <tr
+                                            key={item.sku}
+                                            onClick={() => {
+                                                setSelectedSku(item.sku);
+                                                setSelectedAuditTxnId('LATEST');
+                                            }}
+                                            className={`transition cursor-pointer ${
+                                                isSelected 
+                                                    ? 'bg-purple-600/20 hover:bg-purple-600/30' 
+                                                    : 'hover:bg-white/5'
+                                            }`}
+                                        >
+                                            <td className="py-3 px-4">
+                                                <div className="font-bold text-white flex items-center gap-2">
+                                                    <span>{item.name}</span>
+                                                    {isSelected && (
+                                                        <span className="px-1.5 py-0.2 bg-purple-500 text-white rounded text-[9px] font-mono">
+                                                            当前聚焦
+                                                        </span>
+                                                    )}
+                                                </div>
+                                                <div className="text-[10px] font-mono text-gray-400 flex items-center gap-1.5 mt-0.5">
+                                                    <span>{item.sku}</span>
+                                                    <span className="px-1.5 py-0.2 rounded bg-purple-500/20 text-purple-300 font-bold border border-purple-500/30 text-[9px]">
+                                                        🗓️ {item.durationDays}天
                                                     </span>
-                                                )}
-                                            </div>
-                                            <div className="text-[10px] font-mono text-gray-400 flex items-center gap-1.5 mt-0.5">
-                                                <span>{item.sku}</span>
-                                                <span className="px-1.5 py-0.2 rounded bg-purple-500/20 text-purple-300 font-bold border border-purple-500/30 text-[9px]">
-                                                    🗓️ {item.durationDays}天
+                                                </div>
+                                            </td>
+                                            <td className="py-3 px-3 text-center">
+                                                <span className="px-2 py-0.5 rounded text-[10px] font-mono bg-white/10 text-gray-300">
+                                                    {item.type}
                                                 </span>
-                                            </div>
-                                        </td>
-                                        <td className="py-3 px-3 text-center">
-                                            <span className="px-2 py-0.5 rounded text-[10px] font-mono bg-white/10 text-gray-300">
-                                                {item.type}
-                                            </span>
-                                        </td>
-                                        <td className="py-3 px-3 text-right font-mono text-gray-300">
-                                            {formatQty(item.startAuditStock)} {item.uom}
-                                        </td>
-                                        <td className="py-3 px-3 text-right font-mono">
-                                            <div className="font-bold text-emerald-400">+{formatQty(item.productionQty)}</div>
-                                            <div className="text-[9px] text-emerald-400/70">~{formatQty(item.dailyAvgProd)}/天</div>
-                                        </td>
-                                        <td className="py-3 px-3 text-right font-mono">
-                                            <div className="font-bold text-blue-400">-{formatQty(item.deliveryQty)}</div>
-                                            <div className="text-[9px] text-blue-400/70">~{formatQty(item.dailyAvgDeliv)}/天</div>
-                                        </td>
-                                        <td className="py-3 px-3 text-right font-mono font-bold text-cyan-300">
-                                            {formatQty(item.expectedStock)}
-                                        </td>
-                                        <td className="py-3 px-3 text-right font-mono font-black text-amber-300">
-                                            {formatQty(item.currentActualStock)}
-                                        </td>
-                                        <td className="py-3 px-3 text-right font-mono font-bold">
-                                            <span className={item.variance === 0 ? 'text-gray-400' : item.variance > 0 ? 'text-emerald-400' : 'text-red-400'}>
-                                                {formatSignedQty(item.variance)}
-                                            </span>
-                                        </td>
-                                        <td className="py-3 px-4 text-center">
-                                            {item.isClosedAudit ? (
+                                            </td>
+                                            <td className="py-3 px-3 text-right font-mono text-gray-300">
+                                                {formatQty(item.startAuditStock)} {item.uom}
+                                            </td>
+                                            <td className="py-3 px-3 text-right font-mono">
+                                                <div className="font-bold text-emerald-400">+{formatQty(item.productionQty)}</div>
+                                                <div className="text-[9px] text-emerald-400/70">~{formatQty(item.dailyAvgProd)}/天</div>
+                                            </td>
+                                            <td className="py-3 px-3 text-right font-mono">
+                                                <div className="font-bold text-blue-400">-{formatQty(item.deliveryQty)}</div>
+                                                <div className="text-[9px] text-blue-400/70">~{formatQty(item.dailyAvgDeliv)}/天</div>
+                                            </td>
+                                            <td className="py-3 px-3 text-right font-mono font-bold text-cyan-300">
+                                                {formatQty(item.expectedStock)}
+                                            </td>
+                                            <td className="py-3 px-3 text-right font-mono font-black text-amber-300">
+                                                {formatQty(item.currentActualStock)}
+                                            </td>
+                                            <td className="py-3 px-3 text-right font-mono font-bold">
+                                                <span className={item.variance === 0 ? 'text-gray-400' : item.variance > 0 ? 'text-emerald-400' : 'text-red-400'}>
+                                                    {formatSignedQty(item.variance)}
+                                                </span>
+                                            </td>
+                                            <td className="py-3 px-4 text-center">
                                                 <div className="inline-flex items-center gap-1.5 px-2.5 py-1 rounded-full font-mono text-[11px] font-black border bg-black/40">
                                                     <span className={`w-2 h-2 rounded-full ${
                                                         item.healthStatus === 'excellent' ? 'bg-emerald-400' :
@@ -1234,29 +1247,25 @@ export const StockReconciliationDashboard: React.FC<Props> = ({
                                                         {item.productionAccuracy.toFixed(1)}%
                                                     </span>
                                                 </div>
-                                            ) : (
-                                                <span className="px-2 py-1 bg-amber-500/10 text-amber-400 border border-amber-500/20 rounded-lg text-[10px] font-bold">
-                                                    ⚡ 动态推演
-                                                </span>
-                                            )}
-                                        </td>
-                                        <td className="py-3 px-3 text-center">
-                                            <button
-                                                type="button"
-                                                onClick={(e) => {
-                                                    e.stopPropagation();
-                                                    setSelectedSku(item.sku);
-                                                    setSelectedAuditTxnId('LATEST');
-                                                    window.scrollTo({ top: 0, behavior: 'smooth' });
-                                                }}
-                                                className="px-2.5 py-1 bg-purple-500/20 hover:bg-purple-500/40 text-purple-300 font-bold rounded-lg border border-purple-500/30 transition active:scale-95 text-[10px]"
-                                            >
-                                                聚焦推演
-                                            </button>
-                                        </td>
-                                    </tr>
-                                );
-                            })}
+                                            </td>
+                                            <td className="py-3 px-3 text-center">
+                                                <button
+                                                    type="button"
+                                                    onClick={(e) => {
+                                                        e.stopPropagation();
+                                                        setSelectedSku(item.sku);
+                                                        setSelectedAuditTxnId('LATEST');
+                                                        window.scrollTo({ top: 0, behavior: 'smooth' });
+                                                    }}
+                                                    className="px-2.5 py-1 bg-purple-500/20 hover:bg-purple-500/40 text-purple-300 font-bold rounded-lg border border-purple-500/30 transition active:scale-95 text-[10px]"
+                                                >
+                                                    聚焦推演
+                                                </button>
+                                            </td>
+                                        </tr>
+                                    );
+                                })
+                            )}
                         </tbody>
                     </table>
                 </div>
