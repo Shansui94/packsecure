@@ -8,8 +8,8 @@ import manageEmployeeHandler from './api/manage-employee';
 import visionHandler from './api/agent/vision';
 import geocodeHandler from './api/geocode';
 import aiPhotoHandler from './api/agent/ai-photo';
-import universalIntakeHandler from './api/agent/universal-intake';
-import universalQueryHandler from './api/agent/universal-query';
+import universalHandler, { handleIntake, handleQuery, handleParseText } from './api/agent/universal';
+import iotConfigHandler, { handleMachines } from './api/iot-config';
 import lorryLatestMileageHandler from './api/lorry-latest-mileage';
 import v2DocumentsHandler, {
     handleProcess as documentProcessHandler,
@@ -41,8 +41,12 @@ mountVercelHandler('/api/manage-employee', manageEmployeeHandler);
 mountVercelHandler('/api/agent/vision', visionHandler);
 mountVercelHandler('/api/geocode', geocodeHandler);
 mountVercelHandler('/api/agent/ai-photo', aiPhotoHandler);
-mountVercelHandler('/api/agent/universal-intake', universalIntakeHandler);
-mountVercelHandler('/api/agent/universal-query', universalQueryHandler);
+mountVercelHandler('/api/agent/universal', universalHandler);
+mountVercelHandler('/api/agent/universal-intake', handleIntake);
+mountVercelHandler('/api/agent/universal-query', handleQuery);
+mountVercelHandler('/api/agent/parse-text', handleParseText);
+mountVercelHandler('/api/iot-config', iotConfigHandler);
+mountVercelHandler('/api/machines', handleMachines);
 mountVercelHandler('/api/lorry-latest-mileage', lorryLatestMileageHandler);
 mountVercelHandler('/api/v2-documents', v2DocumentsHandler);
 mountVercelHandler('/api/v2/documents/process', documentProcessHandler);

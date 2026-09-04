@@ -1,6 +1,22 @@
 {
     "rewrites": [
         {
+            "source": "/api/agent/universal-intake",
+            "destination": "/api/agent/universal?action=intake"
+        },
+        {
+            "source": "/api/agent/universal-query",
+            "destination": "/api/agent/universal?action=query"
+        },
+        {
+            "source": "/api/agent/parse-text",
+            "destination": "/api/agent/universal?action=parse-text"
+        },
+        {
+            "source": "/api/machines",
+            "destination": "/api/iot-config?action=machines"
+        },
+        {
             "source": "/api/v2/documents/(.*)",
             "destination": "/api/v2-documents?action=$1"
         },

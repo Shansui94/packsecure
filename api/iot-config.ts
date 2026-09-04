@@ -7,6 +7,35 @@ const supabaseKey = (process.env.SUPABASE_SERVICE_ROLE_KEY ||
     "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6ImtkYWh1Ynlod25kZ3lsb2FsamFrIiwicm9sZSI6ImFub24iLCJpYXQiOjE3NjUzODY4ODksImV4cCI6MjA4MDk2Mjg4OX0.mzTtQ6zpfvRY07372UH_M4dvKPzHBDkiydwosUYPs-8")!;
 const supabase = createClient(supabaseUrl, supabaseKey);
 
+export async function handleMachines(_req: VercelRequest, res: VercelResponse) {
+    try {
+        const { data: machines, error: mError } = await supabase
+            .from('sys_machines_v2')
+            .select('*')
+            .order('machine_id');
+
+        if (mError) throw mError;
+
+        const { data: iotConfigs, error: iError } = await supabase
+            .from('iot_device_configs')
+            .select('machine_id, last_heartbeat');
+
+        if (iError) throw iError;
+
+        const result = machines.map((m: any) => {
+            const iot = iotConfigs.find((i: any) => i.machine_id === m.machine_id);
+            return {
+                ...m,
+                last_heartbeat: iot ? iot.last_heartbeat : null
+            };
+        });
+
+        return res.status(200).json(result);
+    } catch (error: any) {
+        return res.status(500).json({ error: error.message });
+    }
+}
+
 export default async function handler(req: VercelRequest, res: VercelResponse) {
     // Enable CORS
     res.setHeader('Access-Control-Allow-Credentials', 'true');
@@ -21,7 +50,11 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
         return res.status(200).end();
     }
 
-    const { mac } = req.query;
+    const { mac, action } = req.query;
+
+    if (action === 'machines' || (!mac && req.method === 'GET')) {
+        return handleMachines(req, res);
+    }
 
     if (!mac) {
         return res.status(400).json({ error: 'MAC address is required' });
