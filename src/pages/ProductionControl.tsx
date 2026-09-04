@@ -1383,50 +1383,88 @@ const ProductionControl: React.FC<ProductionControlProps> = ({ user, jobs = [], 
     const handleManualClockOut = async () => {
         const targetMachine = selectedMachine;
         if (!targetMachine) return;
-        const empId = operatorEmployeeId || user?.employee_id || user?.id || 'OP-AUTO';
-        const empName = operatorName || user?.name || '操作工';
+        const empId = operatorEmployeeId || user?.employeeId || user?.employee_id || user?.id || 'OP-AUTO';
+        const shortKey = targetMachine.split('-')[0].trim();
 
         try {
             const now = new Date();
             const clockEventTime = now.toISOString();
 
-            const { data: activeShifts } = await supabase
+            // Collect all possible candidate IDs for this operator
+            const candidateIds = Array.from(new Set([
+                empId,
+                operatorEmployeeId,
+                operatorId,
+                user?.employeeId,
+                user?.employee_id,
+                user?.uid,
+                user?.id
+            ].filter(Boolean))) as string[];
+
+            // 1. Query open shifts for this operator (strictly using operator_id, NOT operator_name)
+            let query = supabase
                 .from('operator_attendance')
-                .select('id, clock_in')
-                .or(`operator_id.eq.${empId},operator_name.eq.${empName}`)
-                .eq('machine_id', targetMachine)
+                .select('id, clock_in, operator_id, machine_id')
                 .is('clock_out', null);
 
-            if (activeShifts && activeShifts.length > 0) {
-                for (const shift of activeShifts) {
+            if (candidateIds.length > 0) {
+                query = query.or(candidateIds.map(id => `operator_id.eq.${id}`).join(','));
+            }
+
+            const { data: myOpenShifts, error: queryErr } = await query;
+            if (queryErr) {
+                console.error("Error finding open shifts to close:", queryErr);
+            }
+
+            // Filter shifts matching target machine or shortKey, fallback to all open shifts for this operator
+            const matchingShifts = (myOpenShifts || []).filter(s => {
+                const m = (s.machine_id || '').toUpperCase();
+                return m === targetMachine.toUpperCase() || m.startsWith(shortKey.toUpperCase());
+            });
+
+            const shiftsToClose = matchingShifts.length > 0 ? matchingShifts : (myOpenShifts || []);
+
+            if (shiftsToClose.length > 0) {
+                for (const shift of shiftsToClose) {
                     const clockIn = new Date(shift.clock_in);
                     const hoursWorked = Math.max(0, (now.getTime() - clockIn.getTime()) / 3600000);
-                    await supabase.from('operator_attendance')
+                    const { error: updErr } = await supabase.from('operator_attendance')
                         .update({
                             clock_out: clockEventTime,
                             hours_worked: Math.round(hoursWorked * 100) / 100,
-                            notes: 'Manual Clock-Out (一键登出)'
+                            notes: 'Manual Clock-Out (扫码/一键登出)'
                         })
                         .eq('id', shift.id);
+
+                    if (updErr) {
+                        console.error("Failed to update shift clock_out:", updErr);
+                    }
                 }
             }
 
             // Clear operator_id from active products for this machine
-            await supabase.from('machine_active_products')
-                .update({ operator_id: null })
-                .eq('machine_id', targetMachine);
+            try {
+                await supabase.from('machine_active_products')
+                    .update({ operator_id: null })
+                    .or(`machine_id.eq.${targetMachine},machine_id.eq.${shortKey},machine_id.ilike.${shortKey}-%`);
+            } catch (e) {
+                console.warn("machine_active_products unbind warning:", e);
+            }
 
+            // Remove all relevant keys from localStorage and sessionStorage
             if (operatorEmployeeId) {
                 localStorage.removeItem(`operatorClockInTime_${operatorEmployeeId}`);
             }
-            if (empId) {
-                localStorage.removeItem(`operatorClockInTime_${empId}`);
-            }
+            candidateIds.forEach(id => {
+                localStorage.removeItem(`operatorClockInTime_${id}`);
+            });
             setClockInTime(null);
             
             sessionStorage.removeItem('selectedMachine');
             localStorage.removeItem('selectedMachine');
             localStorage.removeItem('device_machine_id');
+            sessionStorage.removeItem('packsecure_operator_machine');
+            localStorage.removeItem('packsecure_operator_machine');
             setSelectedMachine(null);
             setMachineMetadata(null);
 
@@ -1437,6 +1475,7 @@ const ProductionControl: React.FC<ProductionControlProps> = ({ user, jobs = [], 
 
         } catch (err) {
             console.error("Failed to clock out:", err);
+            alert("登出出现异常，请重试！");
         }
     };
 
