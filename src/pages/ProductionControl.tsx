@@ -73,6 +73,16 @@ const CATEGORIES: Record<string, { label: string; emoji: string; color: string }
     other: { label: '其他 Other', emoji: '📋', color: 'bg-gray-500/20 text-gray-300 border-gray-500/30' },
 };
 
+// 车间 6 大现场专项工作分类（原料卸柜、车间加班、协助司机装车、搬运打托、Shopee打包、Boss特单）
+export const SPECIAL_WORK_CATEGORIES = [
+    { key: 'Container', label: 'Container 原料卸柜', icon: '📦', badge: '采购到厂收货', color: 'bg-blue-500/10 text-blue-300 border-blue-500/30', activeColor: 'bg-blue-600 text-white border-blue-400' },
+    { key: 'OT', label: 'OT 车间加班', icon: '⏰', badge: '延时抢修赶工', color: 'bg-amber-500/10 text-amber-300 border-amber-500/30', activeColor: 'bg-amber-600 text-white border-amber-400' },
+    { key: 'handling', label: '搬运打托', icon: '🏗️', badge: '原料打托码放', color: 'bg-cyan-500/10 text-cyan-300 border-cyan-500/30', activeColor: 'bg-cyan-600 text-white border-cyan-400' },
+    { key: 'driver_order', label: '协助司机 Trip', icon: '🚚', badge: '协助装车配货', color: 'bg-emerald-500/10 text-emerald-300 border-emerald-500/30', activeColor: 'bg-emerald-600 text-white border-emerald-400' },
+    { key: 'shopee', label: 'Shopee 散单', icon: '🛍️', badge: '电商小件打包', color: 'bg-orange-500/10 text-orange-300 border-orange-500/30', activeColor: 'bg-orange-600 text-white border-orange-400' },
+    { key: 'boss_order', label: 'Boss 特单', icon: '👑', badge: '老板指定急单', color: 'bg-purple-500/10 text-purple-300 border-purple-500/30', activeColor: 'bg-purple-600 text-white border-purple-400' },
+];
+
 // Parser for SKU
 const parseBubbleWrapSku = (sku: string): ParsedSku | null => {
     try {
@@ -735,6 +745,17 @@ const ProductionControl: React.FC<ProductionControlProps> = ({ user, jobs = [], 
     const [selectedRolls, setSelectedRolls] = useState<number>(1);
     const [activeSku, setActiveSku] = useState<string | null>(null);
 
+    // 6 大现场专项工作状态
+    const [activeSpecialCategory, setActiveSpecialCategory] = useState<string | null>(null);
+    const [specialContainerNo, setSpecialContainerNo] = useState('');
+    const [specialPalletCount, setSpecialPalletCount] = useState('');
+    const [specialOtHours, setSpecialOtHours] = useState('');
+    const [specialDriverPlate, setSpecialDriverPlate] = useState('');
+    const [specialTripId, setSpecialTripId] = useState('');
+    const [specialShopeeCount, setSpecialShopeeCount] = useState('');
+    const [specialNote, setSpecialNote] = useState('');
+    const [submittingSpecialWork, setSubmittingSpecialWork] = useState(false);
+
     // Takeover Warning Modal State
     const [takeoverWarningRecord, setTakeoverWarningRecord] = useState<any>(null);
     const [lastTakeoverWarning, setLastTakeoverWarning] = useState<any>(null);
@@ -1360,7 +1381,11 @@ const ProductionControl: React.FC<ProductionControlProps> = ({ user, jobs = [], 
     }, [selectedMachine, operatorEmployeeId, isControlMode]);
 
     const handleManualClockOut = async () => {
-        if (!operatorEmployeeId || !selectedMachine) return;
+        const targetMachine = selectedMachine;
+        if (!targetMachine) return;
+        const empId = operatorEmployeeId || user?.employee_id || user?.id || 'OP-AUTO';
+        const empName = operatorName || user?.name || '操作工';
+
         try {
             const now = new Date();
             const clockEventTime = now.toISOString();
@@ -1368,8 +1393,8 @@ const ProductionControl: React.FC<ProductionControlProps> = ({ user, jobs = [], 
             const { data: activeShifts } = await supabase
                 .from('operator_attendance')
                 .select('id, clock_in')
-                .eq('operator_id', operatorEmployeeId)
-                .eq('machine_id', selectedMachine)
+                .or(`operator_id.eq.${empId},operator_name.eq.${empName}`)
+                .eq('machine_id', targetMachine)
                 .is('clock_out', null);
 
             if (activeShifts && activeShifts.length > 0) {
@@ -1380,7 +1405,7 @@ const ProductionControl: React.FC<ProductionControlProps> = ({ user, jobs = [], 
                         .update({
                             clock_out: clockEventTime,
                             hours_worked: Math.round(hoursWorked * 100) / 100,
-                            notes: 'Manual Clock-Out'
+                            notes: 'Manual Clock-Out (一键登出)'
                         })
                         .eq('id', shift.id);
                 }
@@ -1389,21 +1414,26 @@ const ProductionControl: React.FC<ProductionControlProps> = ({ user, jobs = [], 
             // Clear operator_id from active products for this machine
             await supabase.from('machine_active_products')
                 .update({ operator_id: null })
-                .eq('machine_id', selectedMachine);
-
-            const prevMachine = selectedMachine;
+                .eq('machine_id', targetMachine);
 
             if (operatorEmployeeId) {
                 localStorage.removeItem(`operatorClockInTime_${operatorEmployeeId}`);
             }
+            if (empId) {
+                localStorage.removeItem(`operatorClockInTime_${empId}`);
+            }
             setClockInTime(null);
             
             sessionStorage.removeItem('selectedMachine');
+            localStorage.removeItem('selectedMachine');
             localStorage.removeItem('device_machine_id');
             setSelectedMachine(null);
             setMachineMetadata(null);
 
-            alert(`👋 登出成功！已退出机台 ${prevMachine}。\nClock out successful! Unbound from ${prevMachine}.`);
+            // 广播机台解绑事件，让全局万能快拍悬浮胶囊等组件立即同步
+            window.dispatchEvent(new CustomEvent('packsecure:machine-changed', { detail: null }));
+
+            alert(`👋 登出成功！已退出机台 ${targetMachine}。\nClock out successful! Unbound from ${targetMachine}.`);
 
         } catch (err) {
             console.error("Failed to clock out:", err);
@@ -1496,6 +1526,94 @@ const ProductionControl: React.FC<ProductionControlProps> = ({ user, jobs = [], 
     useEffect(() => {
         fetchOperatorTasks();
     }, [user]);
+
+    // 6 大现场专项工作一键报工处理
+    const handleSpecialWorkSubmit = async (e?: React.FormEvent) => {
+        if (e) e.preventDefault();
+        if (!activeSpecialCategory) return;
+
+        setSubmittingSpecialWork(true);
+        try {
+            const catObj = SPECIAL_WORK_CATEGORIES.find(c => c.key === activeSpecialCategory);
+            const catLabel = catObj?.label || activeSpecialCategory;
+
+            let summary = '';
+            const detailParts: string[] = [];
+
+            if (activeSpecialCategory === 'Container') {
+                if (specialContainerNo) detailParts.push(`柜号: ${specialContainerNo.toUpperCase()}`);
+                if (specialPalletCount) detailParts.push(`卸柜: ${specialPalletCount} 托`);
+                summary = `原料采购货柜${specialContainerNo ? ` ${specialContainerNo.toUpperCase()}` : ''}到厂收货${specialPalletCount ? ` (${specialPalletCount}托)` : ''}`;
+            } else if (activeSpecialCategory === 'OT') {
+                if (specialOtHours) detailParts.push(`加班工时: ${specialOtHours} 小时`);
+                summary = `车间加班${specialOtHours ? ` ${specialOtHours}小时` : ''}`;
+            } else if (activeSpecialCategory === 'handling') {
+                if (specialPalletCount) detailParts.push(`搬运打托: ${specialPalletCount} 托`);
+                summary = `搬运打托${specialPalletCount ? ` ${specialPalletCount}托` : ''}`;
+            } else if (activeSpecialCategory === 'driver_order') {
+                if (specialDriverPlate) detailParts.push(`司机/车牌: ${specialDriverPlate}`);
+                if (specialTripId) detailParts.push(`行程单: ${specialTripId}`);
+                summary = `协助司机行程${specialDriverPlate ? ` (${specialDriverPlate})` : ''}装车配货`;
+            } else if (activeSpecialCategory === 'shopee') {
+                if (specialShopeeCount) detailParts.push(`打包件数: ${specialShopeeCount} 件`);
+                summary = `Shopee 电商散单打包${specialShopeeCount ? ` ${specialShopeeCount}件` : ''}`;
+            } else if (activeSpecialCategory === 'boss_order') {
+                summary = `老板指定加急特单`;
+            }
+
+            if (specialNote) detailParts.push(`备注: ${specialNote}`);
+
+            const fullTitle = `【${catLabel}】${summary || '现场专项作业'}`;
+            const fullDesc = detailParts.join(' | ') || specialNote || summary;
+
+            const uploaderId = user?.uid || user?.id || operatorEmployeeId || 'OP-AUTO';
+            const uploaderName = user?.name || operatorName || '现场操作工';
+
+            // 1. 插入 tasks 表供车间与管理层大屏实时看板查阅
+            const { error: taskErr } = await supabase.from('tasks').insert({
+                title: fullTitle,
+                description: fullDesc,
+                status: 'Done',
+                priority: activeSpecialCategory === 'boss_order' ? 'High' : 'Normal',
+                assigned_to: uploaderId,
+                created_at: new Date().toISOString()
+            });
+
+            if (taskErr) throw taskErr;
+
+            // 2. 插入 work_photos 表生成现场留档凭证
+            await supabase.from('work_photos').insert({
+                employee_id: operatorEmployeeId || uploaderId,
+                employee_name: uploaderName,
+                photo_url: 'https://images.unsplash.com/photo-1581091226825-a6a2a5aee158?w=800&auto=format&fit=crop',
+                ai_description: `[现场专项工作] ${catLabel}`,
+                user_note: `${fullTitle} - ${fullDesc}`,
+                category: activeSpecialCategory,
+                machine_id: selectedMachine || null,
+                created_at: new Date().toISOString()
+            });
+
+            // 3. 重置表单状态
+            setSpecialContainerNo('');
+            setSpecialPalletCount('');
+            setSpecialOtHours('');
+            setSpecialDriverPlate('');
+            setSpecialTripId('');
+            setSpecialShopeeCount('');
+            setSpecialNote('');
+            setActiveSpecialCategory(null);
+
+            // 4. 刷新操作员任务列表
+            await fetchOperatorTasks();
+
+            alert(`✅ 成功登记【${catLabel}】！\n数据已同步至车间待办与高管中心。`);
+        } catch (err: any) {
+            console.error('Failed to log special work:', err);
+            alert(`登记失败: ${err.message || '网络异常'}`);
+        } finally {
+            setSubmittingSpecialWork(false);
+        }
+    };
 
     // Resolve Machine Metadata
     useEffect(() => {
@@ -2176,28 +2294,36 @@ const ProductionControl: React.FC<ProductionControlProps> = ({ user, jobs = [], 
                             <span className="sm:hidden">{t('配料巡检')}</span>
                         </button>
 
-                        {clockInTime && (
-                            user && user.role === 'Operator' ? (
+                        {(clockInTime || selectedMachine) && (
+                            <div className="flex items-center gap-1.5 shrink-0">
+                                {/* 一键登出按钮 (免扫码直接下机结算考勤) */}
+                                <button
+                                    onClick={async () => {
+                                        const confirmed = window.confirm(`确定要一键登出当前机台【${currentMachineName}】吗？\n系统将自动记录下线考勤时间并解除机台绑定。\nConfirm to clock out from machine ${currentMachineName}?`);
+                                        if (confirmed) {
+                                            await handleManualClockOut();
+                                        }
+                                    }}
+                                    className="bg-rose-600 hover:bg-rose-500 active:scale-95 text-white font-bold py-1.5 px-3 rounded-xl shadow-lg border border-rose-400/50 flex items-center gap-1.5 text-xs shrink-0 transition-all cursor-pointer"
+                                    title={t('一键解绑并记录下线考勤')}
+                                >
+                                    <LogOut size={14} className="text-white" />
+                                    <span>{t('一键登出')}</span>
+                                </button>
+
+                                {/* 扫码登出按钮 (备选) */}
                                 <button
                                     onClick={() => {
                                         hasScannedClockOutRef.current = false;
                                         setIsScanningForClockOut(true);
                                     }}
-                                    className="bg-rose-600/80 hover:bg-rose-600 text-white font-medium py-1.5 px-3 rounded-xl shadow border border-rose-400/40 flex items-center gap-1.5 text-xs shrink-0"
+                                    className="bg-white/5 hover:bg-white/10 text-gray-300 hover:text-white font-medium py-1.5 px-2.5 rounded-xl border border-white/10 flex items-center gap-1 text-xs shrink-0 transition-all cursor-pointer"
+                                    title={t('通过扫描机台二维码登出')}
                                 >
-                                    <Camera size={14} />
+                                    <Camera size={13} className="text-gray-400" />
                                     <span className="hidden sm:inline">{t('扫码登出')}</span>
-                                    <span className="sm:hidden">{t('扫码登出')}</span>
                                 </button>
-                            ) : (
-                                <button
-                                    onClick={handleManualClockOut}
-                                    className="bg-rose-600/80 hover:bg-rose-600 text-white font-medium py-1.5 px-3 rounded-xl shadow border border-rose-400/40 flex items-center gap-1.5 text-xs shrink-0"
-                                >
-                                    <LogOut size={14} />
-                                    <span>{t('登出')}</span>
-                                </button>
-                            )
+                            </div>
                         )}
                     </div>
                 </header>
@@ -2875,6 +3001,214 @@ const ProductionControl: React.FC<ProductionControlProps> = ({ user, jobs = [], 
                                 )}
                             </div>
                             <input ref={fileInputRef} type="file" accept="image/*,video/*" className="hidden" onChange={handlePhotoSelect} />
+
+                            {/* 1.5 现场 6 大专项工作快捷报工板块 */}
+                            <div className="bg-gradient-to-br from-indigo-950/40 via-purple-950/20 to-zinc-900/60 border border-indigo-500/30 rounded-2xl p-4 backdrop-blur-md shadow-xl">
+                                <div className="flex items-center justify-between mb-3">
+                                    <div className="flex items-center gap-2">
+                                        <span className="w-2 h-2 rounded-full bg-emerald-400 animate-pulse" />
+                                        <h3 className="text-xs font-bold text-white flex items-center gap-1.5">
+                                            <Sparkles size={14} className="text-indigo-400" />
+                                            <span>{t('现场 6 大专项工作报工')}</span>
+                                        </h3>
+                                    </div>
+                                    <button
+                                        type="button"
+                                        onClick={() => {
+                                            window.dispatchEvent(new CustomEvent('packsecure:open-smart-intake', {
+                                                detail: { workCategory: activeSpecialCategory || 'Container' }
+                                            }));
+                                        }}
+                                        className="text-[11px] text-indigo-300 hover:text-white bg-indigo-500/20 hover:bg-indigo-500/30 px-2.5 py-1 rounded-xl border border-indigo-400/30 flex items-center gap-1.5 transition-all cursor-pointer"
+                                        title="开启万能快拍拍照与语音识别"
+                                    >
+                                        <Camera size={12} />
+                                        <span>{t('万能快拍')}</span>
+                                    </button>
+                                </div>
+
+                                {/* 6 大专项分类快捷选择芯片 */}
+                                <div className="grid grid-cols-3 gap-1.5 mb-3">
+                                    {SPECIAL_WORK_CATEGORIES.map(cat => (
+                                        <button
+                                            key={cat.key}
+                                            type="button"
+                                            onClick={() => {
+                                                setActiveSpecialCategory(cat.key === activeSpecialCategory ? null : cat.key);
+                                            }}
+                                            className={`p-2 rounded-xl border text-[11px] font-bold flex flex-col items-center justify-center gap-0.5 transition-all active:scale-95 cursor-pointer ${
+                                                activeSpecialCategory === cat.key
+                                                    ? `${cat.activeColor} shadow-md scale-[1.02]`
+                                                    : `${cat.color} hover:border-white/20 opacity-80 hover:opacity-100`
+                                            }`}
+                                        >
+                                            <span className="text-base">{cat.icon}</span>
+                                            <span className="truncate w-full text-center">{cat.label}</span>
+                                            <span className="text-[9px] opacity-70 font-normal truncate">{cat.badge}</span>
+                                        </button>
+                                    ))}
+                                </div>
+
+                                {/* 当选中某分类时展开极速填报面板 */}
+                                {activeSpecialCategory && (
+                                    <form onSubmit={handleSpecialWorkSubmit} className="p-3 bg-white/[0.03] border border-white/10 rounded-xl space-y-2.5 animate-fade-in">
+                                        <div className="flex items-center justify-between text-xs font-semibold text-indigo-300 border-b border-white/5 pb-1.5">
+                                            <span>正在登记: {SPECIAL_WORK_CATEGORIES.find(c => c.key === activeSpecialCategory)?.label}</span>
+                                            <button
+                                                type="button"
+                                                onClick={() => setActiveSpecialCategory(null)}
+                                                className="text-gray-400 hover:text-white text-[10px] cursor-pointer"
+                                            >
+                                                ✕ 取消
+                                            </button>
+                                        </div>
+
+                                        {activeSpecialCategory === 'Container' && (
+                                            <div className="grid grid-cols-2 gap-2">
+                                                <div>
+                                                    <label className="text-[10px] text-gray-400">货柜号 (Container No)</label>
+                                                    <input
+                                                        type="text"
+                                                        placeholder="例: MSCU-123456"
+                                                        value={specialContainerNo}
+                                                        onChange={e => setSpecialContainerNo(e.target.value)}
+                                                        className="w-full bg-white/5 border border-white/10 text-xs px-2.5 py-1.5 rounded-lg focus:border-indigo-500 focus:outline-none text-white uppercase"
+                                                    />
+                                                </div>
+                                                <div>
+                                                    <label className="text-[10px] text-gray-400">卸柜托数 / 件数</label>
+                                                    <input
+                                                        type="number"
+                                                        placeholder="例: 20"
+                                                        value={specialPalletCount}
+                                                        onChange={e => setSpecialPalletCount(e.target.value)}
+                                                        className="w-full bg-white/5 border border-white/10 text-xs px-2.5 py-1.5 rounded-lg focus:border-indigo-500 focus:outline-none text-white"
+                                                    />
+                                                </div>
+                                            </div>
+                                        )}
+
+                                        {activeSpecialCategory === 'OT' && (
+                                            <div>
+                                                <label className="text-[10px] text-gray-400">加班工时 (小时)</label>
+                                                <input
+                                                    type="number"
+                                                    step="0.5"
+                                                    placeholder="例: 2.5"
+                                                    value={specialOtHours}
+                                                    onChange={e => setSpecialOtHours(e.target.value)}
+                                                    className="w-full bg-white/5 border border-white/10 text-xs px-2.5 py-1.5 rounded-lg focus:border-amber-500 focus:outline-none text-white"
+                                                    required
+                                                />
+                                            </div>
+                                        )}
+
+                                        {activeSpecialCategory === 'handling' && (
+                                            <div>
+                                                <label className="text-[10px] text-gray-400">搬运 / 打托托数 (Pallets)</label>
+                                                <input
+                                                    type="number"
+                                                    placeholder="例: 15"
+                                                    value={specialPalletCount}
+                                                    onChange={e => setSpecialPalletCount(e.target.value)}
+                                                    className="w-full bg-white/5 border border-white/10 text-xs px-2.5 py-1.5 rounded-lg focus:border-cyan-500 focus:outline-none text-white"
+                                                    required
+                                                />
+                                            </div>
+                                        )}
+
+                                        {activeSpecialCategory === 'driver_order' && (
+                                            <div className="grid grid-cols-2 gap-2">
+                                                <div>
+                                                    <label className="text-[10px] text-gray-400">司机 / 卡车车牌</label>
+                                                    <input
+                                                        type="text"
+                                                        placeholder="例: Ah Seng / PGD1234"
+                                                        value={specialDriverPlate}
+                                                        onChange={e => setSpecialDriverPlate(e.target.value)}
+                                                        className="w-full bg-white/5 border border-white/10 text-xs px-2.5 py-1.5 rounded-lg focus:border-emerald-500 focus:outline-none text-white"
+                                                    />
+                                                </div>
+                                                <div>
+                                                    <label className="text-[10px] text-gray-400">协助行程单 (Trip)</label>
+                                                    <input
+                                                        type="text"
+                                                        placeholder="例: TRIP-1"
+                                                        value={specialTripId}
+                                                        onChange={e => setSpecialTripId(e.target.value)}
+                                                        className="w-full bg-white/5 border border-white/10 text-xs px-2.5 py-1.5 rounded-lg focus:border-emerald-500 focus:outline-none text-white"
+                                                    />
+                                                </div>
+                                            </div>
+                                        )}
+
+                                        {activeSpecialCategory === 'shopee' && (
+                                            <div>
+                                                <label className="text-[10px] text-gray-400">打包件数 (包裹数)</label>
+                                                <input
+                                                    type="number"
+                                                    placeholder="例: 50"
+                                                    value={specialShopeeCount}
+                                                    onChange={e => setSpecialShopeeCount(e.target.value)}
+                                                    className="w-full bg-white/5 border border-white/10 text-xs px-2.5 py-1.5 rounded-lg focus:border-orange-500 focus:outline-none text-white"
+                                                    required
+                                                />
+                                            </div>
+                                        )}
+
+                                        {activeSpecialCategory === 'boss_order' && (
+                                            <div>
+                                                <label className="text-[10px] text-gray-400">老板特单加急说明 (Notes)</label>
+                                                <input
+                                                    type="text"
+                                                    placeholder="例: VIP客户急需20卷黑膜，老板交代优先插单生产"
+                                                    value={specialNote}
+                                                    onChange={e => setSpecialNote(e.target.value)}
+                                                    className="w-full bg-white/5 border border-white/10 text-xs px-2.5 py-1.5 rounded-lg focus:border-purple-500 focus:outline-none text-white"
+                                                    required
+                                                />
+                                            </div>
+                                        )}
+
+                                        {activeSpecialCategory !== 'boss_order' && (
+                                            <div>
+                                                <label className="text-[10px] text-gray-400">补充说明 / 备注</label>
+                                                <input
+                                                    type="text"
+                                                    placeholder="选填: 现场说明或情况备注"
+                                                    value={specialNote}
+                                                    onChange={e => setSpecialNote(e.target.value)}
+                                                    className="w-full bg-white/5 border border-white/10 text-xs px-2.5 py-1.5 rounded-lg focus:border-indigo-500 focus:outline-none text-white"
+                                                />
+                                            </div>
+                                        )}
+
+                                        <div className="flex gap-2 pt-1">
+                                            <button
+                                                type="submit"
+                                                disabled={submittingSpecialWork}
+                                                className="flex-1 bg-gradient-to-r from-indigo-600 to-purple-600 hover:from-indigo-500 hover:to-purple-500 text-white font-bold py-2 px-3 rounded-xl text-xs flex items-center justify-center gap-1.5 shadow-md active:scale-95 transition-all cursor-pointer disabled:opacity-50"
+                                            >
+                                                {submittingSpecialWork ? <Loader className="animate-spin" size={13} /> : <Check size={13} />}
+                                                <span>一键提交专项工作</span>
+                                            </button>
+                                            <button
+                                                type="button"
+                                                onClick={() => {
+                                                    window.dispatchEvent(new CustomEvent('packsecure:open-smart-intake', {
+                                                        detail: { workCategory: activeSpecialCategory }
+                                                    }));
+                                                }}
+                                                className="px-3 bg-white/5 hover:bg-white/10 text-gray-300 rounded-xl border border-white/10 text-xs flex items-center gap-1 cursor-pointer"
+                                                title="改用拍照/语音万能快拍"
+                                            >
+                                                <Camera size={13} />
+                                                <span>快拍</span>
+                                            </button>
+                                        </div>
+                                    </form>
+                                )}
+                            </div>
 
                             {/* 2. OPERATOR TASKS CHECKLIST */}
                             <div className="bg-white/5 border border-white/10 rounded-2xl p-4 backdrop-blur-md">

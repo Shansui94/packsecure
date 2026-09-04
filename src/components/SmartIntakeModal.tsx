@@ -118,11 +118,20 @@ export const SmartIntakeModal: React.FC<SmartIntakeModalProps> = ({ currentUser,
             setBoundMachine(getBoundOperatorMachine());
         };
 
+        const handleOpenIntake = (e: any) => {
+            setIsOpen(true);
+            if (e.detail?.workCategory) {
+                setSelectedWorkCategory(e.detail.workCategory);
+            }
+        };
+
         window.addEventListener('packsecure:machine-changed', handleMachineChange);
         window.addEventListener('storage', handleStorage);
+        window.addEventListener('packsecure:open-smart-intake', handleOpenIntake);
         return () => {
             window.removeEventListener('packsecure:machine-changed', handleMachineChange);
             window.removeEventListener('storage', handleStorage);
+            window.removeEventListener('packsecure:open-smart-intake', handleOpenIntake);
         };
     }, []);
 

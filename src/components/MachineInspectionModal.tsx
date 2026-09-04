@@ -36,6 +36,13 @@ interface MachineInspectionModalProps {
 
 type ScrewType = 'Screw_A' | 'Screw_B' | 'Screw_C';
 
+// 稳健判断单位是否为 "包"（Bag / 25kg），跨中英马泰印多语言及旧数据兼容
+export const isBagUnit = (u?: string | null): boolean => {
+    if (!u) return false;
+    const s = u.trim().toLowerCase();
+    return s === 'bag' || s === '包' || s === '包包' || s === 'beg' || s.includes('bag') || s.includes('25kg') || s.includes('包');
+};
+
 interface MaterialItemState {
     id: string;
     name: string;
@@ -73,26 +80,26 @@ const getMasterRawMaterialPresets = (t: any) => [
 const getInitialPresetMaterials = (t: any): Record<ScrewType, MaterialItemState[]> => ({
 
     Screw_A: [
-        { id: 'a1', name: 'LDPE 2426H', sku: 'RM-LDPE-2426H', unit: t('Bag'), prevQty: 3, newQty: 3 },
-        { id: 'a2', name: 'LDPE 6238', sku: 'RM-LDPE-6238', unit: t('Bag'), prevQty: 1, newQty: 1 },
-        { id: 'a3', name: 'HDPE / GC 7260', sku: 'RM-HDPE-7260', unit: t('Bag'), prevQty: 5, newQty: 5 },
-        { id: 'a4', name: 'C1802 / 7042', sku: 'RM-C1802', unit: t('Bag'), prevQty: 8, newQty: 8 },
-        { id: 'a5', name: 'L1220F / 1218WJ', sku: 'RM-L1220F', unit: t('Bag'), prevQty: 5, newQty: 5 },
+        { id: 'a1', name: 'LDPE 2426H', sku: 'RM-LDPE-2426H', unit: 'bag', prevQty: 3, newQty: 3 },
+        { id: 'a2', name: 'LDPE 6238', sku: 'RM-LDPE-6238', unit: 'bag', prevQty: 1, newQty: 1 },
+        { id: 'a3', name: 'HDPE / GC 7260', sku: 'RM-HDPE-7260', unit: 'bag', prevQty: 5, newQty: 5 },
+        { id: 'a4', name: 'C1802 / 7042', sku: 'RM-C1802', unit: 'bag', prevQty: 8, newQty: 8 },
+        { id: 'a5', name: 'L1220F / 1218WJ', sku: 'RM-L1220F', unit: 'bag', prevQty: 5, newQty: 5 },
         { id: 'a6', name: t('Recycle (scrap/recycling)'), sku: 'RM-RECYCLE', unit: 'kg', prevQty: 10, newQty: 10 },
         { id: 'a7', name: t('Black (black masterbatch)'), sku: 'RM-MB-BLACK', unit: 'kg', prevQty: 16, newQty: 16 },
     ],
     Screw_B: [
-        { id: 'b1', name: 'LDPE 2426H', sku: 'RM-LDPE-2426H', unit: t('Bag'), prevQty: 3, newQty: 3 },
-        { id: 'b2', name: t('HDPE polyethylene material'), sku: 'RM-HDPE-BASE', unit: t('Bag'), prevQty: 6, newQty: 6 },
-        { id: 'b3', name: '2192J / 18020SA / L1220F', sku: 'RM-MIX-2192J', unit: t('Bag'), prevQty: 4, newQty: 4 },
-        { id: 'b4', name: 'C1802 / 7042', sku: 'RM-C1802', unit: t('Bag'), prevQty: 11, newQty: 11 },
+        { id: 'b1', name: 'LDPE 2426H', sku: 'RM-LDPE-2426H', unit: 'bag', prevQty: 3, newQty: 3 },
+        { id: 'b2', name: t('HDPE polyethylene material'), sku: 'RM-HDPE-BASE', unit: 'bag', prevQty: 6, newQty: 6 },
+        { id: 'b3', name: '2192J / 18020SA / L1220F', sku: 'RM-MIX-2192J', unit: 'bag', prevQty: 4, newQty: 4 },
+        { id: 'b4', name: 'C1802 / 7042', sku: 'RM-C1802', unit: 'bag', prevQty: 11, newQty: 11 },
         { id: 'b5', name: t('Recycle (scrap/recycling)'), sku: 'RM-RECYCLE', unit: 'kg', prevQty: 20, newQty: 20 },
         { id: 'b6', name: t('Plastic (transparent plastic material)'), sku: 'RM-PLASTIC', unit: 'kg', prevQty: 10, newQty: 10 },
     ],
     Screw_C: [
-        { id: 'c1', name: 'LDPE 2426H', sku: 'RM-LDPE-2426H', unit: t('Bag'), prevQty: 3, newQty: 3 },
-        { id: 'c2', name: 'HDPE / GC 7260', sku: 'RM-HDPE-7260', unit: t('Bag'), prevQty: 5, newQty: 5 },
-        { id: 'c3', name: 'C1802 / 7042', sku: 'RM-C1802', unit: t('Bag'), prevQty: 8, newQty: 8 },
+        { id: 'c1', name: 'LDPE 2426H', sku: 'RM-LDPE-2426H', unit: 'bag', prevQty: 3, newQty: 3 },
+        { id: 'c2', name: 'HDPE / GC 7260', sku: 'RM-HDPE-7260', unit: 'bag', prevQty: 5, newQty: 5 },
+        { id: 'c3', name: 'C1802 / 7042', sku: 'RM-C1802', unit: 'bag', prevQty: 8, newQty: 8 },
         { id: 'c4', name: t('Recycle (scrap/recycling)'), sku: 'RM-RECYCLE', unit: 'kg', prevQty: 15, newQty: 15 },
     ]
 });
@@ -224,7 +231,7 @@ export const MachineInspectionModal: React.FC<MachineInspectionModalProps> = ({
     const [showAddMatForm, setShowAddMatForm] = useState(false);
     const [newMatName, setNewMatName] = useState('');
     const [newMatQty, setNewMatQty] = useState<number>(3);
-    const [newMatUnit, setNewMatUnit] = useState<string>(t('包'));
+    const [newMatUnit, setNewMatUnit] = useState<string>('bag');
 
     // 提交保存状态
     const [isSavingFullRecipe, setIsSavingFullRecipe] = useState(false);
@@ -372,11 +379,12 @@ export const MachineInspectionModal: React.FC<MachineInspectionModalProps> = ({
 
         const newId = Date.now().toString();
         const defaultPhoto = findMaterialStandardPhoto(name, globalPhotoMap);
+        const standardUnit = isBagUnit(newMatUnit) ? 'bag' : 'kg';
         const newItem: MaterialItemState = {
             id: newId,
             name: name,
             sku: `RM-${name.replace(/\s+/g, '-').toUpperCase()}`,
-            unit: newMatUnit,
+            unit: standardUnit,
             prevQty: newMatQty,
             newQty: newMatQty,
             photoUrl: defaultPhoto || undefined
@@ -562,17 +570,38 @@ export const MachineInspectionModal: React.FC<MachineInspectionModalProps> = ({
         }
     };
 
-    // 手动切换单位
+    // 🔁 手动切换单位（包 ⇋ kg）并智能换算数量，同时同步保存云端
     const handleToggleUnit = (id: string) => {
-        setScrewMaterials(prev => ({
-            ...prev,
-            [selectedScrew]: (prev[selectedScrew] || []).map(m => {
+        const targetMat = currentMaterials.find(m => m.id === id);
+        if (!targetMat) return;
+
+        const currentlyBag = isBagUnit(targetMat.unit);
+        let convertedQty = targetMat.newQty;
+        let nextUnit: 'bag' | 'kg' = 'bag';
+
+        if (currentlyBag) {
+            // 包 ➔ kg：例如 3 包 ➔ 75 kg
+            convertedQty = Math.round(targetMat.newQty * 25);
+            nextUnit = 'kg';
+        } else {
+            // kg ➔ 包：例如 75 kg ➔ 3 包；非 25 整倍数保留 1 位小数
+            const bags = targetMat.newQty / 25;
+            convertedQty = Number.isInteger(bags) ? bags : Number(bags.toFixed(1));
+            nextUnit = 'bag';
+        }
+
+        const updatedMaterials = {
+            ...screwMaterials,
+            [selectedScrew]: (screwMaterials[selectedScrew] || []).map(m => {
                 if (m.id === id) {
-                    return { ...m, unit: m.unit === t('Bag') ? 'kg' : t('Bag') };
+                    return { ...m, unit: nextUnit, newQty: convertedQty, prevQty: targetMat.newQty };
                 }
                 return m;
             })
-        }));
+        };
+
+        // 立即全端同步保存
+        syncScrewMaterialsToCloud(updatedMaterials);
     };
 
     // 辅助工具：上传照片 DataURL 到 Supabase work-photos 存储桶，获取跨端永久访问的 URL
@@ -875,9 +904,14 @@ export const MachineInspectionModal: React.FC<MachineInspectionModalProps> = ({
 
                         {/* 配料表头部：直接在此更改 Recipe */}
                         <div className="flex items-center justify-between">
-                            <span className="text-xs font-bold text-gray-300 flex items-center gap-1">
-                                📦 {currentScrewConfig.name}  {t('current recipe (')}{currentMaterials.length}  {t('item)')}
-                                                            </span>
+                            <div className="flex items-center gap-2.5">
+                                <span className="text-xs font-bold text-gray-200 flex items-center gap-1">
+                                    📦 {currentScrewConfig.name} <span className="text-gray-400">({currentMaterials.length} {t('item')})</span>
+                                </span>
+                                <span className="text-[11px] font-mono font-black text-emerald-400 bg-emerald-950/80 px-2 py-0.5 rounded-md border border-emerald-500/40">
+                                    {t('Total Batch')}: {currentMaterials.reduce((sum, mat) => sum + (isBagUnit(mat.unit) ? (Number(mat.newQty) || 0) * 25 : (Number(mat.newQty) || 0)), 0)} kg
+                                </span>
+                            </div>
 
                             <button
                                 onClick={() => setShowAddMatForm(true)}
@@ -936,7 +970,7 @@ export const MachineInspectionModal: React.FC<MachineInspectionModalProps> = ({
                                             onChange={(e) => setNewMatUnit(e.target.value as any)}
                                             className="w-full bg-gray-900 border border-gray-800 text-xs px-2 py-1.5 rounded-lg text-amber-300 font-bold"
                                         >
-                                            <option value={t('Bag')}>{t('Bag (25kg)')}</option>
+                                            <option value="bag">{t('Bag (25kg)')}</option>
                                             <option value="kg">kg</option>
                                         </select>
                                     </div>
@@ -961,7 +995,7 @@ export const MachineInspectionModal: React.FC<MachineInspectionModalProps> = ({
                                                                     </div>
                             ) : (
                                 currentMaterials.map((mat) => {
-                                    const isBags = mat.unit === t('Bag');
+                                    const isBags = isBagUnit(mat.unit);
                                     const calculatedKg = isBags ? mat.newQty * 25 : mat.newQty;
 
                                     return (
@@ -1031,39 +1065,54 @@ export const MachineInspectionModal: React.FC<MachineInspectionModalProps> = ({
                                                 </div>
                                             </div>
 
-                                            <div className="flex items-center justify-between gap-2">
-                                                {/* 数量调节加减 */}
-                                                <div className="flex items-center space-x-1.5 bg-gray-900 p-1 rounded-lg border border-gray-800">
-                                                    <button
-                                                        onClick={() => handleUpdateQty(mat.id, mat.newQty - 1)}
-                                                        className="px-2 py-1 bg-gray-800 text-gray-300 hover:bg-gray-700 rounded font-bold text-xs"
-                                                    >
-                                                        -1
-                                                    </button>
-                                                    <input
-                                                        type="number"
-                                                        value={mat.newQty}
-                                                        onChange={(e) => handleUpdateQty(mat.id, Number(e.target.value))}
-                                                        className="w-12 text-center font-mono font-black text-amber-400 bg-transparent text-sm focus:outline-none"
-                                                    />
+                                            <div className="flex items-center justify-between gap-2 flex-wrap">
+                                                {/* 数量调节器与单位切换胶囊（排版优化，避免误触） */}
+                                                <div className="flex items-center gap-2">
+                                                    {/* 加减步进器：[-] [输入框] [+] 紧密排列 */}
+                                                    <div className="flex items-center bg-gray-900 rounded-lg border border-gray-800 p-0.5 shadow-inner">
+                                                        <button
+                                                            onClick={() => handleUpdateQty(mat.id, Math.max(0, mat.newQty - 1))}
+                                                            className="w-7 h-7 flex items-center justify-center bg-gray-800 text-gray-300 hover:bg-gray-700 hover:text-white rounded font-bold text-sm transition"
+                                                        >
+                                                            -1
+                                                        </button>
+                                                        <input
+                                                            type="number"
+                                                            value={mat.newQty}
+                                                            onChange={(e) => handleUpdateQty(mat.id, Number(e.target.value))}
+                                                            className="w-12 text-center font-mono font-black text-amber-400 bg-transparent text-sm focus:outline-none"
+                                                        />
+                                                        <button
+                                                            onClick={() => handleUpdateQty(mat.id, mat.newQty + 1)}
+                                                            className="w-7 h-7 flex items-center justify-center bg-gray-800 text-gray-300 hover:bg-gray-700 hover:text-white rounded font-bold text-sm transition"
+                                                        >
+                                                            +1
+                                                        </button>
+                                                    </div>
+
+                                                    {/* 独立单位切换胶囊，点击智能转换并同步 */}
                                                     <button
                                                         onClick={() => handleToggleUnit(mat.id)}
-                                                        className="text-[11px] bg-amber-950/60 text-amber-300 border border-amber-500/40 px-2 py-0.5 rounded font-bold hover:bg-amber-900/60"
-                                                        title={t('Click to switch units (bag/kg)')}
+                                                        className={`text-xs px-2.5 py-1 rounded-lg font-bold border transition flex items-center gap-1.5 cursor-pointer ${
+                                                            isBags
+                                                                ? 'bg-amber-950/80 text-amber-300 border-amber-500/50 hover:bg-amber-900/90 shadow-sm'
+                                                                : 'bg-cyan-950/80 text-cyan-300 border-cyan-500/50 hover:bg-cyan-900/90 shadow-sm'
+                                                        }`}
+                                                        title={t('Click to convert unit (Bag ⇋ kg) with automatic quantity calculation') || '点击切换单位（包 ⇋ kg）自动换算数量'}
                                                     >
-                                                        {mat.unit} {isBags ? t('(25kg/bag)') : ''}
-                                                    </button>
-                                                    <button
-                                                        onClick={() => handleUpdateQty(mat.id, mat.newQty + 1)}
-                                                        className="px-2 py-1 bg-gray-800 text-gray-300 hover:bg-gray-700 rounded font-bold text-xs"
-                                                    >
-                                                        +1
+                                                        <span>{isBags ? t('Bag') : 'kg'}</span>
+                                                        <span className="text-[10px] opacity-75 font-mono">{isBags ? '(25kg/包)' : '(公斤)'}</span>
+                                                        <span className="text-[9px] opacity-60">⇄</span>
                                                     </button>
                                                 </div>
 
-                                                {/* 重量计算提示 */}
-                                                <div className="text-[11px] text-gray-400 font-mono">
-                                                    = <span className="font-bold text-emerald-400">{calculatedKg}</span> kg
+                                                {/* 折合重量直观提示 */}
+                                                <div className="text-xs font-mono text-gray-300 bg-gray-900/80 px-2.5 py-1 rounded-lg border border-gray-800/80">
+                                                    {isBags ? (
+                                                        <>折合: <span className="font-black text-emerald-400 text-sm">{calculatedKg}</span> kg</>
+                                                    ) : (
+                                                        <><span className="font-black text-cyan-400 text-sm">{mat.newQty}</span> kg <span className="text-[10px] text-gray-400 font-normal">({(mat.newQty / 25).toFixed(1)}包)</span></>
+                                                    )}
                                                 </div>
                                             </div>
                                         </div>
