@@ -379,6 +379,10 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
                             .is('clock_out', null)
                             .select('id');
 
+                        if (attErr) {
+                            console.warn('Operator clock-out warning:', attErr.message);
+                        }
+
                         commitResults.recordsCreated.push({
                             table: 'operator_attendance',
                             action: 'logout',

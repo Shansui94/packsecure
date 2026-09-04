@@ -52,7 +52,6 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
             topic = '',
             existingContent = '',
             language = 'zh', // 'zh' | 'zh-bm' | 'zh-en'
-            sopType = 'standard', // 'standard' | 'troubleshooting' | 'safety' | 'delivery'
             category = 'production',
             targetRoles = [],
             pageId = '',
@@ -225,7 +224,7 @@ ${existingContent}
         }
 
         if (!responseText) {
-            console.warn("[SOP AI] Gemini models unavailable, using industrial rule-based generator fallback.");
+            console.warn("[SOP AI] Gemini models unavailable, using industrial rule-based generator fallback. Last error:", lastError?.message || lastError);
             const fallbackResult = generateFallbackIndustrialSOP({
                 action,
                 topic: topic || req.body.message || '',
