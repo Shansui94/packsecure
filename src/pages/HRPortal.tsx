@@ -19,6 +19,12 @@ import {
     awardBadgeToEmployee 
 } from '../services/badgeService';
 import { logActivity } from '../utils/logger';
+import { 
+    MODULE_GROUPS, 
+    MODULE_REGISTRY, 
+    getDefaultRolePermissionsMap, 
+    UserRole 
+} from '../config/modules';
 
 const formatYYYYMMDD = (dateStr: string | null | undefined): string => {
     if (!dateStr) return '';
@@ -74,45 +80,15 @@ interface Employee {
     base_location?: string;
 }
 
-const ALL_PAGES = [
-    { id: 'factory-live-os', label: 'Factory Live OS', group: 'Factory' },
-    { id: 'scanner', label: 'Production Control', group: 'Factory' },
-    { id: 'livestock', label: 'Live Stock', group: 'Factory' },
-    { id: 'production', label: 'Production Logs', group: 'Factory' },
-    { id: 'floor-plan', label: i18next.t('Floor Plan (factory layout)'), group: 'Factory' },
-    { id: 'machine-schedule', label: i18next.t('Machine Schedule'), group: 'Factory' },
-    { id: 'inventory', label: 'Inventory', group: 'Inventory' },
-    { id: 'products', label: 'Product Library', group: 'Inventory' },
-    { id: 'stock-movement', label: 'Stock Movement', group: 'Inventory' },
-    { id: 'stock-audit', label: 'Stock Audit', group: 'Inventory' },
-    { id: 'audit-report', label: 'Audit Report', group: 'Inventory' },
-    { id: 'delivery', label: 'Trip Management', group: 'Logistics' },
-    { id: 'order-summary', label: 'Daily Prep', group: 'Logistics' },
-    { id: 'lorry-management', label: 'Lorry Fleet', group: 'Logistics' },
-    { id: 'delivery-driver', label: 'My Delivery', group: 'Driver' },
-    { id: 'delivery-history', label: 'My History', group: 'Driver' },
-    { id: 'lorry-service', label: 'Lorry Service', group: 'Driver' },
-    { id: 'hr', label: 'HR Portal', group: 'Admin' },
-    { id: 'operators', label: i18next.t('operators'), group: 'Admin' },
-    { id: 'driver-management', label: 'Driver Management', group: 'Admin' },
-    { id: 'data-v2', label: 'Data Command', group: 'Admin' },
-    { id: 'iot', label: 'IoT Settings', group: 'Admin' },
-    { id: 'reports', label: 'Executive Reports', group: 'Admin' },
-    { id: 'activity-logs', label: i18next.t('Activity Logs (operation logs)'), group: 'Admin' },
-    { id: 'dev-log', label: i18next.t('Dev Log'), group: 'Admin' },
-    { id: 'maintenance', label: 'Maintenance Control', group: 'Other' },
-    { id: 'claims', label: 'Claims', group: 'Other' },
-    { id: 'notes', label: 'Notes', group: 'Other' },
-    { id: 'tasks', label: 'Tasks', group: 'Other' },
-    { id: 'driver-leave', label: 'Apply Leave', group: 'Other' },
-    { id: 'report-history', label: 'Reports', group: 'Other' },
-    { id: 'leave-calendar', label: i18next.t('Leave Center'), group: 'Other' },
-    { id: 'sop-center', label: i18next.t('SOP Guide'), group: 'Other' },
-    { id: 'work-photos', label: i18next.t('Work Photos'), group: 'Other' },
-    { id: 'personal-report', label: i18next.t('Monthly Report'), group: 'Other' },
-];
+const ALL_PAGES = MODULE_REGISTRY.map(m => ({
+    id: m.id,
+    label: m.label,
+    group: m.group
+}));
 
-const ALL_ROLES = ['SuperAdmin', 'Admin', 'Manager', 'LogisticsCoordinator', 'HR', 'Operator', 'Driver'];
+const ALL_ROLES: UserRole[] = [
+    'SuperAdmin', 'Admin', 'Manager', 'LogisticsCoordinator', 'HR', 'Operator', 'Driver', 'Sales', 'Finance'
+];
 
 const MONTH_NAMES = ['January', 'February', 'March', 'April', 'May', 'June',
     'July', 'August', 'September', 'October', 'November', 'December'];
@@ -367,6 +343,11 @@ const EmployeeModal: React.FC<{
                 }
             });
 
+            // Dispatch instant realtime update to active browser sessions
+            window.dispatchEvent(new CustomEvent('packsecure:user-permissions-updated', {
+                detail: payload.role_modules
+            }));
+
             onSave();
             onClose();
         }
@@ -505,65 +486,75 @@ const EmployeeModal: React.FC<{
                     )}
 
                     {/* Custom Module Unlocks */}
-                    {['SuperAdmin', 'Admin', 'Manager'].includes(currentUser?.role || '') && (
-                        <div className="pt-4 border-t border-white/5 space-y-2">
-                            <label className="block text-[10px] text-emerald-400 font-bold uppercase tracking-widest">
-                                
-                                                                {t('🛡️ Custom Module Unlocks (privilege activation)')}
-                                                            </label>
-                            <p className="text-[10px] text-gray-500 leading-tight">
-                                
-                                                                {t('grant_exclusive_page_access_no_role_chan')}
-                                                            </p>
-                            <div className="grid grid-cols-2 gap-2">
-                                {[
-                                    { id: 'stock-audit', label: t('Stock Audit') },
-                                    { id: 'stock-movement', label: t('Stock Move') },
-                                    { id: 'inventory', label: t('Inventory (raw material inventory)') },
-                                    { id: 'livestock', label: t('Live Stock (finished product warehouse)') },
-                                    { id: 'scanner', label: t('Scanner (production coding)') },
-                                    { id: 'machine-schedule', label: t('Machine Schedule') },
-                                    { id: 'floor-plan', label: t('Floor Plan (factory layout)') },
-                                    { id: 'data-v2', label: t('Data Base (underlying library)') },
-                                    { id: 'order-summary', label: t('Daily Prep (production preparation)') },
-                                    { id: 'delivery', label: t('Trip Admin (executive dispatch)') },
-                                    { id: 'delivery-driver', label: t('My Delivery (driver mobile app)') },
-                                    { id: 'reports', label: t('Exec Reports (Total Reports)') },
-                                    { id: 'maintenance', label: t('Maintenance (machine maintenance)') },
-                                    { id: 'hr', label: t('HR Portal (Administrative Personnel)') },
-                                    { id: 'leave-calendar', label: t('Leave Center') },
-                                    { id: 'sop-center', label: t('SOP Guide') },
-                                    { id: 'work-photos', label: t('Work Photos') },
-                                    { id: 'personal-report', label: t('Monthly Report') },
-                                    { id: 'activity-logs', label: t('Activity Logs (operation logs)') },
-                                    { id: 'dev-log', label: t('Dev Log') }
-                                ].map(mod => {
-                                    const roleModules = form.role_modules || [];
-                                    const isEnabled = roleModules.includes(mod.id);
-                                    return (
-                                        <button
-                                            key={mod.id}
-                                            type="button"
-                                            onClick={() => {
-                                                const newMods = isEnabled 
-                                                    ? roleModules.filter(m => m !== mod.id)
-                                                    : [...roleModules, mod.id];
-                                                setForm(f => ({ ...f, role_modules: newMods }));
-                                            }}
-                                            className={`px-2 py-2 rounded-xl text-left text-xs font-bold transition-all border flex items-center justify-between ${
-                                                isEnabled 
-                                                    ? 'bg-emerald-500/10 border-emerald-500/30 text-emerald-400'
-                                                    : 'bg-white/5 border-white/5 text-gray-500 hover:border-white/10 hover:text-gray-300'
-                                            }`}
-                                        >
-                                            <span className="truncate">{mod.label}</span>
-                                            {isEnabled && <div className="w-1.5 h-1.5 rounded-full bg-emerald-400 shadow-[0_0_5px_rgba(16,185,129,0.8)]" />}
-                                        </button>
-                                    );
-                                })}
+                    {['SuperAdmin', 'Admin', 'Manager'].includes(currentUser?.role || '') && (() => {
+                        const defaultMap = getDefaultRolePermissionsMap();
+                        const roleDefaultSet = defaultMap[form.role || ''] || new Set<string>();
+                        const roleModules = form.role_modules || [];
+
+                        return (
+                            <div className="pt-4 border-t border-white/5 space-y-3">
+                                <div>
+                                    <label className="block text-[10px] text-emerald-400 font-bold uppercase tracking-widest">
+                                        🛡️ 员工特权模块分配 (Custom Module Unlocks)
+                                    </label>
+                                    <p className="text-[10px] text-gray-400 mt-0.5 leading-tight">
+                                        针对该员工单独开通特定功能，即使所属角色默认无权限也可使用。
+                                    </p>
+                                </div>
+
+                                <div className="space-y-3 max-h-60 overflow-y-auto pr-1 custom-scrollbar">
+                                    {MODULE_GROUPS.map(group => {
+                                        const groupMods = MODULE_REGISTRY.filter(m => m.group === group.id && !m.hiddenFromNav);
+                                        if (groupMods.length === 0) return null;
+
+                                        return (
+                                            <div key={group.id} className="bg-black/40 rounded-xl p-2.5 border border-white/5">
+                                                <div className="text-[10px] font-bold text-gray-400 uppercase tracking-wider mb-2 flex items-center justify-between">
+                                                    <span>{group.title}</span>
+                                                    <span className="text-[9px] text-gray-500">{group.description}</span>
+                                                </div>
+                                                <div className="grid grid-cols-2 gap-1.5">
+                                                    {groupMods.map(mod => {
+                                                        const isRoleDefault = roleDefaultSet.has(mod.id);
+                                                        const isAddonEnabled = roleModules.includes(mod.id);
+
+                                                        return (
+                                                            <button
+                                                                key={mod.id}
+                                                                type="button"
+                                                                onClick={() => {
+                                                                    if (isRoleDefault) return;
+                                                                    const newMods = isAddonEnabled
+                                                                        ? roleModules.filter(m => m !== mod.id)
+                                                                        : [...roleModules, mod.id];
+                                                                    setForm(f => ({ ...f, role_modules: newMods }));
+                                                                }}
+                                                                title={isRoleDefault ? '此模块已由员工角色基线自带 (Inherited from role)' : '点击开通/取消个人特权'}
+                                                                className={`px-2 py-1.5 rounded-lg text-left text-xs font-medium transition-all border flex items-center justify-between gap-1 ${
+                                                                    isRoleDefault
+                                                                        ? 'bg-blue-500/10 border-blue-500/20 text-blue-300 cursor-default'
+                                                                        : isAddonEnabled
+                                                                        ? 'bg-emerald-500/15 border-emerald-500/40 text-emerald-300 shadow-sm'
+                                                                        : 'bg-white/[0.03] border-white/5 text-gray-400 hover:border-white/10 hover:text-white'
+                                                                }`}
+                                                            >
+                                                                <span className="truncate">{mod.label}</span>
+                                                                {isRoleDefault ? (
+                                                                    <span className="text-[8px] bg-blue-500/20 text-blue-300 px-1 py-0.5 rounded font-mono shrink-0">角色自带</span>
+                                                                ) : isAddonEnabled ? (
+                                                                    <div className="w-1.5 h-1.5 rounded-full bg-emerald-400 shadow-[0_0_5px_rgba(16,185,129,0.8)] shrink-0" />
+                                                                ) : null}
+                                                            </button>
+                                                        );
+                                                    })}
+                                                </div>
+                                            </div>
+                                        );
+                                    })}
+                                </div>
                             </div>
-                        </div>
-                    )}
+                        );
+                    })()}
 
                     {error && <div className="text-red-400 text-xs bg-red-500/10 border border-red-500/20 rounded-xl px-3 py-2">{error}</div>}
                 </div>
@@ -1188,20 +1179,34 @@ const HRPortal: React.FC<HRPortalProps> = ({ user, initialTab, initialRoleFilter
 
     useEffect(() => { fetchEmployees(); }, [fetchEmployees]);
 
-    // ── Permissions ──────────────────────────────────────────
+    // ── RBAC Permissions Management ──────────────────────────
     const fetchPermissions = useCallback(async () => {
         setLoadingPerms(true);
         const { data } = await supabase.from('role_permissions').select('*');
+        const defaultMap = getDefaultRolePermissionsMap();
         const map: Record<string, Record<string, boolean>> = {};
+
+        // 1. Initialize with role default baselines
+        ALL_ROLES.forEach(role => {
+            map[role] = {};
+            MODULE_REGISTRY.forEach(m => {
+                map[role][m.id] = defaultMap[role]?.has(m.id) ?? false;
+            });
+        });
+
+        // 2. Overlay explicit database overrides if present
         (data || []).forEach((r: any) => {
             if (!map[r.role_name]) map[r.role_name] = {};
             map[r.role_name][r.page_id] = r.allowed;
         });
+
         setPermissions(map);
         setLoadingPerms(false);
     }, []);
 
-    useEffect(() => { if (activeTab === 'permissions') fetchPermissions(); }, [activeTab, fetchPermissions]);
+    useEffect(() => { 
+        if (activeTab === 'permissions') fetchPermissions(); 
+    }, [activeTab, fetchPermissions]);
 
     const togglePerm = (role: string, pageId: string) => {
         setPermissions(prev => ({
@@ -1210,19 +1215,54 @@ const HRPortal: React.FC<HRPortalProps> = ({ user, initialTab, initialRoleFilter
         }));
     };
 
+    const resetRoleToDefaults = (role: string) => {
+        const defaultMap = getDefaultRolePermissionsMap();
+        const roleDefaults = defaultMap[role];
+        setPermissions(prev => {
+            const next = { ...prev };
+            next[role] = {};
+            MODULE_REGISTRY.forEach(m => {
+                next[role][m.id] = roleDefaults?.has(m.id) ?? false;
+            });
+            return next;
+        });
+    };
+
+    const toggleAllInRole = (role: string, allow: boolean) => {
+        setPermissions(prev => {
+            const next = { ...prev };
+            next[role] = {};
+            MODULE_REGISTRY.forEach(m => {
+                next[role][m.id] = allow;
+            });
+            return next;
+        });
+    };
+
+    const toggleAllInGroup = (role: string, groupId: string, allow: boolean) => {
+        const groupMods = MODULE_REGISTRY.filter(m => m.group === groupId);
+        setPermissions(prev => {
+            const next = { ...prev, [role]: { ...(prev[role] || {}) } };
+            groupMods.forEach(m => {
+                next[role][m.id] = allow;
+            });
+            return next;
+        });
+    };
+
     const savePermissions = async () => {
         setSavingPerms(true);
         const rows: any[] = [];
-        const targetedRoles = Object.keys(permissions);
+        const targetedRoles = Object.keys(permissions).filter(r => r !== 'SuperAdmin');
 
-        Object.entries(permissions).forEach(([role, pages]) => {
+        targetedRoles.forEach(role => {
+            const pages = permissions[role] || {};
             Object.entries(pages).forEach(([pageId, allowed]) => {
                 rows.push({ role_name: role, page_id: pageId, allowed });
             });
         });
         
         try {
-            // Only wipe the roles we are about to re-insert
             if (targetedRoles.length > 0) {
                 await supabase.from('role_permissions').delete().in('role_name', targetedRoles);
             }
@@ -1231,11 +1271,23 @@ const HRPortal: React.FC<HRPortalProps> = ({ user, initialTab, initialRoleFilter
                 const { error } = await supabase.from('role_permissions').insert(rows);
                 if (error) throw error;
             }
+
+            // Dispatch instant event for active sessions
+            window.dispatchEvent(new CustomEvent('packsecure:user-permissions-updated'));
+
+            logActivity(user, {
+                action: 'PERMISSIONS_UPDATE',
+                module: 'HR / RBAC Matrix',
+                target: `Role Permissions Matrix: ${targetedRoles.join(', ')}`,
+                status: 'SUCCESS',
+                resultSummary: `更新了 ${targetedRoles.length} 个角色的系统功能模块权限`,
+                details: { roles: targetedRoles, rowCount: rows.length }
+            });
             
-            alert('✅ Permissions saved! Changes take effect on next login.');
+            alert('✅ 角色权限已保存！系统已通过实时通道热更新生效。');
         } catch (err: any) {
             console.error("Save failed:", err);
-            alert("❌ Failed to save permissions! Error: " + err.message);
+            alert("❌ 保存权限失败: " + err.message);
         } finally {
             setSavingPerms(false);
         }
@@ -1898,54 +1950,212 @@ const HRPortal: React.FC<HRPortalProps> = ({ user, initialTab, initialRoleFilter
                 </div>
             )}
 
-            {/* ── PAGE PERMISSIONS ── */}
+            {/* ── RBAC PAGE PERMISSIONS MATRIX ── */}
             {activeTab === 'permissions' && (
-                <div>
-                    <div className="flex items-center justify-between mb-4 flex-wrap gap-3">
-                        <div className="flex gap-2 flex-wrap">
-                            {ALL_ROLES.map(role => (
-                                <button key={role} onClick={() => setSelectedPermRole(role)}
-                                    className={`px-3 py-2 rounded-xl text-xs font-bold border transition-all ${selectedPermRole === role ? 'bg-purple-500/20 text-purple-400 border-purple-500/30' : 'bg-white/5 text-gray-500 border-white/5 hover:text-white'}`}>
-                                    {role}
-                                </button>
-                            ))}
+                <div className="space-y-6">
+                    {/* Role Selector and Top Actions */}
+                    <div className="bg-[#0d0d12] border border-white/10 rounded-2xl p-5 shadow-xl space-y-4">
+                        <div className="flex items-center justify-between flex-wrap gap-3">
+                            <div>
+                                <h3 className="text-base font-black text-white flex items-center gap-2">
+                                    <Shield size={18} className="text-purple-400" />
+                                    可视化 RBAC 角色权限矩阵
+                                </h3>
+                                <p className="text-xs text-gray-400 mt-1">
+                                    为不同岗位角色配置默认基线模块。修改保存后，在线用户将通过实时通道无感生效。
+                                </p>
+                            </div>
+
+                            {selectedPermRole !== 'SuperAdmin' && (
+                                <div className="flex items-center gap-2 flex-wrap">
+                                    <button
+                                        type="button"
+                                        onClick={() => resetRoleToDefaults(selectedPermRole)}
+                                        className="flex items-center gap-1.5 px-3 py-2 bg-white/5 hover:bg-white/10 border border-white/10 rounded-xl text-xs text-gray-300 font-bold transition-all cursor-pointer"
+                                        title="重置为系统推荐的角色默认权限"
+                                    >
+                                        <RefreshCw size={13} className="text-amber-400" />
+                                        恢复默认预设
+                                    </button>
+                                    <button
+                                        type="button"
+                                        onClick={() => toggleAllInRole(selectedPermRole, true)}
+                                        className="px-3 py-2 bg-white/5 hover:bg-white/10 border border-white/10 rounded-xl text-xs text-emerald-400 font-bold transition-all cursor-pointer"
+                                    >
+                                        全选开通
+                                    </button>
+                                    <button
+                                        type="button"
+                                        onClick={() => toggleAllInRole(selectedPermRole, false)}
+                                        className="px-3 py-2 bg-white/5 hover:bg-white/10 border border-white/10 rounded-xl text-xs text-rose-400 font-bold transition-all cursor-pointer"
+                                    >
+                                        全部禁用
+                                    </button>
+                                    <button
+                                        type="button"
+                                        onClick={savePermissions}
+                                        disabled={savingPerms}
+                                        className="flex items-center gap-2 px-5 py-2 bg-gradient-to-r from-emerald-600 to-green-600 hover:from-emerald-500 hover:to-green-500 disabled:opacity-50 rounded-xl text-xs text-white font-black shadow-lg shadow-green-950/40 transition-all active:scale-95 cursor-pointer"
+                                    >
+                                        {savingPerms ? <Loader size={14} className="animate-spin" /> : <Save size={14} />}
+                                        保存权限矩阵
+                                    </button>
+                                </div>
+                            )}
                         </div>
-                        <button onClick={savePermissions} disabled={savingPerms}
-                            className="flex items-center gap-2 px-4 py-2.5 bg-green-600 hover:bg-green-500 disabled:opacity-50 rounded-xl text-sm text-white font-bold transition-colors">
-                            {savingPerms ? <Loader size={12} className="animate-spin" /> : <Save size={12} />}
-                            Save Permissions
-                        </button>
+
+                        {/* Role Pills */}
+                        <div className="flex gap-2 flex-wrap pt-2 border-t border-white/5">
+                            {ALL_ROLES.map(role => {
+                                const isSelected = selectedPermRole === role;
+                                const isSA = role === 'SuperAdmin';
+                                return (
+                                    <button
+                                        key={role}
+                                        type="button"
+                                        onClick={() => setSelectedPermRole(role)}
+                                        className={`px-3.5 py-2 rounded-xl text-xs font-bold border transition-all flex items-center gap-1.5 cursor-pointer ${
+                                            isSelected
+                                                ? isSA 
+                                                    ? 'bg-amber-500/20 text-amber-300 border-amber-500/40 shadow-md shadow-amber-950/30'
+                                                    : 'bg-purple-500/20 text-purple-300 border-purple-500/40 shadow-md shadow-purple-950/30'
+                                                : 'bg-white/5 text-gray-400 border-white/5 hover:border-white/10 hover:text-white'
+                                        }`}
+                                    >
+                                        {isSA && <span>👑</span>}
+                                        <span>{role}</span>
+                                    </button>
+                                );
+                            })}
+                        </div>
                     </div>
 
-                    <div className="bg-[#0d0d12] border border-white/5 rounded-2xl p-1 text-xs text-gray-500 mb-4">
-                        <AlertCircle size={12} className="inline mr-1 text-amber-400" />
-                        Page access is saved to DB. Changes apply to users on next login. Unchecked = blocked, Checked = allowed.
+                    {/* Notification Tip */}
+                    <div className="bg-blue-500/10 border border-blue-500/20 rounded-2xl px-4 py-3 text-xs text-blue-300 flex items-start gap-2.5">
+                        <AlertCircle size={16} className="text-blue-400 shrink-0 mt-0.5" />
+                        <div>
+                            <span className="font-bold">两级权限架构提示：</span>
+                            <span className="text-blue-200/80 ml-1">
+                                本表格定义【角色基线】。若需让某位具体员工（如特定 Operator 或 Manager）破格拥有某项特权，请前往
+                                <span className="font-mono bg-blue-500/20 px-1 py-0.5 rounded mx-1 text-white">Personnel (员工列表)</span>
+                                编辑该员工档案，在「🛡️ 员工特权模块分配」中直接勾选即可，无需改动角色全局基线。
+                            </span>
+                        </div>
                     </div>
 
                     {loadingPerms ? (
-                        <div className="flex justify-center py-16"><Loader className="animate-spin" size={24} /></div>
+                        <div className="flex justify-center py-20"><Loader className="animate-spin text-purple-400" size={32} /></div>
+                    ) : selectedPermRole === 'SuperAdmin' ? (
+                        <div className="bg-[#0d0d12] border border-amber-500/20 rounded-3xl p-10 text-center space-y-3">
+                            <div className="w-14 h-14 rounded-2xl bg-amber-500/10 border border-amber-500/30 flex items-center justify-center text-amber-400 mx-auto text-2xl shadow-inner">
+                                👑
+                            </div>
+                            <h3 className="text-lg font-black text-white">SuperAdmin 最高系统管理员</h3>
+                            <p className="text-xs text-gray-400 max-w-md mx-auto leading-relaxed">
+                                SuperAdmin 拥有系统底层所有功能、大屏、管理中心与配置项的永久完全访问权（通配符 <code className="text-amber-300 font-mono">*</code>），不受任何矩阵规则限制。
+                            </p>
+                        </div>
                     ) : (
-                        <div className="space-y-4">
-                            {Object.entries(pageGroups).map(([group, pages]) => (
-                                <div key={group} className="bg-[#0d0d12] border border-white/5 rounded-2xl overflow-hidden">
-                                    <div className="px-4 py-2 border-b border-white/5 text-[10px] font-black text-gray-500 uppercase tracking-widest">{group}</div>
-                                    <div className="divide-y divide-white/5">
-                                        {pages.map(page => {
-                                            const isAllowed = permissions[selectedPermRole]?.[page.id] ?? false;
-                                            return (
-                                                <div key={page.id} className="px-4 py-3 flex items-center justify-between hover:bg-white/[0.02]">
-                                                    <span className="text-sm text-white">{page.label}</span>
-                                                    <button onClick={() => togglePerm(selectedPermRole, page.id)}
-                                                        className={`flex items-center gap-2 px-3 py-1.5 rounded-lg text-xs font-bold border transition-all ${isAllowed ? 'bg-green-500/10 text-green-400 border-green-500/20' : 'bg-white/5 text-gray-600 border-white/5'}`}>
-                                                        {isAllowed ? <ToggleRight size={14} /> : <ToggleLeft size={14} />}
-                                                        {isAllowed ? 'ALLOWED' : 'BLOCKED'}
-                                                    </button>
+                        <div className="space-y-6">
+                            {MODULE_GROUPS.map(group => {
+                                const groupMods = MODULE_REGISTRY.filter(m => m.group === group.id && !m.hiddenFromNav);
+                                if (groupMods.length === 0) return null;
+
+                                const rolePermMap = permissions[selectedPermRole] || {};
+                                const allowedCount = groupMods.filter(m => rolePermMap[m.id] ?? false).length;
+
+                                return (
+                                    <div key={group.id} className="bg-[#0d0d12] border border-white/10 rounded-2xl overflow-hidden shadow-lg">
+                                        <div className="px-5 py-3.5 bg-white/[0.02] border-b border-white/5 flex items-center justify-between flex-wrap gap-2">
+                                            <div className="flex items-center gap-3">
+                                                <div>
+                                                    <span className="text-xs font-black text-white tracking-wide uppercase">{group.title}</span>
+                                                    <span className="text-[10px] text-gray-500 ml-2 font-mono">({group.description})</span>
                                                 </div>
-                                            );
-                                        })}
+                                                <span className={`text-[10px] font-mono px-2 py-0.5 rounded-full font-bold border ${
+                                                    allowedCount > 0 
+                                                        ? 'bg-purple-500/15 text-purple-300 border-purple-500/30' 
+                                                        : 'bg-white/5 text-gray-500 border-white/5'
+                                                }`}>
+                                                    {allowedCount} / {groupMods.length} 已开通
+                                                </span>
+                                            </div>
+
+                                            <div className="flex items-center gap-1.5">
+                                                <button
+                                                    type="button"
+                                                    onClick={() => toggleAllInGroup(selectedPermRole, group.id, true)}
+                                                    className="px-2.5 py-1 bg-white/5 hover:bg-white/10 rounded-lg text-[10px] font-bold text-emerald-400 transition-colors cursor-pointer"
+                                                >
+                                                    本组全开
+                                                </button>
+                                                <button
+                                                    type="button"
+                                                    onClick={() => toggleAllInGroup(selectedPermRole, group.id, false)}
+                                                    className="px-2.5 py-1 bg-white/5 hover:bg-white/10 rounded-lg text-[10px] font-bold text-gray-500 hover:text-rose-400 transition-colors cursor-pointer"
+                                                >
+                                                    本组全关
+                                                </button>
+                                            </div>
+                                        </div>
+
+                                        <div className="grid grid-cols-1 md:grid-cols-2 divide-y md:divide-y-0 md:divide-x divide-white/5">
+                                            {groupMods.map(mod => {
+                                                const isAllowed = rolePermMap[mod.id] ?? false;
+                                                const IconComponent = mod.icon;
+
+                                                return (
+                                                    <div 
+                                                        key={mod.id} 
+                                                        className="p-4 flex items-center justify-between gap-3 hover:bg-white/[0.015] transition-colors border-b border-white/5"
+                                                    >
+                                                        <div className="flex items-center gap-3 min-w-0">
+                                                            <div className={`w-9 h-9 rounded-xl flex items-center justify-center shrink-0 border ${
+                                                                isAllowed 
+                                                                    ? 'bg-emerald-500/10 border-emerald-500/30 text-emerald-400' 
+                                                                    : 'bg-white/5 border-white/5 text-gray-600'
+                                                            }`}>
+                                                                <IconComponent size={18} />
+                                                            </div>
+                                                            <div className="min-w-0">
+                                                                <div className="flex items-center gap-2">
+                                                                    <span className="text-xs font-bold text-white truncate">{mod.label}</span>
+                                                                    <span className="text-[10px] text-gray-500 font-mono truncate">{mod.labelEn}</span>
+                                                                </div>
+                                                                {mod.description && (
+                                                                    <p className="text-[10px] text-gray-500 truncate mt-0.5">{mod.description}</p>
+                                                                )}
+                                                            </div>
+                                                        </div>
+
+                                                        <button
+                                                            type="button"
+                                                            onClick={() => togglePerm(selectedPermRole, mod.id)}
+                                                            className={`flex items-center gap-1.5 px-3 py-1.5 rounded-xl text-xs font-black border transition-all shrink-0 cursor-pointer active:scale-95 ${
+                                                                isAllowed
+                                                                    ? 'bg-emerald-500/20 text-emerald-300 border-emerald-500/40 shadow-sm shadow-emerald-950/40'
+                                                                    : 'bg-white/5 text-gray-500 border-white/5 hover:border-white/10 hover:text-gray-300'
+                                                            }`}
+                                                        >
+                                                            {isAllowed ? (
+                                                                <>
+                                                                    <ToggleRight size={15} className="text-emerald-400" />
+                                                                    <span>已开通</span>
+                                                                </>
+                                                            ) : (
+                                                                <>
+                                                                    <ToggleLeft size={15} className="text-gray-600" />
+                                                                    <span>已禁用</span>
+                                                                </>
+                                                            )}
+                                                        </button>
+                                                    </div>
+                                                );
+                                            })}
+                                        </div>
                                     </div>
-                                </div>
-                            ))}
+                                );
+                            })}
                         </div>
                     )}
                 </div>

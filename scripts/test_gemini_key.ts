@@ -14,32 +14,29 @@ if (!apiKey) {
     process.exit(1);
 }
 
+
+
 async function testKey() {
-    const url = `https://generativelanguage.googleapis.com/v1beta/models/gemini-1.5-flash:generateContent?key=${apiKey}`;
-
-    console.log("Sending test request to Google...");
-
     try {
-        const response = await fetch(url, {
-            method: "POST",
-            headers: { "Content-Type": "application/json" },
-            body: JSON.stringify({
-                contents: [{ parts: [{ text: "Hello, are you working?" }] }]
-            })
-        });
-
-        const data = await response.json();
-
-        if (!response.ok) {
-            console.error("\n❌ API Key Verification FAILED!");
-            console.error(`Status: ${response.status} ${response.statusText}`);
-            console.error("Error Details:", JSON.stringify(data, null, 2));
-        } else {
-            console.log("\n✅ API Key Verification SUCCESS!");
-            console.log("Response:", data.candidates[0].content.parts[0].text);
+        console.log("Checking listModels...");
+        const testModels = ['gemini-1.5-flash', 'gemini-1.5-pro', 'gemini-1.0-pro'];
+        for (const m of testModels) {
+            const url = `https://generativelanguage.googleapis.com/v1beta/models/${m}:generateContent?key=${apiKey}`;
+            const response = await fetch(url, {
+                method: "POST",
+                headers: { "Content-Type": "application/json" },
+                body: JSON.stringify({
+                    contents: [{ parts: [{ text: "Hello" }] }]
+                })
+            });
+            const data = await response.json();
+            if (response.ok) {
+                console.log(`Model ${m}: ✅ SUCCESS! ->`, data.candidates?.[0]?.content?.parts?.[0]?.text?.trim()?.slice(0, 30));
+            } else {
+                console.log(`Model ${m}: ❌ FAILED (${response.status}) - ${data.error?.message?.split('\n')[0]}`);
+            }
         }
-
-    } catch (e) {
+    } catch (e: any) {
         console.error("Network Error:", e);
     }
 }

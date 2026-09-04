@@ -6,7 +6,9 @@ import {
     Sparkles, Bot, Play, LayoutGrid, List, Eye,
     AlertTriangle, Info, CheckCircle2, AlertCircle,
     Languages, Wrench, Truck, Boxes, Users, ShieldCheck,
-    Factory, ChevronRight, Copy, Check, RotateCcw, FileCheck
+    Factory, ChevronRight, Copy, Check, RotateCcw,
+    Send, Undo2, PanelLeftClose, PanelLeftOpen, MessageSquare,
+    Image as ImageIcon, Film, Paperclip, Upload, Loader2, Camera
 } from 'lucide-react';
 import ReactMarkdown from 'react-markdown';
 import { supabase } from '../services/supabase';
@@ -27,6 +29,14 @@ export interface SOPArticle {
     created_at?: string;
     updated_at?: string;
     category?: string;
+}
+
+interface ChatMessage {
+    id: string;
+    sender: 'user' | 'ai';
+    text: string;
+    timestamp: Date;
+    photoUrl?: string;
 }
 
 interface SOPCenterProps {
@@ -106,124 +116,8 @@ function inferCategory(article: Partial<SOPArticle>): string {
     return 'production';
 }
 
-// ─── Industry SOP Templates ──────────────────────────────────────────────────
-const SOP_TEMPLATES = [
-    {
-        name: '⚙️ 设备标准操作规程 (Machine Operating SOP)',
-        template: `# 设备标准操作规程 (Standard Operating Procedure)
-
-> [!NOTE]
-> 本规程适用于工厂机台的标准开机、生产巡检与停机交接作业，确保操作合规与产出品质稳定。
-
----
-
-## 1. 作业准备与安全检查 (Pre-check)
-1. **劳保用品 (PPE)**：作业人员必须佩戴防护手套、安全鞋及耳塞。
-2. **设备状态确认**：
-   - 检查急停按钮 (E-Stop) 是否灵敏复位。
-   - 检查机身接地线与温控仪表显示是否正常。
-   - 确认模头与辊筒表面无异物附着。
-
-> [!WARNING]
-> 严禁在机械运转中将手伸入加热区或高速牵引辊之间！如遇卡料，必须先按下急停并切断动力源。
-
----
-
-## 2. 标准开机步骤 (Operating Steps)
-1. **系统扫码上岗**：使用手机 PackSecure 打开生产控制台，扫描当前机台专属二维码完成人员报工。
-2. **预热升温**：设定温控仪表至目标工艺温度（1区/2区/3区），待达到设定值并保温 15 分钟。
-3. **低速引料**：启动主电机低速旋转，观察出料塑化状态，缓慢提升牵引速度。
-4. **首件检验**：测量首卷成品宽度、厚度公差与气泡饱满度，合格后方可全速批量生产。
-
----
-
-## 3. 生产异常处置 (Troubleshooting)
-| 常见现象 | 可能原因 | 排除对策 |
-| :--- | :--- | :--- |
-| 厚薄不均 | 模唇间隙不一 / 局部风环堵塞 | 调整微调螺栓，清理风环风槽 |
-| 表面晶点/焦料 | 原料混有杂质 / 局部过热 | 停机清理螺杆，校准加热圈电热偶 |
-| 卷取打皱 | 牵引张力过小 / 展平辊角度偏移 | 微调磁粉制动张力，校正展平辊 |
-
----
-
-## 4. 交接班与收工规范 (Handover)
-- [ ] 清理机台周边碎料并回收到对应料框
-- [ ] 在 PackSecure 提交本日产量并记录异常备注
-- [ ] 模温机降温至安全温度后关闭主电源
-`
-    },
-    {
-        name: '🚚 司机配送与回厂还车规范 (Driver Delivery & Return)',
-        template: `# 司机送货打卡与交单还车 SOP (Driver Delivery Standard)
-### Prosedur Operasi Standard Penghantaran & Pemulangan Lori
-
-> [!IMPORTANT]
-> 司机每日开工必须扫码绑定卡车，并在每站送达后完成【DO 纸质单签字照】与【现场货物照】双重拍照上传。
-
----
-
-## 1. 流程简图 / Aliran Kerja
-\`\`\`
-[1. 扫车上QR绑定卡车] ➔ [2. 依次送达客户并拍照提交] ➔ [3. 回厂交单并扫车内QR还车]
-\`\`\`
-
----
-
-## 2. 核心操作步骤 / Langkah Operasi
-### 步骤一：开工绑定车辆 / Langkah 1: Tambat Lori
-1. 打开手机端 **My Deliveries** 模块。
-2. 点击顶部 **「扫码绑定卡车 / Imbas QR Lori」**，对准驾驶室仪表盘上的车牌 QR 码。
-3. 确认手机顶部横幅变绿，并显示正确车牌号码。
-
-### 步骤二：客户点卸货与凭证上传 / Langkah 2: Hantar & Muat Naik Foto
-1. 送达指定客户地点后，在订单列表中点开对应行单。
-2. **拍照上传双凭证**：
-   - **BUNYIK DO**：拍摄客户盖章且签字的送货单全貌（字迹清晰完整）。
-   - **BUKTI BARANG**：拍摄货物放置在客户仓库或收货区的现场清晰照片。
-3. 点击底部的 **「SUBMIT THIS DROP POINT / 提交此站」** 按钮确认完成。
-
-> [!WARNING]
-> 送货途中不要点击任何“结束行程”按钮！全部站点送完后直接开车返回 Taiping 厂区。
-
-### 步骤三：回厂交单与扫码收工 / Langkah 3: Balik & Imbas Tamat
-1. 前往文员办公室，将客户签署的全部纸质 DO 交付给相关文员。
-2. 在手机顶部蓝色卡车条中点击 **「TAMAT SYIF / END SHIFT」**。
-3. 再次扫描卡车仪表盘上的同一个二维码，系统自动将所有单据归档结单并释放卡车。
-`
-    },
-    {
-        name: '🛡️ 车间安全生产与 PPE 防护规范 (Safety & PPE Protocol)',
-        template: `# 车间安全生产与劳动防护守则 (Safety & PPE Protocol)
-
-> [!CAUTION]
-> 安全第一，预防为主！进入工厂生产区域，必须时刻遵守以下人身安全与设备安全红线！
-
----
-
-## 1. 劳保防护装备 (PPE 要求)
-所有进入车间作业人员（含机修、巡检与装卸人员），必须严格穿戴：
-- 🥾 **防砸防穿刺劳保鞋**（严禁穿拖鞋、凉鞋或布鞋）
-- 🧤 **耐磨防割或防烫手套**（操作旋转运动部件时禁用棉纱线手套）
-- 🦺 **反光安全马甲**（仓库区及叉车通道内必须穿戴）
-- 🎧 **防噪音耳塞/耳罩**（高分贝机台区作业时佩戴）
-
----
-
-## 2. 设备六大安全禁令
-1. **严禁带电检修**：设备电气故障必须由专职电工执行“断电挂牌上锁 (LOTO)”流程。
-2. **严禁旁路安全门**：禁止私自拆卸或短接光栅传感器与安全连锁装置。
-3. **严禁运转中清灰**：机器未完全停稳前，禁止用毛刷或抹布清理辊筒夹缝。
-4. **急停开关不可阻挡**：各机台前后急停按钮周围 1 米内严禁堆放原材料或托盘。
-
-> [!TIP]
-> 发现任何漏油、冒烟或异响，立即按下就近的红色急停开关 (E-Stop)，并使用 PackSecure 系统上报停机报警！
-`
-    }
-];
-
 // ─── Custom Markdown Renderer Components ─────────────────────────────────────
 const MarkdownComponents = {
-    // Custom heading with id for smooth scrolling TOC
     h1: ({ node, children, ...props }: any) => {
         const text = String(children);
         const id = text.toLowerCase().replace(/[^a-z0-9\u4e00-\u9fa5]+/g, '-');
@@ -239,17 +133,15 @@ const MarkdownComponents = {
         const id = text.toLowerCase().replace(/[^a-z0-9\u4e00-\u9fa5]+/g, '-');
         return <h3 id={id} className="text-base font-bold text-gray-200 mt-5 mb-2" {...props}>{children}</h3>;
     },
-    // GitHub Style Alert blockquotes
     blockquote: ({ node, children, ...props }: any) => {
         const childArray = Array.isArray(children) ? children : [children];
-        // Examine text content for alert tag
         const flatText = childArray.map(c => typeof c === 'string' ? c : (c?.props?.children || '')).join('');
 
         if (flatText.includes('[!NOTE]')) {
             return (
                 <div className="my-4 rounded-xl border border-blue-500/30 bg-blue-950/20 p-4 text-blue-200 text-sm flex gap-3 shadow-md shadow-blue-500/5">
                     <Info size={20} className="text-blue-400 shrink-0 mt-0.5" />
-                    <div className="flex-1 font-medium leading-relaxed prose-invert">{children}</div>
+                    <div className="flex-1 font-medium leading-relaxed">{children}</div>
                 </div>
             );
         }
@@ -292,7 +184,6 @@ const MarkdownComponents = {
             </blockquote>
         );
     },
-    // Tables
     table: ({ node, children, ...props }: any) => (
         <div className="overflow-x-auto my-5 rounded-xl border border-gray-800 bg-gray-950/60 shadow-inner">
             <table className="min-w-full divide-y divide-gray-800 text-sm text-left text-gray-300" {...props}>
@@ -310,12 +201,10 @@ const MarkdownComponents = {
             {children}
         </td>
     ),
-    // Lists
     ul: ({ node, children, ...props }: any) => <ul className="list-disc ml-5 space-y-1 my-2 text-gray-300 text-sm" {...props}>{children}</ul>,
     ol: ({ node, children, ...props }: any) => <ol className="list-decimal ml-5 space-y-1.5 my-2 text-gray-300 text-sm" {...props}>{children}</ol>,
     li: ({ node, children, ...props }: any) => <li className="leading-relaxed" {...props}>{children}</li>,
     p: ({ node, children, ...props }: any) => {
-        // Clean out raw alert markers if inside p
         const str = String(children);
         if (str.startsWith('[!NOTE]') || str.startsWith('[!TIP]') || str.startsWith('[!IMPORTANT]') || str.startsWith('[!WARNING]') || str.startsWith('[!CAUTION]')) {
             const clean = str.replace(/^\[!(NOTE|TIP|IMPORTANT|WARNING|CAUTION)\]\s*/, '');
@@ -323,6 +212,18 @@ const MarkdownComponents = {
         }
         return <p className="mb-3 leading-relaxed text-gray-300 text-sm" {...props}>{children}</p>;
     },
+    img: ({ node, src, alt, ...props }: any) => (
+        <div className="my-5 rounded-2xl overflow-hidden border border-gray-800 bg-gray-900/60 shadow-lg group">
+            <img
+                src={src}
+                alt={alt || 'SOP 规范插图'}
+                className="w-full max-h-[500px] object-contain mx-auto transition-transform duration-300 group-hover:scale-[1.01]"
+                loading="lazy"
+                {...props}
+            />
+            {alt && <p className="text-center text-xs text-gray-400 py-2.5 bg-gray-900/80 border-t border-gray-800/80 font-medium">{alt}</p>}
+        </div>
+    ),
     code: ({ node, inline, children, ...props }: any) => {
         if (inline) {
             return <code className="px-1.5 py-0.5 rounded bg-gray-800/80 border border-gray-700/60 text-indigo-300 font-mono text-xs" {...props}>{children}</code>;
@@ -360,20 +261,26 @@ export default function SOPCenter({ userRole, user, onNavigate }: SOPCenterProps
     const [isChecklistMode, setIsChecklistMode] = useState(false);
     const [checkedTasks, setCheckedTasks] = useState<Record<string, boolean>>({});
 
-    // Admin Editor states
+    // Admin Copilot Workspace states
     const [isEditing, setIsEditing] = useState(false);
     const [editArticle, setEditArticle] = useState<Partial<SOPArticle> | null>(null);
     const [editorTab, setEditorTab] = useState<'write' | 'split' | 'preview'>('split');
+    const [copilotOpen, setCopilotOpen] = useState(true);
 
-    // Executive AI Assistant States
-    const [showAIModal, setShowAIModal] = useState(false);
-    const [aiAction, setAiAction] = useState<'generate' | 'polish' | 'safety_alerts' | 'translate' | 'checklist'>('generate');
-    const [aiTopic, setAiTopic] = useState('');
-    const [aiLanguage, setAiLanguage] = useState<'zh' | 'zh-bm' | 'zh-en'>('zh');
-    const [aiSopType, setAiSopType] = useState('standard');
-    const [aiLoading, setAiLoading] = useState(false);
-    const [aiResult, setAiResult] = useState<any | null>(null);
-    const [copiedContent, setCopiedContent] = useState(false);
+    // AI Chat Copilot Stream, Photo Attachment & Undo State
+    const [chatMessages, setChatMessages] = useState<ChatMessage[]>([]);
+    const [chatInput, setChatInput] = useState('');
+    const [aiProcessing, setAiProcessing] = useState(false);
+    const [undoStack, setUndoStack] = useState<Partial<SOPArticle>[]>([]);
+    const [aiAttachedPhoto, setAiAttachedPhoto] = useState<{ file: File; preview: string; base64: string } | null>(null);
+    const [uploadingImage, setUploadingImage] = useState(false);
+    const [uploadingVideo, setUploadingVideo] = useState(false);
+
+    const chatBottomRef = useRef<HTMLDivElement>(null);
+    const chatInputRef = useRef<HTMLInputElement>(null);
+    const fileInputImageRef = useRef<HTMLInputElement>(null);
+    const fileInputVideoRef = useRef<HTMLInputElement>(null);
+    const fileInputAiPhotoRef = useRef<HTMLInputElement>(null);
 
     const isAdmin = userRole === 'SuperAdmin' || userRole === 'Admin' || user?.employeeId === '001';
 
@@ -381,7 +288,6 @@ export default function SOPCenter({ userRole, user, onNavigate }: SOPCenterProps
         loadArticles();
     }, []);
 
-    // Load articles from Supabase
     const loadArticles = async () => {
         setLoading(true);
         try {
@@ -391,7 +297,6 @@ export default function SOPCenter({ userRole, user, onNavigate }: SOPCenterProps
                 .order('sort_order', { ascending: true });
 
             if (!error && data) {
-                // Attach inferred category
                 const enhanced = data.map((art: any) => ({
                     ...art,
                     category: inferCategory(art)
@@ -405,28 +310,21 @@ export default function SOPCenter({ userRole, user, onNavigate }: SOPCenterProps
         }
     };
 
-    // Filter visible articles according to user permissions & filters
+    // Filter visible articles
     const filteredArticles = useMemo(() => {
         return articles.filter(a => {
-            // 1. Permissions
             if (!isAdmin) {
                 if (!a.is_published) return false;
                 if (a.target_roles && a.target_roles.length > 0 && userRole && !a.target_roles.includes(userRole)) {
                     return false;
                 }
             }
-
-            // 2. Role Filter Tab
             if (roleFilter !== 'All') {
                 if (!a.target_roles || !a.target_roles.includes(roleFilter)) return false;
             }
-
-            // 3. Category Tab
             if (selectedCategory !== 'all') {
                 if (a.category !== selectedCategory) return false;
             }
-
-            // 4. Search Keyword
             if (searchTerm.trim()) {
                 const q = searchTerm.toLowerCase();
                 const matchTitle = (a.title || '').toLowerCase().includes(q);
@@ -435,12 +333,10 @@ export default function SOPCenter({ userRole, user, onNavigate }: SOPCenterProps
                 const matchContent = (a.content || '').toLowerCase().includes(q);
                 return matchTitle || matchDesc || matchPage || matchContent;
             }
-
             return true;
         });
     }, [articles, isAdmin, userRole, roleFilter, selectedCategory, searchTerm]);
 
-    // Statistics counts
     const stats = useMemo(() => {
         const total = articles.length;
         const published = articles.filter(a => a.is_published).length;
@@ -449,7 +345,6 @@ export default function SOPCenter({ userRole, user, onNavigate }: SOPCenterProps
         return { total, published, forMyRole, withPages };
     }, [articles, userRole]);
 
-    // Parse TOC headings from article content
     const tableOfContents = useMemo(() => {
         if (!selectedArticle?.content) return [];
         const lines = selectedArticle.content.split('\n');
@@ -475,7 +370,6 @@ export default function SOPCenter({ userRole, user, onNavigate }: SOPCenterProps
         return headings;
     }, [selectedArticle]);
 
-    // Parse checklist tasks from article content for Checklist Mode
     const checklistItems = useMemo(() => {
         if (!selectedArticle?.content) return [];
         const lines = selectedArticle.content.split('\n');
@@ -483,7 +377,6 @@ export default function SOPCenter({ userRole, user, onNavigate }: SOPCenterProps
 
         lines.forEach(line => {
             const trimmed = line.trim();
-            // Match markdown checkboxes "- [ ]" or numbered steps
             if (trimmed.startsWith('- [ ]') || trimmed.startsWith('- [x]')) {
                 items.push(trimmed.replace(/^-\s*\[[ xX]\]\s*/, ''));
             } else if (/^(步骤\s*[一二三四五六七八九十0-9]+|Langkah\s*\d+|Step\s*\d+)[：:]/i.test(trimmed)) {
@@ -496,7 +389,6 @@ export default function SOPCenter({ userRole, user, onNavigate }: SOPCenterProps
         return items;
     }, [selectedArticle]);
 
-    // Handle interactive checklist toggle
     const handleToggleTask = (task: string) => {
         if (!selectedArticle) return;
         const key = `${selectedArticle.id}-${task}`;
@@ -509,7 +401,6 @@ export default function SOPCenter({ userRole, user, onNavigate }: SOPCenterProps
         });
     };
 
-    // Load saved checklist on article select
     useEffect(() => {
         if (selectedArticle) {
             try {
@@ -520,8 +411,10 @@ export default function SOPCenter({ userRole, user, onNavigate }: SOPCenterProps
         }
     }, [selectedArticle]);
 
-    // ─── CRUD Actions ─────────────────────────────────────────────────────────
-    const handleCreate = () => {
+    // ─── Open Copilot Workspace ───────────────────────────────────────────────
+    const handleOpenAICopilot = (initialPrompt?: string) => {
+        setUndoStack([]);
+        setAiAttachedPhoto(null);
         setEditArticle({
             title: '',
             description: '',
@@ -534,25 +427,259 @@ export default function SOPCenter({ userRole, user, onNavigate }: SOPCenterProps
             created_by: user?.name || 'Admin',
             category: 'production'
         });
+        setChatMessages([
+            {
+                id: 'welcome',
+                sender: 'ai',
+                text: '您好！我是 PackSecure SOP 智能副驾驶。您可以直接在下方告诉我您想做什么规程，或点击 📎 拍照上传现场设备/白板图纸，我将直接在右侧为您起草整篇规程，并支持在对话中就地微调。',
+                timestamp: new Date()
+            }
+        ]);
         setEditorTab('split');
+        setCopilotOpen(true);
         setIsEditing(true);
+
+        if (initialPrompt) {
+            setTimeout(() => handleSendChatMessage(initialPrompt), 200);
+        } else {
+            setTimeout(() => chatInputRef.current?.focus(), 150);
+        }
     };
 
     const handleEdit = (article: SOPArticle) => {
+        setUndoStack([]);
+        setAiAttachedPhoto(null);
         setEditArticle({ ...article });
+        setChatMessages([
+            {
+                id: 'welcome-edit',
+                sender: 'ai',
+                text: `已载入规程《${article.title}》。您可以在下方随时输入修改指令（如“把第2步改一下”、“补充高温安全警告”、“翻译成中马双语”），我将就地在右侧正文中同步修改。`,
+                timestamp: new Date()
+            }
+        ]);
         setEditorTab('split');
+        setCopilotOpen(true);
         setIsEditing(true);
+        setTimeout(() => chatInputRef.current?.focus(), 150);
     };
 
+    // ─── Photo Selection for AI Copilot ───────────────────────────────────────
+    const handleSelectAiPhoto = (e: React.ChangeEvent<HTMLInputElement>) => {
+        const file = e.target.files?.[0];
+        if (!file) return;
+        const reader = new FileReader();
+        reader.onload = () => {
+            const base64 = (reader.result as string).split(',')[1];
+            setAiAttachedPhoto({
+                file,
+                preview: URL.createObjectURL(file),
+                base64
+            });
+        };
+        reader.readAsDataURL(file);
+        if (fileInputAiPhotoRef.current) fileInputAiPhotoRef.current.value = '';
+    };
+
+    // ─── Send Conversational Chat Instruction ─────────────────────────────────
+    const handleSendChatMessage = async (customText?: string) => {
+        const text = (customText || chatInput).trim();
+        if ((!text && !aiAttachedPhoto) || aiProcessing) return;
+
+        // Push previous article state to Undo Stack
+        if (editArticle) {
+            setUndoStack(prev => [...prev.slice(-10), { ...editArticle }]);
+        }
+
+        const photoSnapshot = aiAttachedPhoto;
+        let uploadedPhotoUrl = '';
+
+        // If photo attached, upload it to work-photos in background
+        if (photoSnapshot) {
+            try {
+                const ext = photoSnapshot.file.name.split('.').pop() || 'jpg';
+                const fName = `sop_ai_${Date.now()}_${Math.random().toString(36).slice(2, 6)}.${ext}`;
+                const { error: upErr } = await supabase.storage
+                    .from('work-photos')
+                    .upload(fName, photoSnapshot.file, { contentType: photoSnapshot.file.type || 'image/jpeg' });
+                if (!upErr) {
+                    const { data: d } = supabase.storage.from('work-photos').getPublicUrl(fName);
+                    uploadedPhotoUrl = d.publicUrl;
+                }
+            } catch (e) { }
+        }
+
+        const userMsg: ChatMessage = {
+            id: Date.now().toString(),
+            sender: 'user',
+            text: text || '请根据我上传的照片起草规范规程',
+            timestamp: new Date(),
+            photoUrl: photoSnapshot ? photoSnapshot.preview : undefined
+        };
+
+        setChatMessages(prev => [...prev, userMsg]);
+        if (!customText) setChatInput('');
+        setAiAttachedPhoto(null);
+        setAiProcessing(true);
+
+        try {
+            const resp = await fetch('/api/agent/sop-assistant', {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({
+                    action: 'chat_refine',
+                    message: text || '请根据上传的现场设备/工艺照片起草规范规程',
+                    topic: text,
+                    existingContent: editArticle?.content || '',
+                    currentTitle: editArticle?.title || '',
+                    language: 'zh',
+                    category: editArticle?.category || 'production',
+                    targetRoles: editArticle?.target_roles || [],
+                    pageId: editArticle?.page_id || '',
+                    imageBase64: photoSnapshot?.base64,
+                    mimeType: photoSnapshot?.file.type,
+                    imageUrl: uploadedPhotoUrl
+                })
+            });
+
+            if (!resp.ok) {
+                const errText = await resp.text();
+                throw new Error(`服务响应异常: ${resp.status}`);
+            }
+
+            const json = await resp.json();
+            if (!json.success) throw new Error(json.error || 'AI 处理失败');
+
+            const result = json.data;
+
+            // Direct in-place synchronization to right-side editor
+            setEditArticle(prev => {
+                if (!prev) return prev;
+                return {
+                    ...prev,
+                    title: (prev.title && prev.title.length > 4 && prev.content && prev.content.length > 50) ? prev.title : (result.title || prev.title),
+                    description: result.description || prev.description,
+                    content: result.content || prev.content,
+                    target_roles: prev.target_roles?.length ? prev.target_roles : (result.suggested_roles || prev.target_roles),
+                    page_id: prev.page_id ? prev.page_id : (result.suggested_page_id || prev.page_id),
+                    category: result.category || prev.category
+                };
+            });
+
+            const aiMsg: ChatMessage = {
+                id: (Date.now() + 1).toString(),
+                sender: 'ai',
+                text: result.summary || '已为您同步更新右侧工作台规程正文。',
+                timestamp: new Date()
+            };
+            setChatMessages(prev => [...prev, aiMsg]);
+        } catch (err: any) {
+            const errorMsg: ChatMessage = {
+                id: (Date.now() + 1).toString(),
+                sender: 'ai',
+                text: `⚠️ 处理出现异常: ${err.message}，请重新发送指令。`,
+                timestamp: new Date()
+            };
+            setChatMessages(prev => [...prev, errorMsg]);
+        } finally {
+            setAiProcessing(false);
+            setTimeout(() => {
+                chatBottomRef.current?.scrollIntoView({ behavior: 'smooth' });
+            }, 100);
+        }
+    };
+
+    // ─── Upload Image Directly into Markdown Text ─────────────────────────────
+    const handleUploadMarkdownImage = async (e: React.ChangeEvent<HTMLInputElement>) => {
+        const file = e.target.files?.[0];
+        if (!file) return;
+        setUploadingImage(true);
+        try {
+            const ext = file.name.split('.').pop() || 'jpg';
+            const fileName = `sop_img_${Date.now()}_${Math.random().toString(36).slice(2, 6)}.${ext}`;
+            const { error } = await supabase.storage
+                .from('work-photos')
+                .upload(fileName, file, { contentType: file.type || 'image/jpeg' });
+
+            if (error) throw error;
+            const { data } = supabase.storage.from('work-photos').getPublicUrl(fileName);
+            const publicUrl = data.publicUrl;
+
+            // Insert into markdown text
+            const imgSnippet = `\n\n![${file.name.replace(/\.[^/.]+$/, '')}](${publicUrl})\n\n`;
+            setEditArticle(prev => prev ? { ...prev, content: (prev.content || '') + imgSnippet } : prev);
+        } catch (err: any) {
+            alert('插图上传失败: ' + err.message);
+        } finally {
+            setUploadingImage(false);
+            if (fileInputImageRef.current) fileInputImageRef.current.value = '';
+        }
+    };
+
+    // ─── Upload Local Video for SOP Article ───────────────────────────────────
+    const handleUploadVideo = async (e: React.ChangeEvent<HTMLInputElement>) => {
+        const file = e.target.files?.[0];
+        if (!file) return;
+        if (file.size > 100 * 1024 * 1024) {
+            alert('视频文件较大，请上传小于 100MB 的视频。');
+            return;
+        }
+
+        setUploadingVideo(true);
+        try {
+            const ext = file.name.split('.').pop() || 'mp4';
+            const fileName = `sop_vid_${Date.now()}_${Math.random().toString(36).slice(2, 6)}.${ext}`;
+            const { error } = await supabase.storage
+                .from('work-photos')
+                .upload(fileName, file, { contentType: file.type || 'video/mp4' });
+
+            if (error) throw error;
+            const { data } = supabase.storage.from('work-photos').getPublicUrl(fileName);
+            const publicUrl = data.publicUrl;
+
+            setEditArticle(prev => prev ? { ...prev, video_url: publicUrl } : prev);
+        } catch (err: any) {
+            alert('视频上传失败: ' + err.message);
+        } finally {
+            setUploadingVideo(false);
+            if (fileInputVideoRef.current) fileInputVideoRef.current.value = '';
+        }
+    };
+
+    // Undo last modification
+    const handleUndo = () => {
+        if (undoStack.length === 0) return;
+        const lastState = undoStack[undoStack.length - 1];
+        setUndoStack(prev => prev.slice(0, -1));
+        setEditArticle(prev => prev ? { ...prev, ...lastState } : prev);
+        setChatMessages(prev => [
+            ...prev,
+            {
+                id: Date.now().toString(),
+                sender: 'ai',
+                text: '↩️ 已为您撤销上一次改动，右侧工作台已恢复至修改前的状态。',
+                timestamp: new Date()
+            }
+        ]);
+        setTimeout(() => {
+            chatBottomRef.current?.scrollIntoView({ behavior: 'smooth' });
+        }, 100);
+    };
+
+    // Quick insert snippets
+    const insertSnippet = (snippet: string) => {
+        setEditArticle(prev => prev ? { ...prev, content: (prev.content || '') + '\n\n' + snippet } : prev);
+    };
+
+    // ─── Save SOP to Supabase ─────────────────────────────────────────────────
     const handleSave = async () => {
         if (!editArticle?.title) {
-            alert(t('Please enter SOP Title'));
+            alert(t('请输入规程标题'));
             return;
         }
 
         try {
             if (editArticle.id) {
-                // Update
                 const { error } = await supabase
                     .from('sop_articles')
                     .update({
@@ -570,7 +697,6 @@ export default function SOPCenter({ userRole, user, onNavigate }: SOPCenterProps
 
                 if (error) throw error;
             } else {
-                // Insert
                 const { error } = await supabase
                     .from('sop_articles')
                     .insert({
@@ -592,110 +718,19 @@ export default function SOPCenter({ userRole, user, onNavigate }: SOPCenterProps
             setEditArticle(null);
             loadArticles();
         } catch (err: any) {
-            alert(t('Save failed: ') + err.message);
+            alert(t('保存失败: ') + err.message);
         }
     };
 
     const handleDelete = async (id: string) => {
-        if (!confirm(t('Are you sure you want to delete this SOP? This cannot be undone.'))) return;
+        if (!confirm(t('确定删除该规程吗？此操作无法撤销。'))) return;
         await supabase.from('sop_articles').delete().eq('id', id);
         loadArticles();
         if (selectedArticle?.id === id) setSelectedArticle(null);
     };
 
-    // ─── Executive AI Co-Pilot Calls ──────────────────────────────────────────
-    const handleRunAIAssistant = async (actionType?: typeof aiAction) => {
-        const action = actionType || aiAction;
-        setAiLoading(true);
-        setAiResult(null);
-
-        try {
-            const payload = {
-                action: action,
-                topic: aiTopic,
-                existingContent: editArticle?.content || selectedArticle?.content || '',
-                language: aiLanguage,
-                sopType: aiSopType,
-                category: editArticle?.category || 'production',
-                targetRoles: editArticle?.target_roles || [],
-                pageId: editArticle?.page_id || ''
-            };
-
-            const resp = await fetch('/api/agent/sop-assistant', {
-                method: 'POST',
-                headers: { 'Content-Type': 'application/json' },
-                body: JSON.stringify(payload)
-            });
-
-            if (!resp.ok) {
-                const text = await resp.text();
-                let errMsg = `服务响应异常 (${resp.status})`;
-                try {
-                    const parsed = JSON.parse(text);
-                    if (parsed.error) errMsg = parsed.error;
-                } catch {
-                    if (text.includes('Cannot POST') || resp.status === 404) {
-                        errMsg = '后端 API 路由未加载 (404)，请重启后端服务或刷新页面。';
-                    }
-                }
-                throw new Error(errMsg);
-            }
-
-            const json = await resp.json();
-            if (!json.success) throw new Error(json.error || 'AI generation failed');
-
-            setAiResult(json.data);
-        } catch (err: any) {
-            alert('AI 辅助调用失败: ' + err.message);
-        } finally {
-            setAiLoading(false);
-        }
-    };
-
-    // Apply AI draft into editor
-    const handleApplyAIResult = (mode: 'replace' | 'append') => {
-        if (!aiResult) return;
-
-        if (!isEditing) {
-            // Open editor with AI result
-            setEditArticle({
-                title: aiResult.title || aiTopic,
-                description: aiResult.description || '',
-                content: aiResult.content || '',
-                target_roles: aiResult.suggested_roles || ['Operator', 'Manager'],
-                page_id: aiResult.suggested_page_id || '',
-                category: aiResult.category || 'production',
-                is_published: true,
-                sort_order: articles.length + 1
-            });
-            setIsEditing(true);
-        } else {
-            // Already editing
-            setEditArticle(prev => {
-                if (!prev) return prev;
-                return {
-                    ...prev,
-                    title: mode === 'replace' ? (aiResult.title || prev.title) : prev.title,
-                    description: mode === 'replace' ? (aiResult.description || prev.description) : prev.description,
-                    content: mode === 'replace'
-                        ? aiResult.content
-                        : `${prev.content || ''}\n\n---\n\n${aiResult.content}`,
-                    target_roles: prev.target_roles?.length ? prev.target_roles : (aiResult.suggested_roles || prev.target_roles),
-                    page_id: prev.page_id ? prev.page_id : (aiResult.suggested_page_id || prev.page_id),
-                    category: aiResult.category || prev.category
-                };
-            });
-        }
-
-        setShowAIModal(false);
-        setAiResult(null);
-    };
-
-    // Render YouTube or Video Embed
     const renderVideoPlayer = (url: string) => {
         if (!url) return null;
-
-        // Check if YouTube
         const ytMatch = url.match(/(?:youtu\.be\/|youtube\.com\/(?:embed\/|v\/|watch\?v=|watch\?.+&v=))([\w-]{11})/);
         if (ytMatch) {
             return (
@@ -710,21 +745,14 @@ export default function SOPCenter({ userRole, user, onNavigate }: SOPCenterProps
                 </div>
             );
         }
-
-        // Direct video link
         return (
-            <div className="my-6 rounded-2xl overflow-hidden border border-gray-800 bg-black">
-                <video controls className="w-full aspect-video">
+            <div className="my-6 rounded-2xl overflow-hidden border border-gray-800 bg-black shadow-xl">
+                <video controls className="w-full aspect-video rounded-2xl">
                     <source src={url} />
-                    {t('Your browser does not support playing this video.')}
+                    {t('浏览器不支持播放此格式视频')}
                 </video>
             </div>
         );
-    };
-
-    // ─── Print View Handler ───────────────────────────────────────────────────
-    const handlePrint = () => {
-        window.print();
     };
 
     // ═══════════════════════════════════════════════════════════════════════════
@@ -737,7 +765,7 @@ export default function SOPCenter({ userRole, user, onNavigate }: SOPCenterProps
 
         return (
             <div className="h-full flex flex-col overflow-hidden bg-gray-950">
-                {/* Print Header (Visible ONLY when printing) */}
+                {/* Print Header */}
                 <div className="hidden print:block p-8 border-b-2 border-black text-black">
                     <div className="flex justify-between items-start">
                         <div>
@@ -752,7 +780,7 @@ export default function SOPCenter({ userRole, user, onNavigate }: SOPCenterProps
                     </div>
                 </div>
 
-                {/* Interactive Top Navbar (Hidden when printing) */}
+                {/* Top Navbar */}
                 <div className="print:hidden flex-shrink-0 px-6 py-4 border-b border-gray-800/80 bg-gray-950/90 backdrop-blur-xl flex items-center justify-between z-10 shadow-lg">
                     <div className="flex items-center gap-4">
                         <button
@@ -765,7 +793,7 @@ export default function SOPCenter({ userRole, user, onNavigate }: SOPCenterProps
 
                         <div className="h-4 w-px bg-gray-800" />
 
-                        {/* View / Checklist Toggle */}
+                        {/* Checklist Mode Toggle */}
                         <div className="flex items-center bg-gray-900 border border-gray-800 rounded-xl p-1">
                             <button
                                 onClick={() => setIsChecklistMode(false)}
@@ -790,7 +818,6 @@ export default function SOPCenter({ userRole, user, onNavigate }: SOPCenterProps
                     </div>
 
                     <div className="flex items-center gap-2.5">
-                        {/* Deep Link to Associated Feature */}
                         {selectedArticle.page_id && onNavigate && (
                             <button
                                 onClick={() => onNavigate(selectedArticle.page_id!)}
@@ -802,17 +829,15 @@ export default function SOPCenter({ userRole, user, onNavigate }: SOPCenterProps
                             </button>
                         )}
 
-                        {/* Print Button */}
                         <button
-                            onClick={handlePrint}
+                            onClick={() => window.print()}
                             className="flex items-center gap-1.5 px-3.5 py-2 rounded-xl bg-gray-900 border border-gray-800 hover:border-gray-700 text-gray-300 hover:text-white text-xs font-bold transition-all hover:scale-105 active:scale-95"
-                            title="打印适于张贴的车间标准作业表"
+                            title="打印 A4 车间标准作业表"
                         >
                             <Printer size={14} />
                             <span>{t('打印规范')}</span>
                         </button>
 
-                        {/* Admin Actions */}
                         {isAdmin && (
                             <button
                                 onClick={() => handleEdit(selectedArticle)}
@@ -859,20 +884,14 @@ export default function SOPCenter({ userRole, user, onNavigate }: SOPCenterProps
                     </div>
                 </div>
 
-                {/* Article Main Body with TOC on the Right */}
+                {/* Article Main Body with TOC */}
                 <div className="flex-1 overflow-y-auto px-8 py-8 custom-scrollbar">
                     <div className="max-w-5xl mx-auto grid grid-cols-1 lg:grid-cols-12 gap-8 items-start">
-
-                        {/* Left / Center: Article Content */}
                         <div className="lg:col-span-9 space-y-6">
-
-                            {/* Embedded Video */}
                             {selectedArticle.video_url && renderVideoPlayer(selectedArticle.video_url)}
 
-                            {/* Mode A: Interactive Checklist Mode */}
                             {isChecklistMode ? (
                                 <div className="space-y-6">
-                                    {/* Progress Card */}
                                     <div className="p-6 rounded-2xl bg-gradient-to-r from-indigo-950/50 to-blue-950/30 border border-indigo-500/30 shadow-xl">
                                         <div className="flex justify-between items-center mb-3">
                                             <div>
@@ -887,7 +906,6 @@ export default function SOPCenter({ userRole, user, onNavigate }: SOPCenterProps
                                             </div>
                                         </div>
 
-                                        {/* Progress Bar */}
                                         <div className="w-full h-2.5 bg-gray-900 rounded-full overflow-hidden border border-gray-800">
                                             <div
                                                 className="h-full bg-gradient-to-r from-blue-500 to-indigo-500 transition-all duration-500 rounded-full"
@@ -901,7 +919,6 @@ export default function SOPCenter({ userRole, user, onNavigate }: SOPCenterProps
                                         </div>
                                     </div>
 
-                                    {/* Task Checklist Items */}
                                     <div className="space-y-3">
                                         {checklistItems.map((task, idx) => {
                                             const isDone = !!checkedTasks[`${selectedArticle.id}-${task}`];
@@ -947,7 +964,6 @@ export default function SOPCenter({ userRole, user, onNavigate }: SOPCenterProps
                                     </div>
                                 </div>
                             ) : (
-                                /* Mode B: Standard Full Markdown Reader */
                                 <div className="prose prose-invert max-w-none prose-indigo">
                                     <ReactMarkdown components={MarkdownComponents}>
                                         {selectedArticle.content}
@@ -955,7 +971,7 @@ export default function SOPCenter({ userRole, user, onNavigate }: SOPCenterProps
                                 </div>
                             )}
 
-                            {/* Factory Floor Print Sign-off Box (Visible ONLY on print) */}
+                            {/* Sign-off Box (Visible on Print) */}
                             <div className="hidden print:block pt-12 mt-12 border-t-2 border-black text-black">
                                 <div className="grid grid-cols-3 gap-8 text-xs font-bold">
                                     <div className="border-t border-black pt-2">
@@ -977,7 +993,7 @@ export default function SOPCenter({ userRole, user, onNavigate }: SOPCenterProps
                             </div>
                         </div>
 
-                        {/* Right: Table of Contents & Quick Summary (Hidden on Print & Small Screen) */}
+                        {/* TOC Sidebar */}
                         <div className="hidden lg:block lg:col-span-3 sticky top-6 space-y-4 print:hidden">
                             {tableOfContents.length > 0 && (
                                 <div className="p-4 rounded-2xl bg-gray-900/60 border border-gray-800/80 backdrop-blur-md shadow-lg">
@@ -1004,7 +1020,6 @@ export default function SOPCenter({ userRole, user, onNavigate }: SOPCenterProps
                                 </div>
                             )}
 
-                            {/* Quick Metadata Card */}
                             <div className="p-4 rounded-2xl bg-gray-900/40 border border-gray-800/60 text-xs space-y-2.5">
                                 <div className="flex justify-between text-gray-400">
                                     <span>创建者:</span>
@@ -1022,7 +1037,6 @@ export default function SOPCenter({ userRole, user, onNavigate }: SOPCenterProps
                                 </div>
                             </div>
                         </div>
-
                     </div>
                 </div>
             </div>
@@ -1030,12 +1044,12 @@ export default function SOPCenter({ userRole, user, onNavigate }: SOPCenterProps
     }
 
     // ═══════════════════════════════════════════════════════════════════════════
-    // 2. MAIN LIST VIEW WITH HERO, KPI & FILTERS
+    // 2. MAIN LIST VIEW
     // ═══════════════════════════════════════════════════════════════════════════
     return (
         <div className="h-full flex flex-col overflow-hidden bg-gray-950 text-white">
 
-            {/* Top Header Banner */}
+            {/* Top Header */}
             <div className="flex-shrink-0 px-6 pt-5 pb-4 border-b border-gray-800/60 bg-gray-950/80 backdrop-blur-xl">
                 <div className="flex items-center justify-between mb-4">
                     <div className="flex items-center gap-3.5">
@@ -1046,36 +1060,31 @@ export default function SOPCenter({ userRole, user, onNavigate }: SOPCenterProps
                             <div className="flex items-center gap-2">
                                 <h1 className="text-xl font-black tracking-tight text-white">{t('SOP Guide Center')}</h1>
                                 <span className="px-2 py-0.5 rounded-full bg-indigo-500/10 text-indigo-400 border border-indigo-500/30 text-[10px] font-extrabold uppercase">
-                                    Industrial 2.0
+                                    Copilot 2.0
                                 </span>
                             </div>
                             <p className="text-xs text-gray-400 mt-0.5">
-                                {t('标准作业规程与岗位逻辑门户 • 汇聚车间、物流、人事全流程')}
+                                {t('标准作业规程与岗位操作门户 • 汇聚车间、物流、人事全流程')}
                             </p>
                         </div>
                     </div>
 
                     <div className="flex items-center gap-2.5">
-                        {/* Executive AI Assistant Trigger */}
+                        {/* Executive AI Assistant Trigger: Direct Workspace launch! */}
                         {isAdmin && (
                             <button
-                                onClick={() => {
-                                    setAiAction('generate');
-                                    setAiResult(null);
-                                    setShowAIModal(true);
-                                }}
-                                className="px-3.5 py-2 rounded-xl bg-gradient-to-r from-purple-600 via-indigo-600 to-blue-600 hover:from-purple-500 hover:to-blue-500 text-white font-bold text-xs flex items-center gap-2 shadow-lg shadow-indigo-500/25 transition-all hover:scale-105 active:scale-95"
+                                onClick={() => handleOpenAICopilot()}
+                                className="px-3.5 py-2 rounded-xl bg-gradient-to-r from-purple-600 via-indigo-600 to-blue-600 hover:from-purple-500 hover:to-blue-500 text-white font-bold text-xs flex items-center gap-2 shadow-lg shadow-indigo-500/25 transition-all hover:scale-105 active:scale-95 cursor-pointer"
                             >
                                 <Bot size={16} className="text-amber-300 animate-pulse" />
                                 <span>{t('🤖 AI 智能起草 SOP')}</span>
                             </button>
                         )}
 
-                        {/* Create Button */}
                         {isAdmin && (
                             <button
-                                onClick={handleCreate}
-                                className="px-3.5 py-2 rounded-xl bg-gray-900 border border-gray-800 hover:border-gray-700 text-white font-bold text-xs flex items-center gap-1.5 transition-all hover:scale-105 active:scale-95"
+                                onClick={() => handleOpenAICopilot()}
+                                className="px-3.5 py-2 rounded-xl bg-gray-900 border border-gray-800 hover:border-gray-700 text-white font-bold text-xs flex items-center gap-1.5 transition-all hover:scale-105 active:scale-95 cursor-pointer"
                             >
                                 <Plus size={15} />
                                 <span>{t('新建 SOP')}</span>
@@ -1084,7 +1093,7 @@ export default function SOPCenter({ userRole, user, onNavigate }: SOPCenterProps
                     </div>
                 </div>
 
-                {/* KPI Metrics Ribbon */}
+                {/* KPI Metrics */}
                 <div className="grid grid-cols-2 sm:grid-cols-4 gap-3 mb-4">
                     <div className="bg-gray-900/60 border border-gray-800/80 rounded-xl px-4 py-2.5 flex items-center justify-between">
                         <div>
@@ -1116,7 +1125,7 @@ export default function SOPCenter({ userRole, user, onNavigate }: SOPCenterProps
                     </div>
                 </div>
 
-                {/* Category Tabs */}
+                {/* Categories */}
                 <div className="flex items-center gap-1.5 overflow-x-auto custom-scrollbar pb-2 mb-3">
                     {CATEGORIES.map(cat => {
                         const Icon = cat.icon;
@@ -1137,9 +1146,8 @@ export default function SOPCenter({ userRole, user, onNavigate }: SOPCenterProps
                     })}
                 </div>
 
-                {/* Search Bar, Role Filter & View Switcher */}
+                {/* Search Bar & Role Filter */}
                 <div className="flex flex-col sm:flex-row items-center gap-3">
-                    {/* Search */}
                     <div className="relative flex-1 w-full">
                         <Search size={16} className="absolute left-3.5 top-1/2 -translate-y-1/2 text-gray-500" />
                         <input
@@ -1158,7 +1166,6 @@ export default function SOPCenter({ userRole, user, onNavigate }: SOPCenterProps
                         )}
                     </div>
 
-                    {/* Role Filter Tabs */}
                     <div className="flex items-center gap-1 bg-gray-900 border border-gray-800 rounded-xl p-1 shrink-0">
                         <button
                             onClick={() => setRoleFilter('All')}
@@ -1178,7 +1185,6 @@ export default function SOPCenter({ userRole, user, onNavigate }: SOPCenterProps
                         ))}
                     </div>
 
-                    {/* View Switcher */}
                     <div className="flex items-center bg-gray-900 border border-gray-800 rounded-xl p-1 shrink-0">
                         <button
                             onClick={() => setViewMode('grid')}
@@ -1198,7 +1204,7 @@ export default function SOPCenter({ userRole, user, onNavigate }: SOPCenterProps
                 </div>
             </div>
 
-            {/* Articles Display Content */}
+            {/* Articles List Display */}
             <div className="flex-1 overflow-y-auto p-6 custom-scrollbar">
                 {loading ? (
                     <div className="flex flex-col items-center justify-center h-64 gap-3 text-gray-500">
@@ -1209,13 +1215,10 @@ export default function SOPCenter({ userRole, user, onNavigate }: SOPCenterProps
                     <div className="flex flex-col items-center justify-center h-64 text-gray-500 space-y-3">
                         <FileText size={48} className="opacity-20 text-indigo-400" />
                         <p className="font-bold text-sm text-gray-400">{t('未找到匹配的标准作业规程')}</p>
-                        <p className="text-xs text-gray-600">{t('尝试切换分类筛选，或使用 AI 助手一键生成新规程')}</p>
+                        <p className="text-xs text-gray-600">{t('尝试切换分类筛选，或使用 AI 智能副驾驶一句话起草新规程')}</p>
                         {isAdmin && (
                             <button
-                                onClick={() => {
-                                    setAiAction('generate');
-                                    setShowAIModal(true);
-                                }}
+                                onClick={() => handleOpenAICopilot()}
                                 className="mt-2 px-4 py-2 rounded-xl bg-indigo-600 hover:bg-indigo-500 text-white text-xs font-bold flex items-center gap-1.5 shadow-lg shadow-indigo-600/20"
                             >
                                 <Bot size={14} />
@@ -1224,7 +1227,6 @@ export default function SOPCenter({ userRole, user, onNavigate }: SOPCenterProps
                         )}
                     </div>
                 ) : viewMode === 'grid' ? (
-                    /* Grid Card View */
                     <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-5">
                         {filteredArticles.map(article => {
                             const catObj = CATEGORIES.find(c => c.id === article.category);
@@ -1238,7 +1240,6 @@ export default function SOPCenter({ userRole, user, onNavigate }: SOPCenterProps
                                     onClick={() => setSelectedArticle(article)}
                                     className="group relative bg-gray-900/60 border border-gray-800/80 rounded-2xl overflow-hidden hover:border-indigo-500/40 transition-all duration-300 hover:shadow-xl hover:shadow-indigo-500/10 cursor-pointer flex flex-col"
                                 >
-                                    {/* Card Header Media Gradient */}
                                     <div className="relative h-32 overflow-hidden bg-gradient-to-br from-indigo-950/80 via-gray-900 to-purple-950/40 p-4 flex flex-col justify-between">
                                         <div className="flex items-center justify-between z-10">
                                             <span className="flex items-center gap-1.5 px-2.5 py-1 rounded-full text-[10px] font-bold bg-black/40 backdrop-blur-md border border-white/10 text-gray-300">
@@ -1246,7 +1247,6 @@ export default function SOPCenter({ userRole, user, onNavigate }: SOPCenterProps
                                                 {catObj?.label || '规范'}
                                             </span>
 
-                                            {/* Status Badge */}
                                             {!article.is_published && (
                                                 <span className="px-2 py-0.5 rounded-full bg-amber-500/20 border border-amber-500/30 text-amber-400 text-[10px] font-bold">
                                                     {t('草稿')}
@@ -1254,12 +1254,10 @@ export default function SOPCenter({ userRole, user, onNavigate }: SOPCenterProps
                                             )}
                                         </div>
 
-                                        {/* Center Watermark Icon */}
                                         <div className="absolute right-4 bottom-2 opacity-10 group-hover:opacity-20 group-hover:scale-110 transition-all duration-300">
                                             <CatIcon size={80} className="text-white" />
                                         </div>
 
-                                        {/* Badges Ribbon (Video / Page Linked) */}
                                         <div className="flex items-center gap-1.5 z-10">
                                             {hasVideo && (
                                                 <span className="flex items-center gap-1 px-2 py-0.5 rounded-full bg-red-500/20 text-red-400 border border-red-500/30 text-[9px] font-bold">
@@ -1273,7 +1271,6 @@ export default function SOPCenter({ userRole, user, onNavigate }: SOPCenterProps
                                             )}
                                         </div>
 
-                                        {/* Admin Quick Action Hover Bar */}
                                         {isAdmin && (
                                             <div className="absolute top-3 right-3 flex gap-1.5 opacity-0 group-hover:opacity-100 transition-opacity z-20">
                                                 <button
@@ -1294,7 +1291,6 @@ export default function SOPCenter({ userRole, user, onNavigate }: SOPCenterProps
                                         )}
                                     </div>
 
-                                    {/* Card Content Body */}
                                     <div className="p-4 flex-1 flex flex-col justify-between space-y-3">
                                         <div>
                                             <h3 className="text-white font-extrabold text-sm mb-1.5 line-clamp-1 group-hover:text-indigo-300 transition-colors">
@@ -1305,7 +1301,6 @@ export default function SOPCenter({ userRole, user, onNavigate }: SOPCenterProps
                                             </p>
                                         </div>
 
-                                        {/* Target Roles & Footer */}
                                         <div className="pt-2 border-t border-gray-800/60 flex items-center justify-between">
                                             <div className="flex flex-wrap gap-1">
                                                 {article.target_roles.length === 0 ? (
@@ -1340,7 +1335,6 @@ export default function SOPCenter({ userRole, user, onNavigate }: SOPCenterProps
                         })}
                     </div>
                 ) : (
-                    /* Dense List View */
                     <div className="bg-gray-900/40 border border-gray-800/80 rounded-2xl overflow-hidden divide-y divide-gray-800/60">
                         {filteredArticles.map(article => {
                             const catObj = CATEGORIES.find(c => c.id === article.category);
@@ -1418,233 +1412,60 @@ export default function SOPCenter({ userRole, user, onNavigate }: SOPCenterProps
             </div>
 
             {/* ═══════════════════════════════════════════════════════════════════════
-                3. EXECUTIVE AI CO-PILOT MODAL
-            ═══════════════════════════════════════════════════════════════════════ */}
-            {showAIModal && (
-                <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/70 backdrop-blur-md p-4 animate-in fade-in duration-200">
-                    <div className="bg-gray-950 border border-gray-800 rounded-3xl w-full max-w-2xl max-h-[92vh] flex flex-col shadow-2xl overflow-hidden">
-
-                        {/* Modal Header */}
-                        <div className="flex items-center justify-between px-6 py-4 border-b border-gray-800 bg-gradient-to-r from-purple-950/40 via-indigo-950/30 to-gray-950">
-                            <div className="flex items-center gap-3">
-                                <div className="w-9 h-9 rounded-xl bg-gradient-to-br from-purple-600 to-indigo-600 flex items-center justify-center shadow-lg shadow-purple-500/20">
-                                    <Bot size={18} className="text-amber-300" />
-                                </div>
-                                <div>
-                                    <h2 className="text-base font-black text-white">
-                                        {t('高管专属 AI 智能副驾驶 (Executive AI SOP Co-pilot)')}
-                                    </h2>
-                                    <p className="text-[11px] text-gray-400">
-                                        {t('输入要点，自动依据车间机台与工业工程规范起草或润色标准规程')}
-                                    </p>
-                                </div>
-                            </div>
-                            <button
-                                onClick={() => { setShowAIModal(false); setAiResult(null); }}
-                                className="p-2 rounded-lg hover:bg-gray-800 text-gray-400 hover:text-white"
-                            >
-                                <X size={18} />
-                            </button>
-                        </div>
-
-                        {/* Modal Body */}
-                        <div className="flex-1 overflow-y-auto p-6 space-y-5 custom-scrollbar">
-
-                            {/* Step 1: Input & Configuration (when no result yet) */}
-                            {!aiResult && (
-                                <>
-                                    {/* Topic / Prompt */}
-                                    <div>
-                                        <label className="text-xs font-bold text-gray-300 mb-1.5 flex items-center gap-1">
-                                            <Sparkles size={13} className="text-indigo-400" />
-                                            {t('SOP 主题或要点描述')}
-                                        </label>
-                                        <textarea
-                                            value={aiTopic}
-                                            onChange={e => setAiTopic(e.target.value)}
-                                            placeholder={t('例如：帮我起草关于拉伸膜机 T1.1-M03 换卷与厚度校准的规程，或者气泡膜机开机排气防爆孔注意事项...')}
-                                            rows={3}
-                                            className="w-full bg-gray-900 border border-gray-800 rounded-xl p-3 text-white text-xs placeholder-gray-500 focus:border-indigo-500 outline-none resize-none"
-                                        />
-                                    </div>
-
-                                    {/* Language Mode Selector */}
-                                    <div>
-                                        <label className="text-xs font-bold text-gray-300 mb-1.5 flex items-center gap-1">
-                                            <Languages size={13} className="text-indigo-400" />
-                                            {t('语言与双语对照模式')}
-                                        </label>
-                                        <div className="grid grid-cols-3 gap-2.5">
-                                            {[
-                                                { id: 'zh', label: '纯中文规程', sub: '专业严谨工业规范' },
-                                                { id: 'zh-bm', label: '中+马双语对照', sub: '适合车间与司机一线 (推荐)' },
-                                                { id: 'zh-en', label: '中+英双语对照', sub: '跨国协作与管理标准' },
-                                            ].map(lang => (
-                                                <button
-                                                    key={lang.id}
-                                                    onClick={() => setAiLanguage(lang.id as any)}
-                                                    className={`p-3 rounded-xl border text-left transition-all ${aiLanguage === lang.id
-                                                        ? 'bg-indigo-950/40 border-indigo-500 text-white shadow-md'
-                                                        : 'bg-gray-900/60 border-gray-800 text-gray-400 hover:border-gray-700'
-                                                        }`}
-                                                >
-                                                    <p className="font-bold text-xs">{lang.label}</p>
-                                                    <p className="text-[10px] text-gray-500 mt-0.5">{lang.sub}</p>
-                                                </button>
-                                            ))}
-                                        </div>
-                                    </div>
-
-                                    {/* SOP Type Selector */}
-                                    <div>
-                                        <label className="text-xs font-bold text-gray-300 mb-1.5 block">
-                                            {t('规程类型与重点')}
-                                        </label>
-                                        <div className="grid grid-cols-2 sm:grid-cols-4 gap-2">
-                                            {[
-                                                { id: 'standard', label: '⚙️ 标准操作规程', sub: '开机生产全流程' },
-                                                { id: 'troubleshooting', label: '🔧 设备排障指南', sub: '异常现象与排除' },
-                                                { id: 'safety', label: '🛡️ 安全防护守则', sub: '高危作业与PPE' },
-                                                { id: 'delivery', label: '🚚 司机交接标准', sub: '拍照交单还车' },
-                                            ].map(type => (
-                                                <button
-                                                    key={type.id}
-                                                    onClick={() => setAiSopType(type.id)}
-                                                    className={`p-2.5 rounded-xl border text-left transition-all ${aiSopType === type.id
-                                                        ? 'bg-indigo-600 text-white border-indigo-500 shadow'
-                                                        : 'bg-gray-900/60 border-gray-800 text-gray-400 hover:border-gray-700'
-                                                        }`}
-                                                >
-                                                    <p className="font-bold text-xs">{type.label}</p>
-                                                    <p className="text-[9px] text-gray-400 mt-0.5">{type.sub}</p>
-                                                </button>
-                                            ))}
-                                        </div>
-                                    </div>
-
-                                    {/* Action Trigger Button */}
-                                    <div className="pt-2">
-                                        <button
-                                            onClick={() => handleRunAIAssistant('generate')}
-                                            disabled={aiLoading || !aiTopic.trim()}
-                                            className="w-full py-3.5 rounded-xl bg-gradient-to-r from-purple-600 via-indigo-600 to-blue-600 hover:from-purple-500 hover:to-blue-500 text-white font-extrabold text-sm flex items-center justify-center gap-2 shadow-lg shadow-indigo-600/30 transition-all disabled:opacity-50 disabled:cursor-not-allowed"
-                                        >
-                                            {aiLoading ? (
-                                                <>
-                                                    <div className="w-4 h-4 border-2 border-white border-t-transparent rounded-full animate-spin" />
-                                                    <span>{t('AI 正在调取机台数据与规程库撰写中...')}</span>
-                                                </>
-                                            ) : (
-                                                <>
-                                                    <Sparkles size={16} />
-                                                    <span>{t('开始由 AI 生成标准规程')}</span>
-                                                </>
-                                            )}
-                                        </button>
-                                    </div>
-                                </>
-                            )}
-
-                            {/* Step 2: AI Result Preview & Confirmation */}
-                            {aiResult && (
-                                <div className="space-y-4">
-                                    <div className="p-4 rounded-xl bg-indigo-950/30 border border-indigo-500/30 flex items-center justify-between">
-                                        <div>
-                                            <span className="text-[10px] uppercase font-bold text-indigo-400">{t('AI 草稿生成就绪')}</span>
-                                            <h3 className="font-black text-white text-base mt-0.5">{aiResult.title}</h3>
-                                            <p className="text-xs text-gray-400 mt-0.5">{aiResult.description}</p>
-                                        </div>
-                                        <div className="flex gap-1.5 shrink-0">
-                                            {aiResult.suggested_roles?.map((r: string) => (
-                                                <span key={r} className="px-2 py-0.5 rounded-full text-[10px] font-bold bg-indigo-500/20 text-indigo-300">
-                                                    {r}
-                                                </span>
-                                            ))}
-                                        </div>
-                                    </div>
-
-                                    {/* Markdown Preview Box */}
-                                    <div className="rounded-2xl border border-gray-800 bg-gray-900/60 p-5 max-h-96 overflow-y-auto custom-scrollbar prose prose-invert prose-indigo text-xs">
-                                        <ReactMarkdown components={MarkdownComponents}>
-                                            {aiResult.content}
-                                        </ReactMarkdown>
-                                    </div>
-
-                                    {/* Apply Actions */}
-                                    <div className="flex items-center justify-between pt-2">
-                                        <button
-                                            onClick={() => setAiResult(null)}
-                                            className="px-4 py-2 rounded-xl bg-gray-900 border border-gray-800 text-gray-300 hover:text-white text-xs font-bold flex items-center gap-1.5"
-                                        >
-                                            <RotateCcw size={13} />
-                                            {t('重新调整提示词')}
-                                        </button>
-
-                                        <div className="flex gap-2">
-                                            {isEditing && (
-                                                <button
-                                                    onClick={() => handleApplyAIResult('append')}
-                                                    className="px-4 py-2.5 rounded-xl bg-gray-800 hover:bg-gray-700 text-gray-200 text-xs font-bold"
-                                                >
-                                                    {t('追加到末尾')}
-                                                </button>
-                                            )}
-                                            <button
-                                                onClick={() => handleApplyAIResult('replace')}
-                                                className="px-5 py-2.5 rounded-xl bg-indigo-600 hover:bg-indigo-500 text-white text-xs font-bold flex items-center gap-1.5 shadow-lg shadow-indigo-600/30"
-                                            >
-                                                <Check size={14} />
-                                                {t('采纳并填入编辑器')}
-                                            </button>
-                                        </div>
-                                    </div>
-                                </div>
-                            )}
-
-                        </div>
-                    </div>
-                </div>
-            )}
-
-            {/* ═══════════════════════════════════════════════════════════════════════
-                4. MODERN FULL-FEATURED SOP EDITOR MODAL
+                3. ALL-IN-ONE NOTION-STYLE COPILOT WORKSPACE
             ═══════════════════════════════════════════════════════════════════════ */}
             {isEditing && editArticle && (
-                <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/75 backdrop-blur-md p-3 sm:p-6 animate-in fade-in duration-200">
-                    <div className="bg-gray-950 border border-gray-800 rounded-3xl w-full max-w-5xl h-[92vh] flex flex-col shadow-2xl overflow-hidden">
+                <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/80 backdrop-blur-lg p-2 sm:p-5 animate-in fade-in duration-200">
+                    <div className="bg-gray-950 border border-gray-800 rounded-3xl w-full max-w-7xl h-[94vh] flex flex-col shadow-2xl overflow-hidden">
 
-                        {/* Editor Header */}
-                        <div className="flex items-center justify-between px-6 py-3.5 border-b border-gray-800 bg-gray-950 shrink-0">
+                        {/* Workspace Top Header Bar */}
+                        <div className="flex items-center justify-between px-6 py-3 border-b border-gray-800 bg-gray-950 shrink-0">
                             <div className="flex items-center gap-3">
-                                <span className="p-2 rounded-xl bg-indigo-600/20 text-indigo-400">
-                                    <Pencil size={16} />
-                                </span>
-                                <div>
-                                    <h2 className="text-base font-black text-white">
-                                        {editArticle.id ? t('编辑标准作业规程') : t('新建标准作业规程')}
-                                    </h2>
-                                    <p className="text-[10px] text-gray-500">{t('支持 Markdown 渲染、AI 润色与车间实操大纲')}</p>
+                                <button
+                                    onClick={() => setCopilotOpen(!copilotOpen)}
+                                    className={`flex items-center gap-1.5 px-3 py-1.5 rounded-xl border text-xs font-bold transition-all ${copilotOpen
+                                        ? 'bg-purple-950/40 border-purple-500/40 text-purple-300'
+                                        : 'bg-gray-900 border-gray-800 text-gray-400 hover:text-white'
+                                        }`}
+                                    title={copilotOpen ? "折叠 AI 对话栏" : "展开 AI 对话栏"}
+                                >
+                                    <Bot size={15} className="text-amber-300" />
+                                    <span>AI 副驾驶</span>
+                                    {copilotOpen ? <PanelLeftClose size={14} /> : <PanelLeftOpen size={14} />}
+                                </button>
+
+                                <div className="h-4 w-px bg-gray-800" />
+
+                                <div className="flex items-center gap-2">
+                                    <span className="text-xs font-black text-white">
+                                        {editArticle.id ? t('编辑 SOP 工作台') : t('AI 协助创作工作台')}
+                                    </span>
+                                    {editArticle.title && (
+                                        <span className="text-xs text-gray-400 truncate max-w-xs font-medium">
+                                            • {editArticle.title}
+                                        </span>
+                                    )}
                                 </div>
                             </div>
 
-                            <div className="flex items-center gap-2">
+                            <div className="flex items-center gap-3">
                                 {/* Editor View Modes */}
                                 <div className="flex items-center bg-gray-900 border border-gray-800 rounded-xl p-1">
                                     <button
                                         onClick={() => setEditorTab('write')}
-                                        className={`px-2.5 py-1 rounded-lg text-xs font-bold transition ${editorTab === 'write' ? 'bg-indigo-600 text-white' : 'text-gray-400 hover:text-white'}`}
+                                        className={`px-3 py-1 rounded-lg text-xs font-bold transition ${editorTab === 'write' ? 'bg-indigo-600 text-white' : 'text-gray-400 hover:text-white'}`}
                                     >
                                         {t('纯编辑')}
                                     </button>
                                     <button
                                         onClick={() => setEditorTab('split')}
-                                        className={`px-2.5 py-1 rounded-lg text-xs font-bold transition ${editorTab === 'split' ? 'bg-indigo-600 text-white' : 'text-gray-400 hover:text-white'}`}
+                                        className={`px-3 py-1 rounded-lg text-xs font-bold transition ${editorTab === 'split' ? 'bg-indigo-600 text-white' : 'text-gray-400 hover:text-white'}`}
                                     >
-                                        {t('分屏预览')}
+                                        {t('分屏对比')}
                                     </button>
                                     <button
                                         onClick={() => setEditorTab('preview')}
-                                        className={`px-2.5 py-1 rounded-lg text-xs font-bold transition ${editorTab === 'preview' ? 'bg-indigo-600 text-white' : 'text-gray-400 hover:text-white'}`}
+                                        className={`px-3 py-1 rounded-lg text-xs font-bold transition ${editorTab === 'preview' ? 'bg-indigo-600 text-white' : 'text-gray-400 hover:text-white'}`}
                                     >
                                         {t('最终预览')}
                                     </button>
@@ -1652,282 +1473,517 @@ export default function SOPCenter({ userRole, user, onNavigate }: SOPCenterProps
 
                                 <button
                                     onClick={() => { setIsEditing(false); setEditArticle(null); }}
-                                    className="p-2 rounded-lg hover:bg-gray-800 text-gray-400 hover:text-white"
+                                    className="p-2 rounded-lg hover:bg-gray-800 text-gray-400 hover:text-white transition"
                                 >
                                     <X size={18} />
                                 </button>
                             </div>
                         </div>
 
-                        {/* Editor AI & Template Quick Toolbar */}
-                        <div className="px-6 py-2 border-b border-gray-800/80 bg-gray-900/40 flex flex-wrap items-center justify-between gap-2 shrink-0">
-                            {/* In-Editor AI Actions */}
-                            <div className="flex items-center gap-1.5">
-                                <span className="text-[11px] font-bold text-indigo-400 flex items-center gap-1 mr-1">
-                                    <Bot size={13} />
-                                    AI 工具箱:
-                                </span>
-                                <button
-                                    onClick={() => {
-                                        setAiTopic(editArticle.title || '当前草稿润色');
-                                        setAiAction('polish');
-                                        handleRunAIAssistant('polish');
-                                        setShowAIModal(true);
-                                    }}
-                                    className="px-2.5 py-1 rounded-lg bg-gray-800 hover:bg-gray-700 text-gray-200 text-[11px] font-bold transition"
-                                >
-                                    🪄 工业级润色
-                                </button>
-                                <button
-                                    onClick={() => {
-                                        setAiTopic(editArticle.title || '安全警示补充');
-                                        setAiAction('safety_alerts');
-                                        handleRunAIAssistant('safety_alerts');
-                                        setShowAIModal(true);
-                                    }}
-                                    className="px-2.5 py-1 rounded-lg bg-gray-800 hover:bg-gray-700 text-amber-300 text-[11px] font-bold transition"
-                                >
-                                    ⚠️ 补充安全警示
-                                </button>
-                                <button
-                                    onClick={() => {
-                                        setAiLanguage('zh-bm');
-                                        setAiAction('translate');
-                                        handleRunAIAssistant('translate');
-                                        setShowAIModal(true);
-                                    }}
-                                    className="px-2.5 py-1 rounded-lg bg-gray-800 hover:bg-gray-700 text-emerald-300 text-[11px] font-bold transition"
-                                >
-                                    🌐 转中马双语
-                                </button>
-                            </div>
+                        {/* Workspace Middle Content: Left (Copilot Chat) + Right (Editor Canvas) */}
+                        <div className="flex-1 flex overflow-hidden">
 
-                            {/* Template Preset Dropdown */}
-                            <div className="flex items-center gap-2">
-                                <span className="text-[11px] text-gray-500">{t('套用标准模板')}:</span>
-                                <select
-                                    onChange={e => {
-                                        const idx = Number(e.target.value);
-                                        if (!isNaN(idx) && SOP_TEMPLATES[idx]) {
-                                            if (editArticle.content && !confirm(t('套用模板将覆盖当前内容，是否继续？'))) return;
-                                            setEditArticle(prev => prev ? { ...prev, content: SOP_TEMPLATES[idx].template } : prev);
-                                        }
-                                    }}
-                                    defaultValue=""
-                                    className="bg-gray-800 border border-gray-700 text-gray-200 text-xs rounded-lg px-2.5 py-1 outline-none"
-                                >
-                                    <option value="" disabled>{t('选择预置模板...')}</option>
-                                    {SOP_TEMPLATES.map((tmpl, idx) => (
-                                        <option key={idx} value={idx}>{tmpl.name}</option>
-                                    ))}
-                                </select>
-                            </div>
-                        </div>
+                            {/* ── LEFT: Conversational AI Copilot Panel ── */}
+                            {copilotOpen && (
+                                <div className="w-full sm:w-96 border-r border-gray-800 bg-gray-900/30 flex flex-col shrink-0">
+                                    {/* Chat Header */}
+                                    <div className="p-3.5 border-b border-gray-800/80 bg-gray-900/50 flex items-center justify-between">
+                                        <div className="flex items-center gap-2">
+                                            <div className="w-7 h-7 rounded-lg bg-gradient-to-br from-purple-600 to-indigo-600 flex items-center justify-center">
+                                                <Bot size={15} className="text-amber-300" />
+                                            </div>
+                                            <div>
+                                                <h3 className="text-xs font-extrabold text-white">SOP 智能副驾驶</h3>
+                                                <p className="text-[10px] text-gray-400">输入一句话或传图，边聊边改</p>
+                                            </div>
+                                        </div>
 
-                        {/* Editor Body */}
-                        <div className="flex-1 overflow-y-auto p-6 space-y-4 custom-scrollbar">
+                                        {undoStack.length > 0 && (
+                                            <button
+                                                onClick={handleUndo}
+                                                className="flex items-center gap-1 px-2 py-1 rounded-lg bg-gray-800 hover:bg-gray-700 text-amber-400 hover:text-amber-300 text-[11px] font-bold transition"
+                                                title="撤销上一次 AI 修改"
+                                            >
+                                                <Undo2 size={12} />
+                                                <span>撤销</span>
+                                            </button>
+                                        )}
+                                    </div>
 
-                            {/* Row 1: Title & Category */}
-                            <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
-                                <div className="md:col-span-2">
-                                    <label className="text-[11px] font-black uppercase text-gray-400 mb-1 block">
-                                        {t('规程标题 (Title) *')}
-                                    </label>
-                                    <input
-                                        value={editArticle.title || ''}
-                                        onChange={e => setEditArticle(prev => prev ? { ...prev, title: e.target.value } : prev)}
-                                        placeholder={t('例如：拉伸膜机 T1.1-M03 换卷与厚度校准规程')}
-                                        className="w-full bg-gray-900 border border-gray-800 rounded-xl px-3.5 py-2.5 text-white text-sm focus:border-indigo-500 outline-none"
-                                    />
-                                </div>
-
-                                <div>
-                                    <label className="text-[11px] font-black uppercase text-gray-400 mb-1 block">
-                                        {t('所属分类 (Category)')}
-                                    </label>
-                                    <select
-                                        value={editArticle.category || 'production'}
-                                        onChange={e => setEditArticle(prev => prev ? { ...prev, category: e.target.value } : prev)}
-                                        className="w-full bg-gray-900 border border-gray-800 rounded-xl px-3 py-2.5 text-white text-xs focus:border-indigo-500 outline-none"
-                                    >
-                                        {CATEGORIES.filter(c => c.id !== 'all').map(c => (
-                                            <option key={c.id} value={c.id}>{c.label}</option>
-                                        ))}
-                                    </select>
-                                </div>
-                            </div>
-
-                            {/* Row 2: Description */}
-                            <div>
-                                <label className="text-[11px] font-black uppercase text-gray-400 mb-1 block">
-                                    {t('简要说明 (Description)')}
-                                </label>
-                                <input
-                                    value={editArticle.description || ''}
-                                    onChange={e => setEditArticle(prev => prev ? { ...prev, description: e.target.value } : prev)}
-                                    placeholder={t('用一句话概括此规程的目的与适用范围')}
-                                    className="w-full bg-gray-900 border border-gray-800 rounded-xl px-3.5 py-2.5 text-white text-xs focus:border-indigo-500 outline-none"
-                                />
-                            </div>
-
-                            {/* Row 3: Target Roles & Page Link */}
-                            <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-                                {/* Roles */}
-                                <div>
-                                    <label className="text-[11px] font-black uppercase text-gray-400 mb-1.5 block">
-                                        {t('适用工种角色 (Target Roles)')}
-                                    </label>
-                                    <div className="flex flex-wrap gap-1.5">
-                                        {ALL_ROLES.map(role => {
-                                            const isSelected = editArticle.target_roles?.includes(role);
-                                            return (
-                                                <button
-                                                    key={role}
-                                                    type="button"
-                                                    onClick={() => {
-                                                        setEditArticle(prev => {
-                                                            if (!prev) return prev;
-                                                            const cur = prev.target_roles || [];
-                                                            return {
-                                                                ...prev,
-                                                                target_roles: isSelected
-                                                                    ? cur.filter(r => r !== role)
-                                                                    : [...cur, role]
-                                                            };
-                                                        });
-                                                    }}
-                                                    className={`px-3 py-1 rounded-lg text-xs font-bold transition border ${isSelected
-                                                        ? 'border-white/40 scale-105 shadow-sm'
-                                                        : 'border-gray-800 opacity-60 hover:opacity-100'
+                                    {/* Chat Message History */}
+                                    <div className="flex-1 overflow-y-auto p-4 space-y-3.5 custom-scrollbar text-xs">
+                                        {chatMessages.map(msg => (
+                                            <div
+                                                key={msg.id}
+                                                className={`flex flex-col ${msg.sender === 'user' ? 'items-end' : 'items-start'}`}
+                                            >
+                                                <div
+                                                    className={`max-w-[90%] p-3 rounded-2xl leading-relaxed space-y-2 ${msg.sender === 'user'
+                                                        ? 'bg-indigo-600 text-white rounded-br-none shadow-md'
+                                                        : 'bg-gray-800/80 border border-gray-700/60 text-gray-200 rounded-bl-none shadow'
                                                         }`}
-                                                    style={{
-                                                        backgroundColor: isSelected ? (ROLE_COLORS[role] || '#666') + '25' : 'transparent',
-                                                        color: ROLE_COLORS[role] || '#666'
-                                                    }}
                                                 >
-                                                    {role}
+                                                    {msg.photoUrl && (
+                                                        <div className="rounded-xl overflow-hidden border border-white/20 max-h-40">
+                                                            <img src={msg.photoUrl} alt="Attached" className="w-full h-auto object-cover" />
+                                                        </div>
+                                                    )}
+                                                    <p>{msg.text}</p>
+                                                </div>
+                                                <span className="text-[9px] text-gray-600 mt-1 px-1">
+                                                    {msg.timestamp.toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })}
+                                                </span>
+                                            </div>
+                                        ))}
+
+                                        {aiProcessing && (
+                                            <div className="flex items-center gap-2 p-3 rounded-2xl bg-indigo-950/40 border border-indigo-500/30 text-indigo-300 text-xs animate-pulse">
+                                                <div className="w-3.5 h-3.5 border-2 border-indigo-400 border-t-transparent rounded-full animate-spin" />
+                                                <span>AI 正在分析并就地修改右侧规程...</span>
+                                            </div>
+                                        )}
+                                        <div ref={chatBottomRef} />
+                                    </div>
+
+                                    {/* Starter Suggestion Pills (Shown if only welcome message) */}
+                                    {chatMessages.length <= 1 && (
+                                        <div className="p-3 border-t border-gray-800/60 space-y-1.5 bg-gray-950/40">
+                                            <p className="text-[10px] font-bold text-gray-500 uppercase tracking-wider">💡 快速开始灵感:</p>
+                                            <div className="flex flex-wrap gap-1.5">
+                                                {[
+                                                    '🚚 我想做司机的sop',
+                                                    '⚙️ 拉伸膜机T1.1换卷规程',
+                                                    '🫧 气泡膜机开机排气规范',
+                                                    '🛡️ 车间PPE防护守则'
+                                                ].map(pill => (
+                                                    <button
+                                                        key={pill}
+                                                        onClick={() => handleSendChatMessage(pill.slice(3))}
+                                                        className="px-2.5 py-1 rounded-lg bg-gray-800/80 hover:bg-gray-700 text-gray-300 hover:text-white text-[11px] font-medium transition"
+                                                    >
+                                                        {pill}
+                                                    </button>
+                                                ))}
+                                            </div>
+                                        </div>
+                                    )}
+
+                                    {/* Quick Action Chips Bar */}
+                                    {editArticle.content && editArticle.content.length > 20 && (
+                                        <div className="px-3 py-2 border-t border-gray-800/60 flex flex-wrap gap-1.5 bg-gray-950/60">
+                                            <button
+                                                onClick={() => handleSendChatMessage('请精简当前规程正文，去除冗余套话，保留最干练的核心步骤')}
+                                                disabled={aiProcessing}
+                                                className="px-2 py-0.5 rounded-lg bg-gray-800 hover:bg-gray-700 text-indigo-300 text-[10px] font-bold transition disabled:opacity-50"
+                                            >
+                                                ⚡ 精简步骤
+                                            </button>
+                                            <button
+                                                onClick={() => handleSendChatMessage('请审查当前规程中的安全隐患，在步骤前增加 [!WARNING] 或 [!CAUTION] 彩色安全警告卡片')}
+                                                disabled={aiProcessing}
+                                                className="px-2 py-0.5 rounded-lg bg-gray-800 hover:bg-gray-700 text-amber-300 text-[10px] font-bold transition disabled:opacity-50"
+                                            >
+                                                ⚠️ 加安全警告
+                                            </button>
+                                            <button
+                                                onClick={() => handleSendChatMessage('请将当前规程的标题和各步骤转换为中文 + 马来文 (Bahasa Melayu) 双语对照版本')}
+                                                disabled={aiProcessing}
+                                                className="px-2 py-0.5 rounded-lg bg-gray-800 hover:bg-gray-700 text-emerald-300 text-[10px] font-bold transition disabled:opacity-50"
+                                            >
+                                                🌐 转中马双语
+                                            </button>
+                                            <button
+                                                onClick={() => handleSendChatMessage('请从当前正文中提取出一线员工可闭环打勾的实操核对清单（- [ ] 格式）')}
+                                                disabled={aiProcessing}
+                                                className="px-2 py-0.5 rounded-lg bg-gray-800 hover:bg-gray-700 text-purple-300 text-[10px] font-bold transition disabled:opacity-50"
+                                            >
+                                                📋 提取清单
+                                            </button>
+                                        </div>
+                                    )}
+
+                                    {/* Photo Preview Strip (if photo attached) */}
+                                    {aiAttachedPhoto && (
+                                        <div className="px-3 py-2 border-t border-gray-800 bg-gray-900/80 flex items-center justify-between">
+                                            <div className="flex items-center gap-2">
+                                                <img src={aiAttachedPhoto.preview} alt="Attached" className="w-8 h-8 rounded-lg object-cover border border-indigo-500/40" />
+                                                <div className="text-[11px] truncate max-w-[180px] text-gray-300 font-mono">
+                                                    {aiAttachedPhoto.file.name}
+                                                </div>
+                                            </div>
+                                            <button
+                                                onClick={() => setAiAttachedPhoto(null)}
+                                                className="text-gray-500 hover:text-red-400 p-1 rounded-lg"
+                                            >
+                                                <X size={14} />
+                                            </button>
+                                        </div>
+                                    )}
+
+                                    {/* Chat Input Bar */}
+                                    <div className="p-3 border-t border-gray-800 bg-gray-950">
+                                        <form
+                                            onSubmit={e => {
+                                                e.preventDefault();
+                                                handleSendChatMessage();
+                                            }}
+                                            className="flex items-center gap-2"
+                                        >
+                                            <input
+                                                ref={fileInputAiPhotoRef}
+                                                type="file"
+                                                accept="image/*"
+                                                onChange={handleSelectAiPhoto}
+                                                className="hidden"
+                                            />
+                                            <button
+                                                type="button"
+                                                onClick={() => fileInputAiPhotoRef.current?.click()}
+                                                className="p-2.5 rounded-xl bg-gray-900 hover:bg-gray-800 text-gray-400 hover:text-white border border-gray-800 transition"
+                                                title="拍照或上传车间现场/机台照片"
+                                            >
+                                                <Camera size={15} />
+                                            </button>
+
+                                            <input
+                                                ref={chatInputRef}
+                                                value={chatInput}
+                                                onChange={e => setChatInput(e.target.value)}
+                                                placeholder={t('对 AI 说，如：把第2步改成必须拍两张照...')}
+                                                disabled={aiProcessing}
+                                                className="flex-1 bg-gray-900 border border-gray-800 rounded-xl px-3.5 py-2.5 text-xs text-white placeholder-gray-500 focus:border-indigo-500 outline-none transition disabled:opacity-50"
+                                            />
+                                            <button
+                                                type="submit"
+                                                disabled={aiProcessing || (!chatInput.trim() && !aiAttachedPhoto)}
+                                                className="p-2.5 rounded-xl bg-indigo-600 hover:bg-indigo-500 text-white transition disabled:opacity-40 shadow-md shadow-indigo-600/20"
+                                            >
+                                                <Send size={15} />
+                                            </button>
+                                        </form>
+                                    </div>
+                                </div>
+                            )}
+
+                            {/* ── RIGHT: SOP Editor Canvas ── */}
+                            <div className="flex-1 flex flex-col overflow-hidden bg-gray-950">
+
+                                {/* Editor Metadata Configuration Ribbon */}
+                                <div className="p-5 border-b border-gray-800/80 bg-gray-900/30 space-y-3.5 shrink-0 overflow-y-auto max-h-60 custom-scrollbar">
+                                    {/* Title & Category */}
+                                    <div className="grid grid-cols-1 md:grid-cols-4 gap-3">
+                                        <div className="md:col-span-3">
+                                            <label className="text-[10px] font-black uppercase text-gray-400 mb-1 block">
+                                                {t('规程标题 (Title) *')}
+                                            </label>
+                                            <input
+                                                value={editArticle.title || ''}
+                                                onChange={e => setEditArticle(prev => prev ? { ...prev, title: e.target.value } : prev)}
+                                                placeholder={t('例如：司机配送与回厂交单扫码还车规范')}
+                                                className="w-full bg-gray-900 border border-gray-800 rounded-xl px-3.5 py-2 text-white text-sm font-bold focus:border-indigo-500 outline-none"
+                                            />
+                                        </div>
+                                        <div>
+                                            <label className="text-[10px] font-black uppercase text-gray-400 mb-1 block">
+                                                {t('分类 (Category)')}
+                                            </label>
+                                            <select
+                                                value={editArticle.category || 'production'}
+                                                onChange={e => setEditArticle(prev => prev ? { ...prev, category: e.target.value } : prev)}
+                                                className="w-full bg-gray-900 border border-gray-800 rounded-xl px-3 py-2 text-white text-xs focus:border-indigo-500 outline-none"
+                                            >
+                                                {CATEGORIES.filter(c => c.id !== 'all').map(c => (
+                                                    <option key={c.id} value={c.id}>{c.label}</option>
+                                                ))}
+                                            </select>
+                                        </div>
+                                    </div>
+
+                                    {/* Roles, System Page & Status */}
+                                    <div className="grid grid-cols-1 md:grid-cols-12 gap-3 items-center">
+                                        {/* Roles */}
+                                        <div className="md:col-span-5">
+                                            <label className="text-[10px] font-black uppercase text-gray-400 mb-1 block">
+                                                {t('适用工种角色')}
+                                            </label>
+                                            <div className="flex flex-wrap gap-1">
+                                                {ALL_ROLES.map(role => {
+                                                    const isSelected = editArticle.target_roles?.includes(role);
+                                                    return (
+                                                        <button
+                                                            key={role}
+                                                            type="button"
+                                                            onClick={() => {
+                                                                setEditArticle(prev => {
+                                                                    if (!prev) return prev;
+                                                                    const cur = prev.target_roles || [];
+                                                                    return {
+                                                                        ...prev,
+                                                                        target_roles: isSelected
+                                                                            ? cur.filter(r => r !== role)
+                                                                            : [...cur, role]
+                                                                    };
+                                                                });
+                                                            }}
+                                                            className={`px-2.5 py-0.5 rounded-lg text-[11px] font-bold transition border ${isSelected
+                                                                ? 'border-white/40 shadow-sm'
+                                                                : 'border-gray-800 opacity-60 hover:opacity-100'
+                                                                }`}
+                                                            style={{
+                                                                backgroundColor: isSelected ? (ROLE_COLORS[role] || '#666') + '25' : 'transparent',
+                                                                color: ROLE_COLORS[role] || '#666'
+                                                            }}
+                                                        >
+                                                            {role}
+                                                        </button>
+                                                    );
+                                                })}
+                                            </div>
+                                        </div>
+
+                                        {/* Associated System Page */}
+                                        <div className="md:col-span-4">
+                                            <label className="text-[10px] font-black uppercase text-gray-400 mb-1 block">
+                                                {t('关联系统功能 (一键跳转)')}
+                                            </label>
+                                            <select
+                                                value={editArticle.page_id || ''}
+                                                onChange={e => setEditArticle(prev => prev ? { ...prev, page_id: e.target.value } : prev)}
+                                                className="w-full bg-gray-900 border border-gray-800 rounded-xl px-2.5 py-1.5 text-white text-xs focus:border-indigo-500 outline-none"
+                                            >
+                                                <option value="">{t('无关联功能 (纯指导文档)')}</option>
+                                                {SYSTEM_PAGES.map(p => (
+                                                    <option key={p.id} value={p.id}>
+                                                        [{p.id}] {p.name}
+                                                    </option>
+                                                ))}
+                                            </select>
+                                        </div>
+
+                                        {/* Publish Status Toggle */}
+                                        <div className="md:col-span-3">
+                                            <label className="text-[10px] font-black uppercase text-gray-400 mb-1 block">
+                                                {t('发布状态')}
+                                            </label>
+                                            <button
+                                                type="button"
+                                                onClick={() => setEditArticle(prev => prev ? { ...prev, is_published: !prev.is_published } : prev)}
+                                                className={`w-full py-1.5 rounded-xl font-bold text-xs transition border flex items-center justify-center gap-1.5 ${editArticle.is_published
+                                                    ? 'bg-emerald-950/30 border-emerald-500/40 text-emerald-400'
+                                                    : 'bg-gray-900 border-gray-800 text-gray-500'
+                                                    }`}
+                                            >
+                                                {editArticle.is_published ? (
+                                                    <>
+                                                        <CheckCircle2 size={13} />
+                                                        <span>{t('已发布 (执行中)')}</span>
+                                                    </>
+                                                ) : (
+                                                    <>
+                                                        <AlertCircle size={13} />
+                                                        <span>{t('草稿 (内部编制)')}</span>
+                                                    </>
+                                                )}
+                                            </button>
+                                        </div>
+                                    </div>
+
+                                    {/* Video Tutorial Upload & Link Ribbon Row */}
+                                    <div className="pt-2 border-t border-gray-800/60">
+                                        <div className="flex flex-col sm:flex-row items-start sm:items-center justify-between gap-2">
+                                            <div className="flex items-center gap-2">
+                                                <Film size={14} className="text-red-400 shrink-0" />
+                                                <span className="text-[10px] font-black uppercase text-gray-400">
+                                                    {t('配套教学视频 (Video Tutorial)')}
+                                                </span>
+                                                {editArticle.video_url && (
+                                                    <span className="text-[10px] px-2 py-0.5 rounded-full bg-red-500/20 text-red-300 font-mono truncate max-w-xs">
+                                                        已配置视频
+                                                    </span>
+                                                )}
+                                            </div>
+
+                                            <div className="flex items-center gap-2 w-full sm:w-auto">
+                                                <input
+                                                    ref={fileInputVideoRef}
+                                                    type="file"
+                                                    accept="video/mp4,video/webm,video/quicktime"
+                                                    onChange={handleUploadVideo}
+                                                    className="hidden"
+                                                />
+                                                <button
+                                                    type="button"
+                                                    onClick={() => fileInputVideoRef.current?.click()}
+                                                    disabled={uploadingVideo}
+                                                    className="flex items-center gap-1.5 px-3 py-1.5 rounded-xl bg-gray-900 border border-gray-700 hover:border-gray-600 text-gray-200 text-xs font-bold transition hover:scale-105 active:scale-95 disabled:opacity-50 shrink-0"
+                                                >
+                                                    {uploadingVideo ? (
+                                                        <>
+                                                            <div className="w-3 h-3 border-2 border-indigo-400 border-t-transparent rounded-full animate-spin" />
+                                                            <span>视频上传中...</span>
+                                                        </>
+                                                    ) : (
+                                                        <>
+                                                            <Upload size={12} className="text-red-400" />
+                                                            <span>上传本地视频 (MP4/WebM)</span>
+                                                        </>
+                                                    )}
                                                 </button>
-                                            );
-                                        })}
+
+                                                <div className="relative flex-1 sm:w-72">
+                                                    <input
+                                                        value={editArticle.video_url || ''}
+                                                        onChange={e => setEditArticle(prev => prev ? { ...prev, video_url: e.target.value } : prev)}
+                                                        placeholder="或粘贴 YouTube / MP4 链接..."
+                                                        className="w-full bg-gray-900 border border-gray-800 rounded-xl px-2.5 py-1.5 text-xs text-white placeholder-gray-500 focus:border-indigo-500 outline-none font-mono"
+                                                    />
+                                                    {editArticle.video_url && (
+                                                        <button
+                                                            type="button"
+                                                            onClick={() => setEditArticle(prev => prev ? { ...prev, video_url: '' } : prev)}
+                                                            className="absolute right-2 top-1/2 -translate-y-1/2 text-gray-500 hover:text-white"
+                                                            title="移除视频"
+                                                        >
+                                                            <X size={12} />
+                                                        </button>
+                                                    )}
+                                                </div>
+                                            </div>
+                                        </div>
                                     </div>
                                 </div>
 
-                                {/* Associated System Page Dropdown */}
-                                <div>
-                                    <label className="text-[11px] font-black uppercase text-gray-400 mb-1.5 block">
-                                        {t('关联系统功能模块 (Deep Link Page)')}
-                                    </label>
-                                    <select
-                                        value={editArticle.page_id || ''}
-                                        onChange={e => setEditArticle(prev => prev ? { ...prev, page_id: e.target.value } : prev)}
-                                        className="w-full bg-gray-900 border border-gray-800 rounded-xl px-3 py-2.5 text-white text-xs focus:border-indigo-500 outline-none"
-                                    >
-                                        <option value="">{t('无关联功能 (纯指导文档)')}</option>
-                                        {SYSTEM_PAGES.map(p => (
-                                            <option key={p.id} value={p.id}>
-                                                [{p.id}] {p.name}
-                                            </option>
-                                        ))}
-                                    </select>
-                                </div>
-                            </div>
+                                {/* Markdown Editor Toolbar & Canvas */}
+                                <div className="flex-1 overflow-hidden p-5 flex flex-col space-y-2">
+                                    {/* In-Editor Media & Markdown Toolbar */}
+                                    <div className="flex flex-wrap items-center justify-between gap-2 px-1 pb-1">
+                                        <div className="flex items-center gap-1.5">
+                                            <input
+                                                ref={fileInputImageRef}
+                                                type="file"
+                                                accept="image/*"
+                                                onChange={handleUploadMarkdownImage}
+                                                className="hidden"
+                                            />
+                                            <button
+                                                type="button"
+                                                onClick={() => fileInputImageRef.current?.click()}
+                                                disabled={uploadingImage}
+                                                className="flex items-center gap-1.5 px-3 py-1.5 rounded-xl bg-gray-900 border border-gray-700 hover:border-gray-600 text-indigo-300 hover:text-white text-xs font-bold transition hover:scale-105 active:scale-95 disabled:opacity-50"
+                                            >
+                                                {uploadingImage ? (
+                                                    <>
+                                                        <div className="w-3 h-3 border-2 border-indigo-400 border-t-transparent rounded-full animate-spin" />
+                                                        <span>插图上传中...</span>
+                                                    </>
+                                                ) : (
+                                                    <>
+                                                        <ImageIcon size={14} className="text-indigo-400" />
+                                                        <span>插入车间插图/照片</span>
+                                                    </>
+                                                )}
+                                            </button>
 
-                            {/* Row 4: Video URL & Publish Status */}
-                            <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-                                <div>
-                                    <label className="text-[11px] font-black uppercase text-gray-400 mb-1 block">
-                                        {t('教学视频链接 (YouTube 或 MP4 URL)')}
-                                    </label>
-                                    <input
-                                        value={editArticle.video_url || ''}
-                                        onChange={e => setEditArticle(prev => prev ? { ...prev, video_url: e.target.value } : prev)}
-                                        placeholder="https://www.youtube.com/watch?v=... 或 .mp4"
-                                        className="w-full bg-gray-900 border border-gray-800 rounded-xl px-3 py-2.5 text-white text-xs focus:border-indigo-500 outline-none"
-                                    />
-                                </div>
+                                            <div className="h-4 w-px bg-gray-800 mx-1" />
 
-                                <div>
-                                    <label className="text-[11px] font-black uppercase text-gray-400 mb-1 block">
-                                        {t('发布状态 (Publication Status)')}
-                                    </label>
-                                    <button
-                                        type="button"
-                                        onClick={() => setEditArticle(prev => prev ? { ...prev, is_published: !prev.is_published } : prev)}
-                                        className={`w-full py-2.5 rounded-xl font-bold text-xs transition border flex items-center justify-center gap-2 ${editArticle.is_published
-                                            ? 'bg-emerald-950/30 border-emerald-500/40 text-emerald-400'
-                                            : 'bg-gray-900 border-gray-800 text-gray-500'
-                                            }`}
-                                    >
-                                        {editArticle.is_published ? (
-                                            <>
-                                                <CheckCircle2 size={15} />
-                                                <span>{t('✅ 已发布 (对指定角色可见)')}</span>
-                                            </>
-                                        ) : (
-                                            <>
-                                                <AlertCircle size={15} />
-                                                <span>{t('🔒 草稿 (仅管理员可见)')}</span>
-                                            </>
-                                        )}
-                                    </button>
-                                </div>
-                            </div>
-
-                            {/* Row 5: Content Markdown Editor with Live Split / Preview */}
-                            <div>
-                                <div className="flex items-center justify-between mb-1.5">
-                                    <label className="text-[11px] font-black uppercase text-gray-400">
-                                        {t('规程正文内容 (Markdown Format) *')}
-                                    </label>
-                                    <span className="text-[10px] text-gray-500 font-mono">
-                                        支持标准 Markdown 表格与 &gt; [!WARNING] 警示块
-                                    </span>
-                                </div>
-
-                                <div className={`grid gap-4 ${editorTab === 'split' ? 'grid-cols-1 md:grid-cols-2' : 'grid-cols-1'}`}>
-                                    {/* Textarea (Visible in 'write' or 'split') */}
-                                    {editorTab !== 'preview' && (
-                                        <textarea
-                                            value={editArticle.content || ''}
-                                            onChange={e => setEditArticle(prev => prev ? { ...prev, content: e.target.value } : prev)}
-                                            placeholder={t('# 标题\n\n> [!NOTE]\n> 背景或目的说明\n\n## 1. 步骤清单\n- [ ] 1. 第一步\n- [ ] 2. 第二步\n\n> [!WARNING]\n> 安全与注意事项')}
-                                            rows={14}
-                                            className="w-full bg-gray-900/90 border border-gray-800 rounded-xl p-4 text-white font-mono text-xs focus:border-indigo-500 outline-none resize-y leading-relaxed"
-                                        />
-                                    )}
-
-                                    {/* Live Preview (Visible in 'preview' or 'split') */}
-                                    {editorTab !== 'write' && (
-                                        <div className="rounded-xl border border-gray-800 bg-gray-900/40 p-4 max-h-[380px] overflow-y-auto custom-scrollbar prose prose-invert prose-indigo text-xs">
-                                            {editArticle.content ? (
-                                                <ReactMarkdown components={MarkdownComponents}>
-                                                    {editArticle.content}
-                                                </ReactMarkdown>
-                                            ) : (
-                                                <p className="text-gray-500 italic">{t('在左侧输入 Markdown，此处将实时渲染最终效果...')}</p>
-                                            )}
+                                            <button
+                                                type="button"
+                                                onClick={() => insertSnippet('> [!WARNING]\n> 注意事项：严禁触碰运转辊轮与高温模具！')}
+                                                className="px-2.5 py-1 rounded-lg bg-gray-900 border border-gray-800 hover:border-gray-700 text-amber-400 text-[11px] font-bold"
+                                            >
+                                                + ⚠️ 警告卡片
+                                            </button>
+                                            <button
+                                                type="button"
+                                                onClick={() => insertSnippet('> [!TIP]\n> 操作技巧：引料时保持双手位于安全挡板以外。')}
+                                                className="px-2.5 py-1 rounded-lg bg-gray-900 border border-gray-800 hover:border-gray-700 text-emerald-400 text-[11px] font-bold"
+                                            >
+                                                + 💡 技巧卡片
+                                            </button>
+                                            <button
+                                                type="button"
+                                                onClick={() => insertSnippet('| 检验项目 | 标准值 | 允许公差 |\n| :--- | :--- | :--- |\n| 膜厚度 | 20 μm | ± 1 μm |\n| 卷宽度 | 500 mm | ± 2 mm |')}
+                                                className="px-2.5 py-1 rounded-lg bg-gray-900 border border-gray-800 hover:border-gray-700 text-blue-400 text-[11px] font-bold"
+                                            >
+                                                + 📊 对比表格
+                                            </button>
+                                            <button
+                                                type="button"
+                                                onClick={() => insertSnippet('- [ ] 开机前设备与防护自检\n- [ ] 扫码确认上岗\n- [ ] 首件公差检验确认')}
+                                                className="px-2.5 py-1 rounded-lg bg-gray-900 border border-gray-800 hover:border-gray-700 text-purple-400 text-[11px] font-bold"
+                                            >
+                                                + 📋 核对清单
+                                            </button>
                                         </div>
-                                    )}
+
+                                        <div className="text-[11px] text-gray-500 font-mono">
+                                            Markdown 格式支持
+                                        </div>
+                                    </div>
+
+                                    {/* Markdown Canvas & Split Screen */}
+                                    <div className={`flex-1 grid gap-4 overflow-hidden ${editorTab === 'split' ? 'grid-cols-1 md:grid-cols-2' : 'grid-cols-1'}`}>
+                                        {/* Write Textarea */}
+                                        {editorTab !== 'preview' && (
+                                            <div className="h-full flex flex-col">
+                                                <textarea
+                                                    value={editArticle.content || ''}
+                                                    onChange={e => setEditArticle(prev => prev ? { ...prev, content: e.target.value } : prev)}
+                                                    placeholder={t('# 规程标题\n\n> [!NOTE]\n> 规程目的与背景\n\n## 1. 核心操作步骤\n1. 步骤一\n2. 步骤二\n\n> [!WARNING]\n> 安全注意事项')}
+                                                    className="w-full flex-1 bg-gray-900/90 border border-gray-800 rounded-2xl p-4 text-white font-mono text-xs focus:border-indigo-500 outline-none resize-none leading-relaxed custom-scrollbar shadow-inner"
+                                                />
+                                            </div>
+                                        )}
+
+                                        {/* Real-time Markdown Preview */}
+                                        {editorTab !== 'write' && (
+                                            <div className="h-full rounded-2xl border border-gray-800 bg-gray-900/40 p-5 overflow-y-auto custom-scrollbar prose prose-invert prose-indigo text-xs">
+                                                {editArticle.video_url && (
+                                                    <div className="mb-4">
+                                                        {renderVideoPlayer(editArticle.video_url)}
+                                                    </div>
+                                                )}
+
+                                                {editArticle.content ? (
+                                                    <ReactMarkdown components={MarkdownComponents}>
+                                                        {editArticle.content}
+                                                    </ReactMarkdown>
+                                                ) : (
+                                                    <div className="h-full flex flex-col items-center justify-center text-gray-600 space-y-2">
+                                                        <Bot size={36} className="opacity-30 text-indigo-400" />
+                                                        <p className="font-medium text-xs">在左侧 AI 对话框输入一句话或传图</p>
+                                                        <p className="text-[11px] text-gray-500">AI 将自动在此处为您实时生成并渲染规程正文与插图</p>
+                                                    </div>
+                                                )}
+                                            </div>
+                                        )}
+                                    </div>
                                 </div>
+
+                                {/* Editor Footer Actions */}
+                                <div className="flex items-center justify-between px-6 py-3.5 border-t border-gray-800 bg-gray-950 shrink-0">
+                                    <div className="text-xs text-gray-500 font-mono">
+                                        {editArticle.content ? `${editArticle.content.length} 字符` : '草稿'}
+                                    </div>
+
+                                    <div className="flex items-center gap-3">
+                                        <button
+                                            onClick={() => { setIsEditing(false); setEditArticle(null); }}
+                                            className="px-4 py-2 rounded-xl bg-gray-900 border border-gray-800 text-gray-300 hover:text-white font-bold text-xs transition"
+                                        >
+                                            {t('取消')}
+                                        </button>
+                                        <button
+                                            onClick={handleSave}
+                                            className="px-6 py-2 rounded-xl bg-indigo-600 hover:bg-indigo-500 text-white font-bold text-xs flex items-center gap-2 shadow-lg shadow-indigo-600/30 hover:scale-105 active:scale-95 transition-all cursor-pointer"
+                                        >
+                                            <Save size={15} />
+                                            {t('保存规程')}
+                                        </button>
+                                    </div>
+                                </div>
+
                             </div>
-
-                        </div>
-
-                        {/* Editor Footer */}
-                        <div className="flex justify-end gap-3 px-6 py-4 border-t border-gray-800 bg-gray-950 shrink-0">
-                            <button
-                                onClick={() => { setIsEditing(false); setEditArticle(null); }}
-                                className="px-5 py-2.5 rounded-xl bg-gray-900 border border-gray-800 text-gray-300 hover:text-white font-bold text-xs transition"
-                            >
-                                {t('取消')}
-                            </button>
-                            <button
-                                onClick={handleSave}
-                                className="px-6 py-2.5 rounded-xl bg-indigo-600 hover:bg-indigo-500 text-white font-bold text-xs flex items-center gap-2 shadow-lg shadow-indigo-600/20 hover:scale-105 active:scale-95 transition-all"
-                            >
-                                <Save size={15} />
-                                {t('保存规程')}
-                            </button>
                         </div>
 
                     </div>

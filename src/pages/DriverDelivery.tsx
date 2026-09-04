@@ -394,16 +394,7 @@ const DriverDelivery: React.FC<DriverDeliveryProps> = ({ user }) => {
                     proof_of_load_url: photoUrl
                 }).eq('id', selectedOrder.id);
 
-                // ⚡ Immediately deduct driver's actual loaded quantity from warehouse
-                await deductStockForOrder({
-                    id: selectedOrder.id,
-                    order_number: selectedOrder.orderNumber,
-                    trip_origin: (selectedOrder as any).trip_origin || (selectedOrder as any).tripOrigin,
-                    items: updatedItems,
-                    driver_name: user?.name
-                });
-
-                alert("⚠️ Kuantiti pesanan berubah. Stok ditolak mengikut muatan sebenar & Menunggu kelulusan logistik. / Order quantity changed. Stock deducted according to actual load & Pending logistics approval.");
+                alert("⚠️ Kuantiti pesanan berubah & Menunggu kelulusan logistik. / Order quantity changed & Pending logistics approval.");
 
                 // Optimistic Update: Move to Pending Approval locally so button changes to Confirm Delivery immediately
                 setTasks(prev => prev.map(t => {
@@ -776,14 +767,30 @@ const DriverDelivery: React.FC<DriverDeliveryProps> = ({ user }) => {
                 finalNote = newNoteSegment;
             }
 
-            // If the order status was 'Pending Approval', it remains in 'Pending Approval' status
-            // so the admin still reviews and approves it later.
-            const nextStatus = selectedOrder.status === 'Pending Approval'
-                ? 'Pending Approval'
-                : (isFinalDrop ? 'Delivered' : 'Loaded');
+            // Calculate totalDrops and completed drops from newPhotos
+            const totalDrops = selectedOrder.trip_drop_count || 1;
+            const completedDrops = Math.floor(newPhotos.filter(Boolean).length / 2);
+            let updatedTripDropCount = totalDrops;
+            if (completedDrops > totalDrops) {
+                updatedTripDropCount = completedDrops;
+            }
 
-            // Check if column exists dynamically
-            const hasExtractedDoCol = tasks.length > 0 && ('extracted_do_number' in tasks[0]);
+            // Status decision logic:
+            // 1. If order was already Delivered, keep Delivered (never revert back to Loaded!)
+            // 2. If order was Pending Approval, keep Pending Approval
+            // 3. Otherwise, if isFinalDrop OR if driver has no lorry bound and all drops completed, set to Delivered
+            let nextStatus = selectedOrder.status;
+            if (selectedOrder.status === 'Delivered') {
+                nextStatus = 'Delivered';
+            } else if (selectedOrder.status === 'Pending Approval') {
+                nextStatus = 'Pending Approval';
+            } else {
+                if (isFinalDrop || (!currentLorry && completedDrops >= totalDrops)) {
+                    nextStatus = 'Delivered';
+                } else {
+                    nextStatus = 'Loaded';
+                }
+            }
 
             let updatedNotes = finalNote;
             if (extractedDoNumber) {
@@ -793,6 +800,14 @@ const DriverDelivery: React.FC<DriverDeliveryProps> = ({ user }) => {
                     : `[AI DO: ${extractedDoNumber}]`;
             }
 
+            // Clear or update Hantaran Separa note if all drops are completed
+            if (completedDrops >= totalDrops && updatedNotes.includes('Hantaran Separa')) {
+                updatedNotes += `\n[${timeStr}] ✅ Drop tambahan dimuat naik (${completedDrops}/${totalDrops} drops lengkap).`;
+            }
+            if (completedDrops > totalDrops) {
+                updatedNotes += `\n[${timeStr}] ℹ️ Jumlah Drop dikemaskini dari ${totalDrops} ke ${completedDrops}.`;
+            }
+
             const updatePayload: any = {
                 status: nextStatus,
                 pod_timestamp: new Date().toISOString(),
@@ -800,8 +815,8 @@ const DriverDelivery: React.FC<DriverDeliveryProps> = ({ user }) => {
                 notes: updatedNotes
             };
 
-            if (hasExtractedDoCol && extractedDoNumber) {
-                updatePayload.extracted_do_number = extractedDoNumber;
+            if (completedDrops > totalDrops) {
+                updatePayload.trip_drop_count = completedDrops;
             }
 
             // Update order status, set pod_photo_url, pod_timestamp, notes, etc.
@@ -818,13 +833,11 @@ const DriverDelivery: React.FC<DriverDeliveryProps> = ({ user }) => {
                     const localUpdated: any = { 
                         ...t, 
                         status: nextStatus, 
+                        trip_drop_count: updatedTripDropCount,
                         pod_photo_url: podPhotoUrl, 
                         pod_timestamp: new Date().toISOString(), 
                         notes: updatedNotes 
                     };
-                    if (hasExtractedDoCol && extractedDoNumber) {
-                        localUpdated.extracted_do_number = extractedDoNumber;
-                    }
                     return localUpdated;
                 }
                 return t;
@@ -951,16 +964,14 @@ const DriverDelivery: React.FC<DriverDeliveryProps> = ({ user }) => {
             const { data: urlData } = supabase.storage.from('work-photos').getPublicUrl(fileName);
             const publicUrl = urlData.publicUrl;
 
-            // Fetch the current pod_photo_url from database to be accurate
+            // Fetch the current pod_photo_url, status, and trip_drop_count from database to be accurate
             const { data: freshOrder, error: fetchErr } = await supabase
                 .from('sales_orders')
-                .select('pod_photo_url, notes, extracted_do_number')
+                .select('status, trip_drop_count, pod_photo_url, notes')
                 .eq('id', laterUploadTarget.orderId)
                 .single();
 
             if (fetchErr) throw fetchErr;
-
-            const hasExtractedDoCol = ('extracted_do_number' in freshOrder);
 
             const currentPhotos = freshOrder.pod_photo_url ? freshOrder.pod_photo_url.split(',') : [];
             
@@ -971,6 +982,10 @@ const DriverDelivery: React.FC<DriverDeliveryProps> = ({ user }) => {
             currentPhotos[laterUploadTarget.photoIndex] = publicUrl;
             const updatedPodUrl = currentPhotos.join(',');
 
+            const totalDrops = freshOrder.trip_drop_count || 1;
+            const filledDoCount = currentPhotos.filter((url, idx) => idx % 2 === 0 && Boolean(url.trim())).length;
+            const completedDrops = Math.floor(currentPhotos.filter(Boolean).length / 2);
+
             // Construct notes update (fallback)
             let updatedNotes = freshOrder.notes || '';
             if (extractedDoNumber) {
@@ -980,13 +995,19 @@ const DriverDelivery: React.FC<DriverDeliveryProps> = ({ user }) => {
                     : `[AI DO: ${extractedDoNumber}]`;
             }
 
+            // Clear or update Hantaran Separa note if all drops/DOs are filled
+            if ((completedDrops >= totalDrops || filledDoCount >= totalDrops) && updatedNotes.includes('Hantaran Separa')) {
+                updatedNotes += `\n[${timeStr}] ✅ DO tertunggak telah dimuat naik. Semua ${totalDrops} drops lengkap.`;
+            }
+
             const updatePayload: any = { 
                 pod_photo_url: updatedPodUrl,
                 notes: updatedNotes
             };
 
-            if (hasExtractedDoCol && extractedDoNumber) {
-                updatePayload.extracted_do_number = extractedDoNumber;
+            // If order was in Loaded due to incomplete drops and driver has no lorry bound, auto-promote to Delivered
+            if (!currentLorry && freshOrder.status === 'Loaded' && (completedDrops >= totalDrops || filledDoCount >= totalDrops)) {
+                updatePayload.status = 'Delivered';
             }
 
             // Update database
@@ -1800,71 +1821,137 @@ const DriverDelivery: React.FC<DriverDeliveryProps> = ({ user }) => {
                                 })()}
                             </div>
 
+                            {/* POD Photos, Drop/DO Mismatch Check and Actions */}
+                            {(() => {
+                                const orderTotalDrops = (order as any).trip_drop_count || 1;
+                                const rawPodStr = order.pod_photo_url ? order.pod_photo_url.trim() : '';
+                                const rawPhotosList = rawPodStr ? rawPodStr.split(',') : [];
+                                const completedDropsCount = Math.floor(rawPhotosList.filter(Boolean).length / 2);
+                                const validDoPhotosCount = rawPhotosList.filter((url, idx) => idx % 2 === 0 && Boolean(url.trim())).length;
+                                const hasMissingDoSlot = rawPhotosList.some((url, idx) => idx % 2 === 0 && !url.trim());
+                                const isDropMismatch = (completedDropsCount !== orderTotalDrops) || (validDoPhotosCount !== orderTotalDrops) || hasMissingDoSlot;
 
-                            {/* POD Photos and Notes (for Delivered orders) */}
-                            {order.pod_photo_url && (
-                                <div className="mb-4 bg-slate-950/40 p-3 rounded-xl border border-slate-800/80">
-                                    <p className="text-[10px] text-emerald-400 uppercase font-black mb-2 flex items-center gap-1">📸 Bukti Penghantaran / Proof of Delivery (POD)</p>
-                                    <div className="grid grid-cols-4 gap-2">
-                                        {order.pod_photo_url.split(',').map((url, idx) => {
-                                            const isDo = idx % 2 === 0;
-                                            if (!url || url.trim() === '') {
-                                                if (isDo) {
-                                                    const isUploadingThis = laterUploading && 
-                                                        laterUploadTarget?.orderId === order.id && 
-                                                        laterUploadTarget?.photoIndex === idx;
-
-                                                    return (
-                                                        <div key={idx} className="relative rounded-lg border border-dashed border-slate-700 bg-slate-900/50 hover:bg-slate-900 hover:border-blue-500/50 transition-all aspect-square flex flex-col items-center justify-center gap-1 group cursor-pointer"
-                                                             onClick={(e) => {
-                                                                 e.stopPropagation();
-                                                                 if (!isUploadingThis) handleTriggerLaterUpload(order.id, idx);
-                                                             }}
-                                                        >
-                                                            {isUploadingThis ? (
-                                                                <>
-                                                                    <div className="w-4 h-4 border-2 border-blue-500/30 border-t-blue-500 rounded-full animate-spin"></div>
-                                                                    <span className="text-[6px] text-blue-400 font-bold uppercase text-center">UPLOADING...</span>
-                                                                </>
-                                                            ) : (
-                                                                <>
-                                                                    <Upload size={16} className="text-slate-500 group-hover:text-blue-400 transition-colors" />
-                                                                    <span className="text-[8px] font-black text-slate-400 group-hover:text-slate-200 uppercase tracking-wider text-center px-1">
-                                                                        UPLOAD DO
-                                                                    </span>
-                                                                </>
-                                                            )}
-                                                        </div>
-                                                    );
-                                                }
-                                                return (
-                                                    <div key={idx} className="relative rounded-lg border border-dashed border-slate-800 bg-slate-950/50 aspect-square flex items-center justify-center">
-                                                        <span className="text-[8px] font-black text-slate-600 uppercase tracking-wider text-center">NO PHOTO</span>
+                                return (
+                                    <>
+                                        {/* Drop / DO Mismatch Warning Alert */}
+                                        {isDropMismatch && (
+                                            <div className="mb-4 bg-amber-950/40 border border-amber-500/40 rounded-xl p-3 flex items-start gap-2.5 text-xs">
+                                                <div className="text-amber-400 font-black text-sm shrink-0 mt-0.5">⚠️</div>
+                                                <div className="flex-1">
+                                                    <div className="font-black text-amber-400 uppercase tracking-wide flex items-center justify-between flex-wrap gap-1">
+                                                        <span>Drop & DO Tidak Padan / Mismatch</span>
+                                                        <span className="font-mono bg-amber-500/20 text-amber-300 px-1.5 py-0.5 rounded border border-amber-500/30 text-[10px]">
+                                                            {completedDropsCount}/{orderTotalDrops} Drops ({validDoPhotosCount} DO)
+                                                        </span>
                                                     </div>
-                                                );
-                                            }
-                                            return (
-                                                <div key={idx} className="relative rounded-lg overflow-hidden border border-white/5 bg-black/40 aspect-square group">
-                                                    <img 
-                                                        src={url} 
-                                                        alt={`POD - ${idx + 1}`} 
-                                                        className="w-full h-full object-cover cursor-zoom-in hover:scale-105 transition-transform duration-300" 
-                                                        onClick={() => setPreviewImageUrl(url)}
-                                                    />
-                                                    <div className="absolute top-1 left-1 bg-black/80 backdrop-blur-sm text-[8px] font-black text-emerald-400 px-1.5 py-0.5 rounded border border-emerald-500/20 uppercase tracking-wider">
-                                                        {isDo ? 'DO' : 'Barang'}
-                                                    </div>
+                                                    <p className="text-[11px] text-amber-200/80 mt-1 leading-snug">
+                                                        {completedDropsCount < orderTotalDrops 
+                                                            ? `Perlu ${orderTotalDrops - completedDropsCount} lagi Drop untuk disahkan.` 
+                                                            : hasMissingDoSlot 
+                                                                ? 'Terdapat Drop yang belum mempunyai gambar DO bertandatangan.' 
+                                                                : `Dihantar ${completedDropsCount} Drops melebihi rekod asal (${orderTotalDrops} Drops).`}
+                                                    </p>
                                                 </div>
-                                            );
-                                        })}
-                                    </div>
-                                    {order.pod_timestamp && (
-                                        <p className="text-[9px] text-slate-500 mt-2 font-mono uppercase">
-                                            Dihantar pada / Delivered: {new Date(order.pod_timestamp).toLocaleString('en-GB')}
-                                        </p>
-                                    )}
-                                </div>
-                            )}
+                                            </div>
+                                        )}
+
+                                        {/* POD Photos and Notes */}
+                                        {(order.pod_photo_url || isDropMismatch) && (
+                                            <div className="mb-4 bg-slate-950/40 p-3 rounded-xl border border-slate-800/80">
+                                                <div className="flex justify-between items-center mb-2">
+                                                    <p className="text-[10px] text-emerald-400 uppercase font-black flex items-center gap-1">
+                                                        📸 Bukti Penghantaran / Proof of Delivery (POD)
+                                                    </p>
+                                                    <span className="text-[10px] font-mono font-bold text-slate-400">
+                                                        {completedDropsCount} / {orderTotalDrops} Drops
+                                                    </span>
+                                                </div>
+                                                <div className="grid grid-cols-4 gap-2">
+                                                    {rawPhotosList.map((url, idx) => {
+                                                        const isDo = idx % 2 === 0;
+                                                        if (!url || url.trim() === '') {
+                                                            if (isDo) {
+                                                                const isUploadingThis = laterUploading && 
+                                                                    laterUploadTarget?.orderId === order.id && 
+                                                                    laterUploadTarget?.photoIndex === idx;
+
+                                                                return (
+                                                                    <div key={idx} className="relative rounded-lg border border-dashed border-slate-700 bg-slate-900/50 hover:bg-slate-900 hover:border-blue-500/50 transition-all aspect-square flex flex-col items-center justify-center gap-1 group cursor-pointer"
+                                                                        onClick={(e) => {
+                                                                            e.stopPropagation();
+                                                                            if (!isUploadingThis) handleTriggerLaterUpload(order.id, idx);
+                                                                        }}
+                                                                    >
+                                                                        {isUploadingThis ? (
+                                                                            <>
+                                                                                <div className="w-4 h-4 border-2 border-blue-500/30 border-t-blue-500 rounded-full animate-spin"></div>
+                                                                                <span className="text-[6px] text-blue-400 font-bold uppercase text-center">UPLOADING...</span>
+                                                                            </>
+                                                                        ) : (
+                                                                            <>
+                                                                                <Upload size={16} className="text-slate-500 group-hover:text-blue-400 transition-colors" />
+                                                                                <span className="text-[8px] font-black text-slate-400 group-hover:text-slate-200 uppercase tracking-wider text-center px-1">
+                                                                                    UPLOAD DO
+                                                                                </span>
+                                                                            </>
+                                                                        )}
+                                                                    </div>
+                                                                );
+                                                            }
+                                                            return (
+                                                                <div key={idx} className="relative rounded-lg border border-dashed border-slate-800 bg-slate-950/50 aspect-square flex items-center justify-center">
+                                                                    <span className="text-[8px] font-black text-slate-600 uppercase tracking-wider text-center">NO PHOTO</span>
+                                                                </div>
+                                                            );
+                                                        }
+                                                        return (
+                                                            <div key={idx} className="relative rounded-lg overflow-hidden border border-white/5 bg-black/40 aspect-square group">
+                                                                <img 
+                                                                    src={url} 
+                                                                    alt={`POD - ${idx + 1}`} 
+                                                                    className="w-full h-full object-cover cursor-zoom-in hover:scale-105 transition-transform duration-300" 
+                                                                    onClick={() => setPreviewImageUrl(url)}
+                                                                />
+                                                                <div className="absolute top-1 left-1 bg-black/80 backdrop-blur-sm text-[8px] font-black text-emerald-400 px-1.5 py-0.5 rounded border border-emerald-500/20 uppercase tracking-wider">
+                                                                    {isDo ? 'DO' : 'Barang'}
+                                                                </div>
+                                                            </div>
+                                                        );
+                                                    })}
+
+                                                    {/* Missing Drops Placeholders */}
+                                                    {Array.from({ length: Math.max(0, orderTotalDrops - Math.ceil(rawPhotosList.length / 2)) }).map((_, missingIdx) => {
+                                                        const dropNum = Math.ceil(rawPhotosList.length / 2) + missingIdx + 1;
+                                                        return (
+                                                            <div 
+                                                                key={`missing-drop-${dropNum}`} 
+                                                                onClick={() => handleOpenUnloadModal(order)}
+                                                                className="col-span-2 relative rounded-lg border border-dashed border-amber-500/50 bg-amber-950/20 hover:bg-amber-900/30 transition-all p-2 flex items-center justify-between gap-2 cursor-pointer group"
+                                                            >
+                                                                <div className="flex items-center gap-2">
+                                                                    <div className="w-6 h-6 rounded-full bg-amber-500/20 text-amber-400 flex items-center justify-center font-black text-[10px]">
+                                                                        {dropNum}
+                                                                    </div>
+                                                                    <div>
+                                                                        <span className="text-[9px] font-black text-amber-300 uppercase block">Drop #{dropNum} Belum Selesai</span>
+                                                                        <span className="text-[8px] text-slate-400">Ketik untuk muat naik DO & Barang</span>
+                                                                    </div>
+                                                                </div>
+                                                                <Camera size={14} className="text-amber-400 group-hover:scale-110 transition-transform shrink-0" />
+                                                            </div>
+                                                        );
+                                                    })}
+                                                </div>
+                                                {order.pod_timestamp && (
+                                                    <p className="text-[9px] text-slate-500 mt-2 font-mono uppercase">
+                                                        Dihantar pada / Delivered: {new Date(order.pod_timestamp).toLocaleString('en-GB')}
+                                                    </p>
+                                                )}
+                                            </div>
+                                        )}
+                                    </>
+                                );
+                            })()}
 
                             {/* ACTION BUTTON (Only for To-Do) */}
                             {activeTab === 'todo' && (
@@ -1891,19 +1978,31 @@ const DriverDelivery: React.FC<DriverDeliveryProps> = ({ user }) => {
                             )}
 
                             {activeTab === 'done' && (
-                                <div className={`text-center py-2 rounded-xl text-xs font-bold uppercase flex items-center justify-center gap-2 ${order.status === 'Pending Approval'
-                                    ? 'bg-yellow-500/10 border border-yellow-500/20 text-yellow-500'
-                                    : 'bg-green-500/10 border border-green-500/20 text-green-400'
-                                    }`}>
-                                    {order.status === 'Pending Approval' ? (
-                                        <>
-                                            <Truck size={14} /> Menunggu kelulusan logistik / Pending logistics approval
-                                        </>
-                                    ) : (
-                                        <>
-                                            <CheckCircle size={14} /> Stok Ditolak & Hantar / Delivered & Stock Deducted
-                                        </>
-                                    )}
+                                <div className="space-y-2">
+                                    <div className={`text-center py-2 rounded-xl text-xs font-bold uppercase flex items-center justify-center gap-2 ${order.status === 'Pending Approval'
+                                        ? 'bg-yellow-500/10 border border-yellow-500/20 text-yellow-500'
+                                        : 'bg-green-500/10 border border-green-500/20 text-green-400'
+                                        }`}>
+                                        {order.status === 'Pending Approval' ? (
+                                            <>
+                                                <Truck size={14} /> Menunggu kelulusan logistik / Pending logistics approval
+                                            </>
+                                        ) : (
+                                            <>
+                                                <CheckCircle size={14} /> Stok Ditolak & Hantar / Delivered & Stock Deducted
+                                            </>
+                                        )}
+                                    </div>
+                                    <button
+                                        onClick={() => handleOpenUnloadModal(order)}
+                                        data-action="OPEN_APPEND_DROP_MODAL"
+                                        data-action-name="补充添加送货点与照片"
+                                        data-target={`工单 #${order.orderNumber || order.id}`}
+                                        className="w-full py-2.5 bg-slate-800 hover:bg-slate-750 text-slate-300 hover:text-white border border-slate-700 hover:border-emerald-500/50 rounded-xl font-bold uppercase text-xs tracking-wider flex items-center justify-center gap-2 transition-all active:scale-98 shadow-sm"
+                                    >
+                                        <Camera size={14} className="text-emerald-400" />
+                                        <span>+ Tambah Drop / DO & Foto (Kemaskini POD)</span>
+                                    </button>
                                 </div>
                             )}
                         </div>
@@ -2074,11 +2173,16 @@ const DriverDelivery: React.FC<DriverDeliveryProps> = ({ user }) => {
                         <div>
                             <h2 className="font-black text-white text-lg flex items-center gap-1.5">
                                 <span>SAHKAN HANTARAN / CONFIRM DELIVERY</span>
-                                {selectedOrder.trip_drop_count && selectedOrder.trip_drop_count > 1 && (
-                                    <span className="text-emerald-400 text-sm font-bold bg-emerald-500/10 px-2 py-0.5 rounded border border-emerald-500/20 font-mono">
-                                        ({Math.floor((selectedOrder.pod_photo_url ? selectedOrder.pod_photo_url.split(',').length : 0) / 2) + 1}/{selectedOrder.trip_drop_count})
-                                    </span>
-                                )}
+                                {(() => {
+                                    const total = selectedOrder.trip_drop_count || 1;
+                                    const currentDropNum = Math.floor((selectedOrder.pod_photo_url ? selectedOrder.pod_photo_url.split(',').length : 0) / 2) + 1;
+                                    const isExtra = currentDropNum > total;
+                                    return (
+                                        <span className={`text-xs font-bold px-2 py-0.5 rounded border font-mono ${isExtra ? 'bg-amber-500/20 text-amber-300 border-amber-500/30' : 'bg-emerald-500/10 text-emerald-400 border border-emerald-500/20'}`}>
+                                            ({currentDropNum}/{total}{isExtra ? ' • Extra Drop' : ''})
+                                        </span>
+                                    );
+                                })()}
                             </h2>
                             <p className="text-[10px] text-slate-500 uppercase font-bold">{selectedOrder.orderNumber}</p>
                         </div>

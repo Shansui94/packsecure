@@ -75,6 +75,13 @@ const getItemLocation = (item: SalesOrderItem, order: SalesOrder): string => {
     return LOCATIONS[0] || 'SPD';
 };
 
+const getLocalDateString = (d: Date = new Date()): string => {
+    const year = d.getFullYear();
+    const month = String(d.getMonth() + 1).padStart(2, '0');
+    const day = String(d.getDate()).padStart(2, '0');
+    return `${year}-${month}-${day}`;
+};
+
 interface OrderSummaryProps {
     user?: any;
 }
@@ -84,7 +91,7 @@ const OrderSummary: React.FC<OrderSummaryProps> = ({ user }) => {
     const [orders, setOrders] = useState<SalesOrder[]>([]);
     const [previewImageUrl, setPreviewImageUrl] = useState<string | null>(null);
     const [drivers, setDrivers] = useState<User[]>([]);
-    const [selectedDate, setSelectedDate] = useState<string>(new Date().toISOString().split('T')[0]);
+    const [selectedDate, setSelectedDate] = useState<string>(getLocalDateString());
     const [loading, setLoading] = useState(false);
     const [activeTab, setActiveTab] = useState<Location>(LOCATIONS[0] || 'Unknown');
 
@@ -248,22 +255,34 @@ const OrderSummary: React.FC<OrderSummaryProps> = ({ user }) => {
 
     // Resolve item name: prefer current name from master catalog, fallback to stored name
     const resolveItemName = (item: { product: string; sku?: string }) => {
-        if (item.sku && skuNameMap[item.sku]) return skuNameMap[item.sku];
-        return item.product;
+        let name = (item.sku && skuNameMap[item.sku]) ? skuNameMap[item.sku] : item.product;
+        if (name && name.includes('STRECTH FIL')) {
+            name = name.replace('STRECTH FIL', 'STRETCH FILM');
+        }
+        return name || item.product;
     };
 
     // --- FETCH ---
     const fetchData = useCallback(async () => {
         setLoading(true);
         try {
-            const { data: allUsers } = await supabase.from('users_public').select('*');
+            const [allUsersRes, sysUsersRes] = await Promise.all([
+                supabase.from('users_public').select('*'),
+                supabase.from('sys_users_v2').select('id, auth_user_id, role_modules')
+            ]);
 
+            const allUsers = allUsersRes.data;
             if (allUsers) {
+                const driverCapableSet = new Set<string>();
+                (sysUsersRes.data || []).forEach((su: any) => {
+                    if (su.role_modules && Array.isArray(su.role_modules) && su.role_modules.includes('delivery-driver')) {
+                        if (su.id) driverCapableSet.add(su.id);
+                        if (su.auth_user_id) driverCapableSet.add(su.auth_user_id);
+                    }
+                });
+
                 const filtered = allUsers.filter(u =>
-                    u.role === 'Driver' ||
-                    u.email === 'neosonchun@gmail.com' ||
-                    u.email === 'ericsoobaolin0219@gmail.com' ||
-                    u.name?.toLowerCase().includes('neoson')
+                    u.role === 'Driver' || driverCapableSet.has(u.id)
                 );
                 setDrivers(filtered.map(u => ({
                     uid: u.id,
@@ -431,7 +450,7 @@ const OrderSummary: React.FC<OrderSummaryProps> = ({ user }) => {
         const lower = name.toLowerCase();
         
         if (s.startsWith('bw') || lower.includes('single') || lower.includes('double') || lower.includes('layer') || lower.includes('bubble')) return '🫧 Bubble Wrap';
-        if (lower.includes('stretch film') || lower.includes('sf') || lower.includes('hand roll')) return '📦 Stretch Film';
+        if (s.startsWith('sf') || s.includes('sf-') || lower.includes('stretch film') || lower.includes('strecth') || lower.includes('sf') || lower.includes('hand roll')) return '📦 Stretch Film';
         if (lower.includes('foam') || lower.includes('pe foam')) return '🛡️ PE Foam';
         if (lower.includes('corrugated') || lower.includes('box') || lower.includes('carton') || lower.includes('edge')) return '🗂️ Cartons & Edge Protectors';
         if (lower.includes('core') || lower.includes('paper')) return '📜 Paper Cores';
@@ -441,9 +460,9 @@ const OrderSummary: React.FC<OrderSummaryProps> = ({ user }) => {
     const groupedSummary = Object.entries(productSummary).reduce((acc, [product, data]) => {
         const cat = categorizeProduct(product, data.sku);
         if (!acc[cat]) acc[cat] = [];
-        acc[cat].push({ product, qty: data.qty });
+        acc[cat].push({ product, qty: data.qty, sku: data.sku });
         return acc;
-    }, {} as Record<string, { product: string; qty: number }[]>);
+    }, {} as Record<string, { product: string; qty: number; sku?: string }[]>);
 
     // Build column list: unassigned + all drivers who have orders in this tab
     const driverIdsInTab = [...new Set(
@@ -514,7 +533,7 @@ const OrderSummary: React.FC<OrderSummaryProps> = ({ user }) => {
                                                 {category}
                                             </h3>
                                             <div className="grid grid-cols-2 md:grid-cols-4 lg:grid-cols-6 gap-3">
-                                                {items.map(({ product, qty }) => {
+                                                {items.map(({ product, qty, sku }) => {
                                                     let lookupLoc = activeTab;
                                                     // Generalized fallback for sub-locations sharing a parent warehouse
                                                     if (!stockMapByLoc[lookupLoc] && STOCK_FALLBACK[lookupLoc]) {
@@ -524,24 +543,34 @@ const OrderSummary: React.FC<OrderSummaryProps> = ({ user }) => {
                                                     const deficit = qty - stock;
                                                     const hasDeficit = deficit > 0;
                                                     return (
-                                                    <div key={product} className={`bg-[#121215] border rounded-lg px-3 py-2 flex flex-col relative overflow-hidden transition-colors ${hasDeficit ? 'border-red-500/30' : 'border-white/10'}`}>
-                                                        {hasDeficit && <div className="absolute top-0 right-0 w-1.5 h-1.5 bg-red-500 rounded-full mt-2 mr-2 shadow-[0_0_5px_rgba(239,68,68,0.8)]"></div>}
-                                                        <span className="text-[10px] text-gray-400 font-mono truncate mb-1" title={product}>{product}</span>
-                                                        <div className="flex items-end justify-between mt-1">
+                                                    <div key={product} className={`bg-[#121215] border rounded-xl p-3 flex flex-col justify-between relative overflow-hidden transition-all ${hasDeficit ? 'border-red-500/40 shadow-[0_0_15px_rgba(239,68,68,0.08)]' : 'border-white/10 hover:border-white/20'}`}>
+                                                        {hasDeficit && (
+                                                            <div className="absolute top-2.5 right-2.5 w-2 h-2 bg-red-500 rounded-full shadow-[0_0_8px_rgba(239,68,68,0.9)]" title="Shortage"></div>
+                                                        )}
+                                                        {/* 名字为主，SKU为辅 */}
+                                                        <div className="flex flex-col mb-2.5 pr-3 min-w-0">
+                                                            <span className="text-xs sm:text-sm font-black text-white tracking-wide truncate leading-snug" title={product}>
+                                                                {product}
+                                                            </span>
+                                                            <span className="text-[10px] text-cyan-400 font-mono font-medium truncate mt-0.5" title={sku ? `SKU: ${sku}` : product}>
+                                                                {sku || product}
+                                                            </span>
+                                                        </div>
+                                                        <div className="flex items-end justify-between pt-2 border-t border-white/5">
                                                             <div className="flex flex-col">
-                                                                <span className="text-[9px] text-gray-500 uppercase tracking-widest">Req</span>
-                                                                <span className="text-lg font-black text-white leading-none">{qty}</span>
+                                                                <span className="text-[9px] text-gray-400 font-bold uppercase tracking-wider">Req</span>
+                                                                <span className="text-lg font-black text-white leading-none mt-1">{qty}</span>
                                                             </div>
                                                             <div className="w-px h-6 bg-white/10 mx-2"></div>
                                                             <div className="flex flex-col items-end">
-                                                                <span className="text-[9px] text-gray-500 uppercase tracking-widest">Phy Stock</span>
-                                                                <span className={`text-md font-bold leading-none ${stock >= qty ? 'text-green-500' : 'text-amber-400'}`}>{stock}</span>
+                                                                <span className="text-[9px] text-gray-400 font-bold uppercase tracking-wider">Phy Stock</span>
+                                                                <span className={`text-sm font-black leading-none mt-1 ${stock >= qty ? 'text-green-400' : 'text-amber-400'}`}>{stock}</span>
                                                             </div>
                                                         </div>
                                                         {hasDeficit && (
-                                                            <span className="text-[9px] font-bold text-red-400 mt-1.5 bg-red-500/10 px-1.5 py-0.5 rounded truncate w-fit">
+                                                            <div className="mt-2 text-[9px] font-bold text-red-400 bg-red-500/10 border border-red-500/20 px-2 py-0.5 rounded-md truncate w-fit">
                                                                 Shortage: {deficit}
-                                                            </span>
+                                                            </div>
                                                         )}
                                                     </div>
                                                     );
@@ -721,11 +750,18 @@ const DriverColumn: React.FC<{
                                     </div>
 
                                     <div className="bg-black/30 rounded-lg p-2 space-y-2">
-                                        {order.items.map((item, idx) => (
+                                        {order.items.map((item, idx) => {
+                                            const resolvedName = resolveItemName(item);
+                                            return (
                                             <div key={idx} className="text-xs border-b border-white/[0.02] last:border-0 pb-1.5 last:pb-0">
-                                                <div className="flex justify-between">
-                                                    <span className="text-gray-300 font-medium">{resolveItemName(item)}</span>
-                                                    <span className="font-mono text-gray-400">x{item.quantity}</span>
+                                                <div className="flex justify-between items-start">
+                                                    <div className="flex flex-col min-w-0 pr-2">
+                                                        <span className="text-gray-200 font-semibold">{resolvedName}</span>
+                                                        {item.sku && item.sku !== resolvedName && (
+                                                            <span className="text-[10px] text-cyan-400 font-mono">{item.sku}</span>
+                                                        )}
+                                                    </div>
+                                                    <span className="font-mono text-gray-300 font-bold shrink-0">x{item.quantity}</span>
                                                 </div>
                                                 {item.remark && (
                                                     <p className="text-[10px] text-amber-500/80 font-mono tracking-wide mt-1 bg-amber-500/5 px-1.5 py-0.5 rounded border border-amber-500/10 w-fit max-w-full whitespace-pre-wrap">
@@ -733,7 +769,8 @@ const DriverColumn: React.FC<{
                                                     </p>
                                                 )}
                                             </div>
-                                        ))}
+                                            );
+                                        })}
                                     </div>
 
                                     {order.notes && (

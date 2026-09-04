@@ -1,5 +1,5 @@
 
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useMemo, useCallback } from 'react';
 import {
     LayoutDashboard,
     ClipboardList,
@@ -35,10 +35,12 @@ import {
     Lightbulb
 } from 'lucide-react';
 import { supabase } from '../services/supabase';
-import { canAccessPage } from '../utils/pageAccess';
+import { canAccessPage, computeEffectivePermissions } from '../utils/pageAccess';
+import { MODULE_GROUPS, MODULE_REGISTRY } from '../config/modules';
 import { useTranslation } from 'react-i18next';
 import PageLogicDrawer from './PageLogicDrawer';
 import { changeLanguage, LANGUAGES, t } from '../utils/i18n';
+import SmartIntakeModal from './SmartIntakeModal';
 
 interface LayoutProps {
     children: React.ReactNode;
@@ -59,7 +61,7 @@ const Layout: React.FC<LayoutProps> = ({ children, activePage, setActivePage, us
     // DB-driven page permissions: Set<page_id> of allowed pages for this role
     const [dbAllowedPages, setDbAllowedPages] = useState<Set<string> | null>(null);
     const [showLangModal, setShowLangModal] = useState(false);
-    const isSuperAdmin = userRole === 'SuperAdmin' || user?.employeeId === '001';
+    const isSuperAdmin = userRole === 'SuperAdmin';
 
     // Languages Config
     const languages = [
@@ -139,8 +141,6 @@ const Layout: React.FC<LayoutProps> = ({ children, activePage, setActivePage, us
     const useCollapsedNavLayout = isSidebarCollapsed && isLgUp;
     const showNavLabels = !isLgUp || !isSidebarCollapsed;
 
-    const isNeoson = user?.email === 'neosonchun@gmail.com';
-
     useEffect(() => {
         if (user) {
             fetchTaskCount();
@@ -157,9 +157,12 @@ const Layout: React.FC<LayoutProps> = ({ children, activePage, setActivePage, us
         }
     }, [user]);
 
-    // Fetch DB-driven page permissions for this role
-    useEffect(() => {
-        if (!userRole || userRole === 'SuperAdmin') return;
+    // Fetch DB-driven page permissions for this role & subscribe to realtime updates
+    const fetchRolePerms = useCallback(() => {
+        if (!userRole || userRole === 'SuperAdmin') {
+            setDbAllowedPages(null);
+            return;
+        }
         supabase
             .from('role_permissions')
             .select('page_id, allowed')
@@ -169,21 +172,32 @@ const Layout: React.FC<LayoutProps> = ({ children, activePage, setActivePage, us
                     const allowedSet = new Set<string>(
                         data.filter(r => r.allowed).map(r => r.page_id)
                     );
-                    
-                    // --- SPECIAL OVERRIDES MATCHING App.tsx ---
-                    if (user?.email === 'neosonchun@gmail.com') {
-                        ['delivery-driver', 'delivery-history', 'leave-calendar', 'lorry-service'].forEach(p => allowedSet.add(p));
-                    }
-                    // --- COMBINE CUSTOM MODULE UNLOCKS ---
-                    if (user?.roleModules && user.roleModules.length > 0) {
-                        user.roleModules.forEach((p: string) => allowedSet.add(p));
-                    }
-
                     setDbAllowedPages(allowedSet);
+                } else {
+                    setDbAllowedPages(null);
                 }
-                // If no DB records for this role, keep null → fall back to hardcoded
             });
-    }, [userRole, user?.email]);
+    }, [userRole]);
+
+    useEffect(() => {
+        fetchRolePerms();
+
+        const channel = supabase.channel('layout-role-permissions-sync')
+            .on('postgres_changes', { event: '*', schema: 'public', table: 'role_permissions' }, () => {
+                fetchRolePerms();
+            })
+            .subscribe();
+
+        const handleUserPermUpdate = () => {
+            fetchRolePerms();
+        };
+        window.addEventListener('packsecure:user-permissions-updated', handleUserPermUpdate);
+
+        return () => {
+            supabase.removeChannel(channel);
+            window.removeEventListener('packsecure:user-permissions-updated', handleUserPermUpdate);
+        };
+    }, [fetchRolePerms]);
 
     const fetchTaskCount = async () => {
         if (!user) return;
@@ -198,6 +212,20 @@ const Layout: React.FC<LayoutProps> = ({ children, activePage, setActivePage, us
         }
     };
 
+    const effectivePermissions = useMemo(() => {
+        return computeEffectivePermissions({
+            role: userRole,
+            isSuperAdmin,
+            dbRoleAllowedPages: dbAllowedPages,
+            userRoleModules: user?.roleModules || user?.role_modules || []
+        });
+    }, [userRole, isSuperAdmin, dbAllowedPages, user?.roleModules, user?.role_modules]);
+
+    const hasAccess = useCallback((pageId: string) => {
+        if (isSuperAdmin) return true;
+        return effectivePermissions.has('*') || effectivePermissions.has(pageId);
+    }, [isSuperAdmin, effectivePermissions]);
+
     const NavGroup = ({ title, children }: { title: string, children: React.ReactNode }) => (
         <div className={useCollapsedNavLayout ? 'mb-3' : 'mb-6'}>
             {showNavLabels && (
@@ -209,16 +237,10 @@ const Layout: React.FC<LayoutProps> = ({ children, activePage, setActivePage, us
         </div>
     );
 
-    const NavItem = ({ id, icon: Icon, label, roles, badge }: { id: string, icon: any, label: string, roles?: string[], badge?: number }) => {
-        const hasAccess = canAccessPage(id, {
-            isSuperAdmin,
-            userRole,
-            navRoles: roles,
-            dbAllowedPages,
-            roleModules: user?.roleModules,
-        });
+    const NavItem = ({ id, icon: Icon, label, badge }: { id: string, icon: any, label: string, badge?: number }) => {
+        const itemHasAccess = hasAccess(id);
 
-        if (!hasAccess) return null;
+        if (!itemHasAccess) return null;
 
         const isActive = activePage === id;
 
@@ -355,150 +377,31 @@ const Layout: React.FC<LayoutProps> = ({ children, activePage, setActivePage, us
 
                     <nav className={`flex-1 overflow-y-auto custom-scrollbar space-y-2 pb-6 ${useCollapsedNavLayout ? 'px-2' : 'px-4'}`}>
 
-                        {/* EXECUTIVE SUITE (SuperAdmin, Admin, Manager) */}
-                        {/* Logistics coordinator workspace (menu via role_permissions in DB) */}
-                        {userRole === 'LogisticsCoordinator' && (
-                            <NavGroup title="Logistics Workspace">
-                                <NavItem id="livestock" icon={BarChart3} label="Live Stock" roles={['LogisticsCoordinator']} />
-                                <NavItem id="delivery" icon={Truck} label="Trip Management" roles={['LogisticsCoordinator']} />
-                                <NavItem id="order-summary" icon={FileBarChart} label="Daily Prep" roles={['LogisticsCoordinator']} />
-                                <NavItem id="products" icon={Package} label="Product Library" roles={['LogisticsCoordinator']} />
-                                <NavItem id="maintenance" icon={Wrench} label="Maintenance Control" roles={['LogisticsCoordinator']} />
-                                <NavItem id="driver-management" icon={Users} label="Driver Management" roles={['LogisticsCoordinator']} />
-                                <NavItem id="reports" icon={FileBarChart} label="Reports" roles={['LogisticsCoordinator']} />
-                            </NavGroup>
-                        )}
+                        {/* DYNAMIC RBAC NAVIGATION DRIVEN BY MODULE_GROUPS & MODULE_REGISTRY */}
+                        {MODULE_GROUPS.map(group => {
+                            const groupModules = MODULE_REGISTRY.filter(
+                                m => m.group === group.id && !m.hiddenFromNav && hasAccess(m.id)
+                            );
 
-                        {/* EXECUTIVE SUITE (SuperAdmin, Admin, Manager) */}
-                        {userRole !== 'LogisticsCoordinator' && (userRole === 'SuperAdmin' || userRole === 'Admin' || userRole === 'Manager' || user?.employeeId === '001' || user?.employeeId === '6965') && (
-                            <>
-                                <NavGroup title="Executive Suite">
-                                    <NavItem id="factory-live-os" icon={LayoutDashboard} label="Factory Live OS" roles={['SuperAdmin', 'Admin', 'Manager']} />
-                                    <NavItem id="william-dashboard" icon={FileText} label="William's Dashboard" roles={['SuperAdmin', 'Admin', 'Manager']} />
-                                    <NavItem id="data-v2" icon={Database} label="Data Command" roles={['SuperAdmin', 'Admin', 'Manager']} />
+                            if (groupModules.length === 0) return null;
+
+                            return (
+                                <NavGroup key={group.id} title={group.title}>
+                                    {groupModules.map(mod => {
+                                        const badge = mod.badgeKey === 'tasks' ? taskCount : undefined;
+                                        return (
+                                            <NavItem
+                                                key={mod.id}
+                                                id={mod.id}
+                                                icon={mod.icon}
+                                                label={mod.label}
+                                                badge={badge}
+                                            />
+                                        );
+                                    })}
                                 </NavGroup>
-
-                                <NavGroup title="Operations">
-                                    <NavItem id="scanner" icon={Scan} label="Production Workspace" roles={['SuperAdmin', 'Admin', 'Manager']} />
-                                    <NavItem id="raw_material_mobile" icon={FlaskConical} label="Multi-Screw & Material Mixing" roles={['SuperAdmin', 'Admin', 'Manager']} />
-                                    <NavItem id="livestock" icon={BarChart3} label="Live Stock" roles={['SuperAdmin', 'Admin', 'Manager']} />
-                                    <NavItem id="recipes" icon={Activity} label="Yield & AI Learning" roles={['SuperAdmin', 'Admin', 'Manager']} />
-                                    <NavItem id="machine-schedule" icon={Calendar} label="Machine Schedule" roles={['SuperAdmin', 'Admin', 'Manager']} />
-                                    <NavItem id="machine-labels" icon={Printer} label="Machine QR Labels" roles={['SuperAdmin', 'Admin', 'Manager']} />
-                                    <NavItem id="floor-plan" icon={LayoutDashboard} label="Floor Plan" roles={['SuperAdmin', 'Admin', 'Manager']} />
-                                </NavGroup>
-
-                                <NavGroup title="Inventory & BOM">
-                                    <NavItem id="inventory" icon={Boxes} label="Global Inventory" roles={['SuperAdmin', 'Admin', 'Manager']} />
-                                    <NavItem id="products" icon={Package} label="Product Library" roles={['SuperAdmin', 'Admin', 'Manager']} />
-                                    <NavItem id="stock-movement" icon={ArrowUpDown} label="Stock Movement" roles={['SuperAdmin', 'Admin', 'Manager']} />
-                                    <NavItem id="stock-audit" icon={ClipboardCheck} label="Stock Audit" roles={['SuperAdmin', 'Admin', 'Manager']} />
-                                    <NavItem id="audit-report" icon={FileBarChart} label="Audit Report" roles={['SuperAdmin', 'Admin', 'Manager']} />
-                                </NavGroup>
-
-                                <NavGroup title="Logistics">
-                                    <NavItem id="delivery" icon={Truck} label="Trip Management" roles={['SuperAdmin', 'Admin', 'Manager']} />
-                                    <NavItem id="order-summary" icon={FileBarChart} label="Daily Prep" roles={['SuperAdmin', 'Admin', 'Manager']} />
-                                    <NavItem id="maintenance" icon={Wrench} label="Maintenance Control" roles={['SuperAdmin', 'Admin', 'Manager']} />
-                                    <NavItem id="lorry-management" icon={Truck} label="Lorry Fleet" roles={['SuperAdmin', 'Admin', 'Manager']} />
-                                    <NavItem id="production" icon={Database} label="Production Logs" roles={['SuperAdmin', 'Admin', 'Manager']} />
-                                    <NavItem id="report-history" icon={FileText} label="Report History" roles={['SuperAdmin', 'Admin', 'Manager']} />
-                                </NavGroup>
-
-                                <NavGroup title="Organization">
-                                    <NavItem id="leave-calendar" icon={Calendar} label="Staff Hub" roles={['SuperAdmin', 'Admin', 'Manager', 'HR', 'Driver', 'Operator']} />
-                                    <NavItem id="hr" icon={Users} label="HR Control Center" roles={['SuperAdmin', 'Admin', 'Manager']} />
-                                    <NavItem id="reports" icon={FileBarChart} label="Reports" roles={['SuperAdmin', 'Admin', 'Manager']} />
-                                    <NavItem id="iot" icon={Cpu} label="IOT SETTINGS" roles={['SuperAdmin', 'Admin', 'Manager']} />
-                                    <NavItem id="dev-log" icon={Activity} label="Dev Log" roles={['SuperAdmin', 'Admin']} />
-                                    <NavItem id="activity-logs" icon={Activity} label="Activity Logs" roles={['SuperAdmin', 'Admin', 'Manager']} />
-                                    <div className="h-4" />
-                                    {!isNeoson && <NavItem id="personal-report" icon={FileText} label="My Monthly Report" roles={['SuperAdmin', 'Admin', 'Manager']} />}
-                                </NavGroup>
-
-                                {!isNeoson && (
-                                    <NavGroup title="Productivity">
-                                        <NavItem id="sop-center" icon={BookOpen} label="SOP Center" roles={['SuperAdmin', 'Admin', 'Manager']} />
-                                        <NavItem id="work-photos" icon={Camera} label="📸 Work Photos" roles={['SuperAdmin', 'Admin', 'Manager']} />
-                                        <NavItem id="notes" icon={FileText} label="Notes" roles={['SuperAdmin', 'Admin', 'Manager']} />
-                                        <NavItem id="tasks" icon={ClipboardList} label="Tasks" roles={['SuperAdmin', 'Admin', 'Manager']} badge={taskCount} />
-                                    </NavGroup>
-                                )}
-                            </>
-                        )}
-
-                        {/* DRIVER VIEW */}
-                        {(userRole === 'Driver' || isNeoson || user?.roleModules?.includes('delivery-driver') || user?.roleModules?.includes('delivery-history')) && (
-                            <>
-                                <NavGroup title="Driver Workspace">
-                                    <NavItem id="delivery-driver" icon={Package} label="My Deliveries" roles={['Driver', 'Manager']} />
-                                    <NavItem id="delivery-history" icon={ClipboardList} label="Delivery History" roles={['Driver', 'Manager']} />
-                                    <NavItem id="driver-leave" icon={Calendar} label="Staff Hub" roles={['Driver', 'Manager']} />
-                                    <NavItem id="lorry-service" icon={Truck} label="Lorry Service" roles={['Driver', 'Manager']} />
-                                    <NavItem id="personal-report" icon={FileText} label="Monthly Report" roles={['Driver', 'Manager']} />
-                                </NavGroup>
-
-                                <NavGroup title="Productivity">
-                                    <NavItem id="sop-center" icon={BookOpen} label="SOP Center" roles={['Driver', 'Manager']} />
-                                    <NavItem id="work-photos" icon={Camera} label="📸 Work Photos" roles={['Driver', 'Manager']} />
-                                    <NavItem id="notes" icon={FileText} label="Notes" roles={['Driver', 'Manager']} />
-                                    <NavItem id="tasks" icon={ClipboardList} label="Tasks" roles={['Driver', 'Manager']} badge={taskCount} />
-                                    <NavItem id="activity-logs" icon={Activity} label="Activity Logs" roles={['Driver', 'Manager']} />
-                                </NavGroup>
-                            </>
-                        )}
-
-                        {/* HR VIEW */}
-                        {userRole === 'HR' && (
-                            <>
-                                <NavGroup title="HR Workspace">
-                                    <NavItem id="hr" icon={Users} label="HR Control Center" roles={['HR']} />
-                                    <NavItem id="driver-leave" icon={Calendar} label="Staff Hub" roles={['HR']} />
-                                    <NavItem id="personal-report" icon={FileText} label="My Monthly Report" roles={['HR']} />
-                                </NavGroup>
-
-                                <NavGroup title="Productivity">
-                                    <NavItem id="sop-center" icon={BookOpen} label="SOP Center" roles={['HR']} />
-                                    <NavItem id="work-photos" icon={Camera} label="📸 Work Photos" roles={['HR']} />
-                                    <NavItem id="notes" icon={FileText} label="Notes" roles={['HR']} />
-                                    <NavItem id="tasks" icon={ClipboardList} label="Tasks" roles={['HR']} badge={taskCount} />
-                                    <NavItem id="activity-logs" icon={Activity} label="Activity Logs" roles={['HR']} />
-                                </NavGroup>
-                            </>
-                        )}
-
-                        {/* OPERATOR VIEW */}
-                        {userRole === 'Operator' && user?.employeeId !== '009' && (
-                            <>
-                                <NavGroup title="Production Floor">
-                                    <NavItem id="scanner" icon={Scan} label="Production Workspace" roles={['Operator']} />
-                                    <NavItem id="raw_material_mobile" icon={FlaskConical} label="Multi-Screw & Material Mixing" roles={['Operator']} />
-                                    <NavItem id="order-summary" icon={FileBarChart} label="Daily Prep" roles={['Operator']} />
-                                    <NavItem id="personal-report" icon={FileText} label="My Monthly Report" roles={['Operator']} />
-                                </NavGroup>
-
-                                <NavGroup title="Productivity">
-                                    <NavItem id="sop-center" icon={BookOpen} label="SOP Center" roles={['Operator']} />
-                                    <NavItem id="work-photos" icon={Camera} label="📸 Work Photos" roles={['Operator']} />
-                                    <NavItem id="notes" icon={FileText} label="Notes" roles={['Operator']} />
-                                    <NavItem id="tasks" icon={ClipboardList} label="Tasks" roles={['Operator']} badge={taskCount} />
-                                    <NavItem id="activity-logs" icon={Activity} label="Activity Logs" roles={['Operator']} />
-                                </NavGroup>
-                            </>
-                        )}
-
-                        {/* CUSTOM ACCESS OVERRIDE: STOCK AUDIT (Global visibility for explicit DB permissions, avoiding duplicate for execs) */}
-                        {userRole !== 'SuperAdmin' && userRole !== 'Admin' && userRole !== 'Manager' && canAccessPage('stock-audit', {
-                            isSuperAdmin,
-                            userRole,
-                            navRoles: ['Operator', 'Driver', 'HR'],
-                            dbAllowedPages,
-                            roleModules: user?.roleModules
-                        }) && (
-                            <NavGroup title="Inventory Audits">
-                                <NavItem id="stock-audit" icon={ClipboardCheck} label="Stock Audit" roles={['Operator', 'Driver', 'HR']} />
-                            </NavGroup>
-                        )}
+                            );
+                        })}
                         {/* 🤖 AI 助理与 💡 本页逻辑说明 专用按钮 (移至左侧菜单) */}
                         <div className="px-3 pt-3 pb-2 border-t border-white/5 space-y-2 shrink-0">
                             <button
@@ -637,6 +540,11 @@ const Layout: React.FC<LayoutProps> = ({ children, activePage, setActivePage, us
                         userRole={userRole} 
                         user={user} 
                         setActivePage={setActivePage} 
+                    />
+
+                    <SmartIntakeModal 
+                        currentUser={user} 
+                        pageContext={{ activePage, userRole }} 
                     />
                 </main>
             </div>

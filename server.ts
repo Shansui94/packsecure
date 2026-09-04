@@ -8,6 +8,8 @@ import manageEmployeeHandler from './api/manage-employee';
 import visionHandler from './api/agent/vision';
 import geocodeHandler from './api/geocode';
 import aiPhotoHandler from './api/agent/ai-photo';
+import universalIntakeHandler from './api/agent/universal-intake';
+import universalQueryHandler from './api/agent/universal-query';
 import lorryLatestMileageHandler from './api/lorry-latest-mileage';
 import v2DocumentsHandler, {
     handleProcess as documentProcessHandler,
@@ -39,6 +41,8 @@ mountVercelHandler('/api/manage-employee', manageEmployeeHandler);
 mountVercelHandler('/api/agent/vision', visionHandler);
 mountVercelHandler('/api/geocode', geocodeHandler);
 mountVercelHandler('/api/agent/ai-photo', aiPhotoHandler);
+mountVercelHandler('/api/agent/universal-intake', universalIntakeHandler);
+mountVercelHandler('/api/agent/universal-query', universalQueryHandler);
 mountVercelHandler('/api/lorry-latest-mileage', lorryLatestMileageHandler);
 mountVercelHandler('/api/v2-documents', v2DocumentsHandler);
 mountVercelHandler('/api/v2/documents/process', documentProcessHandler);

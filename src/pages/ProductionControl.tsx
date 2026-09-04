@@ -16,7 +16,7 @@ import { getBubbleWrapSku } from '../utils/skuMapper';
 import { 
     Box, Settings, Clock, Layers, LogOut, Calendar, Package,
     Camera, Check, AlertTriangle, User as UserIcon, RefreshCw, Play, Loader, Send, Sparkles, Image as ImageIcon,
-    Video, Square, X, FlaskConical
+    Video, Square, X, FlaskConical, QrCode
 } from 'lucide-react';
 import { supabase } from '../services/supabase';
 import { getMachineByCode, getMachineById } from '../services/productionService';
@@ -1005,7 +1005,21 @@ const ProductionControl: React.FC<ProductionControlProps> = ({ user, jobs = [], 
         };
     }, [selectedMachine]);
 
-    const handleMachineTabClick = (machineId: string) => {
+    // 监听全局机台切换事件 (如来自万能快拍或其它组件)
+    useEffect(() => {
+        const handleExternalMachineChange = (e: any) => {
+            const newMachineId = e.detail;
+            if (newMachineId && newMachineId !== selectedMachine) {
+                handleMachineTabClick(newMachineId, false);
+            }
+        };
+        window.addEventListener('packsecure:machine-changed', handleExternalMachineChange);
+        return () => {
+            window.removeEventListener('packsecure:machine-changed', handleExternalMachineChange);
+        };
+    }, [selectedMachine]);
+
+    const handleMachineTabClick = (machineId: string, emitEvent = true) => {
         if (selectedMachine === machineId) return; // Already selected
         
         // Reset control mode to false (Monitor Mode) when switching tabs for managers,
@@ -1019,6 +1033,10 @@ const ProductionControl: React.FC<ProductionControlProps> = ({ user, jobs = [], 
         sessionStorage.setItem('selectedMachine', machineId);
         localStorage.setItem('device_machine_id', machineId);
         setSelectedMachine(machineId);
+
+        if (emitEvent && typeof window !== 'undefined') {
+            window.dispatchEvent(new CustomEvent('packsecure:machine-changed', { detail: machineId }));
+        }
     };
 
     const initiateTakeover = async (machineId: string) => {
@@ -2103,10 +2121,24 @@ const ProductionControl: React.FC<ProductionControlProps> = ({ user, jobs = [], 
                                 <span className="text-xs text-gray-400 font-normal">Production Workspace</span>
                             </h2>
                             {selectedMachine && (
-                                <p className="text-xs text-gray-400 flex items-center gap-1.5 mt-0.5">
-                                    <span className="w-1.5 h-1.5 rounded-full bg-emerald-400"></span>
-                                    <span>{t('当前机台')}: <strong className="text-gray-200 font-medium">{currentMachineName}</strong></span>
-                                </p>
+                                <div className="flex items-center gap-2 mt-0.5">
+                                    <p className="text-xs text-gray-400 flex items-center gap-1.5">
+                                        <span className="w-1.5 h-1.5 rounded-full bg-emerald-400"></span>
+                                        <span>{t('当前机台')}: <strong className="text-gray-200 font-medium">{currentMachineName}</strong></span>
+                                    </p>
+                                    <button
+                                        type="button"
+                                        onClick={() => {
+                                            hasScannedRef.current = false;
+                                            setIsScanningMachine(true);
+                                        }}
+                                        className="px-2 py-0.5 rounded-lg bg-indigo-600/30 hover:bg-indigo-600/50 text-indigo-300 border border-indigo-500/40 text-[11px] font-medium flex items-center gap-1 transition cursor-pointer"
+                                        title={t('切换机台一定要扫码')}
+                                    >
+                                        <Camera size={12} />
+                                        <span>{t('扫码换机')}</span>
+                                    </button>
+                                </div>
                             )}
                         </div>
                     </div>
@@ -2170,6 +2202,78 @@ const ProductionControl: React.FC<ProductionControlProps> = ({ user, jobs = [], 
                     </div>
                 </header>
 
+                {/* 切换机台一定要扫码 - 在线扫码换机弹窗 */}
+                {isScanningMachine && selectedMachine && (
+                    <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/80 backdrop-blur-sm animate-fade-in">
+                        <div className="bg-zinc-900 border border-white/10 rounded-2xl max-w-sm w-full p-5 flex flex-col items-center gap-4 shadow-2xl relative">
+                            <div className="w-full flex justify-between items-center pb-2 border-b border-white/10">
+                                <div className="flex items-center gap-2 text-white font-bold text-sm">
+                                    <Camera className="w-4 h-4 text-indigo-400" />
+                                    <span>{t('扫码切换机台')}</span>
+                                </div>
+                                <button
+                                    type="button"
+                                    onClick={() => {
+                                        hasScannedRef.current = false;
+                                        setIsScanningMachine(false);
+                                    }}
+                                    className="p-1 rounded-lg text-gray-400 hover:text-white hover:bg-white/10 transition"
+                                >
+                                    <X size={16} />
+                                </button>
+                            </div>
+
+                            <div className="w-full aspect-square overflow-hidden rounded-2xl border-2 border-indigo-500 shadow-lg relative bg-black">
+                                <Scanner
+                                    key="switch-machine-scanner"
+                                    onScan={(detectedCodes) => {
+                                        if (hasScannedRef.current) return;
+                                        if (detectedCodes && detectedCodes.length > 0) {
+                                            const text = detectedCodes[0].rawValue;
+                                            if (text) {
+                                                let cleanText = text.trim();
+                                                if (cleanText.includes('#/production/')) {
+                                                    cleanText = cleanText.split('#/production/')[1].split('?')[0].split('/')[0];
+                                                }
+                                                if (cleanText.toUpperCase().startsWith('MACHINE:')) {
+                                                    cleanText = cleanText.substring(8).trim();
+                                                }
+                                                let found = machines.find(m => (((m as any).machine_id || m.id)?.toUpperCase() === cleanText.toUpperCase()));
+                                                if (!found) {
+                                                    found = machines.find(m => m.name.toUpperCase() === cleanText.toUpperCase());
+                                                }
+                                                if (found) {
+                                                    hasScannedRef.current = true;
+                                                    const newMachineId = (found as any).machine_id || found.id;
+                                                    handleMachineTabClick(newMachineId);
+                                                    if (typeof navigator !== 'undefined' && navigator.vibrate) {
+                                                        navigator.vibrate([100, 50, 100]);
+                                                    }
+                                                    setTimeout(() => {
+                                                        setIsScanningMachine(false);
+                                                    }, 150);
+                                                } else {
+                                                    alert(`⚠️ 未知的机台二维码 / Unknown machine QR: ${cleanText}`);
+                                                }
+                                            }
+                                        }
+                                    }}
+                                    onError={(err) => {
+                                        console.error("QR Scan Error:", err);
+                                        alert("⚠️ 无法获取摄像头权限进行扫码绑定。 Please check camera permissions.");
+                                        setIsScanningMachine(false);
+                                    }}
+                                />
+                            </div>
+
+                            <div className="text-center">
+                                <p className="text-xs text-gray-200 font-bold">{t('请对准新机台二维码进行扫码切换')}</p>
+                                <p className="text-[11px] text-gray-400 mt-0.5">{t('当前机台')}: {currentMachineName}</p>
+                            </div>
+                        </div>
+                    </div>
+                )}
+
                 {/* MACHINE TABS SWITCHER (Hidden for Operators) */}
                 {user && user.role !== 'Operator' && (
                     <div className="grid grid-cols-2 sm:flex sm:flex-wrap gap-2 mb-4">
@@ -2219,12 +2323,18 @@ const ProductionControl: React.FC<ProductionControlProps> = ({ user, jobs = [], 
                                              if (detectedCodes && detectedCodes.length > 0) {
                                                  const text = detectedCodes[0].rawValue;
                                                  if (text) {
-                                                    const cleanText = text.trim();
-                                                    let found = machines.find(m => ((m as any).machine_id || m.id) === cleanText);
-                                                    if (!found) {
-                                                        found = machines.find(m => m.name === cleanText);
-                                                    }
-                                                    if (found) {
+                                                     let cleanText = text.trim();
+                                                     if (cleanText.includes('#/production/')) {
+                                                         cleanText = cleanText.split('#/production/')[1].split('?')[0].split('/')[0];
+                                                     }
+                                                     if (cleanText.toUpperCase().startsWith('MACHINE:')) {
+                                                         cleanText = cleanText.substring(8).trim();
+                                                     }
+                                                     let found = machines.find(m => (((m as any).machine_id || m.id)?.toUpperCase() === cleanText.toUpperCase()));
+                                                     if (!found) {
+                                                         found = machines.find(m => m.name.toUpperCase() === cleanText.toUpperCase());
+                                                     }
+                                                     if (found) {
                                                          hasScannedRef.current = true;
                                                          handleMachineTabClick((found as any).machine_id || found.id);
                                                          setTimeout(() => {

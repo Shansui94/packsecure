@@ -616,8 +616,9 @@ const DeliveryOrderManagement: React.FC<DeliveryOrderManagementProps> = ({ user 
                 setLorryServices(filteredServices);
             }
 
-            const [usersRes, ordersRes, itemsRes, leavesRes, lorriesRes, servicesRes, ratesRes, customersRes] = await Promise.all([
+            const [usersRes, sysUsersRes, ordersRes, itemsRes, leavesRes, lorriesRes, servicesRes, ratesRes, customersRes] = await Promise.all([
                 supabase.from('users_public').select('*'),
+                supabase.from('sys_users_v2').select('id, auth_user_id, role_modules'),
                 supabase.from('sales_orders').select('*').order('trip_sequence', { ascending: true }).order('created_at', { ascending: false }),
                 getV2Items(),
                 supabase.from('employee_leave').select('*'),
@@ -663,12 +664,18 @@ const DeliveryOrderManagement: React.FC<DeliveryOrderManagementProps> = ({ user 
                 });
                 setAllUsersMap(userMap);
 
-                // Filter locally to ensure complex OR logic is handled correctly
+                // Driver capability set from role_modules in sys_users_v2
+                const driverCapableSet = new Set<string>();
+                (sysUsersRes.data || []).forEach((su: any) => {
+                    if (su.role_modules && Array.isArray(su.role_modules) && su.role_modules.includes('delivery-driver')) {
+                        if (su.id) driverCapableSet.add(su.id);
+                        if (su.auth_user_id) driverCapableSet.add(su.auth_user_id);
+                    }
+                });
+
+                // Filter drivers: anyone with Driver role OR having 'delivery-driver' module capability
                 const filteredUsers = usersRes.data.filter(u =>
-                    u.role === 'Driver' ||
-                    u.email === 'neosonchun@gmail.com' ||
-                    u.email === 'ericsoobaolin0219@gmail.com' ||
-                    u.name?.toLowerCase().includes('neoson')
+                    u.role === 'Driver' || driverCapableSet.has(u.id)
                 );
 
                 const mappedDrivers: User[] = filteredUsers.map(u => ({
@@ -1141,15 +1148,7 @@ const DeliveryOrderManagement: React.FC<DeliveryOrderManagementProps> = ({ user 
 
             if (error) throw error;
 
-            // ⚡ Deduct stock for restored loaded order
-            await deductStockForOrder({
-                id: order.id,
-                order_number: order.orderNumber,
-                trip_origin: (order as any).trip_origin || (order as any).tripOrigin,
-                items: order.items
-            });
-
-            alert(`✅ Order ${order.orderNumber} restored to Loaded & stock deducted!`);
+            alert(`✅ Order ${order.orderNumber} restored to Loaded (Stock synced via trigger)!`);
 
             // Optimistic update
             setOrders(prev => prev.map(o => o.id === order.id ? { ...o, status: 'Loaded' } : o));
@@ -1336,6 +1335,16 @@ const DeliveryOrderManagement: React.FC<DeliveryOrderManagementProps> = ({ user 
     };
 
     const matchV2ItemFromScan = (sku?: string, product?: string): V2Item | null => {
+        // Alias normalization: shorthand "SF CLEAR" or "SF BLACK" without explicit weight defaults to 2.2KG
+        const raw = `${sku || ''} ${product || ''}`.toLowerCase().replace(/[-_]/g, ' ');
+        if (raw.includes('sf clear') && !raw.includes('2.0')) {
+            const found = v2Items.find(i => i.sku === 'SF-CLEAR-2.2');
+            if (found) return found;
+        }
+        if (raw.includes('sf black') && !raw.includes('2.0')) {
+            const found = v2Items.find(i => i.sku === 'SF-BLACK-2.2');
+            if (found) return found;
+        }
         return matchV2ItemByName(product) || matchV2ItemByName(sku) || matchV2ItemBySku(sku);
     };
 

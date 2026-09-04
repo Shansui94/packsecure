@@ -8,7 +8,6 @@ import {
 } from 'lucide-react';
 import { supabase } from '../services/supabase';
 import { getV2Items } from '../services/apiV2';
-import { deductStockForOrder } from '../services/stockService';
 import * as XLSX from 'xlsx';
 
 const normalizeWarehouseName = (loc: string): string => {
@@ -2912,14 +2911,7 @@ const PersonalMonthlyReport: React.FC<Props> = ({ user }) => {
                                                         if (error) {
                                                             alert("Approval failed: " + error.message);
                                                         } else {
-                                                            // ⚡ Deduct stock for approved loaded trip
-                                                            await deductStockForOrder({
-                                                                id: selectedTrip.id,
-                                                                order_number: selectedTrip.order_number,
-                                                                trip_origin: selectedTrip.trip_origin,
-                                                                items: selectedTrip.items
-                                                            });
-                                                            alert("✅ 已批准并扣减库存！ / Approved & stock adjusted!");
+                                                            alert("✅ 已批准！库存已由系统触发器自动同步扣减。 / Approved & stock auto-synced!");
                                                             setSelectedTrip(null);
                                                             fetchData();
                                                         }

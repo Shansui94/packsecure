@@ -18,6 +18,12 @@ import { User, MobileInspectionLog } from '../types';
 import { logActivity } from '../utils/logger';
 import { compressImage } from '../utils/imageCompress';
 import { useTranslation } from 'react-i18next';
+import {
+    fetchGlobalMaterialPhotos,
+    findMaterialStandardPhoto,
+    saveGlobalMaterialPhoto,
+    normalizeMaterialName
+} from '../services/rawMaterialPhotoService';
 
 interface MachineInspectionModalProps {
     isOpen: boolean;
@@ -240,15 +246,28 @@ export const MachineInspectionModal: React.FC<MachineInspectionModalProps> = ({
     // 照片大图 Lightbox
     const [lightboxPhoto, setLightboxPhoto] = useState<string | null>(null);
 
-    // 初始加载数据库日志 & 原材料清单
+    // 全厂原材料标准包装图片映射库
+    const [globalPhotoMap, setGlobalPhotoMap] = useState<Record<string, string>>({});
+
+    // 初始加载数据库日志 & 原材料清单 & 全厂标准包装图片
     useEffect(() => {
         if (isOpen) {
             fetchMachineLogs();
             fetchDbRawMaterials();
+            loadGlobalPhotos();
         }
     }, [isOpen, machineId, machineName]);
 
-    // 从 Supabase `items` 表（type = 'raw'）拉取全厂原材料数据
+    const loadGlobalPhotos = async () => {
+        try {
+            const map = await fetchGlobalMaterialPhotos();
+            setGlobalPhotoMap(map);
+        } catch (e) {
+            console.warn('Failed to load global material photos:', e);
+        }
+    };
+
+    // 从 Supabase items 表（type = raw）拉取全厂原材料数据
     const fetchDbRawMaterials = async () => {
         try {
             const { data } = await supabase
@@ -352,13 +371,15 @@ export const MachineInspectionModal: React.FC<MachineInspectionModalProps> = ({
         }
 
         const newId = Date.now().toString();
+        const defaultPhoto = findMaterialStandardPhoto(name, globalPhotoMap);
         const newItem: MaterialItemState = {
             id: newId,
             name: name,
             sku: `RM-${name.replace(/\s+/g, '-').toUpperCase()}`,
             unit: newMatUnit,
             prevQty: newMatQty,
-            newQty: newMatQty
+            newQty: newMatQty,
+            photoUrl: defaultPhoto || undefined
         };
 
         const updatedMaterials = {
@@ -576,17 +597,44 @@ export const MachineInspectionModal: React.FC<MachineInspectionModalProps> = ({
         return compressedDataUrl;
     };
 
-    // 📷 拍摄或上传单项物料包装/外袋照片
+    // 📷 拍摄或上传单项物料包装/外袋照片（全厂防错标准包装袋照片建档与更新）
     const handleItemPhotoUpload = async (id: string, e: React.ChangeEvent<HTMLInputElement>) => {
         if (e.target.files?.[0]) {
+            const file = e.target.files[0];
+            const targetMat = currentMaterials.find(m => m.id === id);
+            const matName = targetMat ? targetMat.name : '';
+            const existingPhoto = targetMat?.photoUrl || findMaterialStandardPhoto(matName, globalPhotoMap);
+
+            // 🛡️ 防误触二次确认：当全厂已有该材料标准照片时提示
+            if (existingPhoto) {
+                const confirmed = window.confirm(
+                    `【全厂防错图库更新确认】\n\n原材料 [${matName || '此物料'}] 已有全厂标准包装图。\n更换后将同步更新全厂所有机台该物料的防错对照图。\n\n是否确认更换为新照片？`
+                );
+                if (!confirmed) {
+                    e.target.value = '';
+                    return;
+                }
+            }
+
             try {
-                const compressed = await compressImage(e.target.files[0], 1024, 0.7);
+                const compressed = await compressImage(file, 1024, 0.7);
                 const cloudUrl = await uploadPhotoBlobToSupabase(compressed);
+                
+                // 1. 同步当前机台当前螺杆物料配方状态
                 const updated = {
                     ...screwMaterials,
                     [selectedScrew]: (screwMaterials[selectedScrew] || []).map(m => m.id === id ? { ...m, photoUrl: cloudUrl } : m)
                 };
                 syncScrewMaterialsToCloud(updated);
+
+                // 2. 沉淀至全厂统一原材料图库，所有机台和库存管理瞬间共享
+                if (matName) {
+                    await saveGlobalMaterialPhoto(matName, cloudUrl, currentUser);
+                    setGlobalPhotoMap(prev => ({
+                        ...prev,
+                        [normalizeMaterialName(matName)]: cloudUrl
+                    }));
+                }
             } catch (err) {
                 console.error('Item photo upload error:', err);
             }
@@ -920,28 +968,39 @@ export const MachineInspectionModal: React.FC<MachineInspectionModalProps> = ({
                                         <div key={mat.id} className="bg-gray-950 border border-gray-800 rounded-xl p-3 space-y-1.5 shadow-sm">
                                             <div className="flex items-center justify-between">
                                                 <div className="flex items-center space-x-2.5 flex-wrap">
-                                                    {/* 📷 物料包装图片预览或【添加图片】按钮 */}
-                                                    {mat.photoUrl ? (
-                                                        <img
-                                                            src={mat.photoUrl}
-                                                            alt={mat.name}
-                                                            onClick={() => setLightboxPhoto(mat.photoUrl || null)}
-                                                            className="w-10 h-10 rounded-lg object-cover border border-indigo-500/50 shadow-md cursor-pointer hover:opacity-80 shrink-0"
-                                                            title={t('Click to enlarge and preview the material packaging diagram')}
-                                                        />
-                                                    ) : (
-                                                        <label className="text-[11px] bg-indigo-950/80 text-indigo-300 border border-indigo-500/40 px-2 py-1 rounded-lg flex items-center gap-1 cursor-pointer font-bold hover:bg-indigo-900/80 shrink-0 transition" title={t('Upload/take photos of the outer bag of the material')}>
-                                                            <Camera size={13} className="text-indigo-400" />
-                                                            <span>{t('📷Add picture')}</span>
-                                                            <input
-                                                                type="file"
-                                                                accept="image/*"
-                                                                capture="environment"
-                                                                className="hidden"
-                                                                onChange={(e) => handleItemPhotoUpload(mat.id, e)}
-                                                            />
-                                                        </label>
-                                                    )}
+                                                    {/* 📷 物料包装图片预览（支持全厂标准防错图自动带出）或【添加图片】按钮 */}
+                                                    {(() => {
+                                                        const displayPhoto = mat.photoUrl || findMaterialStandardPhoto(mat.name, globalPhotoMap);
+                                                        if (displayPhoto) {
+                                                            return (
+                                                                <div className="relative group shrink-0">
+                                                                    <img
+                                                                        src={displayPhoto}
+                                                                        alt={mat.name}
+                                                                        onClick={() => setLightboxPhoto(displayPhoto)}
+                                                                        className="w-10 h-10 rounded-lg object-cover border-2 border-emerald-500/70 shadow-md cursor-pointer hover:opacity-80 transition"
+                                                                        title={t('Standard packaging photo (Click to enlarge for verification)') || '标准外包装图（点击放大核对防错）'}
+                                                                    />
+                                                                    <span className="absolute -bottom-1 -right-1 bg-emerald-600 text-[8px] font-black text-white px-1 rounded shadow-sm scale-90">
+                                                                        {t('Standard') || '标准'}
+                                                                    </span>
+                                                                </div>
+                                                            );
+                                                        }
+                                                        return (
+                                                            <label className="text-[11px] bg-indigo-950/80 text-indigo-300 border border-indigo-500/40 px-2 py-1 rounded-lg flex items-center gap-1 cursor-pointer font-bold hover:bg-indigo-900/80 shrink-0 transition" title={t('Upload/take photos of the outer bag of the material')}>
+                                                                <Camera size={13} className="text-indigo-400" />
+                                                                <span>{t('📷Add picture')}</span>
+                                                                <input
+                                                                    type="file"
+                                                                    accept="image/*"
+                                                                    capture="environment"
+                                                                    className="hidden"
+                                                                    onChange={(e) => handleItemPhotoUpload(mat.id, e)}
+                                                                />
+                                                            </label>
+                                                        );
+                                                    })()}
 
                                                     <div>
                                                         <span className="font-extrabold text-white text-sm block">{mat.name}</span>
@@ -949,7 +1008,7 @@ export const MachineInspectionModal: React.FC<MachineInspectionModalProps> = ({
                                                 </div>
 
                                                 <div className="flex items-center gap-2">
-                                                    {mat.photoUrl && (
+                                                    {(mat.photoUrl || findMaterialStandardPhoto(mat.name, globalPhotoMap)) && (
                                                         <label className="text-[10px] text-gray-400 hover:text-indigo-300 underline cursor-pointer">
                                                             
                                                                                                                         {t('replace')}

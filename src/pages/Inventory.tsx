@@ -16,9 +16,17 @@ import {
     SlidersHorizontal,
     ArrowUpDown,
     ExternalLink,
-    Scale
+    Scale,
+    Camera,
+    X
 } from 'lucide-react';
 import { useTranslation } from 'react-i18next';
+import { compressImage } from '../utils/imageCompress';
+import {
+    saveGlobalMaterialPhoto,
+    fetchGlobalMaterialPhotos,
+    findMaterialStandardPhoto
+} from '../services/rawMaterialPhotoService';
 
 // --- TYPES ---
 interface MasterItem {
@@ -29,6 +37,7 @@ interface MasterItem {
     status: string;
     min_stock_level?: number;
     nickname?: string;
+    photo_url?: string;
 }
 
 interface InventoryRecord {
@@ -51,6 +60,7 @@ interface MatrixRow {
     totalStock: number;
     status: 'healthy' | 'low' | 'out_of_stock';
     lastUpdated: string;
+    photo_url?: string;
 }
 
 type HealthFilter = 'all' | 'healthy' | 'low' | 'out';
@@ -99,6 +109,42 @@ const Inventory: React.FC = () => {
     const [activeTab, setActiveTab] = useState<'matrix' | 'reconciliation'>('matrix');
     const [reconcileSku, setReconcileSku] = useState<string | null>(null);
 
+    // 标准包装图片与大图预览
+    const [lightboxPhoto, setLightboxPhoto] = useState<string | null>(null);
+    const [globalPhotos, setGlobalPhotos] = useState<Record<string, string>>({});
+    const [uploadingSku, setUploadingSku] = useState<string | null>(null);
+
+    const handlePhotoUpload = async (sku: string, itemName: string, e: React.ChangeEvent<HTMLInputElement>) => {
+        if (e.target.files?.[0]) {
+            setUploadingSku(sku);
+            try {
+                const file = e.target.files[0];
+                const compressed = await compressImage(file, 1024, 0.7);
+                let cloudUrl = compressed;
+                if (compressed.startsWith('data:')) {
+                    const res = await fetch(compressed);
+                    const blob = await res.blob();
+                    const cleanSku = sku.replace(/[^a-zA-Z0-9]/g, '_');
+                    const fileName = `std_pack_${cleanSku}_${Date.now()}.jpg`;
+                    const { error } = await supabase.storage
+                        .from('work-photos')
+                        .upload(fileName, blob, { contentType: blob.type || 'image/jpeg' });
+                    if (!error) {
+                        const { data } = supabase.storage.from('work-photos').getPublicUrl(fileName);
+                        if (data?.publicUrl) cloudUrl = data.publicUrl;
+                    }
+                }
+                await saveGlobalMaterialPhoto(itemName || sku, cloudUrl);
+                setMasterItems(prev => prev.map(item => item.sku === sku ? { ...item, photo_url: cloudUrl } : item));
+                setGlobalPhotos(prev => ({ ...prev, [itemName]: cloudUrl }));
+            } catch (err) {
+                console.error('Photo upload error:', err);
+            } finally {
+                setUploadingSku(null);
+            }
+        }
+    };
+
     const handleOpenReconcile = (sku: string) => {
         setReconcileSku(sku);
         setActiveTab('reconciliation');
@@ -113,16 +159,18 @@ const Inventory: React.FC = () => {
     const fetchData = async () => {
         setLoading(true);
         try {
-            const [masterRes, invRes] = await Promise.all([
+            const [masterRes, invRes, photosMap] = await Promise.all([
                 supabase
                     .from('master_items_v2')
-                    .select('sku, name, type, uom, status, min_stock_level, nickname')
+                    .select('sku, name, type, uom, status, min_stock_level, nickname, photo_url')
                     .eq('status', 'Active')
                     .order('sku', { ascending: true }),
                 supabase
                     .from('v2_inventory_view')
-                    .select('sku, name, type, uom, loc_id, current_stock, last_updated')
+                    .select('sku, name, type, uom, loc_id, current_stock, last_updated'),
+                fetchGlobalMaterialPhotos()
             ]);
+            if (photosMap) setGlobalPhotos(photosMap);
 
             if (masterRes.error) throw masterRes.error;
             if (invRes.error) throw invRes.error;
@@ -205,7 +253,8 @@ const Inventory: React.FC = () => {
                 factoryStocks,
                 totalStock,
                 status,
-                lastUpdated: lastUpdatedMap.get(trimmedSku) || ''
+                lastUpdated: lastUpdatedMap.get(trimmedSku) || '',
+                photo_url: item.photo_url || globalPhotos[item.name] || findMaterialStandardPhoto(item.name, globalPhotos) || undefined
             };
         });
     }, [masterItems, inventoryRecords, allLocations]);
@@ -677,9 +726,50 @@ const Inventory: React.FC = () => {
                                                     {row.sku}
                                                 </td>
 
-                                                {/* Name */}
-                                                <td className="py-3.5 px-4 text-gray-300 max-w-xs truncate" title={row.name}>
-                                                    {row.name}
+                                                {/* Name & Packaging Photo */}
+                                                <td className="py-3.5 px-4 text-gray-300 max-w-sm">
+                                                    <div className="flex items-center gap-2.5">
+                                                        {row.photo_url ? (
+                                                            <div className="relative group/photo shrink-0">
+                                                                <img
+                                                                    src={row.photo_url}
+                                                                    alt={row.name}
+                                                                    onClick={(e) => {
+                                                                        e.stopPropagation();
+                                                                        setLightboxPhoto(row.photo_url || null);
+                                                                    }}
+                                                                    className="w-8 h-8 rounded-lg object-cover border border-cyan-500/50 shadow-sm cursor-pointer hover:opacity-80 transition shrink-0"
+                                                                    title={t('Click to enlarge standard packaging photo') || '点击放大查看标准包装图'}
+                                                                />
+                                                                <label className="absolute inset-0 bg-black/60 rounded-lg flex items-center justify-center opacity-0 group-hover/photo:opacity-100 transition cursor-pointer text-[9px] text-white font-bold" title={t('Replace photo') || '更换照片'}>
+                                                                    <span>{t('replace') || '换图'}</span>
+                                                                    <input
+                                                                        type="file"
+                                                                        accept="image/*"
+                                                                        className="hidden"
+                                                                        onChange={(e) => handlePhotoUpload(row.sku, row.name, e)}
+                                                                    />
+                                                                </label>
+                                                            </div>
+                                                        ) : (
+                                                            <label className="w-8 h-8 rounded-lg border border-dashed border-white/20 hover:border-cyan-500/60 flex items-center justify-center text-gray-500 hover:text-cyan-400 cursor-pointer shrink-0 transition bg-white/[0.02]" title={t('Upload standard packaging photo for anti-error') || '上传标准外袋照片建档防错'}>
+                                                                {uploadingSku === row.sku ? (
+                                                                    <div className="w-3.5 h-3.5 border-2 border-cyan-400 border-t-transparent rounded-full animate-spin" />
+                                                                ) : (
+                                                                    <Camera size={13} />
+                                                                )}
+                                                                <input
+                                                                    type="file"
+                                                                    accept="image/*"
+                                                                    className="hidden"
+                                                                    onChange={(e) => handlePhotoUpload(row.sku, row.name, e)}
+                                                                />
+                                                            </label>
+                                                        )}
+                                                        <span className="truncate max-w-[200px]" title={row.name}>
+                                                            {row.name}
+                                                        </span>
+                                                    </div>
                                                 </td>
 
                                                 {/* Type */}
@@ -767,6 +857,31 @@ const Inventory: React.FC = () => {
                     </div>
                 </div>
             </div>
+
+            {/* --- LIGHTBOX MODAL --- */}
+            {lightboxPhoto && (
+                <div
+                    className="fixed inset-0 z-50 bg-black/80 flex items-center justify-center p-4 backdrop-blur-sm animate-in fade-in"
+                    onClick={() => setLightboxPhoto(null)}
+                >
+                    <div
+                        className="relative max-w-2xl max-h-[85vh] bg-[#0d0d14] border border-white/20 rounded-2xl p-3 shadow-2xl overflow-hidden"
+                        onClick={e => e.stopPropagation()}
+                    >
+                        <img
+                            src={lightboxPhoto}
+                            alt="Standard Packaging"
+                            className="max-h-[75vh] w-auto rounded-xl object-contain mx-auto"
+                        />
+                        <button
+                            onClick={() => setLightboxPhoto(null)}
+                            className="absolute top-4 right-4 bg-black/70 hover:bg-black text-white rounded-full p-2 border border-white/20 transition cursor-pointer"
+                        >
+                            <X size={18} />
+                        </button>
+                    </div>
+                </div>
+            )}
         </div>
     );
 };

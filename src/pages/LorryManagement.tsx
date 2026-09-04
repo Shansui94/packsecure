@@ -96,20 +96,26 @@ const LorryManagement: React.FC = () => {
 
     const fetchData = async () => {
         setLoading(true);
-        const [lorriesRes, driversRes, logsRes, alertsRes] = await Promise.all([
+        const [lorriesRes, driversRes, sysUsersRes, logsRes, alertsRes] = await Promise.all([
             supabase.from('lorries').select('*').order('created_at', { ascending: false }),
             supabase.from('users_public').select('*').order('name'),
+            supabase.from('sys_users_v2').select('id, auth_user_id, role_modules'),
             supabase.from('lorry_mileage_logs').select('*, lorries(plate_number), driver:driver_id(name, email)').order('created_at', { ascending: false }),
             supabase.from('lorry_mileage_alerts').select('*, lorries(plate_number), driver:driver_id(name, email), resolver:resolved_by(name, email)').order('created_at', { ascending: false })
         ]);
 
         if (lorriesRes.data) setLorries(lorriesRes.data);
         if (driversRes.data) {
+            const driverCapableSet = new Set<string>();
+            (sysUsersRes.data || []).forEach((su: any) => {
+                if (su.role_modules && Array.isArray(su.role_modules) && su.role_modules.includes('delivery-driver')) {
+                    if (su.id) driverCapableSet.add(su.id);
+                    if (su.auth_user_id) driverCapableSet.add(su.auth_user_id);
+                }
+            });
+
             const filteredDrivers = driversRes.data.filter((u: any) =>
-                u.role === 'Driver' ||
-                u.email === 'neosonchun@gmail.com' ||
-                u.email === 'ericsoobaolin0219@gmail.com' ||
-                u.name?.toLowerCase().includes('neoson')
+                u.role === 'Driver' || driverCapableSet.has(u.id)
             );
             setDrivers(filteredDrivers);
         }

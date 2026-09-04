@@ -1,6 +1,6 @@
 import React, { useState, useEffect, useMemo } from 'react';
 import { supabase } from '../services/supabase';
-import { Search, RefreshCw, Box, Filter, X, TrendingUp, TrendingDown, Clipboard, ArrowUpDown, Truck, MapPin, Hash, ChevronLeft, ChevronRight, LayoutGrid, List, Scale } from 'lucide-react';
+import { Search, RefreshCw, Box, Filter, X, TrendingUp, TrendingDown, Clipboard, ArrowUpDown, Truck, MapPin, Hash, ChevronLeft, ChevronRight, LayoutGrid, List, Scale, AlertTriangle } from 'lucide-react';
 import { WAREHOUSES } from '../data/factoryData';
 import { StockReconciliationDashboard } from '../components/StockReconciliationDashboard';
 
@@ -545,8 +545,12 @@ const DetailPanel: React.FC<{ item: StockRow; locFilter: string; onClose: () => 
     );
 };
 
+interface LiveStockProps {
+    onNavigate?: (page: string) => void;
+}
+
 // --- MAIN ---
-const LiveStock: React.FC = () => {
+const LiveStock: React.FC<LiveStockProps> = ({ onNavigate }) => {
     const [rows, setRows] = useState<StockRow[]>([]);
     const [loading, setLoading] = useState(true);
     const [lastUpdated, setLastUpdated] = useState('');
@@ -554,6 +558,9 @@ const LiveStock: React.FC = () => {
     const [typeFilter, setTypeFilter] = useState<string>('All');
     const [locationFilter, setLocationFilter] = useState<string>('All');
     const [selectedItem, setSelectedItem] = useState<StockRow | null>(null);
+    const [shortageItem, setShortageItem] = useState<StockRow | null>(null);
+    const [pendingOrdersList, setPendingOrdersList] = useState<any[]>([]);
+    const [shortageOnlyFilter, setShortageOnlyFilter] = useState<boolean>(false);
     const [viewMode, setViewMode] = useState<'card' | 'list'>(() => {
         return (localStorage.getItem('livestock_view') as 'card' | 'list') || 'card';
     });
@@ -584,15 +591,17 @@ const LiveStock: React.FC = () => {
                     .eq('status', 'Active'),
                 supabase
                     .from('sales_orders')
-                    .select('items')
-                    .in('status', ['New', 'Production', 'Ready'])
+                    .select('id, order_number, customer, status, items, delivery_address, created_at, trip_origin')
+                    .in('status', ['New', 'Production', 'Ready', 'Pending Approval'])
             ]);
 
             if (invRes.error) throw invRes.error;
             if (masterRes.error) throw masterRes.error;
             if (ordersRes.error) throw ordersRes.error;
 
-            // 仓库位置名称归一化对齐（合并 OPM Lama / opm_lama / T1 / T2 / T3 等历史别名）
+            setPendingOrdersList(ordersRes.data || []);
+
+            // 仓库位置名称归一化对齐（严格对应实体厂区名）
             const normalizeLoc = (loc?: string) => {
                 if (!loc) return 'OPM Lama';
                 const l = loc.toLowerCase().trim();
@@ -600,6 +609,9 @@ const LiveStock: React.FC = () => {
                 if (l === 'spd') return 'SPD';
                 if (l === 'opm corner' || l === 'opm_corner') return 'OPM Corner';
                 if (l === 'opm ali' || l === 'opm_ali') return 'OPM Ali';
+                if (l === 'nilai') return 'Nilai';
+                if (l === 'johor') return 'Johor';
+                if (l === 'kelantan') return 'Kelantan';
                 return loc.trim();
             };
 
@@ -725,22 +737,52 @@ const LiveStock: React.FC = () => {
         // 🔒 剔除物理库存为 0 且无订单预留的无用/空占位记录
         const mergedArray = Array.from(skuMap.values());
         return mergedArray.filter(r => {
-            // if (r.current_stock === 0 && (r.reserved_stock || 0) === 0) {
-            //     return false;
-            // }
+            if (shortageOnlyFilter && (r.available_stock || 0) >= 0) {
+                return false;
+            }
             const matchType = typeFilter === 'All' || r.type === typeFilter;
             const matchSearch = searchTerms.length === 0 || searchTerms.every(term => 
                 r.sku.toLowerCase().includes(term) || r.name.toLowerCase().includes(term)
             );
             return matchType && matchSearch;
-        }).sort((a, b) => a.sku.localeCompare(b.sku));
+        }).sort((a, b) => {
+            if (shortageOnlyFilter) {
+                return (a.available_stock || 0) - (b.available_stock || 0);
+            }
+            return a.sku.localeCompare(b.sku);
+        });
 
-    }, [rows, typeFilter, search, locationFilter]);
+    }, [rows, typeFilter, search, locationFilter, shortageOnlyFilter]);
+
+    const getMatchingOrders = (item: StockRow) => {
+        return pendingOrdersList.filter(order => {
+            if (!order.items || !Array.isArray(order.items)) return false;
+            return order.items.some((it: any) => {
+                const sku = (it.sku || it.item_sku)?.trim();
+                const rawLoc = it.sourceLocation || (order as any).sourceLocation || (order as any).factory_id || order.trip_origin;
+                let loc = 'OPM Lama';
+                if (rawLoc) {
+                    const l = String(rawLoc).toLowerCase().trim();
+                    if (l === 'opm lama' || l === 'opm_lama' || l === 't1' || l === 't2' || l === 't3' || l === 't4' || l === 't5' || l === 'taiping') loc = 'OPM Lama';
+                    else if (l === 'spd') loc = 'SPD';
+                    else if (l === 'opm corner' || l === 'opm_corner') loc = 'OPM Corner';
+                    else if (l === 'opm ali' || l === 'opm_ali') loc = 'OPM Ali';
+                    else if (l === 'nilai') loc = 'Nilai';
+                    else if (l === 'johor') loc = 'Johor';
+                    else if (l === 'kelantan') loc = 'Kelantan';
+                    else loc = String(rawLoc).trim();
+                }
+                const matchSku = sku === item.sku;
+                const matchLoc = !item.loc_id || item.loc_id === 'All' || loc === item.loc_id;
+                return matchSku && matchLoc && Number(it.quantity || it.qty) > 0;
+            });
+        });
+    };
 
     const totalItems = filtered.length;
     const totalQty = filtered.reduce((sum, r) => sum + (r.available_stock || 0), 0);
-    const lowStockCount = filtered.filter(r => (r.available_stock || 0) < LOW_STOCK_THRESHOLD).length;
-    const negativeCount = filtered.filter(r => (r.available_stock || 0) < 0).length;
+    const lowStockCount = filtered.filter(r => (r.available_stock || 0) < LOW_STOCK_THRESHOLD && (r.available_stock || 0) >= 0).length;
+    const negativeCount = rows.filter(r => (r.available_stock || 0) < 0).length;
 
     const getStockColor = (qty: number) => {
         if (qty < 0) return 'text-red-600 dark:text-red-500';
@@ -748,10 +790,11 @@ const LiveStock: React.FC = () => {
         return 'text-slate-900 dark:text-white';
     };
 
-    const getStockBadge = (qty: number) => {
-        if (qty < 0) return { label: 'NEGATIVE', cls: 'bg-red-100 text-red-700 border-red-200 dark:bg-red-500/15 dark:text-red-400 dark:border-red-500/30' };
-        if (qty < LOW_STOCK_THRESHOLD) return { label: 'LOW STOCK', cls: 'bg-amber-100 text-amber-700 border-amber-200 dark:bg-amber-500/15 dark:text-amber-400 dark:border-amber-500/30' };
-        return { label: 'AVAILABLE', cls: 'bg-green-100 text-green-700 border-green-200 dark:bg-green-500/15 dark:text-green-400 dark:border-green-500/30' };
+    const getStockBadge = (availQty: number, phyQty: number = 0) => {
+        if (availQty < 0) return { label: `⚠️ 缺货 ${Math.abs(availQty)}`, isShortage: true, cls: 'bg-red-500 text-white font-black border-red-600 shadow-md shadow-red-500/20 animate-pulse' };
+        if (availQty === 0 && phyQty === 0) return { label: 'OUT OF STOCK', isShortage: false, cls: 'bg-slate-100 text-slate-500 border-slate-200 dark:bg-white/10 dark:text-gray-400 dark:border-white/10' };
+        if (availQty < LOW_STOCK_THRESHOLD) return { label: 'LOW STOCK', isShortage: false, cls: 'bg-amber-100 text-amber-700 border-amber-200 dark:bg-amber-500/15 dark:text-amber-400 dark:border-amber-500/30' };
+        return { label: 'AVAILABLE', isShortage: false, cls: 'bg-green-100 text-green-700 border-green-200 dark:bg-green-500/15 dark:text-green-400 dark:border-green-500/30' };
     };
 
     return (
@@ -829,10 +872,24 @@ const LiveStock: React.FC = () => {
                             </div>
                         )}
                         {negativeCount > 0 && (
-                            <div className="bg-red-50 border border-red-200 dark:bg-red-500/10 dark:border-red-500/20 rounded-xl px-4 py-3 min-w-[100px] shadow-sm">
-                                <div className="text-[10px] text-red-600 dark:text-red-400 font-bold uppercase mb-0.5">Negative</div>
-                                <div className="text-xl font-black text-red-600 dark:text-red-400">{negativeCount}</div>
-                            </div>
+                            <button
+                                type="button"
+                                onClick={() => setShortageOnlyFilter(prev => !prev)}
+                                className={`rounded-xl px-4 py-3 min-w-[110px] shadow-sm text-left transition-all border cursor-pointer ${
+                                    shortageOnlyFilter
+                                        ? 'bg-red-600 text-white border-red-700 ring-2 ring-red-400 shadow-lg shadow-red-600/30'
+                                        : 'bg-red-50 border-red-200 hover:bg-red-100 dark:bg-red-500/10 dark:border-red-500/20 dark:hover:bg-red-500/20'
+                                }`}
+                                title="点击筛选仅查看超卖/缺货规格 (Click to filter shortages only)"
+                            >
+                                <div className={`text-[10px] font-bold uppercase mb-0.5 flex items-center gap-1 ${shortageOnlyFilter ? 'text-white' : 'text-red-600 dark:text-red-400'}`}>
+                                    <AlertTriangle size={11} className={shortageOnlyFilter ? 'animate-bounce' : ''} />
+                                    <span>缺货 (Deficit)</span>
+                                </div>
+                                <div className={`text-xl font-black ${shortageOnlyFilter ? 'text-white' : 'text-red-600 dark:text-red-400'}`}>
+                                    {negativeCount} {shortageOnlyFilter && <span className="text-xs font-normal opacity-80">(筛选中)</span>}
+                                </div>
+                            </button>
                         )}
                     </div>
                 </div>
@@ -926,13 +983,24 @@ const LiveStock: React.FC = () => {
                     <div className="space-y-6">
                         {(() => {
                             const renderMiniCard = (item: StockRow) => {
-                                const badge = getStockBadge(item.current_stock);
+                                const isShortage = (item.available_stock || 0) < 0;
+                                const badge = getStockBadge(item.available_stock || 0, item.current_stock);
                                 const styleConfig = TYPE_STYLE[item.type] || DEFAULT_STYLE;
                                 return (
                                     <button
                                         key={item.sku}
-                                        onClick={() => setSelectedItem(item)}
-                                        className={`shrink-0 w-36 sm:w-44 relative border rounded-2xl p-3 sm:p-4 text-left cursor-pointer shadow-sm flex flex-col justify-between h-28 sm:h-32 snap-start hover:scale-[1.02] transition-transform ${styleConfig.bgCard}`}
+                                        onClick={() => {
+                                            if (isShortage) {
+                                                setShortageItem(item);
+                                            } else {
+                                                setSelectedItem(item);
+                                            }
+                                        }}
+                                        className={`shrink-0 w-36 sm:w-44 relative border rounded-2xl p-3 sm:p-4 text-left cursor-pointer shadow-sm flex flex-col justify-between h-28 sm:h-32 snap-start hover:scale-[1.02] transition-transform ${
+                                            isShortage
+                                                ? 'bg-gradient-to-br from-red-50 to-white dark:from-red-950/30 dark:to-transparent border-red-300 dark:border-red-500/40 shadow-red-500/10'
+                                                : styleConfig.bgCard
+                                        }`}
                                     >
                                         <div>
                                             <div className="font-black text-slate-800 dark:text-white text-xs sm:text-sm tracking-tight leading-tight mb-1 line-clamp-2" title={item.name}>{item.name}</div>
@@ -1031,16 +1099,27 @@ const LiveStock: React.FC = () => {
                     /* DENSE LIST VIEW (Mobile Optimized) */
                     <div className="flex flex-col space-y-2 bg-slate-50 dark:bg-black/20 p-2 rounded-2xl border border-slate-200 dark:border-white/5">
                         {filtered.map((item, idx) => {
+                            const isShortage = (item.available_stock || 0) < 0;
                             const styleConfig = TYPE_STYLE[item.type] || DEFAULT_STYLE;
                             return (
                                 <button 
                                     key={item.sku}
-                                    onClick={() => setSelectedItem(item)} 
-                                    className={`flex items-center justify-between p-3 sm:px-4 bg-white dark:bg-[#12121a] border border-slate-200 dark:border-white/10 rounded-xl hover:bg-slate-100 dark:hover:bg-white/5 text-left active:scale-[0.99] transition-all shadow-sm ${idx % 2 === 0 ? 'bg-white dark:bg-[#12121a]' : 'bg-slate-50/50 dark:bg-[#12121a]/50'}`}
+                                    onClick={() => {
+                                        if (isShortage) {
+                                            setShortageItem(item);
+                                        } else {
+                                            setSelectedItem(item);
+                                        }
+                                    }} 
+                                    className={`flex items-center justify-between p-3 sm:px-4 rounded-xl text-left active:scale-[0.99] transition-all shadow-sm ${
+                                        isShortage
+                                            ? 'bg-red-50/70 border border-red-300 dark:bg-red-950/20 dark:border-red-500/30 hover:border-red-400'
+                                            : `bg-white dark:bg-[#12121a] border border-slate-200 dark:border-white/10 hover:bg-slate-100 dark:hover:bg-white/5 ${idx % 2 === 0 ? 'bg-white dark:bg-[#12121a]' : 'bg-slate-50/50 dark:bg-[#12121a]/50'}`
+                                    }`}
                                 >
                                     <div className="flex items-center gap-3 flex-1 min-w-0 pr-2">
-                                        <span className={`text-[10px] font-black uppercase px-2 py-1 rounded-lg w-16 text-center shrink-0 border shadow-sm ${styleConfig.badge}`}>
-                                            {item.type}
+                                        <span className={`text-[10px] font-black uppercase px-2 py-1 rounded-lg w-16 text-center shrink-0 border shadow-sm ${isShortage ? 'bg-red-600 text-white border-red-700 animate-pulse' : styleConfig.badge}`}>
+                                            {isShortage ? '缺货' : item.type}
                                         </span>
                                         <div className="flex flex-col min-w-0 flex-1">
                                             <div className="font-bold text-slate-800 dark:text-white text-xs sm:text-sm truncate w-full leading-tight">
@@ -1076,6 +1155,178 @@ const LiveStock: React.FC = () => {
                     locFilter={locationFilter}
                     onClose={() => setSelectedItem(null)}
                 />
+            )}
+
+            {/* Shortage Order Drill-down Modal */}
+            {shortageItem && (
+                <div className="fixed inset-0 z-50 flex items-center justify-center p-3 sm:p-4 bg-slate-900/60 backdrop-blur-sm animate-fade-in">
+                    <div className="bg-white dark:bg-[#12121a] border border-red-200 dark:border-red-500/30 rounded-3xl max-w-2xl w-full max-h-[90vh] overflow-hidden flex flex-col shadow-2xl">
+                        {/* Header */}
+                        <div className="p-5 sm:p-6 bg-gradient-to-r from-red-500/10 via-amber-500/5 to-transparent border-b border-red-200/50 dark:border-white/5 flex items-start justify-between shrink-0">
+                            <div>
+                                <div className="flex items-center gap-2">
+                                    <span className="px-2.5 py-0.5 rounded-full text-[10px] font-black uppercase tracking-wider bg-red-600 text-white shadow-sm">
+                                        ⚠️ 缺货排产与调拨提醒
+                                    </span>
+                                    {shortageItem.loc_id && (
+                                        <span className="px-2 py-0.5 rounded-md text-[10px] font-bold bg-slate-100 dark:bg-white/10 text-slate-700 dark:text-gray-300 font-mono">
+                                            📍 {shortageItem.loc_id}
+                                        </span>
+                                    )}
+                                </div>
+                                <h2 className="text-lg sm:text-xl font-black text-slate-900 dark:text-white mt-2 leading-tight">
+                                    {shortageItem.name}
+                                </h2>
+                                <p className="text-xs text-blue-600 dark:text-blue-400 font-mono mt-0.5 font-bold">
+                                    {shortageItem.sku}
+                                </p>
+                            </div>
+                            <button
+                                onClick={() => setShortageItem(null)}
+                                className="p-2 rounded-xl text-slate-400 hover:text-slate-700 dark:hover:text-white hover:bg-slate-100 dark:hover:bg-white/5 cursor-pointer"
+                            >
+                                <X size={20} />
+                            </button>
+                        </div>
+
+                        {/* Metrics Bar */}
+                        <div className="grid grid-cols-3 gap-2 p-3 sm:p-4 bg-slate-50 dark:bg-black/30 border-b border-slate-200/50 dark:border-white/5 text-center shrink-0">
+                            <div className="p-2.5 rounded-xl bg-white dark:bg-[#181822] border border-slate-200/50 dark:border-white/5">
+                                <div className="text-[10px] text-slate-400 font-bold uppercase">在库物理库存</div>
+                                <div className="text-lg font-black text-slate-800 dark:text-white">{shortageItem.current_stock}</div>
+                            </div>
+                            <div className="p-2.5 rounded-xl bg-white dark:bg-[#181822] border border-slate-200/50 dark:border-white/5">
+                                <div className="text-[10px] text-blue-500 font-bold uppercase">待发订单预留</div>
+                                <div className="text-lg font-black text-blue-600 dark:text-blue-400">{shortageItem.reserved_stock}</div>
+                            </div>
+                            <div className="p-2.5 rounded-xl bg-red-50 dark:bg-red-500/10 border border-red-200 dark:border-red-500/20">
+                                <div className="text-[10px] text-red-600 dark:text-red-400 font-bold uppercase">当前可用缺口</div>
+                                <div className="text-lg font-black text-red-600 dark:text-red-400">{shortageItem.available_stock}</div>
+                            </div>
+                        </div>
+
+                        {/* Scrollable Body */}
+                        <div className="p-5 sm:p-6 overflow-y-auto space-y-6 flex-1 custom-scrollbar">
+                            {/* 1. Cross-warehouse available stock */}
+                            <div>
+                                <h3 className="text-xs font-black uppercase tracking-wider text-slate-500 dark:text-gray-400 mb-2.5 flex items-center gap-1.5">
+                                    <Truck size={14} className="text-cyan-500" />
+                                    <span>跨仓现货推荐 (可调拨货源)</span>
+                                </h3>
+                                {(() => {
+                                    const otherStock = rows.filter(r => r.sku === shortageItem.sku && r.loc_id !== shortageItem.loc_id && (r.available_stock || 0) > 0);
+                                    if (otherStock.length === 0) {
+                                        return (
+                                            <div className="p-3.5 rounded-xl bg-slate-50 dark:bg-white/[0.02] border border-slate-200 dark:border-white/5 text-xs text-slate-500 dark:text-gray-400">
+                                                ⚠️ 全厂其他仓库暂无此规格的多余现货，需尽快安排产线排产！
+                                            </div>
+                                        );
+                                    }
+                                    return (
+                                        <div className="grid grid-cols-1 sm:grid-cols-2 gap-2">
+                                            {otherStock.map(os => (
+                                                <div key={os.loc_id} className="p-3 rounded-xl bg-cyan-50/60 dark:bg-cyan-500/10 border border-cyan-200/60 dark:border-cyan-500/20 flex items-center justify-between">
+                                                    <div>
+                                                        <div className="text-xs font-black text-cyan-900 dark:text-cyan-300">📍 {os.loc_id}</div>
+                                                        <div className="text-[10px] text-slate-500 dark:text-gray-400 mt-0.5">物理: {os.current_stock} | 预留: {os.reserved_stock}</div>
+                                                    </div>
+                                                    <div className="text-right">
+                                                        <span className="text-base font-black text-cyan-700 dark:text-cyan-400">+{os.available_stock}</span>
+                                                        <span className="text-[10px] text-slate-400 ml-1">{os.uom}</span>
+                                                    </div>
+                                                </div>
+                                            ))}
+                                        </div>
+                                    );
+                                })()}
+                            </div>
+
+                            {/* 2. Reserving Orders Drilldown */}
+                            <div>
+                                {(() => {
+                                    const matchingOrders = getMatchingOrders(shortageItem);
+                                    return (
+                                        <>
+                                            <h3 className="text-xs font-black uppercase tracking-wider text-slate-500 dark:text-gray-400 mb-2.5 flex items-center gap-1.5">
+                                                <Clipboard size={14} className="text-violet-500" />
+                                                <span>占用此规格的待交付销售订单 (共 {matchingOrders.length} 笔)</span>
+                                            </h3>
+                                            {matchingOrders.length === 0 ? (
+                                                <div className="p-3.5 rounded-xl bg-slate-50 dark:bg-white/[0.02] border border-slate-200 dark:border-white/5 text-xs text-slate-500">
+                                                    未查到具体待交付订单占用明细。
+                                                </div>
+                                            ) : (
+                                                <div className="space-y-2">
+                                                    {matchingOrders.map((order: any) => {
+                                                        const itemDetail = (order.items || []).find((it: any) => (it.sku || it.item_sku)?.trim() === shortageItem.sku);
+                                                        const reservedQty = Number(itemDetail?.quantity || itemDetail?.qty) || 0;
+                                                        return (
+                                                            <div key={order.id} className="p-3 sm:p-3.5 rounded-xl bg-slate-50 dark:bg-white/[0.03] border border-slate-200 dark:border-white/5 hover:border-slate-300 dark:hover:border-white/10 transition-colors">
+                                                                <div className="flex items-start justify-between gap-2">
+                                                                    <div className="min-w-0 flex-1">
+                                                                        <div className="flex items-center gap-2 flex-wrap">
+                                                                            <span className="text-xs font-bold font-mono text-blue-600 dark:text-blue-400">{order.order_number}</span>
+                                                                            <span className={`px-2 py-0.5 rounded text-[10px] font-bold uppercase ${
+                                                                                order.status === 'New' ? 'bg-blue-100 text-blue-700 dark:bg-blue-500/20 dark:text-blue-300' :
+                                                                                order.status === 'Ready' ? 'bg-emerald-100 text-emerald-700 dark:bg-emerald-500/20 dark:text-emerald-300' :
+                                                                                order.status === 'Pending Approval' ? 'bg-amber-100 text-amber-700 dark:bg-amber-500/20 dark:text-amber-300' :
+                                                                                'bg-slate-100 text-slate-600 dark:bg-white/10 dark:text-gray-300'
+                                                                            }`}>
+                                                                                {order.status}
+                                                                            </span>
+                                                                        </div>
+                                                                        <div className="text-sm font-black text-slate-800 dark:text-white mt-1 truncate">
+                                                                            {order.customer || '客户未填写'}
+                                                                        </div>
+                                                                        <div className="text-xs text-slate-500 dark:text-gray-400 mt-0.5 truncate">
+                                                                            📍 {order.delivery_address || '自提 / 无详细地址'}
+                                                                        </div>
+                                                                    </div>
+                                                                    <div className="text-right shrink-0 pl-2">
+                                                                        <div className="text-[10px] text-slate-400 uppercase font-bold">需求预留</div>
+                                                                        <div className="text-base sm:text-lg font-black text-red-600 dark:text-red-400 tabular-nums">
+                                                                            {reservedQty} <span className="text-xs font-normal text-slate-400">{shortageItem.uom}</span>
+                                                                        </div>
+                                                                    </div>
+                                                                </div>
+                                                            </div>
+                                                        );
+                                                    })}
+                                                </div>
+                                            )}
+                                        </>
+                                    );
+                                })()}
+                            </div>
+                        </div>
+
+                        {/* Footer Actions */}
+                        <div className="p-4 bg-slate-50 dark:bg-black/40 border-t border-slate-200/50 dark:border-white/5 flex items-center justify-between gap-3 shrink-0">
+                            <button
+                                onClick={() => {
+                                    const targetItem = shortageItem;
+                                    setShortageItem(null);
+                                    setSelectedItem(targetItem);
+                                }}
+                                className="px-4 py-2.5 rounded-xl border border-slate-300 dark:border-white/10 text-xs font-bold text-slate-700 dark:text-gray-300 hover:bg-slate-100 dark:hover:bg-white/5 transition-colors cursor-pointer"
+                            >
+                                查看流水历史
+                            </button>
+                            {onNavigate && (
+                                <button
+                                    onClick={() => {
+                                        setShortageItem(null);
+                                        onNavigate('stock-movement');
+                                    }}
+                                    className="flex items-center gap-2 px-5 py-2.5 rounded-xl bg-gradient-to-r from-cyan-600 to-blue-600 hover:from-cyan-500 hover:to-blue-500 text-white text-xs font-black shadow-lg shadow-cyan-950/40 active:scale-95 transition-all cursor-pointer"
+                                >
+                                    <ArrowUpDown size={14} />
+                                    <span>一键跨仓调拨 (Stock Movement)</span>
+                                </button>
+                            )}
+                        </div>
+                    </div>
+                </div>
             )}
         </div>
     );

@@ -52,9 +52,10 @@ import MachineSchedule from './pages/MachineSchedule';
 import ActivityLogs from './pages/ActivityLogs';
 import FloorPlan from './pages/FloorPlan';
 import WilliamDocumentCenter from './pages/WilliamDocumentCenter';
+import BossCoPilot from './pages/BossCoPilot';
 
 import { User, UserRole, InventoryItem, ProductionLog as ProductionLogType, JobOrder } from './types';
-import { mergeAllowedPages } from './utils/pageAccess';
+import { mergeAllowedPages, computeEffectivePermissions } from './utils/pageAccess';
 import AIAgentWidget from './components/AIAgentWidget';
 
 import { supabase } from './services/supabase';
@@ -240,7 +241,18 @@ function App() {
         };
     }, []);
 
-    // --- FETCH ROLE PERMISSIONS FROM DB ---
+    // --- REALTIME LISTENER FOR INDIVIDUAL USER PERMISSION UPDATES ---
+    useEffect(() => {
+        const handleUserPermUpdate = (e: any) => {
+            if (e.detail && Array.isArray(e.detail)) {
+                setUser((prev: any) => prev ? ({ ...prev, roleModules: e.detail }) : prev);
+            }
+        };
+        window.addEventListener('packsecure:user-permissions-updated', handleUserPermUpdate);
+        return () => window.removeEventListener('packsecure:user-permissions-updated', handleUserPermUpdate);
+    }, []);
+
+    // --- FETCH ROLE PERMISSIONS FROM DB & REALTIME SYNC ---
     useEffect(() => {
         if (!user || user.role === 'SuperAdmin') {
             setPermissionsLoaded(true);
@@ -248,71 +260,62 @@ function App() {
         }
         
         setPermissionsLoaded(false);
-        supabase
-            .from('role_permissions')
-            .select('page_id, allowed')
-            .eq('role_name', user.role)
-            .then(({ data }) => {
-                if (data && data.length > 0) {
-                    const allowedSet = new Set<string>(
-                        data.filter(r => r.allowed).map(r => r.page_id)
-                    );
-                    setDbAllowedPages(allowedSet);
-                } else {
-                    setDbAllowedPages(null); // Fallback to hardcoded if no config
-                }
-                setPermissionsLoaded(true);
-            });
-    }, [user]);
+        const fetchRolePerms = () => {
+            supabase
+                .from('role_permissions')
+                .select('page_id, allowed')
+                .eq('role_name', user.role)
+                .then(({ data }) => {
+                    if (data && data.length > 0) {
+                        const allowedSet = new Set<string>(
+                            data.filter(r => r.allowed).map(r => r.page_id)
+                        );
+                        setDbAllowedPages(allowedSet);
+                    } else {
+                        setDbAllowedPages(null); // Fallback to standard defaults
+                    }
+                    setPermissionsLoaded(true);
+                });
+        };
 
-    // --- STRICT ROUTE GUARD ---
+        fetchRolePerms();
+
+        // Subscribe to realtime role permissions changes
+        const channel = supabase.channel('app-role-permissions-sync')
+            .on('postgres_changes', { event: '*', schema: 'public', table: 'role_permissions' }, () => {
+                fetchRolePerms();
+            })
+            .subscribe();
+
+        return () => {
+            supabase.removeChannel(channel);
+        };
+    }, [user?.role]);
+
+    // --- STRICT DYNAMIC ROUTE GUARD (ZERO HARDCODED EXCEPTIONS) ---
     useEffect(() => {
         if (!user || !user.role || !permissionsLoaded) return;
 
-        const role = user.role;
-        // Define allowable pages per role
-        const allowedPages: Record<string, string[]> = {
-            'SuperAdmin': ['*'], // The Only One with Full Access
-            'Admin': ['profile', 'construction', 'factory-live-os', 'dashboard', 'data-v2', 'customer-import', 'universal-intake', 'scanner', 'jobs', 'livestock', 'inventory', 'recipes', 'products', 'delivery', 'order-summary', 'dispatch', 'production', 'report-history', 'users', 'hr', 'simple-stock', 'maintenance', 'lorry-management', 'iot', 'driver-management', 'operators', 'dev-log', 'leave-calendar', 'personal-report', 'machine-schedule', 'machine-labels', 'activity-logs', 'floor-plan', 'stock-movement', 'stock-audit', 'audit-report', 'reports', 'notes', 'tasks', 'sop-center', 'work-photos', 'executive-reports', 'driver-leave'],
-            'Manager': ['profile', 'construction', 'factory-live-os', 'dashboard', 'data-v2', 'customer-import', 'universal-intake', 'jobs', 'livestock', 'inventory', 'recipes', 'products', 'delivery', 'order-summary', 'dispatch', 'production', 'report-history', 'hr', 'simple-stock', 'maintenance', 'lorry-management', 'iot', 'driver-management', 'operators', 'leave-calendar', 'personal-report', 'machine-schedule', 'machine-labels', 'activity-logs', 'floor-plan', 'stock-movement', 'stock-audit', 'audit-report', 'reports', 'notes', 'tasks', 'sop-center', 'work-photos', 'executive-reports', 'driver-leave', 'scanner'],
-            'LogisticsCoordinator': ['profile', 'construction', 'dashboard', 'livestock', 'delivery', 'order-summary', 'products', 'maintenance', 'driver-management', 'leave-calendar', 'personal-report', 'activity-logs', 'notes', 'tasks', 'sop-center', 'work-photos', 'reports'],
-            'Driver': ['delivery-driver', 'delivery-history', 'leave-calendar', 'lorry-service', 'profile', 'personal-report', 'activity-logs', 'notes', 'tasks', 'sop-center', 'work-photos', 'driver-leave'],
-            'Operator': ['scanner', 'leave-calendar', 'profile', 'personal-report', 'activity-logs', 'notes', 'tasks', 'sop-center', 'work-photos', 'order-summary'],
-            'Device': ['scanner'],
-            'HR': ['profile', 'hr', 'leave-calendar', 'notes', 'tasks', 'personal-report', 'activity-logs', 'sop-center', 'work-photos', 'driver-leave'],
-            'Sales': ['profile', 'construction', 'personal-report', 'activity-logs'],
-            'Finance': ['profile', 'construction', 'personal-report', 'activity-logs']
-        };
+        const effectivePermissions = computeEffectivePermissions({
+            role: user.role,
+            isSuperAdmin: user.role === 'SuperAdmin',
+            dbRoleAllowedPages: dbAllowedPages,
+            userRoleModules: user.roleModules
+        });
 
-        let allowed = mergeAllowedPages(
-            role,
-            allowedPages[role] || [],
-            dbAllowedPages,
-            user.roleModules
-        );
-
-        // --- SPECIAL USER OVERRIDE (Neoson - Manager + Driver) ---
-        if (user.email === 'neosonchun@gmail.com') {
-            allowed = [...new Set([...allowed, 'delivery-driver', 'delivery-history', 'leave-calendar'])];
-        }
-
-        // --- SPECIAL USER OVERRIDE (Baby - Operator / Stock Audit) ---
-        if (user.employeeId === '0014' || user.email === 'driver.0014@packsecure.local' || user.name?.toLowerCase() === 'baby') {
-            allowed = [...new Set([...allowed, 'stock-audit'])];
-        }
-
-        const isAllowed = allowed.includes('*') || allowed.includes(activePage);
+        const isAllowed = effectivePermissions.has('*') || effectivePermissions.has(activePage);
 
         if (!isAllowed) {
-            console.warn(`Access Denied: ${role} tried to access ${activePage}. Redirecting...`);
+            console.warn(`Access Denied: ${user.role} tried to access ${activePage}. Redirecting...`);
             if (activePage === 'login') return; // Allow login page
 
-            else if (allowed.includes('construction')) setActivePage('construction');
-            else if (role === 'Operator' || role === 'Device') setActivePage('scanner');
-            else if (role === 'Driver') setActivePage('delivery-driver');
-            else setActivePage('login');
+            if (effectivePermissions.has('construction')) setActivePage('construction');
+            else if (user.role === 'Operator' || user.role === 'Device') setActivePage('scanner');
+            else if (user.role === 'Driver') setActivePage('delivery-driver');
+            else if (effectivePermissions.has('dashboard')) setActivePage('dashboard');
+            else setActivePage('profile');
         }
-    }, [activePage, user]);
+    }, [activePage, user, dbAllowedPages, permissionsLoaded]);
 
     const handleSession = async (session: Session | null) => {
         if (!session?.user) {
@@ -447,10 +450,8 @@ function App() {
             if (isAppMode) {
                 setActivePage('delivery-driver');
             } else if (!localStorage.getItem('lastActivePage')) {
-                if (employeeId === '009') setActivePage('order-summary');
-                else if (role === 'SuperAdmin') setActivePage('dashboard');
-                else if (role === 'Operator') setActivePage('scanner');
-                else if (role === 'Device') setActivePage('scanner');
+                if (role === 'SuperAdmin') setActivePage('dashboard');
+                else if (role === 'Operator' || role === 'Device') setActivePage('scanner');
                 else if (role === 'Driver') setActivePage('delivery-driver');
                 else if (role === 'Manager') setActivePage('order-summary');
                 else if (['Admin', 'Sales', 'Finance'].includes(role)) setActivePage('construction');
@@ -751,7 +752,7 @@ function App() {
             case 'inventory':
                 return <Inventory />;
             case 'livestock':
-                return <LiveStock />;
+                return <LiveStock onNavigate={setActivePage} />;
             case 'stock-movement':
                 return <StockMovement user={user} />;
             case 'stock-audit':
@@ -808,6 +809,8 @@ function App() {
                 return <UpdatePassword />;
             case 'profile':
                 return <Profile user={user} onNavigate={setActivePage} />;
+            case 'boss-copilot':
+                return <BossCoPilot currentUser={user} onNavigate={setActivePage} />;
             case 'factory-live-os':
                 return <FactoryLiveOS onNavigate={setActivePage} />;
             case 'floor-plan':

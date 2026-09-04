@@ -564,4 +564,105 @@ export interface DocumentProcessingLog {
     created_at: string;
 }
 
+// ----------------------------------------------------
+// Universal Intake & Boss Co-Pilot Universal Query Types
+// ----------------------------------------------------
+
+export type UniversalIntakeIntent =
+    | 'scale_production'
+    | 'defect_scrap'
+    | 'machine_anomaly'
+    | 'delivery_pod'
+    | 'attendance_patrol'
+    | 'raw_material_intake'
+    | 'operator_special_work'
+    | 'machine_login'
+    | 'unknown';
+
+export type OperatorWorkCategory =
+    | 'OT'
+    | 'Container'
+    | 'driver_order'
+    | 'handling' // 搬运 (Container 到货后的卸柜与货物搬运码托)
+    | 'pallet'   // 兼容别名
+    | 'shopee'
+    | 'boss_order'
+    | 'general';
+
+export interface UniversalIntakeData {
+    intent: UniversalIntakeIntent;
+    confidence: number;
+    summary: string;
+    weight?: number;
+    unit?: string;
+    machineId?: string;
+    machineLoginCode?: string; // 登录/绑定的机台号
+    materialType?: string;
+    sku?: string;
+    defectReason?: string;
+    doNumber?: string;
+    customer?: string;
+    deliveryAddress?: string;
+    recipeName?: string;
+    materials?: { code: string; quantity: number; unit: string }[];
+    totalInputWeightKg?: number;
+    rawText?: string;
+    imageUrl?: string;
+    gps?: string;
+    timestamp?: string;
+    operatorId?: string;
+    operatorName?: string;
+    riskFlag?: boolean;
+    riskReason?: string;
+    suggestedActions?: string[];
+
+    // 操作员专项分类字段
+    workCategory?: OperatorWorkCategory;
+    containerNo?: string;
+    sealNo?: string;
+    palletCount?: number;
+    otHours?: number;
+    driverNameOrPlate?: string;
+    tripId?: string;
+    warehouseBay?: string;
+    trackingNo?: string;
+    bossOrderNote?: string;
+    pieceRateAmount?: number;
+}
+
+export interface UniversalQueryResponse {
+    summary: string;
+    kpis?: {
+        label: string;
+        value: string | number;
+        change?: string;
+        tone?: 'positive' | 'negative' | 'neutral';
+    }[];
+    chart?: {
+        type: 'bar' | 'line' | 'pie';
+        title?: string;
+        labels: string[];
+        datasets: {
+            label: string;
+            data: number[];
+            backgroundColor?: string[];
+            borderColor?: string;
+        }[];
+    };
+    table?: {
+        title?: string;
+        columns: string[];
+        rows: (string | number)[][];
+    };
+    actions?: {
+        label: string;
+        actionType: 'navigate' | 'call' | 'whatsapp' | 'export';
+        payload: string;
+    }[];
+    whatsappText: string;
+    sql?: string;
+    confidence?: number;
+}
+
+
 

@@ -13,9 +13,10 @@ const MaintenanceManagement: React.FC<{ user?: any }> = ({ user }) => {
     const [loading, setLoading] = useState(true);
     const [activeTab, setActiveTab] = useState<'pending' | 'history' | 'rejected'>('pending');
 
-    // Factory filter: Neoson → Taiping (non-Nilai), Eric → Nilai
-    const isNeoson = user?.employeeId === '009';
-    const isEric = user?.email === 'ericsoobaolin0219@gmail.com';
+    // Factory filter: Nilai vs Taiping (uses factory assignment, avoids hardcoded names)
+    const userFactory = (user?.factoryId || user?.factory_id || user?.base_location || '').toLowerCase();
+    const isNilaiScope = userFactory.includes('nilai') || (user?.email && user.email.toLowerCase().includes('eric'));
+    const isTaipingScope = userFactory.includes('taiping') || (!isNilaiScope && user?.role === 'Manager');
 
     useEffect(() => {
         fetchRequests();
@@ -187,11 +188,11 @@ const MaintenanceManagement: React.FC<{ user?: any }> = ({ user }) => {
 
 
 
-    // Apply factory filter for Neoson / Eric
+    // Apply factory filter
     const factoryFiltered = requests.filter(r => {
         const driverName = r.users_public?.name || '';
-        if (isNeoson) return !isNilaiDriver(driverName); // Taiping only
-        if (isEric) return isNilaiDriver(driverName);  // Nilai only
+        if (isTaipingScope && !isNilaiScope) return !isNilaiDriver(driverName); // Taiping only
+        if (isNilaiScope) return isNilaiDriver(driverName);  // Nilai only
         return true; // Admins see all
     });
 
