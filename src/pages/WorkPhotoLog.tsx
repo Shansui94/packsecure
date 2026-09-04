@@ -124,7 +124,16 @@ const WorkPhotoLog: React.FC<Props> = ({ user }) => {
 
         const { data, error } = await query;
         if (error) console.error('Load photos error:', error);
-        let list = data || [];
+        let list = (data || []).map(p => {
+            let rawJson = p.ai_raw_json;
+            if (!rawJson && Array.isArray(p.ai_tags)) {
+                const tag = p.ai_tags.find((t: string) => typeof t === 'string' && t.startsWith('RAW_JSON:'));
+                if (tag) {
+                    try { rawJson = JSON.parse(tag.substring(9)); } catch (_) {}
+                }
+            }
+            return { ...p, ai_raw_json: rawJson };
+        });
         if (filterCategory === 'discrepancy') {
             list = list.filter(p => p.ai_raw_json?.needs_review === true || p.ai_raw_json?.discrepancy === true);
         }
@@ -167,7 +176,7 @@ const WorkPhotoLog: React.FC<Props> = ({ user }) => {
                 reviewed_at: new Date().toISOString()
             };
             await supabase.from('work_photos').update({
-                ai_raw_json: updatedJson,
+                ai_tags: ['RAW_JSON:' + JSON.stringify(updatedJson)],
                 user_note: `${(photo.user_note || '').split('|')[0] || ''}| ${aiWeight.toFixed(2)} KG (主管已纠偏)`
             }).eq('id', photo.id);
 

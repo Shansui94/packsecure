@@ -27,7 +27,7 @@ import {
 import * as XLSX from 'xlsx';
 import { supabase } from '../services/supabase';
 import { User } from '../types';
-import { compressImage } from '../utils/imageCompress';
+import { compressImage, dataURLtoBlob } from '../utils/imageCompress';
 import { useTranslation } from 'react-i18next';
 
 interface RecycleMachineControlProps {
@@ -121,6 +121,7 @@ export const RecycleMachineControl: React.FC<RecycleMachineControlProps> = ({
     const [aiAnalysis, setAiAnalysis] = useState<string | null>(null);
 
     const fileInputRef = useRef<HTMLInputElement>(null);
+    const cameraInputRef = useRef<HTMLInputElement>(null);
     const webcamRef = useRef<Webcam>(null);
 
     // All Historical Logs & Filter
@@ -156,10 +157,19 @@ export const RecycleMachineControl: React.FC<RecycleMachineControlProps> = ({
                     const note = (p.user_note || '').trim().toUpperCase();
                     const ai = p.ai_description || '';
 
+                    // Extract rawJson from ai_raw_json or ai_tags
+                    let rawJson: any = p.ai_raw_json;
+                    if (!rawJson && Array.isArray(p.ai_tags)) {
+                        const tag = p.ai_tags.find((t: string) => typeof t === 'string' && t.startsWith('RAW_JSON:'));
+                        if (tag) {
+                            try { rawJson = JSON.parse(tag.substring(9)); } catch (_) {}
+                        }
+                    }
+
                     // Match weight with high precision
                     let weight = 0;
-                    if (p.ai_raw_json && p.ai_raw_json.weight && Number(p.ai_raw_json.weight) > 0) {
-                        weight = parseFloat(p.ai_raw_json.weight);
+                    if (rawJson && rawJson.weight && Number(rawJson.weight) > 0) {
+                        weight = parseFloat(rawJson.weight);
                     } else {
                         const noteMatch = note.match(/([\d.]+)\s*KG/i) || note.match(/\|\s*([\d.]+)/);
                         if (noteMatch) {
@@ -220,10 +230,11 @@ export const RecycleMachineControl: React.FC<RecycleMachineControlProps> = ({
                         materialColor: matConfig.color,
                         weight: weight > 0 ? weight : 14.5,
                         intervalMinutes: intervalMin,
-                        downtimeReason: p.ai_raw_json?.downtimeReason || (isShiftStart ? '新班次首包' : undefined),
+                        downtimeReason: rawJson?.downtimeReason || (isShiftStart ? '新班次首包' : undefined),
                         operatorName: p.employee_name || 'Operator',
                         photoUrl: p.photo_url,
-                        userNote: p.user_note
+                        userNote: p.user_note,
+                        aiRawJson: rawJson
                     });
                 });
 
@@ -407,7 +418,7 @@ export const RecycleMachineControl: React.FC<RecycleMachineControlProps> = ({
                 reviewed_at: new Date().toISOString()
             };
             await supabase.from('work_photos').update({
-                ai_raw_json: updatedJson,
+                ai_tags: ['RAW_JSON:' + JSON.stringify(updatedJson)],
                 user_note: `${logItem.materialKey} | ${aiWeight.toFixed(2)} KG (主管已纠偏)`
             }).eq('id', logItem.id);
 
@@ -473,18 +484,35 @@ export const RecycleMachineControl: React.FC<RecycleMachineControlProps> = ({
 
         try {
             setIsUploading(true);
-            const compressed = await compressImage(file, 2560, 0.90);
+            let compressed: string;
+            try {
+                compressed = await compressImage(file, 2560, 0.90);
+            } catch (cErr) {
+                console.warn("compressImage fallback to direct FileReader:", cErr);
+                compressed = await new Promise<string>((resolve, reject) => {
+                    const reader = new FileReader();
+                    reader.onload = () => resolve(reader.result as string);
+                    reader.onerror = reject;
+                    reader.readAsDataURL(file);
+                });
+            }
             setPhotoPreview(compressed);
-            const base64 = compressed.split(',')[1];
+            const base64 = compressed.includes(',') ? compressed.split(',')[1] : compressed;
             setPhotoBase64(base64);
-            setPhotoBlob(file);
+            try {
+                const blob = dataURLtoBlob(compressed);
+                setPhotoBlob(blob);
+            } catch {
+                setPhotoBlob(file);
+            }
 
-            await runAIOCRScan(base64);
+            runAIOCRScan(base64);
         } catch (err: any) {
             console.error("Failed to process photo:", err);
             alert("图片读取失败: " + err.message);
         } finally {
             setIsUploading(false);
+            if (e.target) e.target.value = '';
         }
     };
 
@@ -493,14 +521,16 @@ export const RecycleMachineControl: React.FC<RecycleMachineControlProps> = ({
         const imageSrc = webcamRef.current?.getScreenshot();
         if (imageSrc) {
             setPhotoPreview(imageSrc);
-            const base64 = imageSrc.split(',')[1];
+            const base64 = imageSrc.includes(',') ? imageSrc.split(',')[1] : imageSrc;
             setPhotoBase64(base64);
             setShowWebcam(false);
 
-            fetch(imageSrc)
-                .then(r => r.blob())
-                .then(blob => setPhotoBlob(blob))
-                .catch(err => console.error("Webcam blob conversion failed:", err));
+            try {
+                const blob = dataURLtoBlob(imageSrc);
+                setPhotoBlob(blob);
+            } catch (err) {
+                console.error("Webcam blob conversion failed:", err);
+            }
 
             runAIOCRScan(base64);
         }
@@ -566,16 +596,23 @@ export const RecycleMachineControl: React.FC<RecycleMachineControlProps> = ({
             // 1. Upload photo to Supabase storage if available
             if (photoBlob || photoBase64) {
                 try {
-                    const blob = photoBlob || await fetch(`data:image/jpeg;base64,${photoBase64}`).then(r => r.blob());
-                    const fileName = `recycle_${machineId}_${effectiveOpEmpId}_${Date.now()}.jpg`;
+                    let blob = photoBlob;
+                    if (!blob && photoBase64) {
+                        blob = dataURLtoBlob(`data:image/jpeg;base64,${photoBase64}`);
+                    }
+                    if (blob) {
+                        const fileName = `recycle_${machineId}_${effectiveOpEmpId}_${Date.now()}.jpg`;
 
-                    const { error: uploadErr } = await supabase.storage
-                        .from('work-photos')
-                        .upload(fileName, blob, { contentType: 'image/jpeg' });
+                        const { error: uploadErr } = await supabase.storage
+                            .from('work-photos')
+                            .upload(fileName, blob, { contentType: 'image/jpeg' });
 
-                    if (!uploadErr) {
-                        const { data: urlData } = supabase.storage.from('work-photos').getPublicUrl(fileName);
-                        uploadedPhotoUrl = urlData.publicUrl;
+                        if (!uploadErr) {
+                            const { data: urlData } = supabase.storage.from('work-photos').getPublicUrl(fileName);
+                            uploadedPhotoUrl = urlData.publicUrl;
+                        } else {
+                            console.warn("Photo storage upload error:", uploadErr);
+                        }
                     }
                 } catch (storErr) {
                     console.warn("Photo storage upload non-fatal:", storErr);
@@ -597,6 +634,7 @@ export const RecycleMachineControl: React.FC<RecycleMachineControlProps> = ({
             };
 
             // 2. Insert into work_photos table for historical tracking
+            // Note: ai_tags stores the JSON string since work_photos does not have an ai_raw_json column
             const { data: insertedPhoto, error: photoErr } = await supabase.from('work_photos').insert([{
                 employee_id: effectiveOpEmpId,
                 employee_name: effectiveOpName,
@@ -605,7 +643,7 @@ export const RecycleMachineControl: React.FC<RecycleMachineControlProps> = ({
                 photo_url: uploadedPhotoUrl,
                 user_note: formattedNote,
                 ai_description: `手动填报: ${targetWeight.toFixed(2)} KG, AI核验: ${aiDetectedWeight || targetWeight} KG`,
-                ai_raw_json: aiRawData
+                ai_tags: ['RAW_JSON:' + JSON.stringify(aiRawData)]
             }]).select().single();
 
             if (photoErr) {
@@ -979,27 +1017,42 @@ export const RecycleMachineControl: React.FC<RecycleMachineControlProps> = ({
                                     <p className="text-xs font-bold text-gray-300">现场电子秤拍照存证</p>
                                     <p className="text-[10px] text-gray-500 mt-0.5">拍摄或上传电子秤照片（选填）</p>
                                 </div>
-                                <div className="flex gap-2 mt-2">
+                                <div className="flex gap-2 mt-2 flex-wrap justify-center">
                                     <button
                                         type="button"
-                                        onClick={() => setShowWebcam(true)}
-                                        className="px-3.5 py-2 bg-purple-600/20 hover:bg-purple-600/30 border border-purple-500/30 text-purple-300 rounded-xl text-xs font-bold flex items-center gap-1.5 transition"
+                                        onClick={() => {
+                                            if (cameraInputRef.current) {
+                                                cameraInputRef.current.click();
+                                            } else {
+                                                setShowWebcam(true);
+                                            }
+                                        }}
+                                        className="px-3.5 py-2 bg-purple-600 hover:bg-purple-500 text-white rounded-xl text-xs font-bold flex items-center gap-1.5 transition shadow-md shadow-purple-500/20 active:scale-95 cursor-pointer"
                                     >
                                         <Camera size={13} /> 开启相机
                                     </button>
                                     <button
                                         type="button"
                                         onClick={() => fileInputRef.current?.click()}
-                                        className="px-3.5 py-2 bg-white/5 hover:bg-white/10 border border-white/10 text-gray-300 rounded-xl text-xs font-bold flex items-center gap-1.5 transition"
+                                        className="px-3.5 py-2 bg-white/10 hover:bg-white/20 border border-white/10 text-gray-200 rounded-xl text-xs font-bold flex items-center gap-1.5 transition active:scale-95 cursor-pointer"
                                     >
                                         <ImageIcon size={13} /> 相册选择
+                                    </button>
+                                    <button
+                                        type="button"
+                                        onClick={() => setShowWebcam(true)}
+                                        className="px-2.5 py-2 bg-white/5 hover:bg-white/10 border border-white/10 text-gray-400 hover:text-white rounded-xl text-[10px] font-medium flex items-center gap-1 transition cursor-pointer"
+                                        title="电脑端网页摄像头实时画面"
+                                    >
+                                        Webcam
                                     </button>
                                 </div>
                             </div>
                         )}
                     </div>
 
-                    <input ref={fileInputRef} type="file" accept="image/*" capture="environment" className="hidden" onChange={handleFileSelect} />
+                    <input ref={cameraInputRef} type="file" accept="image/*" capture="environment" className="hidden" onChange={handleFileSelect} />
+                    <input ref={fileInputRef} type="file" accept="image/*" className="hidden" onChange={handleFileSelect} />
 
                     {photoPreview && (
                         <button
