@@ -27,6 +27,30 @@ import { useTranslation } from 'react-i18next';
 
 
 // --- TYPE DEFINITIONS ---
+export interface SpecialTaskPhoto {
+    id: string;
+    url: string;
+    timestamp: string;
+    note: string;
+}
+
+export interface ActiveSpecialTaskSession {
+    id: string;
+    category: string;
+    categoryLabel: string;
+    startTime: string;
+    operatorId: string;
+    operatorName: string;
+    containerNo?: string;
+    palletCount?: string;
+    otHours?: string;
+    driverPlate?: string;
+    tripId?: string;
+    shopeeCount?: string;
+    note?: string;
+    photos: SpecialTaskPhoto[];
+}
+
 interface OperatorTask {
     id: string;
     title: string;
@@ -745,16 +769,89 @@ const ProductionControl: React.FC<ProductionControlProps> = ({ user, jobs = [], 
     const [selectedRolls, setSelectedRolls] = useState<number>(1);
     const [activeSku, setActiveSku] = useState<string | null>(null);
 
-    // 6 大现场专项工作状态
-    const [activeSpecialCategory, setActiveSpecialCategory] = useState<string | null>(null);
-    const [specialContainerNo, setSpecialContainerNo] = useState('');
-    const [specialPalletCount, setSpecialPalletCount] = useState('');
-    const [specialOtHours, setSpecialOtHours] = useState('');
-    const [specialDriverPlate, setSpecialDriverPlate] = useState('');
-    const [specialTripId, setSpecialTripId] = useState('');
-    const [specialShopeeCount, setSpecialShopeeCount] = useState('');
-    const [specialNote, setSpecialNote] = useState('');
-    const [submittingSpecialWork, setSubmittingSpecialWork] = useState(false);
+    // 6 大现场专项工作状态（独立作业会话模式）
+    const [activeSpecialTask, setActiveSpecialTask] = useState<ActiveSpecialTaskSession | null>(() => {
+        try {
+            const currentId = localStorage.getItem('packsecure_active_special_task_current_id');
+            const saved = localStorage.getItem(`packsecure_active_special_task_${currentId || ''}`) ||
+                          localStorage.getItem('packsecure_active_special_task');
+            if (saved) return JSON.parse(saved);
+        } catch (e) {
+            console.warn("Failed to load active special task:", e);
+        }
+        return null;
+    });
+
+    const [specialTaskDuration, setSpecialTaskDuration] = useState<string>('00:00:00');
+    const [specialTaskPhotoFile, setSpecialTaskPhotoFile] = useState<File | null>(null);
+    const [specialTaskPhotoPreview, setSpecialTaskPhotoPreview] = useState<string | null>(null);
+    const [specialTaskPhotoNote, setSpecialTaskPhotoNote] = useState<string>('');
+    const [uploadingSpecialPhoto, setUploadingSpecialPhoto] = useState<boolean>(false);
+    const [viewingPhotoUrl, setViewingPhotoUrl] = useState<string | null>(null);
+    const [submittingSpecialWork, setSubmittingSpecialWork] = useState<boolean>(false);
+    const specialPhotoInputRef = useRef<HTMLInputElement>(null);
+
+    // 实时作业秒表计时器 (精确基于 startTime 毫秒差计算)
+    useEffect(() => {
+        if (!activeSpecialTask?.startTime) {
+            setSpecialTaskDuration('00:00:00');
+            return;
+        }
+
+        const updateTimer = () => {
+            const start = new Date(activeSpecialTask.startTime).getTime();
+            const now = Date.now();
+            const diffMs = Math.max(0, now - start);
+            const totalSecs = Math.floor(diffMs / 1000);
+            const hrs = Math.floor(totalSecs / 3600);
+            const mins = Math.floor((totalSecs % 3600) / 60);
+            const secs = totalSecs % 60;
+            setSpecialTaskDuration(
+                `${String(hrs).padStart(2, '0')}:${String(mins).padStart(2, '0')}:${String(secs).padStart(2, '0')}`
+            );
+        };
+
+        updateTimer();
+        const interval = setInterval(updateTimer, 1000);
+        return () => clearInterval(interval);
+    }, [activeSpecialTask?.startTime]);
+
+    // 持久化当前专项工作会话至 localStorage
+    useEffect(() => {
+        const empId = activeSpecialTask?.operatorId || operatorEmployeeId || user?.employeeId || 'OP-AUTO';
+        if (activeSpecialTask) {
+            localStorage.setItem(`packsecure_active_special_task_${empId}`, JSON.stringify(activeSpecialTask));
+            localStorage.setItem('packsecure_active_special_task_current_id', empId);
+            localStorage.setItem('packsecure_active_special_task', JSON.stringify(activeSpecialTask));
+        } else {
+            localStorage.removeItem(`packsecure_active_special_task_${empId}`);
+            localStorage.removeItem('packsecure_active_special_task_current_id');
+            localStorage.removeItem('packsecure_active_special_task');
+        }
+    }, [activeSpecialTask, operatorEmployeeId, user]);
+
+    // 监听万能快拍等组件推送的专项工作照片
+    useEffect(() => {
+        const handleSpecialPhotoEvent = (e: any) => {
+            if (activeSpecialTask && e.detail?.photoUrl) {
+                const newP: SpecialTaskPhoto = {
+                    id: `p-${Date.now()}`,
+                    url: e.detail.photoUrl,
+                    timestamp: new Date().toISOString(),
+                    note: e.detail.note || `现场记录 #${(activeSpecialTask.photos?.length || 0) + 1}`
+                };
+                setActiveSpecialTask(prev => prev ? {
+                    ...prev,
+                    photos: [...(prev.photos || []), newP]
+                } : null);
+            }
+        };
+
+        window.addEventListener('packsecure:special-photo-added', handleSpecialPhotoEvent);
+        return () => {
+            window.removeEventListener('packsecure:special-photo-added', handleSpecialPhotoEvent);
+        };
+    }, [activeSpecialTask]);
 
     // Takeover Warning Modal State
     const [takeoverWarningRecord, setTakeoverWarningRecord] = useState<any>(null);
@@ -891,16 +988,18 @@ const ProductionControl: React.FC<ProductionControlProps> = ({ user, jobs = [], 
                     localStorage.setItem(`operatorClockInTime_${operatorEmployeeId}`, activeShift.clock_in);
                     setClockInTime(activeShift.clock_in);
                     
-                    // 🔒 只有在当前尚未选择机台时，才默认定位到打卡机台；
+                    // 🔒 只有在当前尚未选择机台且未处于专项工作时，才默认定位到打卡机台；
                     // 如果用户已手动选择了 J1 或其他机台，切切标签页/重新聚焦页面时保留用户选中的机台，绝对不强行切走！
-                    setSelectedMachine(prev => {
-                        if (!prev && activeShift.machine_id) {
-                            sessionStorage.setItem('selectedMachine', activeShift.machine_id);
-                            localStorage.setItem('device_machine_id', activeShift.machine_id);
-                            return activeShift.machine_id;
-                        }
-                        return prev;
-                    });
+                    if (!activeSpecialTask) {
+                        setSelectedMachine(prev => {
+                            if (!prev && activeShift.machine_id) {
+                                sessionStorage.setItem('selectedMachine', activeShift.machine_id);
+                                localStorage.setItem('device_machine_id', activeShift.machine_id);
+                                return activeShift.machine_id;
+                            }
+                            return prev;
+                        });
+                    }
                 } else {
                     localStorage.removeItem(`operatorClockInTime_${operatorEmployeeId}`);
                     setClockInTime(null);
@@ -1041,6 +1140,18 @@ const ProductionControl: React.FC<ProductionControlProps> = ({ user, jobs = [], 
     }, [selectedMachine]);
 
     const handleMachineTabClick = (machineId: string, emitEvent = true) => {
+        if (activeSpecialTask) {
+            const confirmSwitch = window.confirm(
+                `⚠️ 互斥提示：您当前有一项正在进行的现场专项作业【${activeSpecialTask.categoryLabel}】（已计时 ${specialTaskDuration}）！\n\n操作员不能同时进行专项任务与机台生产。\n是否放弃当前专项工作并转入机台【${machineId}】生产？`
+            );
+            if (!confirmSwitch) return;
+            const empId = activeSpecialTask.operatorId || operatorEmployeeId || 'OP-AUTO';
+            setActiveSpecialTask(null);
+            localStorage.removeItem(`packsecure_active_special_task_${empId}`);
+            localStorage.removeItem('packsecure_active_special_task_current_id');
+            localStorage.removeItem('packsecure_active_special_task');
+        }
+
         if (selectedMachine === machineId) return; // Already selected
         
         // Reset control mode to false (Monitor Mode) when switching tabs for managers,
@@ -1566,89 +1677,255 @@ const ProductionControl: React.FC<ProductionControlProps> = ({ user, jobs = [], 
         fetchOperatorTasks();
     }, [user]);
 
-    // 6 大现场专项工作一键报工处理
-    const handleSpecialWorkSubmit = async (e?: React.FormEvent) => {
-        if (e) e.preventDefault();
-        if (!activeSpecialCategory) return;
+    // 6 大现场专项工作独立作业会话控制逻辑
+    const startSpecialTask = async (categoryKey: string) => {
+        const catObj = SPECIAL_WORK_CATEGORIES.find(c => c.key === categoryKey);
+        const catLabel = catObj?.label || categoryKey;
+
+        // 1. 严格互斥检查：操作员不能同时开机生产又进行现场专项作业！
+        if (selectedMachine) {
+            const confirmSwitch = window.confirm(
+                `⚠️ 互斥提示：操作员不能同时开机生产又进行现场专项作业！\n\n您当前正在机台【${currentMachineName}】值班中。\n是否立即结束机台值班并下机，转入【${catLabel}】专项任务？`
+            );
+            if (!confirmSwitch) return;
+            await handleManualClockOut();
+        }
+
+        const uploaderId = operatorEmployeeId || user?.employeeId || user?.employee_id || user?.id || 'OP-AUTO';
+        const uploaderName = operatorName || user?.name || '现场操作工';
+
+        const newSession: ActiveSpecialTaskSession = {
+            id: `ST-${Date.now()}`,
+            category: categoryKey,
+            categoryLabel: catLabel,
+            startTime: new Date().toISOString(),
+            operatorId: uploaderId,
+            operatorName: uploaderName,
+            containerNo: '',
+            palletCount: '',
+            otHours: '',
+            driverPlate: '',
+            tripId: '',
+            shopeeCount: '',
+            note: '',
+            photos: []
+        };
+
+        setActiveSpecialTask(newSession);
+        setSpecialTaskPhotoFile(null);
+        setSpecialTaskPhotoPreview(null);
+        setSpecialTaskPhotoNote('');
+    };
+
+    const updateActiveSpecialTaskField = (field: keyof ActiveSpecialTaskSession, value: any) => {
+        setActiveSpecialTask(prev => prev ? { ...prev, [field]: value } : null);
+    };
+
+    const handleCancelSpecialTask = () => {
+        if (!activeSpecialTask) return;
+        const confirmCancel = window.confirm(
+            `⚠️ 确定要取消并放弃本次【${activeSpecialTask.categoryLabel}】作业吗？\n已计时的工时和未归档的信息将不会被保存。`
+        );
+        if (!confirmCancel) return;
+
+        const uploaderId = activeSpecialTask.operatorId || operatorEmployeeId || 'OP-AUTO';
+        setActiveSpecialTask(null);
+        localStorage.removeItem(`packsecure_active_special_task_${uploaderId}`);
+        localStorage.removeItem('packsecure_active_special_task_current_id');
+        localStorage.removeItem('packsecure_active_special_task');
+        setSpecialTaskPhotoFile(null);
+        setSpecialTaskPhotoPreview(null);
+        setSpecialTaskPhotoNote('');
+    };
+
+    const handleSpecialPhotoChange = async (e: React.ChangeEvent<HTMLInputElement>) => {
+        if (e.target.files && e.target.files[0]) {
+            const file = e.target.files[0];
+            setSpecialTaskPhotoFile(file);
+            try {
+                const compressed = await compressImage(file, 1600, 0.85);
+                setSpecialTaskPhotoPreview(compressed);
+            } catch (err) {
+                const reader = new FileReader();
+                reader.onload = (re) => setSpecialTaskPhotoPreview(re.target?.result as string);
+                reader.readAsDataURL(file);
+            }
+        }
+    };
+
+    const handleSaveSpecialTaskPhoto = async () => {
+        if (!activeSpecialTask || (!specialTaskPhotoFile && !specialTaskPhotoPreview)) {
+            alert("请先拍照或选择照片！");
+            return;
+        }
+
+        setUploadingSpecialPhoto(true);
+        try {
+            const empId = activeSpecialTask.operatorId || operatorEmployeeId || 'OP-AUTO';
+            const empName = activeSpecialTask.operatorName || operatorName || '现场操作工';
+            const fileExt = 'jpg';
+            const fileName = `special_${activeSpecialTask.category}_${empId}_${Date.now()}.${fileExt}`;
+
+            let blob: Blob;
+            if (specialTaskPhotoPreview && specialTaskPhotoPreview.startsWith('data:')) {
+                const base64Data = specialTaskPhotoPreview.split(',')[1];
+                const byteCharacters = atob(base64Data);
+                const byteNumbers = new Array(byteCharacters.length);
+                for (let i = 0; i < byteCharacters.length; i++) {
+                    byteNumbers[i] = byteCharacters.charCodeAt(i);
+                }
+                blob = new Blob([new Uint8Array(byteNumbers)], { type: 'image/jpeg' });
+            } else if (specialTaskPhotoFile) {
+                blob = specialTaskPhotoFile;
+            } else {
+                throw new Error("No image data found");
+            }
+
+            const { error: uploadErr } = await supabase.storage
+                .from('work-photos')
+                .upload(fileName, blob, { contentType: 'image/jpeg' });
+
+            if (uploadErr) throw uploadErr;
+
+            const { data: urlData } = supabase.storage.from('work-photos').getPublicUrl(fileName);
+            const photoUrl = urlData.publicUrl;
+
+            const photoIndex = (activeSpecialTask.photos?.length || 0) + 1;
+            const noteText = specialTaskPhotoNote.trim() || `阶段工作记录 #${photoIndex}`;
+            const recordTime = new Date().toISOString();
+
+            // 插入 work_photos 表生成阶段工作凭证
+            const { error: dbErr } = await supabase.from('work_photos').insert({
+                employee_id: empId,
+                employee_name: empName,
+                photo_url: photoUrl,
+                category: activeSpecialTask.category,
+                user_note: `【${activeSpecialTask.categoryLabel}】${noteText}`,
+                ai_description: `[专项作业进度凭证] ${activeSpecialTask.categoryLabel} 阶段记录 #${photoIndex}`,
+                ai_tags: [`TASK_ID:${activeSpecialTask.id}`, `CATEGORY:${activeSpecialTask.category}`],
+                machine_id: null,
+                created_at: recordTime
+            });
+
+            if (dbErr) {
+                console.warn("work_photos insert warning:", dbErr);
+            }
+
+            const newPhoto: SpecialTaskPhoto = {
+                id: `p-${Date.now()}`,
+                url: photoUrl,
+                timestamp: recordTime,
+                note: noteText
+            };
+
+            const updatedSession: ActiveSpecialTaskSession = {
+                ...activeSpecialTask,
+                photos: [...(activeSpecialTask.photos || []), newPhoto]
+            };
+
+            setActiveSpecialTask(updatedSession);
+
+            setSpecialTaskPhotoFile(null);
+            setSpecialTaskPhotoPreview(null);
+            setSpecialTaskPhotoNote('');
+            if (specialPhotoInputRef.current) {
+                specialPhotoInputRef.current.value = '';
+            }
+
+            alert(`✅ 阶段工作记录照片已成功留档！(本次第 ${updatedSession.photos.length} 张凭证)`);
+        } catch (err: any) {
+            console.error("Failed to upload special work photo:", err);
+            alert(`照片上传失败: ${err.message || '网络错误'}`);
+        } finally {
+            setUploadingSpecialPhoto(false);
+        }
+    };
+
+    const handleDeleteSpecialTaskPhoto = (photoId: string) => {
+        if (!activeSpecialTask) return;
+        const confirmDelete = window.confirm("确定要从本次作业中移除这张照片记录吗？");
+        if (!confirmDelete) return;
+
+        setActiveSpecialTask({
+            ...activeSpecialTask,
+            photos: (activeSpecialTask.photos || []).filter(p => p.id !== photoId)
+        });
+    };
+
+    const handleCompleteSpecialTask = async () => {
+        if (!activeSpecialTask) return;
+
+        const start = new Date(activeSpecialTask.startTime).getTime();
+        const now = Date.now();
+        const elapsedMinutes = Math.max(1, Math.round((now - start) / 60000));
+        const elapsedHours = (elapsedMinutes / 60).toFixed(1);
+        const photosCount = activeSpecialTask.photos?.length || 0;
+
+        let summary = '';
+        const detailParts: string[] = [];
+
+        detailParts.push(`耗时: ${specialTaskDuration} (${elapsedMinutes}分钟)`);
+        detailParts.push(`留档照片: ${photosCount}张`);
+
+        if (activeSpecialTask.category === 'Container') {
+            if (activeSpecialTask.containerNo) detailParts.push(`柜号: ${activeSpecialTask.containerNo.toUpperCase()}`);
+            if (activeSpecialTask.palletCount) detailParts.push(`卸柜: ${activeSpecialTask.palletCount}托`);
+            summary = `原料采购货柜${activeSpecialTask.containerNo ? ` ${activeSpecialTask.containerNo.toUpperCase()}` : ''}到厂卸柜完成${activeSpecialTask.palletCount ? ` (${activeSpecialTask.palletCount}托)` : ''}`;
+        } else if (activeSpecialTask.category === 'OT') {
+            const otVal = activeSpecialTask.otHours || elapsedHours;
+            detailParts.push(`加班工时: ${otVal}小时`);
+            summary = `车间加班赶工完成 (${otVal}小时)`;
+        } else if (activeSpecialTask.category === 'handling') {
+            if (activeSpecialTask.palletCount) detailParts.push(`搬运打托: ${activeSpecialTask.palletCount}托`);
+            summary = `搬运打托码放完成${activeSpecialTask.palletCount ? ` (${activeSpecialTask.palletCount}托)` : ''}`;
+        } else if (activeSpecialTask.category === 'driver_order') {
+            if (activeSpecialTask.driverPlate) detailParts.push(`司机/车牌: ${activeSpecialTask.driverPlate}`);
+            if (activeSpecialTask.tripId) detailParts.push(`行程单: ${activeSpecialTask.tripId}`);
+            summary = `协助司机行程${activeSpecialTask.driverPlate ? ` (${activeSpecialTask.driverPlate})` : ''}装车配货完成`;
+        } else if (activeSpecialTask.category === 'shopee') {
+            if (activeSpecialTask.shopeeCount) detailParts.push(`打包件数: ${activeSpecialTask.shopeeCount}件`);
+            summary = `Shopee 电商散单打包完成${activeSpecialTask.shopeeCount ? ` (${activeSpecialTask.shopeeCount}件)` : ''}`;
+        } else if (activeSpecialTask.category === 'boss_order') {
+            summary = `老板指定急单专项处理完成`;
+        }
+
+        if (activeSpecialTask.note) detailParts.push(`现场备注: ${activeSpecialTask.note}`);
+
+        const fullTitle = `【${activeSpecialTask.categoryLabel}】${summary || '现场专项作业完成'}`;
+        const fullDesc = detailParts.join(' | ');
+
+        const confirmFinish = window.confirm(
+            `🏁 确认完成并归档本次【${activeSpecialTask.categoryLabel}】？\n\n- 总耗时: ${specialTaskDuration} (${elapsedMinutes} 分钟)\n- 留档工作记录照片: ${photosCount} 张\n\n点击【确定】将同步至系统待办与管理层看板。`
+        );
+        if (!confirmFinish) return;
 
         setSubmittingSpecialWork(true);
         try {
-            const catObj = SPECIAL_WORK_CATEGORIES.find(c => c.key === activeSpecialCategory);
-            const catLabel = catObj?.label || activeSpecialCategory;
+            const uploaderId = activeSpecialTask.operatorId || operatorEmployeeId || 'OP-AUTO';
 
-            let summary = '';
-            const detailParts: string[] = [];
-
-            if (activeSpecialCategory === 'Container') {
-                if (specialContainerNo) detailParts.push(`柜号: ${specialContainerNo.toUpperCase()}`);
-                if (specialPalletCount) detailParts.push(`卸柜: ${specialPalletCount} 托`);
-                summary = `原料采购货柜${specialContainerNo ? ` ${specialContainerNo.toUpperCase()}` : ''}到厂收货${specialPalletCount ? ` (${specialPalletCount}托)` : ''}`;
-            } else if (activeSpecialCategory === 'OT') {
-                if (specialOtHours) detailParts.push(`加班工时: ${specialOtHours} 小时`);
-                summary = `车间加班${specialOtHours ? ` ${specialOtHours}小时` : ''}`;
-            } else if (activeSpecialCategory === 'handling') {
-                if (specialPalletCount) detailParts.push(`搬运打托: ${specialPalletCount} 托`);
-                summary = `搬运打托${specialPalletCount ? ` ${specialPalletCount}托` : ''}`;
-            } else if (activeSpecialCategory === 'driver_order') {
-                if (specialDriverPlate) detailParts.push(`司机/车牌: ${specialDriverPlate}`);
-                if (specialTripId) detailParts.push(`行程单: ${specialTripId}`);
-                summary = `协助司机行程${specialDriverPlate ? ` (${specialDriverPlate})` : ''}装车配货`;
-            } else if (activeSpecialCategory === 'shopee') {
-                if (specialShopeeCount) detailParts.push(`打包件数: ${specialShopeeCount} 件`);
-                summary = `Shopee 电商散单打包${specialShopeeCount ? ` ${specialShopeeCount}件` : ''}`;
-            } else if (activeSpecialCategory === 'boss_order') {
-                summary = `老板指定加急特单`;
-            }
-
-            if (specialNote) detailParts.push(`备注: ${specialNote}`);
-
-            const fullTitle = `【${catLabel}】${summary || '现场专项作业'}`;
-            const fullDesc = detailParts.join(' | ') || specialNote || summary;
-
-            const uploaderId = user?.uid || user?.id || operatorEmployeeId || 'OP-AUTO';
-            const uploaderName = user?.name || operatorName || '现场操作工';
-
-            // 1. 插入 tasks 表供车间与管理层大屏实时看板查阅
             const { error: taskErr } = await supabase.from('tasks').insert({
                 title: fullTitle,
                 description: fullDesc,
                 status: 'Done',
-                priority: activeSpecialCategory === 'boss_order' ? 'High' : 'Normal',
+                priority: activeSpecialTask.category === 'boss_order' ? 'High' : 'Normal',
                 assigned_to: uploaderId,
-                created_at: new Date().toISOString()
+                created_at: activeSpecialTask.startTime
             });
 
             if (taskErr) throw taskErr;
 
-            // 2. 插入 work_photos 表生成现场留档凭证
-            await supabase.from('work_photos').insert({
-                employee_id: operatorEmployeeId || uploaderId,
-                employee_name: uploaderName,
-                photo_url: 'https://images.unsplash.com/photo-1581091226825-a6a2a5aee158?w=800&auto=format&fit=crop',
-                ai_description: `[现场专项工作] ${catLabel}`,
-                user_note: `${fullTitle} - ${fullDesc}`,
-                category: activeSpecialCategory,
-                machine_id: selectedMachine || null,
-                created_at: new Date().toISOString()
-            });
+            const finishedCat = activeSpecialTask.categoryLabel;
+            setActiveSpecialTask(null);
+            localStorage.removeItem(`packsecure_active_special_task_${uploaderId}`);
+            localStorage.removeItem('packsecure_active_special_task_current_id');
+            localStorage.removeItem('packsecure_active_special_task');
 
-            // 3. 重置表单状态
-            setSpecialContainerNo('');
-            setSpecialPalletCount('');
-            setSpecialOtHours('');
-            setSpecialDriverPlate('');
-            setSpecialTripId('');
-            setSpecialShopeeCount('');
-            setSpecialNote('');
-            setActiveSpecialCategory(null);
-
-            // 4. 刷新操作员任务列表
             await fetchOperatorTasks();
 
-            alert(`✅ 成功登记【${catLabel}】！\n数据已同步至车间待办与高管中心。`);
+            alert(`🎉 专项任务【${finishedCat}】已圆满完成！\n总用时: ${specialTaskDuration}，留档照片: ${photosCount} 张。\n数据已同步至车间看板。`);
         } catch (err: any) {
-            console.error('Failed to log special work:', err);
-            alert(`登记失败: ${err.message || '网络异常'}`);
+            console.error("Failed to complete special task:", err);
+            alert(`完成任务提交失败: ${err.message || '网络错误'}`);
         } finally {
             setSubmittingSpecialWork(false);
         }
@@ -2463,90 +2740,569 @@ const ProductionControl: React.FC<ProductionControlProps> = ({ user, jobs = [], 
                 )}
 
                 {!selectedMachine ? (
-                    <div className="flex-1 flex flex-col items-center justify-center p-8 bg-white/5 border border-white/10 rounded-3xl min-h-[40vh] text-center backdrop-blur-md gap-4">
-                        {isScanningMachine || (user && user.role === 'Operator') ? (
-                            <div className="w-full max-w-[320px] flex flex-col gap-4 animate-fade-in-up">
-                                {user && user.role !== 'Operator' && (
-                                    <div className="flex justify-between items-center bg-white/5 border border-white/10 rounded-xl px-4 py-2.5">
-                                        <button 
-                                            type="button" 
-                                            onClick={() => {
-                                                 hasScannedRef.current = true;
-                                                 setIsScanningMachine(false);
-                                              }}
-                                            className="p-1 rounded-full bg-white/10 text-gray-400 hover:text-white transition-colors"
-                                        >
-                                            <X size={14} />
-                                        </button>
+                    activeSpecialTask ? (
+                        /* DEDICATED IN-PROGRESS SPECIAL TASK WORKSPACE */
+                        <div className="flex-1 flex flex-col gap-6 animate-fade-in">
+                            {/* Top Banner with live stopwatch */}
+                            <div className="bg-gradient-to-r from-indigo-950/80 via-purple-950/60 to-zinc-900/80 border border-indigo-500/30 p-5 rounded-3xl backdrop-blur-md shadow-2xl flex flex-col md:flex-row items-start md:items-center justify-between gap-4">
+                                <div className="flex items-center gap-4">
+                                    <div className="w-14 h-14 rounded-2xl bg-indigo-500/20 border border-indigo-400/40 flex items-center justify-center text-3xl shadow-inner shrink-0">
+                                        {SPECIAL_WORK_CATEGORIES.find(c => c.key === activeSpecialTask.category)?.icon || '📋'}
                                     </div>
-                                )}
-                                <div key="scanner-active" className="w-full aspect-square overflow-hidden rounded-2xl border-2 border-[#E97132] shadow-lg shadow-[#E97132]/10 relative">
-                                    <Scanner
-                                         key="prod-control-machine-scanner"
-                                         onScan={(detectedCodes) => {
-                                             if (hasScannedRef.current) return;
-                                             if (detectedCodes && detectedCodes.length > 0) {
-                                                 const text = detectedCodes[0].rawValue;
-                                                 if (text) {
-                                                     let cleanText = text.trim();
-                                                     if (cleanText.includes('#/production/')) {
-                                                         cleanText = cleanText.split('#/production/')[1].split('?')[0].split('/')[0];
-                                                     }
-                                                     if (cleanText.toUpperCase().startsWith('MACHINE:')) {
-                                                         cleanText = cleanText.substring(8).trim();
-                                                     }
-                                                     let found = machines.find(m => (((m as any).machine_id || m.id)?.toUpperCase() === cleanText.toUpperCase()));
-                                                     if (!found) {
-                                                         found = machines.find(m => m.name.toUpperCase() === cleanText.toUpperCase());
-                                                     }
-                                                     if (found) {
-                                                         hasScannedRef.current = true;
-                                                         handleMachineTabClick((found as any).machine_id || found.id);
-                                                         setTimeout(() => {
-                                                             setIsScanningMachine(false);
-                                                         }, 100);
-                                                     } else {
-                                                         alert(`⚠️ 未知的机台二维码 / Unknown machine QR: ${cleanText}`);
-                                                     }
-                                                 }
-                                             }
-                                         }}
-                                         onError={(err) => {
-                                             console.error("QR Scan Error:", err);
-                                             alert("⚠️ 无法获取摄像头权限进行扫码绑定。 Please check camera permissions.");
-                                             hasScannedRef.current = true;
-                                             if (user?.role !== 'Operator') {
-                                                 setTimeout(() => {
-                                                     setIsScanningMachine(false);
-                                                 }, 100);
-                                             }
-                                         }}
-                                     />
+                                    <div>
+                                        <div className="flex items-center gap-2 flex-wrap">
+                                            <h2 className="text-xl font-black text-white">
+                                                {activeSpecialTask.categoryLabel}
+                                            </h2>
+                                            <span className="px-2.5 py-0.5 rounded-full text-[10px] font-bold bg-amber-500/20 text-amber-300 border border-amber-500/30 animate-pulse">
+                                                ● {t('作业进行中')}
+                                            </span>
+                                        </div>
+                                        <p className="text-xs text-gray-400 mt-1">
+                                            {t('操作员')}: <span className="text-white font-medium">{activeSpecialTask.operatorName}</span> ({activeSpecialTask.operatorId}) · {t('开始时间')}: {new Date(activeSpecialTask.startTime).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit', second: '2-digit' })}
+                                        </p>
+                                    </div>
                                 </div>
-                                <div className="text-center">
-                                     <p className="text-xs text-gray-300 font-bold">请对准机台二维码进行扫码绑定</p>
-                                     <p className="text-[10px] text-gray-500 mt-1">Please scan the machine QR code to bind</p>
+
+                                <div className="flex items-center gap-3 w-full md:w-auto justify-between md:justify-end">
+                                    <div className="flex items-center gap-3 bg-black/50 border border-emerald-500/40 px-4 py-2 rounded-2xl shadow-inner">
+                                        <Clock size={18} className="text-emerald-400 animate-spin-slow" />
+                                        <div>
+                                            <p className="text-[9px] text-emerald-400 font-bold uppercase tracking-wider">{t('实时作业计时')}</p>
+                                            <p className="text-xl sm:text-2xl font-mono font-black text-emerald-300 tracking-wider">
+                                                {specialTaskDuration}
+                                            </p>
+                                        </div>
+                                    </div>
+                                    <button
+                                        type="button"
+                                        onClick={handleCancelSpecialTask}
+                                        className="px-3.5 py-2 rounded-xl bg-white/5 hover:bg-rose-500/20 text-gray-400 hover:text-rose-300 border border-white/10 hover:border-rose-500/30 text-xs font-semibold flex items-center gap-1.5 transition-all cursor-pointer"
+                                        title="取消放弃本次作业"
+                                    >
+                                        <X size={14} />
+                                        <span className="hidden sm:inline">{t('放弃作业')}</span>
+                                    </button>
                                 </div>
                             </div>
-                        ) : (
-                            <>
-                                <div className="w-16 h-16 rounded-full bg-white/5 border border-white/10 flex items-center justify-center text-3xl shadow-inner">🏭</div>
-                                <div>
-                                    <h2 className="text-xl font-black text-white">Select a Machine</h2>
-                                    <p className="text-xs text-gray-500 max-w-sm mt-1">Please select a machine from the tabs above, or scan the machine QR code to bind.</p>
+
+                            {/* Main 2-column workspace */}
+                            <div className="grid grid-cols-1 lg:grid-cols-12 gap-6 items-start">
+                                {/* LEFT: Work Photo Evidence & Stream (7 cols) */}
+                                <div className="lg:col-span-7 flex flex-col gap-6">
+                                    {/* Progressive Photo Capture Card */}
+                                    <div className="bg-white/5 border border-white/10 rounded-3xl p-5 backdrop-blur-md shadow-lg">
+                                        <div className="flex items-center justify-between mb-2">
+                                            <div className="flex items-center gap-2">
+                                                <Camera size={18} className="text-indigo-400" />
+                                                <h3 className="text-sm font-bold text-white">
+                                                    {t('阶段工作记录拍照')} / Progressive Work Evidence
+                                                </h3>
+                                            </div>
+                                            <span className="text-[11px] font-semibold text-indigo-300 bg-indigo-500/20 px-2.5 py-0.5 rounded-full border border-indigo-500/30">
+                                                {t('已拍摄')} {activeSpecialTask.photos?.length || 0} {t('张')}
+                                            </span>
+                                        </div>
+                                        <p className="text-xs text-gray-400 mb-4 leading-relaxed">
+                                            {t('作业期间的每一次拍照均作为阶段工作凭证自动留档（例如：开柜封条号、作业进度、码盘托盘、完工现场等）。')}
+                                        </p>
+
+                                        {!specialTaskPhotoPreview ? (
+                                            <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
+                                                <label className="cursor-pointer flex flex-col items-center justify-center p-6 border-2 border-dashed border-indigo-500/40 hover:border-indigo-400 bg-indigo-500/10 hover:bg-indigo-500/20 rounded-2xl transition-all group active:scale-98">
+                                                    <div className="w-12 h-12 rounded-full bg-indigo-500/20 flex items-center justify-center mb-2 group-hover:scale-110 transition-transform">
+                                                        <Camera size={24} className="text-indigo-300" />
+                                                    </div>
+                                                    <span className="text-xs font-black text-white">{t('拍照记录当前进度')}</span>
+                                                    <span className="text-[10px] text-gray-400 mt-0.5">{t('调用手机相机拍摄现场')}</span>
+                                                    <input
+                                                        ref={specialPhotoInputRef}
+                                                        type="file"
+                                                        accept="image/*"
+                                                        capture="environment"
+                                                        onChange={handleSpecialPhotoChange}
+                                                        className="hidden"
+                                                    />
+                                                </label>
+
+                                                <label className="cursor-pointer flex flex-col items-center justify-center p-6 border border-white/10 hover:border-white/20 bg-white/5 hover:bg-white/10 rounded-2xl transition-all group active:scale-98">
+                                                    <div className="w-12 h-12 rounded-full bg-white/5 flex items-center justify-center mb-2 group-hover:scale-110 transition-transform">
+                                                        <ImageIcon size={22} className="text-gray-300" />
+                                                    </div>
+                                                    <span className="text-xs font-semibold text-gray-200">{t('相册选取照片')}</span>
+                                                    <span className="text-[10px] text-gray-400 mt-0.5">{t('从手机相册中选择凭证')}</span>
+                                                    <input
+                                                        type="file"
+                                                        accept="image/*"
+                                                        onChange={handleSpecialPhotoChange}
+                                                        className="hidden"
+                                                    />
+                                                </label>
+                                            </div>
+                                        ) : (
+                                            <div className="space-y-3 animate-fade-in">
+                                                <div className="relative rounded-2xl overflow-hidden border border-white/15 bg-black/60 flex items-center justify-center max-h-64">
+                                                    <img
+                                                        src={specialTaskPhotoPreview}
+                                                        alt="Current shot"
+                                                        className="max-h-64 w-auto object-contain"
+                                                    />
+                                                    <button
+                                                        type="button"
+                                                        onClick={() => {
+                                                            setSpecialTaskPhotoFile(null);
+                                                            setSpecialTaskPhotoPreview(null);
+                                                            if (specialPhotoInputRef.current) specialPhotoInputRef.current.value = '';
+                                                        }}
+                                                        className="absolute top-3 right-3 p-1.5 rounded-full bg-black/70 hover:bg-rose-600 text-white transition-colors cursor-pointer"
+                                                        title="重新拍照"
+                                                    >
+                                                        <X size={16} />
+                                                    </button>
+                                                </div>
+
+                                                <div>
+                                                    <label className="text-[11px] font-semibold text-gray-300 mb-1 block">
+                                                        {t('阶段工作说明 / 照片备注 (选填)')}
+                                                    </label>
+                                                    <input
+                                                        type="text"
+                                                        placeholder="例如: 柜门封条号拍摄 / 已卸完第5托 / 缠绕膜打托完成..."
+                                                        value={specialTaskPhotoNote}
+                                                        onChange={e => setSpecialTaskPhotoNote(e.target.value)}
+                                                        className="w-full bg-white/5 border border-white/10 text-xs px-3.5 py-2.5 rounded-xl focus:border-indigo-500 focus:outline-none text-white placeholder-gray-500"
+                                                    />
+                                                </div>
+
+                                                <div className="flex gap-2 pt-1">
+                                                    <button
+                                                        type="button"
+                                                        onClick={handleSaveSpecialTaskPhoto}
+                                                        disabled={uploadingSpecialPhoto}
+                                                        className="flex-1 py-3 px-4 bg-gradient-to-r from-indigo-600 to-purple-600 hover:from-indigo-500 hover:to-purple-500 text-white rounded-xl text-xs font-black flex items-center justify-center gap-2 shadow-lg active:scale-95 transition-all cursor-pointer disabled:opacity-50"
+                                                    >
+                                                        {uploadingSpecialPhoto ? <Loader className="animate-spin" size={14} /> : <Check size={14} />}
+                                                        <span>{t('确认记录此照片')} (本次第 {(activeSpecialTask.photos?.length || 0) + 1} 张)</span>
+                                                    </button>
+                                                    <button
+                                                        type="button"
+                                                        onClick={() => {
+                                                            setSpecialTaskPhotoFile(null);
+                                                            setSpecialTaskPhotoPreview(null);
+                                                            if (specialPhotoInputRef.current) specialPhotoInputRef.current.value = '';
+                                                        }}
+                                                        className="px-4 py-3 bg-white/5 hover:bg-white/10 text-gray-400 hover:text-white rounded-xl text-xs border border-white/10 cursor-pointer"
+                                                    >
+                                                        {t('重拍')}
+                                                    </button>
+                                                </div>
+                                            </div>
+                                        )}
+                                    </div>
+
+                                    {/* Timeline of Recorded Photos */}
+                                    <div className="bg-white/5 border border-white/10 rounded-3xl p-5 backdrop-blur-md shadow-lg">
+                                        <div className="flex items-center justify-between mb-3">
+                                            <h3 className="text-xs font-bold text-white uppercase tracking-wider flex items-center gap-1.5">
+                                                <Layers size={14} className="text-indigo-400" />
+                                                <span>{t('本次作业工作记录时间流')} ({activeSpecialTask.photos?.length || 0})</span>
+                                            </h3>
+                                            {activeSpecialTask.photos?.length > 0 && (
+                                                <span className="text-[10px] text-gray-400">{t('点击照片可放大查看')}</span>
+                                            )}
+                                        </div>
+
+                                        {(!activeSpecialTask.photos || activeSpecialTask.photos.length === 0) ? (
+                                            <div className="text-center py-8 border border-dashed border-white/10 rounded-2xl bg-white/[0.02]">
+                                                <p className="text-xs text-gray-400">
+                                                    {t('暂未拍摄工作记录照片')}
+                                                </p>
+                                                <p className="text-[11px] text-gray-500 mt-1">
+                                                    {t('点击上方【拍照记录当前进度】拍摄第一张作业凭证')}
+                                                </p>
+                                            </div>
+                                        ) : (
+                                            <div className="space-y-2.5 max-h-[380px] overflow-y-auto pr-1 custom-scrollbar">
+                                                {activeSpecialTask.photos.map((p, idx) => (
+                                                    <div
+                                                        key={p.id || idx}
+                                                        className="flex items-center gap-3 p-3 bg-white/[0.04] border border-white/10 rounded-2xl hover:border-white/20 transition-all group"
+                                                    >
+                                                        <img
+                                                            src={p.url}
+                                                            alt={`Work record #${idx + 1}`}
+                                                            onClick={() => setViewingPhotoUrl(p.url)}
+                                                            className="w-14 h-14 rounded-xl object-cover border border-white/15 cursor-pointer hover:scale-105 transition-transform shrink-0 shadow-md"
+                                                        />
+                                                        <div className="min-w-0 flex-1">
+                                                            <div className="flex items-center gap-2">
+                                                                <span className="text-[11px] font-black text-indigo-300">
+                                                                    {t('阶段记录')} #{idx + 1}
+                                                                </span>
+                                                                <span className="text-[10px] text-gray-500">
+                                                                    {new Date(p.timestamp).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit', second: '2-digit' })}
+                                                                </span>
+                                                            </div>
+                                                            <p className="text-xs text-gray-200 mt-0.5 truncate">
+                                                                {p.note || t('现场工作凭证留档')}
+                                                            </p>
+                                                        </div>
+                                                        <button
+                                                            type="button"
+                                                            onClick={() => handleDeleteSpecialTaskPhoto(p.id)}
+                                                            className="p-2 rounded-xl text-gray-500 hover:text-rose-400 hover:bg-rose-500/10 transition-colors opacity-0 group-hover:opacity-100 cursor-pointer"
+                                                            title="移除此张记录"
+                                                        >
+                                                            <X size={14} />
+                                                        </button>
+                                                    </div>
+                                                ))}
+                                            </div>
+                                        )}
+                                    </div>
                                 </div>
-                                
-                                <button
-                                    type="button"
-                                    onClick={() => { hasScannedRef.current = false; setIsScanningMachine(true); }}
-                                    className="px-6 py-3 bg-gradient-to-r from-[#E97132] to-[#FE4B13] hover:from-[#FE4B13] hover:to-[#E97132] text-white rounded-2xl flex items-center gap-2 text-xs font-black uppercase tracking-wider shadow-lg shadow-[#E97132]/10 active:scale-95 transition-all mt-2 cursor-pointer border border-[#E97132]/20"
-                                >
-                                    <Camera size={14} />
-                                    Scan QR Code to Bind / 扫码绑定机台
-                                </button>
-                            </>
-                        )}
-                    </div>
+
+                                {/* RIGHT: Task Details & Complete Action (5 cols) */}
+                                <div className="lg:col-span-5 flex flex-col gap-6">
+                                    <div className="bg-white/5 border border-white/10 rounded-3xl p-5 backdrop-blur-md shadow-lg space-y-4">
+                                        <div className="border-b border-white/10 pb-3">
+                                            <h3 className="text-sm font-bold text-white flex items-center gap-2">
+                                                <Sparkles size={16} className="text-indigo-400" />
+                                                <span>{t('作业关键数据填报')}</span>
+                                            </h3>
+                                            <p className="text-[11px] text-gray-400 mt-0.5">
+                                                {t('可在作业过程中随时填写，完成后统一归档')}
+                                            </p>
+                                        </div>
+
+                                        {activeSpecialTask.category === 'Container' && (
+                                            <div className="space-y-3">
+                                                <div>
+                                                    <label className="text-[11px] text-gray-300 font-semibold mb-1 block">{t('货柜号 (Container No)')}</label>
+                                                    <input
+                                                        type="text"
+                                                        placeholder="例: MSCU-123456"
+                                                        value={activeSpecialTask.containerNo || ''}
+                                                        onChange={e => updateActiveSpecialTaskField('containerNo', e.target.value.toUpperCase())}
+                                                        className="w-full bg-white/5 border border-white/10 text-xs px-3.5 py-2.5 rounded-xl focus:border-indigo-500 focus:outline-none text-white uppercase font-mono"
+                                                    />
+                                                </div>
+                                                <div>
+                                                    <label className="text-[11px] text-gray-300 font-semibold mb-1 block">{t('已卸柜托数 / 件数')}</label>
+                                                    <input
+                                                        type="number"
+                                                        placeholder="例: 20"
+                                                        value={activeSpecialTask.palletCount || ''}
+                                                        onChange={e => updateActiveSpecialTaskField('palletCount', e.target.value)}
+                                                        className="w-full bg-white/5 border border-white/10 text-xs px-3.5 py-2.5 rounded-xl focus:border-indigo-500 focus:outline-none text-white"
+                                                    />
+                                                </div>
+                                            </div>
+                                        )}
+
+                                        {activeSpecialTask.category === 'OT' && (
+                                            <div>
+                                                <label className="text-[11px] text-gray-300 font-semibold mb-1 block">{t('加班工时 (小时)')}</label>
+                                                <input
+                                                    type="number"
+                                                    step="0.5"
+                                                    placeholder="例: 2.0"
+                                                    value={activeSpecialTask.otHours || ''}
+                                                    onChange={e => updateActiveSpecialTaskField('otHours', e.target.value)}
+                                                    className="w-full bg-white/5 border border-white/10 text-xs px-3.5 py-2.5 rounded-xl focus:border-amber-500 focus:outline-none text-white"
+                                                />
+                                            </div>
+                                        )}
+
+                                        {activeSpecialTask.category === 'handling' && (
+                                            <div>
+                                                <label className="text-[11px] text-gray-300 font-semibold mb-1 block">{t('搬运 / 打托托数 (Pallets)')}</label>
+                                                <input
+                                                    type="number"
+                                                    placeholder="例: 15"
+                                                    value={activeSpecialTask.palletCount || ''}
+                                                    onChange={e => updateActiveSpecialTaskField('palletCount', e.target.value)}
+                                                    className="w-full bg-white/5 border border-white/10 text-xs px-3.5 py-2.5 rounded-xl focus:border-cyan-500 focus:outline-none text-white"
+                                                />
+                                            </div>
+                                        )}
+
+                                        {activeSpecialTask.category === 'driver_order' && (
+                                            <div className="space-y-3">
+                                                <div>
+                                                    <label className="text-[11px] text-gray-300 font-semibold mb-1 block">{t('司机姓名 / 车牌号')}</label>
+                                                    <input
+                                                        type="text"
+                                                        placeholder="例: Ah Seng / PGD1234"
+                                                        value={activeSpecialTask.driverPlate || ''}
+                                                        onChange={e => updateActiveSpecialTaskField('driverPlate', e.target.value)}
+                                                        className="w-full bg-white/5 border border-white/10 text-xs px-3.5 py-2.5 rounded-xl focus:border-emerald-500 focus:outline-none text-white"
+                                                    />
+                                                </div>
+                                                <div>
+                                                    <label className="text-[11px] text-gray-300 font-semibold mb-1 block">{t('协助行程单号 (Trip ID)')}</label>
+                                                    <input
+                                                        type="text"
+                                                        placeholder="例: TRIP-01"
+                                                        value={activeSpecialTask.tripId || ''}
+                                                        onChange={e => updateActiveSpecialTaskField('tripId', e.target.value)}
+                                                        className="w-full bg-white/5 border border-white/10 text-xs px-3.5 py-2.5 rounded-xl focus:border-emerald-500 focus:outline-none text-white font-mono"
+                                                    />
+                                                </div>
+                                            </div>
+                                        )}
+
+                                        {activeSpecialTask.category === 'shopee' && (
+                                            <div>
+                                                <label className="text-[11px] text-gray-300 font-semibold mb-1 block">{t('打包件数 (包裹数)')}</label>
+                                                <input
+                                                    type="number"
+                                                    placeholder="例: 50"
+                                                    value={activeSpecialTask.shopeeCount || ''}
+                                                    onChange={e => updateActiveSpecialTaskField('shopeeCount', e.target.value)}
+                                                    className="w-full bg-white/5 border border-white/10 text-xs px-3.5 py-2.5 rounded-xl focus:border-orange-500 focus:outline-none text-white"
+                                                />
+                                            </div>
+                                        )}
+
+                                        {activeSpecialTask.category === 'boss_order' && (
+                                            <div>
+                                                <label className="text-[11px] text-gray-300 font-semibold mb-1 block">{t('老板急单加急说明')}</label>
+                                                <input
+                                                    type="text"
+                                                    placeholder="例: VIP客户急需20卷黑膜加急插单"
+                                                    value={activeSpecialTask.note || ''}
+                                                    onChange={e => updateActiveSpecialTaskField('note', e.target.value)}
+                                                    className="w-full bg-white/5 border border-white/10 text-xs px-3.5 py-2.5 rounded-xl focus:border-purple-500 focus:outline-none text-white"
+                                                />
+                                            </div>
+                                        )}
+
+                                        {activeSpecialTask.category !== 'boss_order' && (
+                                            <div>
+                                                <label className="text-[11px] text-gray-300 font-semibold mb-1 block">{t('现场补充说明 / 备注')}</label>
+                                                <textarea
+                                                    rows={2}
+                                                    placeholder="选填: 现场情况补充或特殊说明..."
+                                                    value={activeSpecialTask.note || ''}
+                                                    onChange={e => updateActiveSpecialTaskField('note', e.target.value)}
+                                                    className="w-full bg-white/5 border border-white/10 text-xs px-3.5 py-2 rounded-xl focus:border-indigo-500 focus:outline-none text-white placeholder-gray-500 resize-none"
+                                                />
+                                            </div>
+                                        )}
+
+                                        {/* Complete Button */}
+                                        <div className="pt-3 border-t border-white/10 space-y-2">
+                                            <button
+                                                type="button"
+                                                onClick={handleCompleteSpecialTask}
+                                                disabled={submittingSpecialWork}
+                                                className="w-full py-4 px-4 bg-gradient-to-r from-emerald-600 via-teal-600 to-emerald-700 hover:from-emerald-500 hover:to-teal-500 text-white rounded-2xl text-sm font-black flex items-center justify-center gap-2 shadow-xl shadow-emerald-600/30 active:scale-98 transition-all cursor-pointer disabled:opacity-50"
+                                            >
+                                                {submittingSpecialWork ? <Loader className="animate-spin" size={16} /> : <Check size={16} />}
+                                                <span>🏁 {t('完成本次专项作业并归档')}</span>
+                                            </button>
+                                            <p className="text-[11px] text-gray-400 text-center">
+                                                {t('当前历时')}: <span className="text-emerald-300 font-bold">{specialTaskDuration}</span> · {t('已留档照片')}: <span className="text-white font-bold">{activeSpecialTask.photos?.length || 0} {t('张')}</span>
+                                            </p>
+                                        </div>
+                                    </div>
+                                </div>
+                            </div>
+                        </div>
+                    ) : isScanningMachine ? (
+                        /* MACHINE QR SCANNER */
+                        <div className="flex-1 flex flex-col items-center justify-center p-8 bg-white/5 border border-white/10 rounded-3xl min-h-[40vh] text-center backdrop-blur-md gap-4 animate-fade-in">
+                            <div className="w-full max-w-[340px] flex flex-col gap-4 animate-fade-in-up">
+                                <div className="flex justify-between items-center bg-white/5 border border-white/10 rounded-xl px-4 py-2.5">
+                                    <span className="text-xs text-white font-bold">{t('机台二维码扫码绑定')}</span>
+                                    <button
+                                        type="button"
+                                        onClick={() => {
+                                            hasScannedRef.current = true;
+                                            setIsScanningMachine(false);
+                                        }}
+                                        className="p-1 rounded-full bg-white/10 text-gray-400 hover:text-white transition-colors cursor-pointer"
+                                        title="返回模式选择中心"
+                                    >
+                                        <X size={14} />
+                                    </button>
+                                </div>
+                                <div className="w-full aspect-square overflow-hidden rounded-2xl border-2 border-[#E97132] shadow-lg shadow-[#E97132]/10 relative bg-black">
+                                    <Scanner
+                                        key="prod-control-machine-scanner"
+                                        onScan={(detectedCodes) => {
+                                            if (hasScannedRef.current) return;
+                                            if (activeSpecialTask) {
+                                                alert(`⚠️ 互斥提示：您当前正在进行现场专项作业【${activeSpecialTask.categoryLabel}】！\n请先完成或放弃当前专项工作，才能扫码绑定机台生产。`);
+                                                return;
+                                            }
+                                            if (detectedCodes && detectedCodes.length > 0) {
+                                                const text = detectedCodes[0].rawValue;
+                                                if (text) {
+                                                    let cleanText = text.trim();
+                                                    if (cleanText.includes('#/production/')) {
+                                                        cleanText = cleanText.split('#/production/')[1].split('?')[0].split('/')[0];
+                                                    }
+                                                    if (cleanText.toUpperCase().startsWith('MACHINE:')) {
+                                                        cleanText = cleanText.substring(8).trim();
+                                                    }
+                                                    let found = machines.find(m => (((m as any).machine_id || m.id)?.toUpperCase() === cleanText.toUpperCase()));
+                                                    if (!found) {
+                                                        found = machines.find(m => m.name.toUpperCase() === cleanText.toUpperCase());
+                                                    }
+                                                    if (found) {
+                                                        hasScannedRef.current = true;
+                                                        handleMachineTabClick((found as any).machine_id || found.id);
+                                                        setTimeout(() => {
+                                                            setIsScanningMachine(false);
+                                                        }, 100);
+                                                    } else {
+                                                        alert(`⚠️ 未知的机台二维码 / Unknown machine QR: ${cleanText}`);
+                                                    }
+                                                }
+                                            }
+                                        }}
+                                        onError={(err) => {
+                                            console.error("QR Scan Error:", err);
+                                            alert("⚠️ 无法获取摄像头权限进行扫码绑定。 Please check camera permissions.");
+                                            hasScannedRef.current = true;
+                                            setTimeout(() => {
+                                                setIsScanningMachine(false);
+                                            }, 100);
+                                        }}
+                                    />
+                                </div>
+                                <div className="text-center">
+                                    <p className="text-xs text-gray-300 font-bold">{t('请对准机台二维码进行扫码绑定')}</p>
+                                    <p className="text-[10px] text-gray-500 mt-1">Please scan the machine QR code to bind</p>
+                                    <button
+                                        type="button"
+                                        onClick={() => {
+                                            hasScannedRef.current = true;
+                                            setIsScanningMachine(false);
+                                        }}
+                                        className="mt-3 text-xs text-gray-400 hover:text-white underline cursor-pointer"
+                                    >
+                                        ✕ {t('取消并返回车间工作中心')}
+                                    </button>
+                                </div>
+                            </div>
+                        </div>
+                    ) : (
+                        /* WORKSHOP OPERATIONS HUB (Dual-mode: Machine vs Special Tasks) */
+                        <div className="flex-1 flex flex-col gap-6 animate-fade-in">
+                            {/* HUB HEADER */}
+                            <div className="bg-gradient-to-r from-blue-950/40 via-indigo-950/30 to-zinc-900/50 border border-white/10 rounded-3xl p-6 backdrop-blur-md flex flex-col sm:flex-row items-start sm:items-center justify-between gap-4">
+                                <div className="flex items-center gap-4">
+                                    <div className="w-14 h-14 rounded-2xl bg-white/5 border border-white/10 flex items-center justify-center text-3xl shadow-inner shrink-0">
+                                        🏭
+                                    </div>
+                                    <div>
+                                        <h2 className="text-lg sm:text-xl font-black text-white">
+                                            {t('车间操作中心')} · Workshop Operations Hub
+                                        </h2>
+                                        <p className="text-xs text-gray-400 mt-1">
+                                            {t('当前员工')}: <span className="text-white font-semibold">{operatorName || user?.name || '操作员'}</span> ({operatorEmployeeId || user?.employeeId || 'OP-AUTO'}) · {t('请选择进入机台生产或现场专项工作')}
+                                        </p>
+                                    </div>
+                                </div>
+                                <div className="text-[11px] text-gray-400 bg-white/5 px-3 py-1.5 rounded-xl border border-white/5">
+                                    {t('互斥规则: 开机生产与专项作业严格互斥独立')}
+                                </div>
+                            </div>
+
+                            {/* DUAL MODE SELECTION */}
+                            <div className="grid grid-cols-1 lg:grid-cols-12 gap-6 items-stretch">
+                                {/* 1. MACHINE PRODUCTION CARD (5 cols) */}
+                                <div className="lg:col-span-5 bg-white/5 border border-white/10 rounded-3xl p-6 backdrop-blur-md flex flex-col justify-between shadow-xl group hover:border-[#E97132]/40 transition-all">
+                                    <div>
+                                        <div className="flex items-center justify-between mb-4">
+                                            <span className="w-10 h-10 rounded-2xl bg-[#E97132]/20 border border-[#E97132]/30 flex items-center justify-center text-xl">
+                                                ⚙️
+                                            </span>
+                                            <span className="text-[10px] font-bold uppercase tracking-wider text-[#E97132] bg-[#E97132]/10 px-2.5 py-1 rounded-full border border-[#E97132]/20">
+                                                {t('机台作业模式')}
+                                            </span>
+                                        </div>
+                                        <h3 className="text-base font-black text-white mb-1.5">
+                                            {t('机台开机生产')} / Machine Production
+                                        </h3>
+                                        <p className="text-xs text-gray-400 leading-relaxed mb-4">
+                                            {t('吹膜机组开机值班、米数统计、报工称重、配方录入、次品废料报废与设备日常点检。')}
+                                        </p>
+                                    </div>
+
+                                    <div className="space-y-2.5 pt-2">
+                                        <button
+                                            type="button"
+                                            onClick={() => {
+                                                hasScannedRef.current = false;
+                                                setIsScanningMachine(true);
+                                            }}
+                                            className="w-full py-3.5 px-4 bg-gradient-to-r from-[#E97132] to-[#FE4B13] hover:from-[#FE4B13] hover:to-[#E97132] text-white rounded-2xl flex items-center justify-center gap-2 text-xs font-black uppercase tracking-wider shadow-lg shadow-[#E97132]/20 active:scale-98 transition-all cursor-pointer border border-[#E97132]/30"
+                                        >
+                                            <Camera size={16} />
+                                            <span>{t('扫码绑定机台开机')} / Scan Machine QR</span>
+                                        </button>
+                                        <p className="text-[10px] text-gray-500 text-center">
+                                            {t('扫码机台二维码即可自动绑定并进入机台操作台')}
+                                        </p>
+                                    </div>
+                                </div>
+
+                                {/* 2. 6 SPECIAL WORK CATEGORIES (7 cols) */}
+                                <div className="lg:col-span-7 bg-white/5 border border-white/10 rounded-3xl p-6 backdrop-blur-md flex flex-col justify-between shadow-xl">
+                                    <div>
+                                        <div className="flex items-center justify-between mb-3">
+                                            <div className="flex items-center gap-2">
+                                                <Sparkles size={16} className="text-amber-400" />
+                                                <h3 className="text-sm font-black text-white">
+                                                    {t('现场 6 大专项工作 (离机作业)')}
+                                                </h3>
+                                            </div>
+                                            <span className="text-[10px] font-bold text-amber-400 bg-amber-500/10 px-2.5 py-1 rounded-full border border-amber-500/20">
+                                                {t('即开即计 · 拍照即记录')}
+                                            </span>
+                                        </div>
+                                        <p className="text-xs text-gray-400 leading-relaxed mb-4">
+                                            {t('无需开机！点击下方任意卡片立即进入作业模式并启动计时，作业中的拍照将作为阶段工作凭证自动留档：')}
+                                        </p>
+
+                                        <div className="grid grid-cols-2 sm:grid-cols-3 gap-2.5">
+                                            {SPECIAL_WORK_CATEGORIES.map(cat => (
+                                                <button
+                                                    key={cat.key}
+                                                    type="button"
+                                                    onClick={() => startSpecialTask(cat.key)}
+                                                    className="p-3.5 rounded-2xl border border-white/10 bg-white/[0.04] hover:bg-white/[0.09] hover:border-indigo-500/50 hover:scale-[1.02] text-left transition-all active:scale-95 cursor-pointer flex flex-col justify-between min-h-[96px] group"
+                                                >
+                                                    <div className="flex items-center justify-between w-full">
+                                                        <span className="text-2xl group-hover:scale-110 transition-transform">{cat.icon}</span>
+                                                        <span className="text-[9px] px-1.5 py-0.5 rounded-md bg-white/5 text-gray-400 font-normal">
+                                                            {cat.badge}
+                                                        </span>
+                                                    </div>
+                                                    <div className="mt-2">
+                                                        <p className="text-xs font-bold text-white group-hover:text-indigo-300 transition-colors">
+                                                            {cat.label}
+                                                        </p>
+                                                        <p className="text-[10px] text-gray-500 mt-0.5">
+                                                            {t('点击开始计时作业')}
+                                                        </p>
+                                                    </div>
+                                                </button>
+                                            ))}
+                                        </div>
+                                    </div>
+
+                                    <p className="text-[10px] text-gray-500 mt-4 text-center">
+                                        💡 {t('提示：作业期间可多次拍照记录阶段成果，完工后一键汇总归档')}
+                                    </p>
+                                </div>
+                            </div>
+                        </div>
+                    )
                 ) : (
                     <div className="flex-1 grid grid-cols-1 lg:grid-cols-12 gap-6 items-start">
                         {/* LEFT COLUMN: COCKPIT LANES & MANAGER SCHEDULES (8 cols on standard lanes, 12 cols on Recycle) */}
@@ -3041,212 +3797,38 @@ const ProductionControl: React.FC<ProductionControlProps> = ({ user, jobs = [], 
                             </div>
                             <input ref={fileInputRef} type="file" accept="image/*,video/*" className="hidden" onChange={handlePhotoSelect} />
 
-                            {/* 1.5 现场 6 大专项工作快捷报工板块 */}
-                            <div className="bg-gradient-to-br from-indigo-950/40 via-purple-950/20 to-zinc-900/60 border border-indigo-500/30 rounded-2xl p-4 backdrop-blur-md shadow-xl">
-                                <div className="flex items-center justify-between mb-3">
+                            {/* 1.5 现场专项工作入口卡片（机台模式下互斥提示与一键下机切换） */}
+                            <div className="bg-gradient-to-br from-amber-950/30 via-zinc-900/60 to-zinc-900/80 border border-amber-500/30 rounded-2xl p-4 backdrop-blur-md shadow-lg">
+                                <div className="flex items-center justify-between mb-2">
                                     <div className="flex items-center gap-2">
-                                        <span className="w-2 h-2 rounded-full bg-emerald-400 animate-pulse" />
+                                        <span className="w-2 h-2 rounded-full bg-amber-400 animate-ping" />
                                         <h3 className="text-xs font-bold text-white flex items-center gap-1.5">
-                                            <Sparkles size={14} className="text-indigo-400" />
-                                            <span>{t('现场 6 大专项工作报工')}</span>
+                                            <Sparkles size={14} className="text-amber-400" />
+                                            <span>{t('现场专项工作 (离机作业)')}</span>
                                         </h3>
                                     </div>
-                                    <button
-                                        type="button"
-                                        onClick={() => {
-                                            window.dispatchEvent(new CustomEvent('packsecure:open-smart-intake', {
-                                                detail: { workCategory: activeSpecialCategory || 'Container' }
-                                            }));
-                                        }}
-                                        className="text-[11px] text-indigo-300 hover:text-white bg-indigo-500/20 hover:bg-indigo-500/30 px-2.5 py-1 rounded-xl border border-indigo-400/30 flex items-center gap-1.5 transition-all cursor-pointer"
-                                        title="开启万能快拍拍照与语音识别"
-                                    >
-                                        <Camera size={12} />
-                                        <span>{t('万能快拍')}</span>
-                                    </button>
+                                    <span className="text-[10px] text-amber-300 font-bold bg-amber-500/20 px-2 py-0.5 rounded-full border border-amber-500/30">
+                                        {t('需下机切换')}
+                                    </span>
                                 </div>
-
-                                {/* 6 大专项分类快捷选择芯片 */}
-                                <div className="grid grid-cols-3 gap-1.5 mb-3">
-                                    {SPECIAL_WORK_CATEGORIES.map(cat => (
-                                        <button
-                                            key={cat.key}
-                                            type="button"
-                                            onClick={() => {
-                                                setActiveSpecialCategory(cat.key === activeSpecialCategory ? null : cat.key);
-                                            }}
-                                            className={`p-2 rounded-xl border text-[11px] font-bold flex flex-col items-center justify-center gap-0.5 transition-all active:scale-95 cursor-pointer ${
-                                                activeSpecialCategory === cat.key
-                                                    ? `${cat.activeColor} shadow-md scale-[1.02]`
-                                                    : `${cat.color} hover:border-white/20 opacity-80 hover:opacity-100`
-                                            }`}
-                                        >
-                                            <span className="text-base">{cat.icon}</span>
-                                            <span className="truncate w-full text-center">{cat.label}</span>
-                                            <span className="text-[9px] opacity-70 font-normal truncate">{cat.badge}</span>
-                                        </button>
-                                    ))}
-                                </div>
-
-                                {/* 当选中某分类时展开极速填报面板 */}
-                                {activeSpecialCategory && (
-                                    <form onSubmit={handleSpecialWorkSubmit} className="p-3 bg-white/[0.03] border border-white/10 rounded-xl space-y-2.5 animate-fade-in">
-                                        <div className="flex items-center justify-between text-xs font-semibold text-indigo-300 border-b border-white/5 pb-1.5">
-                                            <span>正在登记: {SPECIAL_WORK_CATEGORIES.find(c => c.key === activeSpecialCategory)?.label}</span>
-                                            <button
-                                                type="button"
-                                                onClick={() => setActiveSpecialCategory(null)}
-                                                className="text-gray-400 hover:text-white text-[10px] cursor-pointer"
-                                            >
-                                                ✕ 取消
-                                            </button>
-                                        </div>
-
-                                        {activeSpecialCategory === 'Container' && (
-                                            <div className="grid grid-cols-2 gap-2">
-                                                <div>
-                                                    <label className="text-[10px] text-gray-400">货柜号 (Container No)</label>
-                                                    <input
-                                                        type="text"
-                                                        placeholder="例: MSCU-123456"
-                                                        value={specialContainerNo}
-                                                        onChange={e => setSpecialContainerNo(e.target.value)}
-                                                        className="w-full bg-white/5 border border-white/10 text-xs px-2.5 py-1.5 rounded-lg focus:border-indigo-500 focus:outline-none text-white uppercase"
-                                                    />
-                                                </div>
-                                                <div>
-                                                    <label className="text-[10px] text-gray-400">卸柜托数 / 件数</label>
-                                                    <input
-                                                        type="number"
-                                                        placeholder="例: 20"
-                                                        value={specialPalletCount}
-                                                        onChange={e => setSpecialPalletCount(e.target.value)}
-                                                        className="w-full bg-white/5 border border-white/10 text-xs px-2.5 py-1.5 rounded-lg focus:border-indigo-500 focus:outline-none text-white"
-                                                    />
-                                                </div>
-                                            </div>
-                                        )}
-
-                                        {activeSpecialCategory === 'OT' && (
-                                            <div>
-                                                <label className="text-[10px] text-gray-400">加班工时 (小时)</label>
-                                                <input
-                                                    type="number"
-                                                    step="0.5"
-                                                    placeholder="例: 2.5"
-                                                    value={specialOtHours}
-                                                    onChange={e => setSpecialOtHours(e.target.value)}
-                                                    className="w-full bg-white/5 border border-white/10 text-xs px-2.5 py-1.5 rounded-lg focus:border-amber-500 focus:outline-none text-white"
-                                                    required
-                                                />
-                                            </div>
-                                        )}
-
-                                        {activeSpecialCategory === 'handling' && (
-                                            <div>
-                                                <label className="text-[10px] text-gray-400">搬运 / 打托托数 (Pallets)</label>
-                                                <input
-                                                    type="number"
-                                                    placeholder="例: 15"
-                                                    value={specialPalletCount}
-                                                    onChange={e => setSpecialPalletCount(e.target.value)}
-                                                    className="w-full bg-white/5 border border-white/10 text-xs px-2.5 py-1.5 rounded-lg focus:border-cyan-500 focus:outline-none text-white"
-                                                    required
-                                                />
-                                            </div>
-                                        )}
-
-                                        {activeSpecialCategory === 'driver_order' && (
-                                            <div className="grid grid-cols-2 gap-2">
-                                                <div>
-                                                    <label className="text-[10px] text-gray-400">司机 / 卡车车牌</label>
-                                                    <input
-                                                        type="text"
-                                                        placeholder="例: Ah Seng / PGD1234"
-                                                        value={specialDriverPlate}
-                                                        onChange={e => setSpecialDriverPlate(e.target.value)}
-                                                        className="w-full bg-white/5 border border-white/10 text-xs px-2.5 py-1.5 rounded-lg focus:border-emerald-500 focus:outline-none text-white"
-                                                    />
-                                                </div>
-                                                <div>
-                                                    <label className="text-[10px] text-gray-400">协助行程单 (Trip)</label>
-                                                    <input
-                                                        type="text"
-                                                        placeholder="例: TRIP-1"
-                                                        value={specialTripId}
-                                                        onChange={e => setSpecialTripId(e.target.value)}
-                                                        className="w-full bg-white/5 border border-white/10 text-xs px-2.5 py-1.5 rounded-lg focus:border-emerald-500 focus:outline-none text-white"
-                                                    />
-                                                </div>
-                                            </div>
-                                        )}
-
-                                        {activeSpecialCategory === 'shopee' && (
-                                            <div>
-                                                <label className="text-[10px] text-gray-400">打包件数 (包裹数)</label>
-                                                <input
-                                                    type="number"
-                                                    placeholder="例: 50"
-                                                    value={specialShopeeCount}
-                                                    onChange={e => setSpecialShopeeCount(e.target.value)}
-                                                    className="w-full bg-white/5 border border-white/10 text-xs px-2.5 py-1.5 rounded-lg focus:border-orange-500 focus:outline-none text-white"
-                                                    required
-                                                />
-                                            </div>
-                                        )}
-
-                                        {activeSpecialCategory === 'boss_order' && (
-                                            <div>
-                                                <label className="text-[10px] text-gray-400">老板特单加急说明 (Notes)</label>
-                                                <input
-                                                    type="text"
-                                                    placeholder="例: VIP客户急需20卷黑膜，老板交代优先插单生产"
-                                                    value={specialNote}
-                                                    onChange={e => setSpecialNote(e.target.value)}
-                                                    className="w-full bg-white/5 border border-white/10 text-xs px-2.5 py-1.5 rounded-lg focus:border-purple-500 focus:outline-none text-white"
-                                                    required
-                                                />
-                                            </div>
-                                        )}
-
-                                        {activeSpecialCategory !== 'boss_order' && (
-                                            <div>
-                                                <label className="text-[10px] text-gray-400">补充说明 / 备注</label>
-                                                <input
-                                                    type="text"
-                                                    placeholder="选填: 现场说明或情况备注"
-                                                    value={specialNote}
-                                                    onChange={e => setSpecialNote(e.target.value)}
-                                                    className="w-full bg-white/5 border border-white/10 text-xs px-2.5 py-1.5 rounded-lg focus:border-indigo-500 focus:outline-none text-white"
-                                                />
-                                            </div>
-                                        )}
-
-                                        <div className="flex gap-2 pt-1">
-                                            <button
-                                                type="submit"
-                                                disabled={submittingSpecialWork}
-                                                className="flex-1 bg-gradient-to-r from-indigo-600 to-purple-600 hover:from-indigo-500 hover:to-purple-500 text-white font-bold py-2 px-3 rounded-xl text-xs flex items-center justify-center gap-1.5 shadow-md active:scale-95 transition-all cursor-pointer disabled:opacity-50"
-                                            >
-                                                {submittingSpecialWork ? <Loader className="animate-spin" size={13} /> : <Check size={13} />}
-                                                <span>一键提交专项工作</span>
-                                            </button>
-                                            <button
-                                                type="button"
-                                                onClick={() => {
-                                                    window.dispatchEvent(new CustomEvent('packsecure:open-smart-intake', {
-                                                        detail: { workCategory: activeSpecialCategory }
-                                                    }));
-                                                }}
-                                                className="px-3 bg-white/5 hover:bg-white/10 text-gray-300 rounded-xl border border-white/10 text-xs flex items-center gap-1 cursor-pointer"
-                                                title="改用拍照/语音万能快拍"
-                                            >
-                                                <Camera size={13} />
-                                                <span>快拍</span>
-                                            </button>
-                                        </div>
-                                    </form>
-                                )}
+                                <p className="text-[11px] text-gray-400 leading-relaxed mb-3">
+                                    {t('操作员不能同时开机生产又进行现场专项作业。如需进行【原料卸柜、搬运打托、协助装车、OT加班、Shopee打包、Boss特单】，请先下机并结束当前机台值班。')}
+                                </p>
+                                <button
+                                    type="button"
+                                    onClick={async () => {
+                                        const confirmSwitch = window.confirm(
+                                            `⚠️ 确定要结束机台【${currentMachineName}】的值班，下机并转入现场专项工作吗？\nAre you sure you want to clock out from machine and switch to special tasks?`
+                                        );
+                                        if (confirmSwitch) {
+                                            await handleManualClockOut();
+                                        }
+                                    }}
+                                    className="w-full py-2.5 px-3 bg-gradient-to-r from-amber-600 to-orange-600 hover:from-amber-500 hover:to-orange-500 text-white rounded-xl text-xs font-bold flex items-center justify-center gap-2 shadow-md active:scale-95 transition-all cursor-pointer"
+                                >
+                                    <LogOut size={14} />
+                                    <span>{t('下机转入现场专项工作')}</span>
+                                </button>
                             </div>
 
                             {/* 2. OPERATOR TASKS CHECKLIST */}
@@ -3798,6 +4380,30 @@ const ProductionControl: React.FC<ProductionControlProps> = ({ user, jobs = [], 
                 </div>
             )}
             
+            {/* 专项工作照片放大查看 Lightbox */}
+            {viewingPhotoUrl && (
+                <div 
+                    onClick={() => setViewingPhotoUrl(null)}
+                    className="fixed inset-0 z-[600] bg-black/85 backdrop-blur-md flex items-center justify-center p-4 animate-fade-in cursor-pointer"
+                >
+                    <div className="relative max-w-2xl max-h-[85vh] flex flex-col items-center" onClick={e => e.stopPropagation()}>
+                        <img 
+                            src={viewingPhotoUrl} 
+                            alt="Enlarged evidence" 
+                            className="rounded-2xl max-h-[80vh] w-auto object-contain border border-white/20 shadow-2xl" 
+                        />
+                        <button 
+                            type="button"
+                            onClick={() => setViewingPhotoUrl(null)}
+                            className="absolute top-3 right-3 p-2 rounded-full bg-black/70 text-white hover:bg-white/20 transition-colors cursor-pointer"
+                            title="关闭"
+                        >
+                            <X size={18} />
+                        </button>
+                    </div>
+                </div>
+            )}
+
             {/* 机台专属巡检与配料模态框 */}
             <MachineInspectionModal
                 isOpen={showInspectionModal}
