@@ -461,14 +461,19 @@ export const RecycleMachineControl: React.FC<RecycleMachineControlProps> = ({
             });
             if (res.ok) {
                 const data = await res.json();
-                if (data.weight !== undefined && Number(data.weight) > 0) {
-                    const detectedNum = parseFloat(Number(data.weight).toFixed(2));
+                const detectedVal = Number(data.weight);
+                if (data.weight !== undefined && !isNaN(detectedVal) && detectedVal > 0) {
+                    const detectedNum = parseFloat(detectedVal.toFixed(2));
                     setAiDetectedWeight(detectedNum);
-                    // NOTE: NEVER auto-fill weightInput! Worker must manually input the weight.
+                    // 自动带入填报框（若为空或<=0），方便员工一键保存
+                    setWeightInput(prev => (!prev || parseFloat(prev) <= 0 ? detectedNum.toFixed(2) : prev));
+                    setAiAnalysis(`AI 识别读数: ${detectedNum} KG (如不符可直接修改下方输入框)`);
+                } else {
+                    setAiDetectedWeight(null);
+                    setAiAnalysis("AI 未能自动辨识秤盘读数，请在下方直接核对输入实测重量。");
                 }
-                if (data.digits_raw_seen || data.description) {
-                    setAiAnalysis(`AI 秤盘核验读数: ${data.weight} kg (仪表显示: ${data.digits_raw_seen || data.weight})`);
-                }
+            } else {
+                setAiAnalysis("AI视觉服务响应延迟，请直接在下方核对并输入实测重量。");
             }
         } catch (e) {
             console.warn("AI scale OCR skipped:", e);
@@ -554,7 +559,7 @@ export const RecycleMachineControl: React.FC<RecycleMachineControlProps> = ({
     const handleSubmitRecycleOutput = async () => {
         const parsedWeight = parseFloat(weightInput);
         if (isNaN(parsedWeight) || parsedWeight <= 0) {
-            alert("请手动输入实测称重重量（如 14.5 KG）！\nPlease manually enter the scale weight!");
+            alert("请填入或选择电子秤上的实测重量（如 14.10 KG）！\nPlease enter the scale weight!");
             return;
         }
 
@@ -938,15 +943,23 @@ export const RecycleMachineControl: React.FC<RecycleMachineControlProps> = ({
                             <button
                                 type="button"
                                 onClick={handleSubmitRecycleOutput}
-                                disabled={isUploading || !weightInput}
-                                className="w-full py-4 bg-gradient-to-r from-cyan-500 via-blue-600 to-purple-600 hover:from-cyan-400 hover:to-purple-500 disabled:opacity-40 disabled:cursor-not-allowed text-white font-black text-base rounded-2xl shadow-xl flex items-center justify-center gap-2 transition-all active:scale-98 cursor-pointer"
+                                disabled={isUploading}
+                                className={`w-full py-4 text-white font-black text-base rounded-2xl shadow-xl flex items-center justify-center gap-2 transition-all active:scale-98 cursor-pointer ${
+                                    weightInput && Number(weightInput) > 0
+                                        ? 'bg-gradient-to-r from-cyan-500 via-blue-600 to-purple-600 hover:from-cyan-400 hover:to-purple-500 shadow-cyan-500/20'
+                                        : 'bg-gradient-to-r from-slate-600 to-zinc-700 hover:from-slate-500 hover:to-zinc-600 opacity-90'
+                                }`}
                             >
                                 {isUploading ? (
                                     <Loader className="animate-spin" size={18} />
                                 ) : (
                                     <CheckCircle2 size={20} />
                                 )}
-                                <span>确认称重并入库 ({weightInput || '0'} KG {RECYCLE_MATERIALS.find(m => m.key === selectedMaterialKey)?.label})</span>
+                                <span>
+                                    {weightInput && Number(weightInput) > 0
+                                        ? `确认称重并入库 (${weightInput} KG ${RECYCLE_MATERIALS.find(m => m.key === selectedMaterialKey)?.label})`
+                                        : `请输入实测重量后入库 (${RECYCLE_MATERIALS.find(m => m.key === selectedMaterialKey)?.label})`}
+                                </span>
                             </button>
                         </div>
                     </div>
@@ -1055,15 +1068,73 @@ export const RecycleMachineControl: React.FC<RecycleMachineControlProps> = ({
                     <input ref={fileInputRef} type="file" accept="image/*" className="hidden" onChange={handleFileSelect} />
 
                     {photoPreview && (
-                        <button
-                            type="button"
-                            onClick={handleSubmitRecycleOutput}
-                            disabled={isUploading || !weightInput}
-                            className="w-full py-3 bg-gradient-to-r from-emerald-500 to-teal-600 hover:from-emerald-400 hover:to-teal-500 text-white font-black text-xs rounded-xl shadow-lg flex items-center justify-center gap-1.5 transition-all active:scale-95 cursor-pointer"
-                        >
-                            {isUploading ? <Loader className="animate-spin" size={14} /> : <CheckCircle2 size={16} />}
-                            <span>📸 立即保存入库 ({weightInput || '0'} KG {RECYCLE_MATERIALS.find(m => m.key === selectedMaterialKey)?.label})</span>
-                        </button>
+                        <div className="space-y-3 p-3.5 bg-cyan-950/30 border border-cyan-500/30 rounded-2xl animate-fade-in shadow-inner">
+                            <div className="flex items-center justify-between">
+                                <label className="text-xs font-black text-cyan-300 flex items-center gap-1.5">
+                                    <Scale size={14} className="text-cyan-400" />
+                                    <span>现场实测重量核对 (KG)</span>
+                                    <span className="text-red-400">*</span>
+                                </label>
+                                {aiDetectedWeight && aiDetectedWeight > 0 ? (
+                                    <span className="text-[10px] bg-emerald-500/20 text-emerald-300 font-bold px-2 py-0.5 rounded-full border border-emerald-500/30">
+                                        AI读数: {aiDetectedWeight.toFixed(2)} KG
+                                    </span>
+                                ) : (
+                                    <span className="text-[10px] text-gray-400">
+                                        支持手动输入与快捷选择
+                                    </span>
+                                )}
+                            </div>
+
+                            <div className="relative flex items-center">
+                                <input
+                                    type="number"
+                                    step="0.01"
+                                    placeholder="输入秤上实测数字，如 14.10"
+                                    value={weightInput}
+                                    onChange={(e) => setWeightInput(e.target.value)}
+                                    className="w-full bg-black/60 border border-cyan-500/50 focus:border-cyan-400 rounded-xl py-2.5 px-3.5 text-2xl font-black text-white placeholder-gray-600 focus:outline-none tabular-nums"
+                                />
+                                <span className="absolute right-3.5 text-xs font-bold text-cyan-400 uppercase">KG</span>
+                            </div>
+
+                            {/* 常用快捷重量标签 */}
+                            <div className="flex items-center gap-1.5 flex-wrap pt-0.5">
+                                <span className="text-[10px] text-gray-400 font-bold">常用:</span>
+                                {['12.0', '13.5', '14.0', '14.1', '14.5', '15.0', '16.0', '18.0', '20.0'].map(w => (
+                                    <button
+                                        key={w}
+                                        type="button"
+                                        onClick={() => setWeightInput(w)}
+                                        className={`px-2 py-0.5 rounded-lg border text-[11px] font-mono font-bold transition active:scale-95 cursor-pointer ${
+                                            weightInput === w
+                                                ? 'bg-cyan-500 text-black font-black border-cyan-400 shadow-md'
+                                                : 'bg-white/10 border-white/10 text-cyan-200 hover:bg-white/20'
+                                        }`}
+                                    >
+                                        {w}kg
+                                    </button>
+                                ))}
+                            </div>
+
+                            <button
+                                type="button"
+                                onClick={handleSubmitRecycleOutput}
+                                disabled={isUploading}
+                                className={`w-full py-3.5 text-white font-black text-sm rounded-xl shadow-lg flex items-center justify-center gap-2 transition-all active:scale-95 cursor-pointer ${
+                                    weightInput && Number(weightInput) > 0
+                                        ? 'bg-gradient-to-r from-emerald-500 via-teal-500 to-cyan-500 hover:from-emerald-400 hover:to-cyan-400 shadow-emerald-500/20'
+                                        : 'bg-gradient-to-r from-purple-600 to-indigo-600 hover:from-purple-500 hover:to-indigo-500'
+                                }`}
+                            >
+                                {isUploading ? <Loader className="animate-spin" size={16} /> : <CheckCircle2 size={18} />}
+                                <span>
+                                    {weightInput && Number(weightInput) > 0
+                                        ? `📸 确认 ${weightInput} KG 并保存入库 (${RECYCLE_MATERIALS.find(m => m.key === selectedMaterialKey)?.label})`
+                                        : `📸 请输入或选择实测重量后保存入库`}
+                                </span>
+                            </button>
+                        </div>
                     )}
 
                     {aiAnalysis && (

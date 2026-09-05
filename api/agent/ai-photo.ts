@@ -53,22 +53,23 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
 
 TASK:
 1. Locate the digital screen / LED / LCD display of the electronic weighing scale in the photo.
-2. Accurately read the weight reading displayed on the scale.
-   - Look at the digits and decimal point very carefully (e.g., 0015.60, 14.85, 12.30, 20.00, 15.10, 9.80).
-   - In 7-segment LED/LCD displays, don't confuse 5 and 6, or 8 and 0, or 1 and 7.
-   - Check if there are leading unlit zeros (e.g. 0014.50 means 14.50 kg).
-   - Identify the unit (usually kg / 公斤).
-3. If there is a bag/material on the scale, identify its type/color (SF.W, SF.B, BW.W, BW.B, MIX).
+   - In electronic scales, look for the screen labeled 'WEIGHT' or 'WEIGHT(kg)'.
+   - If there are multiple display rows (Weight, Unit Price, Total Price), focus ONLY on the TOP 'WEIGHT' row!
+2. Accurately read the WEIGHT reading displayed on the scale:
+   - Look at 7-segment red or green LED digits carefully (e.g., 14.10, 14.1, 15.00, 13.50, 20.00, 12.30, 9.80).
+   - Recognize decimal points (or commas/ticks e.g. 14.10, 14.1, 14,10). Do not confuse 14.10 with 0 or 1410.
+   - Ignore unlit segments and leading blanks.
+3. If the scale display is completely unreadable or not visible, return weight: 0.
 
 Return ONLY valid JSON (no markdown ticks):
 {
   "scale_detected": true,
-  "weight": 14.50,
+  "weight": 14.10,
   "unit": "kg",
-  "digits_raw_seen": "14.50",
+  "digits_raw_seen": "14.10",
   "material_type": "SF.W",
   "confidence": 0.95,
-  "description": "电子秤读数为 14.50 公斤"
+  "description": "电子秤读数为 14.10 公斤"
 }`;
             } else if (targetMode === 'defect') {
                 prompt = `你是工厂管理系统的 AI 助手。请分析这张放在电子称重器上的缺陷产品照片。
@@ -217,6 +218,35 @@ You MUST return a JSON format like this:
 
     } catch (e: any) {
         console.error("AI Photo Analysis Error:", e);
-        return res.status(500).json({ error: e.message || "Photo analysis failed" });
+        const reqMode = req.body?.mode;
+        if (reqMode === 'scale' || reqMode === 'recycle') {
+            return res.status(200).json({
+                scale_detected: false,
+                weight: 0,
+                unit: 'kg',
+                description: 'AI 视觉分析服务暂时离线或未识别，请以人工输入为准',
+                is_fallback: true
+            });
+        }
+        if (reqMode === 'defect') {
+            return res.status(200).json({
+                description: '缺陷记录已就绪，请手动确认重量与原因',
+                category: 'defect',
+                tags: ['manual_check'],
+                risk_flag: true,
+                risk_reason: 'Defect product recorded (Manual entry)',
+                weight: 0,
+                defect_reason: 'other',
+                is_fallback: true
+            });
+        }
+        return res.status(200).json({
+            description: '现场工作记录已上传（未调用AI）',
+            category: 'other',
+            tags: [],
+            risk_flag: false,
+            risk_reason: '',
+            is_fallback: true
+        });
     }
 }

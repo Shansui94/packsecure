@@ -2272,7 +2272,7 @@ const ProductionControl: React.FC<ProductionControlProps> = ({ user, jobs = [], 
             });
             if (res.ok) {
                 const data = await res.json();
-                if (data.weight !== undefined) {
+                if (data.weight !== undefined && Number(data.weight) > 0) {
                     setDefectWeight(String(data.weight));
                 }
                 if (data.defect_reason) {
