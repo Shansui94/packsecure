@@ -3,6 +3,7 @@ import QRCode from 'react-qr-code';
 import { supabase } from '../services/supabase';
 import { User as UserType, UserRole } from '../types';
 import { useTranslation } from 'react-i18next';
+import { changeLanguage } from '../utils/i18n';
 import { 
     User, Lock, Shield, CheckCircle, AlertTriangle, 
     Eye, EyeOff, MapPin, Building, BadgeCheck, 
@@ -205,8 +206,7 @@ export const Profile: React.FC<ProfileProps> = ({ user, onNavigate }) => {
     ];
 
     const handleLanguageChange = (code: string) => {
-        i18n.changeLanguage(code);
-        localStorage.setItem('packsecure_lang', code);
+        changeLanguage(code as any);
     };
 
     // ── Fetch Real Business Stats & Evaluate Badges ──

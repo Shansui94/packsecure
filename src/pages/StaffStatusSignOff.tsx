@@ -117,7 +117,26 @@ interface StaffStatusSignOffProps {
 }
 
 const StaffStatusSignOff: React.FC<StaffStatusSignOffProps> = ({ user, onNavigate }) => {
-    const { t } = useTranslation();
+    const { t, i18n } = useTranslation();
+    const [currentLang, setCurrentLang] = useState<string>(() => i18n.language || localStorage.getItem('packsecure_lang') || 'zh-CN');
+
+    useEffect(() => {
+        const handleLangChange = (e: any) => {
+            const newLang = e?.detail || localStorage.getItem('packsecure_lang') || 'zh-CN';
+            setCurrentLang(newLang);
+        };
+        window.addEventListener('packsecure:lang-change', handleLangChange);
+        return () => window.removeEventListener('packsecure:lang-change', handleLangChange);
+    }, []);
+
+    const getLocLabel = useCallback((loc: LocationKey) => {
+        const conf = LOCATION_CONFIG[loc];
+        if (!conf) return loc;
+        if (currentLang === 'zh-CN') return conf.label;
+        if (currentLang === 'en') return conf.labelEn || conf.label;
+        const translated = t(conf.label);
+        return (translated && translated !== conf.label) ? translated : (conf.labelEn || conf.label);
+    }, [currentLang, t]);
     
     // Core filter state
     const [selectedDate, setSelectedDate] = useState<string>(mytTodayYmd());
@@ -399,7 +418,7 @@ const StaffStatusSignOff: React.FC<StaffStatusSignOffProps> = ({ user, onNavigat
                     t.driver_id === emp.employee_id || t.driver_id === emp.name
                 );
                 if (activeTrip) {
-                    workContext.deliveryTrip = `${activeTrip.zone || '配送中'} (${activeTrip.status})`;
+                    workContext.deliveryTrip = `${activeTrip.zone || t('配送中')} (${activeTrip.status})`;
                 }
             }
 
@@ -501,7 +520,7 @@ const StaffStatusSignOff: React.FC<StaffStatusSignOffProps> = ({ user, onNavigat
                 const empId = (item.employee.employee_id || '').toLowerCase();
                 const machine = (item.attendance?.machine_id || item.workContext.machineName || '').toLowerCase();
                 const role = (item.employee.role || '').toLowerCase();
-                const locName = (LOCATION_CONFIG[item.location]?.label || item.location).toLowerCase();
+                const locName = `${getLocLabel(item.location)} ${LOCATION_CONFIG[item.location]?.labelEn || ''} ${item.location}`.toLowerCase();
                 if (!name.includes(q) && !empId.includes(q) && !machine.includes(q) && !role.includes(q) && !locName.includes(q)) {
                     return false;
                 }
@@ -568,7 +587,7 @@ const StaffStatusSignOff: React.FC<StaffStatusSignOffProps> = ({ user, onNavigat
 
             if (error) {
                 console.error("Sign-off error:", error);
-                alert(`核准更新失败: ${error.message}`);
+                alert(`${t('核准更新失败')}: ${error.message}`);
                 loadData(false);
             } else {
                 if (user) {
@@ -591,7 +610,7 @@ const StaffStatusSignOff: React.FC<StaffStatusSignOffProps> = ({ user, onNavigat
         if (!item.attendance) return;
         const record = item.attendance;
 
-        const confirmed = window.confirm(`确定要撤销员工【${item.employee.name}】的工时核准标记吗？\n撤销后将回到待审核状态。`);
+        const confirmed = window.confirm(`${t('确定要撤销员工')}【${item.employee.name}】${t('的工时核准标记吗？\n撤销后将回到待审核状态。')}`);
         if (!confirmed) return;
 
         try {
@@ -638,8 +657,8 @@ const StaffStatusSignOff: React.FC<StaffStatusSignOffProps> = ({ user, onNavigat
             return;
         }
 
-        const locLabel = targetLoc ? `【${LOCATION_CONFIG[targetLoc].label}】` : '';
-        const confirmed = window.confirm(`确定要一键核准${locLabel}当前筛选出的 ${pendingItems.length} 位员工下班工时吗？\n核准后将自动锁定考勤记录并归档。`);
+        const locLabel = targetLoc ? `【${getLocLabel(targetLoc)}】` : '';
+        const confirmed = window.confirm(`${t('确定要一键核准')}${locLabel}${t('当前筛选出的')} ${pendingItems.length} ${t('位员工下班工时吗？\n核准后将自动锁定考勤记录并归档。')}`);
         if (!confirmed) return;
 
         setBatchLoading(true);
@@ -667,10 +686,10 @@ const StaffStatusSignOff: React.FC<StaffStatusSignOffProps> = ({ user, onNavigat
             }
 
             await loadData(false);
-            alert(`✅ 成功批量核准 ${pendingItems.length} 条下班记录！`);
+            alert(`✅ ${t('成功批量核准')} ${pendingItems.length} ${t('条下班记录！')}`);
         } catch (err) {
             console.error("Batch sign-off error:", err);
-            alert("批量核准过程中出现问题，请刷新重试。");
+            alert(t('批量核准过程中出现问题，请刷新重试。'));
         } finally {
             setBatchLoading(false);
         }
@@ -782,7 +801,7 @@ const StaffStatusSignOff: React.FC<StaffStatusSignOffProps> = ({ user, onNavigat
             alert(t('✅ 工时记录调整已成功保存！'));
         } catch (err: any) {
             console.error("Save adjust error:", err);
-            alert(`保存失败: ${err.message || err}`);
+            alert(`${t('保存失败')}: ${err.message || err}`);
         } finally {
             setSavingAdjust(false);
         }
@@ -828,13 +847,13 @@ const StaffStatusSignOff: React.FC<StaffStatusSignOffProps> = ({ user, onNavigat
                         <div className="flex items-center gap-2 mt-1 flex-wrap text-[11px]">
                             {/* Role Badge */}
                             <span className="px-2 py-0.5 rounded-lg bg-white/5 text-gray-300 border border-white/10 font-medium">
-                                {emp.role}
+                                {t(emp.role) || emp.role}
                             </span>
 
                             {/* Location Badge (High-contrast Factory Tag) */}
                             <span className={`px-2 py-0.5 rounded-lg font-bold border flex items-center gap-1 ${locConfig.badgeClass}`}>
                                 <MapPin size={10} />
-                                <span>{locConfig.label}</span>
+                                <span>{getLocLabel(location)}</span>
                                 <span className="text-[9px] opacity-70">({locConfig.code})</span>
                             </span>
                         </div>
@@ -882,9 +901,9 @@ const StaffStatusSignOff: React.FC<StaffStatusSignOffProps> = ({ user, onNavigat
                         {att ? (
                             <div className="text-xs text-gray-200 font-mono">
                                 <div>
-                                    <span className="text-gray-400">入: </span>
+                                    <span className="text-gray-400">{t('入')}: </span>
                                     <span>{att.clock_in ? att.clock_in.slice(11, 16) : '--:--'}</span>
-                                    <span className="text-gray-400 ml-2">出: </span>
+                                    <span className="text-gray-400 ml-2">{t('出')}: </span>
                                     <span>{att.clock_out ? att.clock_out.slice(11, 16) : (status === 'ACTIVE' ? t('进行中') : '--:--')}</span>
                                 </div>
                                 <div className="text-[11px] text-gray-400 mt-0.5">
@@ -903,17 +922,17 @@ const StaffStatusSignOff: React.FC<StaffStatusSignOffProps> = ({ user, onNavigat
                             {workContext.machineName && (
                                 <p className="flex items-center gap-1 font-semibold text-white">
                                     <Factory size={12} className="text-indigo-400" />
-                                    <span>机台: {workContext.machineName}</span>
+                                    <span>{t('机台')}: {workContext.machineName}</span>
                                 </p>
                             )}
                             {workContext.sku && (
                                 <p className="text-[11px] text-gray-400 truncate max-w-[180px]">
-                                    产品: {workContext.sku}
+                                    {t('产品')}: {workContext.sku}
                                 </p>
                             )}
                             {workContext.outputCount !== undefined && (
                                 <p className="text-[11px] text-cyan-300 font-mono">
-                                    产出: {workContext.outputCount} 卷
+                                    {t('产出')}: {workContext.outputCount} {t('卷')}
                                 </p>
                             )}
                             {workContext.deliveryTrip && (
@@ -924,7 +943,7 @@ const StaffStatusSignOff: React.FC<StaffStatusSignOffProps> = ({ user, onNavigat
                             )}
                             {workContext.specialTask && (
                                 <p className="text-[11px] text-purple-300">
-                                    专项: {workContext.specialTask}
+                                    {t('专项')}: {workContext.specialTask}
                                 </p>
                             )}
                             {!workContext.machineName && !workContext.deliveryTrip && !workContext.specialTask && att && (
@@ -1163,7 +1182,7 @@ const StaffStatusSignOff: React.FC<StaffStatusSignOffProps> = ({ user, onNavigat
                                 }`}
                             >
                                 <span className={`w-1.5 h-1.5 rounded-full ${isSelected ? 'bg-current' : 'bg-gray-500'}`}></span>
-                                <span>{conf.label}</span>
+                                <span>{getLocLabel(loc)}</span>
                                 <span className="text-[10px] opacity-70">({conf.code})</span>
                                 <span className={`text-[10px] px-1.5 py-0.2 rounded-full font-mono ${
                                     isSelected ? 'bg-white/20 text-white' : 'bg-white/10 text-gray-400'
@@ -1171,7 +1190,7 @@ const StaffStatusSignOff: React.FC<StaffStatusSignOffProps> = ({ user, onNavigat
                                     {count}
                                 </span>
                                 {pendingCount > 0 && (
-                                    <span className="w-2 h-2 rounded-full bg-amber-400 animate-pulse" title={`${pendingCount}人待审核`}></span>
+                                    <span className="w-2 h-2 rounded-full bg-amber-400 animate-pulse" title={`${pendingCount} ${t('人待审核')}`}></span>
                                 )}
                             </button>
                         );
@@ -1215,9 +1234,9 @@ const StaffStatusSignOff: React.FC<StaffStatusSignOffProps> = ({ user, onNavigat
                     <div className="flex items-center gap-2">
                         <Building size={16} className={LOCATION_CONFIG[locationFilter].color} />
                         <span className="text-white font-bold">
-                            {t('当前专注厂区')}: <span className={LOCATION_CONFIG[locationFilter].color}>{LOCATION_CONFIG[locationFilter].label} ({LOCATION_CONFIG[locationFilter].labelEn} · {LOCATION_CONFIG[locationFilter].code})</span>
+                            {t('当前专注厂区')}: <span className={LOCATION_CONFIG[locationFilter].color}>{getLocLabel(locationFilter)} ({LOCATION_CONFIG[locationFilter].labelEn} · {LOCATION_CONFIG[locationFilter].code})</span>
                         </span>
-                        <span className="text-gray-400">· 统计卡片与列表已自动联动过滤</span>
+                        <span className="text-gray-400">{t('· 统计卡片与列表已自动联动过滤')}</span>
                     </div>
                     <button
                         type="button"
@@ -1237,7 +1256,7 @@ const StaffStatusSignOff: React.FC<StaffStatusSignOffProps> = ({ user, onNavigat
                     className="apple-glass p-4 rounded-2xl border border-white/10 hover:border-indigo-500/40 transition cursor-pointer group"
                 >
                     <div className="flex items-center justify-between text-gray-400 text-xs mb-1">
-                        <span>{locationFilter === 'ALL' ? t('全厂在册员工') : `${LOCATION_CONFIG[locationFilter].label}在册`}</span>
+                        <span>{locationFilter === 'ALL' ? t('全厂在册员工') : `${getLocLabel(locationFilter)} ${t('在册')}`}</span>
                         <Users size={16} className="text-gray-400 group-hover:text-indigo-400 transition" />
                     </div>
                     <p className="text-2xl font-black text-white font-mono">{metrics.total}</p>
@@ -1416,19 +1435,19 @@ const StaffStatusSignOff: React.FC<StaffStatusSignOffProps> = ({ user, onNavigat
                                         <div>
                                             <div className="flex items-center gap-2">
                                                 <h2 className="text-base font-black text-white">
-                                                    {conf.label}
+                                                    {getLocLabel(loc)}
                                                 </h2>
                                                 <span className="text-[11px] font-bold text-gray-400">
                                                     ({conf.labelEn} · {conf.code})
                                                 </span>
                                             </div>
                                             <div className="flex items-center gap-3 text-xs mt-0.5">
-                                                <span className="text-gray-300">共 <strong>{locItems.length}</strong> 人</span>
-                                                <span className="text-emerald-400">🟢 <strong>{locActive}</strong> 人在岗</span>
+                                                <span className="text-gray-300">{t('共')} <strong>{locItems.length}</strong> {t('人')}</span>
+                                                <span className="text-emerald-400">🟢 <strong>{locActive}</strong> {t('人在岗')}</span>
                                                 {locPending > 0 ? (
-                                                    <span className="text-amber-300 font-bold animate-pulse">🟡 <strong>{locPending}</strong> 人待审核</span>
+                                                    <span className="text-amber-300 font-bold animate-pulse">🟡 <strong>{locPending}</strong> {t('人待审核')}</span>
                                                 ) : (
-                                                    <span className="text-blue-400">🔵 全部已审核</span>
+                                                    <span className="text-blue-400">🔵 {t('全部已审核')}</span>
                                                 )}
                                             </div>
                                         </div>
@@ -1504,10 +1523,10 @@ const StaffStatusSignOff: React.FC<StaffStatusSignOffProps> = ({ user, onNavigat
                                         onChange={e => setEditForm(prev => ({ ...prev, location: e.target.value as LocationKey }))}
                                         className="w-full bg-white/5 border border-white/10 text-xs px-3 py-2.5 rounded-xl text-white focus:outline-none focus:border-indigo-500 cursor-pointer"
                                     >
-                                        <option value="Taiping">太平总厂 (Taiping · T1)</option>
-                                        <option value="Nilai">汝来分厂 (Nilai · N1)</option>
-                                        <option value="Johor">柔佛分厂 (Johor · J1)</option>
-                                        <option value="Kelantan">吉兰丹分厂 (Kelantan · K1)</option>
+                                        <option value="Taiping">{getLocLabel('Taiping')} (Taiping · T1)</option>
+                                        <option value="Nilai">{getLocLabel('Nilai')} (Nilai · N1)</option>
+                                        <option value="Johor">{getLocLabel('Johor')} (Johor · J1)</option>
+                                        <option value="Kelantan">{getLocLabel('Kelantan')} (Kelantan · K1)</option>
                                     </select>
                                 </div>
                                 <div>
@@ -1516,7 +1535,7 @@ const StaffStatusSignOff: React.FC<StaffStatusSignOffProps> = ({ user, onNavigat
                                     </label>
                                     <input
                                         type="text"
-                                        placeholder="例: J1 / T1-M03"
+                                        placeholder={t('例: J1 / T1-M03')}
                                         value={editForm.machine_id}
                                         onChange={e => setEditForm(prev => ({ ...prev, machine_id: e.target.value.toUpperCase() }))}
                                         className="w-full bg-white/5 border border-white/10 text-xs px-3.5 py-2.5 rounded-xl text-white font-mono focus:outline-none focus:border-indigo-500 uppercase"
