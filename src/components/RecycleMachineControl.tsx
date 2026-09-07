@@ -85,6 +85,45 @@ const DOWNTIME_REASONS = [
     '机器调机 / 检修 (Maintenance)'
 ];
 
+const resolveRecycleLocId = (mId: string): string => {
+    if (mId.startsWith('J')) return 'Johor';
+    if (mId.startsWith('K')) return 'Kelantan';
+    if (mId.startsWith('N')) return 'Nilai';
+    return 'OPM Lama';
+};
+
+const resolveOperatorUuid = async (
+    rawOpId: string | null | undefined,
+    empId: string | null | undefined,
+    name: string | null | undefined
+): Promise<string | null> => {
+    const isUuid = (val: string | null | undefined) =>
+        typeof val === 'string' && /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i.test(val);
+
+    if (isUuid(rawOpId)) return rawOpId!;
+
+    try {
+        const queryTerms: string[] = [];
+        if (empId) queryTerms.push(`employee_id.eq.${empId}`, `pin.eq.${empId}`);
+        if (rawOpId) queryTerms.push(`employee_id.eq.${rawOpId}`, `pin.eq.${rawOpId}`, `auth_user_id.eq.${rawOpId}`);
+        if (name) queryTerms.push(`name.eq.${name}`);
+
+        if (queryTerms.length > 0) {
+            const { data } = await supabase
+                .from('sys_users_v2')
+                .select('id')
+                .or(queryTerms.join(','))
+                .limit(1);
+            if (data && data[0]?.id) {
+                return data[0].id;
+            }
+        }
+    } catch (e) {
+        console.warn("Could not resolve operator UUID:", e);
+    }
+    return null;
+};
+
 export const RecycleMachineControl: React.FC<RecycleMachineControlProps> = ({
     machineId,
     machineName,
@@ -136,21 +175,26 @@ export const RecycleMachineControl: React.FC<RecycleMachineControlProps> = ({
     const fetchRecycleLogs = async () => {
         try {
             setLoadingLogs(true);
-            const shortKey = machineId.split('-')[0].trim();
 
-            // Fetch up to 1000 newest records first to guarantee latest records are always present
+            // Fetch up to 1000 newest records strictly for this recycle machine
             const { data, error } = await supabase
                 .from('work_photos')
                 .select('*')
-                .or(`machine_id.eq.${machineId},machine_id.eq.${shortKey},machine_id.ilike.${shortKey}-%`)
+                .eq('machine_id', machineId)
                 .order('created_at', { ascending: false })
                 .limit(1000);
 
             if (error) throw error;
 
             if (data) {
+                // Defensively exclude any blowing machine formula or inspection logs
+                const filteredData = data.filter(p => 
+                    p.category !== 'MACHINE_SCREW_FORMULA' && 
+                    p.category !== 'MACHINE_INSPECTION_LOG'
+                );
+
                 // Sort chronologically for accurate interval calculations
-                const chronoData = [...data].reverse();
+                const chronoData = [...filteredData].reverse();
                 const parsedLogs: RecycleBatchLog[] = [];
 
                 chronoData.forEach((p, idx) => {
@@ -375,7 +419,7 @@ export const RecycleMachineControl: React.FC<RecycleMachineControlProps> = ({
             // 2. Delete from production_logs_v2
             await supabase.from('production_logs_v2').delete().eq('batch_code', logItem.id);
             // 3. Reverse stock_ledger_v2
-            const locId = machineId.startsWith('N') ? 'Nilai' : 'OPM Lama';
+            const locId = resolveRecycleLocId(machineId);
             const selectedConfig = RECYCLE_MATERIALS.find(m => m.key === logItem.materialKey) || RECYCLE_MATERIALS[0];
             await supabase.from('stock_ledger_v2').insert([{
                 sku: selectedConfig.sku,
@@ -429,7 +473,7 @@ export const RecycleMachineControl: React.FC<RecycleMachineControlProps> = ({
             }).eq('batch_code', logItem.id);
 
             // 3. Insert stock_ledger_v2 adjustment delta
-            const locId = machineId.startsWith('N') ? 'Nilai' : 'OPM Lama';
+            const locId = resolveRecycleLocId(machineId);
             const selectedConfig = RECYCLE_MATERIALS.find(m => m.key === logItem.materialKey) || RECYCLE_MATERIALS[0];
             await supabase.from('stock_ledger_v2').insert([{
                 sku: selectedConfig.sku,
@@ -658,15 +702,16 @@ export const RecycleMachineControl: React.FC<RecycleMachineControlProps> = ({
 
             // 3. Reliable production_logs_v2 & stock_ledger_v2 sync
             try {
-                const locId = machineId.startsWith('N') ? 'Nilai' : 'OPM Lama';
-                const operatorUid = user?.uid || (user as any)?.id || operatorId || null;
+                const locId = resolveRecycleLocId(machineId);
+                const rawOpUid = user?.uid || (user as any)?.id || operatorId || null;
+                const operatorUuid = await resolveOperatorUuid(rawOpUid, effectiveOpEmpId, effectiveOpName);
 
                 // Sync to production_logs_v2
                 await supabase.from('production_logs_v2').insert([{
                     machine_id: machineId,
                     sku: selectedConfig.sku,
                     output_qty: targetWeight,
-                    operator_id: operatorUid,
+                    operator_id: operatorUuid,
                     reject_qty: 0,
                     note: formattedNote,
                     batch_code: insertedPhoto?.id || null
