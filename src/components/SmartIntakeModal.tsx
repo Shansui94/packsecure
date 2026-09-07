@@ -21,7 +21,7 @@ import {
     LogOut
 } from 'lucide-react';
 import { Scanner } from '@yudiel/react-qr-scanner';
-import { useTranslation } from 'react-i18next';
+import { t } from '../utils/i18n';
 import {
     createFastOcrThumbnail,
     uploadOriginalImageToSupabase,
@@ -69,7 +69,7 @@ const INTENT_NAMES: Record<UniversalIntakeIntent, { label: string; color: string
 };
 
 export const SmartIntakeModal: React.FC<SmartIntakeModalProps> = ({ currentUser, pageContext }) => {
-    const { t } = useTranslation();
+    const [, setLangTick] = useState(0);
     const [isOpen, setIsOpen] = useState(false);
     const [selectedFile, setSelectedFile] = useState<File | null>(null);
     const [imagePreview, setImagePreview] = useState<string>('');
@@ -113,7 +113,7 @@ export const SmartIntakeModal: React.FC<SmartIntakeModalProps> = ({ currentUser,
         const handleOnline = async () => {
             const synced = await syncOfflineQueue(() => setOfflineCount((prev) => Math.max(0, prev - 1)));
             if (synced > 0) {
-                setToastMessage(`✅ 网络已恢复，已自动同步 ${synced} 条离线数据`);
+                setToastMessage(`${t('✅ 网络已恢复，已自动同步离线数据')} (${synced})`);
                 setTimeout(() => setToastMessage(null), 3500);
             }
             updateQueueCount();
@@ -150,13 +150,19 @@ export const SmartIntakeModal: React.FC<SmartIntakeModalProps> = ({ currentUser,
             }
         };
 
+        const handleLangChange = () => {
+            setLangTick((prev) => prev + 1);
+        };
+
         window.addEventListener('packsecure:machine-changed', handleMachineChange);
         window.addEventListener('storage', handleStorage);
         window.addEventListener('packsecure:open-smart-intake', handleOpenIntake);
+        window.addEventListener('packsecure:lang-change', handleLangChange);
         return () => {
             window.removeEventListener('packsecure:machine-changed', handleMachineChange);
             window.removeEventListener('storage', handleStorage);
             window.removeEventListener('packsecure:open-smart-intake', handleOpenIntake);
+            window.removeEventListener('packsecure:lang-change', handleLangChange);
         };
     }, []);
 
@@ -193,7 +199,7 @@ export const SmartIntakeModal: React.FC<SmartIntakeModalProps> = ({ currentUser,
         const targetCode = matched ? matched.machine_id : cleanCode;
 
         if (!targetCode) {
-            setToastMessage('⚠️ 未能识别有效的机台二维码');
+            setToastMessage(t('⚠️ 未能识别有效的机台二维码'));
             setTimeout(() => { hasScannedMachineQrRef.current = false; }, 1500);
             return;
         }
@@ -206,7 +212,7 @@ export const SmartIntakeModal: React.FC<SmartIntakeModalProps> = ({ currentUser,
         bindOperatorMachine(targetCode);
         setBoundMachine(targetCode);
         setIsScanningMachineQr(false);
-        setToastMessage(`✅ 扫码成功！当前已切换绑定至机台: ${targetCode}`);
+        setToastMessage(`${t('✅ 扫码成功！当前已切换绑定至机台:')} ${targetCode}`);
 
         if (parsedData) {
             setParsedData({
@@ -250,7 +256,7 @@ export const SmartIntakeModal: React.FC<SmartIntakeModalProps> = ({ currentUser,
 
         const SpeechRecognition = (window as any).SpeechRecognition || (window as any).webkitSpeechRecognition;
         if (!SpeechRecognition) {
-            alert('当前浏览器不支持语音听写，请手动输入');
+            alert(t('当前浏览器不支持语音听写，请手动输入'));
             return;
         }
 
@@ -278,7 +284,7 @@ export const SmartIntakeModal: React.FC<SmartIntakeModalProps> = ({ currentUser,
 
     // 操作员身份字段兼容提取 (支持 employee_id / id / employeeId / uid)
     const currentOperatorId = currentUser?.employee_id || currentUser?.id || currentUser?.employeeId || currentUser?.uid || '';
-    const currentOperatorName = currentUser?.name || '现场操作员';
+    const currentOperatorName = currentUser?.name || t('现场操作员');
 
     // 处理拍照选择与双流极速识别
     const handleFileSelect = async (file: File) => {
@@ -320,7 +326,7 @@ export const SmartIntakeModal: React.FC<SmartIntakeModalProps> = ({ currentUser,
             setParsedData(result);
         } catch (err: any) {
             console.error('Fast intake failed:', err);
-            setToastMessage(`识别失败: ${err.message || '网络不稳定'}`);
+            setToastMessage(`${t('识别失败:')} ${err.message || t('网络不稳定')}`);
         } finally {
             setIsAnalyzing(false);
         }
@@ -330,7 +336,7 @@ export const SmartIntakeModal: React.FC<SmartIntakeModalProps> = ({ currentUser,
     const handleTextSubmit = async (customText?: string) => {
         const textToSubmit = (customText !== undefined ? customText : speechText).trim();
         if (!textToSubmit) {
-            setToastMessage('⚠️ 请输入文字说明或点击拍照');
+            setToastMessage(t('⚠️ 请输入文字说明或点击拍照'));
             return;
         }
 
@@ -362,7 +368,7 @@ export const SmartIntakeModal: React.FC<SmartIntakeModalProps> = ({ currentUser,
             setParsedData(result);
         } catch (err: any) {
             console.error('Fast text intake failed:', err);
-            setToastMessage(`识别失败: ${err.message || '网络不稳定'}`);
+            setToastMessage(`${t('识别失败:')} ${err.message || t('网络不稳定')}`);
         } finally {
             setIsAnalyzing(false);
         }
@@ -375,8 +381,8 @@ export const SmartIntakeModal: React.FC<SmartIntakeModalProps> = ({ currentUser,
 
         try {
             const isLogout = !!parsedData.isLogout ||
-                (parsedData.summary && (parsedData.summary.includes('登出') || parsedData.summary.includes('下机'))) ||
-                (speechText && (speechText.includes('登出') || speechText.includes('下机')));
+                (parsedData.summary && (/登出|下机|logout|clock out/i).test(parsedData.summary)) ||
+                (speechText && (/登出|下机|logout|clock out/i).test(speechText));
 
             // 若包含登出意图，执行解绑；若为登录/开机，执行本地绑定
             if (isLogout) {
@@ -393,9 +399,9 @@ export const SmartIntakeModal: React.FC<SmartIntakeModalProps> = ({ currentUser,
             const res = await commitUniversalIntake(parsedData, rawImageUrl || imagePreview, speechText);
             if (res.success) {
                 if (isLogout) {
-                    setToastMessage('✅ 登出机台成功！已解除当前机台绑定');
+                    setToastMessage(t('✅ 登出机台成功！已解除当前机台绑定'));
                 } else {
-                    setToastMessage('✅ 入库成功！已自动沉淀到对应业务台账');
+                    setToastMessage(t('✅ 入库成功！已自动沉淀到对应业务台账'));
                 }
                 setTimeout(() => {
                     handleReset();
@@ -403,7 +409,7 @@ export const SmartIntakeModal: React.FC<SmartIntakeModalProps> = ({ currentUser,
                 }, 1500);
             }
         } catch (err: any) {
-            setToastMessage(`入库异常: ${err.message}`);
+            setToastMessage(`${t('入库异常:')} ${err.message}`);
         } finally {
             setIsCommitting(false);
         }
@@ -412,13 +418,13 @@ export const SmartIntakeModal: React.FC<SmartIntakeModalProps> = ({ currentUser,
     // 一键登出当前机台
     const handleDirectLogout = async () => {
         if (!boundMachine) {
-            setToastMessage('⚠️ 当前未绑定任何机台');
+            setToastMessage(t('⚠️ 当前未绑定任何机台'));
             return;
         }
 
         const currentMachineName = boundMachine;
 
-        if (!window.confirm(`确认要一键登出机台【${currentMachineName}】吗？\n系统将自动记录下线考勤时间并解除机台绑定。`)) {
+        if (!window.confirm(`${t('确认要一键登出机台吗？')}\n[${currentMachineName}]\n${t('系统将自动记录下线考勤时间并解除机台绑定。')}`)) {
             return;
         }
 
@@ -447,7 +453,7 @@ export const SmartIntakeModal: React.FC<SmartIntakeModalProps> = ({ currentUser,
             unbindOperatorMachine();
             setBoundMachine('');
 
-            setToastMessage(`✅ 已成功登出机台【${currentMachineName}】！`);
+            setToastMessage(`${t('✅ 已成功登出机台')} [${currentMachineName}]`);
             setTimeout(() => {
                 handleReset();
             }, 600);
@@ -456,7 +462,7 @@ export const SmartIntakeModal: React.FC<SmartIntakeModalProps> = ({ currentUser,
             // 兜底本地解绑，确保操作员不被卡住
             unbindOperatorMachine();
             setBoundMachine('');
-            setToastMessage(`✅ 已解除机台【${currentMachineName}】绑定`);
+            setToastMessage(`${t('✅ 已解除机台绑定')} [${currentMachineName}]`);
         } finally {
             setIsLoggingOut(false);
         }
@@ -482,7 +488,7 @@ export const SmartIntakeModal: React.FC<SmartIntakeModalProps> = ({ currentUser,
         setParsedData({
             ...parsedData,
             intent: newIntent,
-            summary: `已修正为: ${INTENT_NAMES[newIntent]?.label || newIntent}`
+            summary: `${t('已修正为:')} ${t(INTENT_NAMES[newIntent]?.label || newIntent)}`
         });
     };
 
@@ -494,7 +500,7 @@ export const SmartIntakeModal: React.FC<SmartIntakeModalProps> = ({ currentUser,
             ...parsedData,
             intent: 'operator_special_work',
             workCategory: category,
-            summary: `【${catInfo?.label || category}】操作员专项作业记录`
+            summary: `【${t(catInfo?.label || category)}】${t('操作员专项作业记录')}`
         });
     };
 
@@ -507,17 +513,17 @@ export const SmartIntakeModal: React.FC<SmartIntakeModalProps> = ({ currentUser,
                         onClick={async () => {
                             const synced = await syncOfflineQueue(() => setOfflineCount((prev) => Math.max(0, prev - 1)));
                             if (synced > 0) {
-                                setToastMessage(`✅ 成功同步 ${synced} 条离线数据`);
+                                setToastMessage(`✅ ${t('Commit successful! Record archived to ledger') || 'Synced'}`);
                             } else {
-                                setToastMessage('离线队列等待同步中，将在网络恢复时自动重试');
+                                setToastMessage(t('离线队列等待同步中，将在网络恢复时自动重试'));
                             }
                             setTimeout(() => setToastMessage(null), 3000);
                         }}
                         className="flex items-center gap-1.5 px-3 py-2 bg-amber-500/90 text-white rounded-full text-xs font-semibold shadow-lg hover:bg-amber-600 transition"
-                        title="点击同步离线暂存队列"
+                        title={t('点击同步离线暂存队列')}
                     >
                         <WifiOff className="w-3.5 h-3.5 animate-pulse" />
-                        <span>待同步 ({offlineCount})</span>
+                        <span>{t('待同步')} ({offlineCount})</span>
                     </button>
                 )}
 
@@ -527,21 +533,21 @@ export const SmartIntakeModal: React.FC<SmartIntakeModalProps> = ({ currentUser,
                         setIsOpen(true);
                     }}
                     className="flex items-center gap-2.5 px-4 py-2.5 bg-gradient-to-r from-emerald-600 via-teal-600 to-cyan-600 text-white rounded-full shadow-2xl hover:scale-105 active:scale-95 transition-all duration-200 border border-white/20 group"
-                    title="点击打开万能快拍与作业录入"
+                    title={t('点击打开万能快拍与作业录入')}
                 >
                     <div className="relative">
                         <Camera className="w-5 h-5 text-white" />
                         <Sparkles className="w-2.5 h-2.5 text-amber-300 absolute -top-1 -right-1 animate-ping" />
                     </div>
                     <div className="flex flex-col items-start leading-tight">
-                        <span className="font-bold text-sm tracking-wide">万能快拍</span>
+                        <span className="font-bold text-sm tracking-wide">{t('万能快拍')}</span>
                         {boundMachine ? (
                             <span className="text-[10px] text-emerald-100 font-mono font-bold flex items-center gap-1">
                                 <span className="w-1.5 h-1.5 rounded-full bg-amber-300 animate-pulse" />
                                 {boundMachine}
                             </span>
                         ) : (
-                            <span className="text-[10px] text-emerald-200/80 font-mono">现场录入</span>
+                            <span className="text-[10px] text-emerald-200/80 font-mono">{t('现场录入')}</span>
                         )}
                     </div>
                 </button>
@@ -572,19 +578,19 @@ export const SmartIntakeModal: React.FC<SmartIntakeModalProps> = ({ currentUser,
                                 </div>
                                 <div>
                                     <h3 className="text-base font-bold text-white flex items-center gap-2">
-                                        万能快拍 (Smart Intake)
+                                        {t('万能快拍 (Smart Intake)')}
                                         <span className="text-[10px] uppercase font-mono px-2 py-0.5 rounded-full bg-emerald-500/20 text-emerald-400 border border-emerald-500/30">
-                                            0.8s 极速识别
+                                            {t('0.8s 极速识别')}
                                         </span>
                                     </h3>
                                     <p className="text-xs text-zinc-400 flex items-center gap-3 mt-0.5">
                                         <span className="flex items-center gap-1">
                                             <Clock className="w-3 h-3 text-zinc-500" />
-                                            {currentTime || '刚刚'}
+                                            {currentTime || t('刚刚')}
                                         </span>
                                         <span className="flex items-center gap-1">
                                             <MapPin className="w-3 h-3 text-zinc-500" />
-                                            {gpsLocation || '定位中...'}
+                                            {gpsLocation || t('定位中...')}
                                         </span>
                                     </p>
                                 </div>
@@ -605,7 +611,7 @@ export const SmartIntakeModal: React.FC<SmartIntakeModalProps> = ({ currentUser,
                             <div className="flex items-center gap-2">
                                 <span className="text-zinc-400 flex items-center gap-1 font-medium">
                                     <Cpu className="w-3.5 h-3.5 text-indigo-400" />
-                                    当前机台:
+                                    {t('当前机台:')}
                                 </span>
                                 {boundMachine ? (
                                     <span className="inline-flex items-center gap-1.5 px-2.5 py-0.5 rounded-full bg-emerald-500/20 text-emerald-300 font-bold border border-emerald-500/30">
@@ -614,7 +620,7 @@ export const SmartIntakeModal: React.FC<SmartIntakeModalProps> = ({ currentUser,
                                     </span>
                                 ) : (
                                     <span className="inline-flex items-center gap-1 px-2 py-0.5 rounded-full bg-amber-500/20 text-amber-300 font-medium border border-amber-500/30">
-                                        <AlertTriangle className="w-3 h-3" /> 未绑定机台
+                                        <AlertTriangle className="w-3 h-3" /> {t('未绑定机台')}
                                     </span>
                                 )}
                             </div>
@@ -625,14 +631,14 @@ export const SmartIntakeModal: React.FC<SmartIntakeModalProps> = ({ currentUser,
                                         onClick={handleDirectLogout}
                                         disabled={isLoggingOut}
                                         className="px-2.5 py-1.5 rounded-xl bg-rose-500/20 hover:bg-rose-600 text-rose-300 hover:text-white font-bold flex items-center gap-1.5 border border-rose-500/40 shadow-sm transition active:scale-95 text-xs disabled:opacity-50"
-                                        title="一键解绑当前机台并记录下线考勤"
+                                        title={t('一键解绑当前机台并记录下线考勤')}
                                     >
                                         {isLoggingOut ? (
                                             <RefreshCw className="w-3.5 h-3.5 animate-spin text-rose-400" />
                                         ) : (
                                             <LogOut className="w-3.5 h-3.5" />
                                         )}
-                                        <span>{isLoggingOut ? '登出中...' : '一键登出'}</span>
+                                        <span>{isLoggingOut ? t('登出中...') : t('一键登出')}</span>
                                     </button>
                                 )}
                                 <button
@@ -642,10 +648,10 @@ export const SmartIntakeModal: React.FC<SmartIntakeModalProps> = ({ currentUser,
                                         setIsScanningMachineQr((prev) => !prev);
                                     }}
                                     className="px-3 py-1.5 rounded-xl bg-gradient-to-r from-indigo-600 to-blue-600 hover:from-indigo-500 hover:to-blue-500 text-white font-bold flex items-center gap-1.5 border border-indigo-400/40 shadow-md transition active:scale-95 text-xs"
-                                    title="现场规则：切换机台必须对准机台二维码进行扫码"
+                                    title={t('现场规则：切换机台必须对准机台二维码进行扫码')}
                                 >
                                     <QrCode className="w-3.5 h-3.5" />
-                                    <span>{boundMachine ? '扫码换机' : '扫码登录机台'}</span>
+                                    <span>{boundMachine ? t('扫码换机') : t('扫码登录机台')}</span>
                                 </button>
                             </div>
                         </div>
@@ -656,7 +662,7 @@ export const SmartIntakeModal: React.FC<SmartIntakeModalProps> = ({ currentUser,
                                 <div className="w-full flex items-center justify-between text-xs pb-1.5 border-b border-zinc-800">
                                     <span className="text-white font-bold flex items-center gap-1.5">
                                         <QrCode className="w-4 h-4 text-indigo-400 animate-pulse" />
-                                        <span>切换机台一定要扫码</span>
+                                        <span>{t('切换机台一定要扫码')}</span>
                                     </span>
                                     <button
                                         type="button"
@@ -686,7 +692,7 @@ export const SmartIntakeModal: React.FC<SmartIntakeModalProps> = ({ currentUser,
                                 </div>
 
                                 <p className="text-[11px] text-zinc-400 text-center font-medium">
-                                    请将摄像头对准机身铭牌或二维码标签 (如 T1-1, N1-1 等)
+                                    {t('请将摄像头对准机身铭牌或二维码标签 (如 T1-1, N1-1 等)')}
                                 </p>
                             </div>
                         )}
@@ -706,10 +712,10 @@ export const SmartIntakeModal: React.FC<SmartIntakeModalProps> = ({ currentUser,
                                         </div>
                                         <div className="text-center">
                                             <p className="text-sm font-semibold text-white flex items-center justify-center gap-1.5">
-                                                <span>点击调用相机拍照</span>
-                                                <span className="text-[10px] text-emerald-400 bg-emerald-500/20 px-1.5 py-0.5 rounded font-mono">首选推荐</span>
+                                                <span>{t('点击调用相机拍照')}</span>
+                                                <span className="text-[10px] text-emerald-400 bg-emerald-500/20 px-1.5 py-0.5 rounded font-mono">{t('首选推荐')}</span>
                                             </p>
-                                            <p className="text-xs text-zinc-400 mt-1">支持称重磅秤、废料次品、机台铭牌、送货单、配方投料</p>
+                                            <p className="text-xs text-zinc-400 mt-1">{t('支持称重磅秤、废料次品、机台铭牌、送货单、配方投料')}</p>
                                         </div>
                                     </div>
 
@@ -717,9 +723,9 @@ export const SmartIntakeModal: React.FC<SmartIntakeModalProps> = ({ currentUser,
                                     <div className="bg-zinc-800/40 p-3 rounded-2xl border border-zinc-700/60 space-y-2">
                                         <div className="text-[11px] font-bold text-zinc-400 uppercase tracking-wider flex items-center justify-between">
                                             <span className="flex items-center gap-1.5 text-amber-400">
-                                                <Sparkles className="w-3 h-3" /> 操作员 6 大专项作业快捷分类
+                                                <Sparkles className="w-3 h-3" /> {t('操作员 6 大专项作业快捷分类')}
                                             </span>
-                                            <span className="text-[10px] text-zinc-500">点选分类后可写字或拍照</span>
+                                            <span className="text-[10px] text-zinc-500">{t('点选分类后可写字或拍照')}</span>
                                         </div>
                                         <div className="grid grid-cols-2 sm:grid-cols-3 gap-2">
                                             {SPECIAL_WORK_CATEGORIES.map((cat) => {
@@ -734,7 +740,7 @@ export const SmartIntakeModal: React.FC<SmartIntakeModalProps> = ({ currentUser,
                                                             if (newCat) {
                                                                 setSpeechText((prev) => {
                                                                     const clean = prev.replace(/^【.*?】\s*/, '').trim();
-                                                                    return `【${cat.label}】 ${clean}`.trim();
+                                                                    return `【${t(cat.label)}】 ${clean}`.trim();
                                                                 });
                                                             }
                                                         }}
@@ -745,13 +751,13 @@ export const SmartIntakeModal: React.FC<SmartIntakeModalProps> = ({ currentUser,
                                                         <div className="flex items-center justify-between w-full">
                                                             <div className="flex items-center gap-1.5">
                                                                 <span className="text-base">{cat.icon}</span>
-                                                                <span className="font-bold">{cat.label}</span>
+                                                                <span className="font-bold">{t(cat.label)}</span>
                                                             </div>
                                                             {isSelected && (
                                                                 <span className="w-2 h-2 rounded-full bg-amber-400 animate-pulse" />
                                                             )}
                                                         </div>
-                                                        <span className="text-[10px] opacity-75 font-normal line-clamp-1">{cat.desc}</span>
+                                                        <span className="text-[10px] opacity-75 font-normal line-clamp-1">{t(cat.desc)}</span>
                                                     </button>
                                                 );
                                             })}
@@ -762,7 +768,7 @@ export const SmartIntakeModal: React.FC<SmartIntakeModalProps> = ({ currentUser,
                                     <div className="bg-zinc-800/60 border border-zinc-700/60 rounded-2xl p-3.5 space-y-2.5 shadow-md">
                                         <div className="flex items-center justify-between">
                                             <span className="text-xs font-bold text-zinc-200 flex items-center gap-1.5">
-                                                <Sparkles className="w-3.5 h-3.5 text-emerald-400" /> 文字 / 语音快速输入 (写完点发送直接上传)
+                                                <Sparkles className="w-3.5 h-3.5 text-emerald-400" /> {t('文字 / 语音快速输入 (写完点发送直接上传)')}
                                             </span>
                                             <button
                                                 type="button"
@@ -775,11 +781,11 @@ export const SmartIntakeModal: React.FC<SmartIntakeModalProps> = ({ currentUser,
                                             >
                                                 {isListening ? (
                                                     <>
-                                                        <MicOff className="w-3 h-3 text-rose-400" /> 正在倾听...
+                                                        <MicOff className="w-3 h-3 text-rose-400" /> {t('正在倾听...')}
                                                     </>
                                                 ) : (
                                                     <>
-                                                        <Mic className="w-3 h-3 text-cyan-400" /> 按此说话
+                                                        <Mic className="w-3 h-3 text-cyan-400" /> {t('按此说话')}
                                                     </>
                                                 )}
                                             </button>
@@ -796,7 +802,7 @@ export const SmartIntakeModal: React.FC<SmartIntakeModalProps> = ({ currentUser,
                                                         handleTextSubmit();
                                                     }
                                                 }}
-                                                placeholder="输入文字，如：3号机称重 18.5kg、OT加班2小时、卸柜20托..."
+                                                placeholder={t('输入文字，如：3号机称重 18.5kg、OT加班2小时、卸柜20托...')}
                                                 className="flex-1 bg-zinc-900 border border-zinc-700 focus:border-emerald-500 rounded-xl px-3.5 py-2.5 text-xs text-white placeholder-zinc-500 focus:outline-none transition shadow-inner"
                                             />
                                             <button
@@ -804,20 +810,20 @@ export const SmartIntakeModal: React.FC<SmartIntakeModalProps> = ({ currentUser,
                                                 onClick={() => handleTextSubmit()}
                                                 disabled={!speechText.trim() || isAnalyzing}
                                                 className="px-4 py-2.5 bg-gradient-to-r from-emerald-600 to-teal-600 hover:from-emerald-500 hover:to-teal-500 text-white font-bold text-xs rounded-xl flex items-center gap-1.5 shadow-lg border border-emerald-400/30 transition disabled:opacity-40 disabled:cursor-not-allowed shrink-0 active:scale-95"
-                                                title="提交文字智能识别并入库"
+                                                title={t('提交文字智能识别并入库')}
                                             >
                                                 {isAnalyzing ? (
                                                     <RefreshCw className="w-3.5 h-3.5 animate-spin" />
                                                 ) : (
                                                     <Send className="w-3.5 h-3.5" />
                                                 )}
-                                                <span>发送识别</span>
+                                                <span>{t('发送识别')}</span>
                                             </button>
                                         </div>
 
                                         {/* 快捷输入词条 */}
                                         <div className="flex items-center gap-1.5 overflow-x-auto no-scrollbar pt-1">
-                                            <span className="text-[10px] text-zinc-500 shrink-0">快捷输入:</span>
+                                            <span className="text-[10px] text-zinc-500 shrink-0">{t('快捷输入:')}</span>
                                             {[
                                                 '登出当前机台',
                                                 '3号机称重 18.5kg',
@@ -840,7 +846,7 @@ export const SmartIntakeModal: React.FC<SmartIntakeModalProps> = ({ currentUser,
                                                             : 'bg-zinc-900/90 hover:bg-zinc-700 text-zinc-400 hover:text-white border-zinc-800'
                                                     } text-[10px] border transition whitespace-nowrap shrink-0`}
                                                 >
-                                                    {example}
+                                                    {t(example)}
                                                 </button>
                                             ))}
                                         </div>
@@ -860,7 +866,7 @@ export const SmartIntakeModal: React.FC<SmartIntakeModalProps> = ({ currentUser,
                                                 }}
                                                 className="absolute bottom-2 right-2 px-3 py-1.5 bg-black/70 hover:bg-black text-white text-xs rounded-full border border-white/20 backdrop-blur-md flex items-center gap-1"
                                             >
-                                                <RefreshCw className="w-3 h-3" /> 重拍
+                                                <RefreshCw className="w-3 h-3" /> {t('重拍')}
                                             </button>
                                         </div>
                                     ) : (
@@ -870,8 +876,8 @@ export const SmartIntakeModal: React.FC<SmartIntakeModalProps> = ({ currentUser,
                                                     <Sparkles className="w-4 h-4" />
                                                 </div>
                                                 <div className="truncate">
-                                                    <span className="text-[10px] text-emerald-400 font-bold uppercase tracking-wider">已提交文字/语音录入:</span>
-                                                    <p className="text-xs text-white font-semibold truncate mt-0.5">{speechText || parsedData?.summary || '无文字备注'}</p>
+                                                    <span className="text-[10px] text-emerald-400 font-bold uppercase tracking-wider">{t('已提交文字/语音录入:')}</span>
+                                                    <p className="text-xs text-white font-semibold truncate mt-0.5">{speechText || parsedData?.summary || t('无文字备注')}</p>
                                                 </div>
                                             </div>
                                             <button
@@ -879,7 +885,7 @@ export const SmartIntakeModal: React.FC<SmartIntakeModalProps> = ({ currentUser,
                                                 onClick={handleReset}
                                                 className="px-2.5 py-1.5 bg-zinc-700 hover:bg-zinc-600 active:scale-95 text-zinc-200 text-xs font-semibold rounded-xl border border-zinc-600 shrink-0 transition"
                                             >
-                                                重新输入
+                                                {t('重新输入')}
                                             </button>
                                         </div>
                                     )}
@@ -888,8 +894,8 @@ export const SmartIntakeModal: React.FC<SmartIntakeModalProps> = ({ currentUser,
                                     {isAnalyzing && (
                                         <div className="p-6 bg-zinc-800/60 rounded-2xl border border-zinc-700 flex flex-col items-center justify-center gap-3 animate-pulse">
                                             <div className="w-10 h-10 border-4 border-emerald-500/30 border-t-emerald-500 rounded-full animate-spin" />
-                                            <p className="text-sm font-semibold text-white">Gemini 极速分析识别中...</p>
-                                            <p className="text-xs text-zinc-400">正在提取业务意图、关键数字与归属分类</p>
+                                            <p className="text-sm font-semibold text-white">{t('Gemini 极速分析识别中...')}</p>
+                                            <p className="text-xs text-zinc-400">{t('正在提取业务意图、关键数字与归属分类')}</p>
                                         </div>
                                     )}
 
@@ -912,7 +918,7 @@ export const SmartIntakeModal: React.FC<SmartIntakeModalProps> = ({ currentUser,
                                                             }`}
                                                         >
                                                             <span>{info.icon}</span>
-                                                            <span>{info.label}</span>
+                                                            <span>{t(info.label)}</span>
                                                         </button>
                                                     );
                                                 })}
@@ -920,7 +926,7 @@ export const SmartIntakeModal: React.FC<SmartIntakeModalProps> = ({ currentUser,
 
                                             {/* 操作员 6 大专项作业一键切换胶囊 */}
                                             <div className="flex items-center gap-1.5 overflow-x-auto pb-1 no-scrollbar pt-1 border-t border-zinc-800">
-                                                <span className="text-[10px] uppercase font-bold text-amber-500 whitespace-nowrap">专项:</span>
+                                                <span className="text-[10px] uppercase font-bold text-amber-500 whitespace-nowrap">{t('专项:')}</span>
                                                 {SPECIAL_WORK_CATEGORIES.map((cat) => {
                                                     const isSelected = parsedData.intent === 'operator_special_work' && (parsedData.workCategory === cat.key || (cat.key === 'handling' && parsedData.workCategory === 'pallet'));
                                                     return (
@@ -935,7 +941,7 @@ export const SmartIntakeModal: React.FC<SmartIntakeModalProps> = ({ currentUser,
                                                             }`}
                                                         >
                                                             <span>{cat.icon}</span>
-                                                            <span>{cat.label}</span>
+                                                            <span>{t(cat.label)}</span>
                                                         </button>
                                                     );
                                                 })}
@@ -948,9 +954,9 @@ export const SmartIntakeModal: React.FC<SmartIntakeModalProps> = ({ currentUser,
                                                         <span className="text-xl">💻</span>
                                                         <div>
                                                             <p className="text-xs font-bold text-indigo-200">
-                                                                识别到机台: <span className="text-white bg-indigo-600 px-1.5 py-0.5 rounded font-mono font-black">{parsedData.machineLoginCode || parsedData.machineId}</span>
+                                                                {t('识别到机台:')} <span className="text-white bg-indigo-600 px-1.5 py-0.5 rounded font-mono font-black">{parsedData.machineLoginCode || parsedData.machineId}</span>
                                                             </p>
-                                                            <p className="text-[10px] text-indigo-300/80">当前绑定为 {boundMachine || '未绑定'}，是否登录此机台？</p>
+                                                            <p className="text-[10px] text-indigo-300/80">{t('当前绑定为 ')}{boundMachine || t('未绑定机台')}{t('，是否登录此机台？')}</p>
                                                         </div>
                                                     </div>
                                                     <button
@@ -959,11 +965,11 @@ export const SmartIntakeModal: React.FC<SmartIntakeModalProps> = ({ currentUser,
                                                             const target = parsedData.machineLoginCode || parsedData.machineId!;
                                                             bindOperatorMachine(target);
                                                             setBoundMachine(target);
-                                                            setToastMessage(`✅ 已切换绑定至机台: ${target}`);
+                                                            setToastMessage(`${t('✅ 扫码成功！当前已切换绑定至机台:')} ${target}`);
                                                         }}
                                                         className="px-3 py-1.5 bg-indigo-600 hover:bg-indigo-500 active:scale-95 text-white text-xs font-bold rounded-xl shadow-md border border-indigo-400/30 whitespace-nowrap"
                                                     >
-                                                        立即登录绑定
+                                                        {t('立即登录绑定')}
                                                     </button>
                                                 </div>
                                             )}
@@ -972,10 +978,10 @@ export const SmartIntakeModal: React.FC<SmartIntakeModalProps> = ({ currentUser,
                                             <div className="p-4 bg-zinc-800/90 rounded-2xl border border-emerald-500/40 shadow-xl space-y-3">
                                                 <div className="flex items-center justify-between border-b border-zinc-700/60 pb-2">
                                                     <span className="text-xs font-bold uppercase tracking-wider text-emerald-400 flex items-center gap-1.5">
-                                                        <Sparkles className="w-3.5 h-3.5" /> AI 识别结论
+                                                        <Sparkles className="w-3.5 h-3.5" /> {t('AI 识别结论')}
                                                     </span>
                                                     <span className="text-xs text-zinc-400 font-mono">
-                                                        置信度: {Math.round((parsedData.confidence || 0.95) * 100)}%
+                                                        {t('置信度:')} {Math.round((parsedData.confidence || 0.95) * 100)}%
                                                     </span>
                                                 </div>
 
@@ -988,7 +994,7 @@ export const SmartIntakeModal: React.FC<SmartIntakeModalProps> = ({ currentUser,
                                                     {/* 重量 */}
                                                     {(parsedData.intent === 'scale_production' || parsedData.intent === 'defect_scrap') && (
                                                         <div className="bg-zinc-900/80 p-2.5 rounded-xl border border-zinc-700">
-                                                            <span className="text-[11px] text-zinc-400">实测重量 (kg)</span>
+                                                            <span className="text-[11px] text-zinc-400">{t('实测重量 (kg)')}</span>
                                                             <div className="flex items-baseline gap-1 mt-0.5">
                                                                 <input
                                                                     type="number"
@@ -1008,10 +1014,10 @@ export const SmartIntakeModal: React.FC<SmartIntakeModalProps> = ({ currentUser,
                                                             <div>
                                                                 <span className="text-[11px] text-zinc-400 flex items-center gap-1">
                                                                     <Cpu className="w-3 h-3 text-indigo-400" />
-                                                                    关联机台 (扫码绑定)
+                                                                    {t('关联机台 (扫码绑定)')}
                                                                 </span>
                                                                 <div className="text-sm font-bold text-white mt-0.5 font-mono">
-                                                                    {parsedData.machineId || boundMachine || '未扫码机台'}
+                                                                    {parsedData.machineId || boundMachine || t('未扫码机台')}
                                                                 </div>
                                                             </div>
                                                             <button
@@ -1021,10 +1027,10 @@ export const SmartIntakeModal: React.FC<SmartIntakeModalProps> = ({ currentUser,
                                                                     setIsScanningMachineQr(true);
                                                                 }}
                                                                 className="px-2.5 py-1 bg-indigo-600/80 hover:bg-indigo-600 active:scale-95 text-[11px] text-white font-bold rounded-lg flex items-center gap-1 border border-indigo-400/30 shadow transition shrink-0"
-                                                                title="现场规则：切换机台必须扫码"
+                                                                title={t('现场规则：切换机台必须扫码')}
                                                             >
                                                                 <QrCode className="w-3 h-3" />
-                                                                <span>扫码换机</span>
+                                                                <span>{t('扫码换机')}</span>
                                                             </button>
                                                         </div>
                                                     )}
@@ -1032,11 +1038,11 @@ export const SmartIntakeModal: React.FC<SmartIntakeModalProps> = ({ currentUser,
                                                     {/* 送货单号 (若是 POD) */}
                                                     {parsedData.intent === 'delivery_pod' && (
                                                         <div className="bg-zinc-900/80 p-2.5 rounded-xl border border-zinc-700 col-span-2">
-                                                            <span className="text-[11px] text-zinc-400">送货单号 (DO Number)</span>
+                                                            <span className="text-[11px] text-zinc-400">{t('送货单号 (DO Number)')}</span>
                                                             <input
                                                                 type="text"
                                                                 value={parsedData.doNumber || ''}
-                                                                placeholder="例: DO-8821"
+                                                                placeholder={t('例: DO-8821')}
                                                                 onChange={(e) => setParsedData({ ...parsedData, doNumber: e.target.value })}
                                                                 className="w-full bg-transparent text-sm font-bold text-cyan-400 focus:outline-none mt-0.5"
                                                             />
@@ -1046,11 +1052,11 @@ export const SmartIntakeModal: React.FC<SmartIntakeModalProps> = ({ currentUser,
                                                     {/* 异常原因 */}
                                                     {(parsedData.intent === 'defect_scrap' || parsedData.intent === 'machine_anomaly') && (
                                                         <div className="bg-zinc-900/80 p-2.5 rounded-xl border border-zinc-700 col-span-2">
-                                                            <span className="text-[11px] text-zinc-400">异常/原因分类</span>
+                                                            <span className="text-[11px] text-zinc-400">{t('异常/原因分类')}</span>
                                                             <input
                                                                 type="text"
                                                                 value={parsedData.defectReason || ''}
-                                                                placeholder="例如: 膜卷气泡过厚 / 换网停机"
+                                                                placeholder={t('例如: 膜卷气泡过厚 / 换网停机')}
                                                                 onChange={(e) => setParsedData({ ...parsedData, defectReason: e.target.value })}
                                                                 className="w-full bg-transparent text-xs text-white focus:outline-none mt-0.5"
                                                             />
@@ -1060,14 +1066,14 @@ export const SmartIntakeModal: React.FC<SmartIntakeModalProps> = ({ currentUser,
                                                     {/* 机台登录专属卡片 (切换机台一定要扫码) */}
                                                     {parsedData.intent === 'machine_login' && (
                                                         <div className="bg-zinc-900/80 p-3 rounded-xl border border-indigo-500/40 col-span-2 space-y-2">
-                                                            <span className="text-[11px] text-zinc-400">机台扫码登录确认 (切换机台需对准机身二维码)</span>
+                                                            <span className="text-[11px] text-zinc-400">{t('机台扫码登录确认 (切换机台需对准机身二维码)')}</span>
                                                             <div className="flex items-center justify-between p-2.5 bg-zinc-800/80 rounded-xl border border-zinc-700">
                                                                 <div className="flex items-center gap-2">
                                                                     <QrCode className="w-5 h-5 text-indigo-400" />
                                                                     <div>
-                                                                        <p className="text-[10px] text-zinc-400">待绑定机台</p>
+                                                                        <p className="text-[10px] text-zinc-400">{t('待绑定机台')}</p>
                                                                         <p className="text-base font-black text-indigo-300 font-mono">
-                                                                            {parsedData.machineLoginCode || parsedData.machineId || '未扫码机台'}
+                                                                            {parsedData.machineLoginCode || parsedData.machineId || t('未扫码机台')}
                                                                         </p>
                                                                     </div>
                                                                 </div>
@@ -1081,7 +1087,7 @@ export const SmartIntakeModal: React.FC<SmartIntakeModalProps> = ({ currentUser,
                                                                         className="px-2.5 py-1.5 bg-zinc-700 hover:bg-zinc-600 text-zinc-200 rounded-lg text-xs font-semibold flex items-center gap-1"
                                                                     >
                                                                         <QrCode className="w-3.5 h-3.5" />
-                                                                        <span>重新扫码</span>
+                                                                        <span>{t('重新扫码')}</span>
                                                                     </button>
                                                                     <button
                                                                         type="button"
@@ -1090,12 +1096,12 @@ export const SmartIntakeModal: React.FC<SmartIntakeModalProps> = ({ currentUser,
                                                                             if (target) {
                                                                                 bindOperatorMachine(target);
                                                                                 setBoundMachine(target);
-                                                                                setToastMessage(`✅ 已成功登录绑定至机台: ${target}`);
+                                                                                setToastMessage(`${t('✅ 扫码成功！当前已切换绑定至机台:')} ${target}`);
                                                                             }
                                                                         }}
                                                                         className="px-3 py-1.5 bg-indigo-600 hover:bg-indigo-500 text-white rounded-lg text-xs font-bold shadow"
                                                                     >
-                                                                        立即绑定
+                                                                        {t('立即绑定')}
                                                                     </button>
                                                                 </div>
                                                             </div>
@@ -1108,41 +1114,41 @@ export const SmartIntakeModal: React.FC<SmartIntakeModalProps> = ({ currentUser,
                                                     {parsedData.workCategory === 'Container' && (
                                                         <>
                                                             <div className="bg-zinc-900/80 p-2.5 rounded-xl border border-zinc-700">
-                                                                <span className="text-[11px] text-zinc-400">货柜柜号 (Container No)</span>
+                                                                <span className="text-[11px] text-zinc-400">{t('货柜柜号 (Container No)')}</span>
                                                                 <input
                                                                     type="text"
                                                                     value={parsedData.containerNo || ''}
-                                                                    placeholder="例: MSCU-882910"
+                                                                    placeholder={t('例: MSCU-882910')}
                                                                     onChange={(e) => setParsedData({ ...parsedData, containerNo: e.target.value })}
                                                                     className="w-full bg-transparent text-sm font-bold text-cyan-400 focus:outline-none mt-0.5 uppercase"
                                                                 />
                                                             </div>
                                                             <div className="bg-zinc-900/80 p-2.5 rounded-xl border border-zinc-700">
-                                                                <span className="text-[11px] text-zinc-400">铅封号 (Seal No)</span>
+                                                                <span className="text-[11px] text-zinc-400">{t('铅封号 (Seal No)')}</span>
                                                                 <input
                                                                     type="text"
                                                                     value={parsedData.sealNo || ''}
-                                                                    placeholder="例: SL-123456"
+                                                                    placeholder={t('例: SL-123456')}
                                                                     onChange={(e) => setParsedData({ ...parsedData, sealNo: e.target.value })}
                                                                     className="w-full bg-transparent text-sm font-bold text-white focus:outline-none mt-0.5 uppercase"
                                                                 />
                                                             </div>
                                                             <div className="bg-zinc-900/80 p-2.5 rounded-xl border border-zinc-700">
-                                                                <span className="text-[11px] text-zinc-400">采购物料类别</span>
+                                                                <span className="text-[11px] text-zinc-400">{t('采购物料类别')}</span>
                                                                 <input
                                                                     type="text"
                                                                     value={parsedData.materialType || ''}
-                                                                    placeholder="例: 聚乙烯树脂 / 色母"
+                                                                    placeholder={t('例: 聚乙烯树脂 / 色母')}
                                                                     onChange={(e) => setParsedData({ ...parsedData, materialType: e.target.value })}
                                                                     className="w-full bg-transparent text-sm font-bold text-amber-300 focus:outline-none mt-0.5"
                                                                 />
                                                             </div>
                                                             <div className="bg-zinc-900/80 p-2.5 rounded-xl border border-zinc-700">
-                                                                <span className="text-[11px] text-zinc-400">卸柜件数 / 托数</span>
+                                                                <span className="text-[11px] text-zinc-400">{t('卸柜件数 / 托数')}</span>
                                                                 <input
                                                                     type="number"
                                                                     value={parsedData.palletCount ?? ''}
-                                                                    placeholder="例: 20 托"
+                                                                    placeholder={t('例: 20 托')}
                                                                     onChange={(e) => setParsedData({ ...parsedData, palletCount: parseInt(e.target.value) || 0 })}
                                                                     className="w-full bg-transparent text-sm font-bold text-emerald-400 focus:outline-none mt-0.5"
                                                                 />
@@ -1154,12 +1160,12 @@ export const SmartIntakeModal: React.FC<SmartIntakeModalProps> = ({ currentUser,
                                                     {parsedData.workCategory === 'OT' && (
                                                         <>
                                                             <div className="bg-zinc-900/80 p-2.5 rounded-xl border border-zinc-700">
-                                                                <span className="text-[11px] text-zinc-400">加班工时 (小时)</span>
+                                                                <span className="text-[11px] text-zinc-400">{t('加班工时 (小时)')}</span>
                                                                 <input
                                                                     type="number"
                                                                     step="0.5"
                                                                     value={parsedData.otHours ?? ''}
-                                                                    placeholder="例: 2.0"
+                                                                    placeholder={t('例: 2.0')}
                                                                     onChange={(e) => setParsedData({ ...parsedData, otHours: parseFloat(e.target.value) || 0 })}
                                                                     className="w-full bg-transparent text-lg font-black text-amber-400 focus:outline-none mt-0.5"
                                                                 />
@@ -1168,10 +1174,10 @@ export const SmartIntakeModal: React.FC<SmartIntakeModalProps> = ({ currentUser,
                                                                 <div>
                                                                     <span className="text-[11px] text-zinc-400 flex items-center gap-1">
                                                                         <Cpu className="w-3 h-3 text-indigo-400" />
-                                                                        关联机台 (扫码绑定)
+                                                                        {t('关联机台 (扫码绑定)')}
                                                                     </span>
                                                                     <div className="text-sm font-bold text-white mt-0.5 font-mono">
-                                                                        {parsedData.machineId || boundMachine || '未扫码机台'}
+                                                                        {parsedData.machineId || boundMachine || t('未扫码机台')}
                                                                     </div>
                                                                 </div>
                                                                 <button
@@ -1181,18 +1187,18 @@ export const SmartIntakeModal: React.FC<SmartIntakeModalProps> = ({ currentUser,
                                                                         setIsScanningMachineQr(true);
                                                                     }}
                                                                     className="px-2.5 py-1 bg-indigo-600/80 hover:bg-indigo-600 active:scale-95 text-[11px] text-white font-bold rounded-lg flex items-center gap-1 border border-indigo-400/30 shadow transition shrink-0"
-                                                                    title="现场规则：切换机台必须扫码"
+                                                                    title={t('现场规则：切换机台必须扫码')}
                                                                 >
                                                                     <QrCode className="w-3 h-3" />
-                                                                    <span>扫码换机</span>
+                                                                    <span>{t('扫码换机')}</span>
                                                                 </button>
                                                             </div>
                                                             <div className="bg-zinc-900/80 p-2.5 rounded-xl border border-zinc-700 col-span-2">
-                                                                <span className="text-[11px] text-zinc-400">加班原因与任务</span>
+                                                                <span className="text-[11px] text-zinc-400">{t('加班原因与任务')}</span>
                                                                 <input
                                                                     type="text"
                                                                     value={parsedData.defectReason || ''}
-                                                                    placeholder="例: 换网调机、紧急赶工出货"
+                                                                    placeholder={t('例: 换网调机、紧急赶工出货')}
                                                                     onChange={(e) => setParsedData({ ...parsedData, defectReason: e.target.value })}
                                                                     className="w-full bg-transparent text-xs text-white focus:outline-none mt-0.5"
                                                                 />
@@ -1204,31 +1210,31 @@ export const SmartIntakeModal: React.FC<SmartIntakeModalProps> = ({ currentUser,
                                                     {parsedData.workCategory === 'driver_order' && (
                                                         <>
                                                             <div className="bg-zinc-900/80 p-2.5 rounded-xl border border-zinc-700">
-                                                                <span className="text-[11px] text-zinc-400">关联司机 / 车牌</span>
+                                                                <span className="text-[11px] text-zinc-400">{t('关联司机 / 车牌')}</span>
                                                                 <input
                                                                     type="text"
                                                                     value={parsedData.driverNameOrPlate || ''}
-                                                                    placeholder="例: 张师傅 / WXV 8899"
+                                                                    placeholder={t('例: 张师傅 / WXV 8899')}
                                                                     onChange={(e) => setParsedData({ ...parsedData, driverNameOrPlate: e.target.value })}
                                                                     className="w-full bg-transparent text-sm font-bold text-blue-400 focus:outline-none mt-0.5"
                                                                 />
                                                             </div>
                                                             <div className="bg-zinc-900/80 p-2.5 rounded-xl border border-zinc-700">
-                                                                <span className="text-[11px] text-zinc-400">行程Trip单号</span>
+                                                                <span className="text-[11px] text-zinc-400">{t('行程Trip单号')}</span>
                                                                 <input
                                                                     type="text"
                                                                     value={parsedData.tripId || ''}
-                                                                    placeholder="例: TRIP-2026-03"
+                                                                    placeholder={t('例: TRIP-2026-03')}
                                                                     onChange={(e) => setParsedData({ ...parsedData, tripId: e.target.value })}
                                                                     className="w-full bg-transparent text-sm font-bold text-cyan-400 focus:outline-none mt-0.5"
                                                                 />
                                                             </div>
                                                             <div className="bg-zinc-900/80 p-2.5 rounded-xl border border-zinc-700 col-span-2">
-                                                                <span className="text-[11px] text-zinc-400">协助送货单 (DO No)</span>
+                                                                <span className="text-[11px] text-zinc-400">{t('协助送货单 (DO No)')}</span>
                                                                 <input
                                                                     type="text"
                                                                     value={parsedData.doNumber || ''}
-                                                                    placeholder="例: DO-8891, DO-8892"
+                                                                    placeholder={t('例: DO-8891, DO-8892')}
                                                                     onChange={(e) => setParsedData({ ...parsedData, doNumber: e.target.value })}
                                                                     className="w-full bg-transparent text-sm font-bold text-white focus:outline-none mt-0.5"
                                                                 />
@@ -1240,31 +1246,31 @@ export const SmartIntakeModal: React.FC<SmartIntakeModalProps> = ({ currentUser,
                                                     {(parsedData.workCategory === 'handling' || parsedData.workCategory === 'pallet') && (
                                                         <>
                                                             <div className="bg-zinc-900/80 p-2.5 rounded-xl border border-zinc-700">
-                                                                <span className="text-[11px] text-zinc-400">搬运托数 (Pallets)</span>
+                                                                <span className="text-[11px] text-zinc-400">{t('搬运托数 (Pallets)')}</span>
                                                                 <input
                                                                     type="number"
                                                                     value={parsedData.palletCount ?? ''}
-                                                                    placeholder="例: 10 托"
+                                                                    placeholder={t('例: 10 托')}
                                                                     onChange={(e) => setParsedData({ ...parsedData, palletCount: parseInt(e.target.value) || 0 })}
                                                                     className="w-full bg-transparent text-lg font-black text-emerald-400 focus:outline-none mt-0.5"
                                                                 />
                                                             </div>
                                                             <div className="bg-zinc-900/80 p-2.5 rounded-xl border border-zinc-700">
-                                                                <span className="text-[11px] text-zinc-400">存放库位 / 区域</span>
+                                                                <span className="text-[11px] text-zinc-400">{t('存放库位 / 区域')}</span>
                                                                 <input
                                                                     type="text"
                                                                     value={parsedData.warehouseBay || ''}
-                                                                    placeholder="例: Raw Material Bay A"
+                                                                    placeholder={t('例: Raw Material Bay A')}
                                                                     onChange={(e) => setParsedData({ ...parsedData, warehouseBay: e.target.value })}
                                                                     className="w-full bg-transparent text-sm font-bold text-cyan-300 focus:outline-none mt-0.5"
                                                                 />
                                                             </div>
                                                             <div className="bg-zinc-900/80 p-2.5 rounded-xl border border-zinc-700 col-span-2">
-                                                                <span className="text-[11px] text-zinc-400">货物类型 / 规格型号</span>
+                                                                <span className="text-[11px] text-zinc-400">{t('货物类型 / 规格型号')}</span>
                                                                 <input
                                                                     type="text"
                                                                     value={parsedData.sku || ''}
-                                                                    placeholder="例: 原料树脂包 / SF-500-150-18-CLR"
+                                                                    placeholder={t('例: 原料树脂包 / SF-500-150-18-CLR')}
                                                                     onChange={(e) => setParsedData({ ...parsedData, sku: e.target.value })}
                                                                     className="w-full bg-transparent text-sm font-bold text-white focus:outline-none mt-0.5"
                                                                 />
@@ -1276,21 +1282,21 @@ export const SmartIntakeModal: React.FC<SmartIntakeModalProps> = ({ currentUser,
                                                     {parsedData.workCategory === 'shopee' && (
                                                         <>
                                                             <div className="bg-zinc-900/80 p-2.5 rounded-xl border border-zinc-700">
-                                                                <span className="text-[11px] text-zinc-400">运单号 / Tracking</span>
+                                                                <span className="text-[11px] text-zinc-400">{t('运单号 / Tracking')}</span>
                                                                 <input
                                                                     type="text"
                                                                     value={parsedData.trackingNo || ''}
-                                                                    placeholder="例: SPXMY1234567"
+                                                                    placeholder={t('例: SPXMY1234567')}
                                                                     onChange={(e) => setParsedData({ ...parsedData, trackingNo: e.target.value })}
                                                                     className="w-full bg-transparent text-sm font-bold text-orange-400 focus:outline-none mt-0.5"
                                                                 />
                                                             </div>
                                                             <div className="bg-zinc-900/80 p-2.5 rounded-xl border border-zinc-700">
-                                                                <span className="text-[11px] text-zinc-400">包裹件数</span>
+                                                                <span className="text-[11px] text-zinc-400">{t('包裹件数')}</span>
                                                                 <input
                                                                     type="number"
                                                                     value={parsedData.palletCount ?? ''}
-                                                                    placeholder="例: 5 件"
+                                                                    placeholder={t('例: 5 件')}
                                                                     onChange={(e) => setParsedData({ ...parsedData, palletCount: parseInt(e.target.value) || 0 })}
                                                                     className="w-full bg-transparent text-sm font-bold text-white focus:outline-none mt-0.5"
                                                                 />
@@ -1302,20 +1308,20 @@ export const SmartIntakeModal: React.FC<SmartIntakeModalProps> = ({ currentUser,
                                                     {parsedData.workCategory === 'boss_order' && (
                                                         <>
                                                             <div className="bg-zinc-900/80 p-2.5 rounded-xl border border-zinc-700">
-                                                                <span className="text-[11px] text-zinc-400">VIP 客户名称</span>
+                                                                <span className="text-[11px] text-zinc-400">{t('VIP 客户名称')}</span>
                                                                 <input
                                                                     type="text"
                                                                     value={parsedData.customer || ''}
-                                                                    placeholder="例: TopGlove / 某大客户"
+                                                                    placeholder={t('例: TopGlove / 某大客户')}
                                                                     onChange={(e) => setParsedData({ ...parsedData, customer: e.target.value })}
                                                                     className="w-full bg-transparent text-sm font-bold text-purple-400 focus:outline-none mt-0.5"
                                                                 />
                                                             </div>
                                                             <div className="bg-zinc-900/80 p-2.5 rounded-xl border border-zinc-700">
-                                                                <span className="text-[11px] text-zinc-400">特单备注 / 紧急度</span>
+                                                                <span className="text-[11px] text-zinc-400">{t('特单备注 / 紧急度')}</span>
                                                                 <input
                                                                     type="text"
-                                                                    value={parsedData.bossOrderNote || '加急特批'}
+                                                                    value={parsedData.bossOrderNote || t('加急特批')}
                                                                     onChange={(e) => setParsedData({ ...parsedData, bossOrderNote: e.target.value })}
                                                                     className="w-full bg-transparent text-sm font-bold text-amber-300 focus:outline-none mt-0.5"
                                                                 />
@@ -1325,12 +1331,12 @@ export const SmartIntakeModal: React.FC<SmartIntakeModalProps> = ({ currentUser,
 
                                                     {/* 补充说明与操作员现场备注 */}
                                                     <div className="bg-zinc-900/80 p-2.5 rounded-xl border border-zinc-700 col-span-2">
-                                                        <span className="text-[11px] text-zinc-400">操作员补充说明 / 文字备注 (可修改)</span>
+                                                        <span className="text-[11px] text-zinc-400">{t('操作员补充说明 / 文字备注 (可修改)')}</span>
                                                         <input
                                                             type="text"
                                                             value={speechText}
                                                             onChange={(e) => setSpeechText(e.target.value)}
-                                                            placeholder="可补充或修改说明备注..."
+                                                            placeholder={t('可补充或修改说明备注...')}
                                                             className="w-full bg-transparent text-xs text-white focus:outline-none mt-0.5"
                                                         />
                                                     </div>
@@ -1342,7 +1348,7 @@ export const SmartIntakeModal: React.FC<SmartIntakeModalProps> = ({ currentUser,
                                                 onClick={handleCommit}
                                                 disabled={isCommitting}
                                                 className={`w-full py-3.5 ${
-                                                    parsedData.isLogout || (parsedData.summary && (parsedData.summary.includes('登出') || parsedData.summary.includes('下机')))
+                                                    parsedData.isLogout || (parsedData.summary && (/登出|下机|logout|clock out/i).test(parsedData.summary))
                                                         ? 'bg-gradient-to-r from-rose-600 via-rose-700 to-red-600 border-rose-400/30'
                                                         : 'bg-gradient-to-r from-emerald-600 via-teal-600 to-emerald-600 border-emerald-400/30'
                                                 } hover:brightness-110 active:scale-[0.99] text-white rounded-2xl font-bold text-base shadow-xl flex items-center justify-center gap-2 border transition disabled:opacity-50`}
@@ -1350,17 +1356,17 @@ export const SmartIntakeModal: React.FC<SmartIntakeModalProps> = ({ currentUser,
                                                 {isCommitting ? (
                                                     <>
                                                         <RefreshCw className="w-5 h-5 animate-spin" />
-                                                        <span>正在记录落库...</span>
+                                                        <span>{t('正在记录落库...')}</span>
                                                     </>
-                                                ) : parsedData.isLogout || (parsedData.summary && (parsedData.summary.includes('登出') || parsedData.summary.includes('下机'))) ? (
+                                                ) : parsedData.isLogout || (parsedData.summary && (/登出|下机|logout|clock out/i).test(parsedData.summary)) ? (
                                                     <>
                                                         <LogOut className="w-5 h-5 text-rose-200" />
-                                                        <span>一键确认登出机台 (Clock Out)</span>
+                                                        <span>{t('一键确认登出机台 (Clock Out)')}</span>
                                                     </>
                                                 ) : (
                                                     <>
                                                         <Check className="w-5 h-5 text-emerald-200" />
-                                                        <span>一键确认入库 (Commit)</span>
+                                                        <span>{t('一键确认入库 (Commit)')}</span>
                                                     </>
                                                 )}
                                             </button>
