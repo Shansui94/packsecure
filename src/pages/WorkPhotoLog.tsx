@@ -69,6 +69,21 @@ const compressImage = (file: File, maxWidth = 2048, quality = 0.85): Promise<str
 
 const WorkPhotoLog: React.FC<Props> = ({ user }) => {
     const { t } = useTranslation();
+    const [langTick, setLangTick] = useState(0);
+    useEffect(() => {
+        const handleLangChange = () => setLangTick(prev => prev + 1);
+        window.addEventListener('packsecure:lang-change', handleLangChange);
+        return () => window.removeEventListener('packsecure:lang-change', handleLangChange);
+    }, []);
+
+    const categories: Record<string, { label: string; emoji: string; color: string }> = React.useMemo(() => ({
+        qc: { label: t('qc'), emoji: '🔍', color: 'bg-blue-500/20 text-blue-300 border-blue-500/30' },
+        defect: { label: t('defect'), emoji: '⚠️', color: 'bg-rose-500/20 text-rose-300 border-rose-500/30' },
+        downtime: { label: t('stop'), emoji: '🛑', color: 'bg-red-500/20 text-red-300 border-red-500/30' },
+        startup: { label: t('start'), emoji: '🟢', color: 'bg-green-500/20 text-green-300 border-green-500/30' },
+        other: { label: t('other'), emoji: '📋', color: 'bg-gray-500/20 text-gray-300 border-gray-500/30' },
+    }), [t, langTick]);
+
     const [photos, setPhotos] = useState<WorkPhoto[]>([]);
     const [loading, setLoading] = useState(true);
     const [uploading, setUploading] = useState(false);
@@ -620,7 +635,7 @@ const WorkPhotoLog: React.FC<Props> = ({ user }) => {
                                     <div>
                                         <label className="text-[10px] uppercase font-bold text-gray-500 tracking-wider mb-2 block">{t('Classification')}</label>
                                         <div className="flex flex-wrap gap-2">
-                                            {Object.entries(CATEGORIES).map(([key, cat]) => (
+                                            {Object.entries(categories).map(([key, cat]) => (
                                                 <button
                                                     key={key}
                                                     onClick={() => setAiResult(prev => prev ? { ...prev, category: key } : prev)}
@@ -721,7 +736,7 @@ const WorkPhotoLog: React.FC<Props> = ({ user }) => {
                         >
                             {t('all')}
                         </button>
-                        {Object.entries(CATEGORIES).map(([key, cat]) => (
+                        {Object.entries(categories).map(([key, cat]) => (
                             <button
                                 key={key}
                                 onClick={() => setFilterCategory(key)}
@@ -741,7 +756,7 @@ const WorkPhotoLog: React.FC<Props> = ({ user }) => {
                                 }`}
                         >
                             <AlertTriangle size={13} />
-                            <span>⚠️ 差异待复核</span>
+                            <span>⚠️ {t('差异待复核')}</span>
                         </button>
                     </div>
 
@@ -757,7 +772,7 @@ const WorkPhotoLog: React.FC<Props> = ({ user }) => {
                     ) : (
                         <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-4">
                             {photos.map(photo => {
-                                const cat = CATEGORIES[photo.category] || CATEGORIES.other;
+                                const cat = categories[photo.category] || categories.other;
                                 const isVideo = photo.photo_url.toLowerCase().endsWith('.webm') || photo.photo_url.toLowerCase().endsWith('.mp4');
                                 const hasDiscrepancy = photo.ai_raw_json?.needs_review === true || photo.ai_raw_json?.discrepancy === true;
                                 return (
@@ -794,7 +809,7 @@ const WorkPhotoLog: React.FC<Props> = ({ user }) => {
                                             )}
                                             {hasDiscrepancy ? (
                                                 <div className="absolute top-2 right-2 px-2 py-1 rounded-lg bg-amber-500 text-black text-[10px] font-black flex items-center gap-1 shadow-lg">
-                                                    <AlertTriangle size={10} /> 差异待复核
+                                                    <AlertTriangle size={10} /> {t('差异待复核')}
                                                 </div>
                                             ) : photo.risk_flag ? (
                                                 <div className="absolute top-2 right-2 px-2 py-1 rounded-lg bg-red-500/80 text-white text-[10px] font-bold flex items-center gap-1">
@@ -882,15 +897,15 @@ const WorkPhotoLog: React.FC<Props> = ({ user }) => {
                                     <div className="p-4 rounded-2xl bg-amber-500/10 border border-amber-500/30 space-y-3">
                                         <div className="flex items-center gap-2 text-amber-400 font-bold text-xs">
                                             <AlertTriangle size={16} />
-                                            <span>⚠️ 称重数据存在差异 (待主管核销)</span>
+                                            <span>⚠️ {t('称重数据存在差异 (待主管核销)')}</span>
                                         </div>
                                         <div className="grid grid-cols-2 gap-3 text-xs font-mono">
                                             <div className="p-2.5 rounded-xl bg-black/40 border border-white/10">
-                                                <span className="text-gray-400 block text-[10px]">✍️ 手动填报重量</span>
+                                                <span className="text-gray-400 block text-[10px]">✍️ {t('手动填报重量')}</span>
                                                 <span className="text-lg font-black text-white">{selectedPhoto.ai_raw_json?.manual_input || '0.00'} KG</span>
                                             </div>
                                             <div className="p-2.5 rounded-xl bg-cyan-500/10 border border-cyan-500/30">
-                                                <span className="text-cyan-300 block text-[10px]">🤖 AI 照片识别秤读数</span>
+                                                <span className="text-cyan-300 block text-[10px]">🤖 {t('AI 照片识别秤读数')}</span>
                                                 <span className="text-lg font-black text-cyan-300">{selectedPhoto.ai_raw_json?.ai_detected_weight || selectedPhoto.ai_raw_json?.weight || '0.00'} KG</span>
                                             </div>
                                         </div>
@@ -901,7 +916,7 @@ const WorkPhotoLog: React.FC<Props> = ({ user }) => {
                                                 className="w-full py-2.5 bg-gradient-to-r from-cyan-600 to-teal-600 hover:from-cyan-500 hover:to-teal-500 text-white font-bold text-xs rounded-xl shadow-lg flex items-center justify-center gap-1.5 transition active:scale-95 cursor-pointer"
                                             >
                                                 <Zap size={14} />
-                                                <span>✅ 采纳 AI 秤读数纠偏并同步库存 ({selectedPhoto.ai_raw_json?.ai_detected_weight || selectedPhoto.ai_raw_json?.weight} KG)</span>
+                                                <span>✅ {t('采纳 AI 秤读数纠偏并同步库存')} ({selectedPhoto.ai_raw_json?.ai_detected_weight || selectedPhoto.ai_raw_json?.weight} KG)</span>
                                             </button>
                                         )}
                                     </div>

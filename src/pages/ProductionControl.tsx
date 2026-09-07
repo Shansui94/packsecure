@@ -725,6 +725,13 @@ interface ProductionControlProps {
 
 const ProductionControl: React.FC<ProductionControlProps> = ({ user, jobs = [], onNavigate }) => {
     const { t } = useTranslation();
+    const [, setLangTick] = useState(0);
+    useEffect(() => {
+        const handleLangChange = () => setLangTick(prev => prev + 1);
+        window.addEventListener('packsecure:lang-change', handleLangChange);
+        return () => window.removeEventListener('packsecure:lang-change', handleLangChange);
+    }, []);
+
     // Machine Selection State
     const [selectedMachine, setSelectedMachine] = useState<string | null>(
         sessionStorage.getItem('selectedMachine') || localStorage.getItem('device_machine_id')
@@ -2645,7 +2652,8 @@ const ProductionControl: React.FC<ProductionControlProps> = ({ user, jobs = [], 
                                 {/* 一键登出按钮 (免扫码直接下机结算考勤) */}
                                 <button
                                     onClick={async () => {
-                                        const confirmed = window.confirm(`确定要一键登出当前机台【${currentMachineName}】吗？\n系统将自动记录下线考勤时间并解除机台绑定。\nConfirm to clock out from machine ${currentMachineName}?`);
+                                        const confirmMsg = `${t('确定要一键登出当前机台吗？')} [${currentMachineName}]\n${t('系统将自动记录下线考勤时间并解除机台绑定。')}`;
+                                        const confirmed = window.confirm(confirmMsg);
                                         if (confirmed) {
                                             await handleManualClockOut();
                                         }
@@ -3509,7 +3517,7 @@ const ProductionControl: React.FC<ProductionControlProps> = ({ user, jobs = [], 
                                     {/* 专属拍照录入板 */}
                                     <div className="bg-white/5 border border-white/10 rounded-3xl p-6 backdrop-blur-md">
                                         <h3 className="text-sm font-black tracking-widest text-purple-400 uppercase flex items-center gap-2 mb-4">
-                                            <Camera size={16} /> 拍照登记产量 / Production Photo Registration
+                                            <Camera size={16} /> {t('拍照登记产量')}
                                         </h3>
                                         
                                         {!photoPreview ? (
@@ -3521,8 +3529,8 @@ const ProductionControl: React.FC<ProductionControlProps> = ({ user, jobs = [], 
                                                     <div className="w-12 h-12 rounded-full bg-purple-500/20 flex items-center justify-center text-purple-400 border border-purple-500/30">
                                                         <Camera size={20} />
                                                     </div>
-                                                    <span className="text-sm font-bold text-purple-300">Live Camera / 开启相机</span>
-                                                    <span className="text-xs text-gray-500">使用设备相机实时拍摄</span>
+                                                    <span className="text-sm font-bold text-purple-300">{t('开启相机')}</span>
+                                                    <span className="text-xs text-gray-500">{t('使用设备相机实时拍摄')}</span>
                                                 </button>
                                                 
                                                 <button 
@@ -3532,8 +3540,8 @@ const ProductionControl: React.FC<ProductionControlProps> = ({ user, jobs = [], 
                                                     <div className="w-12 h-12 rounded-full bg-white/5 flex items-center justify-center text-gray-400 border border-white/10">
                                                         <ImageIcon size={20} />
                                                     </div>
-                                                    <span className="text-sm font-bold text-gray-300">Upload File / 上传文件</span>
-                                                    <span className="text-xs text-gray-500">从相册选择照片或文件</span>
+                                                    <span className="text-sm font-bold text-gray-300">{t('上传文件')}</span>
+                                                    <span className="text-xs text-gray-500">{t('从相册选择照片或文件')}</span>
                                                 </button>
                                             </div>
                                         ) : (
@@ -3547,7 +3555,7 @@ const ProductionControl: React.FC<ProductionControlProps> = ({ user, jobs = [], 
                                                     {(uploadingPhoto || analyzingPhoto) && (
                                                         <div className="absolute inset-0 bg-black/60 flex flex-col items-center justify-center gap-2">
                                                             <Loader className="animate-spin text-purple-400" size={24} />
-                                                            <span className="text-xs text-purple-300 font-bold">AI Analyzing Scene...</span>
+                                                            <span className="text-xs text-purple-300 font-bold">{t('AI 正在分析场景...')}</span>
                                                         </div>
                                                     )}
                                                 </div>
@@ -3555,7 +3563,7 @@ const ProductionControl: React.FC<ProductionControlProps> = ({ user, jobs = [], 
                                                 {aiAnalysis && (
                                                     <div className="p-4 bg-purple-500/5 border border-purple-500/10 rounded-xl max-w-xl mx-auto">
                                                         <div className="text-[10px] text-purple-400 uppercase font-black tracking-widest flex items-center gap-1.5">
-                                                            <Sparkles size={11} /> AI Scene Analysis / AI 图像场景分析:
+                                                            <Sparkles size={11} /> {t('AI 图像场景分析')}:
                                                         </div>
                                                         <p className="text-xs text-white mt-1 leading-normal font-medium">{aiAnalysis}</p>
                                                     </div>
@@ -3564,11 +3572,11 @@ const ProductionControl: React.FC<ProductionControlProps> = ({ user, jobs = [], 
                                                 {/* 备注与操作 */}
                                                 <div className="max-w-xl mx-auto space-y-4">
                                                     <div className="space-y-1">
-                                                        <label className="text-[10px] text-gray-400 uppercase font-black tracking-wider">Note / 生产备注 (如规格、班次等)</label>
+                                                        <label className="text-[10px] text-gray-400 uppercase font-black tracking-wider">{t('生产备注')}</label>
                                                         <textarea 
                                                             value={photoNote}
                                                             onChange={e => setPhotoNote(e.target.value)}
-                                                            placeholder="Add any shift notes or specifications..."
+                                                            placeholder={t('生产备注')}
                                                             className="w-full bg-white/5 border border-white/10 text-xs px-3 py-2 rounded-xl focus:border-purple-500 focus:outline-none min-h-[60px] text-white"
                                                         />
                                                     </div>
@@ -3578,7 +3586,7 @@ const ProductionControl: React.FC<ProductionControlProps> = ({ user, jobs = [], 
                                                             onClick={cancelPhotoSelect} 
                                                             className="px-4 py-2 text-xs font-bold text-gray-400 hover:text-white transition-all rounded-xl hover:bg-white/5 active:scale-95"
                                                         >
-                                                            Cancel / 取消
+                                                            {t('取消')}
                                                         </button>
                                                         <button 
                                                             onClick={submitPhotoLog} 
@@ -3586,7 +3594,7 @@ const ProductionControl: React.FC<ProductionControlProps> = ({ user, jobs = [], 
                                                             className="px-6 py-2 bg-purple-600 hover:bg-purple-500 disabled:bg-purple-600/50 disabled:cursor-not-allowed text-white font-bold text-xs rounded-xl flex items-center gap-1.5 transition-all active:scale-95 shadow-lg shadow-purple-500/10 border border-purple-500/20"
                                                         >
                                                             {uploadingPhoto ? <Loader className="animate-spin" size={12} /> : <Check size={12} />}
-                                                            <span>Upload Photo / 提交拍照</span>
+                                                            <span>{t('提交拍照')}</span>
                                                         </button>
                                                     </div>
                                                 </div>
@@ -3696,7 +3704,7 @@ const ProductionControl: React.FC<ProductionControlProps> = ({ user, jobs = [], 
                                                 {(uploadingPhoto || analyzingPhoto) && (
                                                     <div className="absolute inset-0 bg-black/60 flex flex-col items-center justify-center gap-2">
                                                         <Loader className="animate-spin text-purple-400" size={20} />
-                                                        <span className="text-xs text-purple-300 font-medium">AI 识别中...</span>
+                                                        <span className="text-xs text-purple-300 font-medium">{t('AI 识别中...')}</span>
                                                     </div>
                                                 )}
                                             </div>
@@ -3704,7 +3712,7 @@ const ProductionControl: React.FC<ProductionControlProps> = ({ user, jobs = [], 
                                             {aiAnalysis && (
                                                 <div className="p-2.5 bg-purple-500/5 border border-purple-500/10 rounded-xl">
                                                     <div className="text-[10px] text-purple-400 font-semibold flex items-center gap-1">
-                                                        <Sparkles size={10} /> AI 图像分析:
+                                                        <Sparkles size={10} /> {t('AI 图像分析')}:
                                                     </div>
                                                     <p className="text-xs text-white mt-0.5 leading-tight">{aiAnalysis}</p>
                                                 </div>
@@ -3720,7 +3728,7 @@ const ProductionControl: React.FC<ProductionControlProps> = ({ user, jobs = [], 
                                                             photoCategory === key ? cat.color : 'border-white/5 text-gray-500 hover:text-gray-300'
                                                         }`}
                                                     >
-                                                        {cat.emoji} {cat.label}
+                                                        {cat.emoji} {t(cat.label)}
                                                     </button>
                                                 ))}
                                             </div>
@@ -3728,14 +3736,14 @@ const ProductionControl: React.FC<ProductionControlProps> = ({ user, jobs = [], 
                                             {/* DEFECT SPECIFIC INPUTS */}
                                             {photoCategory === 'defect' && (
                                                 <div className="p-3 bg-rose-500/5 border border-rose-500/10 rounded-xl space-y-2.5">
-                                                    <div className="text-[10px] font-semibold text-rose-400">次品明细记录</div>
+                                                    <div className="text-[10px] font-semibold text-rose-400">{t('次品明细记录')}</div>
                                                     
                                                     <div className="space-y-1">
-                                                        <label className="text-[10px] text-gray-400">重量 (KG)</label>
+                                                        <label className="text-[10px] text-gray-400">{t('重量 (KG)')}</label>
                                                         <div className="flex gap-2">
                                                             <input
                                                                 type="text"
-                                                                placeholder="例: 10.90"
+                                                                placeholder="10.90"
                                                                 value={defectWeight}
                                                                 onChange={e => setDefectWeight(e.target.value)}
                                                                 className="flex-1 bg-white/5 border border-white/10 text-xs px-2.5 py-1.5 rounded-lg focus:border-rose-500 focus:outline-none"
@@ -3747,23 +3755,23 @@ const ProductionControl: React.FC<ProductionControlProps> = ({ user, jobs = [], 
                                                                 className="px-3 bg-rose-500/20 hover:bg-rose-500/30 text-rose-300 font-medium text-xs rounded-lg border border-rose-500/30 flex items-center gap-1 transition-all"
                                                             >
                                                                 {analyzingPhoto ? <Loader className="animate-spin" size={10} /> : <Sparkles size={10} />}
-                                                                <span>AI 识别</span>
+                                                                <span>{t('AI 识别')}</span>
                                                             </button>
                                                         </div>
                                                     </div>
 
                                                     <div className="space-y-1">
-                                                        <label className="text-[10px] text-gray-400">次品原因</label>
+                                                        <label className="text-[10px] text-gray-400">{t('次品原因')}</label>
                                                         <select
                                                             value={defectReason}
                                                             onChange={e => setDefectReason(e.target.value)}
                                                             className="w-full bg-white/5 border border-white/10 text-xs px-2.5 py-1.5 rounded-lg focus:border-rose-500 focus:outline-none text-white [&>option]:bg-zinc-900"
                                                         >
-                                                            <option value="">选择原因...</option>
-                                                            <option value="underweight">克重不足</option>
-                                                            <option value="deformation">变形</option>
-                                                            <option value="damage">破损</option>
-                                                            <option value="other">其他</option>
+                                                            <option value="">{t('选择原因...')}</option>
+                                                            <option value="underweight">{t('克重不足')}</option>
+                                                            <option value="deformation">{t('变形')}</option>
+                                                            <option value="damage">{t('破损')}</option>
+                                                            <option value="other">{t('其他')}</option>
                                                         </select>
                                                     </div>
                                                 </div>
@@ -3774,15 +3782,15 @@ const ProductionControl: React.FC<ProductionControlProps> = ({ user, jobs = [], 
                                                 type="text" 
                                                 value={photoNote} 
                                                 onChange={e => setPhotoNote(e.target.value)} 
-                                                placeholder="备注信息..."
+                                                placeholder={t('生产备注')}
                                                 className="w-full bg-white/5 border border-white/10 text-xs p-2 rounded-xl focus:border-purple-500 focus:outline-none"
                                             />
 
                                             <div className="flex gap-2">
-                                                <button onClick={cancelPhotoSelect} className="flex-1 py-1.5 bg-white/5 hover:bg-white/10 text-gray-400 font-medium text-xs rounded-xl border border-white/5 transition-all">取消</button>
+                                                <button onClick={cancelPhotoSelect} className="flex-1 py-1.5 bg-white/5 hover:bg-white/10 text-gray-400 font-medium text-xs rounded-xl border border-white/5 transition-all">{t('取消')}</button>
                                                 <button onClick={submitPhotoLog} disabled={uploadingPhoto || analyzingPhoto} className="flex-1 py-1.5 bg-purple-600 hover:bg-purple-500 text-white font-medium text-xs rounded-xl flex items-center justify-center gap-1 transition-all active:scale-95 shadow-md">
                                                     <Send size={12} />
-                                                    <span>提交</span>
+                                                    <span>{t('提交')}</span>
                                                 </button>
                                             </div>
                                         </div>
@@ -3793,11 +3801,11 @@ const ProductionControl: React.FC<ProductionControlProps> = ({ user, jobs = [], 
                             {/* 📷 2. RECENT PHOTOS GRID (最近登记照片 - 全机台通用跨端呈现) */}
                             <div className="bg-white/5 border border-white/10 rounded-2xl p-4 backdrop-blur-md">
                                 <h3 className="text-xs font-semibold text-gray-300 uppercase tracking-wider flex items-center gap-1.5 mb-3">
-                                    <ImageIcon size={14} className="text-purple-400" /> 最近登记照片 ({machinePhotos.length})
+                                    <ImageIcon size={14} className="text-purple-400" /> {t('最近登记照片')} ({machinePhotos.length})
                                 </h3>
 
                                 {machinePhotos.length === 0 ? (
-                                    <p className="text-center py-4 text-xs text-gray-500 font-mono">暂无现场照片记录</p>
+                                    <p className="text-center py-4 text-xs text-gray-500 font-mono">{t('暂无现场照片记录')}</p>
                                 ) : (
                                     <div className="grid grid-cols-2 gap-2.5 max-h-64 overflow-y-auto custom-scrollbar p-1">
                                         {machinePhotos.map((p) => {
@@ -4091,9 +4099,9 @@ const ProductionControl: React.FC<ProductionControlProps> = ({ user, jobs = [], 
                         <div className="w-12 h-12 rounded-full bg-red-500/10 flex items-center justify-center text-red-500 mx-auto mb-3 border border-red-500/20">
                             <Camera size={24} />
                         </div>
-                        <h2 className="text-lg font-black tracking-wider text-white uppercase font-bold">扫码登出 / Scan to Clock Out</h2>
+                        <h2 className="text-lg font-black tracking-wider text-white uppercase font-bold">{t('扫码登出')}</h2>
                         <p className="text-[11px] text-gray-400 mt-1">
-                            请使用摄像头扫描当前绑定的机台 <strong className="text-cyan-400 font-mono">{currentMachineName}</strong> 的二维码进行登出。
+                            {t('请使用摄像头扫描当前绑定的机台二维码进行登出')} (<strong className="text-cyan-400 font-mono">{currentMachineName}</strong>)
                         </p>
                     </div>
 
@@ -4107,7 +4115,6 @@ const ProductionControl: React.FC<ProductionControlProps> = ({ user, jobs = [], 
                                         const text = detectedCodes[0].rawValue;
                                         if (text) {
                                             const cleanText = text.trim();
-                                            // Allow scanning ANY QR code to clock out
                                             // Allow scanning ANY QR code to clock out
                                             hasScannedClockOutRef.current = true;
                                             handleManualClockOut();
@@ -4131,7 +4138,7 @@ const ProductionControl: React.FC<ProductionControlProps> = ({ user, jobs = [], 
                         }}
                         className="w-full py-3 bg-white/5 border border-white/10 hover:bg-white/10 text-xs text-gray-400 transition-all flex items-center justify-center font-bold rounded-xl"
                     >
-                        取消 / CANCEL
+                        {t('取消')}
                     </button>
                 </div>
             </div>
@@ -4147,10 +4154,10 @@ const ProductionControl: React.FC<ProductionControlProps> = ({ user, jobs = [], 
                     <div className="text-center mb-4 shrink-0">
                         <h2 className="text-lg font-black tracking-wider text-white uppercase font-bold flex items-center justify-center gap-2">
                             <UserIcon size={20} className="text-apple-blue" />
-                            <span>选择操作员 / Select Operator</span>
+                            <span>{t('选择操作员')}</span>
                         </h2>
                         <p className="text-[11px] text-apple-textMuted mt-1">
-                            请选择负责机台 <strong className="text-cyan-400 font-mono">{pendingMachine || selectedMachine}</strong> 的人员以进行绑定。
+                            {t('请选择负责机台的人员以进行绑定')} (<strong className="text-cyan-400 font-mono">{pendingMachine || selectedMachine}</strong>)
                         </p>
                     </div>
 
@@ -4160,7 +4167,7 @@ const ProductionControl: React.FC<ProductionControlProps> = ({ user, jobs = [], 
                             type="text"
                             value={operatorSearchQuery}
                             onChange={(e) => setOperatorSearchQuery(e.target.value)}
-                            placeholder="输入名字或工号搜索 / Search name or ID..."
+                            placeholder={t('输入名字或工号搜索...')}
                             className="w-full bg-white/5 border border-white/10 text-xs p-3 rounded-xl focus:border-apple-blue focus:outline-none text-white font-bold"
                         />
                     </div>
@@ -4170,7 +4177,7 @@ const ProductionControl: React.FC<ProductionControlProps> = ({ user, jobs = [], 
                         {loadingOperators ? (
                             <div className="flex flex-col items-center justify-center py-12 gap-2 text-gray-500 animate-pulse">
                                 <Loader className="animate-spin text-apple-blue" size={24} />
-                                <span className="text-xs font-bold">正在加载人员列表...</span>
+                                <span className="text-xs font-bold">{t('正在加载人员列表...')}</span>
                             </div>
                         ) : (
                             (() => {
@@ -4181,7 +4188,7 @@ const ProductionControl: React.FC<ProductionControlProps> = ({ user, jobs = [], 
                                 if (filtered.length === 0) {
                                     return (
                                         <div className="text-center py-12 text-xs text-gray-500 font-bold">
-                                            未找到匹配的人员 🔍
+                                            {t('未找到匹配的人员 🔍')}
                                         </div>
                                     );
                                 }
@@ -4215,7 +4222,7 @@ const ProductionControl: React.FC<ProductionControlProps> = ({ user, jobs = [], 
                                                     )}
                                                     <div className="min-w-0 w-full">
                                                         <p className="text-xs font-bold text-white truncate">{op.name}</p>
-                                                        <p className="text-[9px] text-gray-500 font-mono mt-0.5">工号: {op.employee_id}</p>
+                                                        <p className="text-[9px] text-gray-500 font-mono mt-0.5">{op.employee_id}</p>
                                                     </div>
                                                 </button>
                                             );
@@ -4231,7 +4238,7 @@ const ProductionControl: React.FC<ProductionControlProps> = ({ user, jobs = [], 
                             onClick={() => setIsOperatorModalOpen(false)}
                             className="w-full py-3 bg-white/5 hover:bg-white/10 text-gray-400 hover:text-white font-bold text-xs rounded-xl border border-white/5 transition-all active:scale-95"
                         >
-                            取消 / CANCEL
+                            {t('取消')}
                         </button>
                     </div>
                 </div>

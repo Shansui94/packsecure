@@ -3,6 +3,7 @@ import { supabase } from '../services/supabase';
 import { Calendar as CalendarIcon, ChevronLeft, ChevronRight, User as UserIcon, CalendarDays, Loader, Send, History, CheckCircle, XCircle, FileText, ClipboardList, Undo2, DollarSign, AlertCircle, Users } from 'lucide-react';
 import { getSalaryAdvancesForDriver, createSalaryAdvance } from '../services/apiV2';
 import { logActivity } from '../utils/logger';
+import { t } from '../utils/i18n';
 
 interface LeaveRecord {
     id: string;
@@ -33,6 +34,13 @@ interface Props {
 }
 
 const LeaveCalendar: React.FC<Props> = ({ user, onNavigate }) => {
+    const [, setLangTick] = useState(0);
+    useEffect(() => {
+        const handleLangChange = () => setLangTick((prev) => prev + 1);
+        window.addEventListener('packsecure:lang-change', handleLangChange);
+        return () => window.removeEventListener('packsecure:lang-change', handleLangChange);
+    }, []);
+
     // Current Active Tab
     const [activeTab, setActiveTab] = useState<'calendar' | 'my-leave' | 'approvals' | 'my-advance'>('calendar');
 
@@ -1250,7 +1258,7 @@ const LeaveCalendar: React.FC<Props> = ({ user, onNavigate }) => {
                         </div>
                         <div>
                             <h1 className="text-lg sm:text-2xl font-black italic uppercase tracking-wider bg-clip-text text-transparent bg-gradient-to-r from-blue-400 to-purple-400 drop-shadow-sm leading-tight">
-                                URUSAN STAF / STAFF HUB
+                                {t('员工服务台 / 考勤')}
                             </h1>
                             <p className="text-[9px] sm:text-[10px] text-slate-500 font-bold uppercase tracking-widest mt-0.5">Sistem Urusan Staf Bersepadu / Unified Staff Request Hub</p>
                         </div>
@@ -1261,7 +1269,7 @@ const LeaveCalendar: React.FC<Props> = ({ user, onNavigate }) => {
                             className="self-start sm:self-auto px-4 py-2.5 rounded-xl bg-purple-600/10 border border-purple-500/30 text-purple-300 hover:bg-purple-600/20 hover:text-purple-200 text-xs font-bold flex items-center gap-2 transition active:scale-95 shadow-sm cursor-pointer"
                         >
                             <Users size={15} />
-                            <span>⚙️ 前往 HR 控制中心 (HR Control)</span>
+                            <span>⚙️ {t('前往 HR 控制中心')}</span>
                             <ChevronRight size={14} />
                         </button>
                     )}
@@ -1272,22 +1280,22 @@ const LeaveCalendar: React.FC<Props> = ({ user, onNavigate }) => {
                     <button onClick={() => setActiveTab('calendar')}
                         className={`flex-1 sm:flex-none text-center px-2 sm:px-5 py-2 sm:py-2.5 rounded-xl font-bold text-[10px] sm:text-xs uppercase tracking-wider transition-all border whitespace-nowrap
                         ${activeTab === 'calendar' ? 'bg-blue-600/20 text-blue-400 border-blue-500/30' : 'bg-white/5 text-slate-500 border-white/5 hover:text-white hover:bg-white/10'}`}>
-                        <span className="hidden sm:inline">Pandangan Kalendar / Calendar View</span>
-                        <span className="inline sm:hidden">Kalendar</span>
+                        <span className="hidden sm:inline">{t('日历视图')}</span>
+                        <span className="inline sm:hidden">{t('日历视图')}</span>
                     </button>
                     <button onClick={() => setActiveTab('my-leave')}
                         className={`flex-1 sm:flex-none text-center px-2 sm:px-5 py-2 sm:py-2.5 rounded-xl font-bold text-[10px] sm:text-xs uppercase tracking-wider transition-all border whitespace-nowrap
                         ${activeTab === 'my-leave' ? 'bg-purple-600/20 text-purple-400 border-purple-500/30' : 'bg-white/5 text-slate-500 border-white/5 hover:text-white hover:bg-white/10'}`}>
-                        <span className="hidden sm:inline">Cuti Saya (Mohon) / My Leave (Apply)</span>
-                        <span className="inline sm:hidden">Cuti</span>
+                        <span className="hidden sm:inline">{t('我的请假')}</span>
+                        <span className="inline sm:hidden">{t('我的请假')}</span>
                     </button>
 
                     {canRequestAdvance && (
                         <button onClick={() => setActiveTab('my-advance')}
                             className={`flex-1 sm:flex-none text-center px-2 sm:px-5 py-2 sm:py-2.5 rounded-xl font-bold text-[10px] sm:text-xs uppercase tracking-wider transition-all border whitespace-nowrap
                             ${activeTab === 'my-advance' ? 'bg-amber-600/20 text-amber-400 border-amber-500/30' : 'bg-white/5 text-slate-500 border-white/5 hover:text-white hover:bg-white/10'}`}>
-                            <span className="hidden sm:inline">💸 Mohon Advance / Apply Advance</span>
-                            <span className="inline sm:hidden">💸 Advance</span>
+                            <span className="hidden sm:inline">💸 {t('预支申请')}</span>
+                            <span className="inline sm:hidden">💸 {t('预支申请')}</span>
                         </button>
                     )}
 
@@ -1296,7 +1304,7 @@ const LeaveCalendar: React.FC<Props> = ({ user, onNavigate }) => {
                         <button onClick={() => setActiveTab('approvals')}
                             className={`flex-1 sm:flex-none text-center px-2 sm:px-5 py-2 sm:py-2.5 rounded-xl font-bold text-[10px] sm:text-xs uppercase tracking-wider transition-all border whitespace-nowrap flex items-center justify-center gap-1 sm:gap-2
                             ${activeTab === 'approvals' ? 'bg-amber-500/20 text-amber-400 border-amber-500/30' : 'bg-white/5 text-slate-500 border-white/5 hover:text-white hover:bg-white/10'}`}>
-                            <span>Approvals</span>
+                            <span>{t('请假审批')}</span>
                             {pendingLeaves.length > 0 && <span className="bg-amber-500 text-black px-1.5 py-0.5 rounded-full text-[9px] font-black">{pendingLeaves.length}</span>}
                         </button>
                     )}

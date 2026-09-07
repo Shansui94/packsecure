@@ -3,6 +3,7 @@ import { Layers, ChevronDown } from 'lucide-react';
 import { supabase } from '../services/supabase';
 import { User } from '../types';
 import MachineInspectionModal from '../components/MachineInspectionModal';
+import { t } from '../utils/i18n';
 
 interface RawMaterialMobilePortalProps {
     currentUser?: User | null;
@@ -13,6 +14,13 @@ export const RawMaterialMobilePortal: React.FC<RawMaterialMobilePortalProps> = (
     currentUser,
     activeFactoryId
 }) => {
+    const [, setLangTick] = useState(0);
+    useEffect(() => {
+        const handleLangChange = () => setLangTick((prev) => prev + 1);
+        window.addEventListener('packsecure:lang-change', handleLangChange);
+        return () => window.removeEventListener('packsecure:lang-change', handleLangChange);
+    }, []);
+
     const [machines, setMachines] = useState<{ id: string; name: string }[]>([]);
     const [selectedMachineId, setSelectedMachineId] = useState<string>('');
     const [selectedMachineName, setSelectedMachineName] = useState<string>('');
@@ -67,8 +75,8 @@ export const RawMaterialMobilePortal: React.FC<RawMaterialMobilePortalProps> = (
                         <Layers size={20} />
                     </div>
                     <div>
-                        <h2 className="text-sm font-black text-white">手机端多螺杆配料工作台</h2>
-                        <p className="text-[11px] text-gray-400">选择机台进行螺杆配料更改与 Mix 料记录</p>
+                        <h2 className="text-sm font-black text-white">{t('手机端多螺杆配料工作台')}</h2>
+                        <p className="text-[11px] text-gray-400">{t('选择机台进行螺杆配料更改与 Mix 料记录')}</p>
                     </div>
                 </div>
 
@@ -78,7 +86,7 @@ export const RawMaterialMobilePortal: React.FC<RawMaterialMobilePortalProps> = (
                         onChange={handleSelectMachine}
                         className="w-full bg-gray-950 border border-gray-700 text-xs px-3 py-2 rounded-xl text-amber-300 font-bold appearance-none pr-8 focus:outline-none focus:border-indigo-500"
                     >
-                        <option value="" disabled>-- 请选择机台 (Select Machine) --</option>
+                        <option value="" disabled>{t('-- 请选择机台 (Select Machine) --')}</option>
                         {machines.map((mac) => (
                             <option key={mac.id} value={mac.id}>
                                 {mac.name}

@@ -433,7 +433,72 @@ export const CORE_TERMS: {
     { en: 'Network unstable', 'zh-CN': '网络不稳定', 'zh-TW': '網絡不穩定', ms: 'Rangkaian tidak stabil', my: 'လိုင်းမငြိမ်ပါ', hi: 'नेटवर्क अस्थिर है', bn: 'নেটওয়ার্ক অস্থির' },
     { en: 'Network restored, offline data synced', 'zh-CN': '✅ 网络已恢复，已自动同步离线数据', 'zh-TW': '✅ 網絡已恢復，已自動同步離線數據', ms: '✅ Rangkaian pulih, data luar talian diselaraskan', my: '✅ လိုင်းပြန်ရပါပြီ၊ အော့ဖ်လိုင်းဒေတာ ချိန်ကိုက်ပြီးပါပြီ', hi: '✅ नेटवर्क बहाल हुआ, ऑफ़लाइन डेटा सिंक हो गया', bn: '✅ নেটওয়ার্ক পুনরুদ্ধার হয়েছে, অফলাইন ডেটা সিঙ্ক হয়েছে' },
     { en: 'Logged out machine successfully', 'zh-CN': '✅ 已成功登出机台', 'zh-TW': '✅ 已成功登出機台', ms: '✅ Berjaya log keluar mesin', my: '✅ စက်မှ အောင်မြင်စွာ ထွက်ပြီးပါပြီ', hi: '✅ मशीन से सफलतापूर्वक लॉग आउट किया गया', bn: '✅ সফলভাবে মেশিন থেকে লগ আউট করা হয়েছে' },
-    { en: 'Machine unlinked successfully', 'zh-CN': '✅ 已解除机台绑定', 'zh-TW': '✅ 已解除機台綁定', ms: '✅ Pautan mesin berjaya dibatalkan', my: '✅ စက်ချိတ်ဆက်မှု အောင်မြင်စွာ ဖြုတ်ပြီးပါပြီ', hi: '✅ मशीन बाइंडिंग सफलतापूर्वक हटा दी गई', bn: '✅ মেশিন আনলিঙ্ক সফল হয়েছে' }
+    { en: 'Machine unlinked successfully', 'zh-CN': '✅ 已解除机台绑定', 'zh-TW': '✅ 已解除機台綁定', ms: '✅ Pautan mesin berjaya dibatalkan', my: '✅ စက်ချိတ်ဆက်မှု အောင်မြင်စွာ ဖြုတ်ပြီးပါပြီ', hi: '✅ मशीन बाइंडिंग सफलतापूर्वक हटा दी गई', bn: '✅ মেশিন আনলিঙ্ক সফল হয়েছে' },
+
+    // 🏭 操作员工作台与生产记录 (ProductionControl)
+    { en: 'Photo Register Output', 'zh-CN': '拍照登记产量', 'zh-TW': '拍照登記產量', ms: 'Rakam Foto Pengeluaran', my: 'ထုတ်လုပ်မှု ဓာတ်ပုံမှတ်တမ်း', hi: 'फ़ोटो उत्पादन पंजीकरण', bn: 'ছবি আউটপুট নিবন্ধন' },
+    { en: 'Open Camera', 'zh-CN': '开启相机', 'zh-TW': '開啟相機', ms: 'Buka Kamera', my: 'ကင်မရာဖွင့်ပါ', hi: 'कैमरा खोलें', bn: 'ক্যামেরা খুলুন' },
+    { en: 'Capture live using device camera', 'zh-CN': '使用设备相机实时拍摄', 'zh-TW': '使用設備相機即時拍攝', ms: 'Rakam langsung menggunakan kamera peranti', my: 'စက်ပစ္စည်းကင်မရာဖြင့် တိုက်ရိုက်ရိုက်ပါ', hi: 'डिवाइस कैमरे से लाइव कैप्चर करें', bn: 'ডিভাইস ক্যামেরা দিয়ে লাইভ তুলুন' },
+    { en: 'Upload File', 'zh-CN': '上传文件', 'zh-TW': '上傳文件', ms: 'Muat Naik Fail', my: 'ဖိုင်တင်ပါ', hi: 'फ़ाइल अपलोड करें', bn: 'ফাইল আপলোড করুন' },
+    { en: 'Select photo or file from gallery', 'zh-CN': '从相册选择照片或文件', 'zh-TW': '從相簿選擇照片或文件', ms: 'Pilih foto atau fail dari galeri', my: 'ဓာတ်ပုံ သို့မဟုတ် ဖိုင်ရွေးပါ', hi: 'गैलरी से फ़ोटो या फ़ाइल चुनें', bn: 'গ্যালারি থেকে ছবি বা ফাইল বেছে নিন' },
+    { en: 'AI Scene Analysis:', 'zh-CN': 'AI 图像场景分析:', 'zh-TW': 'AI 圖像場景分析:', ms: 'Analisis Imej AI:', my: 'AI ပုံရိပ်ခွဲခြမ်းစိတ်ဖြာချက်:', hi: 'एआई दृश्य विश्लेषण:', bn: 'এআই দৃশ্য বিশ্লেষণ:' },
+    { en: 'Production Notes', 'zh-CN': '生产备注', 'zh-TW': '生產備註', ms: 'Nota Pengeluaran', my: 'ထုတ်လုပ်မှုမှတ်ချက်', hi: 'उत्पादन नोट', bn: 'উৎপাদন নোট' },
+    { en: 'e.g. specs, shift, anomalies', 'zh-CN': '如规格、班次、异常情况', 'zh-TW': '如規格、班次、異常情況', ms: 'cth: spesifikasi, syif, anomali', my: 'ဥပမာ- သတ်မှတ်ချက်၊ အလုပ်ချိန်၊ ချို့ယွင်းချက်', hi: 'उदा: विवरण, शिफ्ट, असामान्यता', bn: 'যেমন: স্পেক, শিফট, অসঙ্গতি' },
+    { en: 'Submit Photo', 'zh-CN': '提交拍照', 'zh-TW': '提交拍照', ms: 'Hantar Foto', my: 'ဓာတ်ပုံတင်သွင်းပါ', hi: 'फ़ोटो सबमिट करें', bn: 'ছবি জমা দিন' },
+    { en: 'AI Analyzing...', 'zh-CN': 'AI 识别中...', 'zh-TW': 'AI 識別中...', ms: 'AI Menganalisis...', my: 'AI ခွဲခြမ်းစိတ်ဖြာနေသည်...', hi: 'एआई विश्लेषण जारी है...', bn: 'এআই বিশ্লেষণ চলছে...' },
+    { en: 'Defect Record Detail', 'zh-CN': '次品明细记录', 'zh-TW': '次品明細記錄', ms: 'Butiran Rekod Rosak', my: 'ချို့ယွင်းချက်အသေးစိတ်မှတ်တမ်း', hi: 'खराब माल विवरण रिकॉर्ड', bn: 'ত্রুটিপূর্ণ পণ্যের বিবরণ' },
+    { en: 'Weight (KG)', 'zh-CN': '重量 (KG)', 'zh-TW': '重量 (KG)', ms: 'Berat (KG)', my: 'အလေးချိန် (KG)', hi: 'वजन (KG)', bn: 'ওজন (কেজি)' },
+    { en: 'Defect Reason', 'zh-CN': '次品原因', 'zh-TW': '次品原因', ms: 'Sebab Rosak', my: 'ချို့ယွင်းရသည့်အကြောင်းရင်း', hi: 'खराब होने का कारण', bn: 'ত্রুটির কারণ' },
+    { en: 'Select reason...', 'zh-CN': '选择原因...', 'zh-TW': '選擇原因...', ms: 'Pilih sebab...', my: 'အကြောင်းရင်းရွေးပါ...', hi: 'कारण चुनें...', bn: 'কারণ নির্বাচন করুন...' },
+    { en: 'Underweight', 'zh-CN': '克重不足', 'zh-TW': '克重不足', ms: 'Kurang Berat', my: 'အလေးချိန်မပြည့်', hi: 'कम वजन', bn: 'কম ওজন' },
+    { en: 'Deformed', 'zh-CN': '变形', 'zh-TW': '變形', ms: 'Ubah Bentuk', my: 'ပုံပျက်', hi: 'विकृत', bn: 'বিকৃত' },
+    { en: 'Damaged', 'zh-CN': '破损', 'zh-TW': '破損', ms: 'Rosak / Koyak', my: 'ပျက်စီး', hi: 'क्षतिग्रस्त', bn: 'ক্ষতিগ্রস্ত' },
+    { en: 'Recent Registered Photos', 'zh-CN': '最近登记照片', 'zh-TW': '最近登記照片', ms: 'Foto Pendaftaran Terkini', my: 'လတ်တလောမှတ်တမ်းတင်ထားသော ဓာတ်ပုံများ', hi: 'हाल ही में पंजीकृत फ़ोटो', bn: 'সম্প্রতি নিবন্ধিত ছবি' },
+    { en: 'No on-site photo records', 'zh-CN': '暂无现场照片记录', 'zh-TW': '暫無現場照片記錄', ms: 'Tiada rekod foto di tapak', my: 'လုပ်ငန်းခွင်ဓာတ်ပုံမှတ်တမ်းမရှိပါ', hi: 'कोई ऑन-साइट फ़ोटो रिकॉर्ड नहीं', bn: 'কোনো অন-সাইট ছবির রেকর্ড নেই' },
+    { en: 'No pending tasks 👍', 'zh-CN': '暂无待办任务 👍', 'zh-TW': '暫無待辦任務 👍', ms: 'Tiada tugasan tertunggak 👍', my: 'စောင့်ဆိုင်းရမည့်တာဝန်မရှိပါ 👍', hi: 'कोई लंबित कार्य नहीं 👍', bn: 'কোনো মুলতুবি কাজ নেই 👍' },
+    { en: 'Scan to Clock Out', 'zh-CN': '扫码登出', 'zh-TW': '掃碼登出', ms: 'Imbas Keluar', my: 'ထွက်ရန် စကင်န်ဖတ်ပါ', hi: 'क्लॉक आउट के लिए स्कैन करें', bn: 'ক্লক আউট করতে স্ক্যান করুন' },
+    { en: 'Select Operator', 'zh-CN': '选择操作员', 'zh-TW': '選擇操作員', ms: 'Pilih Operator', my: 'အော်ပရေတာရွေးပါ', hi: 'ऑपरेटर चुनें', bn: 'অপারেটর নির্বাচন করুন' },
+    { en: 'Search name or ID...', 'zh-CN': '输入名字或工号搜索...', 'zh-TW': '輸入名字或工號搜尋...', ms: 'Cari nama atau no pekerja...', my: 'အမည် သို့မဟုတ် ကုဒ်ဖြင့်ရှာပါ...', hi: 'नाम या आईडी खोजें...', bn: 'নাম বা আইডি খুঁজুন...' },
+    { en: 'Loading personnel list...', 'zh-CN': '正在加载人员列表...', 'zh-TW': '正在載入人員列表...', ms: 'Memuatkan senarai pekerja...', my: 'ဝန်ထမ်းစာရင်းကို ဖော်ပြနေသည်...', hi: 'कर्मचारी सूची लोड हो रही है...', bn: 'কর্মী তালিকা লোড হচ্ছে...' },
+    { en: 'No matching personnel found 🔍', 'zh-CN': '未找到匹配的人员 🔍', 'zh-TW': '未找到匹配的人員 🔍', ms: 'Tiada pekerja sepadan dijumpai 🔍', my: 'ကိုက်ညီသောဝန်ထမ်းမတွေ့ပါ 🔍', hi: 'कोई मेल खाता कर्मचारी नहीं मिला 🔍', bn: 'কোনো মিল থাকা কর্মী পাওয়া যায়নি 🔍' },
+    { en: 'Detail Log', 'zh-CN': '工作记录详情', 'zh-TW': '工作記錄詳情', ms: 'Butiran Rekod Kerja', my: 'အလုပ်မှတ်တမ်းအသေးစိတ်', hi: 'कार्य रिकॉर्ड विवरण', bn: 'কাজের রেকর্ডের বিবরণ' },
+    { en: 'Current Operator', 'zh-CN': '当前员工', 'zh-TW': '當前員工', ms: 'Pekerja Semasa', my: 'လက်ရှိဝန်ထမ်း', hi: 'वर्तमान ऑपरेटर', bn: 'বর্তমান কর্মী' },
+    { en: 'Close', 'zh-CN': '关闭', 'zh-TW': '關閉', ms: 'Tutup', my: 'ပိတ်ပါ', hi: 'बंद करें', bn: 'বন্ধ করুন' },
+    { en: 'Retry', 'zh-CN': '重试', 'zh-TW': '重試', ms: 'Cuba Semula', my: 'ပြန်ကြိုးစားပါ', hi: 'पुनः प्रयास करें', bn: 'পুনরায় চেষ্টা করুন' },
+    { en: 'Confirm record photo', 'zh-CN': '确认记录此照片', 'zh-TW': '確認記錄此照片', ms: 'Sahkan rekod foto ini', my: 'ဤဓာတ်ပုံကို အတည်ပြုပါ', hi: 'इस फ़ोटो को रिकॉर्ड करें', bn: 'এই ছবিটি রেকর্ড নিশ্চিত করুন' },
+
+    // 📅 员工服务台与考勤 (LeaveCalendar)
+    { en: 'Calendar View', 'zh-CN': '日历视图', 'zh-TW': '日曆視圖', ms: 'Pandangan Kalendar', my: 'ပြက္ခဒိန်မြင်ကွင်း', hi: 'कैलेंडर दृश्य', bn: 'ক্যালেন্ডার ভিউ' },
+    { en: 'My Leave', 'zh-CN': '我的请假', 'zh-TW': '我的請假', ms: 'Cuti Saya', my: 'ကျွန်ုပ်၏ခွင့်', hi: 'मेरी छुट्टी', bn: 'আমার ছুটি' },
+    { en: 'Apply Advance', 'zh-CN': '预支申请', 'zh-TW': '預支申請', ms: 'Mohon Advance', my: 'လစာကြိုထုတ်လျှောက်ထားခြင်း', hi: 'अग्रिम वेतन आवेदन', bn: 'অগ্রিম বেতন আবেদন' },
+    { en: 'Approvals', 'zh-CN': '请假审批', 'zh-TW': '請假審批', ms: 'Kelulusan Cuti', my: 'ခွင့်အတည်ပြုချက်များ', hi: 'अनुमोदन', bn: 'অনুমোদন' },
+    { en: 'Go to HR Control', 'zh-CN': '前往 HR 控制中心', 'zh-TW': '前往 HR 控制中心', ms: 'Ke Pusat Kawalan HR', my: 'HR ထိန်းချုပ်ရေးစင်တာသို့', hi: 'एचआर कंट्रोल सेंटर पर जाएं', bn: 'এইচআর কন্ট্রোল সেন্টারে যান' },
+
+    // 🧪 手机端多螺杆与混料配方 (RawMaterialMobilePortal)
+    { en: 'Mobile Multi-Screw Batching Workbench', 'zh-CN': '手机端多螺杆配料工作台', 'zh-TW': '手機端多螺桿配料工作台', ms: 'Meja Kerja Campuran Berbilang Skru Mudah Alih', my: 'မိုဘိုင်း ဝက်အူပေါင်းစုံ ရောစပ်စားပွဲ', hi: 'मोबाइल मल्टी-स्क्रू बैचिंग वर्कबेंच', bn: 'মোবাইল মাল্টি-স্ক্রু ব্যাচিং ওয়ার্কবেঞ্চ' },
+    { en: 'Select machine to modify screw recipes and log material mixes', 'zh-CN': '选择机台进行螺杆配料更改与 Mix 料记录', 'zh-TW': '選擇機台進行螺桿配料更改與 Mix 料記錄', ms: 'Pilih mesin untuk menukar resipi skru dan merekod campuran bahan', my: 'ဝက်အူဖော်မြူလာပြင်ရန်နှင့် ပစ္စည်းရောစပ်မှတ်တမ်းတင်ရန် စက်ကိုရွေးပါ', hi: 'स्क्रू फॉर्मूला बदलने और सामग्री मिश्रण रिकॉर्ड करने के लिए मशीन चुनें', bn: 'স্ক্রু ফর্মুলা পরিবর্তন এবং উপাদান মিশ্রণ রেকর্ড করতে মেশিন নির্বাচন করুন' },
+    { en: '-- Select Machine --', 'zh-CN': '-- 请选择机台 (Select Machine) --', 'zh-TW': '-- 請選擇機台 (Select Machine) --', ms: '-- Sila Pilih Mesin --', my: '-- စက်ကို ရွေးချယ်ပါ --', hi: '-- कृपया मशीन चुनें --', bn: '-- অনুগ্রহ করে মেশিন নির্বাচন করুন --' },
+
+    // 📸 现场作业拍照与纠偏 (WorkPhotoLog & ProductionControl)
+    { en: 'Discrepancy Pending Review', 'zh-CN': '差异待复核', 'zh-TW': '差異待複核', ms: 'Percanggahan Menunggu Semakan', my: 'ကွဲလွဲမှု ပြန်လည်စစ်ဆေးရန်', hi: 'विसंगति समीक्षा लंबित', bn: 'পার্থক্য পর্যালোচনার অপেক্ষায়' },
+    { en: 'Production Photo Registration', 'zh-CN': '拍照登记产量', 'zh-TW': '拍照登記產量', ms: 'Pendaftaran Foto Pengeluaran', my: 'ထုတ်လုပ်မှုဓာတ်ပုံမှတ်တမ်း', hi: 'उत्पादन फ़ोटो पंजीकरण', bn: 'উৎপাদন ফটো নিবন্ধন' },
+    { en: 'AI Analyzing Scene...', 'zh-CN': 'AI 正在分析场景...', 'zh-TW': 'AI 正在分析場景...', ms: 'AI sedang menganalisis adegan...', my: 'AI မြင်ကွင်းကို ခွဲခြမ်းစိတ်ဖြာနေသည်...', hi: 'एआई दृश्य विश्लेषण कर रहा है...', bn: 'এআই দৃশ্য বিশ্লেষণ করছে...' },
+    { en: 'AI Image Analysis', 'zh-CN': 'AI 图像分析', 'zh-TW': 'AI 圖像分析', ms: 'Analisis Imej AI', my: 'AI ရုပ်ပုံခွဲခြမ်းစိတ်ဖြာချက်', hi: 'एआई छवि विश्लेषण', bn: 'এআই চিত্র বিশ্লেষণ' },
+    { en: 'QC Inspection', 'zh-CN': 'QC 质检', 'zh-TW': 'QC 質檢', ms: 'Pemeriksaan QC', my: 'QC စစ်ဆေးခြင်း', hi: 'QC निरीक्षण', bn: 'কিউসি পরিদর্শন' },
+    { en: 'Defects', 'zh-CN': 'Defect 次品', 'zh-TW': 'Defect 次品', ms: 'Barang Rosak', my: 'ချို့ယွင်းချက်များ', hi: 'दोषपूर्ण', bn: 'ত্রুটিযুক্ত' },
+    { en: 'Machine Stop', 'zh-CN': '停机 Stop', 'zh-TW': '停機 Stop', ms: 'Henti Mesin', my: 'စက်ရပ်တန့်ခြင်း', hi: 'मशीन बंद', bn: 'মেশিন বন্ধ' },
+    { en: 'Machine Start', 'zh-CN': '开机 Start', 'zh-TW': '開機 Start', ms: 'Mula Mesin', my: 'စက်စတင်ခြင်း', hi: 'मशीन शुरू', bn: 'মেশিন শুরু' },
+    { en: 'Raw Material Recipe', 'zh-CN': '原料配方', 'zh-TW': '原料配方', ms: 'Resipi Bahan Mentah', my: 'ကုန်ကြမ်းဖော်မြူလာ', hi: 'कच्चा माल फॉर्मूला', bn: 'কাঁচামাল ফর্মুলা' },
+    { en: 'Finished Cartons', 'zh-CN': '成品纸箱', 'zh-TW': '成品紙箱', ms: 'Karton Siap', my: 'အချောထည်ပုံး', hi: 'तैयार कार्टन', bn: 'প্রস্তুত কার্টন' },
+    { en: 'Other Category', 'zh-CN': '其他 Other', 'zh-TW': '其他 Other', ms: 'Lain-lain', my: 'အခြား', hi: 'अन्य', bn: 'অন্যান্য' },
+    { en: 'Weight Discrepancy (Pending Supervisor Review)', 'zh-CN': '称重数据存在差异 (待主管核销)', 'zh-TW': '稱重數據存在差異 (待主管核銷)', ms: 'Percanggahan Berat (Menunggu Semakan Penyelia)', my: 'အလေးချိန်ကွာခြားချက် (ကြီးကြပ်ရေးမှူး ပြန်လည်စစ်ဆေးရန်)', hi: 'वजन में विसंगति (पर्यवेक्षक समीक्षा लंबित)', bn: 'ওজনের অসঙ্গতি (তত্ত্বাবধায়ক পর্যালোচনার অপেক্ষায়)' },
+    { en: 'Manual Input Weight', 'zh-CN': '手动填报重量', 'zh-TW': '手動填報重量', ms: 'Berat Input Manual', my: 'လက်ဖြင့်ထည့်သွင်းထားသော အလေးချိန်', hi: 'मैनुअल रूप से दर्ज वजन', bn: 'ম্যানুয়াল ইনপুট ওজন' },
+    { en: 'AI Scale Reading from Photo', 'zh-CN': 'AI 照片识别秤读数', 'zh-TW': 'AI 照片識別秤讀數', ms: 'Bacaan Penimbang AI dari Foto', my: 'ဓာတ်ပုံမှ AI ချိန်ခွင်ဖတ်ရှုမှု', hi: 'फ़ोटो से एआई स्केल रीडिंग', bn: 'ছবি থেকে এআই স্কেল রিডিং' },
+    { en: 'Adopt AI scale reading correction and sync inventory', 'zh-CN': '采纳 AI 秤读数纠偏并同步库存', 'zh-TW': '採納 AI 秤讀數糾偏並同步庫存', ms: 'Gunakan bacaan penimbang AI dan selaraskan inventori', my: 'AI ချိန်ခွင်ဖတ်ရှုမှုကို အတည်ပြုပြီး သိုလှောင်မှုကို ချိန်ညှိပါ', hi: 'एआई स्केल रीडिंग सुधार लागू करें और इन्वेंट्री सिंक करें', bn: 'এআই স্কেল রিডিং সংশোধন প্রয়োগ করুন এবং ইনভেন্টরি সিঙ্ক করুন' },
+    { en: 'Please scan QR code of bound machine to clock out', 'zh-CN': '请使用摄像头扫描当前绑定的机台二维码进行登出', 'zh-TW': '請使用相機掃描當前綁定的機台二維碼進行登出', ms: 'Sila imbas kod QR mesin terikat untuk mendaftar keluar', my: 'စက်မှထွက်ရန် လက်ရှိစက်၏ QR ကုဒ်ကို စကင်န်ဖတ်ပါ', hi: 'क्लॉक आउट के लिए वर्तमान मशीन का क्यूआर कोड स्कैन करें', bn: 'ক্লক আউট করতে বর্তমান মেশিনের কিউআর কোড স্ক্যান করুন' },
+    { en: 'Please select operator responsible for machine to bind', 'zh-CN': '请选择负责机台的人员以进行绑定', 'zh-TW': '請選擇負責機台的人員以進行綁定', ms: 'Sila pilih operator yang bertanggungjawab untuk memautkan mesin', my: 'စက်ချိတ်ဆက်ရန် တာဝန်ရှိအော်ပရေတာကို ရွေးချယ်ပါ', hi: 'मशीन बाइंड करने के लिए ऑपरेटर चुनें', bn: 'মেশিন লিঙ্ক করতে দায়িত্বপ্রাপ্ত অপারেটর নির্বাচন করুন' },
+    { en: 'Confirm clock out from machine', 'zh-CN': '确定要一键登出当前机台吗？', 'zh-TW': '確定要一鍵登出當前機台嗎？', ms: 'Pasti untuk daftar keluar dari mesin semasa?', my: 'လက်ရှိစက်မှ ထွက်ရန် သေချာပါသလား?', hi: 'क्या आप वर्तमान मशीन से क्लॉक आउट करना चाहते हैं?', bn: 'আপনি কি বর্তমান মেশিন থেকে ক্লক আউট করতে চান?' },
+    { en: 'System will record clock-out time and unbind machine', 'zh-CN': '系统将自动记录下线考勤时间并解除机台绑定。', 'zh-TW': '系統將自動記錄下線考勤時間並解除機台綁定。', ms: 'Sistem akan merekodkan masa daftar keluar dan menyahpaut mesin.', my: 'စနစ်သည် အလုပ်ဆင်းချိန်ကို မှတ်တမ်းတင်ပြီး စက်ချိတ်ဆက်မှုကို ဖြုတ်မည်။', hi: 'सिस्टम स्वचालित रूप से क्लॉक-आउट समय रिकॉर्ड करेगा और मशीन को अनबाइंड करेगा।', bn: 'সিস্টেম স্বয়ংক্রিয়ভাবে ক্লক-আউট সময় রেকর্ড করবে এবং মেশিনটি আনবাইন্ড করবে।' }
 ];
 
 /**
