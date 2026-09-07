@@ -11,6 +11,103 @@ const supabaseKey =
     '';
 const supabase = createClient(supabaseUrl, supabaseKey);
 
+/**
+ * 校验字符串是否为标准合法 UUID
+ */
+function isValidUUID(str: any): boolean {
+    if (typeof str !== 'string') return false;
+    return /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i.test(str.trim());
+}
+
+/**
+ * 智能将输入的机台代码/名称转换为 sys_machines_v2 中合法的主键 machine_id
+ */
+async function resolveValidMachineId(rawMachine: string | undefined): Promise<string> {
+    const input = (rawMachine || '').trim().toUpperCase();
+    try {
+        const { data: machines } = await supabase
+            .from('sys_machines_v2')
+            .select('machine_id, name');
+
+        if (machines && machines.length > 0) {
+            // 1. 完全匹配 machine_id
+            const exact = machines.find((m) => m.machine_id.toUpperCase() === input);
+            if (exact) return exact.machine_id;
+
+            // 2. 完全匹配 name
+            const exactName = machines.find((m) => m.name.toUpperCase() === input);
+            if (exactName) return exactName.machine_id;
+
+            // 3. 常见前缀提取：如 "T1-1", "T1", "1号机" -> 匹配 "T1-M03"
+            const prefixMatch = input.match(/^([A-Z]\d+)/);
+            if (prefixMatch) {
+                const prefix = prefixMatch[1];
+                const matchedByPrefix = machines.find(
+                    (m) => m.machine_id.toUpperCase().startsWith(prefix) || m.name.toUpperCase().includes(prefix)
+                );
+                if (matchedByPrefix) return matchedByPrefix.machine_id;
+            }
+
+            // 4. 数字编号匹配
+            const numMatch = input.match(/(\d+)/);
+            if (numMatch) {
+                const n = numMatch[1];
+                const matchedByNum = machines.find((m) => m.machine_id.includes(n) || m.name.includes(n));
+                if (matchedByNum) return matchedByNum.machine_id;
+            }
+
+            // 5. 兜底返回第一个机台
+            return machines[0].machine_id;
+        }
+    } catch (e) {
+        console.warn('resolveValidMachineId warning:', e);
+    }
+    return 'T1-M03';
+}
+
+/**
+ * 智能将输入的 SKU 校验或转换为 master_items_v2 中合法的 sku
+ */
+async function resolveValidSku(rawSku: string | undefined, machineId: string): Promise<string> {
+    const input = (rawSku || '').trim();
+    try {
+        if (input) {
+            const { data: exactItem } = await supabase
+                .from('master_items_v2')
+                .select('sku')
+                .ilike('sku', input)
+                .limit(1)
+                .maybeSingle();
+            if (exactItem?.sku) return exactItem.sku;
+        }
+
+        // 尝试从机台表获取当前正在生产的 SKU
+        if (machineId) {
+            const { data: machine } = await supabase
+                .from('sys_machines_v2')
+                .select('current_sku')
+                .eq('machine_id', machineId)
+                .maybeSingle();
+            if (machine?.current_sku) {
+                return machine.current_sku;
+            }
+        }
+
+        // 兜底查询任意合法 SKU
+        const { data: defaultItem } = await supabase
+            .from('master_items_v2')
+            .select('sku')
+            .limit(1)
+            .maybeSingle();
+        if (defaultItem?.sku) {
+            return defaultItem.sku;
+        }
+    } catch (e) {
+        console.warn('resolveValidSku warning:', e);
+    }
+    return 'B17-ROLL';
+}
+
 // =====================================================================
 // PART 1: UNIVERSAL INTAKE LOGIC
 // =====================================================================
@@ -24,17 +121,18 @@ function parseWithLocalRules({ speechText = '', context = {}, imageBase64 }: any
 
     const data: any = {
         intent: 'operator_special_work',
-        workCategory: 'general',
+        workCategory: context?.selectedWorkCategory || 'general',
         confidence: 0.92,
         summary: raw || '现场工作登记',
         weight: null,
-        machineId: context?.currentMachine || 'T1-1',
+        machineId: context?.currentMachine || 'T1-M03',
         machineLoginCode: '',
         sku: '',
         defectReason: '',
         doNumber: '',
         containerNo: '',
         sealNo: '',
+        materialType: '',
         palletCount: null,
         otHours: null,
         driverNameOrPlate: '',
@@ -46,11 +144,34 @@ function parseWithLocalRules({ speechText = '', context = {}, imageBase64 }: any
         suggestedActions: []
     };
 
+    // 0. 若上下文显式选中了 6 大专项之一且用户未明确提到机台登录或停机
+    if (context?.selectedWorkCategory && !raw.includes('登出') && !raw.includes('登录') && !raw.includes('故障')) {
+        data.intent = 'operator_special_work';
+        data.workCategory = context.selectedWorkCategory;
+        const palletMatch = raw.match(/(\d+)\s*(托|件|包|箱|板)/);
+        if (palletMatch) data.palletCount = parseInt(palletMatch[1]);
+        const hoursMatch = raw.match(/(\d+(\.\d+)?)\s*(小时|h|hr|hrs)?/i);
+        if (hoursMatch) data.otHours = parseFloat(hoursMatch[1]);
+        const cntrMatch = raw.match(/([A-Z]{4}[-\s]?\d{6,7})/i);
+        if (cntrMatch) data.containerNo = cntrMatch[1].toUpperCase();
+
+        const catNames: Record<string, string> = {
+            Container: 'Container 原料采购卸柜',
+            OT: 'OT 车间加班',
+            driver_order: '协助行程 Trip',
+            handling: '搬运 (卸柜打托)',
+            shopee: 'Shopee 散单',
+            boss_order: 'Boss 特单'
+        };
+        data.summary = `【${catNames[context.selectedWorkCategory] || context.selectedWorkCategory}】${raw || '现场专项作业记录'}`;
+        return data;
+    }
+
     // 1. 登出机台 / 机器登出 / 机器登录 / 切换机台
     if (raw.includes('登出') || raw.includes('下机') || raw.includes('退出') || lower.includes('logout') || lower.includes('clock out')) {
         data.intent = 'machine_login';
         data.isLogout = true;
-        data.machineLoginCode = context?.currentMachine || 'T1-1';
+        data.machineLoginCode = context?.currentMachine || 'T1-M03';
         data.summary = `操作员申请登出当前机台 (${context?.currentMachine || '当前机台'})`;
         data.defectReason = '登出机台申请';
         return data;
@@ -202,6 +323,7 @@ export async function handleIntake(req: VercelRequest, res: VercelResponse) {
 
             // 1. Immutable record in work_photos for audit and visual trace
             try {
+                const resolvedMachine = await resolveValidMachineId(parsedData.machineId || context?.currentMachine);
                 const { data: photoRecord, error: photoErr } = await supabase
                     .from('work_photos')
                     .insert({
@@ -211,10 +333,11 @@ export async function handleIntake(req: VercelRequest, res: VercelResponse) {
                         ai_description: parsedData.summary || '万能快拍采集入库',
                         user_note: speechText || parsedData.rawText || '',
                         category: parsedData.intent || 'other',
-                        ai_tags: [parsedData.intent, parsedData.machineId, parsedData.sku].filter(Boolean),
+                        ai_tags: [parsedData.intent, resolvedMachine, parsedData.sku].filter(Boolean),
                         risk_flag: !!parsedData.riskFlag,
                         risk_reason: parsedData.riskReason || null,
                         location: finalGps || null,
+                        machine_id: resolvedMachine,
                         created_at: finalTimestamp
                     })
                     .select('id')
@@ -229,83 +352,117 @@ export async function handleIntake(req: VercelRequest, res: VercelResponse) {
 
             // 2. Specific domain table writes based on confirmed intent
             if (parsedData.intent === 'scale_production') {
-                // 生产报工入库
+                // 生产报工入库 (写入生产主表 production_logs_v2，并自动触发库存流水)
                 try {
                     const weightVal = Number(parsedData.weight) || 0;
+                    const validMachineId = await resolveValidMachineId(parsedData.machineId || context?.currentMachine);
+                    const validSku = await resolveValidSku(parsedData.sku, validMachineId);
+
+                    const originalNote = [
+                        `【万能快拍生产入库】${parsedData.summary || ''}`,
+                        parsedData.sku && parsedData.sku !== validSku ? `(现场输入规格: ${parsedData.sku})` : '',
+                        photoUrl && !photoUrl.startsWith('data:') ? `[存证: ${photoUrl}]` : ''
+                    ].filter(Boolean).join(' ');
+
                     const { data: prodLog, error: prodErr } = await supabase
                         .from('production_logs_v2')
                         .insert({
-                            machine_name: parsedData.machineId || '通用机台',
-                            sku: parsedData.sku || 'SF-500-150-18-CLR',
-                            weight: weightVal,
-                            net_weight: weightVal,
-                            gross_weight: weightVal,
-                            status: 'Completed',
-                            operator_name: empName,
-                            photo_url: photoUrl,
-                            notes: `【万能快拍生产入库】${parsedData.summary || ''}`,
+                            machine_id: validMachineId,
+                            sku: validSku,
+                            output_qty: weightVal,
+                            reject_qty: 0,
+                            operator_id: isValidUUID(empId) ? empId : null,
+                            note: originalNote,
                             created_at: finalTimestamp
                         })
-                        .select('id')
+                        .select('log_id')
                         .maybeSingle();
 
-                    if (!prodErr && prodLog) {
-                        commitResults.recordsCreated.push({ table: 'production_logs_v2', id: prodLog.id });
+                    if (prodErr) {
+                        console.error('Production log insert error:', prodErr.message);
+                    } else if (prodLog) {
+                        commitResults.recordsCreated.push({
+                            table: 'production_logs_v2',
+                            id: prodLog.log_id,
+                            machine_id: validMachineId,
+                            sku: validSku,
+                            output_qty: weightVal
+                        });
                     }
                 } catch (e) {
                     console.warn('Production log insert warning:', e);
                 }
             } else if (parsedData.intent === 'defect_scrap') {
-                // 废料次品记录
+                // 废料次品记录 (写入 production_logs_v2 的 reject_qty，便于大屏与生产报表统计)
                 try {
                     const scrapWeight = Number(parsedData.weight) || 0;
+                    const validMachineId = await resolveValidMachineId(parsedData.machineId || context?.currentMachine);
+                    const validSku = await resolveValidSku(parsedData.sku, validMachineId);
+
+                    const scrapNote = `【次品废料报废】${scrapWeight}kg. 原因: ${parsedData.defectReason || '未注明'}${parsedData.summary ? ` (${parsedData.summary})` : ''}`;
+
                     const { data: scrapLog, error: scrapErr } = await supabase
-                        .from('mobile_inspection_logs')
+                        .from('production_logs_v2')
                         .insert({
-                            log_type: 'material',
-                            machine_name: parsedData.machineId || '废料称重',
-                            reaction_tag: 'normal',
-                            reaction_notes: `次品废料报废: ${scrapWeight}kg. 原因: ${parsedData.defectReason || '未注明'}`,
-                            photo_url: photoUrl || '',
-                            operator_name: empName,
-                            operator_role: 'Operator',
-                            change_amount: scrapWeight,
+                            machine_id: validMachineId,
+                            sku: validSku,
+                            output_qty: 0,
+                            reject_qty: scrapWeight,
+                            operator_id: isValidUUID(empId) ? empId : null,
+                            note: scrapNote,
                             created_at: finalTimestamp
                         })
-                        .select('id')
+                        .select('log_id')
                         .maybeSingle();
 
-                    if (!scrapErr && scrapLog) {
-                        commitResults.recordsCreated.push({ table: 'mobile_inspection_logs', id: scrapLog.id });
+                    if (scrapErr) {
+                        console.error('Scrap log insert error:', scrapErr.message);
+                    } else if (scrapLog) {
+                        commitResults.recordsCreated.push({
+                            table: 'production_logs_v2',
+                            id: scrapLog.log_id,
+                            machine_id: validMachineId,
+                            reject_qty: scrapWeight
+                        });
                     }
                 } catch (e) {
                     console.warn('Scrap log insert warning:', e);
                 }
             } else if (parsedData.intent === 'machine_anomaly') {
-                // 设备点检异常与停机
+                // 设备点检异常与停机 (生成紧急待办/维保任务)
                 try {
-                    const { data: inspLog, error: inspErr } = await supabase
-                        .from('mobile_inspection_logs')
+                    const validMachineId = await resolveValidMachineId(parsedData.machineId || context?.currentMachine);
+                    const anomalyTitle = `【设备异常维修】机台 ${validMachineId} - ${parsedData.defectReason || '紧急停机报警'}`;
+                    const anomalyDesc = `操作员 ${empName} (${empId}) 报告机台 ${validMachineId} 发生异常：\n原因: ${parsedData.defectReason || parsedData.summary || '设备异常'}\n详情: ${speechText || parsedData.rawText || ''}\n时间: ${finalTimestamp}\n位置: ${finalGps || '现场'}`;
+
+                    const { data: taskLog, error: taskErr } = await supabase
+                        .from('tasks')
                         .insert({
-                            log_type: 'machine_adjustment',
-                            machine_name: parsedData.machineId || '点检机台',
-                            adjustment_position: parsedData.defectReason || '设备异常停机',
-                            adjustment_notes: parsedData.summary || '万能快拍异常提交',
-                            photo_url: photoUrl || '',
-                            operator_name: empName,
+                            title: anomalyTitle,
+                            description: anomalyDesc,
+                            status: 'Pending',
+                            priority: 'High',
+                            assigned_to: isValidUUID(empId) ? empId : null,
                             created_at: finalTimestamp
                         })
                         .select('id')
                         .maybeSingle();
 
-                    if (!inspErr && inspLog) {
-                        commitResults.recordsCreated.push({ table: 'mobile_inspection_logs', id: inspLog.id });
+                    if (taskErr) {
+                        console.error('Machine anomaly task insert error:', taskErr.message);
+                    } else if (taskLog) {
+                        commitResults.recordsCreated.push({
+                            table: 'tasks',
+                            id: taskLog.id,
+                            type: 'machine_anomaly',
+                            machine: validMachineId
+                        });
                     }
                 } catch (e) {
                     console.warn('Machine anomaly insert warning:', e);
                 }
             } else if (parsedData.intent === 'delivery_pod') {
-                // 物流送货签收 (POD)
+                // 物流送货签收 (POD) - 关联回写 sales_orders 状态、照片与时间戳
                 try {
                     const doNum = parsedData.doNumber;
                     if (doNum) {
@@ -313,7 +470,10 @@ export async function handleIntake(req: VercelRequest, res: VercelResponse) {
                             .from('sales_orders')
                             .update({
                                 status: 'Delivered',
-                                notes: `【POD签收】于 ${finalTimestamp} 完成送达。地点: ${finalGps}`
+                                pod_photo_url: photoUrl || null,
+                                pod_signed_by: empName || '现场签收人',
+                                pod_timestamp: finalTimestamp,
+                                notes: `【POD签收】于 ${finalTimestamp} 完成送达。签收单号: ${doNum}。地点: ${finalGps}`
                             })
                             .ilike('order_number', `%${doNum}%`)
                             .select('id');
@@ -326,19 +486,21 @@ export async function handleIntake(req: VercelRequest, res: VercelResponse) {
                     console.warn('POD update warning:', e);
                 }
             } else if (parsedData.intent === 'operator_special_work' || parsedData.workCategory) {
-                // 操作员 6 大专项作业 (OT, Container 原料采购, driver order 协助Trip, handling 搬运, shopee, boss order)
+                // 操作员 6 大专项作业 (Container 原料采购卸柜, OT 车间加班, driver order 协助Trip, handling 搬运, shopee 散单, boss order 老板特单)
                 try {
                     const workCat = parsedData.workCategory || 'general';
                     const detailDesc = [
                         parsedData.containerNo ? `柜号: ${parsedData.containerNo}` : '',
                         parsedData.sealNo ? `封条: ${parsedData.sealNo}` : '',
+                        parsedData.materialType ? `物料类别: ${parsedData.materialType}` : '',
                         parsedData.otHours ? `加班工时: ${parsedData.otHours}小时` : '',
                         parsedData.palletCount ? `托数/件数: ${parsedData.palletCount}托` : '',
                         parsedData.warehouseBay ? `存放库位: ${parsedData.warehouseBay}` : '',
                         parsedData.driverNameOrPlate ? `司机/车牌: ${parsedData.driverNameOrPlate}` : '',
                         parsedData.tripId ? `行程单号: ${parsedData.tripId}` : '',
                         parsedData.trackingNo ? `运单号: ${parsedData.trackingNo}` : '',
-                        parsedData.bossOrderNote ? `特单说明: ${parsedData.bossOrderNote}` : ''
+                        parsedData.bossOrderNote ? `特单说明: ${parsedData.bossOrderNote}` : '',
+                        `操作员: ${empName} (${empId})`
                     ].filter(Boolean).join(' | ');
 
                     const { data: taskLog, error: taskErr } = await supabase
@@ -348,24 +510,28 @@ export async function handleIntake(req: VercelRequest, res: VercelResponse) {
                             description: `${detailDesc}\n备注: ${speechText || parsedData.rawText || ''}`,
                             status: 'Done',
                             priority: workCat === 'boss_order' ? 'High' : 'Normal',
-                            assigned_to: empId,
+                            assigned_to: isValidUUID(empId) ? empId : null,
                             created_at: finalTimestamp
                         })
                         .select('id')
                         .maybeSingle();
 
-                    if (!taskErr && taskLog) {
+                    if (taskErr) {
+                        console.error('Special work task insert error:', taskErr.message);
+                    } else if (taskLog) {
                         commitResults.recordsCreated.push({ table: 'tasks', id: taskLog.id, category: workCat });
                     }
                 } catch (e) {
                     console.warn('Operator special work insert warning:', e);
                 }
             } else if (parsedData.intent === 'machine_login' || parsedData.machineLoginCode) {
-                // 操作员机台登录与绑定 / 登出
-                const targetMachine = parsedData.machineLoginCode || parsedData.machineId || 'T1-1';
+                // 操作员机台登录与绑定 / 登出考勤
+                const targetMachine = await resolveValidMachineId(parsedData.machineLoginCode || parsedData.machineId || 'T1-M03');
                 const isLogout = !!parsedData.isLogout ||
                     (parsedData.summary && (parsedData.summary.includes('登出') || parsedData.summary.includes('下机'))) ||
                     (speechText && (speechText.includes('登出') || speechText.includes('下机')));
+
+                const opIdentifier = empId || empName || 'OP-AUTO';
 
                 try {
                     if (isLogout) {
@@ -373,9 +539,9 @@ export async function handleIntake(req: VercelRequest, res: VercelResponse) {
                             .from('operator_attendance')
                             .update({
                                 clock_out: finalTimestamp,
-                                notes: `万能快拍登出机台: ${targetMachine}`
+                                notes: `万能快拍登出机台: ${targetMachine} (操作员: ${empName})`
                             })
-                            .eq('operator_name', empName)
+                            .eq('operator_id', opIdentifier)
                             .is('clock_out', null)
                             .select('id');
 
@@ -390,19 +556,22 @@ export async function handleIntake(req: VercelRequest, res: VercelResponse) {
                             count: attUpdate?.length || 0
                         });
                     } else {
+                        const todayDate = finalTimestamp.split('T')[0];
                         const { data: attLog, error: attErr } = await supabase
                             .from('operator_attendance')
                             .insert({
-                                operator_id: empId || 'Unknown',
-                                operator_name: empName,
+                                operator_id: opIdentifier,
                                 machine_id: targetMachine,
+                                date: todayDate,
                                 clock_in: finalTimestamp,
-                                notes: `万能快拍扫码/登录绑定机台: ${targetMachine}`
+                                notes: `万能快拍扫码/登录绑定机台: ${targetMachine} (操作员: ${empName})`
                             })
                             .select('id')
                             .maybeSingle();
 
-                        if (!attErr && attLog) {
+                        if (attErr) {
+                            console.warn('Operator clock-in warning:', attErr.message);
+                        } else if (attLog) {
                             commitResults.recordsCreated.push({ table: 'operator_attendance', id: attLog.id, machine: targetMachine });
                         }
                     }
@@ -411,13 +580,14 @@ export async function handleIntake(req: VercelRequest, res: VercelResponse) {
                 }
             }
 
-            // Also record general activity log
+            // Also record general user activity log
             try {
-                await supabase.from('activity_logs').insert({
-                    user_name: empName,
-                    action_type: parsedData.intent === 'machine_login' ? 'MACHINE_LOGIN' : 'UNIVERSAL_INTAKE_COMMIT',
-                    details: `[${parsedData.intent}] ${parsedData.summary || ''} (机台: ${parsedData.machineLoginCode || parsedData.machineId || '-'})`,
-                    ip_or_gps: finalGps,
+                await supabase.from('user_activity_logs').insert({
+                    user_id: isValidUUID(empId) ? empId : null,
+                    name: empName,
+                    role: 'Operator',
+                    action: parsedData.intent === 'machine_login' ? 'MACHINE_LOGIN' : 'UNIVERSAL_INTAKE_COMMIT',
+                    details: `[${parsedData.intent}] ${parsedData.summary || ''} (机台: ${parsedData.machineLoginCode || parsedData.machineId || '-'}) | GPS: ${finalGps || '-'}`,
                     created_at: finalTimestamp
                 });
             } catch (ignore) {}
@@ -558,7 +728,7 @@ ${timeStr}
         }
 
         // Enhance with caller metadata
-        parsed.imageUrl = rawImageUrl || (imageBase64 ? `data:image/jpeg;base64,${imageBase64.substring(0, 100)}...` : '');
+        parsed.imageUrl = rawImageUrl || (imageBase64 ? (imageBase64.startsWith('data:') ? imageBase64 : `data:image/jpeg;base64,${imageBase64}`) : '');
         parsed.gps = gps || '';
         parsed.timestamp = timestamp || new Date().toISOString();
         parsed.operatorId = operatorId || '';

@@ -53,6 +53,8 @@ import ActivityLogs from './pages/ActivityLogs';
 import FloorPlan from './pages/FloorPlan';
 import WilliamDocumentCenter from './pages/WilliamDocumentCenter';
 import BossCoPilot from './pages/BossCoPilot';
+import SystemDocsEditor from './pages/SystemDocsEditor';
+import StaffStatusSignOff from './pages/StaffStatusSignOff';
 
 import { User, UserRole, InventoryItem, ProductionLog as ProductionLogType, JobOrder } from './types';
 import { mergeAllowedPages, computeEffectivePermissions } from './utils/pageAccess';
@@ -788,6 +790,8 @@ function App() {
                 return <DataManagement />;
             case 'admin-data':
                 return <DataManagement />;
+            case 'staff-status':
+                return <StaffStatusSignOff user={user} onNavigate={setActivePage} />;
             case 'scanner':
                 return <ProductionControl user={user as any} jobs={jobs} onNavigate={setActivePage} />;
             case 'report-history':
@@ -819,6 +823,8 @@ function App() {
                 return <HRPortal user={user} initialTab="personnel" initialRoleFilter="Operator" onNavigate={setActivePage} />;
             case 'dev-log':
                 return <DevLog />;
+            case 'system-docs':
+                return <SystemDocsEditor user={user} />;
             case 'notes':
                 return <Notes user={user} />;
             case 'tasks':

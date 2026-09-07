@@ -72,6 +72,7 @@ export async function uploadOriginalImageToSupabase(file: File | Blob, prefix = 
 
         // 尝试上传至 work-photos 桶或 avatars 桶
         const targetBucket = 'work-photos';
+        let usedBucket = targetBucket;
         let uploadRes = await supabase.storage.from(targetBucket).upload(filePath, file, {
             cacheControl: '3600',
             upsert: false
@@ -83,10 +84,11 @@ export async function uploadOriginalImageToSupabase(file: File | Blob, prefix = 
                 cacheControl: '3600',
                 upsert: false
             });
+            usedBucket = 'avatars';
         }
 
         if (uploadRes.data?.path) {
-            const { data } = supabase.storage.from(uploadRes.data.path.startsWith('universal/') ? targetBucket : 'avatars').getPublicUrl(filePath);
+            const { data } = supabase.storage.from(usedBucket).getPublicUrl(filePath);
             return data.publicUrl;
         }
 
@@ -306,14 +308,18 @@ export async function getAvailableMachines(): Promise<{ machine_id: string; name
         // fallback
     }
 
-    // Default factory machine list
+    // Default factory machine list (align with sys_machines_v2)
     return [
-        { machine_id: 'T1-1', name: 'T1-1 (Taiping 吹膜1号)' },
-        { machine_id: 'T1-2', name: 'T1-2 (Taiping 吹膜2号)' },
-        { machine_id: 'T1-3', name: 'T1-3 (Taiping 吹膜3号)' },
-        { machine_id: 'N1-1', name: 'N1-1 (Nilai 气泡膜1号)' },
-        { machine_id: 'N1-2', name: 'N1-2 (Nilai 气泡膜2号)' },
-        { machine_id: 'Rewinder-1', name: 'Rewinder-1 (复卷分切机)' },
-        { machine_id: 'Rewinder-2', name: 'Rewinder-2 (复卷分切机2)' }
+        { machine_id: 'T1-M03', name: 'Stretch Film (T1)' },
+        { machine_id: 'N1-M01', name: '1M Double Layer (N1)' },
+        { machine_id: 'N2-M02', name: '1M Single Layer (N2)' },
+        { machine_id: 'N3-M03', name: 'Recycle Machine (N3)' },
+        { machine_id: 'T2-M01', name: '2M Double Layer (T2)' },
+        { machine_id: 'T3-M02', name: '1M Single Layer (T3)' },
+        { machine_id: 'T4-M04', name: 'Stretch Film (T4)' },
+        { machine_id: 'T5-M05', name: 'Recycle Machine (T5)' },
+        { machine_id: 'K1-M01', name: '1M Double Layer (K1)' },
+        { machine_id: 'J1-M01', name: '2M Double Layer (J1)' },
+        { machine_id: 'J1-M02', name: 'Recycle Machine (J1)' }
     ];
 }

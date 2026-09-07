@@ -29,5 +29,5 @@ export const MACHINES: Machine[] = [
 
     // Johor
     { id: 'J1-M01', name: '2M Double Layer (J1)', factory_id: 'Johor', type: 'Extruder', status: 'Idle' },
-    { id: 'J1-M02', name: '1M Single Layer (J1)', factory_id: 'Johor', type: 'Extruder', status: 'Idle' }
+    { id: 'J1-M02', name: 'Recycle Machine (J1)', factory_id: 'Johor', type: 'Other', status: 'Idle' }
 ];

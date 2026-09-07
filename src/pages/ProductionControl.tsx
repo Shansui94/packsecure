@@ -791,15 +791,20 @@ const ProductionControl: React.FC<ProductionControlProps> = ({ user, jobs = [], 
     const [submittingSpecialWork, setSubmittingSpecialWork] = useState<boolean>(false);
     const specialPhotoInputRef = useRef<HTMLInputElement>(null);
 
-    // 实时作业秒表计时器 (精确基于 startTime 毫秒差计算)
+    // 实时作业秒表计时器 (根据第一张照片的时间启动，若尚未拍照则显示 00:00:00)
     useEffect(() => {
-        if (!activeSpecialTask?.startTime) {
+        // 严格以第 1 张照片的 timestamp 为计时起点
+        const effectiveStartTime = (activeSpecialTask?.photos && activeSpecialTask.photos.length > 0)
+            ? activeSpecialTask.photos[0].timestamp
+            : null;
+
+        if (!effectiveStartTime) {
             setSpecialTaskDuration('00:00:00');
             return;
         }
 
         const updateTimer = () => {
-            const start = new Date(activeSpecialTask.startTime).getTime();
+            const start = new Date(effectiveStartTime).getTime();
             const now = Date.now();
             const diffMs = Math.max(0, now - start);
             const totalSecs = Math.floor(diffMs / 1000);
@@ -814,7 +819,7 @@ const ProductionControl: React.FC<ProductionControlProps> = ({ user, jobs = [], 
         updateTimer();
         const interval = setInterval(updateTimer, 1000);
         return () => clearInterval(interval);
-    }, [activeSpecialTask?.startTime]);
+    }, [activeSpecialTask?.photos?.[0]?.timestamp]);
 
     // 持久化当前专项工作会话至 localStorage
     useEffect(() => {
@@ -834,16 +839,22 @@ const ProductionControl: React.FC<ProductionControlProps> = ({ user, jobs = [], 
     useEffect(() => {
         const handleSpecialPhotoEvent = (e: any) => {
             if (activeSpecialTask && e.detail?.photoUrl) {
+                const recordTime = new Date().toISOString();
                 const newP: SpecialTaskPhoto = {
                     id: `p-${Date.now()}`,
                     url: e.detail.photoUrl,
-                    timestamp: new Date().toISOString(),
+                    timestamp: recordTime,
                     note: e.detail.note || `现场记录 #${(activeSpecialTask.photos?.length || 0) + 1}`
                 };
-                setActiveSpecialTask(prev => prev ? {
-                    ...prev,
-                    photos: [...(prev.photos || []), newP]
-                } : null);
+                setActiveSpecialTask(prev => {
+                    if (!prev) return null;
+                    const isFirst = !prev.photos || prev.photos.length === 0;
+                    return {
+                        ...prev,
+                        startTime: isFirst ? recordTime : (prev.startTime || recordTime),
+                        photos: [...(prev.photos || []), newP]
+                    };
+                });
             }
         };
 
@@ -1698,7 +1709,7 @@ const ProductionControl: React.FC<ProductionControlProps> = ({ user, jobs = [], 
             id: `ST-${Date.now()}`,
             category: categoryKey,
             categoryLabel: catLabel,
-            startTime: new Date().toISOString(),
+            startTime: '', // 等待拍摄第 1 张工作照片确立正式起始时间
             operatorId: uploaderId,
             operatorName: uploaderName,
             containerNo: '',
@@ -1818,8 +1829,12 @@ const ProductionControl: React.FC<ProductionControlProps> = ({ user, jobs = [], 
                 note: noteText
             };
 
+            const isFirstPhoto = !activeSpecialTask.photos || activeSpecialTask.photos.length === 0;
+            const confirmedStartTime = isFirstPhoto ? recordTime : (activeSpecialTask.photos[0]?.timestamp || activeSpecialTask.startTime || recordTime);
+
             const updatedSession: ActiveSpecialTaskSession = {
                 ...activeSpecialTask,
+                startTime: confirmedStartTime,
                 photos: [...(activeSpecialTask.photos || []), newPhoto]
             };
 
@@ -1832,7 +1847,11 @@ const ProductionControl: React.FC<ProductionControlProps> = ({ user, jobs = [], 
                 specialPhotoInputRef.current.value = '';
             }
 
-            alert(`✅ 阶段工作记录照片已成功留档！(本次第 ${updatedSession.photos.length} 张凭证)`);
+            if (isFirstPhoto) {
+                alert(`📸 首张工作记录照片已留档！\n已确立为本次【${activeSpecialTask.categoryLabel}】的开始时间 (${new Date(recordTime).toLocaleTimeString()})，并已正式启动计时！`);
+            } else {
+                alert(`✅ 阶段工作记录照片已成功留档！(本次第 ${updatedSession.photos.length} 张凭证)`);
+            }
         } catch (err: any) {
             console.error("Failed to upload special work photo:", err);
             alert(`照片上传失败: ${err.message || '网络错误'}`);
@@ -1846,24 +1865,34 @@ const ProductionControl: React.FC<ProductionControlProps> = ({ user, jobs = [], 
         const confirmDelete = window.confirm("确定要从本次作业中移除这张照片记录吗？");
         if (!confirmDelete) return;
 
+        const remainingPhotos = (activeSpecialTask.photos || []).filter(p => p.id !== photoId);
         setActiveSpecialTask({
             ...activeSpecialTask,
-            photos: (activeSpecialTask.photos || []).filter(p => p.id !== photoId)
+            startTime: remainingPhotos.length > 0 ? remainingPhotos[0].timestamp : '',
+            photos: remainingPhotos
         });
     };
 
     const handleCompleteSpecialTask = async () => {
         if (!activeSpecialTask) return;
 
-        const start = new Date(activeSpecialTask.startTime).getTime();
+        const photosCount = activeSpecialTask.photos?.length || 0;
+        if (photosCount === 0) {
+            alert("⚠️ 请至少拍摄 1 张现场工作照片作为任务开始时间与凭证，方可归档完成！\nPlease take at least 1 photo to establish start time and work evidence!");
+            return;
+        }
+
+        // 严格以第 1 张照片的时间作为正式开始时间
+        const startTimestamp = activeSpecialTask.photos[0]?.timestamp || activeSpecialTask.startTime || new Date().toISOString();
+        const start = new Date(startTimestamp).getTime();
         const now = Date.now();
         const elapsedMinutes = Math.max(1, Math.round((now - start) / 60000));
         const elapsedHours = (elapsedMinutes / 60).toFixed(1);
-        const photosCount = activeSpecialTask.photos?.length || 0;
 
         let summary = '';
         const detailParts: string[] = [];
 
+        detailParts.push(`首拍开始: ${new Date(startTimestamp).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit', second: '2-digit' })}`);
         detailParts.push(`耗时: ${specialTaskDuration} (${elapsedMinutes}分钟)`);
         detailParts.push(`留档照片: ${photosCount}张`);
 
@@ -1895,7 +1924,7 @@ const ProductionControl: React.FC<ProductionControlProps> = ({ user, jobs = [], 
         const fullDesc = detailParts.join(' | ');
 
         const confirmFinish = window.confirm(
-            `🏁 确认完成并归档本次【${activeSpecialTask.categoryLabel}】？\n\n- 总耗时: ${specialTaskDuration} (${elapsedMinutes} 分钟)\n- 留档工作记录照片: ${photosCount} 张\n\n点击【确定】将同步至系统待办与管理层看板。`
+            `🏁 确认完成并归档本次【${activeSpecialTask.categoryLabel}】？\n\n- 首拍开始时间: ${new Date(startTimestamp).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit', second: '2-digit' })}\n- 总耗时: ${specialTaskDuration} (${elapsedMinutes} 分钟)\n- 留档工作记录照片: ${photosCount} 张\n\n点击【确定】将同步至系统待办与管理层看板。`
         );
         if (!confirmFinish) return;
 
@@ -1909,7 +1938,7 @@ const ProductionControl: React.FC<ProductionControlProps> = ({ user, jobs = [], 
                 status: 'Done',
                 priority: activeSpecialTask.category === 'boss_order' ? 'High' : 'Normal',
                 assigned_to: uploaderId,
-                created_at: activeSpecialTask.startTime
+                created_at: startTimestamp
             });
 
             if (taskErr) throw taskErr;
@@ -2526,7 +2555,8 @@ const ProductionControl: React.FC<ProductionControlProps> = ({ user, jobs = [], 
         )) ||
         selectedMachine?.toLowerCase().includes('rec') ||
         selectedMachine === 'T5-M05' ||
-        selectedMachine === 'N3-M03'
+        selectedMachine === 'N3-M03' ||
+        selectedMachine === 'J1-M02'
     );
 
     const isSfMachine = Boolean(
@@ -2754,22 +2784,34 @@ const ProductionControl: React.FC<ProductionControlProps> = ({ user, jobs = [], 
                                             <h2 className="text-xl font-black text-white">
                                                 {activeSpecialTask.categoryLabel}
                                             </h2>
-                                            <span className="px-2.5 py-0.5 rounded-full text-[10px] font-bold bg-amber-500/20 text-amber-300 border border-amber-500/30 animate-pulse">
-                                                ● {t('作业进行中')}
-                                            </span>
+                                            {activeSpecialTask.photos?.length > 0 ? (
+                                                <span className="px-2.5 py-0.5 rounded-full text-[10px] font-bold bg-emerald-500/20 text-emerald-300 border border-emerald-500/30 animate-pulse">
+                                                    ● {t('计时进行中')}
+                                                </span>
+                                            ) : (
+                                                <span className="px-2.5 py-0.5 rounded-full text-[10px] font-bold bg-amber-500/20 text-amber-300 border border-amber-500/30 animate-pulse">
+                                                    ● {t('待拍首张照片启动计时')}
+                                                </span>
+                                            )}
                                         </div>
                                         <p className="text-xs text-gray-400 mt-1">
-                                            {t('操作员')}: <span className="text-white font-medium">{activeSpecialTask.operatorName}</span> ({activeSpecialTask.operatorId}) · {t('开始时间')}: {new Date(activeSpecialTask.startTime).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit', second: '2-digit' })}
+                                            {t('操作员')}: <span className="text-white font-medium">{activeSpecialTask.operatorName}</span> ({activeSpecialTask.operatorId}) · {activeSpecialTask.photos?.length > 0 ? (
+                                                <>{t('首拍开始时间')}: <span className="text-white font-medium">{new Date(activeSpecialTask.photos[0].timestamp).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit', second: '2-digit' })}</span></>
+                                            ) : (
+                                                <span className="text-amber-400 font-medium">⚠️ {t('等待拍摄第1张照片确立开始时间')}</span>
+                                            )}
                                         </p>
                                     </div>
                                 </div>
 
                                 <div className="flex items-center gap-3 w-full md:w-auto justify-between md:justify-end">
-                                    <div className="flex items-center gap-3 bg-black/50 border border-emerald-500/40 px-4 py-2 rounded-2xl shadow-inner">
-                                        <Clock size={18} className="text-emerald-400 animate-spin-slow" />
+                                    <div className={`flex items-center gap-3 bg-black/50 border ${activeSpecialTask.photos?.length > 0 ? 'border-emerald-500/40' : 'border-amber-500/30'} px-4 py-2 rounded-2xl shadow-inner`}>
+                                        <Clock size={18} className={activeSpecialTask.photos?.length > 0 ? "text-emerald-400 animate-spin-slow" : "text-amber-400"} />
                                         <div>
-                                            <p className="text-[9px] text-emerald-400 font-bold uppercase tracking-wider">{t('实时作业计时')}</p>
-                                            <p className="text-xl sm:text-2xl font-mono font-black text-emerald-300 tracking-wider">
+                                            <p className={`text-[9px] font-bold uppercase tracking-wider ${activeSpecialTask.photos?.length > 0 ? 'text-emerald-400' : 'text-amber-400'}`}>
+                                                {activeSpecialTask.photos?.length > 0 ? t('实时作业计时') : t('待首拍启动计时')}
+                                            </p>
+                                            <p className={`text-xl sm:text-2xl font-mono font-black tracking-wider ${activeSpecialTask.photos?.length > 0 ? 'text-emerald-300' : 'text-gray-400'}`}>
                                                 {specialTaskDuration}
                                             </p>
                                         </div>
@@ -2794,27 +2836,35 @@ const ProductionControl: React.FC<ProductionControlProps> = ({ user, jobs = [], 
                                     <div className="bg-white/5 border border-white/10 rounded-3xl p-5 backdrop-blur-md shadow-lg">
                                         <div className="flex items-center justify-between mb-2">
                                             <div className="flex items-center gap-2">
-                                                <Camera size={18} className="text-indigo-400" />
+                                                <Camera size={18} className={(!activeSpecialTask.photos || activeSpecialTask.photos.length === 0) ? "text-amber-400" : "text-indigo-400"} />
                                                 <h3 className="text-sm font-bold text-white">
-                                                    {t('阶段工作记录拍照')} / Progressive Work Evidence
+                                                    {(!activeSpecialTask.photos || activeSpecialTask.photos.length === 0)
+                                                        ? t('拍摄第 1 张工作照片 (确立开始时间)')
+                                                        : `${t('阶段工作记录拍照')} / Progressive Work Evidence`}
                                                 </h3>
                                             </div>
-                                            <span className="text-[11px] font-semibold text-indigo-300 bg-indigo-500/20 px-2.5 py-0.5 rounded-full border border-indigo-500/30">
+                                            <span className={`text-[11px] font-semibold px-2.5 py-0.5 rounded-full border ${(!activeSpecialTask.photos || activeSpecialTask.photos.length === 0) ? 'text-amber-300 bg-amber-500/20 border-amber-500/30' : 'text-indigo-300 bg-indigo-500/20 border-indigo-500/30'}`}>
                                                 {t('已拍摄')} {activeSpecialTask.photos?.length || 0} {t('张')}
                                             </span>
                                         </div>
                                         <p className="text-xs text-gray-400 mb-4 leading-relaxed">
-                                            {t('作业期间的每一次拍照均作为阶段工作凭证自动留档（例如：开柜封条号、作业进度、码盘托盘、完工现场等）。')}
+                                            {(!activeSpecialTask.photos || activeSpecialTask.photos.length === 0)
+                                                ? <span className="text-amber-300 font-medium">{t('📌 规则：系统以拍摄并上传第 1 张照片的时间作为本次专项作业的正式开始时间并启动计时。请先拍摄现场开工照片！')}</span>
+                                                : t('作业期间的每一次拍照均作为阶段工作凭证自动留档（例如：开柜封条号、作业进度、码盘托盘、完工现场等）。')}
                                         </p>
 
                                         {!specialTaskPhotoPreview ? (
                                             <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
-                                                <label className="cursor-pointer flex flex-col items-center justify-center p-6 border-2 border-dashed border-indigo-500/40 hover:border-indigo-400 bg-indigo-500/10 hover:bg-indigo-500/20 rounded-2xl transition-all group active:scale-98">
-                                                    <div className="w-12 h-12 rounded-full bg-indigo-500/20 flex items-center justify-center mb-2 group-hover:scale-110 transition-transform">
-                                                        <Camera size={24} className="text-indigo-300" />
+                                                <label className={`cursor-pointer flex flex-col items-center justify-center p-6 border-2 border-dashed ${(!activeSpecialTask.photos || activeSpecialTask.photos.length === 0) ? 'border-amber-500/50 hover:border-amber-400 bg-amber-500/10 hover:bg-amber-500/20' : 'border-indigo-500/40 hover:border-indigo-400 bg-indigo-500/10 hover:bg-indigo-500/20'} rounded-2xl transition-all group active:scale-98`}>
+                                                    <div className={`w-12 h-12 rounded-full ${(!activeSpecialTask.photos || activeSpecialTask.photos.length === 0) ? 'bg-amber-500/20' : 'bg-indigo-500/20'} flex items-center justify-center mb-2 group-hover:scale-110 transition-transform`}>
+                                                        <Camera size={24} className={(!activeSpecialTask.photos || activeSpecialTask.photos.length === 0) ? "text-amber-300" : "text-indigo-300"} />
                                                     </div>
-                                                    <span className="text-xs font-black text-white">{t('拍照记录当前进度')}</span>
-                                                    <span className="text-[10px] text-gray-400 mt-0.5">{t('调用手机相机拍摄现场')}</span>
+                                                    <span className="text-xs font-black text-white">
+                                                        {(!activeSpecialTask.photos || activeSpecialTask.photos.length === 0) ? t('拍摄首张照片 (启动计时)') : t('拍照记录当前进度')}
+                                                    </span>
+                                                    <span className="text-[10px] text-gray-400 mt-0.5">
+                                                        {(!activeSpecialTask.photos || activeSpecialTask.photos.length === 0) ? t('拍下现场开工照片确立开始时间') : t('调用手机相机拍摄现场')}
+                                                    </span>
                                                     <input
                                                         ref={specialPhotoInputRef}
                                                         type="file"
@@ -2879,10 +2929,14 @@ const ProductionControl: React.FC<ProductionControlProps> = ({ user, jobs = [], 
                                                         type="button"
                                                         onClick={handleSaveSpecialTaskPhoto}
                                                         disabled={uploadingSpecialPhoto}
-                                                        className="flex-1 py-3 px-4 bg-gradient-to-r from-indigo-600 to-purple-600 hover:from-indigo-500 hover:to-purple-500 text-white rounded-xl text-xs font-black flex items-center justify-center gap-2 shadow-lg active:scale-95 transition-all cursor-pointer disabled:opacity-50"
+                                                        className={`flex-1 py-3 px-4 ${(!activeSpecialTask.photos || activeSpecialTask.photos.length === 0) ? 'bg-gradient-to-r from-amber-600 to-amber-700 hover:from-amber-500 hover:to-amber-600' : 'bg-gradient-to-r from-indigo-600 to-purple-600 hover:from-indigo-500 hover:to-purple-500'} text-white rounded-xl text-xs font-black flex items-center justify-center gap-2 shadow-lg active:scale-95 transition-all cursor-pointer disabled:opacity-50`}
                                                     >
                                                         {uploadingSpecialPhoto ? <Loader className="animate-spin" size={14} /> : <Check size={14} />}
-                                                        <span>{t('确认记录此照片')} (本次第 {(activeSpecialTask.photos?.length || 0) + 1} 张)</span>
+                                                        <span>
+                                                            {(!activeSpecialTask.photos || activeSpecialTask.photos.length === 0)
+                                                                ? t('确认记录首张照片 (确立开始时间并启动计时)')
+                                                                : `${t('确认记录此照片')} (本次第 ${(activeSpecialTask.photos?.length || 0) + 1} 张)`}
+                                                        </span>
                                                     </button>
                                                     <button
                                                         type="button"
@@ -2913,12 +2967,12 @@ const ProductionControl: React.FC<ProductionControlProps> = ({ user, jobs = [], 
                                         </div>
 
                                         {(!activeSpecialTask.photos || activeSpecialTask.photos.length === 0) ? (
-                                            <div className="text-center py-8 border border-dashed border-white/10 rounded-2xl bg-white/[0.02]">
-                                                <p className="text-xs text-gray-400">
-                                                    {t('暂未拍摄工作记录照片')}
+                                            <div className="text-center py-8 border border-dashed border-amber-500/30 rounded-2xl bg-amber-500/[0.03]">
+                                                <p className="text-xs text-amber-300 font-bold">
+                                                    {t('⏳ 等待拍摄第 1 张照片确立开始时间')}
                                                 </p>
-                                                <p className="text-[11px] text-gray-500 mt-1">
-                                                    {t('点击上方【拍照记录当前进度】拍摄第一张作业凭证')}
+                                                <p className="text-[11px] text-gray-400 mt-1">
+                                                    {t('点击上方【拍摄首张照片】完成上传后，系统将正式以首拍时间启动计时')}
                                                 </p>
                                             </div>
                                         ) : (
@@ -3093,11 +3147,17 @@ const ProductionControl: React.FC<ProductionControlProps> = ({ user, jobs = [], 
 
                                         {/* Complete Button */}
                                         <div className="pt-3 border-t border-white/10 space-y-2">
+                                            {(!activeSpecialTask.photos || activeSpecialTask.photos.length === 0) && (
+                                                <div className="p-3 rounded-2xl bg-amber-500/10 border border-amber-500/30 text-amber-300 text-xs flex items-center gap-2">
+                                                    <span className="text-base">⚠️</span>
+                                                    <span>{t('需先拍摄至少 1 张现场工作照片以确立开始时间与凭证，方可归档完工。')}</span>
+                                                </div>
+                                            )}
                                             <button
                                                 type="button"
                                                 onClick={handleCompleteSpecialTask}
-                                                disabled={submittingSpecialWork}
-                                                className="w-full py-4 px-4 bg-gradient-to-r from-emerald-600 via-teal-600 to-emerald-700 hover:from-emerald-500 hover:to-teal-500 text-white rounded-2xl text-sm font-black flex items-center justify-center gap-2 shadow-xl shadow-emerald-600/30 active:scale-98 transition-all cursor-pointer disabled:opacity-50"
+                                                disabled={submittingSpecialWork || !activeSpecialTask.photos || activeSpecialTask.photos.length === 0}
+                                                className="w-full py-4 px-4 bg-gradient-to-r from-emerald-600 via-teal-600 to-emerald-700 hover:from-emerald-500 hover:to-teal-500 text-white rounded-2xl text-sm font-black flex items-center justify-center gap-2 shadow-xl shadow-emerald-600/30 active:scale-98 transition-all cursor-pointer disabled:opacity-50 disabled:cursor-not-allowed"
                                             >
                                                 {submittingSpecialWork ? <Loader className="animate-spin" size={16} /> : <Check size={16} />}
                                                 <span>🏁 {t('完成本次专项作业并归档')}</span>
@@ -3262,11 +3322,11 @@ const ProductionControl: React.FC<ProductionControlProps> = ({ user, jobs = [], 
                                                 </h3>
                                             </div>
                                             <span className="text-[10px] font-bold text-amber-400 bg-amber-500/10 px-2.5 py-1 rounded-full border border-amber-500/20">
-                                                {t('即开即计 · 拍照即记录')}
+                                                {t('首拍即计 · 拍照即记录')}
                                             </span>
                                         </div>
                                         <p className="text-xs text-gray-400 leading-relaxed mb-4">
-                                            {t('无需开机！点击下方任意卡片立即进入作业模式并启动计时，作业中的拍照将作为阶段工作凭证自动留档：')}
+                                            {t('无需开机！点击进入对应作业，上传第 1 张现场工作照片即正式确立开始时间并启动计时，后续拍照均作为阶段工作凭证自动留档：')}
                                         </p>
 
                                         <div className="grid grid-cols-2 sm:grid-cols-3 gap-2.5">
@@ -3288,7 +3348,7 @@ const ProductionControl: React.FC<ProductionControlProps> = ({ user, jobs = [], 
                                                             {cat.label}
                                                         </p>
                                                         <p className="text-[10px] text-gray-500 mt-0.5">
-                                                            {t('点击开始计时作业')}
+                                                            {t('点击进入 · 拍首照计时')}
                                                         </p>
                                                     </div>
                                                 </button>
@@ -3297,7 +3357,7 @@ const ProductionControl: React.FC<ProductionControlProps> = ({ user, jobs = [], 
                                     </div>
 
                                     <p className="text-[10px] text-gray-500 mt-4 text-center">
-                                        💡 {t('提示：作业期间可多次拍照记录阶段成果，完工后一键汇总归档')}
+                                        💡 {t('提示：以首张照片时间作为正式开工时间，作业期间可多次拍照留档，完工后一键汇总归档')}
                                     </p>
                                 </div>
                             </div>

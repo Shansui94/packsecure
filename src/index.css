@@ -179,9 +179,9 @@ body {
 }
 
 /* Global Form Input Styles to fix browser-specific overrides in dark mode */
-input,
-select,
-textarea {
+input:not([class*="text-"]),
+select:not([class*="text-"]),
+textarea:not([class*="text-"]) {
   color: var(--text-primary);
 }
 

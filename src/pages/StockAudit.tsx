@@ -438,8 +438,9 @@ const StockAudit: React.FC<StockAuditProps> = ({ user }) => {
                                                             placeholder="—"
                                                             value={item.physicalQty}
                                                             onChange={(e) => handlePhysicalQtyChange(item.sku, e.target.value)}
-                                                            className={`w-full md:w-3/4 max-w-[200px] text-center bg-white border-2 rounded-xl py-3 md:py-2 text-xl font-black font-mono focus:outline-none transition-all placeholder-gray-400 text-black shadow-inner focus:border-cyan-500 focus:ring-4 focus:ring-cyan-500/30
-                                                                ${item.physicalQty === '' ? 'border-gray-300' :
+                                                            style={{ color: '#FFFFFF', backgroundColor: '#18181b' }}
+                                                            className={`w-full md:w-3/4 max-w-[200px] text-center bg-zinc-900 border-2 rounded-xl py-3 md:py-2 text-xl font-black font-mono focus:outline-none transition-all placeholder-zinc-500 text-white shadow-inner focus:border-cyan-400 focus:ring-4 focus:ring-cyan-500/30
+                                                                ${item.physicalQty === '' ? 'border-zinc-700 hover:border-zinc-600' :
                                                                     variance === 0 ? 'border-green-500 shadow-[0_0_15px_rgba(34,197,94,0.3)]' : 'border-orange-500 shadow-[0_0_15px_rgba(249,115,22,0.3)]'
                                                                 }`}
                                                         />

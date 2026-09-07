@@ -24,6 +24,10 @@ export const DEFAULT_RATES: Record<string, { day_rate: number; night_rate: numbe
     'N2-M02': { day_rate: 10, night_rate: 15 }, // 1M Single Layer (N2)
     'N3-M03': { day_rate: 10, night_rate: 10 }, // Recycle Machine (N3)
     
+    // Johor Machines
+    'J1-M01': { day_rate: 10, night_rate: 15 }, // 2M Double Layer (J1)
+    'J1-M02': { day_rate: 10, night_rate: 10 }, // Recycle Machine (J1)
+    
     // Factory Login Modes (不登录机器，登录工厂)
     'FACTORY_MODE_1': { day_rate: 8, night_rate: 12 }, // Mode 1: 12am-8am RM12, 8am-12am RM8
     'FACTORY_MODE_2': { day_rate: 10, night_rate: 10 }, // Mode 2: RM10 flat

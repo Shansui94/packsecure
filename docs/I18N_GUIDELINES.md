@@ -1,0 +1,144 @@
+# Packsecure OS — 系统语言与国际化架构规范 (I18N Guidelines)
+
+本文档定义 Packsecure OS 的语言架构、人员分工分级多语言规则、移动端交互设计准则与编码守则。**任何前端开发、页面重构、新增菜单或修改 UI 文案时，必须严格遵守本规范，杜绝出现语言混杂、生硬英文回显或字典污染。**
+
+---
+
+## 一、核心设计原则 (Core Principles)
+
+### 1. 中文为唯一业务真理源 (Single Source of Truth)
+- Packsecure OS 服务于工厂与仓储现场运营，**中文是系统的第一语言和基准真理源**。
+- 所有菜单定义、角色名称、系统提示、默认操作项必须以**规范地道中文**为基准字段（如 `title`、`label` 必须是中文，严禁用英文直接覆盖）。
+
+### 2. 多语言镜像与动态解析机制 (Dynamic Multi-language Resolution)
+- **菜单与导航**：必须在 [`src/config/modules.ts`](file:///c:/Users/Max%20Tan/Downloads/Packsecure%20OS/packsecure/src/config/modules.ts) 中同时具备双语基准字段：
+  - 分组：`title`（中文）与 `titleEn`（英文）
+  - 模块：`label`（中文）与 `labelEn`（英文）
+- **7 国语言动态解析**：在 [`src/components/Layout.tsx`](file:///c:/Users/Max%20Tan/Downloads/Packsecure%20OS/packsecure/src/components/Layout.tsx) 中，菜单渲染通过 `getLocalizedTitle` 与 `getLocalizedLabel` 驱动：
+  - 中文模式（`zh-CN`）：直接返回基准 `title` / `label`。
+  - 英文模式（`en`）：直接返回 `titleEn` / `labelEn`。
+  - 其余 5 种语言（`ms`, `my`, `zh-TW`, `hi`, `bn`）：优先通过 `t()` 动态从 [`src/utils/i18n.ts`](file:///c:/Users/Max%20Tan/Downloads/Packsecure%20OS/packsecure/src/utils/i18n.ts) 的 `CORE_TERMS` 词库中获取对应语言的翻译，确保侧边栏在任何语言下均能准确呈现。
+
+---
+
+## 二、工厂三大人员分工与语言覆盖矩阵 (Tiered Persona Matrix)
+
+在工厂现场运营中，系统不采用“一刀切盲目全量翻译”的粗暴模式，而是按照岗位职责与作业场景严格实施**分级语言覆盖**：
+
+```
+┌────────────────────────────────────────────────────────────────────────┐
+│                        PACKSECURE OS 语言覆盖矩阵                       │
+├────────────────────────────────────────────────────────────────────────┤
+│ 1. 办公室管理人员 (老板/财务/人事/生管)  ──► 🇨🇳 中文 🇬🇧 英文 🇲🇾 马来语 (三语) │
+│    └─ 48 个全功能决策与管理模块 (报表、BOM、审批、监控、主数据)           │
+├────────────────────────────────────────────────────────────────────────┤
+│ 2. 司机 (本地及印裔司机)                ──► 🇲🇾 马来语 🇬🇧 英文 🇨🇳 中文 (三语) │
+│    └─ 4 个移动端专属页面 (送货任务、车辆报修、出车历史、请假申请)          │
+├────────────────────────────────────────────────────────────────────────┤
+│ 3. 外籍一线工人 (缅甸/孟加拉/印度籍)     ──► 🇨🇳 🇬🇧 🇲🇾 🇲🇲 🇧🇩 🇮🇳 (六语)       │
+│    └─ 2 个移动扫码工位端 (车间生产扫码报工、上下班打卡)                     │
+│       遵循: 大图标 • 红绿黄高对比度 • 极简文本 • 大按钮触控                │
+└────────────────────────────────────────────────────────────────────────┘
+```
+
+### 1. 办公室管理人员（老板、财务、人事、生管）
+- **覆盖语言**：**三语** —— 中文（`zh-CN` / `zh-TW`）、英文（`en`）、马来语（`ms`）。
+- **适用范围**：系统全部 48 个深度管理与决策页面（如 Boss 决策大脑、William 经营看板、财务对账、BOM 配方成本模型、全局库存总览等）。
+- **语言策略**：中文为基准真理源，英文为国际标准镜像，马来语满足本地化管理需要。
+
+### 2. 司机（本地及印裔司机）
+- **覆盖语言**：**三语** —— 马来语（`ms`）、英文（`en`）、中文（`zh-CN`）。
+- **接触范围**：司机**只接触以下 4 个移动端页面**，严禁在司机端展示复杂的管理层后台：
+  1. **司机送货任务 (`My Deliveries` / `DriverDelivery.tsx`)**：发车签到、导航、卸货双照拍摄（DO + 货物）、送达签名。
+  2. **车辆维保报修 (`Lorry Service` / `LorryService.tsx`)**：一键报修、选择故障车牌、待修状态跟踪。
+  3. **出车历史记录 (`Delivery History` / `DriverHistory.tsx`)**：历史趟数、月度出车明细、里程与津贴核对。
+  4. **员工请假申请 (`Apply Leave` / `LeaveCalendar.tsx`)**：移动端快速请假提报、假期额度与审批状态查看。
+
+### 3. 外籍一线工人（缅甸、孟加拉、印度籍）
+- **覆盖语言**：**六语** ——
+  1. `zh-CN`（中文简体）
+  2. `en`（English）
+  3. `ms`（Bahasa Melayu）
+  4. `my`（မြန်မာဘာသာ - 缅甸语）
+  5. `bn`（বাংলা - 孟加拉语）
+  6. `hi`（हिन्दी - 印地语）
+- **接触范围**：外籍工人**只使用手机扫码端与工位终端**，仅涵盖两大作业场景：
+  1. **车间生产工作区扫码报工 (`scanner` / `ProductionControl.tsx`)**：机台锁定、膜型选择（单层/双层、透明/黑色）、扫码上料、计件产出。
+  2. **上下班打卡 (`operator_attendance` / 门禁考勤)**：开工签到、换机打卡、下班签退。
+
+---
+
+## 三、车间一线工人界面四大交互铁律 (Worker UI Design Principles)
+
+外籍工人往往不具备良好的中英文读写能力，车间工人端界面必须严格奉行以下四大交互铁律：
+
+> [!IMPORTANT]
+> ### 1. 大图标优先 (Icon-First & Visual Recognition)
+> 所有关键操作必须配备直观、表意明确的大图标（如 📷 拍照、📷 扫码、⚙️ 机台、📦 包装、⏱️ 计时、🛑 停机）。即使完全不认字，工人凭图标即可识别功能。
+
+> [!IMPORTANT]
+> ### 2. 交通红黄绿高对比度设计 (Traffic Light Color Coding)
+> 严格遵循工业级高对比度状态色彩，严禁使用含糊的灰阶或低饱和度莫兰迪色：
+> - 🟢 **绿色 (`#22c55e` / `#10b981`)**：正常运行、扫码成功、已完成、确认打卡、允许开机。
+> - 🔴 **红色 (`#ef4444`)**：停机、报警、不合格、错误、缺料、终止作业。
+> - 🟡 **黄色 (`#f59e0b`)**：待机、注意、检查中、预警、待录入。
+
+> [!IMPORTANT]
+> ### 3. 极简短语文本 (Minimalist Microcopy)
+> 严禁在大屏/移动工位端堆砌长篇复合说明句！文本必须控制在 **1~3 个单词** 或一个明确的动作动词：
+> - 规范示例：`START` (开始)、`STOP` (停止)、`SCAN` (扫码)、`DONE` (完成)、`PHOTO` (拍照)。
+> - 6 种语言下的微文案必须地道简练，杜绝生硬机器翻译长句。
+
+> [!IMPORTANT]
+> ### 4. 超大触控热区 (Large Touch Targets & Glove-Friendly)
+> 考虑到车间工友手指粗糙、戴防油手套或手部带水作业：
+> - 核心操作按钮最小高度不得低于 **56px**（推荐 **64px ~ 72px**）。
+> - 按钮之间必须留足至少 **12px ~ 16px** 间距，彻底杜绝误触。
+> - 点击提供清晰的高亮波纹、按压形变（`active:scale-95`）或震动触觉反馈。
+
+---
+
+## 四、框架层核心词汇防线 (Framework Guardrails)
+
+在 [`src/components/Layout.tsx`](file:///c:/Users/Max%20Tan/Downloads/Packsecure%20OS/packsecure/src/components/Layout.tsx) 与 [`src/utils/i18n.ts`](file:///c:/Users/Max%20Tan/Downloads/Packsecure%20OS/packsecure/src/utils/i18n.ts) 中，固定维护两套框架级防线：
+
+1. **`ROLE_LABELS`**：覆盖系统全部 11 种用户角色（`SuperAdmin`、`LogisticsCoordinator`、`Driver`、`HR`、`Operator` 等）的标准名称。
+2. **`FRAME_LABELS`**：覆盖系统全局控制项（`Quit` 退出登录、`Dark/Light` 深浅色模式、`PIN: ` 工号、`System v6.7 • Data Center Active` 系统状态、`Expand/Collapse sidebar` 侧栏折叠、`🤖 AI Assistant`、`💡 Page Logic Guide`）。
+3. **`CORE_TERMS`**：在 `i18n.ts` 中维护的跨 7 国语言高频词典，支持双向索引，自动向各语言资源包注入。
+
+---
+
+## 五、动态语言解析与回退机制 (Dynamic Resolution & Fallbacks)
+
+### 1. 导航与侧边栏解析逻辑
+在 [`src/components/Layout.tsx`](file:///c:/Users/Max%20Tan/Downloads/Packsecure%20OS/packsecure/src/components/Layout.tsx) 中：
+- 中文模式（`zh-CN`）：直接返回基准中文 `title` / `label`。
+- 英文模式（`en`）：直接返回标准英文 `titleEn` / `labelEn`。
+- 其余语言（`ms`, `my`, `zh-TW`, `hi`, `bn`）：优先调用 `t(group.title)` / `t(mod.label)` 动态读取 6 语词库；若词库无匹配，回退至 `titleEn`，最后回退至中文。
+
+### 2. 智能回退策略
+- 当系统当前语言为中文时，`fallbackLng` 优先回退至标准中文，**严禁将 `fallbackLng` 设为纯英文**，防止未录入词汇生硬跌落成英文。
+
+---
+
+## 六、新增功能检查清单 (Developer Checklist)
+
+在开发新功能或新增页面时，请按以下流程处理语言文案：
+
+### 1. 新增导航模块时
+1. 打开 `src/config/modules.ts`，在 `MODULE_REGISTRY` 中注册模块；
+2. 填写规范中文名称：`label: '功能中文名称'`；
+3. 填写准确英文镜像：`labelEn: 'Feature English Name'`；
+4. 若属于司机 4 大页面或工人 2 大工位，同步在 `src/utils/i18n.ts` 的 `CORE_TERMS` 中补齐三语/六语翻译。
+
+### 2. 页面内新增高频操作按钮时
+- 常用通用动作（如：确认、取消、保存、提交、删除、重置、刷新、导出、草稿、已完成）已由 `CORE_TERMS` 统一管理，直接调用 `t('确认')` 或 `t('Confirm')` 均可。
+
+---
+
+## 七、严禁违规操作 (Anti-Patterns / 严防踩坑)
+
+1. ❌ **严禁使用暴力脚本全量抽取文本**：粗暴的正则或 AST 脚本会将 CSS 选择器、SQL 字段（`role_modules, pin_code`）、Tailwind 类名误提取进 JSON 字典，造成严重污染。
+2. ❌ **严禁在 `modules.ts` 中直接写纯英文 `label`**：模块标签第一源头必须是地道中文。
+3. ❌ **严禁把 48 个管理后台强行全量机翻为缅甸语/孟加拉语**：管理层只用中英文，机械式全量机翻不仅词不达意、还会破坏精密表格布局。必须严格执行“管理三语、工人六语”的分级原则。
+4. ❌ **严禁在工人扫码端使用细长小字体或灰暗按钮**：必须始终遵守大图标、红绿黄高对比度、大热区触控。

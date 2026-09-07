@@ -63,16 +63,7 @@ const Layout: React.FC<LayoutProps> = ({ children, activePage, setActivePage, us
     const [showLangModal, setShowLangModal] = useState(false);
     const isSuperAdmin = userRole === 'SuperAdmin';
 
-    // Languages Config
-    const languages = [
-        { code: 'zh-CN', label: '简体中文', flag: '🇨🇳' },
-        { code: 'zh-TW', label: '繁體中文', flag: '🇭🇰' },
-        { code: 'en', label: 'English', flag: '🇬🇧' },
-        { code: 'ms', label: 'Bahasa Melayu', flag: '🇲🇾' },
-        { code: 'my', label: 'မြန်မာဘာသာ', flag: '🇲🇲' },
-        { code: 'hi', label: 'हिन्दी', flag: '🇮🇳' },
-        { code: 'bn', label: 'বাংলা', flag: '🇧🇩' }
-    ];
+    const languages = LANGUAGES;
 
     const [currentLanguage, setCurrentLanguage] = useState(
         () => localStorage.getItem('packsecure_lang') || 'zh-CN'
@@ -88,8 +79,71 @@ const Layout: React.FC<LayoutProps> = ({ children, activePage, setActivePage, us
         return () => window.removeEventListener('packsecure:lang-change', handleLangChange);
     }, []);
 
+    const isEnglish = currentLanguage === 'en';
+
+    const ROLE_LABELS: Record<string, { zh: string; en: string }> = {
+        SuperAdmin: { zh: '超级管理员', en: 'Super Admin' },
+        Admin: { zh: '管理员', en: 'Admin' },
+        Manager: { zh: '经理', en: 'Manager' },
+        LogisticsCoordinator: { zh: '物流协调员', en: 'Logistics Coordinator' },
+        Driver: { zh: '司机', en: 'Driver' },
+        HR: { zh: '人事 / 考勤', en: 'HR' },
+        Operator: { zh: '操作员', en: 'Operator' },
+        Sales: { zh: '业务销售', en: 'Sales' },
+        Finance: { zh: '财务审计', en: 'Finance' },
+        Device: { zh: '设备终端', en: 'Device' },
+        Guest: { zh: '访客', en: 'Guest' }
+    };
+
+    const FRAME_LABELS: Record<string, { zh: string; en: string }> = {
+        'Dark': { zh: '深色', en: 'Dark' },
+        'Light': { zh: '浅色', en: 'Light' },
+        'Quit': { zh: '退出登录', en: 'Logout' },
+        'Expand sidebar': { zh: '展开侧栏', en: 'Expand sidebar' },
+        'Collapse sidebar': { zh: '折叠侧栏', en: 'Collapse sidebar' },
+        'PIN: ': { zh: '工号: ', en: 'PIN: ' },
+        'System v6.7 • Data Center Active': { zh: '系统 v6.7 • 数据中心运行中', en: 'System v6.7 • Data Center Active' },
+        'System Language / 系统语言': { zh: '系统语言', en: 'Language' },
+        'View My Profile / 个人主页': { zh: '个人主页', en: 'Profile' }
+    };
+
     const translateUI = (text: string) => {
+        if (!text) return '';
+        const translated = t(text);
+        if (translated && translated !== text) return translated;
+        if (FRAME_LABELS[text]) {
+            return isEnglish ? FRAME_LABELS[text].en : FRAME_LABELS[text].zh;
+        }
+        if (ROLE_LABELS[text]) {
+            return isEnglish ? ROLE_LABELS[text].en : ROLE_LABELS[text].zh;
+        }
         return translate(text, { defaultValue: text });
+    };
+
+    const getLocalizedTitle = (group: { title: string; titleEn?: string }) => {
+        if (currentLanguage === 'zh-CN') return group.title;
+        if (currentLanguage === 'en') return group.titleEn || group.title;
+        const translated = t(group.title);
+        if (translated && translated !== group.title) return translated;
+        if (group.titleEn) {
+            const translatedEn = t(group.titleEn);
+            if (translatedEn && translatedEn !== group.titleEn) return translatedEn;
+            return group.titleEn;
+        }
+        return group.title;
+    };
+
+    const getLocalizedLabel = (mod: { label: string; labelEn?: string }) => {
+        if (currentLanguage === 'zh-CN') return mod.label;
+        if (currentLanguage === 'en') return mod.labelEn || mod.label;
+        const translated = t(mod.label);
+        if (translated && translated !== mod.label) return translated;
+        if (mod.labelEn) {
+            const translatedEn = t(mod.labelEn);
+            if (translatedEn && translatedEn !== mod.labelEn) return translatedEn;
+            return mod.labelEn;
+        }
+        return mod.label;
     };
 
     const handleLanguageChange = (langCode: string) => {
@@ -229,7 +283,7 @@ const Layout: React.FC<LayoutProps> = ({ children, activePage, setActivePage, us
     const NavGroup = ({ title, children }: { title: string, children: React.ReactNode }) => (
         <div className={useCollapsedNavLayout ? 'mb-3' : 'mb-6'}>
             {showNavLabels && (
-                <h3 className="px-4 text-[11px] font-black text-gray-500 uppercase tracking-[0.2em] mb-3 opacity-90">{translateUI(title)}</h3>
+                <h3 className="px-4 text-[11px] font-black text-gray-500 uppercase tracking-[0.2em] mb-3 opacity-90">{title}</h3>
             )}
             <div className="space-y-1">
                 {children}
@@ -247,7 +301,7 @@ const Layout: React.FC<LayoutProps> = ({ children, activePage, setActivePage, us
         return (
             <button
                 type="button"
-                title={showNavLabels ? undefined : translateUI(label)}
+                title={showNavLabels ? undefined : label}
                 onClick={() => {
                     setActivePage(id);
                     setIsMobileMenuOpen(false);
@@ -270,7 +324,7 @@ const Layout: React.FC<LayoutProps> = ({ children, activePage, setActivePage, us
                 {/* Label */}
                 {showNavLabels && (
                     <span className={`relative z-10 font-bold tracking-wide text-[15px] flex-1 text-left min-w-0 ${isActive ? 'text-white' : ''}`}>
-                        {translateUI(label)}
+                        {label}
                     </span>
                 )}
 
@@ -308,7 +362,7 @@ const Layout: React.FC<LayoutProps> = ({ children, activePage, setActivePage, us
                         <button
                             type="button"
                             onClick={() => { setActivePage('profile'); setIsMobileMenuOpen(false); }}
-                            title="View My Profile / 个人主页"
+                            title={translateUI('View My Profile / 个人主页')}
                             className="w-8 h-8 rounded-full bg-gray-800 border-2 border-orange-500/80 overflow-hidden flex items-center justify-center cursor-pointer shadow-md active:scale-95 transition-all mr-1"
                         >
                             {user?.photoURL ? (
@@ -385,16 +439,19 @@ const Layout: React.FC<LayoutProps> = ({ children, activePage, setActivePage, us
 
                             if (groupModules.length === 0) return null;
 
+                            const groupTitle = getLocalizedTitle(group);
+
                             return (
-                                <NavGroup key={group.id} title={group.title}>
+                                <NavGroup key={group.id} title={groupTitle}>
                                     {groupModules.map(mod => {
                                         const badge = mod.badgeKey === 'tasks' ? taskCount : undefined;
+                                        const modLabel = getLocalizedLabel(mod);
                                         return (
                                             <NavItem
                                                 key={mod.id}
                                                 id={mod.id}
                                                 icon={mod.icon}
-                                                label={mod.label}
+                                                label={modLabel}
                                                 badge={badge}
                                             />
                                         );
@@ -411,10 +468,10 @@ const Layout: React.FC<LayoutProps> = ({ children, activePage, setActivePage, us
                                     window.dispatchEvent(new CustomEvent('packsecure:open-ai-chat'));
                                 }}
                                 className={`w-full flex items-center gap-3 px-3.5 py-2.5 rounded-xl bg-gradient-to-r from-blue-900/40 to-indigo-900/40 border border-blue-500/30 text-blue-300 font-bold text-xs hover:from-blue-800/50 hover:to-indigo-800/50 transition shadow-sm active:scale-95 cursor-pointer ${useCollapsedNavLayout ? 'justify-center px-0' : ''}`}
-                                title="🤖 AI 智能助理"
+                                title={translateUI('🤖 AI Assistant')}
                             >
                                 <Bot size={18} className="text-blue-400 shrink-0" />
-                                {showNavLabels && <span>🤖 AI 智能助理</span>}
+                                {showNavLabels && <span>{translateUI('🤖 AI Assistant')}</span>}
                             </button>
 
                             <button
@@ -424,10 +481,10 @@ const Layout: React.FC<LayoutProps> = ({ children, activePage, setActivePage, us
                                     window.dispatchEvent(new CustomEvent('packsecure:open-page-logic'));
                                 }}
                                 className={`w-full flex items-center gap-3 px-3.5 py-2.5 rounded-xl bg-gradient-to-r from-purple-900/40 to-indigo-900/40 border border-purple-500/30 text-purple-300 font-bold text-xs hover:from-purple-800/50 hover:to-indigo-800/50 transition shadow-sm active:scale-95 cursor-pointer ${useCollapsedNavLayout ? 'justify-center px-0' : ''}`}
-                                title="💡 本页逻辑说明"
+                                title={translateUI('💡 Page Logic Guide')}
                             >
                                 <Lightbulb size={18} className="text-amber-400 shrink-0 animate-pulse" />
-                                {showNavLabels && <span>💡 本页逻辑说明</span>}
+                                {showNavLabels && <span>{translateUI('💡 Page Logic Guide')}</span>}
                             </button>
                         </div>
                     </nav>
@@ -555,7 +612,7 @@ const Layout: React.FC<LayoutProps> = ({ children, activePage, setActivePage, us
                     <div className="bg-gray-900 border border-gray-800 rounded-3xl p-5 w-full max-w-xs space-y-4 shadow-2xl animate-fade-in">
                         <div className="flex items-center justify-between border-b border-gray-800 pb-3">
                             <h3 className="font-extrabold text-white text-sm flex items-center gap-2">
-                                🌐 选择系统语言 (Language)
+                                🌐 {translateUI('Select Language')}
                             </h3>
                             <button onClick={() => setShowLangModal(false)} className="text-gray-400 hover:text-white p-1 rounded-lg">
                                 <X size={18} />

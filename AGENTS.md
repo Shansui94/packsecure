@@ -98,9 +98,10 @@ npm run lint           # ESLint
 
 ## 业务真理库与数据字典 (必读)
 
-所有业务逻辑与数据库结构必须严格遵照以下两份文档，**重构或修改时严禁擅自删改或遗漏既有规则**：
+所有业务逻辑、语言规范与数据库结构必须严格遵照以下文档，**重构或修改时严禁擅自删改或遗漏既有规则**：
 - 核心业务真理库：[BUSINESS_RULES.md](file:///c:/Users/Max%20Tan/Downloads/Packsecure%20OS/packsecure/docs/BUSINESS_RULES.md)（厂区、机台、工时费率、车队容量、额外补贴等）
 - 数据结构字典：[DATA_DICTIONARY.md](file:///c:/Users/Max%20Tan/Downloads/Packsecure%20OS/packsecure/docs/DATA_DICTIONARY.md)（表结构、枚举值、状态机）
+- 系统语言与国际化规范：[I18N_GUIDELINES.md](file:///c:/Users/Max%20Tan/Downloads/Packsecure%20OS/packsecure/docs/I18N_GUIDELINES.md)（管理层与司机需三语、外籍工人需六语、车间移动端大图标红绿黄高对比度设计、防语言混杂红线）
 
 ## 关键安全防线 (Safety Guardrails)
 

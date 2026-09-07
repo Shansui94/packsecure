@@ -84,9 +84,15 @@ export const SmartIntakeModal: React.FC<SmartIntakeModalProps> = ({ currentUser,
     const [toastMessage, setToastMessage] = useState<string | null>(null);
     const [offlineCount, setOfflineCount] = useState(0);
     const [selectedWorkCategory, setSelectedWorkCategory] = useState<OperatorWorkCategory | null>(null);
+    const userRole = currentUser?.role || pageContext?.userRole || '';
+    const isManagementUser = userRole === 'Admin' || userRole === 'Manager' || userRole === 'SuperAdmin' || userRole === 'Boss';
 
     // 机台登录状态与扫码器（切换机台一定要扫码）
-    const [boundMachine, setBoundMachine] = useState<string>(() => getBoundOperatorMachine());
+    // 区分身份：管理员/经理等管理角色打开万能快拍时，默认不自动绑定任何机台（必须现场扫码才绑定）
+    const [boundMachine, setBoundMachine] = useState<string>(() => {
+        if (isManagementUser) return '';
+        return getBoundOperatorMachine();
+    });
     const [availableMachines, setAvailableMachines] = useState<{ machine_id: string; name: string }[]>([]);
     const [isScanningMachineQr, setIsScanningMachineQr] = useState(false);
     const [isLoggingOut, setIsLoggingOut] = useState(false);
@@ -95,7 +101,7 @@ export const SmartIntakeModal: React.FC<SmartIntakeModalProps> = ({ currentUser,
     const fileInputRef = useRef<HTMLInputElement>(null);
     const recognitionRef = useRef<any>(null);
 
-    // 监听离线队列数量
+    // 监听离线队列数量及网络恢复自动同步
     useEffect(() => {
         const updateQueueCount = () => {
             const queue = getOfflineQueue();
@@ -103,7 +109,21 @@ export const SmartIntakeModal: React.FC<SmartIntakeModalProps> = ({ currentUser,
         };
         updateQueueCount();
         const interval = setInterval(updateQueueCount, 10000);
-        return () => clearInterval(interval);
+
+        const handleOnline = async () => {
+            const synced = await syncOfflineQueue(() => setOfflineCount((prev) => Math.max(0, prev - 1)));
+            if (synced > 0) {
+                setToastMessage(`✅ 网络已恢复，已自动同步 ${synced} 条离线数据`);
+                setTimeout(() => setToastMessage(null), 3500);
+            }
+            updateQueueCount();
+        };
+
+        window.addEventListener('online', handleOnline);
+        return () => {
+            clearInterval(interval);
+            window.removeEventListener('online', handleOnline);
+        };
     }, []);
 
     // 监听系统机台列表与机台切换事件
@@ -111,10 +131,15 @@ export const SmartIntakeModal: React.FC<SmartIntakeModalProps> = ({ currentUser,
         getAvailableMachines().then(setAvailableMachines);
 
         const handleMachineChange = (e: any) => {
+            if (isManagementUser) {
+                // 管理人员不跟随全局其它页面（如控制台查看机台）自动绑定，仅保留主动扫码的结果
+                return;
+            }
             const machine = e.detail || getBoundOperatorMachine();
             setBoundMachine(machine);
         };
         const handleStorage = () => {
+            if (isManagementUser) return;
             setBoundMachine(getBoundOperatorMachine());
         };
 
@@ -150,10 +175,21 @@ export const SmartIntakeModal: React.FC<SmartIntakeModalProps> = ({ currentUser,
             cleanCode = cleanCode.substring(8).trim();
         }
 
-        // 匹配系统机台表
-        const matched = availableMachines.find(
-            (m) => m.machine_id.toUpperCase() === cleanCode.toUpperCase() || m.name.toUpperCase() === cleanCode.toUpperCase()
+        // 匹配系统机台表 (支持完全匹配与前缀模糊匹配，如 T1-1 匹配 T1-M03)
+        const upperCode = cleanCode.toUpperCase();
+        let matched = availableMachines.find(
+            (m) => m.machine_id.toUpperCase() === upperCode || m.name.toUpperCase() === upperCode
         );
+
+        if (!matched) {
+            const prefixMatch = upperCode.match(/^([A-Z]\d+)/);
+            if (prefixMatch) {
+                const prefix = prefixMatch[1];
+                matched = availableMachines.find(
+                    (m) => m.machine_id.toUpperCase().startsWith(prefix) || m.name.toUpperCase().includes(prefix)
+                );
+            }
+        }
         const targetCode = matched ? matched.machine_id : cleanCode;
 
         if (!targetCode) {
@@ -240,6 +276,10 @@ export const SmartIntakeModal: React.FC<SmartIntakeModalProps> = ({ currentUser,
         }
     };
 
+    // 操作员身份字段兼容提取 (支持 employee_id / id / employeeId / uid)
+    const currentOperatorId = currentUser?.employee_id || currentUser?.id || currentUser?.employeeId || currentUser?.uid || '';
+    const currentOperatorName = currentUser?.name || '现场操作员';
+
     // 处理拍照选择与双流极速识别
     const handleFileSelect = async (file: File) => {
         setSelectedFile(file);
@@ -263,12 +303,13 @@ export const SmartIntakeModal: React.FC<SmartIntakeModalProps> = ({ currentUser,
                 speechText,
                 gps: gpsLocation || 'Taiping/Nilai Plant',
                 timestamp: new Date().toISOString(),
-                operatorId: currentUser?.employeeId || currentUser?.uid,
-                operatorName: currentUser?.name || '现场操作员',
+                operatorId: currentOperatorId,
+                operatorName: currentOperatorName,
                 context: {
                     ...(pageContext || {}),
                     currentMachine: boundMachine,
-                    route: window.location.hash
+                    route: window.location.hash,
+                    selectedWorkCategory: selectedWorkCategory || undefined
                 }
             });
 
@@ -304,8 +345,8 @@ export const SmartIntakeModal: React.FC<SmartIntakeModalProps> = ({ currentUser,
                 speechText: textToSubmit,
                 gps: gpsLocation || 'Taiping/Nilai Plant',
                 timestamp: new Date().toISOString(),
-                operatorId: currentUser?.employeeId || currentUser?.uid,
-                operatorName: currentUser?.name || '现场操作员',
+                operatorId: currentOperatorId,
+                operatorName: currentOperatorName,
                 context: {
                     ...(pageContext || {}),
                     currentMachine: boundMachine,
@@ -394,8 +435,8 @@ export const SmartIntakeModal: React.FC<SmartIntakeModalProps> = ({ currentUser,
                     confidence: 1.0,
                     gps: gpsLocation || 'Taiping/Nilai Plant',
                     timestamp: new Date().toISOString(),
-                    operatorId: currentUser?.employeeId || currentUser?.uid || '',
-                    operatorName: currentUser?.name || '现场操作员',
+                    operatorId: currentOperatorId,
+                    operatorName: currentOperatorName,
                     suggestedActions: []
                 },
                 undefined,
@@ -430,6 +471,9 @@ export const SmartIntakeModal: React.FC<SmartIntakeModalProps> = ({ currentUser,
         setSelectedWorkCategory(null);
         setIsAnalyzing(false);
         setIsCommitting(false);
+        if (fileInputRef.current) {
+            fileInputRef.current.value = '';
+        }
     };
 
     // 意图防呆切换
@@ -460,7 +504,15 @@ export const SmartIntakeModal: React.FC<SmartIntakeModalProps> = ({ currentUser,
             <div className="fixed bottom-6 right-6 z-40 flex items-center gap-2">
                 {offlineCount > 0 && (
                     <button
-                        onClick={() => syncOfflineQueue(() => setOfflineCount((prev) => Math.max(0, prev - 1)))}
+                        onClick={async () => {
+                            const synced = await syncOfflineQueue(() => setOfflineCount((prev) => Math.max(0, prev - 1)));
+                            if (synced > 0) {
+                                setToastMessage(`✅ 成功同步 ${synced} 条离线数据`);
+                            } else {
+                                setToastMessage('离线队列等待同步中，将在网络恢复时自动重试');
+                            }
+                            setTimeout(() => setToastMessage(null), 3000);
+                        }}
                         className="flex items-center gap-1.5 px-3 py-2 bg-amber-500/90 text-white rounded-full text-xs font-semibold shadow-lg hover:bg-amber-600 transition"
                         title="点击同步离线暂存队列"
                     >

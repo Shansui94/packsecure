@@ -17,6 +17,7 @@ import v2DocumentsHandler, {
     handleEntities as documentEntitiesHandler,
     handleLogs as documentLogsHandler
 } from './api/v2-documents';
+import docsHandler from './api/docs';
 
 const app = express();
 const PORT = 8080;
@@ -54,6 +55,7 @@ mountVercelHandler('/api/v2/documents/dashboard-metrics', dashboardMetricsHandle
 mountVercelHandler('/api/v2/documents/entities', documentEntitiesHandler);
 mountVercelHandler('/api/v2/documents/logs', documentLogsHandler);
 mountVercelHandler('/api/agent/sop-assistant', sopAssistantHandler);
+mountVercelHandler('/api/docs', docsHandler);
 
 // Mimic Vercel Request/Response for the handler
 app.post('/api/agent/chat', async (req, res) => {

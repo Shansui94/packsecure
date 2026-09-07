@@ -38,7 +38,7 @@
 
 ### 2.4 柔佛厂区 (Johor)
 * **`J1-M01`**：2M Double Layer (J1) —— 2米双层气泡膜机台
-* **`J1-M02`**：1M Single Layer (J1) —— 1米单层气泡膜机台
+* **`J1-M02`**：Recycle Machine (J1) —— 塑料回收造粒机台
 
 ---
 

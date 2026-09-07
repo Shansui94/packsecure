@@ -23,6 +23,7 @@ import {
     Printer,
     FlaskConical,
     Bot,
+    FileCode,
 } from 'lucide-react';
 
 export type UserRole = 
@@ -67,19 +68,19 @@ export interface ModuleDefinition {
 }
 
 export const MODULE_GROUPS: ModuleGroupDefinition[] = [
-    { id: 'executive', title: 'Executive Suite', titleEn: 'Executive Suite', description: '管理驾驶舱与决策支持', order: 1 },
-    { id: 'operations', title: 'Operations', titleEn: 'Operations', description: '车间生产、工位与排产调度', order: 2 },
-    { id: 'inventory', title: 'Inventory & BOM', titleEn: 'Inventory & BOM', description: '原材料、成品、物料流水与盘点', order: 3 },
-    { id: 'logistics', title: 'Logistics', titleEn: 'Logistics', description: '车辆、派车运输与发货履约', order: 4 },
-    { id: 'organization', title: 'Organization', titleEn: 'Organization', description: '人员、考勤服务台、审批与报表', order: 5 },
-    { id: 'productivity', title: 'Productivity', titleEn: 'Productivity', description: 'SOP协同、待办与日常工具', order: 6 }
+    { id: 'executive', title: '管理决策舱', titleEn: 'Executive Suite', description: '管理驾驶舱与决策支持', order: 1 },
+    { id: 'operations', title: '车间作业', titleEn: 'Operations', description: '车间生产、工位与排产调度', order: 2 },
+    { id: 'inventory', title: '库存与物料', titleEn: 'Inventory & BOM', description: '原材料、成品、物料流水与盘点', order: 3 },
+    { id: 'logistics', title: '物流配送', titleEn: 'Logistics', description: '车辆、派车运输与发货履约', order: 4 },
+    { id: 'organization', title: '人事与系统', titleEn: 'Organization', description: '人员、考勤服务台、审批与报表', order: 5 },
+    { id: 'productivity', title: '日常协同', titleEn: 'Productivity', description: 'SOP协同、待办与日常工具', order: 6 }
 ];
 
 export const MODULE_REGISTRY: ModuleDefinition[] = [
     // ── EXECUTIVE SUITE ──
     {
         id: 'boss-copilot',
-        label: 'Boss Co-Pilot',
+        label: 'Boss 决策大脑',
         labelEn: 'Boss Co-Pilot',
         group: 'executive',
         icon: Bot,
@@ -88,7 +89,7 @@ export const MODULE_REGISTRY: ModuleDefinition[] = [
     },
     {
         id: 'factory-live-os',
-        label: 'Factory Live OS',
+        label: '全厂实时大屏',
         labelEn: 'Factory Live OS',
         group: 'executive',
         icon: LayoutDashboard,
@@ -97,7 +98,7 @@ export const MODULE_REGISTRY: ModuleDefinition[] = [
     },
     {
         id: 'william-dashboard',
-        label: "William's Dashboard",
+        label: "William 经营看板",
         labelEn: "William's Dashboard",
         group: 'executive',
         icon: FileText,
@@ -106,7 +107,7 @@ export const MODULE_REGISTRY: ModuleDefinition[] = [
     },
     {
         id: 'data-v2',
-        label: 'Data Command',
+        label: '主数据底座',
         labelEn: 'Data Command',
         group: 'executive',
         icon: Database,
@@ -116,8 +117,17 @@ export const MODULE_REGISTRY: ModuleDefinition[] = [
 
     // ── OPERATIONS ──
     {
+        id: 'staff-status',
+        label: '员工状态与交班核准',
+        labelEn: 'Staff Status & Sign-off',
+        group: 'operations',
+        icon: ClipboardCheck,
+        defaultRoles: ['SuperAdmin', 'Admin', 'Manager'],
+        description: '全员工作状态监控、工时核验与交班审核打钩'
+    },
+    {
         id: 'scanner',
-        label: 'Production Workspace',
+        label: '车间生产工作区',
         labelEn: 'Production Workspace',
         group: 'operations',
         icon: Scan,
@@ -126,7 +136,7 @@ export const MODULE_REGISTRY: ModuleDefinition[] = [
     },
     {
         id: 'raw_material_mobile',
-        label: 'Multi-Screw & Material Mixing',
+        label: '多螺杆与混料配方',
         labelEn: 'Multi-Screw & Material Mixing',
         group: 'operations',
         icon: FlaskConical,
@@ -136,7 +146,7 @@ export const MODULE_REGISTRY: ModuleDefinition[] = [
     },
     {
         id: 'livestock',
-        label: 'Live Stock',
+        label: '成品实时库存',
         labelEn: 'Live Stock',
         group: 'operations',
         icon: BarChart3,
@@ -145,7 +155,7 @@ export const MODULE_REGISTRY: ModuleDefinition[] = [
     },
     {
         id: 'recipes',
-        label: 'Yield & AI Learning',
+        label: '工艺配方与良率',
         labelEn: 'Yield & AI Learning',
         group: 'operations',
         icon: Activity,
@@ -154,7 +164,7 @@ export const MODULE_REGISTRY: ModuleDefinition[] = [
     },
     {
         id: 'machine-schedule',
-        label: 'Machine Schedule',
+        label: '机台排产日历',
         labelEn: 'Machine Schedule',
         group: 'operations',
         icon: Calendar,
@@ -163,7 +173,7 @@ export const MODULE_REGISTRY: ModuleDefinition[] = [
     },
     {
         id: 'machine-labels',
-        label: 'Machine QR Labels',
+        label: '机台二维码标签',
         labelEn: 'Machine QR Labels',
         group: 'operations',
         icon: Printer,
@@ -172,7 +182,7 @@ export const MODULE_REGISTRY: ModuleDefinition[] = [
     },
     {
         id: 'floor-plan',
-        label: 'Floor Plan',
+        label: '车间布局平面图',
         labelEn: 'Floor Plan',
         group: 'operations',
         icon: LayoutDashboard,
@@ -183,7 +193,7 @@ export const MODULE_REGISTRY: ModuleDefinition[] = [
     // ── INVENTORY & BOM ──
     {
         id: 'stock-movement',
-        label: 'Stock Movement',
+        label: '物料出入流水',
         labelEn: 'Stock Movement',
         group: 'inventory',
         icon: ArrowUpDown,
@@ -192,7 +202,7 @@ export const MODULE_REGISTRY: ModuleDefinition[] = [
     },
     {
         id: 'stock-audit',
-        label: 'Stock Audit',
+        label: '实物盘点核对',
         labelEn: 'Stock Audit',
         group: 'inventory',
         icon: ClipboardCheck,
@@ -201,7 +211,7 @@ export const MODULE_REGISTRY: ModuleDefinition[] = [
     },
     {
         id: 'inventory',
-        label: 'Global Inventory',
+        label: '全局库存总览',
         labelEn: 'Global Inventory',
         group: 'inventory',
         icon: Boxes,
@@ -210,7 +220,7 @@ export const MODULE_REGISTRY: ModuleDefinition[] = [
     },
     {
         id: 'products',
-        label: 'Product Library',
+        label: '标准物料成品库',
         labelEn: 'Product Library',
         group: 'inventory',
         icon: Package,
@@ -219,7 +229,7 @@ export const MODULE_REGISTRY: ModuleDefinition[] = [
     },
     {
         id: 'audit-report',
-        label: 'Audit Report',
+        label: '盘点审计报告',
         labelEn: 'Audit Report',
         group: 'inventory',
         icon: FileBarChart,
@@ -230,7 +240,7 @@ export const MODULE_REGISTRY: ModuleDefinition[] = [
     // ── LOGISTICS ──
     {
         id: 'delivery',
-        label: 'Trip Management',
+        label: '出车调度管理',
         labelEn: 'Trip Management',
         group: 'logistics',
         icon: Truck,
@@ -239,7 +249,7 @@ export const MODULE_REGISTRY: ModuleDefinition[] = [
     },
     {
         id: 'delivery-driver',
-        label: 'My Deliveries',
+        label: '司机送货任务',
         labelEn: 'My Deliveries',
         group: 'logistics',
         icon: Package,
@@ -248,7 +258,7 @@ export const MODULE_REGISTRY: ModuleDefinition[] = [
     },
     {
         id: 'delivery-history',
-        label: 'Delivery History',
+        label: '出车历史记录',
         labelEn: 'Delivery History',
         group: 'logistics',
         icon: ClipboardList,
@@ -257,7 +267,7 @@ export const MODULE_REGISTRY: ModuleDefinition[] = [
     },
     {
         id: 'order-summary',
-        label: 'Daily Prep',
+        label: '每日发货备货',
         labelEn: 'Daily Prep',
         group: 'logistics',
         icon: FileBarChart,
@@ -266,7 +276,7 @@ export const MODULE_REGISTRY: ModuleDefinition[] = [
     },
     {
         id: 'maintenance',
-        label: 'Maintenance Control',
+        label: '设备维保管理',
         labelEn: 'Maintenance Control',
         group: 'logistics',
         icon: Wrench,
@@ -275,7 +285,7 @@ export const MODULE_REGISTRY: ModuleDefinition[] = [
     },
     {
         id: 'lorry-management',
-        label: 'Lorry Fleet',
+        label: '货车车队档案',
         labelEn: 'Lorry Fleet',
         group: 'logistics',
         icon: Truck,
@@ -284,7 +294,7 @@ export const MODULE_REGISTRY: ModuleDefinition[] = [
     },
     {
         id: 'lorry-service',
-        label: 'Lorry Service',
+        label: '车辆维保报修',
         labelEn: 'Lorry Service',
         group: 'logistics',
         icon: Truck,
@@ -293,7 +303,7 @@ export const MODULE_REGISTRY: ModuleDefinition[] = [
     },
     {
         id: 'driver-management',
-        label: 'Driver Management',
+        label: '司机运力档案',
         labelEn: 'Driver Management',
         group: 'logistics',
         icon: Users,
@@ -302,7 +312,7 @@ export const MODULE_REGISTRY: ModuleDefinition[] = [
     },
     {
         id: 'production',
-        label: 'Production Logs',
+        label: '生产班次日志',
         labelEn: 'Production Logs',
         group: 'logistics',
         icon: Database,
@@ -311,7 +321,7 @@ export const MODULE_REGISTRY: ModuleDefinition[] = [
     },
     {
         id: 'report-history',
-        label: 'Report History',
+        label: '历史发货报告',
         labelEn: 'Report History',
         group: 'logistics',
         icon: FileText,
@@ -322,7 +332,7 @@ export const MODULE_REGISTRY: ModuleDefinition[] = [
     // ── ORGANIZATION ──
     {
         id: 'leave-calendar',
-        label: 'Staff Hub',
+        label: '员工服务台 / 考勤',
         labelEn: 'Staff Hub',
         group: 'organization',
         icon: Calendar,
@@ -331,7 +341,7 @@ export const MODULE_REGISTRY: ModuleDefinition[] = [
     },
     {
         id: 'driver-leave',
-        label: 'Apply Leave',
+        label: '员工请假申请',
         labelEn: 'Apply Leave',
         group: 'organization',
         icon: Calendar,
@@ -341,7 +351,7 @@ export const MODULE_REGISTRY: ModuleDefinition[] = [
     },
     {
         id: 'hr',
-        label: 'HR Control Center',
+        label: '人事与权限中心',
         labelEn: 'HR Control Center',
         group: 'organization',
         icon: Users,
@@ -350,7 +360,7 @@ export const MODULE_REGISTRY: ModuleDefinition[] = [
     },
     {
         id: 'reports',
-        label: 'Executive Reports',
+        label: '管理层综合报表',
         labelEn: 'Executive Reports',
         group: 'organization',
         icon: FileBarChart,
@@ -359,7 +369,7 @@ export const MODULE_REGISTRY: ModuleDefinition[] = [
     },
     {
         id: 'iot',
-        label: 'IOT SETTINGS',
+        label: '物联网硬件设置',
         labelEn: 'IOT SETTINGS',
         group: 'organization',
         icon: Cpu,
@@ -368,7 +378,7 @@ export const MODULE_REGISTRY: ModuleDefinition[] = [
     },
     {
         id: 'dev-log',
-        label: 'Dev Log',
+        label: '系统开发日志',
         labelEn: 'Dev Log',
         group: 'organization',
         icon: Activity,
@@ -376,8 +386,17 @@ export const MODULE_REGISTRY: ModuleDefinition[] = [
         description: '系统版本迭代与开发日志'
     },
     {
+        id: 'system-docs',
+        label: '系统文档中心',
+        labelEn: 'System Docs',
+        group: 'organization',
+        icon: FileCode,
+        defaultRoles: ['SuperAdmin', 'Admin'],
+        description: '在线查看与编辑系统 Markdown 文档 (README, 业务真理库)'
+    },
+    {
         id: 'activity-logs',
-        label: 'Activity Logs',
+        label: '系统操作日志',
         labelEn: 'Activity Logs',
         group: 'organization',
         icon: Activity,
@@ -386,7 +405,7 @@ export const MODULE_REGISTRY: ModuleDefinition[] = [
     },
     {
         id: 'personal-report',
-        label: 'My Monthly Report',
+        label: '个人出勤月报',
         labelEn: 'My Monthly Report',
         group: 'organization',
         icon: FileText,
@@ -397,7 +416,7 @@ export const MODULE_REGISTRY: ModuleDefinition[] = [
     // ── PRODUCTIVITY ──
     {
         id: 'sop-center',
-        label: 'SOP Center',
+        label: 'SOP 标准指引',
         labelEn: 'SOP Center',
         group: 'productivity',
         icon: BookOpen,
@@ -406,7 +425,7 @@ export const MODULE_REGISTRY: ModuleDefinition[] = [
     },
     {
         id: 'work-photos',
-        label: 'Work Photos',
+        label: '现场作业拍照',
         labelEn: 'Work Photos',
         group: 'productivity',
         icon: Camera,
@@ -415,7 +434,7 @@ export const MODULE_REGISTRY: ModuleDefinition[] = [
     },
     {
         id: 'notes',
-        label: 'Notes',
+        label: '日常工作便签',
         labelEn: 'Notes',
         group: 'productivity',
         icon: FileText,
@@ -424,7 +443,7 @@ export const MODULE_REGISTRY: ModuleDefinition[] = [
     },
     {
         id: 'tasks',
-        label: 'Tasks',
+        label: '协同任务看板',
         labelEn: 'Tasks',
         group: 'productivity',
         icon: ClipboardList,
