@@ -2095,6 +2095,12 @@ const PersonalMonthlyReport: React.FC<Props> = ({ user }) => {
             }
 
             // Shift & Working Hours
+            const now = new Date();
+            const todayStr = `${now.getFullYear()}-${String(now.getMonth() + 1).padStart(2, '0')}-${String(now.getDate()).padStart(2, '0')}`;
+            const isFuture = dateStr > todayStr;
+            const isToday = dateStr === todayStr;
+            const isPast = dateStr < todayStr;
+
             const dayShift = attendanceShifts.find(s => s.date === dateStr);
             let hoursWorked = 0;
             let hasAttendance = !!dayShift;
@@ -2111,64 +2117,84 @@ const PersonalMonthlyReport: React.FC<Props> = ({ user }) => {
                     const outT = new Date(dayShift.clock_out).getTime();
                     if (outT > inT) hoursWorked = Math.round(((outT - inT) / 3600000) * 10) / 10;
                 }
-            } else if (isDriver && (dayDeliveries.length > 0 || dayOdoLogs.length > 0)) {
-                // Driver with active deliveries or odometer logs: synthesize attendance
-                hasAttendance = true;
-                isDerivedDriverAttendance = true;
-                shiftNotes = dayOdoLogs.length > 0 
-                    ? (dayDeliveries.length > 0 ? '【出车与里程表打卡派生】' : '【物流里程表打卡派生】')
-                    : '【物流出车自动派生】';
-
-                const activityTimes = [
-                    ...dayDeliveries.flatMap(d => [d.created_at, d.pod_timestamp, d.order_date, d.deadline]),
-                    ...dayOdoLogs.map(o => o.created_at)
-                ].filter(Boolean).sort();
-
-                const inIso = activityTimes[0] || `${dateStr}T08:00:00+08:00`;
-                const inDate = new Date(inIso);
-                shiftStart = !isNaN(inDate.getTime()) ? inDate.toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' }) : '08:00';
-
-                // Check odometer start / end logs for precise shift hours
-                const startOdo = dayOdoLogs.find(o => o.log_type === 'start');
-                const endOdo = dayOdoLogs.find(o => o.log_type === 'end');
-                if (startOdo?.created_at) {
-                    const sD = new Date(startOdo.created_at);
-                    if (!isNaN(sD.getTime())) shiftStart = sD.toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' });
-                }
-                if (endOdo?.created_at) {
-                    const eD = new Date(endOdo.created_at);
-                    if (!isNaN(eD.getTime())) shiftEnd = eD.toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' });
-                }
-
+            } else if (isDriver && !isFuture) {
+                // Driver on past dates or today
                 const deliveredTrips = dayDeliveries.filter(d => d.status === 'Delivered');
-                if (deliveredTrips.length === dayDeliveries.length && dayDeliveries.length > 0) {
-                    const podTimes = deliveredTrips.map(d => d.pod_timestamp).filter(Boolean).sort();
-                    const outIso = endOdo?.created_at || (podTimes.length > 0 ? podTimes[podTimes.length - 1] : (activityTimes.length > 1 ? activityTimes[activityTimes.length - 1] : null));
-                    if (outIso) {
-                        const outDate = new Date(outIso);
-                        shiftEnd = !isNaN(outDate.getTime()) ? outDate.toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' }) : (shiftEnd || '17:00');
-                        const inMs = inDate.getTime();
-                        const outMs = outDate.getTime();
-                        if (outMs > inMs) {
-                            hoursWorked = Math.max(1, Math.round(((outMs - inMs) / 3600000) * 10) / 10);
+                const activeTrips = dayDeliveries.filter(d => d.status === 'In-Transit' || d.status === 'Arrived');
+
+                const sortedStarts = dayOdoLogs.filter(o => o.log_type === 'start').sort((a, b) => new Date(a.created_at).getTime() - new Date(b.created_at).getTime());
+                const sortedEnds = dayOdoLogs.filter(o => o.log_type === 'end').sort((a, b) => new Date(b.created_at).getTime() - new Date(a.created_at).getTime());
+                const startOdo = sortedStarts[0];
+                const endOdo = sortedEnds[0];
+
+                const hasDriverStarted = Boolean(startOdo || activeTrips.length > 0 || deliveredTrips.length > 0 || (isPast && dayOdoLogs.length > 0));
+
+                if (hasDriverStarted) {
+                    hasAttendance = true;
+                    isDerivedDriverAttendance = true;
+                    shiftNotes = dayOdoLogs.length > 0 
+                        ? (dayDeliveries.length > 0 ? '【出车与里程表打卡派生】' : '【物流里程表打卡派生】')
+                        : '【物流出车自动派生】';
+
+                    // Start time: strictly bounded to dateStr
+                    let inDate: Date;
+                    if (startOdo?.created_at && matchDate(startOdo.created_at, dateStr)) {
+                        inDate = new Date(startOdo.created_at);
+                    } else {
+                        inDate = new Date(`${dateStr}T08:00:00+08:00`);
+                    }
+                    shiftStart = inDate.toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' });
+
+                    // End time: strictly bounded to dateStr
+                    let outDate: Date | null = null;
+                    const podTimes = deliveredTrips.map(d => d.pod_timestamp).filter(ts => matchDate(ts, dateStr)).sort();
+                    const latestPodIso = podTimes.length > 0 ? podTimes[podTimes.length - 1] : null;
+
+                    if (endOdo?.created_at && matchDate(endOdo.created_at, dateStr)) {
+                        const candidateEnd = new Date(endOdo.created_at);
+                        if (candidateEnd.getTime() > inDate.getTime()) {
+                            outDate = candidateEnd;
+                        }
+                    }
+
+                    if (!outDate && latestPodIso) {
+                        outDate = new Date(latestPodIso);
+                    }
+
+                    if (outDate) {
+                        shiftEnd = outDate.toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' });
+                        const diffMs = outDate.getTime() - inDate.getTime();
+                        if (diffMs > 0) {
+                            hoursWorked = Math.min(14, Math.max(1, Math.round((diffMs / 3600000) * 10) / 10));
                         } else {
-                            hoursWorked = Math.max(2, dayDeliveries.length * 2);
+                            hoursWorked = Math.min(8, Math.max(2, dayDeliveries.length * 2));
                         }
                     } else {
-                        shiftEnd = shiftEnd || '17:00';
-                        hoursWorked = Math.max(2, dayDeliveries.length * 2);
-                    }
-                } else if (endOdo?.created_at && startOdo?.created_at) {
-                    const inMs = new Date(startOdo.created_at).getTime();
-                    const outMs = new Date(endOdo.created_at).getTime();
-                    if (outMs > inMs) {
-                        hoursWorked = Math.max(1, Math.round(((outMs - inMs) / 3600000) * 10) / 10);
-                    } else {
-                        hoursWorked = 8;
+                        if (isPast) {
+                            // Completed past day without explicit clock-out: default to 05:00 PM
+                            outDate = new Date(`${dateStr}T17:00:00+08:00`);
+                            shiftEnd = outDate.toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' });
+                            const diffMs = outDate.getTime() - inDate.getTime();
+                            hoursWorked = Math.min(14, Math.max(2, Math.round((diffMs / 3600000) * 10) / 10));
+                        } else {
+                            // Today & still in progress
+                            shiftEnd = 'Aktif / Active';
+                            const elapsed = (Date.now() - inDate.getTime()) / 3600000;
+                            hoursWorked = Math.min(14, Math.max(0.5, Math.round(elapsed * 10) / 10));
+                        }
                     }
                 } else {
-                    shiftEnd = shiftEnd || 'Aktif / Active';
-                    hoursWorked = Math.max(2, Math.max(dayDeliveries.length, dayOdoLogs.length) * 2);
+                    hasAttendance = false;
+                    hoursWorked = 0;
+                    shiftStart = null;
+                    shiftEnd = null;
+                }
+            } else {
+                hasAttendance = Boolean(dayShift);
+                if (!hasAttendance) {
+                    hoursWorked = 0;
+                    shiftStart = null;
+                    shiftEnd = null;
                 }
             }
 
@@ -2367,6 +2393,11 @@ const PersonalMonthlyReport: React.FC<Props> = ({ user }) => {
     const totalDropCount = dailyMetrics.reduce((sum, d) => sum + d.tripDetails.reduce((ts: number, t: any) => ts + (t.trip_drop_count || 1), 0), 0);
     const onTimeTripsCount = dailyMetrics.reduce((sum, d) => sum + d.tripDetails.filter((t: any) => !t.deadline || !t.pod_timestamp || t.pod_timestamp.split('T')[0] <= t.deadline).length, 0);
     const onTimeRate = totalTrips > 0 ? Math.round((onTimeTripsCount / totalTrips) * 100) : 100;
+
+    const todayStr = useMemo(() => {
+        const now = new Date();
+        return `${now.getFullYear()}-${String(now.getMonth() + 1).padStart(2, '0')}-${String(now.getDate()).padStart(2, '0')}`;
+    }, []);
 
     const canSelectEmployee = employeesList.length > 0;
     return (
@@ -3050,6 +3081,16 @@ const PersonalMonthlyReport: React.FC<Props> = ({ user }) => {
                                                             ? `🚚 Hadir / On Trip (${day.tripDetails.length} Trip${day.tripDetails.length > 1 ? 's' : ''})`
                                                             : 'Hadir / Present'}
                                                     </span>
+                                                ) : isDriver && day.tripCount > 0 ? (
+                                                    day.dateStr > todayStr ? (
+                                                        <span className="inline-flex items-center px-2 py-1 rounded bg-blue-500/10 border border-blue-500/20 text-blue-400 text-[10px] font-black uppercase tracking-wider">
+                                                            📅 Dijadualkan / Scheduled ({day.tripCount} Trip{day.tripCount > 1 ? 's' : ''})
+                                                        </span>
+                                                    ) : (
+                                                        <span className="inline-flex items-center px-2 py-1 rounded bg-amber-500/10 border border-amber-500/30 text-amber-300 text-[10px] font-black uppercase tracking-wider">
+                                                            ⏳ Menunggu Imbasan / Pending Scan ({day.tripCount} Trip{day.tripCount > 1 ? 's' : ''})
+                                                        </span>
+                                                    )
                                                 ) : day.isWeekend ? (
                                                     <span className="inline-flex items-center px-2 py-1 rounded bg-white/5 border border-white/5 text-gray-500 text-[10px] font-black uppercase tracking-wider">
                                                         Weekend
@@ -3087,42 +3128,48 @@ const PersonalMonthlyReport: React.FC<Props> = ({ user }) => {
                                                 ) : (
                                                     day.leaveStatus ? (
                                                         <span className="text-amber-400/80 text-xs font-medium">🏖️ Cuti / Leave</span>
-                                                    ) : (
-                                                        isDriver ? (
-                                                            <div className="inline-flex items-center gap-1.5 px-2.5 py-1 rounded-lg text-xs text-gray-400 bg-gray-800/40 border border-gray-700/40">
-                                                                <span>🛋️</span>
-                                                                <span>{day.isWeekend ? '周末休班 / Weekend' : '本日无出车 / Tiada Trip'}</span>
-                                                                {isAdminOrHR && (
-                                                                    <button
-                                                                        type="button"
-                                                                        onClick={() => setSelectedAttendanceDay(day)}
-                                                                        className="text-[10px] text-amber-400 hover:text-amber-300 underline ml-1 cursor-pointer"
-                                                                        title="点击为司机补录工时或打卡"
-                                                                    >
-                                                                        补录
-                                                                    </button>
-                                                                )}
-                                                            </div>
+                                                    ) : isDriver && day.tripCount > 0 ? (
+                                                        day.dateStr > todayStr ? (
+                                                            <span className="text-gray-500 text-xs font-mono">📅 Belum Mula / Scheduled</span>
                                                         ) : (
-                                                            <button
-                                                                type="button"
-                                                                onClick={() => {
-                                                                    if (isAdminOrHR) {
-                                                                        setSelectedAttendanceDay(day);
-                                                                    }
-                                                                }}
-                                                                className={`inline-flex items-center gap-1.5 px-2.5 py-1 rounded-lg border text-xs transition-all ${
-                                                                    isAdminOrHR
-                                                                        ? 'text-amber-300 bg-amber-500/10 border-amber-500/30 hover:bg-amber-500/20 cursor-pointer shadow-sm'
-                                                                        : 'text-amber-400/80 bg-amber-500/5 border-amber-500/15 cursor-default'
-                                                                }`}
-                                                                title={isAdminOrHR ? "点击去为该日打卡补录 / Click to log clock-in time" : "未打卡 / No Clock In"}
-                                                            >
-                                                                <AlertTriangle size={12} className="text-amber-400 shrink-0" />
-                                                                <span className="font-bold">没有时间 / 未打卡</span>
-                                                                {isAdminOrHR && <span className="text-[10px] text-amber-200 underline ml-0.5">去打卡 ➜</span>}
-                                                            </button>
+                                                            <span className="text-amber-400/90 text-xs font-mono flex items-center gap-1.5">
+                                                                🚚 Menunggu Imbasan QR / Pending Scan
+                                                            </span>
                                                         )
+                                                    ) : isDriver ? (
+                                                        <div className="inline-flex items-center gap-1.5 px-2.5 py-1 rounded-lg text-xs text-gray-400 bg-gray-800/40 border border-gray-700/40">
+                                                            <span>🛋️</span>
+                                                            <span>{day.isWeekend ? '周末休班 / Weekend' : '本日无出车 / Tiada Trip'}</span>
+                                                            {isAdminOrHR && (
+                                                                <button
+                                                                    type="button"
+                                                                    onClick={() => setSelectedAttendanceDay(day)}
+                                                                    className="text-[10px] text-amber-400 hover:text-amber-300 underline ml-1 cursor-pointer"
+                                                                    title="点击为司机补录工时或打卡"
+                                                                >
+                                                                    补录
+                                                                </button>
+                                                            )}
+                                                        </div>
+                                                    ) : (
+                                                        <button
+                                                            type="button"
+                                                            onClick={() => {
+                                                                if (isAdminOrHR) {
+                                                                    setSelectedAttendanceDay(day);
+                                                                }
+                                                            }}
+                                                            className={`inline-flex items-center gap-1.5 px-2.5 py-1 rounded-lg border text-xs transition-all ${
+                                                                isAdminOrHR
+                                                                    ? 'text-amber-300 bg-amber-500/10 border-amber-500/30 hover:bg-amber-500/20 cursor-pointer shadow-sm'
+                                                                    : 'text-amber-400/80 bg-amber-500/5 border-amber-500/15 cursor-default'
+                                                            }`}
+                                                            title={isAdminOrHR ? "点击去为该日打卡补录 / Click to log clock-in time" : "未打卡 / No Clock In"}
+                                                        >
+                                                            <AlertTriangle size={12} className="text-amber-400 shrink-0" />
+                                                            <span className="font-bold">没有时间 / 未打卡</span>
+                                                            {isAdminOrHR && <span className="text-[10px] text-amber-200 underline ml-0.5">去打卡 ➜</span>}
+                                                        </button>
                                                     )
                                                 )}
                                             </td>
