@@ -232,6 +232,9 @@ function App() {
             if (hash === '#/simple-stock') {
                 setActivePage('simple-stock');
             }
+            if (hash === '#/personal-report' || hash === '#/monthly-report' || hash === '#/laporan-bulanan') {
+                setActivePage('personal-report');
+            }
         };
 
         handleHash();

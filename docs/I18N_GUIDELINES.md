@@ -11,13 +11,13 @@
 - 所有菜单定义、角色名称、系统提示、默认操作项必须以**规范地道中文**为基准字段（如 `title`、`label` 必须是中文，严禁用英文直接覆盖）。
 
 ### 2. 多语言镜像与动态解析机制 (Dynamic Multi-language Resolution)
-- **菜单与导航**：必须在 [`src/config/modules.ts`](file:///c:/Users/Max%20Tan/Downloads/Packsecure%20OS/packsecure/src/config/modules.ts) 中同时具备双语基准字段：
+- **菜单与导航**：必须在 [`src/config/modules.ts`](../src/config/modules.ts) 中同时具备双语基准字段：
   - 分组：`title`（中文）与 `titleEn`（英文）
   - 模块：`label`（中文）与 `labelEn`（英文）
-- **7 国语言动态解析**：在 [`src/components/Layout.tsx`](file:///c:/Users/Max%20Tan/Downloads/Packsecure%20OS/packsecure/src/components/Layout.tsx) 中，菜单渲染通过 `getLocalizedTitle` 与 `getLocalizedLabel` 驱动：
+- **7 国语言动态解析**：在 [`src/components/Layout.tsx`](../src/components/Layout.tsx) 中，菜单渲染通过 `getLocalizedTitle` 与 `getLocalizedLabel` 驱动：
   - 中文模式（`zh-CN`）：直接返回基准 `title` / `label`。
   - 英文模式（`en`）：直接返回 `titleEn` / `labelEn`。
-  - 其余 5 种语言（`ms`, `my`, `zh-TW`, `hi`, `bn`）：优先通过 `t()` 动态从 [`src/utils/i18n.ts`](file:///c:/Users/Max%20Tan/Downloads/Packsecure%20OS/packsecure/src/utils/i18n.ts) 的 `CORE_TERMS` 词库中获取对应语言的翻译，确保侧边栏在任何语言下均能准确呈现。
+  - 其余 5 种语言（`ms`, `my`, `zh-TW`, `hi`, `bn`）：优先通过 `t()` 动态从 [`src/utils/i18n.ts`](../src/utils/i18n.ts) 的 `CORE_TERMS` 词库中获取对应语言的翻译，确保侧边栏在任何语言下均能准确呈现。
 
 ---
 
@@ -100,7 +100,7 @@
 
 ## 四、框架层核心词汇防线 (Framework Guardrails)
 
-在 [`src/components/Layout.tsx`](file:///c:/Users/Max%20Tan/Downloads/Packsecure%20OS/packsecure/src/components/Layout.tsx) 与 [`src/utils/i18n.ts`](file:///c:/Users/Max%20Tan/Downloads/Packsecure%20OS/packsecure/src/utils/i18n.ts) 中，固定维护两套框架级防线：
+在 [`src/components/Layout.tsx`](../src/components/Layout.tsx) 与 [`src/utils/i18n.ts`](../src/utils/i18n.ts) 中，固定维护两套框架级防线：
 
 1. **`ROLE_LABELS`**：覆盖系统全部 11 种用户角色（`SuperAdmin`、`LogisticsCoordinator`、`Driver`、`HR`、`Operator` 等）的标准名称。
 2. **`FRAME_LABELS`**：覆盖系统全局控制项（`Quit` 退出登录、`Dark/Light` 深浅色模式、`PIN: ` 工号、`System v6.7 • Data Center Active` 系统状态、`Expand/Collapse sidebar` 侧栏折叠、`🤖 AI Assistant`、`💡 Page Logic Guide`）。
@@ -111,7 +111,7 @@
 ## 五、动态语言解析与回退机制 (Dynamic Resolution & Fallbacks)
 
 ### 1. 导航与侧边栏解析逻辑
-在 [`src/components/Layout.tsx`](file:///c:/Users/Max%20Tan/Downloads/Packsecure%20OS/packsecure/src/components/Layout.tsx) 中：
+在 [`src/components/Layout.tsx`](../src/components/Layout.tsx) 中：
 - 中文模式（`zh-CN`）：直接返回基准中文 `title` / `label`。
 - 英文模式（`en`）：直接返回标准英文 `titleEn` / `labelEn`。
 - 其余语言（`ms`, `my`, `zh-TW`, `hi`, `bn`）：优先调用 `t(group.title)` / `t(mod.label)` 动态读取 6 语词库；若词库无匹配，回退至 `titleEn`，最后回退至中文。

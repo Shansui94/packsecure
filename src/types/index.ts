@@ -129,6 +129,38 @@ export interface SalesOrder {
     driver_id?: string;
     extracted_do_number?: string | null;
     whatsapp_screenshot_url?: string | null;
+    customer_phone?: string | null;
+    terms?: string | null;
+    do_total?: number | null;
+}
+
+export interface ParsedDOItem {
+    product: string;
+    quantity: number;
+    uom?: string;
+    sku?: string;
+    sourceLocation?: string;
+}
+
+export interface ParsedDeliveryOrder {
+    doNumber: string;
+    customer: string;
+    deliveryAddress: string;
+    phone?: string;
+    zone?: string;
+    orderDate?: string;
+    terms?: string;
+    items: ParsedDOItem[];
+    doTotal: number;
+}
+
+export interface ParsedTripDOBatch {
+    suggestedTripDate: string;
+    primaryZone: string;
+    totalDrops: number;
+    totalRolls: number;
+    destinationsSummary: string;
+    deliveryOrders: ParsedDeliveryOrder[];
 }
 
 export interface DeliveryRate {

@@ -1,28 +1,90 @@
-# 手动部署指南 (Manual Deployment Guide)
+# Packsecure OS — 生产部署与发布指南 (Deployment Guide)
 
-由于命令行工具需要复杂的登录验证，最简单的 **手动部署** 方法是使用 **Netlify Drop** 功能。
+Packsecure OS 前端基于 React 19 + TypeScript + Vite 构建，后端 API 采用 Vercel Serverless Functions（`api/` 目录），数据库使用 Supabase。
 
-## 第一步：确认构建文件
-我已经为您运行了构建命令。请在您的项目文件夹中找到：
-`C:\Users\User\.gemini\antigravity\playground\cobalt-rocket\dist`
-
-这个 `dist` 文件夹包含了网站上线所需的所有文件 (HTML, CSS, JS)。
-
-## 第二步：拖拽部署 (Drag & Drop)
-
-1.  打开浏览器，访问 **[app.netlify.com/drop](https://app.netlify.com/drop)**。
-    *   (如果您没有登录，它可能允许您作为匿名用户试用，或者需要您登录一下 Netlify 账号)。
-2.  在网页上会看到一个 **"Drag and drop your site folder here"** 的区域。
-3.  **将您的 `dist` 文件夹整个拖进去**。
-
-## 第三步：完成
-1.  松手后，Netlify 会自动上传并发布。
-2.  几秒钟后，它会给您一个 **随机的网址** (例如 `https://nervous-curie-12345.netlify.app`)。
-3.  点击该链接，您的应用就已经上线了！
+系统通过根目录的 [vercel.json](vercel.json) 自动完成单页应用（SPA）前端路由回退与 Serverless API 映射。
 
 ---
 
-## 备选方案：传统服务器
-如果您有自己的服务器 (Nginx / Apache / IIS):
-1.  将 `dist` 文件夹内的 **所有内容** 复制到服务器的 Web 根目录 (例如 `/var/www/html` 或 `C:\inetpub\wwwroot`)。
-2.  确保服务器配置了 rewrite 规则以支持 SPA (Single Page Application)，即所有 404 请求都重定向回 `index.html`。
+## 一、部署前安全检查 (Safety Checklist)
+
+在触发任何环境部署前，必须严格执行以下三项安全防线：
+
+1. **本地编译自检**：
+   ```bash
+   npm run build
+   ```
+   确保 TypeScript 类型检查与 Vite 打包 **0 错误、0 致命警告**。
+2. **代码风格与语法校验**：
+   ```bash
+   npm run lint
+   ```
+3. **禁止泄漏敏感密钥**：
+   - 严禁将包含真实密钥的 `.env` 提交到 Git 仓库。
+   - 前端代码只能通过 `import.meta.env.VITE_*` 读取公有变量。
+
+---
+
+## 二、部署方案
+
+### 方案 1：自动化 Git 持续集成（推荐）
+1. 将修改推送到 GitHub 主分支（`main`）：
+   ```bash
+   git add .
+   git commit -m "feat: 你的功能描述"
+   git push origin main
+   ```
+2. Vercel 关联仓库后会自动拉取代码、运行 `npm run build` 并完成全球 CDN 与 Serverless 部署。
+
+---
+
+### 方案 2：使用一键脚本或 Vercel CLI 手动发布
+若需要在本地快速直接发布至生产环境：
+
+#### 方法 A：运行项目自带脚本
+直接在项目根目录下执行 PowerShell 脚本（脚本会自动先执行 `npm run build`，通过后直接部署）：
+```powershell
+powershell -ExecutionPolicy Bypass -File .\deploy_vercel.ps1
+```
+
+#### 方法 B：原生 CLI 命令
+```bash
+# 1. 执行生产打包
+npm run build
+
+# 2. 部署至生产环境
+npx vercel --prod
+```
+> 若首次运行，CLI 会提示登录 Vercel 账号并关联至 `packsecure` 项目。
+
+---
+
+## 三、生产环境变量配置 (Vercel Dashboard)
+
+在 Vercel 控制台的项目设置 (**Settings -> Environment Variables**) 中，必须确保已配置以下环境变量：
+
+| 变量名称 | 适用端 | 说明 | 示例 / 格式 |
+| :--- | :--- | :--- | :--- |
+| `VITE_SUPABASE_URL` | 前端 (Browser) | Supabase 项目 API 地址 | `https://xxxx.supabase.co` |
+| `VITE_SUPABASE_ANON_KEY` | 前端 (Browser) | Supabase 匿名访问公钥 | `eyJhbGci...` |
+| `SUPABASE_SERVICE_ROLE_KEY` | 服务端 (Serverless) | **禁止带 VITE_ 前缀**，供 `api/` 目录下的管理特权接口使用 | `eyJhbGci...` |
+| `GOOGLE_API_KEY` | 服务端 (Serverless) | **禁止带 VITE_ 前缀**，供 Gemini AI 视觉与对话模型使用 | `AIzaSy...` |
+
+---
+
+## 四、常见部署与排错说明
+
+### 1. 刷新页面出现 404 (SPA 路由丢失)
+- **原因**：由于系统是单页应用（SPA），非根路径（如 `/staff-status`、`#/production/...`）直接刷新时若未做重定向会导致 404。
+- **保障机制**：根目录 [vercel.json](vercel.json) 中已配置捕获规则：
+  ```json
+  {
+      "source": "/(.*)",
+      "destination": "/index.html"
+  }
+  ```
+  该配置已自动生效，请确保不要覆盖或删除此规则。
+
+### 2. `/api/*` 请求返回 404 或 500
+- 检查 [vercel.json](vercel.json) 中 API 的 `rewrites` 是否正确匹配对应 `api/` 下的 Serverless 函数。
+- 查看 Vercel 控制台 **Logs -> Functions** 中的运行堆栈，重点确认 `SUPABASE_SERVICE_ROLE_KEY` 是否已配置。

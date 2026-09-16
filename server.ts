@@ -18,6 +18,7 @@ import v2DocumentsHandler, {
     handleLogs as documentLogsHandler
 } from './api/v2-documents';
 import docsHandler from './api/docs';
+import parseTripPdfHandler from './api/agent/parse-trip-pdf';
 
 const app = express();
 const PORT = 8080;
@@ -56,6 +57,7 @@ mountVercelHandler('/api/v2/documents/entities', documentEntitiesHandler);
 mountVercelHandler('/api/v2/documents/logs', documentLogsHandler);
 mountVercelHandler('/api/agent/sop-assistant', sopAssistantHandler);
 mountVercelHandler('/api/docs', docsHandler);
+mountVercelHandler('/api/agent/parse-trip-pdf', parseTripPdfHandler);
 
 // Mimic Vercel Request/Response for the handler
 app.post('/api/agent/chat', async (req, res) => {

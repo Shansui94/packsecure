@@ -20,13 +20,15 @@ import {
     User as UserIcon, Box, Zap, Trash2, Scissors, AlertTriangle, MapPin, Wrench, LayoutGrid, List, ArrowUp, ArrowDown,
     CheckCircle, XCircle, Camera, Sparkles, ImagePlus, Download,
     RotateCcw, RefreshCw, Settings, ShieldCheck, Clock, Award, TrendingUp, Info,
-    ChevronDown, ChevronUp, Edit3
+    ChevronDown, ChevronUp, Edit3, Phone
 } from 'lucide-react';
 import { WAREHOUSES } from '../data/factoryData';
 import {
     SalesOrder,
     User,
-    Lorry
+    Lorry,
+    ParsedTripDOBatch,
+    ParsedDeliveryOrder
 } from '../types';
 import { V2Item } from '../types/v2';
 import { compressImage, dataUrlToBase64Payload } from '../utils/imageCompress';
@@ -563,6 +565,22 @@ const DeliveryOrderManagement: React.FC<DeliveryOrderManagementProps> = ({ user 
     const [isScanReviewOpen, setIsScanReviewOpen] = useState(false);
     const [scanReview, setScanReview] = useState<ScanSheetReview | null>(null);
     const [isBatchCreating, setIsBatchCreating] = useState(false);
+
+    // DO PDF Upload & Trip Review State (Max 15 PDFs)
+    const [isTripPdfParsing, setIsTripPdfParsing] = useState(false);
+    const [pdfParseProgress, setPdfParseProgress] = useState('');
+    const tripPdfInputRef = useRef<HTMLInputElement>(null);
+    const headerTripPdfInputRef = useRef<HTMLInputElement>(null);
+    const [parsedTripBatch, setParsedTripBatch] = useState<ParsedTripDOBatch | null>(null);
+    const [isParsedTripModalOpen, setIsParsedTripModalOpen] = useState(false);
+    const [parsedTripNumber, setParsedTripNumber] = useState('');
+    const [parsedTripDate, setParsedTripDate] = useState('');
+    const [parsedDeliveryDate, setParsedDeliveryDate] = useState('');
+    const [parsedDriverId, setParsedDriverId] = useState('');
+    const [parsedLorryId, setParsedLorryId] = useState('');
+    const [parsedTripOrigin, setParsedTripOrigin] = useState('Taiping');
+    const [parsedZone, setParsedZone] = useState('');
+    const [isCreatingTrip, setIsCreatingTrip] = useState(false);
 
     // Editing State
     const [editingOrderId, setEditingOrderId] = useState<string | null>(null);
@@ -1752,6 +1770,235 @@ const DeliveryOrderManagement: React.FC<DeliveryOrderManagementProps> = ({ user 
         XLSX.writeFile(wb, 'Trip_Import_Template.xlsx');
     };
 
+    // --- DO PDF (MAX 15) UPLOAD & TRIP DISPATCH HANDLERS ---
+    const handleTripPdfUpload = async (e: React.ChangeEvent<HTMLInputElement>) => {
+        const rawFiles = e.target.files;
+        if (!rawFiles || rawFiles.length === 0) return;
+        const fileList = Array.from(rawFiles);
+        e.target.value = '';
+
+        if (fileList.length > 15) {
+            alert(t('Maksimum 15 fail PDF dibenarkan untuk satu Trip! Sila pilih semula.\nMaximum 15 DO PDF files allowed per trip! Please select again.'));
+            return;
+        }
+
+        setIsTripPdfParsing(true);
+        setPdfParseProgress(t('Reading {{count}} PDF files...', { count: fileList.length }));
+        setToast(null);
+
+        try {
+            const filePayloads = await Promise.all(
+                fileList.map(async (file) => {
+                    const base64 = await new Promise<string>((resolve, reject) => {
+                        const reader = new FileReader();
+                        reader.onload = () => {
+                            const res = reader.result as string;
+                            const data = res.includes(',') ? res.split(',')[1] : res;
+                            resolve(data);
+                        };
+                        reader.onerror = reject;
+                        reader.readAsDataURL(file);
+                    });
+                    return {
+                        name: file.name,
+                        base64,
+                        mimeType: file.type || 'application/pdf'
+                    };
+                })
+            );
+
+            setPdfParseProgress(t('AI analyzing DO details and mapping SKUs...'));
+
+            const response = await fetch('/api/agent/parse-trip-pdf', {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({
+                    files: filePayloads,
+                    productsList: v2Items.map(i => ({ sku: i.sku, name: i.name })),
+                    driversList: drivers.map(d => ({ uid: d.uid, name: d.name || d.email || '' }))
+                })
+            });
+
+            if (!response.ok) {
+                const errData = await response.json().catch(() => ({}));
+                throw new Error(errData.error || `HTTP ${response.status}`);
+            }
+
+            const data: ParsedTripDOBatch = await response.json();
+            if (!data.deliveryOrders || data.deliveryOrders.length === 0) {
+                throw new Error(t('No valid Delivery Orders detected in the uploaded PDFs. Try a clearer PDF.'));
+            }
+
+            // Generate clean standard trip number
+            const now = new Date();
+            const dateCode = `${String(now.getFullYear()).slice(-2)}${String(now.getMonth() + 1).padStart(2, '0')}${String(now.getDate()).padStart(2, '0')}`;
+            const randomSeq = String(Math.floor(Math.random() * 900) + 100);
+            const genTripNo = `TRIP-${dateCode}-${randomSeq}`;
+
+            setParsedTripBatch(data);
+            setParsedTripNumber(genTripNo);
+            setParsedTripDate(data.suggestedTripDate || new Date().toISOString().split('T')[0]);
+            setParsedDeliveryDate(data.suggestedTripDate || new Date().toISOString().split('T')[0]);
+            setParsedTripOrigin(activeLocation || 'Taiping');
+            setParsedZone(data.primaryZone || '');
+            setIsParsedTripModalOpen(true);
+
+            setToast({
+                type: 'success',
+                message: t('Parsed {{count}} DO(s) successfully. Please review and confirm.', { count: data.deliveryOrders.length })
+            });
+        } catch (err: any) {
+            console.error("Failed to parse DO PDF:", err);
+            setToast({
+                type: 'error',
+                message: err.message || t('Failed to parse DO PDF')
+            });
+        } finally {
+            setIsTripPdfParsing(false);
+            setPdfParseProgress('');
+        }
+    };
+
+    const handleCloseParsedTripModal = () => {
+        setIsParsedTripModalOpen(false);
+        setParsedTripBatch(null);
+    };
+
+    const handleRemoveParsedDO = (index: number) => {
+        setParsedTripBatch(prev => {
+            if (!prev) return null;
+            const updated = prev.deliveryOrders.filter((_, idx) => idx !== index);
+            if (updated.length === 0) {
+                handleCloseParsedTripModal();
+                return null;
+            }
+            const totalRolls = updated.reduce((sum, d) => sum + (d.doTotal || 0), 0);
+            return {
+                ...prev,
+                deliveryOrders: updated,
+                totalDrops: updated.length,
+                totalRolls
+            };
+        });
+    };
+
+    const handleMoveParsedDO = (index: number, direction: 'up' | 'down') => {
+        setParsedTripBatch(prev => {
+            if (!prev) return null;
+            const list = [...prev.deliveryOrders];
+            const targetIndex = direction === 'up' ? index - 1 : index + 1;
+            if (targetIndex < 0 || targetIndex >= list.length) return prev;
+            const temp = list[index];
+            list[index] = list[targetIndex];
+            list[targetIndex] = temp;
+            return { ...prev, deliveryOrders: list };
+        });
+    };
+
+    const handleUpdateParsedDO = (index: number, field: keyof ParsedDeliveryOrder, value: any) => {
+        setParsedTripBatch(prev => {
+            if (!prev) return null;
+            const list = [...prev.deliveryOrders];
+            list[index] = { ...list[index], [field]: value };
+            return { ...prev, deliveryOrders: list };
+        });
+    };
+
+    const handleConfirmCreateTrip = async () => {
+        if (!parsedTripBatch || parsedTripBatch.deliveryOrders.length === 0) return;
+        setIsCreatingTrip(true);
+        setToast(null);
+
+        try {
+            const tripId = crypto.randomUUID();
+            const totalDrops = parsedTripBatch.deliveryOrders.length;
+            const defaultLoc = getDefaultLocForOrigin(parsedTripOrigin);
+
+            // 1. Insert into trips_v2
+            const { error: tripError } = await supabase
+                .from('trips_v2')
+                .insert({
+                    id: tripId,
+                    trip_number: parsedTripNumber,
+                    driver_id: parsedDriverId || null,
+                    lorry_id: parsedLorryId || null,
+                    status: 'Planning',
+                    created_at: new Date().toISOString()
+                });
+
+            if (tripError) {
+                console.warn("trips_v2 insert non-fatal notice:", tripError.message);
+            }
+
+            // 2. Insert each DO into sales_orders
+            for (let i = 0; i < parsedTripBatch.deliveryOrders.length; i++) {
+                const doItem = parsedTripBatch.deliveryOrders[i];
+                const orderId = crypto.randomUUID();
+
+                const orderPayload: any = {
+                    id: orderId,
+                    trip_id: tripId,
+                    order_number: doItem.doNumber || `DO-${parsedTripNumber}-${i + 1}`,
+                    customer: doItem.customer || 'General Customer',
+                    delivery_address: doItem.deliveryAddress || '',
+                    customer_phone: doItem.phone || null,
+                    zone: doItem.zone || parsedZone || 'Central',
+                    driver_id: parsedDriverId || null,
+                    status: 'Planned',
+                    order_date: parsedTripDate,
+                    deadline: parsedDeliveryDate,
+                    trip_origin: parsedTripOrigin.toUpperCase(),
+                    trip_drop_count: totalDrops,
+                    stop_sequence: i + 1,
+                    trip_sequence: i + 1,
+                    items: (doItem.items || []).map(it => ({
+                        product: it.product,
+                        quantity: Number(it.quantity) || 1,
+                        sku: it.sku || '',
+                        packaging: 'Unit',
+                        sourceLocation: it.sourceLocation || defaultLoc
+                    })),
+                    notes: doItem.terms ? `Terms: ${doItem.terms}` : ''
+                };
+
+                const { error: soError } = await supabase
+                    .from('sales_orders')
+                    .insert(orderPayload);
+
+                if (soError) {
+                    throw new Error(`Failed to save DO ${doItem.doNumber}: ${soError.message}`);
+                }
+
+                // 3. Keep trip_stops_v2 in sync
+                await supabase.from('trip_stops_v2').insert({
+                    trip_id: tripId,
+                    sales_order_id: orderId,
+                    stop_sequence: i + 1,
+                    status: 'Pending'
+                }).catch(() => {});
+            }
+
+            handleCloseParsedTripModal();
+            handleCloseModal();
+            await fetchData();
+            setToast({
+                type: 'success',
+                message: t('Trip {{trip}} with {{count}} DOs created successfully!', {
+                    trip: parsedTripNumber,
+                    count: totalDrops
+                })
+            });
+        } catch (err: any) {
+            console.error("Failed to create trip from DO PDFs:", err);
+            setToast({
+                type: 'error',
+                message: err.message || t('Failed to create trip')
+            });
+        } finally {
+            setIsCreatingTrip(false);
+        }
+    };
+
     const closeScanReview = () => {
         setIsScanReviewOpen(false);
         setScanReview(null);
@@ -2829,13 +3076,37 @@ const DeliveryOrderManagement: React.FC<DeliveryOrderManagementProps> = ({ user 
                     </h1>
                     <p className="text-slate-400 mt-1 font-medium">{t('Assign trips, track deliveries, and manage fleet.')}</p>
                 </div>
-                <button
-                    onClick={() => setIsCreateModalOpen(true)}
-                    className="group relative bg-gradient-to-r from-blue-600 to-blue-500 hover:from-blue-500 hover:to-blue-400 text-white px-6 py-3 rounded-xl flex items-center gap-3 font-bold shadow-xl shadow-blue-900/20 transition-all active:scale-95"
-                >
-                    <Plus size={20} />
-                    {t('New Trip')}
-                </button>
+                <div className="flex flex-wrap items-center gap-3">
+                    <input
+                        ref={headerTripPdfInputRef}
+                        type="file"
+                        accept="application/pdf,.pdf"
+                        multiple
+                        className="hidden"
+                        onChange={handleTripPdfUpload}
+                    />
+                    <button
+                        onClick={() => headerTripPdfInputRef.current?.click()}
+                        disabled={isTripPdfParsing}
+                        className="group relative bg-gradient-to-r from-amber-600 to-amber-500 hover:from-amber-500 hover:to-amber-400 text-white px-5 py-3 rounded-xl flex items-center gap-2.5 font-bold shadow-xl shadow-amber-950/20 transition-all active:scale-95 disabled:opacity-50"
+                        title="Upload up to 15 DO PDFs to create a Trip"
+                    >
+                        {isTripPdfParsing ? (
+                            <span className="w-4 h-4 border-2 border-white/40 border-t-white rounded-full animate-spin" />
+                        ) : (
+                            <FileText size={18} className="text-amber-200" />
+                        )}
+                        <span>{isTripPdfParsing ? (pdfParseProgress || t('Parsing…')) : t('Upload DO PDF (Max 15)')}</span>
+                    </button>
+
+                    <button
+                        onClick={() => setIsCreateModalOpen(true)}
+                        className="group relative bg-gradient-to-r from-blue-600 to-blue-500 hover:from-blue-500 hover:to-blue-400 text-white px-6 py-3 rounded-xl flex items-center gap-3 font-bold shadow-xl shadow-blue-900/20 transition-all active:scale-95"
+                    >
+                        <Plus size={20} />
+                        {t('New Trip')}
+                    </button>
+                </div>
             </div>
 
             {/* --- PENDING EXTRA JOBS BANNER --- */}
@@ -4111,6 +4382,30 @@ const DeliveryOrderManagement: React.FC<DeliveryOrderManagementProps> = ({ user 
                                 </div>
                                 <div className="flex items-center gap-2">
                                     <input
+                                        ref={tripPdfInputRef}
+                                        type="file"
+                                        accept="application/pdf,.pdf"
+                                        multiple
+                                        className="hidden"
+                                        onChange={handleTripPdfUpload}
+                                    />
+                                    <button
+                                        type="button"
+                                        disabled={isTripPdfParsing}
+                                        onClick={() => tripPdfInputRef.current?.click()}
+                                        className="flex items-center gap-1.5 sm:gap-2 px-2.5 sm:px-4 py-2 rounded-xl bg-amber-500/20 border border-amber-500/40 text-amber-200 hover:bg-amber-500/30 disabled:opacity-50 text-xs font-bold uppercase tracking-wide transition-all shrink-0"
+                                        title="Upload up to 15 DO PDFs for this trip"
+                                    >
+                                        {isTripPdfParsing ? (
+                                            <span className="w-4 h-4 border-2 border-amber-300/30 border-t-amber-200 rounded-full animate-spin" />
+                                        ) : (
+                                            <FileText size={16} className="text-amber-400" />
+                                        )}
+                                        <span className="hidden sm:inline">{isTripPdfParsing ? (pdfParseProgress || t('Parsing…')) : t('Upload DO PDF (Max 15)')}</span>
+                                        <span className="sm:hidden sr-only">{isTripPdfParsing ? 'Parsing' : 'PDF'}</span>
+                                    </button>
+
+                                    <input
                                         ref={tripPhotoInputRef}
                                         type="file"
                                         accept="image/*"
@@ -4856,6 +5151,353 @@ const DeliveryOrderManagement: React.FC<DeliveryOrderManagementProps> = ({ user 
                                 ) : null}
                                 Confirm & Create {scanReview.trips.length} Trip{scanReview.trips.length > 1 ? 's' : ''}
                             </button>
+                        </div>
+                    </div>
+                </div>
+            )}
+
+            {/* --- DO PDF TRIP DISPATCH REVIEW (Max 15 DOs -> 1 Trip) --- */}
+            {isParsedTripModalOpen && parsedTripBatch && (
+                <div className="fixed inset-0 z-[120] flex items-center justify-center p-2 sm:p-4 bg-black/80 backdrop-blur-md animate-in fade-in duration-200">
+                    <div className="bg-slate-950 border border-slate-800 rounded-2xl w-full max-w-4xl max-h-[min(94vh,860px)] overflow-hidden flex flex-col shadow-2xl shadow-black/80">
+                        {/* Header */}
+                        <div className="p-4 sm:p-5 border-b border-slate-800 flex justify-between items-start gap-3 bg-slate-900/60">
+                            <div>
+                                <h3 className="text-lg sm:text-xl font-black text-white flex items-center gap-2">
+                                    <FileText className="text-amber-400" size={22} />
+                                    <span>{t('DO PDF Trip Dispatch Review (出车单据审核)')}</span>
+                                    <span className="text-[10px] bg-amber-500/20 text-amber-300 px-2 py-0.5 rounded-full font-mono border border-amber-500/30">
+                                        {parsedTripBatch.deliveryOrders.length} DOs · Max 15
+                                    </span>
+                                </h3>
+                                <p className="text-xs text-slate-400 mt-1">
+                                    {t('One trip dispatch with {{drops}} drop point(s). Total {{rolls}} rolls detected.', {
+                                        drops: parsedTripBatch.deliveryOrders.length,
+                                        rolls: parsedTripBatch.totalRolls
+                                    })}
+                                </p>
+                            </div>
+                            <button
+                                type="button"
+                                onClick={handleCloseParsedTripModal}
+                                className="p-2 hover:bg-slate-800 rounded-lg text-slate-500 hover:text-white transition-colors"
+                            >
+                                <X size={20} />
+                            </button>
+                        </div>
+
+                        {/* Scrollable Body */}
+                        <div className="flex-1 overflow-y-auto p-4 sm:p-6 space-y-6 custom-scrollbar bg-slate-950">
+                            {/* Trip Master Settings */}
+                            <div className="bg-slate-900/50 border border-slate-800 rounded-2xl p-4 sm:p-5 space-y-4">
+                                <div className="flex items-center justify-between">
+                                    <h4 className="text-xs font-black text-slate-300 uppercase tracking-wider flex items-center gap-2">
+                                        <Truck size={16} className="text-blue-400" />
+                                        <span>{t('Trip Master Settings / 车次主信息')}</span>
+                                    </h4>
+                                    <div className="flex items-center gap-2">
+                                        <span className={`text-xs font-bold px-2.5 py-1 rounded-lg border ${
+                                            parsedTripBatch.totalRolls > 82 
+                                                ? 'bg-amber-500/10 border-amber-500/30 text-amber-400' 
+                                                : 'bg-emerald-500/10 border-emerald-500/30 text-emerald-400'
+                                        }`}>
+                                            📦 {parsedTripBatch.totalRolls} / 82 {t('Rolls')} ({Math.round((parsedTripBatch.totalRolls / 82) * 100)}%)
+                                        </span>
+                                    </div>
+                                </div>
+
+                                <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-3">
+                                    <div>
+                                        <label className="block text-[10px] font-bold text-slate-400 uppercase mb-1">
+                                            {t('Trip Number / 车次编号')}
+                                        </label>
+                                        <input
+                                            type="text"
+                                            className="w-full bg-slate-950 border border-slate-700/80 rounded-xl px-3 py-2 text-xs font-mono font-bold text-amber-300 outline-none focus:border-amber-500"
+                                            value={parsedTripNumber}
+                                            onChange={e => setParsedTripNumber(e.target.value)}
+                                        />
+                                    </div>
+
+                                    <div>
+                                        <label className="block text-[10px] font-bold text-slate-400 uppercase mb-1">
+                                            {t('Trip Date / 出车日期')}
+                                        </label>
+                                        <input
+                                            type="date"
+                                            className="w-full bg-slate-950 border border-slate-700/80 rounded-xl px-3 py-2 text-xs text-slate-200 outline-none focus:border-blue-500 [color-scheme:dark]"
+                                            value={parsedTripDate}
+                                            onChange={e => setParsedTripDate(e.target.value)}
+                                        />
+                                    </div>
+
+                                    <div>
+                                        <label className="block text-[10px] font-bold text-slate-400 uppercase mb-1">
+                                            {t('Delivery Date / 送达日期')}
+                                        </label>
+                                        <input
+                                            type="date"
+                                            className="w-full bg-slate-950 border border-slate-700/80 rounded-xl px-3 py-2 text-xs text-slate-200 outline-none focus:border-blue-500 [color-scheme:dark]"
+                                            value={parsedDeliveryDate}
+                                            onChange={e => setParsedDeliveryDate(e.target.value)}
+                                        />
+                                    </div>
+
+                                    <div>
+                                        <label className="block text-[10px] font-bold text-slate-400 uppercase mb-1">
+                                            {t('Origin Factory / 出发厂区')}
+                                        </label>
+                                        <select
+                                            className="w-full bg-slate-950 border border-slate-700/80 rounded-xl px-3 py-2 text-xs text-slate-200 outline-none focus:border-blue-500"
+                                            value={parsedTripOrigin}
+                                            onChange={e => setParsedTripOrigin(e.target.value)}
+                                        >
+                                            {['Taiping', 'Nilai', 'Kelantan', 'Johor'].map(loc => (
+                                                <option key={loc} value={loc}>{loc}</option>
+                                            ))}
+                                        </select>
+                                    </div>
+                                </div>
+
+                                <div className="grid grid-cols-1 sm:grid-cols-3 gap-3 pt-1 border-t border-slate-800/60">
+                                    <div>
+                                        <label className="block text-[10px] font-bold text-slate-400 uppercase mb-1">
+                                            {t('Assign Driver / 指派司机')}
+                                        </label>
+                                        <select
+                                            className="w-full bg-slate-950 border border-slate-700/80 rounded-xl px-3 py-2 text-xs text-slate-200 outline-none focus:border-blue-500"
+                                            value={parsedDriverId}
+                                            onChange={e => {
+                                                const dId = e.target.value;
+                                                setParsedDriverId(dId);
+                                                // Auto-select bound lorry if available
+                                                const matchedLorry = lorries.find(l => l.driverUserId === dId);
+                                                if (matchedLorry) {
+                                                    setParsedLorryId(matchedLorry.id);
+                                                }
+                                            }}
+                                        >
+                                            <option value="">-- {t('Select Driver (Optional)')} --</option>
+                                            {drivers.map(d => (
+                                                <option key={d.uid} value={d.uid}>
+                                                    {d.name || d.email} ({d.base_location || 'Taiping'})
+                                                </option>
+                                            ))}
+                                        </select>
+                                    </div>
+
+                                    <div>
+                                        <label className="block text-[10px] font-bold text-slate-400 uppercase mb-1">
+                                            {t('Assign Lorry / 绑定车辆')}
+                                        </label>
+                                        <select
+                                            className="w-full bg-slate-950 border border-slate-700/80 rounded-xl px-3 py-2 text-xs text-slate-200 outline-none focus:border-blue-500"
+                                            value={parsedLorryId}
+                                            onChange={e => setParsedLorryId(e.target.value)}
+                                        >
+                                            <option value="">-- {t('Select Lorry (Optional)')} --</option>
+                                            {lorries.map(l => (
+                                                <option key={l.id} value={l.id}>
+                                                    {l.plate_number} {l.capacity ? `(${l.capacity} rolls)` : ''}
+                                                </option>
+                                            ))}
+                                        </select>
+                                    </div>
+
+                                    <div>
+                                        <label className="block text-[10px] font-bold text-slate-400 uppercase mb-1">
+                                            {t('Primary Zone / 目的地主区域')}
+                                        </label>
+                                        <input
+                                            type="text"
+                                            className="w-full bg-slate-950 border border-slate-700/80 rounded-xl px-3 py-2 text-xs text-slate-200 outline-none focus:border-blue-500"
+                                            value={parsedZone}
+                                            onChange={e => setParsedZone(e.target.value)}
+                                            placeholder="e.g. KELANTAN, SELANGOR"
+                                        />
+                                    </div>
+                                </div>
+                            </div>
+
+                            {/* Drops Sequence List */}
+                            <div className="space-y-3">
+                                <div className="flex items-center justify-between">
+                                    <h4 className="text-xs font-black text-slate-300 uppercase tracking-wider flex items-center gap-2">
+                                        <MapPin size={16} className="text-emerald-400" />
+                                        <span>{t('Drops & Delivery Orders / 经停卸货点清单')} ({parsedTripBatch.deliveryOrders.length})</span>
+                                    </h4>
+                                    <span className="text-[11px] text-slate-400">
+                                        {t('Use arrow buttons to adjust delivery sequence (Drop 1 ➔ Drop 2)')}
+                                    </span>
+                                </div>
+
+                                <div className="space-y-3">
+                                    {parsedTripBatch.deliveryOrders.map((doItem, idx) => (
+                                        <div
+                                            key={idx}
+                                            className="bg-slate-900/70 border border-slate-800 hover:border-slate-700 rounded-xl p-4 transition-all space-y-3"
+                                        >
+                                            {/* Drop Row Header */}
+                                            <div className="flex flex-wrap items-center justify-between gap-2 border-b border-slate-800/80 pb-2.5">
+                                                <div className="flex items-center gap-2">
+                                                    <span className="px-2.5 py-1 rounded-lg bg-gradient-to-r from-blue-600 to-indigo-600 text-white font-black text-xs uppercase tracking-wider">
+                                                        Drop #{idx + 1}
+                                                    </span>
+                                                    <div className="flex items-center gap-1.5">
+                                                        <span className="text-xs font-bold text-slate-400">DO:</span>
+                                                        <input
+                                                            type="text"
+                                                            className="bg-slate-950 border border-slate-700 rounded-lg px-2 py-0.5 text-xs font-mono font-bold text-amber-300 w-36 outline-none focus:border-amber-500"
+                                                            value={doItem.doNumber}
+                                                            onChange={e => handleUpdateParsedDO(idx, 'doNumber', e.target.value)}
+                                                            placeholder="OPM2609-xxxx"
+                                                        />
+                                                    </div>
+                                                </div>
+
+                                                <div className="flex items-center gap-2">
+                                                    <span className="text-xs font-bold px-2 py-0.5 rounded bg-slate-800 text-slate-300 border border-slate-700">
+                                                        Total: {doItem.doTotal || (doItem.items || []).reduce((s, it) => s + (Number(it.quantity) || 0), 0)} {t('Rolls')}
+                                                    </span>
+                                                    <div className="flex items-center gap-1 border-l border-slate-800 pl-2">
+                                                        <button
+                                                            type="button"
+                                                            disabled={idx === 0}
+                                                            onClick={() => handleMoveParsedDO(idx, 'up')}
+                                                            className="p-1 rounded bg-slate-800 hover:bg-slate-700 disabled:opacity-30 text-slate-300 transition-colors"
+                                                            title="Move Up in sequence"
+                                                        >
+                                                            <ArrowUp size={14} />
+                                                        </button>
+                                                        <button
+                                                            type="button"
+                                                            disabled={idx === parsedTripBatch.deliveryOrders.length - 1}
+                                                            onClick={() => handleMoveParsedDO(idx, 'down')}
+                                                            className="p-1 rounded bg-slate-800 hover:bg-slate-700 disabled:opacity-30 text-slate-300 transition-colors"
+                                                            title="Move Down in sequence"
+                                                        >
+                                                            <ArrowDown size={14} />
+                                                        </button>
+                                                        <button
+                                                            type="button"
+                                                            onClick={() => handleRemoveParsedDO(idx)}
+                                                            className="p-1 rounded bg-red-500/10 hover:bg-red-500/20 text-red-400 transition-colors ml-1"
+                                                            title="Remove DO from Trip"
+                                                        >
+                                                            <Trash2 size={14} />
+                                                        </button>
+                                                    </div>
+                                                </div>
+                                            </div>
+
+                                            {/* Customer & Address */}
+                                            <div className="grid grid-cols-1 sm:grid-cols-3 gap-3">
+                                                <div>
+                                                    <label className="block text-[9px] font-bold text-slate-500 uppercase mb-0.5">{t('Customer Name')}</label>
+                                                    <input
+                                                        type="text"
+                                                        className="w-full bg-slate-950 border border-slate-800 rounded-lg px-2.5 py-1.5 text-xs font-bold text-white outline-none focus:border-blue-500"
+                                                        value={doItem.customer}
+                                                        onChange={e => handleUpdateParsedDO(idx, 'customer', e.target.value)}
+                                                        placeholder="Customer"
+                                                    />
+                                                </div>
+                                                <div>
+                                                    <label className="block text-[9px] font-bold text-slate-500 uppercase mb-0.5">{t('Contact Phone')}</label>
+                                                    <div className="relative">
+                                                        <input
+                                                            type="text"
+                                                            className="w-full bg-slate-950 border border-slate-800 rounded-lg px-2.5 py-1.5 text-xs text-slate-200 outline-none focus:border-blue-500"
+                                                            value={doItem.phone || ''}
+                                                            onChange={e => handleUpdateParsedDO(idx, 'phone', e.target.value)}
+                                                            placeholder="e.g. 011-56324303"
+                                                        />
+                                                    </div>
+                                                </div>
+                                                <div>
+                                                    <label className="block text-[9px] font-bold text-slate-500 uppercase mb-0.5">{t('Delivery Zone / State')}</label>
+                                                    <input
+                                                        type="text"
+                                                        className="w-full bg-slate-950 border border-slate-800 rounded-lg px-2.5 py-1.5 text-xs text-slate-200 outline-none focus:border-blue-500"
+                                                        value={doItem.zone || ''}
+                                                        onChange={e => handleUpdateParsedDO(idx, 'zone', e.target.value)}
+                                                        placeholder="Zone"
+                                                    />
+                                                </div>
+                                            </div>
+
+                                            <div>
+                                                <label className="block text-[9px] font-bold text-slate-500 uppercase mb-0.5">{t('Delivery Address')}</label>
+                                                <input
+                                                    type="text"
+                                                    className="w-full bg-slate-950 border border-slate-800 rounded-lg px-2.5 py-1.5 text-xs text-slate-300 outline-none focus:border-blue-500"
+                                                    value={doItem.deliveryAddress}
+                                                    onChange={e => handleUpdateParsedDO(idx, 'deliveryAddress', e.target.value)}
+                                                    placeholder="Detailed address"
+                                                />
+                                            </div>
+
+                                            {/* Items Chips */}
+                                            {doItem.items && doItem.items.length > 0 && (
+                                                <div className="pt-2 border-t border-slate-800/50 flex flex-wrap items-center gap-2">
+                                                    <span className="text-[10px] font-bold text-slate-500 uppercase">{t('Items')}:</span>
+                                                    {doItem.items.map((it, itemIdx) => (
+                                                        <span
+                                                            key={itemIdx}
+                                                            className="inline-flex items-center gap-1.5 px-2 py-0.5 rounded-lg bg-slate-950 border border-slate-800 text-[11px] text-slate-300"
+                                                        >
+                                                            <span className="font-semibold text-white">{it.product}</span>
+                                                            <span className="text-amber-400 font-bold">x {it.quantity}</span>
+                                                            {it.sku && (
+                                                                <span className="text-[9px] px-1 rounded bg-blue-500/20 text-blue-300 font-mono">
+                                                                    {it.sku}
+                                                                </span>
+                                                            )}
+                                                        </span>
+                                                    ))}
+                                                </div>
+                                            )}
+                                        </div>
+                                    ))}
+                                </div>
+                            </div>
+                        </div>
+
+                        {/* Footer */}
+                        <div className="p-4 sm:p-5 border-t border-slate-800 flex flex-col sm:flex-row items-center justify-between gap-3 bg-slate-900/60">
+                            <div className="text-xs text-slate-400 flex items-center gap-2">
+                                <CheckCircle size={16} className="text-emerald-400" />
+                                <span>
+                                    {t('Ready to create 1 Trip with {{count}} Delivery Orders', {
+                                        count: parsedTripBatch.deliveryOrders.length
+                                    })}
+                                </span>
+                            </div>
+
+                            <div className="flex items-center gap-2 w-full sm:w-auto">
+                                <button
+                                    type="button"
+                                    onClick={handleCloseParsedTripModal}
+                                    className="flex-1 sm:flex-none px-4 py-2.5 rounded-xl border border-slate-700 text-slate-300 text-xs font-bold uppercase tracking-wider hover:bg-slate-800 transition-colors"
+                                >
+                                    {t('Cancel')}
+                                </button>
+                                <button
+                                    type="button"
+                                    disabled={isCreatingTrip || parsedTripBatch.deliveryOrders.length === 0}
+                                    onClick={handleConfirmCreateTrip}
+                                    className="flex-1 sm:flex-none px-6 py-2.5 rounded-xl bg-gradient-to-r from-emerald-600 to-teal-600 hover:from-emerald-500 hover:to-teal-500 disabled:opacity-50 text-white text-xs font-bold uppercase tracking-wider flex items-center justify-center gap-2 shadow-lg shadow-emerald-950/40 transition-all active:scale-95"
+                                >
+                                    {isCreatingTrip ? (
+                                        <span className="w-4 h-4 border-2 border-white/30 border-t-white rounded-full animate-spin" />
+                                    ) : (
+                                        <Truck size={16} />
+                                    )}
+                                    <span>
+                                        {isCreatingTrip ? t('Creating Trip…') : t('Confirm & Dispatch Trip (确认创建车次)')}
+                                    </span>
+                                </button>
+                            </div>
                         </div>
                     </div>
                 </div>

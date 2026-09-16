@@ -1,6 +1,6 @@
 import React, { useState, useEffect, useRef } from 'react';
 import { supabase } from '../services/supabase';
-import { Truck, CheckCircle, Package, ChevronRight, X, RefreshCw, Camera, Image as ImageIcon, QrCode, Upload } from 'lucide-react';
+import { Truck, CheckCircle, Package, ChevronRight, X, RefreshCw, Camera, Image as ImageIcon, QrCode, Upload, Phone, MapPin, ExternalLink, MessageCircle } from 'lucide-react';
 import { SalesOrder } from '../types';
 import { Scanner } from '@yudiel/react-qr-scanner';
 import { parsePrepPhotos } from '../utils/prepPhotos';
@@ -280,7 +280,11 @@ const DriverDelivery: React.FC<DriverDeliveryProps> = ({ user }) => {
                     deliveryAddress: item.delivery_address || item.deliveryAddress,
                     zone: item.zone || item.delivery_zone,
                     deliveryDate: item.deadline, // Use Deadline as Delivery Date
-                    orderDate: item.order_date || item.orderDate // Map date
+                    orderDate: item.order_date || item.orderDate, // Map date
+                    customer_phone: item.customer_phone || item.customerPhone,
+                    stop_sequence: item.stop_sequence ?? item.stopSequence,
+                    terms: item.terms,
+                    do_total: item.do_total
                 }));
 
                 // Client-side sort
@@ -825,6 +829,33 @@ const DriverDelivery: React.FC<DriverDeliveryProps> = ({ user }) => {
             if (updateError) throw updateError;
             if (!updatedData || updatedData.length === 0) {
                 throw new Error("Update failed: Permission denied or Order not found. (RLS Check Failed)");
+            }
+
+            // Sync to trip_stops_v2 and trips_v2 if this order belongs to a trips_v2 trip
+            if ((selectedOrder as any).trip_id) {
+                try {
+                    await supabase
+                        .from('trip_stops_v2')
+                        .update({
+                            status: isFinalDrop ? 'Completed' : 'Delivered',
+                            completed_at: new Date().toISOString(),
+                            pod_photos: [doUrl, prodUrl].filter(Boolean),
+                            pod_notes: deliveryNote || null
+                        })
+                        .eq('sales_order_id', selectedOrder.id);
+
+                    if (isFinalDrop) {
+                        await supabase
+                            .from('trips_v2')
+                            .update({
+                                status: 'Completed',
+                                completed_at: new Date().toISOString()
+                            })
+                            .eq('id', (selectedOrder as any).trip_id);
+                    }
+                } catch (syncErr) {
+                    console.warn('[TripSync] Non-critical trip_stops_v2 sync warning:', syncErr);
+                }
             }
 
             // Optimistic Update locally
@@ -1721,29 +1752,107 @@ const DriverDelivery: React.FC<DriverDeliveryProps> = ({ user }) => {
                                 }`} />
 
                             {/* Card Body */}
-                            <div className="p-5 pl-7">
-                                <div className="flex justify-between items-start mb-6">
-                                    {/* Swapped: State is now main title, Customer is subtitle */}
-                                    <div>
-                                        <div className="flex items-center flex-wrap gap-2 mb-1.5">
-                                            {(order as any).trip_origin && <span className="text-[10px] font-black uppercase bg-blue-500/20 text-blue-400 px-2 py-0.5 rounded border border-blue-500/20">{(order as any).trip_origin}</span>}
-                                            {order.zone && <span className="text-[10px] font-black uppercase bg-amber-500/20 text-amber-500 px-2 py-0.5 rounded border border-amber-500/20">{order.zone}</span>}
-                                            {(order as any).trip_drop_count > 1 && <span className="text-[10px] font-black uppercase bg-emerald-500/20 text-emerald-400 px-2 py-0.5 rounded border border-emerald-500/20">{(order as any).trip_drop_count} Hentian / Drops</span>}
-                                        </div>
-                                        <h2 className={`text-lg font-black text-white leading-tight whitespace-pre-line ${(order as any).trip_drop_count > 1 ? '' : 'line-clamp-2'}`}>{order.deliveryAddress || order.zone || 'No Route Specified'}</h2>
-                                        {(order as any).deliveryDate && (
-                                            <div className="flex items-center gap-2 mt-1 text-xs font-bold uppercase tracking-wider">
-                                                <span className="text-orange-500">
-                                                    {['Ahad', 'Isnin', 'Selasa', 'Rabu', 'Khamis', 'Jumaat', 'Sabtu'][new Date((order as any).deliveryDate).getDay()]}
-                                                </span>
-                                                <span className="text-blue-400">
-                                                    {new Date((order as any).deliveryDate).toLocaleDateString('en-GB', { day: '2-digit', month: 'short', year: 'numeric' })}
-                                                </span>
-                                            </div>
+                            <div className="p-4 sm:p-5 pl-6 sm:pl-7">
+                                <div className="mb-4">
+                                    {/* Badges bar */}
+                                    <div className="flex items-center flex-wrap gap-1.5 mb-2">
+                                        {(order as any).stop_sequence !== undefined && (order as any).stop_sequence !== null && (
+                                            <span className="text-[11px] font-black uppercase bg-purple-600/30 text-purple-300 px-2.5 py-0.5 rounded-md border border-purple-500/40 flex items-center gap-1">
+                                                🎯 Hentian / Drop #{(order as any).stop_sequence}
+                                            </span>
+                                        )}
+                                        {order.orderNumber && (
+                                            <span className="text-[11px] font-mono font-black uppercase bg-blue-600/20 text-blue-300 px-2.5 py-0.5 rounded-md border border-blue-500/30">
+                                                DO: {order.orderNumber}
+                                            </span>
+                                        )}
+                                        {(order as any).terms && (
+                                            <span className={`text-[10px] font-black uppercase px-2 py-0.5 rounded-md border ${
+                                                (order as any).terms.toUpperCase().includes('C.O.D') 
+                                                    ? 'bg-rose-500/20 text-rose-300 border-rose-500/40' 
+                                                    : 'bg-slate-700/50 text-slate-300 border-slate-600'
+                                            }`}>
+                                                {(order as any).terms}
+                                            </span>
+                                        )}
+                                        {(order as any).do_total && (
+                                            <span className="text-[10px] font-mono font-bold bg-amber-500/20 text-amber-300 px-2 py-0.5 rounded-md border border-amber-500/30">
+                                                {(order as any).do_total} Rolls
+                                            </span>
+                                        )}
+                                        {(order as any).trip_origin && <span className="text-[10px] font-black uppercase bg-slate-800 text-slate-300 px-2 py-0.5 rounded border border-slate-700">{(order as any).trip_origin}</span>}
+                                        {order.zone && <span className="text-[10px] font-black uppercase bg-amber-500/20 text-amber-400 px-2 py-0.5 rounded border border-amber-500/20">{order.zone}</span>}
+                                        {!(order as any).stop_sequence && (order as any).trip_drop_count > 1 && (
+                                            <span className="text-[10px] font-black uppercase bg-emerald-500/20 text-emerald-400 px-2 py-0.5 rounded border border-emerald-500/20">
+                                                {(order as any).trip_drop_count} Hentian / Drops
+                                            </span>
                                         )}
                                     </div>
+
+                                    {/* Customer Name */}
+                                    {order.customer && (
+                                        <h2 className="text-lg font-black text-white leading-tight tracking-tight flex items-baseline gap-1.5 mb-1.5">
+                                            <span>🏢</span>
+                                            <span>{order.customer}</span>
+                                        </h2>
+                                    )}
+
+                                    {/* Address & Navigation */}
+                                    {order.deliveryAddress && (
+                                        <div className="bg-slate-950/70 p-2.5 rounded-xl border border-slate-800 flex items-start justify-between gap-2.5 mt-2">
+                                            <div className="text-xs text-slate-300 whitespace-pre-line leading-relaxed flex items-start gap-1.5">
+                                                <MapPin size={14} className="text-rose-400 shrink-0 mt-0.5" />
+                                                <span>{order.deliveryAddress}</span>
+                                            </div>
+                                            <a
+                                                href={`https://www.google.com/maps/search/?api=1&query=${encodeURIComponent(order.deliveryAddress)}`}
+                                                target="_blank"
+                                                rel="noopener noreferrer"
+                                                onClick={(e) => e.stopPropagation()}
+                                                className="shrink-0 px-2.5 py-1.5 bg-blue-600 hover:bg-blue-500 active:scale-95 text-white rounded-lg text-[11px] font-black flex items-center gap-1 shadow transition-all"
+                                            >
+                                                <span>Peta</span>
+                                                <ExternalLink size={10} />
+                                            </a>
+                                        </div>
+                                    )}
+
+                                    {/* Phone / WhatsApp Action Bar */}
+                                    {(order as any).customer_phone && (
+                                        <div className="flex items-center gap-2 mt-2.5 flex-wrap">
+                                            <a
+                                                href={`tel:${(order as any).customer_phone}`}
+                                                onClick={(e) => e.stopPropagation()}
+                                                className="inline-flex items-center gap-1.5 px-3 py-1.5 bg-emerald-600 hover:bg-emerald-500 active:scale-95 text-white rounded-lg text-xs font-black shadow-md shadow-emerald-950/30 transition-all"
+                                            >
+                                                <Phone size={12} />
+                                                <span>Hubungi / Call: {(order as any).customer_phone}</span>
+                                            </a>
+                                            <a
+                                                href={`https://wa.me/${String((order as any).customer_phone).replace(/[^0-9]/g, '').replace(/^0/, '60')}`}
+                                                target="_blank"
+                                                rel="noopener noreferrer"
+                                                onClick={(e) => e.stopPropagation()}
+                                                className="inline-flex items-center gap-1.5 px-3 py-1.5 bg-green-700 hover:bg-green-600 active:scale-95 text-white rounded-lg text-xs font-black shadow transition-all"
+                                            >
+                                                <MessageCircle size={12} />
+                                                <span>WhatsApp</span>
+                                            </a>
+                                        </div>
+                                    )}
+
+                                    {/* Delivery Date */}
+                                    {(order as any).deliveryDate && (
+                                        <div className="flex items-center gap-2 mt-2 text-xs font-bold uppercase tracking-wider">
+                                            <span className="text-orange-400">
+                                                {['Ahad', 'Isnin', 'Selasa', 'Rabu', 'Khamis', 'Jumaat', 'Sabtu'][new Date((order as any).deliveryDate).getDay()]}
+                                            </span>
+                                            <span className="text-slate-400">
+                                                {new Date((order as any).deliveryDate).toLocaleDateString('en-GB', { day: '2-digit', month: 'short', year: 'numeric' })}
+                                            </span>
+                                        </div>
+                                    )}
                                 </div>
-                            </div>
 
                             {/* Order Notes */}
                             {order.notes && (
@@ -2005,6 +2114,7 @@ const DriverDelivery: React.FC<DriverDeliveryProps> = ({ user }) => {
                                     </button>
                                 </div>
                             )}
+                            </div>
                         </div>
                     );
                 })

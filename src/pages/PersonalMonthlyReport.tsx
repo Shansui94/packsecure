@@ -267,6 +267,7 @@ interface DailyMetrics {
     shiftStart: string | null;
     shiftEnd: string | null;
     notes: string | null;
+    isDerivedDriverAttendance?: boolean;
     machinesOperated: string[];
     jobDetails: { jobId: string; sku?: string; output: number; reject: number }[];
     approvedClaims: number;
@@ -364,6 +365,11 @@ const PersonalMonthlyReport: React.FC<Props> = ({ user }) => {
     const [productionLogs, setProductionLogs] = useState<any[]>([]);
     const [attendanceShifts, setAttendanceShifts] = useState<any[]>([]);
     const [photoLogs, setPhotoLogs] = useState<any[]>([]);
+    const [odometerLogs, setOdometerLogs] = useState<any[]>([]);
+    const [odometerAlerts, setOdometerAlerts] = useState<any[]>([]);
+    const [photoFilterCategory, setPhotoFilterCategory] = useState<string>('all');
+    const [isAllMonthPhotosModalOpen, setIsAllMonthPhotosModalOpen] = useState<boolean>(false);
+    const [allMonthPhotoFilter, setAllMonthPhotoFilter] = useState<string>('all');
     const [leaves, setLeaves] = useState<any[]>([]);
     const [plannedMachines, setPlannedMachines] = useState<any[]>([]);
     const [payroll, setPayroll] = useState<any | null>(null);
@@ -626,27 +632,50 @@ const PersonalMonthlyReport: React.FC<Props> = ({ user }) => {
         const firstDay = `${selectedYear}-${String(selectedMonth).padStart(2, '0')}-01`;
         const lastDayObj = new Date(selectedYear, selectedMonth, 0);
         const lastDayStr = `${lastDayObj.getFullYear()}-${String(lastDayObj.getMonth() + 1).padStart(2, '0')}-${String(lastDayObj.getDate()).padStart(2, '0')}`;
-        const startDateTs = `${firstDay}T00:00:00.000Z`;
-        const endDateTs = `${lastDayStr}T23:59:59.999Z`;
+        const startDateTs = new Date(Date.UTC(selectedYear, selectedMonth - 1, 1) - 24 * 3600 * 1000).toISOString();
+        const endDateTs = new Date(Date.UTC(selectedYear, selectedMonth, 1) + 24 * 3600 * 1000).toISOString();
 
         try {
-            // A. Fetch Viewed User Profile
-            let { data: profileData } = await supabase
-                .from('sys_users_v2')
-                .select('*')
-                .eq('auth_user_id', selectedEmployeeId)
-                .single();
+            // A. Fetch Viewed User Profile (Supports both UUID and Employee ID string)
+            const uuidRegex = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
+            const isTargetUuid = Boolean(selectedEmployeeId && uuidRegex.test(selectedEmployeeId));
 
-            if (!profileData) {
-                // Check users_public (for standalone Drivers)
-                const { data: pubData } = await supabase
-                    .from('users_public')
+            let profileData: any = null;
+            if (isTargetUuid) {
+                const { data: v2Data } = await supabase
+                    .from('sys_users_v2')
                     .select('*')
-                    .eq('id', selectedEmployeeId)
-                    .single();
-                
-                if (pubData) {
-                    profileData = { ...pubData, auth_user_id: pubData.id };
+                    .eq('auth_user_id', selectedEmployeeId)
+                    .maybeSingle();
+                profileData = v2Data;
+
+                if (!profileData) {
+                    const { data: pubData } = await supabase
+                        .from('users_public')
+                        .select('*')
+                        .eq('id', selectedEmployeeId)
+                        .maybeSingle();
+                    if (pubData) {
+                        profileData = { ...pubData, auth_user_id: pubData.id };
+                    }
+                }
+            } else {
+                const { data: v2Data } = await supabase
+                    .from('sys_users_v2')
+                    .select('*')
+                    .eq('employee_id', selectedEmployeeId)
+                    .maybeSingle();
+                profileData = v2Data;
+
+                if (!profileData) {
+                    const { data: pubData } = await supabase
+                        .from('users_public')
+                        .select('*')
+                        .eq('employee_id', selectedEmployeeId)
+                        .maybeSingle();
+                    if (pubData) {
+                        profileData = { ...pubData, auth_user_id: pubData.id };
+                    }
                 }
             }
 
@@ -787,17 +816,77 @@ const PersonalMonthlyReport: React.FC<Props> = ({ user }) => {
             }
             setProductionLogs(prodData);
 
-            // D. Photos
-            if (activeEmpId) {
-                const { data: photoData } = await supabase
-                    .from('work_photos')
-                    .select('created_at, category, risk_flag, photo_url')
-                    .eq('employee_id', activeEmpId)
-                    .gte('created_at', startDateTs)
-                    .lte('created_at', endDateTs);
-                setPhotoLogs(photoData || []);
+            // D. Photos & Odometer Logs
+            const allCandidateIds = Array.from(new Set([
+                selectedEmployeeId,
+                profileData?.auth_user_id,
+                profileData?.id,
+                dbUserId,
+                activeEmpId
+            ].filter(Boolean))) as string[];
+
+            if (activeEmpId || allCandidateIds.length > 0) {
+                try {
+                    const empFilter = Array.from(new Set([activeEmpId, ...allCandidateIds].filter(Boolean))) as string[];
+                    const { data: photoData } = await supabase
+                        .from('work_photos')
+                        .select('created_at, category, risk_flag, photo_url')
+                        .in('employee_id', empFilter)
+                        .gte('created_at', startDateTs)
+                        .lte('created_at', endDateTs);
+                    setPhotoLogs(photoData || []);
+                } catch (pErr) {
+                    console.warn("Fetch work_photos failed:", pErr);
+                    setPhotoLogs([]);
+                }
             } else {
                 setPhotoLogs([]);
+            }
+
+            // Odometer Logs (driver_id in lorry_mileage_logs and lorry_mileage_alerts is strictly UUID)
+            const driverUuidsToQuery = allCandidateIds.filter(id => typeof id === 'string' && uuidRegex.test(id));
+
+            if (driverUuidsToQuery.length > 0) {
+                try {
+                    const { data: odoData, error: odoErr } = await supabase
+                        .from('lorry_mileage_logs')
+                        .select('id, lorry_id, driver_id, mileage, log_type, photo_url, created_at')
+                        .in('driver_id', driverUuidsToQuery)
+                        .gte('created_at', startDateTs)
+                        .lte('created_at', endDateTs)
+                        .order('created_at', { ascending: false });
+                    if (!odoErr && odoData) {
+                        setOdometerLogs(odoData);
+                    } else {
+                        if (odoErr) console.warn("Lorry mileage logs query error:", odoErr);
+                        setOdometerLogs([]);
+                    }
+                } catch (err) {
+                    console.warn("Failed to fetch lorry mileage logs:", err);
+                    setOdometerLogs([]);
+                }
+
+                try {
+                    const { data: alertData, error: alertErr } = await supabase
+                        .from('lorry_mileage_alerts')
+                        .select('id, lorry_id, driver_id, logged_mileage, expected_mileage, difference, photo_url, created_at')
+                        .in('driver_id', driverUuidsToQuery)
+                        .gte('created_at', startDateTs)
+                        .lte('created_at', endDateTs)
+                        .order('created_at', { ascending: false });
+                    if (!alertErr && alertData) {
+                        setOdometerAlerts(alertData);
+                    } else {
+                        if (alertErr) console.warn("Lorry mileage alerts query error:", alertErr);
+                        setOdometerAlerts([]);
+                    }
+                } catch (err) {
+                    console.warn("Failed to fetch lorry mileage alerts:", err);
+                    setOdometerAlerts([]);
+                }
+            } else {
+                setOdometerLogs([]);
+                setOdometerAlerts([]);
             }
 
             // E. Leaves
@@ -857,7 +946,6 @@ const PersonalMonthlyReport: React.FC<Props> = ({ user }) => {
             const { data: dr } = await supabase.from('delivery_rates').select('*');
             setDeliveryRates(dr || []);
 
-            const uuidRegex = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
             const driverUids = Array.from(new Set([selectedEmployeeId, profileData?.auth_user_id, profileData?.id].filter(Boolean)))
                 .filter(id => typeof id === 'string' && uuidRegex.test(id));
 
@@ -1632,6 +1720,11 @@ const PersonalMonthlyReport: React.FC<Props> = ({ user }) => {
                     const weekdayShort = dateObj.toLocaleDateString('ms-MY', { weekday: 'short' });
                     const dateDisplay = `${dateStr} (${weekdayShort})`;
 
+                    const dayTrips = driverDeliveries.filter(d => {
+                        const targetDay = d.deadline?.split('T')[0] || (d.pod_timestamp ? d.pod_timestamp.split('T')[0] : (d.order_date ? d.order_date.split('T')[0] : (d.created_at ? d.created_at.split('T')[0] : null)));
+                        return targetDay === dateStr;
+                    });
+
                     const shift = batchAttendance.find(a => a.operator_id === driver.employee_id && a.date === dateStr);
                     let workingTimeText = '⚠️ 没有时间 / 未打卡';
                     if (shift) {
@@ -1639,6 +1732,12 @@ const PersonalMonthlyReport: React.FC<Props> = ({ user }) => {
                         const sOut = shift.clock_out ? new Date(shift.clock_out).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' }) : 'Aktif';
                         const hWorked = shift.hours_worked ? Number(shift.hours_worked) : 0;
                         workingTimeText = `${sIn} → ${sOut} (${hWorked.toFixed(1)}h)`;
+                    } else if (dayTrips.length > 0) {
+                        workingTimeText = `🚚 出车在岗 (${dayTrips.length} Trips)`;
+                    } else if (isWeekend) {
+                        workingTimeText = '🛋️ Weekend';
+                    } else {
+                        workingTimeText = '🛋️ Tiada Trip / Off';
                     }
 
                     const leave = batchLeaves.find(l => (l.employee_id === driver.employee_id || l.employee_id === driverUid) && dateStr >= l.start_date && dateStr <= l.end_date);
@@ -1646,11 +1745,6 @@ const PersonalMonthlyReport: React.FC<Props> = ({ user }) => {
                         const lType = leave.leave_type || leave.type || 'Leave';
                         workingTimeText = `Cuti / Leave (${lType})`;
                     }
-
-                    const dayTrips = driverDeliveries.filter(d => {
-                        const targetDay = d.deadline?.split('T')[0] || (d.pod_timestamp ? d.pod_timestamp.split('T')[0] : (d.order_date ? d.order_date.split('T')[0] : (d.created_at ? d.created_at.split('T')[0] : null)));
-                        return targetDay === dateStr;
-                    });
 
                     if (dayTrips.length > 0) {
                         dayTrips.forEach((t, tIdx) => {
@@ -1856,37 +1950,145 @@ const PersonalMonthlyReport: React.FC<Props> = ({ user }) => {
             });
             const jobDetails = Array.from(jobMap.values());
 
-            // Photos
-            const dayPhotos = [...photoLogs.filter(p => matchDate(p.created_at, dateStr))];
+            // 1. Odometer logs & alerts for this day
+            const lorryMap = new Map((lorries || []).map(l => [l.id, l.plate_number || l.plate || l.lorry_no]));
+            const dayOdoLogs = odometerLogs.filter(o => matchDate(o.created_at, dateStr));
+            const dayOdoAlerts = odometerAlerts.filter(a => matchDate(a.created_at, dateStr));
+
+            // 2. Photos Collection
+            const dayPhotos: any[] = [...photoLogs.filter(p => matchDate(p.created_at, dateStr)).map(p => ({
+                ...p,
+                type: 'work_photo',
+                badge_color: 'violet'
+            }))];
+
+            // 2.1 Odometer Logs
+            dayOdoLogs.forEach(o => {
+                if (o.photo_url) {
+                    const plate = lorryMap.get(o.lorry_id) || 'Lori / Truck';
+                    const isStart = o.log_type === 'start';
+                    const mileageFmt = o.mileage != null ? `${Number(o.mileage).toLocaleString()} km` : 'N/A';
+                    const catTitle = isStart 
+                        ? `🚚 Odometer Mula / Shift Start (${plate} - ${mileageFmt})`
+                        : `🏁 Odometer Tamat / Shift End (${plate} - ${mileageFmt})`;
+                    dayPhotos.push({
+                        id: o.id,
+                        created_at: o.created_at,
+                        category: catTitle,
+                        photo_url: o.photo_url,
+                        risk_flag: false,
+                        type: 'odometer',
+                        log_type: o.log_type,
+                        mileage: o.mileage,
+                        plate,
+                        badge_color: isStart ? 'emerald' : 'blue'
+                    });
+                }
+            });
+
+            // 2.2 Odometer Alerts
+            dayOdoAlerts.forEach(a => {
+                if (a.photo_url) {
+                    const plate = lorryMap.get(a.lorry_id) || 'Lori / Truck';
+                    const diffStr = (a.difference > 0 ? '+' : '') + a.difference;
+                    const loggedMileageFmt = a.logged_mileage != null ? `${Number(a.logged_mileage).toLocaleString()} km` : 'N/A';
+                    dayPhotos.push({
+                        id: a.id,
+                        created_at: a.created_at,
+                        category: `⚠️ Amaran Odometer (${plate} - Rekod: ${loggedMileageFmt}, Beza: ${diffStr} km)`,
+                        photo_url: a.photo_url,
+                        risk_flag: true,
+                        type: 'odometer',
+                        log_type: 'alert',
+                        mileage: a.logged_mileage,
+                        plate,
+                        badge_color: 'red'
+                    });
+                }
+            });
+
+            // 2.3 Driver Delivery / Trip Photos
             if (isDriver) {
                 dayDeliveries.forEach(d => {
+                    const orderRef = d.order_number ? `[${d.order_number}] ` : '';
                     if (d.proof_of_load_url) {
                         dayPhotos.push({
                             created_at: d.pod_timestamp || d.created_at || `${dateStr}T12:00:00.000Z`,
-                            category: 'Proof of Load / Muatan',
+                            category: `${orderRef}Proof of Load / Naik Barang`,
                             photo_url: d.proof_of_load_url,
-                            risk_flag: false
+                            risk_flag: false,
+                            type: 'load',
+                            order_number: d.order_number,
+                            customer: d.customer,
+                            badge_color: 'amber'
                         });
                     }
                     if (d.pod_photo_url) {
                         d.pod_photo_url.split(',').forEach((url: string, index: number) => {
                             const trimmed = url.trim();
                             if (trimmed) {
+                                const isDO = index % 2 === 0;
+                                const label = isDO 
+                                    ? `Gambar Surat DO / Delivery Order (${Math.floor(index / 2) + 1})` 
+                                    : `Gambar Barang / Goods (${Math.floor(index / 2) + 1})`;
                                 dayPhotos.push({
                                     created_at: d.pod_timestamp || d.created_at || `${dateStr}T12:00:00.000Z`,
-                                    category: `Proof of Delivery / POD (${index + 1})`,
+                                    category: `${orderRef}${label}`,
                                     photo_url: trimmed,
-                                    risk_flag: false
+                                    risk_flag: false,
+                                    type: isDO ? 'do' : 'pod',
+                                    order_number: d.order_number,
+                                    customer: d.customer,
+                                    badge_color: isDO ? 'indigo' : 'purple'
                                 });
                             }
+                        });
+                    } else if (d.proof_of_delivery_url) {
+                        dayPhotos.push({
+                            created_at: d.pod_timestamp || d.created_at || `${dateStr}T12:00:00.000Z`,
+                            category: `${orderRef}Proof of Delivery / POD`,
+                            photo_url: d.proof_of_delivery_url,
+                            risk_flag: false,
+                            type: 'pod',
+                            order_number: d.order_number,
+                            customer: d.customer,
+                            badge_color: 'purple'
+                        });
+                    }
+                    if (d.preparation_photo_url) {
+                        dayPhotos.push({
+                            created_at: d.created_at || `${dateStr}T12:00:00.000Z`,
+                            category: `${orderRef}Penyediaan / Preparation Photo`,
+                            photo_url: d.preparation_photo_url,
+                            risk_flag: false,
+                            type: 'prep',
+                            order_number: d.order_number,
+                            customer: d.customer,
+                            badge_color: 'cyan'
+                        });
+                    }
+                    if (d.whatsapp_screenshot_url) {
+                        dayPhotos.push({
+                            created_at: d.pod_timestamp || d.created_at || `${dateStr}T12:00:00.000Z`,
+                            category: `${orderRef}WhatsApp POD Screenshot`,
+                            photo_url: d.whatsapp_screenshot_url,
+                            risk_flag: false,
+                            type: 'whatsapp',
+                            order_number: d.order_number,
+                            customer: d.customer,
+                            badge_color: 'emerald'
                         });
                     }
                     if (d.pod_signature_url) {
                         dayPhotos.push({
                             created_at: d.pod_timestamp || d.created_at || `${dateStr}T12:00:00.000Z`,
-                            category: 'Tandatangan / Signature',
+                            category: `${orderRef}Tandatangan / Signature`,
                             photo_url: d.pod_signature_url,
-                            risk_flag: false
+                            risk_flag: false,
+                            type: 'signature',
+                            order_number: d.order_number,
+                            customer: d.customer,
+                            badge_color: 'blue'
                         });
                     }
                 });
@@ -1895,6 +2097,12 @@ const PersonalMonthlyReport: React.FC<Props> = ({ user }) => {
             // Shift & Working Hours
             const dayShift = attendanceShifts.find(s => s.date === dateStr);
             let hoursWorked = 0;
+            let hasAttendance = !!dayShift;
+            let shiftStart = (dayShift && dayShift.clock_in) ? new Date(dayShift.clock_in).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' }) : null;
+            let shiftEnd = (dayShift && dayShift.clock_out) ? new Date(dayShift.clock_out).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' }) : null;
+            let shiftNotes = dayShift?.notes || null;
+            let isDerivedDriverAttendance = false;
+
             if (dayShift) {
                 if (dayShift.hours_worked && Number(dayShift.hours_worked) > 0) {
                     hoursWorked = Number(dayShift.hours_worked);
@@ -1902,6 +2110,65 @@ const PersonalMonthlyReport: React.FC<Props> = ({ user }) => {
                     const inT = new Date(dayShift.clock_in).getTime();
                     const outT = new Date(dayShift.clock_out).getTime();
                     if (outT > inT) hoursWorked = Math.round(((outT - inT) / 3600000) * 10) / 10;
+                }
+            } else if (isDriver && (dayDeliveries.length > 0 || dayOdoLogs.length > 0)) {
+                // Driver with active deliveries or odometer logs: synthesize attendance
+                hasAttendance = true;
+                isDerivedDriverAttendance = true;
+                shiftNotes = dayOdoLogs.length > 0 
+                    ? (dayDeliveries.length > 0 ? '【出车与里程表打卡派生】' : '【物流里程表打卡派生】')
+                    : '【物流出车自动派生】';
+
+                const activityTimes = [
+                    ...dayDeliveries.flatMap(d => [d.created_at, d.pod_timestamp, d.order_date, d.deadline]),
+                    ...dayOdoLogs.map(o => o.created_at)
+                ].filter(Boolean).sort();
+
+                const inIso = activityTimes[0] || `${dateStr}T08:00:00+08:00`;
+                const inDate = new Date(inIso);
+                shiftStart = !isNaN(inDate.getTime()) ? inDate.toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' }) : '08:00';
+
+                // Check odometer start / end logs for precise shift hours
+                const startOdo = dayOdoLogs.find(o => o.log_type === 'start');
+                const endOdo = dayOdoLogs.find(o => o.log_type === 'end');
+                if (startOdo?.created_at) {
+                    const sD = new Date(startOdo.created_at);
+                    if (!isNaN(sD.getTime())) shiftStart = sD.toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' });
+                }
+                if (endOdo?.created_at) {
+                    const eD = new Date(endOdo.created_at);
+                    if (!isNaN(eD.getTime())) shiftEnd = eD.toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' });
+                }
+
+                const deliveredTrips = dayDeliveries.filter(d => d.status === 'Delivered');
+                if (deliveredTrips.length === dayDeliveries.length && dayDeliveries.length > 0) {
+                    const podTimes = deliveredTrips.map(d => d.pod_timestamp).filter(Boolean).sort();
+                    const outIso = endOdo?.created_at || (podTimes.length > 0 ? podTimes[podTimes.length - 1] : (activityTimes.length > 1 ? activityTimes[activityTimes.length - 1] : null));
+                    if (outIso) {
+                        const outDate = new Date(outIso);
+                        shiftEnd = !isNaN(outDate.getTime()) ? outDate.toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' }) : (shiftEnd || '17:00');
+                        const inMs = inDate.getTime();
+                        const outMs = outDate.getTime();
+                        if (outMs > inMs) {
+                            hoursWorked = Math.max(1, Math.round(((outMs - inMs) / 3600000) * 10) / 10);
+                        } else {
+                            hoursWorked = Math.max(2, dayDeliveries.length * 2);
+                        }
+                    } else {
+                        shiftEnd = shiftEnd || '17:00';
+                        hoursWorked = Math.max(2, dayDeliveries.length * 2);
+                    }
+                } else if (endOdo?.created_at && startOdo?.created_at) {
+                    const inMs = new Date(startOdo.created_at).getTime();
+                    const outMs = new Date(endOdo.created_at).getTime();
+                    if (outMs > inMs) {
+                        hoursWorked = Math.max(1, Math.round(((outMs - inMs) / 3600000) * 10) / 10);
+                    } else {
+                        hoursWorked = 8;
+                    }
+                } else {
+                    shiftEnd = shiftEnd || 'Aktif / Active';
+                    hoursWorked = Math.max(2, Math.max(dayDeliveries.length, dayOdoLogs.length) * 2);
                 }
             }
 
@@ -1928,6 +2195,21 @@ const PersonalMonthlyReport: React.FC<Props> = ({ user }) => {
             });
             const approvedClaims = dayClaims.reduce((sum, c) => sum + (Number(c.amount) || 0), 0);
 
+            // 2.4 Claims Receipts (Petrol / Toll / Maintenance)
+            dayClaims.forEach(c => {
+                const receiptImg = c.receiptUrl || c.photo_url || c.receipt_url;
+                if (receiptImg) {
+                    dayPhotos.push({
+                        created_at: c.date || c.created_at || `${dateStr}T12:00:00.000Z`,
+                        category: `Resit Tuntutan / Claim (${c.category || c.type || 'Receipt'} - RM${Number(c.amount || 0).toFixed(2)})`,
+                        photo_url: receiptImg,
+                        risk_flag: false,
+                        type: 'claim',
+                        badge_color: 'teal'
+                    });
+                }
+            });
+
             const tripCount = dayDeliveries.length;
             const tripDetails: any[] = [];
 
@@ -1948,23 +2230,34 @@ const PersonalMonthlyReport: React.FC<Props> = ({ user }) => {
 
                 const isExtraJob = t.job_type === 'Extra Job' || t.order_number?.startsWith('TRIP-JOB');
                 const approvedAmountMatch = t.notes?.match(/\[APPROVED_AMOUNT:\s*([\d.]+)\]/);
+                const approvedAmount = approvedAmountMatch ? parseFloat(approvedAmountMatch[1]) : null;
 
                 let baseRate = 0;
                 let extraRate = 0;
                 let tEarnings = 0;
 
-                if (approvedAmountMatch) {
-                    baseRate = parseFloat(approvedAmountMatch[1]) || 0;
-                    tEarnings = baseRate;
+                if (approvedAmount !== null) {
+                    tEarnings = approvedAmount;
                 } else if (rateInfo) {
                     baseRate = Number(rateInfo.base_rate) || 0;
-                    const maxPlaces = Number(rateInfo.max_places) || 0;
-                    const extraPlaces = Math.max(0, drops - maxPlaces);
-                    extraRate = extraPlaces * (Number(rateInfo.extra_rate_per_place) || 0);
-                    tEarnings = baseRate + extraRate;
-                } else if (t.earnings || t.trip_allowance) {
-                    tEarnings = Number(t.earnings || t.trip_allowance || 0);
-                    baseRate = tEarnings;
+                    extraRate = Number(rateInfo.extra_drop_rate) || 0;
+                    const maxPlaces = Number(rateInfo.max_places) || 1;
+                    const extraDrops = Math.max(0, drops - maxPlaces);
+                    tEarnings = baseRate + (extraDrops * extraRate);
+                } else {
+                    const matchedKey = Object.keys(rateMap).find(k => k.startsWith(origin) && k.includes(calcZone));
+                    if (matchedKey) {
+                        const fallbackInfo = rateMap[matchedKey];
+                        baseRate = Number(fallbackInfo.base_rate) || 0;
+                        extraRate = Number(fallbackInfo.extra_drop_rate) || 0;
+                        const maxPlaces = Number(fallbackInfo.max_places) || 1;
+                        const extraDrops = Math.max(0, drops - maxPlaces);
+                        tEarnings = baseRate + (extraDrops * extraRate);
+                    } else {
+                        baseRate = 40;
+                        extraRate = 10;
+                        tEarnings = drops > 1 ? 40 + ((drops - 1) * 10) : 40;
+                    }
                 }
 
                 // If Delivered, add to trip earnings (for both standard trips and extra jobs)
@@ -2022,11 +2315,12 @@ const PersonalMonthlyReport: React.FC<Props> = ({ user }) => {
                 dayNum: i,
                 isWeekend,
                 isSunday,
-                hasAttendance: !!dayShift,
+                hasAttendance,
                 hoursWorked,
-                shiftStart: (dayShift && dayShift.clock_in) ? new Date(dayShift.clock_in).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' }) : null,
-                shiftEnd: (dayShift && dayShift.clock_out) ? new Date(dayShift.clock_out).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' }) : null,
-                notes: dayShift?.notes || null,
+                shiftStart,
+                shiftEnd,
+                notes: shiftNotes,
+                isDerivedDriverAttendance,
                 outputQty,
                 rejectQty,
                 alarmCount,
@@ -2044,7 +2338,16 @@ const PersonalMonthlyReport: React.FC<Props> = ({ user }) => {
             });
         }
         return matrix;
-    }, [productionLogs, attendanceShifts, photoLogs, leaves, plannedMachines, claims, deliveries, deliveryRates, daysInMonth, selectedYear, selectedMonth, isDriver]);
+    }, [productionLogs, attendanceShifts, photoLogs, leaves, plannedMachines, claims, deliveries, deliveryRates, daysInMonth, selectedYear, selectedMonth, isDriver, odometerLogs, odometerAlerts, lorries]);
+
+    // Flat list of all photos for the entire month (for All-Photos Gallery)
+    const allMonthPhotos = useMemo(() => {
+        return dailyMetrics.flatMap(d => (d.photos || []).map((p: any) => ({
+            ...p,
+            dateStr: d.dateStr,
+            dayNum: d.dayNum
+        })));
+    }, [dailyMetrics]);
 
     // Summary Aggregates
     const totalOutput = dailyMetrics.reduce((sum, d) => sum + d.outputQty, 0);
@@ -2323,16 +2626,37 @@ const PersonalMonthlyReport: React.FC<Props> = ({ user }) => {
                             </div>
                         </div>
 
-                        {/* Photo Logs Card */}
-                        <div className="bg-gradient-to-br from-[#0d0d12] to-black border border-white/5 rounded-3xl p-5 shadow-2xl relative overflow-hidden group hover:border-violet-500/30 transition-all duration-300">
+                        {/* Photo Logs Card (Clickable Full Month Gallery) */}
+                        <div 
+                            onClick={() => {
+                                setAllMonthPhotoFilter('all');
+                                setIsAllMonthPhotosModalOpen(true);
+                            }}
+                            className="bg-gradient-to-br from-[#0d0d12] to-black border border-white/5 rounded-3xl p-5 shadow-2xl relative overflow-hidden group hover:border-violet-500/40 hover:shadow-violet-500/10 transition-all duration-300 cursor-pointer"
+                            title="Klik untuk melihat semua gambar kerja, rekod odometer & DO sebulan / Click to view all photos"
+                        >
                             <div className="absolute -right-4 -top-4 w-24 h-24 bg-violet-500/10 rounded-full blur-2xl group-hover:bg-violet-500/20 transition-all"></div>
                             <div className="flex items-start justify-between">
                                 <div>
-                                    <p className="text-[10px] text-violet-400 uppercase tracking-widest font-black mb-1">Rekod Bergambar / Photo Logs</p>
+                                    <p className="text-[10px] text-violet-400 uppercase tracking-widest font-black mb-1 flex items-center gap-1.5">
+                                        Rekod Bergambar / Photo Logs
+                                        <span className="text-[8px] bg-violet-500/20 text-violet-300 px-1.5 py-0.5 rounded border border-violet-500/30">
+                                            Lihat Semua 🔍
+                                        </span>
+                                    </p>
                                     <h3 className="text-3xl font-black text-white">{totalPhotos} <span className="text-xs font-normal text-gray-500">fail</span></h3>
-                                    <p className="text-[10px] text-gray-400 mt-1">{riskPhotoCount > 0 ? <span className="text-red-400 font-bold">⚠️ {riskPhotoCount} Risiko / Risk</span> : 'Gambar Tugasan / Proofs'}</p>
+                                    <p className="text-[10px] text-gray-400 mt-1 flex items-center gap-1.5">
+                                        {riskPhotoCount > 0 ? (
+                                            <span className="text-red-400 font-bold">⚠️ {riskPhotoCount} Risiko / Risk</span>
+                                        ) : (
+                                            <span>Odometer & Bukti Kerja</span>
+                                        )}
+                                        {totalPhotos > 0 && (
+                                            <span className="text-violet-400 font-semibold group-hover:underline">➔ Galeri Penuh</span>
+                                        )}
+                                    </p>
                                 </div>
-                                <div className="p-3 bg-violet-500/10 rounded-2xl text-violet-400 border border-violet-500/20">
+                                <div className="p-3 bg-violet-500/10 rounded-2xl text-violet-400 border border-violet-500/20 group-hover:scale-110 group-hover:border-violet-500/40 transition-all">
                                     <Camera size={20} />
                                 </div>
                             </div>
@@ -2722,7 +3046,9 @@ const PersonalMonthlyReport: React.FC<Props> = ({ user }) => {
                                                     </div>
                                                 ) : day.hasAttendance ? (
                                                     <span className="inline-flex items-center px-2 py-1 rounded bg-emerald-500/10 border border-emerald-500/20 text-emerald-400 text-[10px] font-black uppercase tracking-wider">
-                                                        Hadir / Present
+                                                        {isDriver && day.tripDetails && day.tripDetails.length > 0
+                                                            ? `🚚 Hadir / On Trip (${day.tripDetails.length} Trip${day.tripDetails.length > 1 ? 's' : ''})`
+                                                            : 'Hadir / Present'}
                                                     </span>
                                                 ) : day.isWeekend ? (
                                                     <span className="inline-flex items-center px-2 py-1 rounded bg-white/5 border border-white/5 text-gray-500 text-[10px] font-black uppercase tracking-wider">
@@ -2730,7 +3056,7 @@ const PersonalMonthlyReport: React.FC<Props> = ({ user }) => {
                                                     </span>
                                                 ) : (
                                                     <span className="inline-flex items-center px-2 py-1 rounded bg-gray-800 text-gray-500 text-[10px] font-black uppercase tracking-wider">
-                                                        Tiada Log / No Log
+                                                        {isDriver ? 'Tiada Trip / Off' : 'Tiada Log / No Log'}
                                                     </span>
                                                 )}
                                             </td>
@@ -2746,6 +3072,11 @@ const PersonalMonthlyReport: React.FC<Props> = ({ user }) => {
                                                             <span className="text-[10px] text-emerald-400 font-mono font-bold bg-emerald-500/10 px-1.5 py-0.5 rounded border border-emerald-500/20">
                                                                 {day.hoursWorked.toFixed(1)} hrs
                                                             </span>
+                                                            {day.isDerivedDriverAttendance && (
+                                                                <span className="text-[9px] font-bold text-cyan-400 bg-cyan-500/10 px-1.5 py-0.5 rounded border border-cyan-500/20" title="基于送货记录派生考勤工时">
+                                                                    物流自动计算
+                                                                </span>
+                                                            )}
                                                             {day.notes === 'System Auto-Logout' && (
                                                                 <span className="text-[9px] uppercase font-bold text-red-500/80 bg-red-500/10 px-1.5 py-0.5 rounded border border-red-500/20">
                                                                     Auto-Logout
@@ -2757,24 +3088,41 @@ const PersonalMonthlyReport: React.FC<Props> = ({ user }) => {
                                                     day.leaveStatus ? (
                                                         <span className="text-amber-400/80 text-xs font-medium">🏖️ Cuti / Leave</span>
                                                     ) : (
-                                                        <button
-                                                            type="button"
-                                                            onClick={() => {
-                                                                if (isAdminOrHR) {
-                                                                    setSelectedAttendanceDay(day);
-                                                                }
-                                                            }}
-                                                            className={`inline-flex items-center gap-1.5 px-2.5 py-1 rounded-lg border text-xs transition-all ${
-                                                                isAdminOrHR
-                                                                    ? 'text-amber-300 bg-amber-500/10 border-amber-500/30 hover:bg-amber-500/20 cursor-pointer shadow-sm'
-                                                                    : 'text-amber-400/80 bg-amber-500/5 border-amber-500/15 cursor-default'
-                                                            }`}
-                                                            title={isAdminOrHR ? "点击去为该日打卡补录 / Click to log clock-in time" : "未打卡 / No Clock In"}
-                                                        >
-                                                            <AlertTriangle size={12} className="text-amber-400 shrink-0" />
-                                                            <span className="font-bold">没有时间 / 未打卡</span>
-                                                            {isAdminOrHR && <span className="text-[10px] text-amber-200 underline ml-0.5">去打卡 ➜</span>}
-                                                        </button>
+                                                        isDriver ? (
+                                                            <div className="inline-flex items-center gap-1.5 px-2.5 py-1 rounded-lg text-xs text-gray-400 bg-gray-800/40 border border-gray-700/40">
+                                                                <span>🛋️</span>
+                                                                <span>{day.isWeekend ? '周末休班 / Weekend' : '本日无出车 / Tiada Trip'}</span>
+                                                                {isAdminOrHR && (
+                                                                    <button
+                                                                        type="button"
+                                                                        onClick={() => setSelectedAttendanceDay(day)}
+                                                                        className="text-[10px] text-amber-400 hover:text-amber-300 underline ml-1 cursor-pointer"
+                                                                        title="点击为司机补录工时或打卡"
+                                                                    >
+                                                                        补录
+                                                                    </button>
+                                                                )}
+                                                            </div>
+                                                        ) : (
+                                                            <button
+                                                                type="button"
+                                                                onClick={() => {
+                                                                    if (isAdminOrHR) {
+                                                                        setSelectedAttendanceDay(day);
+                                                                    }
+                                                                }}
+                                                                className={`inline-flex items-center gap-1.5 px-2.5 py-1 rounded-lg border text-xs transition-all ${
+                                                                    isAdminOrHR
+                                                                        ? 'text-amber-300 bg-amber-500/10 border-amber-500/30 hover:bg-amber-500/20 cursor-pointer shadow-sm'
+                                                                        : 'text-amber-400/80 bg-amber-500/5 border-amber-500/15 cursor-default'
+                                                                }`}
+                                                                title={isAdminOrHR ? "点击去为该日打卡补录 / Click to log clock-in time" : "未打卡 / No Clock In"}
+                                                            >
+                                                                <AlertTriangle size={12} className="text-amber-400 shrink-0" />
+                                                                <span className="font-bold">没有时间 / 未打卡</span>
+                                                                {isAdminOrHR && <span className="text-[10px] text-amber-200 underline ml-0.5">去打卡 ➜</span>}
+                                                            </button>
+                                                        )
                                                     )
                                                 )}
                                             </td>
@@ -2946,18 +3294,38 @@ const PersonalMonthlyReport: React.FC<Props> = ({ user }) => {
                                             <td className="px-5 py-4 whitespace-nowrap text-center">
                                                 {day.photoCount > 0 ? (
                                                     <div className="flex items-center justify-center gap-2">
-                                                        {day.photos.slice(0, 3).map((photo, idx) => (
-                                                            <img 
+                                                        {day.photos.slice(0, 3).map((photo: any, idx: number) => (
+                                                            <div 
                                                                 key={idx}
-                                                                src={photo.photo_url} 
-                                                                alt={photo.category || "Work photo"}
-                                                                onClick={() => setSelectedPhotoDay(day)}
-                                                                className="w-8 h-8 rounded-lg border border-white/10 hover:border-violet-500 hover:scale-110 object-cover cursor-pointer transition-all shadow"
-                                                            />
+                                                                className="relative group/thumb cursor-pointer"
+                                                                onClick={() => {
+                                                                    setPhotoFilterCategory('all');
+                                                                    setSelectedPhotoDay(day);
+                                                                }}
+                                                                title={photo.category || "Work photo"}
+                                                            >
+                                                                <img 
+                                                                    src={photo.photo_url} 
+                                                                    alt={photo.category || "Work photo"}
+                                                                    className={`w-8 h-8 rounded-lg border object-cover transition-all shadow hover:scale-110 ${
+                                                                        photo.type === 'odometer' ? 'border-emerald-500/70 hover:border-emerald-400' :
+                                                                        photo.type === 'do' || photo.type === 'pod' ? 'border-indigo-500/70 hover:border-indigo-400' :
+                                                                        photo.risk_flag ? 'border-red-500' : 'border-white/10 hover:border-violet-500'
+                                                                    }`}
+                                                                />
+                                                                {photo.type === 'odometer' && (
+                                                                    <span className="absolute -bottom-1 -right-1 bg-emerald-600 text-white text-[7px] font-black px-1 rounded-full shadow leading-tight">
+                                                                        ODO
+                                                                    </span>
+                                                                )}
+                                                            </div>
                                                         ))}
                                                         {day.photoCount > 3 && (
                                                             <button 
-                                                                onClick={() => setSelectedPhotoDay(day)}
+                                                                onClick={() => {
+                                                                    setPhotoFilterCategory('all');
+                                                                    setSelectedPhotoDay(day);
+                                                                }}
                                                                 className="w-8 h-8 rounded-lg bg-white/5 border border-white/10 hover:border-violet-500 hover:bg-white/10 flex items-center justify-center text-[10px] font-black text-violet-400 transition-all cursor-pointer"
                                                             >
                                                                 +{day.photoCount - 3}
@@ -3877,74 +4245,423 @@ const PersonalMonthlyReport: React.FC<Props> = ({ user }) => {
             )}
 
             {/* Photo Viewer Modal / Paparan Gambar Rekod Kerja */}
-            {selectedPhotoDay && (
-                <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/75 backdrop-blur-sm animate-in fade-in duration-200">
-                    <div className="bg-[#09090b] border border-slate-800 rounded-2xl w-full max-w-2xl max-h-[85vh] flex flex-col shadow-2xl shadow-black relative overflow-hidden">
-                        {/* Header */}
-                        <div className="p-5 border-b border-white/5 bg-slate-900/50 flex justify-between items-start">
-                            <div className="flex items-center gap-3">
-                                <div className="p-2.5 rounded-xl bg-violet-500/10 text-violet-400 border border-violet-500/20">
-                                    <Camera size={20} />
+            {selectedPhotoDay && (() => {
+                const photos: any[] = selectedPhotoDay.photos || [];
+                const odoCount = photos.filter(p => p.type === 'odometer').length;
+                const loadCount = photos.filter(p => p.type === 'load').length;
+                const podCount = photos.filter(p => p.type === 'pod' || p.type === 'do').length;
+                const sigCount = photos.filter(p => p.type === 'signature').length;
+                const claimCount = photos.filter(p => p.type === 'claim').length;
+                const workCount = photos.filter(p => !p.type || p.type === 'work_photo' || p.type === 'prep' || p.type === 'whatsapp').length;
+
+                const filteredPhotos = photos.filter(p => {
+                    if (photoFilterCategory === 'all') return true;
+                    if (photoFilterCategory === 'odometer') return p.type === 'odometer';
+                    if (photoFilterCategory === 'load') return p.type === 'load';
+                    if (photoFilterCategory === 'pod') return p.type === 'pod' || p.type === 'do';
+                    if (photoFilterCategory === 'signature') return p.type === 'signature';
+                    if (photoFilterCategory === 'claim') return p.type === 'claim';
+                    if (photoFilterCategory === 'work') return !p.type || p.type === 'work_photo' || p.type === 'prep' || p.type === 'whatsapp';
+                    return true;
+                });
+
+                return (
+                    <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/75 backdrop-blur-sm animate-in fade-in duration-200">
+                        <div className="bg-[#09090b] border border-slate-800 rounded-2xl w-full max-w-3xl max-h-[90vh] flex flex-col shadow-2xl shadow-black relative overflow-hidden">
+                            {/* Header */}
+                            <div className="p-5 border-b border-white/5 bg-slate-900/50 flex justify-between items-start">
+                                <div className="flex items-center gap-3">
+                                    <div className="p-2.5 rounded-xl bg-violet-500/10 text-violet-400 border border-violet-500/20">
+                                        <Camera size={20} />
+                                    </div>
+                                    <div>
+                                        <h2 className="text-lg font-black text-white flex items-center gap-2">
+                                            Gambar Kerja & Bukti Harian / Daily Proofs
+                                            <span className="text-xs font-bold px-2 py-0.5 rounded-full bg-violet-500/20 text-violet-300 border border-violet-500/30">
+                                                {photos.length} Gambar / Photos
+                                            </span>
+                                        </h2>
+                                        <p className="text-[10px] uppercase font-bold text-gray-400 tracking-widest mt-0.5">
+                                            {new Date(selectedPhotoDay.dateStr.replace(/-/g, '/')).toLocaleDateString('en-GB', { day: '2-digit', month: 'short', year: 'numeric' })}
+                                        </p>
+                                    </div>
                                 </div>
-                                <div>
-                                    <h2 className="text-lg font-black text-white flex items-center gap-2">
-                                        Gambar Kerja / Work Photos
-                                    </h2>
-                                    <p className="text-[10px] uppercase font-bold text-gray-400 tracking-widest mt-0.5">
-                                        {new Date(selectedPhotoDay.dateStr.replace(/-/g, '/')).toLocaleDateString('en-GB', { day: '2-digit', month: 'short', year: 'numeric' })}
-                                    </p>
-                                </div>
+                                <button 
+                                    onClick={() => setSelectedPhotoDay(null)}
+                                    className="p-2 -mr-2 -mt-2 text-gray-500 hover:text-white hover:bg-white/5 rounded-xl transition-colors cursor-pointer"
+                                >
+                                    <X size={20} />
+                                </button>
                             </div>
-                            <button 
-                                onClick={() => setSelectedPhotoDay(null)}
-                                className="p-2 -mr-2 -mt-2 text-gray-500 hover:text-white hover:bg-white/5 rounded-xl transition-colors"
-                            >
-                                <X size={20} />
-                            </button>
-                        </div>
-                        
-                        {/* Body */}
-                        <div className="flex-1 overflow-y-auto p-5 space-y-4 custom-scrollbar bg-slate-950 flex flex-col items-center">
-                            <div className="grid grid-cols-1 md:grid-cols-2 gap-4 w-full">
-                                {selectedPhotoDay.photos.map((photo: any, idx: number) => (
-                                    <div key={idx} className="bg-[#0d0d12] border border-white/5 rounded-xl p-3 flex flex-col gap-3 group hover:border-violet-500/30 transition-all">
-                                        <div className="relative aspect-video rounded-lg overflow-hidden bg-black flex items-center justify-center border border-white/5">
-                                            <img 
-                                                src={photo.photo_url} 
-                                                alt={photo.category || "Work log photo"} 
-                                                className="max-w-full max-h-full object-contain"
-                                            />
-                                            {photo.risk_flag && (
-                                                <span className="absolute top-2 left-2 px-2 py-0.5 bg-red-500 text-white text-[8px] font-black uppercase rounded shadow flex items-center gap-1 animate-pulse">
-                                                    <AlertTriangle size={8} /> RISK / RISIKO
-                                                </span>
-                                            )}
-                                        </div>
-                                        <div className="flex justify-between items-start text-xs">
-                                            <div>
-                                                <div className="font-bold text-gray-200 uppercase text-[10px] tracking-wider bg-white/5 px-2 py-0.5 rounded w-fit">
-                                                    {photo.category || 'Tugasan / Job Log'}
+
+                            {/* Category Filter Chips */}
+                            {photos.length > 1 && (
+                                <div className="px-5 py-2.5 bg-[#0d0d12] border-b border-white/5 flex flex-wrap gap-1.5 text-[11px] overflow-x-auto">
+                                    <button
+                                        onClick={() => setPhotoFilterCategory('all')}
+                                        className={`px-3 py-1 rounded-lg font-bold transition-all cursor-pointer ${
+                                            photoFilterCategory === 'all'
+                                                ? 'bg-violet-600 text-white shadow-md shadow-violet-600/30'
+                                                : 'bg-white/5 text-gray-400 hover:bg-white/10 hover:text-white'
+                                        }`}
+                                    >
+                                        Semua / All ({photos.length})
+                                    </button>
+                                    {odoCount > 0 && (
+                                        <button
+                                            onClick={() => setPhotoFilterCategory('odometer')}
+                                            className={`px-3 py-1 rounded-lg font-bold transition-all flex items-center gap-1 cursor-pointer ${
+                                                photoFilterCategory === 'odometer'
+                                                    ? 'bg-emerald-600 text-white shadow-md shadow-emerald-600/30'
+                                                    : 'bg-emerald-500/10 text-emerald-400 hover:bg-emerald-500/20'
+                                            }`}
+                                        >
+                                            <Truck size={12} /> Odometer ({odoCount})
+                                        </button>
+                                    )}
+                                    {loadCount > 0 && (
+                                        <button
+                                            onClick={() => setPhotoFilterCategory('load')}
+                                            className={`px-3 py-1 rounded-lg font-bold transition-all flex items-center gap-1 cursor-pointer ${
+                                                photoFilterCategory === 'load'
+                                                    ? 'bg-amber-600 text-white shadow-md shadow-amber-600/30'
+                                                    : 'bg-amber-500/10 text-amber-400 hover:bg-amber-500/20'
+                                            }`}
+                                        >
+                                            <Box size={12} /> Naik Barang ({loadCount})
+                                        </button>
+                                    )}
+                                    {podCount > 0 && (
+                                        <button
+                                            onClick={() => setPhotoFilterCategory('pod')}
+                                            className={`px-3 py-1 rounded-lg font-bold transition-all flex items-center gap-1 cursor-pointer ${
+                                                photoFilterCategory === 'pod'
+                                                    ? 'bg-indigo-600 text-white shadow-md shadow-indigo-600/30'
+                                                    : 'bg-indigo-500/10 text-indigo-400 hover:bg-indigo-500/20'
+                                            }`}
+                                        >
+                                            <FileText size={12} /> DO / POD ({podCount})
+                                        </button>
+                                    )}
+                                    {sigCount > 0 && (
+                                        <button
+                                            onClick={() => setPhotoFilterCategory('signature')}
+                                            className={`px-3 py-1 rounded-lg font-bold transition-all flex items-center gap-1 cursor-pointer ${
+                                                photoFilterCategory === 'signature'
+                                                    ? 'bg-blue-600 text-white shadow-md shadow-blue-600/30'
+                                                    : 'bg-blue-500/10 text-blue-400 hover:bg-blue-500/20'
+                                            }`}
+                                        >
+                                            <CheckSquare size={12} /> Tandatangan ({sigCount})
+                                        </button>
+                                    )}
+                                    {claimCount > 0 && (
+                                        <button
+                                            onClick={() => setPhotoFilterCategory('claim')}
+                                            className={`px-3 py-1 rounded-lg font-bold transition-all flex items-center gap-1 cursor-pointer ${
+                                                photoFilterCategory === 'claim'
+                                                    ? 'bg-teal-600 text-white shadow-md shadow-teal-600/30'
+                                                    : 'bg-teal-500/10 text-teal-400 hover:bg-teal-500/20'
+                                            }`}
+                                        >
+                                            <DollarSign size={12} /> Tuntutan ({claimCount})
+                                        </button>
+                                    )}
+                                    {workCount > 0 && (
+                                        <button
+                                            onClick={() => setPhotoFilterCategory('work')}
+                                            className={`px-3 py-1 rounded-lg font-bold transition-all flex items-center gap-1 cursor-pointer ${
+                                                photoFilterCategory === 'work'
+                                                    ? 'bg-purple-600 text-white shadow-md shadow-purple-600/30'
+                                                    : 'bg-purple-500/10 text-purple-400 hover:bg-purple-500/20'
+                                            }`}
+                                        >
+                                            <Sparkles size={12} /> Lain-lain ({workCount})
+                                        </button>
+                                    )}
+                                </div>
+                            )}
+                            
+                            {/* Body */}
+                            <div className="flex-1 overflow-y-auto p-5 custom-scrollbar bg-slate-950">
+                                {filteredPhotos.length === 0 ? (
+                                    <div className="py-12 text-center text-gray-500 text-xs">
+                                        Tiada gambar dalam kategori ini. / No photos in this category.
+                                    </div>
+                                ) : (
+                                    <div className="grid grid-cols-1 md:grid-cols-2 gap-4 w-full">
+                                        {filteredPhotos.map((photo: any, idx: number) => (
+                                            <div key={idx} className="bg-[#0d0d12] border border-white/5 rounded-xl p-3 flex flex-col gap-3 group hover:border-violet-500/30 transition-all">
+                                                <div className="relative aspect-video rounded-lg overflow-hidden bg-black flex items-center justify-center border border-white/5">
+                                                    <img 
+                                                        src={photo.photo_url} 
+                                                        alt={photo.category || "Work log photo"} 
+                                                        className="max-w-full max-h-full object-contain group-hover:scale-105 transition-transform"
+                                                    />
+                                                    {photo.risk_flag && (
+                                                        <span className="absolute top-2 left-2 px-2 py-0.5 bg-red-500 text-white text-[8px] font-black uppercase rounded shadow flex items-center gap-1 animate-pulse">
+                                                            <AlertTriangle size={8} /> RISK / RISIKO
+                                                        </span>
+                                                    )}
+                                                    {photo.type === 'odometer' && (
+                                                        <span className="absolute top-2 right-2 px-2 py-0.5 bg-emerald-600/90 text-white text-[8px] font-black uppercase rounded shadow flex items-center gap-1 backdrop-blur-sm">
+                                                            <Truck size={9} /> ODOMETER
+                                                        </span>
+                                                    )}
                                                 </div>
-                                                <div className="text-[10px] text-gray-500 mt-1">
-                                                    {new Date(photo.created_at).toLocaleTimeString('ms-MY', { hour: '2-digit', minute: '2-digit', second: '2-digit' })}
+                                                <div className="flex justify-between items-start text-xs gap-2">
+                                                    <div className="flex-1 min-w-0">
+                                                        <div className="font-bold text-gray-200 text-[11px] leading-tight break-words">
+                                                            {photo.category || 'Tugasan / Job Log'}
+                                                        </div>
+                                                        {photo.type === 'odometer' && photo.mileage != null && (
+                                                            <div className="mt-1 flex items-center gap-1.5">
+                                                                <span className="px-1.5 py-0.5 bg-emerald-500/10 text-emerald-400 border border-emerald-500/20 rounded font-mono text-[10px] font-bold">
+                                                                    Bacaan: {Number(photo.mileage).toLocaleString()} KM
+                                                                </span>
+                                                                {photo.plate && (
+                                                                    <span className="px-1.5 py-0.5 bg-white/5 text-gray-300 rounded text-[10px] font-bold">
+                                                                        {photo.plate}
+                                                                    </span>
+                                                                )}
+                                                            </div>
+                                                        )}
+                                                        <div className="text-[10px] text-gray-500 mt-1 flex items-center gap-1">
+                                                            <Clock size={10} />
+                                                            {photo.created_at ? new Date(photo.created_at).toLocaleTimeString('ms-MY', { hour: '2-digit', minute: '2-digit', second: '2-digit' }) : '—'}
+                                                        </div>
+                                                    </div>
+                                                    <a 
+                                                        href={photo.photo_url} 
+                                                        target="_blank" 
+                                                        rel="noreferrer"
+                                                        className="text-[10px] text-violet-400 hover:underline font-bold uppercase tracking-wider shrink-0 bg-violet-500/10 hover:bg-violet-500/20 px-2 py-1 rounded transition-colors"
+                                                    >
+                                                        Buka ↗
+                                                    </a>
                                                 </div>
                                             </div>
-                                            <a 
-                                                href={photo.photo_url} 
-                                                target="_blank" 
-                                                rel="noreferrer"
-                                                className="text-[10px] text-violet-400 hover:underline font-bold uppercase tracking-wider"
-                                            >
-                                                Papar Penuh / Open ↗
-                                            </a>
-                                        </div>
+                                        ))}
                                     </div>
-                                ))}
+                                )}
                             </div>
                         </div>
                     </div>
-                </div>
-            )}
+                );
+            })()}
+
+            {/* All-Month Photos Gallery Modal / Galeri Semua Gambar Sebulan */}
+            {isAllMonthPhotosModalOpen && (() => {
+                const photos = allMonthPhotos;
+                const allOdoCount = photos.filter(p => p.type === 'odometer').length;
+                const allLoadCount = photos.filter(p => p.type === 'load').length;
+                const allPodCount = photos.filter(p => p.type === 'pod' || p.type === 'do').length;
+                const allSigCount = photos.filter(p => p.type === 'signature').length;
+                const allClaimCount = photos.filter(p => p.type === 'claim').length;
+                const allWorkCount = photos.filter(p => !p.type || p.type === 'work_photo' || p.type === 'prep' || p.type === 'whatsapp').length;
+
+                const filteredPhotos = photos.filter(p => {
+                    if (allMonthPhotoFilter === 'all') return true;
+                    if (allMonthPhotoFilter === 'odometer') return p.type === 'odometer';
+                    if (allMonthPhotoFilter === 'load') return p.type === 'load';
+                    if (allMonthPhotoFilter === 'pod') return p.type === 'pod' || p.type === 'do';
+                    if (allMonthPhotoFilter === 'signature') return p.type === 'signature';
+                    if (allMonthPhotoFilter === 'claim') return p.type === 'claim';
+                    if (allMonthPhotoFilter === 'work') return !p.type || p.type === 'work_photo' || p.type === 'prep' || p.type === 'whatsapp';
+                    return true;
+                });
+
+                return (
+                    <div className="fixed inset-0 z-50 flex items-center justify-center p-3 md:p-6 bg-black/80 backdrop-blur-md animate-in fade-in duration-200">
+                        <div className="bg-[#09090b] border border-slate-800 rounded-3xl w-full max-w-5xl max-h-[92vh] flex flex-col shadow-2xl shadow-black relative overflow-hidden">
+                            {/* Header */}
+                            <div className="p-5 border-b border-white/5 bg-slate-900/60 flex justify-between items-start">
+                                <div className="flex items-center gap-3">
+                                    <div className="p-3 rounded-2xl bg-violet-500/10 text-violet-400 border border-violet-500/20">
+                                        <Camera size={24} />
+                                    </div>
+                                    <div>
+                                        <h2 className="text-xl font-black text-white flex items-center gap-2.5">
+                                            Galeri Gambar Bulanan / Monthly Photo Gallery
+                                            <span className="text-xs font-bold px-2.5 py-0.5 rounded-full bg-violet-500/20 text-violet-300 border border-violet-500/30">
+                                                {photos.length} Jumlah / Total
+                                            </span>
+                                        </h2>
+                                        <p className="text-xs text-gray-400 mt-0.5">
+                                            Rekod Odometer, Bukti Naik Barang, DO/POD & Tuntutan bagi {selectedMonth}/{selectedYear} ({viewedProfile?.name || 'Driver/Staff'})
+                                        </p>
+                                    </div>
+                                </div>
+                                <button 
+                                    onClick={() => setIsAllMonthPhotosModalOpen(false)}
+                                    className="p-2 -mr-2 -mt-2 text-gray-500 hover:text-white hover:bg-white/5 rounded-xl transition-colors cursor-pointer"
+                                >
+                                    <X size={22} />
+                                </button>
+                            </div>
+
+                            {/* Filters */}
+                            <div className="px-5 py-3 bg-[#0d0d12] border-b border-white/5 flex flex-wrap gap-2 text-xs overflow-x-auto">
+                                <button
+                                    onClick={() => setAllMonthPhotoFilter('all')}
+                                    className={`px-3 py-1.5 rounded-xl font-bold transition-all cursor-pointer ${
+                                        allMonthPhotoFilter === 'all'
+                                            ? 'bg-violet-600 text-white shadow-lg shadow-violet-600/30'
+                                            : 'bg-white/5 text-gray-400 hover:bg-white/10 hover:text-white'
+                                    }`}
+                                >
+                                    Semua / All ({photos.length})
+                                </button>
+                                {allOdoCount > 0 && (
+                                    <button
+                                        onClick={() => setAllMonthPhotoFilter('odometer')}
+                                        className={`px-3 py-1.5 rounded-xl font-bold transition-all flex items-center gap-1.5 cursor-pointer ${
+                                            allMonthPhotoFilter === 'odometer'
+                                                ? 'bg-emerald-600 text-white shadow-lg shadow-emerald-600/30'
+                                                : 'bg-emerald-500/10 text-emerald-400 hover:bg-emerald-500/20'
+                                        }`}
+                                    >
+                                        <Truck size={14} /> Odometer ({allOdoCount})
+                                    </button>
+                                )}
+                                {allLoadCount > 0 && (
+                                    <button
+                                        onClick={() => setAllMonthPhotoFilter('load')}
+                                        className={`px-3 py-1.5 rounded-xl font-bold transition-all flex items-center gap-1.5 cursor-pointer ${
+                                            allMonthPhotoFilter === 'load'
+                                                ? 'bg-amber-600 text-white shadow-lg shadow-amber-600/30'
+                                                : 'bg-amber-500/10 text-amber-400 hover:bg-amber-500/20'
+                                        }`}
+                                    >
+                                        <Box size={14} /> Naik Barang / Load ({allLoadCount})
+                                    </button>
+                                )}
+                                {allPodCount > 0 && (
+                                    <button
+                                        onClick={() => setAllMonthPhotoFilter('pod')}
+                                        className={`px-3 py-1.5 rounded-xl font-bold transition-all flex items-center gap-1.5 cursor-pointer ${
+                                            allMonthPhotoFilter === 'pod'
+                                                ? 'bg-indigo-600 text-white shadow-lg shadow-indigo-600/30'
+                                                : 'bg-indigo-500/10 text-indigo-400 hover:bg-indigo-500/20'
+                                        }`}
+                                    >
+                                        <FileText size={14} /> Surat DO & POD ({allPodCount})
+                                    </button>
+                                )}
+                                {allSigCount > 0 && (
+                                    <button
+                                        onClick={() => setAllMonthPhotoFilter('signature')}
+                                        className={`px-3 py-1.5 rounded-xl font-bold transition-all flex items-center gap-1.5 cursor-pointer ${
+                                            allMonthPhotoFilter === 'signature'
+                                                ? 'bg-blue-600 text-white shadow-lg shadow-blue-600/30'
+                                                : 'bg-blue-500/10 text-blue-400 hover:bg-blue-500/20'
+                                        }`}
+                                    >
+                                        <CheckSquare size={14} /> Tandatangan ({allSigCount})
+                                    </button>
+                                )}
+                                {allClaimCount > 0 && (
+                                    <button
+                                        onClick={() => setAllMonthPhotoFilter('claim')}
+                                        className={`px-3 py-1.5 rounded-xl font-bold transition-all flex items-center gap-1.5 cursor-pointer ${
+                                            allMonthPhotoFilter === 'claim'
+                                                ? 'bg-teal-600 text-white shadow-lg shadow-teal-600/30'
+                                                : 'bg-teal-500/10 text-teal-400 hover:bg-teal-500/20'
+                                        }`}
+                                    >
+                                        <DollarSign size={14} /> Resit Tuntutan ({allClaimCount})
+                                    </button>
+                                )}
+                                {allWorkCount > 0 && (
+                                    <button
+                                        onClick={() => setAllMonthPhotoFilter('work')}
+                                        className={`px-3 py-1.5 rounded-xl font-bold transition-all flex items-center gap-1.5 cursor-pointer ${
+                                            allMonthPhotoFilter === 'work'
+                                                ? 'bg-purple-600 text-white shadow-lg shadow-purple-600/30'
+                                                : 'bg-purple-500/10 text-purple-400 hover:bg-purple-500/20'
+                                        }`}
+                                    >
+                                        <Sparkles size={14} /> Gambar Kerja ({allWorkCount})
+                                    </button>
+                                )}
+                            </div>
+
+                            {/* Gallery Grid */}
+                            <div className="flex-1 overflow-y-auto p-5 custom-scrollbar bg-slate-950">
+                                {filteredPhotos.length === 0 ? (
+                                    <div className="py-20 text-center text-gray-500">
+                                        <Camera size={40} className="mx-auto mb-2 opacity-30" />
+                                        <p className="text-sm font-semibold">Tiada gambar dalam bulan/kategori ini.</p>
+                                        <p className="text-xs text-gray-600 mt-1">No photos found for this category in the selected month.</p>
+                                    </div>
+                                ) : (
+                                    <div className="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-3 lg:grid-cols-4 gap-4">
+                                        {filteredPhotos.map((photo: any, idx: number) => (
+                                            <div key={idx} className="bg-[#0d0d12] border border-white/5 rounded-2xl p-3 flex flex-col gap-2.5 group hover:border-violet-500/40 transition-all hover:shadow-xl hover:shadow-black">
+                                                <div className="relative aspect-square rounded-xl overflow-hidden bg-black flex items-center justify-center border border-white/5">
+                                                    <img 
+                                                        src={photo.photo_url} 
+                                                        alt={photo.category || "Photo log"} 
+                                                        className="w-full h-full object-cover group-hover:scale-105 transition-transform duration-300"
+                                                        loading="lazy"
+                                                    />
+                                                    {/* Day Pill */}
+                                                    <span className="absolute top-2 left-2 px-2 py-0.5 bg-black/75 backdrop-blur-sm text-white text-[9px] font-black rounded-lg border border-white/10 shadow">
+                                                        {photo.dateStr ? formatDateDMY(photo.dateStr) : '—'}
+                                                    </span>
+                                                    {photo.type === 'odometer' && (
+                                                        <span className="absolute bottom-2 left-2 px-2 py-0.5 bg-emerald-600/90 backdrop-blur-sm text-white text-[8px] font-black uppercase rounded shadow flex items-center gap-1">
+                                                            <Truck size={9} /> ODOMETER
+                                                        </span>
+                                                    )}
+                                                    {photo.risk_flag && (
+                                                        <span className="absolute top-2 right-2 px-2 py-0.5 bg-red-500 text-white text-[8px] font-black uppercase rounded shadow animate-pulse">
+                                                            ⚠️ RISIKO
+                                                        </span>
+                                                    )}
+                                                </div>
+
+                                                <div className="flex flex-col gap-1 text-xs">
+                                                    <div className="font-bold text-gray-200 text-[11px] leading-snug line-clamp-2" title={photo.category}>
+                                                        {photo.category || 'Tugasan / Proof'}
+                                                    </div>
+
+                                                    {photo.type === 'odometer' && photo.mileage != null && (
+                                                        <div className="flex items-center gap-1.5 mt-0.5">
+                                                            <span className="px-1.5 py-0.5 bg-emerald-500/10 text-emerald-400 border border-emerald-500/20 rounded font-mono text-[10px] font-bold">
+                                                                {Number(photo.mileage).toLocaleString()} KM
+                                                            </span>
+                                                            {photo.plate && (
+                                                                <span className="px-1.5 py-0.5 bg-white/5 text-gray-300 rounded text-[9px] font-bold">
+                                                                    {photo.plate}
+                                                                </span>
+                                                            )}
+                                                        </div>
+                                                    )}
+
+                                                    <div className="flex items-center justify-between mt-1 pt-1.5 border-t border-white/5 text-[10px] text-gray-500">
+                                                        <span>
+                                                            {photo.created_at ? new Date(photo.created_at).toLocaleTimeString('ms-MY', { hour: '2-digit', minute: '2-digit' }) : '—'}
+                                                        </span>
+                                                        <a 
+                                                            href={photo.photo_url} 
+                                                            target="_blank" 
+                                                            rel="noreferrer"
+                                                            className="text-violet-400 hover:text-violet-300 font-bold uppercase tracking-wider"
+                                                        >
+                                                            Buka ↗
+                                                        </a>
+                                                    </div>
+                                                </div>
+                                            </div>
+                                        ))}
+                                    </div>
+                                )}
+                            </div>
+                        </div>
+                    </div>
+                );
+            })()}
 
             {/* Attendance Edit Modal / Paparan Sunting/Tambah Kehadiran */}
             {selectedAttendanceDay && (
