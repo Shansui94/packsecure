@@ -111,6 +111,35 @@ interface StaffStatusItem {
     workContext: WorkContext;
 }
 
+/** Format ISO timestamp to HH:mm in Malaysia Time (UTC+8) */
+export const formatTimeOnlyMyt = (iso: string | null | undefined): string => {
+    if (!iso) return '--:--';
+    try {
+        const d = new Date(iso);
+        if (isNaN(d.getTime())) return '--:--';
+        return new Intl.DateTimeFormat('en-GB', {
+            timeZone: 'Asia/Kuala_Lumpur',
+            hour: '2-digit',
+            minute: '2-digit',
+            hour12: false
+        }).format(d);
+    } catch {
+        return '--:--';
+    }
+};
+
+/** Format ISO timestamp to YYYY-MM-DDTHH:mm for HTML5 datetime-local inputs in MYT */
+export const formatMytDatetimeLocal = (iso: string | null | undefined, fallbackYmd?: string): string => {
+    if (!iso) return fallbackYmd ? `${fallbackYmd}T08:00` : '';
+    try {
+        const d = new Date(iso);
+        if (isNaN(d.getTime())) return fallbackYmd ? `${fallbackYmd}T08:00` : '';
+        return d.toLocaleString('sv', { timeZone: 'Asia/Kuala_Lumpur' }).replace(' ', 'T').slice(0, 16);
+    } catch {
+        return fallbackYmd ? `${fallbackYmd}T08:00` : '';
+    }
+};
+
 interface StaffStatusSignOffProps {
     user: CurrentUser | null;
     onNavigate?: (page: string) => void;
@@ -156,6 +185,7 @@ const StaffStatusSignOff: React.FC<StaffStatusSignOffProps> = ({ user, onNavigat
     const [productionLogs, setProductionLogs] = useState<any[]>([]);
     const [driverTrips, setDriverTrips] = useState<any[]>([]);
     const [leaves, setLeaves] = useState<any[]>([]);
+    const [mileageLogs, setMileageLogs] = useState<any[]>([]);
 
     // Modal state for adjust hours / manual check-in
     const [adjustModalOpen, setAdjustModalOpen] = useState<boolean>(false);
@@ -183,7 +213,9 @@ const StaffStatusSignOff: React.FC<StaffStatusSignOffProps> = ({ user, onNavigat
     // Helper: Check if record is verified
     const isRecordVerified = (att: AttendanceRecord | null): boolean => {
         if (!att) return false;
-        return Boolean(att.is_verified || (att.notes && att.notes.includes('[Verified')));
+        if (att.is_verified === false) return false;
+        if (att.is_verified === true) return true;
+        return Boolean(att.notes && att.notes.includes('[Verified'));
     };
 
     // Helper: Determine location for an employee
@@ -230,6 +262,8 @@ const StaffStatusSignOff: React.FC<StaffStatusSignOffProps> = ({ user, onNavigat
 
         try {
             const dateStr = selectedDate;
+            const startMytIso = new Date(`${dateStr}T00:00:00+08:00`).toISOString();
+            const endMytIso = new Date(`${dateStr}T23:59:59.999+08:00`).toISOString();
 
             // Run queries concurrently
             const [
@@ -239,7 +273,8 @@ const StaffStatusSignOff: React.FC<StaffStatusSignOffProps> = ({ user, onNavigat
                 { data: mActiveData },
                 { data: logsData },
                 { data: tripsData },
-                { data: leavesData }
+                { data: leavesData },
+                { data: logsMileageData }
             ] = await Promise.all([
                 // 1. Active employees
                 supabase
@@ -264,26 +299,34 @@ const StaffStatusSignOff: React.FC<StaffStatusSignOffProps> = ({ user, onNavigat
                     .from('machine_active_products')
                     .select('*'),
 
-                // 5. Production logs
+                // 5. Production logs (full MYT day from 00:00 to 23:59 in UTC)
                 supabase
                     .from('production_logs_v2')
                     .select('operator_id, output_qty, created_at, job_id')
-                    .gte('created_at', `${dateStr}T00:00:00`)
-                    .lte('created_at', `${dateStr}T23:59:59`),
+                    .gte('created_at', startMytIso)
+                    .lte('created_at', endMytIso),
 
-                // 6. Driver trips
+                // 6. Driver delivery orders (Capture all active, loaded, and completed orders for the day)
                 supabase
                     .from('sales_orders')
-                    .select('driver_id, status, zone, deliveryAddress')
-                    .or(`status.eq.In-Transit,status.eq.Delivered`),
+                    .select('id, order_number, driver_id, status, zone, delivery_address, created_at, pod_timestamp, deadline, order_date, notes, trip_drop_count')
+                    .not('driver_id', 'is', null)
+                    .or(`deadline.eq.${dateStr},order_date.eq.${dateStr},created_at.gte.${startMytIso},pod_timestamp.gte.${startMytIso}`),
 
                 // 7. Approved leaves
                 supabase
                     .from('employee_leave')
-                    .select('employee_id, leave_type, count_days, status, start_date, end_date')
+                    .select('employee_id, reason, count_days, status, start_date, end_date')
                     .eq('status', 'Approved')
                     .lte('start_date', dateStr)
-                    .gte('end_date', dateStr)
+                    .gte('end_date', dateStr),
+
+                // 8. Lorry mileage logs (Driver start & end shift scans)
+                supabase
+                    .from('lorry_mileage_logs')
+                    .select('id, lorry_id, driver_id, mileage, photo_url, log_type, created_at')
+                    .gte('created_at', startMytIso)
+                    .lte('created_at', endMytIso)
             ]);
 
             if (empsErr) console.warn("Error fetching employees:", empsErr);
@@ -310,6 +353,7 @@ const StaffStatusSignOff: React.FC<StaffStatusSignOffProps> = ({ user, onNavigat
             setProductionLogs(logsData || []);
             setDriverTrips(tripsData || []);
             setLeaves(leavesData || []);
+            setMileageLogs(logsMileageData || []);
 
         } catch (err) {
             console.error("StaffStatusSignOff loadData error:", err);
@@ -332,6 +376,12 @@ const StaffStatusSignOff: React.FC<StaffStatusSignOffProps> = ({ user, onNavigat
                 loadData(false);
             })
             .on('postgres_changes', { event: 'INSERT', schema: 'public', table: 'production_logs_v2' }, () => {
+                loadData(false);
+            })
+            .on('postgres_changes', { event: '*', schema: 'public', table: 'sales_orders' }, () => {
+                loadData(false);
+            })
+            .on('postgres_changes', { event: '*', schema: 'public', table: 'lorry_mileage_logs' }, () => {
                 loadData(false);
             })
             .subscribe();
@@ -358,7 +408,7 @@ const StaffStatusSignOff: React.FC<StaffStatusSignOffProps> = ({ user, onNavigat
             );
 
             // Primary active or latest attendance record
-            const primaryAtt = myAtts.length > 0
+            let primaryAtt: AttendanceRecord | null = myAtts.length > 0
                 ? (myAtts.find(a => !a.clock_out) || myAtts[myAtts.length - 1])
                 : null;
 
@@ -369,28 +419,12 @@ const StaffStatusSignOff: React.FC<StaffStatusSignOffProps> = ({ user, onNavigat
                 l.employee_id === emp.id
             );
 
-            // Compute status
-            let status: 'ACTIVE' | 'PENDING' | 'APPROVED' | 'ABSENT' | 'LEAVE' = 'ABSENT';
-
-            if (isOnLeave) {
-                status = 'LEAVE';
-            } else if (primaryAtt) {
-                if (!primaryAtt.clock_out) {
-                    status = 'ACTIVE'; // In progress / working
-                } else if (isRecordVerified(primaryAtt)) {
-                    status = 'APPROVED'; // Shift finished & verified
-                } else {
-                    status = 'PENDING'; // Shift finished, waiting for Manager check-off!
-                }
-            } else {
-                status = 'ABSENT';
-            }
-
             // Compute work context
             const workContext: WorkContext = {};
 
             // 1. Check machine active
             const activeMachine = activeMachines.find(m => 
+                (m.operator_id && emp.id && m.operator_id === emp.id) ||
                 (m.operator_id && emp.auth_user_id && m.operator_id === emp.auth_user_id) ||
                 (m.operator_id && emp.employee_id && m.operator_id === emp.employee_id)
             );
@@ -403,6 +437,7 @@ const StaffStatusSignOff: React.FC<StaffStatusSignOffProps> = ({ user, onNavigat
 
             // 2. Check production logs
             const empLogs = productionLogs.filter(l => 
+                (l.operator_id && emp.id && l.operator_id === emp.id) ||
                 (l.operator_id && emp.employee_id && l.operator_id.toLowerCase() === emp.employee_id.toLowerCase()) ||
                 (l.operator_id && emp.auth_user_id && l.operator_id === emp.auth_user_id)
             );
@@ -412,19 +447,118 @@ const StaffStatusSignOff: React.FC<StaffStatusSignOffProps> = ({ user, onNavigat
                 workContext.lastLogTime = empLogs[0].created_at;
             }
 
-            // 3. Check driver trips
+            // 3. Driver Logic: Trips, Drops, and Virtual Attendance
+            let driverOrdersForToday: any[] = [];
             if (emp.role === 'Driver') {
-                const activeTrip = driverTrips.find(t => 
-                    t.driver_id === emp.employee_id || t.driver_id === emp.name
+                const dids = [emp.id, emp.auth_user_id, emp.employee_id, emp.name]
+                    .filter(Boolean)
+                    .map(x => String(x).toLowerCase());
+
+                driverOrdersForToday = driverTrips.filter(o => 
+                    o.driver_id && dids.includes(String(o.driver_id).toLowerCase()) && o.status !== 'Cancelled'
                 );
-                if (activeTrip) {
-                    workContext.deliveryTrip = `${activeTrip.zone || t('配送中')} (${activeTrip.status})`;
+                const empMileage = mileageLogs.filter(l => 
+                    l.driver_id && dids.includes(String(l.driver_id).toLowerCase())
+                );
+
+                if (driverOrdersForToday.length > 0) {
+                    const deliveredCount = driverOrdersForToday.filter(o => o.status === 'Delivered').length;
+                    const totalCount = driverOrdersForToday.length;
+                    const primaryZone = driverOrdersForToday[0].zone || t('配送中');
+                    const hasOngoing = driverOrdersForToday.some(o => o.status === 'Loaded' || o.status === 'In-Transit');
+                    workContext.deliveryTrip = `${primaryZone} · ${deliveredCount}/${totalCount} Drop (${hasOngoing ? t('配送中') : t('已完成')})`;
+                }
+
+                // If Driver has no explicit machine attendance record, synthesize from mileage logs and sales orders
+                if (!primaryAtt && (driverOrdersForToday.length > 0 || empMileage.length > 0)) {
+                    const startLog = empMileage.find(l => l.log_type === 'start');
+                    const endLog = [...empMileage].reverse().find(l => l.log_type === 'end');
+
+                    const startMytIso = new Date(`${selectedDate}T00:00:00+08:00`).toISOString();
+                    const endMytIso = new Date(`${selectedDate}T23:59:59.999+08:00`).toISOString();
+
+                    const todayActivityTimes = driverOrdersForToday
+                        .flatMap(o => [o.created_at, o.pod_timestamp])
+                        .filter(t => t && t >= startMytIso && t <= endMytIso)
+                        .sort();
+
+                    let clockIn: string | null = null;
+                    if (startLog?.created_at) {
+                        clockIn = startLog.created_at;
+                    } else if (todayActivityTimes.length > 0) {
+                        clockIn = todayActivityTimes[0];
+                    } else if (driverOrdersForToday.length > 0) {
+                        clockIn = `${selectedDate}T08:00:00+08:00`;
+                    }
+
+                    const deliveredOrders = driverOrdersForToday.filter(o => o.status === 'Delivered');
+                    const allDelivered = driverOrdersForToday.length > 0 && deliveredOrders.length === driverOrdersForToday.length;
+                    let clockOut: string | null = null;
+                    if (endLog?.created_at) {
+                        clockOut = endLog.created_at;
+                    } else if (allDelivered && deliveredOrders.length > 0) {
+                        const podTimes = deliveredOrders.map(o => o.pod_timestamp).filter(Boolean).sort();
+                        clockOut = podTimes[podTimes.length - 1] || null;
+                    }
+
+                    let hoursWorked = 0;
+                    if (clockIn && clockOut) {
+                        const inMs = new Date(clockIn).getTime();
+                        const outMs = new Date(clockOut).getTime();
+                        if (outMs > inMs) {
+                            hoursWorked = Math.max(0.5, Math.round(((outMs - inMs) / 3600000) * 10) / 10);
+                        }
+                    } else if (clockIn) {
+                        const inMs = new Date(clockIn).getTime();
+                        const nowMs = Date.now();
+                        if (nowMs > inMs) {
+                            hoursWorked = Math.max(0.5, Math.min(16, Math.round(((nowMs - inMs) / 3600000) * 10) / 10));
+                        }
+                    }
+
+                    if (clockIn) {
+                        primaryAtt = {
+                            id: `virtual-driver-${emp.id || emp.employee_id}-${selectedDate}`,
+                            operator_id: emp.employee_id || emp.auth_user_id || emp.id,
+                            date: selectedDate,
+                            clock_in: clockIn,
+                            clock_out: clockOut,
+                            hours_worked: hoursWorked,
+                            machine_id: null,
+                            notes: endLog 
+                                ? `[Lorry Shift Selesai] ${deliveredOrders.length}/${driverOrdersForToday.length} Drops`
+                                : (driverOrdersForToday.some(o => o.status === 'In-Transit' || o.status === 'Loaded')
+                                    ? `[Delivery In-Progress] ${deliveredOrders.length}/${driverOrdersForToday.length} Drops`
+                                    : `[Driver Schedule] ${driverOrdersForToday.length} Orders`),
+                            is_verified: false,
+                            verified_by: null,
+                            verified_at: null,
+                            verification_notes: null
+                        };
+                    }
                 }
             }
 
             // 4. Check special tasks in notes
             if (primaryAtt?.notes && primaryAtt.notes.includes('SpecialTask:')) {
                 workContext.specialTask = primaryAtt.notes.replace('SpecialTask:', '').split(';')[0];
+            }
+
+            // Compute status
+            let status: 'ACTIVE' | 'PENDING' | 'APPROVED' | 'ABSENT' | 'LEAVE' = 'ABSENT';
+
+            if (isOnLeave) {
+                status = 'LEAVE';
+            } else if (primaryAtt) {
+                if (isRecordVerified(primaryAtt)) {
+                    status = 'APPROVED'; // Shift finished & verified
+                } else if (!primaryAtt.clock_out || (emp.role === 'Driver' && driverOrdersForToday.some(o => o.status === 'Loaded' || o.status === 'In-Transit'))) {
+                    status = 'ACTIVE'; // In progress / delivery in-transit
+                } else {
+                    status = 'PENDING'; // Shift finished, waiting for Manager check-off!
+                }
+            } else {
+                status = 'ABSENT';
             }
 
             // Resolve Location
@@ -439,7 +573,7 @@ const StaffStatusSignOff: React.FC<StaffStatusSignOffProps> = ({ user, onNavigat
                 workContext
             };
         });
-    }, [employees, attendances, leaves, activeMachines, productionLogs, driverTrips, resolveLocation]);
+    }, [employees, attendances, leaves, activeMachines, productionLogs, driverTrips, mileageLogs, selectedDate, resolveLocation, t]);
 
     // Location distribution counts across entire staff
     const locationCounts = useMemo(() => {
@@ -548,6 +682,43 @@ const StaffStatusSignOff: React.FC<StaffStatusSignOffProps> = ({ user, onNavigat
         return groups;
     }, [filteredStaffList]);
 
+    // Helper: Safe Update Attendance (Gracefully degrades to notes tag if is_verified columns don't exist in DB)
+    const safeUpdateAttendance = async (id: string, payload: Record<string, any>) => {
+        const { error } = await supabase
+            .from('operator_attendance')
+            .update(payload)
+            .eq('id', id);
+
+        if (error && (error.code === 'PGRST204' || error.code === '42703' || error.message?.includes('is_verified'))) {
+            // Strip out schema extension columns that do not exist yet in DB
+            const { is_verified, verified_by, verified_at, verification_notes, ...fallbackPayload } = payload;
+            const { error: fallbackError } = await supabase
+                .from('operator_attendance')
+                .update(fallbackPayload)
+                .eq('id', id);
+            if (fallbackError) throw fallbackError;
+            return;
+        }
+        if (error) throw error;
+    };
+
+    // Helper: Safe Insert Attendance (Gracefully degrades to notes tag if is_verified columns don't exist in DB)
+    const safeInsertAttendance = async (payload: Record<string, any>) => {
+        const { error } = await supabase
+            .from('operator_attendance')
+            .insert(payload);
+
+        if (error && (error.code === 'PGRST204' || error.code === '42703' || error.message?.includes('is_verified'))) {
+            const { is_verified, verified_by, verified_at, verification_notes, ...fallbackPayload } = payload;
+            const { error: fallbackError } = await supabase
+                .from('operator_attendance')
+                .insert(fallbackPayload);
+            if (fallbackError) throw fallbackError;
+            return;
+        }
+        if (error) throw error;
+    };
+
     // Handle Single Sign-Off (打钩核准)
     const handleSignOff = async (item: StaffStatusItem) => {
         if (!item.attendance) return;
@@ -557,6 +728,11 @@ const StaffStatusSignOff: React.FC<StaffStatusSignOffProps> = ({ user, onNavigat
         const verifierName = user?.name || user?.employeeId || 'Manager';
 
         try {
+            const cleanNotes = (record.notes || '').replace(/\[Verified by [^\]]+\]/g, '').trim();
+            const updatedNotes = cleanNotes 
+                ? `${cleanNotes} [Verified by ${verifierName} at ${nowIso.slice(11, 16)}]`.trim()
+                : `[Verified by ${verifierName} at ${nowIso.slice(11, 16)}]`;
+
             // Optimistic UI update
             setAttendances(prev => prev.map(a => {
                 if (a.id === record.id) {
@@ -564,43 +740,51 @@ const StaffStatusSignOff: React.FC<StaffStatusSignOffProps> = ({ user, onNavigat
                         ...a,
                         is_verified: true,
                         verified_by: verifierName,
-                        verified_at: nowIso
+                        verified_at: nowIso,
+                        notes: updatedNotes
                     };
                 }
                 return a;
             }));
 
-            const cleanNotes = record.notes || '';
-            const updatedNotes = cleanNotes.includes('[Verified') 
-                ? cleanNotes 
-                : `${cleanNotes} [Verified by ${verifierName} at ${nowIso.slice(11, 16)}]`.trim();
-
-            const { error } = await supabase
-                .from('operator_attendance')
-                .update({
+            // If virtual driver record, crystallize by inserting into operator_attendance
+            if (record.id.startsWith('virtual-driver-')) {
+                await safeInsertAttendance({
+                    operator_id: item.employee.employee_id || item.employee.auth_user_id || item.employee.id,
+                    date: selectedDate,
+                    clock_in: record.clock_in,
+                    clock_out: record.clock_out,
+                    hours_worked: record.hours_worked,
+                    machine_id: null,
+                    is_verified: true,
+                    verified_by: verifierName,
+                    verified_at: nowIso,
+                    verification_notes: record.verification_notes || null,
+                    notes: updatedNotes
+                });
+            } else {
+                await safeUpdateAttendance(record.id, {
                     is_verified: true,
                     verified_by: verifierName,
                     verified_at: nowIso,
                     notes: updatedNotes
-                })
-                .eq('id', record.id);
-
-            if (error) {
-                console.error("Sign-off error:", error);
-                alert(`${t('核准更新失败')}: ${error.message}`);
-                loadData(false);
-            } else {
-                if (user) {
-                    logActivity(user, 'APPROVE_ATTENDANCE', {
-                        operator_id: record.operator_id,
-                        attendance_id: record.id,
-                        hours_worked: record.hours_worked,
-                        location: item.location
-                    });
-                }
+                });
             }
-        } catch (err) {
+
+            if (user) {
+                logActivity(user, 'APPROVE_ATTENDANCE', {
+                    operator_id: record.operator_id,
+                    attendance_id: record.id,
+                    hours_worked: record.hours_worked,
+                    location: item.location
+                });
+            }
+
+            // Reload data to reflect DB changes
+            await loadData(false);
+        } catch (err: any) {
             console.error("Failed to sign off:", err);
+            alert(`${t('核准更新失败')}: ${err?.message || err}`);
             loadData(false);
         }
     };
@@ -614,30 +798,28 @@ const StaffStatusSignOff: React.FC<StaffStatusSignOffProps> = ({ user, onNavigat
         if (!confirmed) return;
 
         try {
+            const cleanNotes = (record.notes || '').replace(/\[Verified by [^\]]+\]/g, '').trim();
+
+            // Optimistic UI update
             setAttendances(prev => prev.map(a => {
                 if (a.id === record.id) {
-                    return { ...a, is_verified: false, verified_by: null, verified_at: null };
+                    return { 
+                        ...a, 
+                        is_verified: false, 
+                        verified_by: null, 
+                        verified_at: null, 
+                        notes: cleanNotes 
+                    };
                 }
                 return a;
             }));
 
-            let cleanNotes = record.notes || '';
-            cleanNotes = cleanNotes.replace(/\[Verified by [^\]]+\]/g, '').trim();
-
-            const { error } = await supabase
-                .from('operator_attendance')
-                .update({
-                    is_verified: false,
-                    verified_by: null,
-                    verified_at: null,
-                    notes: cleanNotes
-                })
-                .eq('id', record.id);
-
-            if (error) {
-                console.error("Un-approve error:", error);
-                loadData(false);
-            }
+            await safeUpdateAttendance(record.id, {
+                is_verified: false,
+                verified_by: null,
+                verified_at: null,
+                notes: cleanNotes
+            });
         } catch (err) {
             console.error("Failed to un-approve:", err);
             loadData(false);
@@ -646,9 +828,11 @@ const StaffStatusSignOff: React.FC<StaffStatusSignOffProps> = ({ user, onNavigat
 
     // Handle Batch Approve All (可针对全厂或某个特定厂区一键全部打钩核准)
     const handleBatchApprove = async (targetLoc?: LocationKey) => {
-        const pendingItems = filteredStaffList.filter(s => {
+        // Collect all pending items matching location scope
+        const pendingItems = staffList.filter(s => {
             if (s.status !== 'PENDING' || !s.attendance) return false;
-            if (targetLoc && s.location !== targetLoc) return false;
+            if (targetLoc) return s.location === targetLoc;
+            if (locationFilter !== 'ALL') return s.location === locationFilter;
             return true;
         });
 
@@ -658,7 +842,7 @@ const StaffStatusSignOff: React.FC<StaffStatusSignOffProps> = ({ user, onNavigat
         }
 
         const locLabel = targetLoc ? `【${getLocLabel(targetLoc)}】` : '';
-        const confirmed = window.confirm(`${t('确定要一键核准')}${locLabel}${t('当前筛选出的')} ${pendingItems.length} ${t('位员工下班工时吗？\n核准后将自动锁定考勤记录并归档。')}`);
+        const confirmed = window.confirm(`${t('确定要一键核准')}${locLabel}${t('当前厂区的')} ${pendingItems.length} ${t('位员工下班工时吗？\n核准后将自动锁定考勤记录并归档。')}`);
         if (!confirmed) return;
 
         setBatchLoading(true);
@@ -669,20 +853,33 @@ const StaffStatusSignOff: React.FC<StaffStatusSignOffProps> = ({ user, onNavigat
             for (const item of pendingItems) {
                 if (!item.attendance) continue;
                 const rec = item.attendance;
-                const cleanNotes = rec.notes || '';
-                const updatedNotes = cleanNotes.includes('[Verified') 
-                    ? cleanNotes 
-                    : `${cleanNotes} [Verified by ${verifierName} at ${nowIso.slice(11, 16)}]`.trim();
+                const cleanNotes = (rec.notes || '').replace(/\[Verified by [^\]]+\]/g, '').trim();
+                const updatedNotes = cleanNotes 
+                    ? `${cleanNotes} [Verified by ${verifierName} at ${nowIso.slice(11, 16)}]`.trim()
+                    : `[Verified by ${verifierName} at ${nowIso.slice(11, 16)}]`;
 
-                await supabase
-                    .from('operator_attendance')
-                    .update({
+                if (rec.id.startsWith('virtual-driver-')) {
+                    await safeInsertAttendance({
+                        operator_id: item.employee.employee_id || item.employee.auth_user_id || item.employee.id,
+                        date: selectedDate,
+                        clock_in: rec.clock_in,
+                        clock_out: rec.clock_out,
+                        hours_worked: rec.hours_worked,
+                        machine_id: null,
+                        is_verified: true,
+                        verified_by: verifierName,
+                        verified_at: nowIso,
+                        verification_notes: rec.verification_notes || null,
+                        notes: updatedNotes
+                    });
+                } else {
+                    await safeUpdateAttendance(rec.id, {
                         is_verified: true,
                         verified_by: verifierName,
                         verified_at: nowIso,
                         notes: updatedNotes
-                    })
-                    .eq('id', rec.id);
+                    });
+                }
             }
 
             await loadData(false);
@@ -700,12 +897,8 @@ const StaffStatusSignOff: React.FC<StaffStatusSignOffProps> = ({ user, onNavigat
         setEditingStaffItem(item);
         const att = item.attendance;
 
-        const defaultClockIn = att?.clock_in 
-            ? att.clock_in.slice(0, 16) 
-            : `${selectedDate}T08:00`;
-        const defaultClockOut = att?.clock_out 
-            ? att.clock_out.slice(0, 16) 
-            : `${selectedDate}T17:00`;
+        const defaultClockIn = formatMytDatetimeLocal(att?.clock_in, selectedDate);
+        const defaultClockOut = formatMytDatetimeLocal(att?.clock_out, selectedDate);
 
         setEditForm({
             clock_in: defaultClockIn,
@@ -750,50 +943,41 @@ const StaffStatusSignOff: React.FC<StaffStatusSignOffProps> = ({ user, onNavigat
             const clockOutIso = editForm.clock_out ? new Date(editForm.clock_out).toISOString() : null;
             const hoursVal = Number(editForm.hours_worked) || 0;
 
-            if (att) {
+            if (att && !att.id.startsWith('virtual-driver-')) {
                 // Update existing record
                 const cleanNotes = att.notes || '';
                 const updatedNotes = editForm.autoApprove
                     ? (cleanNotes.includes('[Verified') ? cleanNotes : `${cleanNotes} [Verified by ${verifierName} at ${nowIso.slice(11, 16)}]`.trim())
                     : cleanNotes;
 
-                const { error } = await supabase
-                    .from('operator_attendance')
-                    .update({
-                        clock_in: clockInIso,
-                        clock_out: clockOutIso,
-                        hours_worked: hoursVal,
-                        machine_id: editForm.machine_id || att.machine_id || null,
-                        is_verified: editForm.autoApprove ? true : att.is_verified,
-                        verified_by: editForm.autoApprove ? verifierName : att.verified_by,
-                        verified_at: editForm.autoApprove ? nowIso : att.verified_at,
-                        verification_notes: editForm.verification_notes || att.verification_notes || null,
-                        notes: updatedNotes
-                    })
-                    .eq('id', att.id);
-
-                if (error) throw error;
+                await safeUpdateAttendance(att.id, {
+                    clock_in: clockInIso,
+                    clock_out: clockOutIso,
+                    hours_worked: hoursVal,
+                    machine_id: editForm.machine_id || att.machine_id || null,
+                    is_verified: editForm.autoApprove ? true : att.is_verified,
+                    verified_by: editForm.autoApprove ? verifierName : att.verified_by,
+                    verified_at: editForm.autoApprove ? nowIso : att.verified_at,
+                    verification_notes: editForm.verification_notes || att.verification_notes || null,
+                    notes: updatedNotes
+                });
             } else {
-                // Insert new manual / 补卡 record
+                // Insert new manual / 补卡 record (or virtual driver crystallization)
                 const newNotes = `Manual entry by ${verifierName}${editForm.autoApprove ? ` [Verified by ${verifierName}]` : ''}`;
 
-                const { error } = await supabase
-                    .from('operator_attendance')
-                    .insert({
-                        operator_id: emp.employee_id || emp.auth_user_id || emp.id,
-                        date: selectedDate,
-                        clock_in: clockInIso,
-                        clock_out: clockOutIso,
-                        hours_worked: hoursVal,
-                        machine_id: editForm.machine_id || null,
-                        is_verified: editForm.autoApprove,
-                        verified_by: editForm.autoApprove ? verifierName : null,
-                        verified_at: editForm.autoApprove ? nowIso : null,
-                        verification_notes: editForm.verification_notes || null,
-                        notes: newNotes
-                    });
-
-                if (error) throw error;
+                await safeInsertAttendance({
+                    operator_id: emp.employee_id || emp.auth_user_id || emp.id,
+                    date: selectedDate,
+                    clock_in: clockInIso,
+                    clock_out: clockOutIso,
+                    hours_worked: hoursVal,
+                    machine_id: editForm.machine_id || null,
+                    is_verified: editForm.autoApprove,
+                    verified_by: editForm.autoApprove ? verifierName : null,
+                    verified_at: editForm.autoApprove ? nowIso : null,
+                    verification_notes: editForm.verification_notes || null,
+                    notes: newNotes
+                });
             }
 
             setAdjustModalOpen(false);
@@ -900,11 +1084,16 @@ const StaffStatusSignOff: React.FC<StaffStatusSignOffProps> = ({ user, onNavigat
                         <span className="text-[10px] text-gray-400 font-semibold block mb-0.5">{t('打卡时间 / 工时')}</span>
                         {att ? (
                             <div className="text-xs text-gray-200 font-mono">
-                                <div>
+                                <div className="flex items-center flex-wrap gap-y-0.5">
                                     <span className="text-gray-400">{t('入')}: </span>
-                                    <span>{att.clock_in ? att.clock_in.slice(11, 16) : '--:--'}</span>
+                                    <span className="text-white font-medium">{formatTimeOnlyMyt(att.clock_in)}</span>
                                     <span className="text-gray-400 ml-2">{t('出')}: </span>
-                                    <span>{att.clock_out ? att.clock_out.slice(11, 16) : (status === 'ACTIVE' ? t('进行中') : '--:--')}</span>
+                                    <span className="text-white font-medium">{att.clock_out ? formatTimeOnlyMyt(att.clock_out) : (status === 'ACTIVE' ? t('进行中') : '--:--')}</span>
+                                    {att.id.startsWith('virtual-driver-') && (
+                                        <span className="ml-1.5 text-[9px] px-1.5 py-0.2 rounded bg-amber-500/15 text-amber-300 border border-amber-500/30">
+                                            {t('物流自动计算')}
+                                        </span>
+                                    )}
                                 </div>
                                 <div className="text-[11px] text-gray-400 mt-0.5">
                                     {t('核算工时')}: <strong className="text-emerald-300 font-black">{att.hours_worked || 0} h</strong>

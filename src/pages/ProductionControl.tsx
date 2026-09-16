@@ -16,7 +16,7 @@ import { getBubbleWrapSku } from '../utils/skuMapper';
 import { 
     Box, Settings, Clock, Layers, LogOut, Calendar, Package,
     Camera, Check, AlertTriangle, User as UserIcon, RefreshCw, Play, Loader, Send, Sparkles, Image as ImageIcon,
-    Video, Square, X, FlaskConical, QrCode
+    Video, Square, X, FlaskConical, QrCode, Printer
 } from 'lucide-react';
 import { supabase } from '../services/supabase';
 import { getMachineByCode, getMachineById } from '../services/productionService';
@@ -24,6 +24,8 @@ import { RecycleMachineControl } from '../components/RecycleMachineControl';
 import { Scanner } from '@yudiel/react-qr-scanner';
 import MachineInspectionModal from '../components/MachineInspectionModal';
 import { useTranslation } from 'react-i18next';
+import { ThermalPrinterModal } from '../components/ThermalPrinterModal';
+import { thermalPrinterService, LabelData } from '../services/thermalPrinterService';
 
 
 // --- TYPE DEFINITIONS ---
@@ -177,6 +179,7 @@ interface ProductionLaneProps {
     machineMetadata: Machine | null;
     user: User | null;
     operatorId: string | null;
+    operatorName?: string | null;
     activeJob: JobOrder | null;
     jobs: JobOrder[];
     onProductionComplete: () => void;
@@ -185,10 +188,11 @@ interface ProductionLaneProps {
     presetSku?: string | null;
     isControlMode: boolean;
     onTakeoverClick?: () => void;
+    onOpenPrinterModal?: () => void;
 }
 
 const ProductionLane: React.FC<ProductionLaneProps> = ({ 
-    laneId, machineMetadata, operatorId, jobs, onProductionComplete, onBeforeProduce, className, presetSku, isControlMode, onTakeoverClick
+    laneId, machineMetadata, operatorId, operatorName, jobs, onProductionComplete, onBeforeProduce, className, presetSku, isControlMode, onTakeoverClick, onOpenPrinterModal
 }) => {
     const { t } = useTranslation();
     const [step, setStep] = useState<1 | 2 | 3>(1);
@@ -202,6 +206,58 @@ const ProductionLane: React.FC<ProductionLaneProps> = ({
     const [liveCount, setLiveCount] = useState(0);
     const [activeSku, setActiveSku] = useState<string | null>(null);
     const [selectedRolls, setSelectedRolls] = useState<number>(1);
+    const [isPrintingCurrent, setIsPrintingCurrent] = useState(false);
+    const [printFeedback, setPrintFeedback] = useState<string | null>(null);
+
+    const handlePrintCurrentLabel = async (copyCount: number = 1) => {
+        const targetSku = activeSku || (selectedSize ? getBubbleWrapSku(selectedLayer, selectedMaterial, selectedSize, selectedRolls, derivedPackaging) : 'BW-GENERAL');
+        const machineCode = machineMetadata?.code || machineMetadata?.id || 'M01';
+        const now = new Date();
+        const lotNo = `LOT-${now.toISOString().slice(0, 10).replace(/-/g, '')}-${machineCode}`;
+        const autoName = `${selectedLayer} ${selectedMaterial} ${selectedSize || ''} ${selectedRolls}Rolls ${derivedPackaging || ''}`.trim();
+
+        const labelData: LabelData = {
+            sku: targetSku,
+            productName: autoName,
+            machineCode: machineCode,
+            operatorName: operatorName || operatorId || 'OP',
+            operatorId: operatorId || 'OP',
+            lotNo: lotNo,
+            timestamp: now.toISOString(),
+            rolls: selectedRolls,
+            layer: selectedLayer,
+            material: selectedMaterial,
+            size: selectedSize || undefined,
+            color: derivedPackaging || undefined,
+            yieldCount: liveCount,
+            barcode: targetSku,
+            qrCode: `PS|${targetSku}|${lotNo}|${machineCode}`
+        };
+
+        setIsPrintingCurrent(true);
+        try {
+            await thermalPrinterService.printRollLabel(labelData, { copies: copyCount });
+            setPrintFeedback(t('✅ 已出纸') + (copyCount > 1 ? ` (${copyCount}张)` : ''));
+            setTimeout(() => setPrintFeedback(null), 2500);
+        } catch (err: any) {
+            console.error('Print label failed:', err);
+            alert(err.message || t('打印失败'));
+        } finally {
+            setIsPrintingCurrent(false);
+        }
+    };
+
+    // 自动出纸监听：当产生新产量且开启了 autoPrintOnCount 时，自动秒打标签
+    const prevLiveCountRef = useRef(liveCount);
+    useEffect(() => {
+        if (isLiveRun && liveCount > prevLiveCountRef.current) {
+            const currentSettings = thermalPrinterService.getSettings();
+            if (currentSettings.autoPrintOnCount) {
+                handlePrintCurrentLabel(1);
+            }
+        }
+        prevLiveCountRef.current = liveCount;
+    }, [liveCount, isLiveRun, activeSku]);
 
     // Apply Preset SKU if clicked from schedule
     useEffect(() => {
@@ -669,6 +725,55 @@ const ProductionLane: React.FC<ProductionLaneProps> = ({
                                             <div className="text-apple-textMuted text-xs font-mono">{t('Units Produced This Session')}</div>
                                         </div>
 
+                                    {/* 🖨️ 车间一键打标控制区 (大触控热区、手套友好设计) */}
+                                    <div className="w-full mb-4 space-y-2">
+                                        <div className="flex items-center gap-2">
+                                            <button
+                                                type="button"
+                                                onClick={() => handlePrintCurrentLabel(1)}
+                                                disabled={isPrintingCurrent}
+                                                className="flex-1 min-h-[58px] bg-gradient-to-r from-blue-600 via-indigo-600 to-blue-700 hover:from-blue-500 hover:to-indigo-500 text-white font-black rounded-2xl shadow-xl shadow-blue-900/30 flex items-center justify-center gap-2.5 text-base active:scale-95 transition-all cursor-pointer disabled:opacity-50 border border-blue-400/30"
+                                            >
+                                                {isPrintingCurrent ? (
+                                                    <RefreshCw size={22} className="animate-spin text-blue-200" />
+                                                ) : (
+                                                    <Printer size={24} className="text-white drop-shadow" />
+                                                )}
+                                                <span className="tracking-wide">
+                                                    {printFeedback || t('🖨️ 打印成品标签 (PRINT)')}
+                                                </span>
+                                            </button>
+
+                                            <button
+                                                type="button"
+                                                onClick={() => onOpenPrinterModal && onOpenPrinterModal()}
+                                                className="px-3.5 min-h-[58px] bg-white/5 hover:bg-white/10 text-gray-300 hover:text-white border border-white/10 rounded-2xl flex flex-col items-center justify-center text-[10px] font-bold transition cursor-pointer active:scale-95"
+                                                title={t('设置打印机与纸张规格')}
+                                            >
+                                                <Settings size={18} className="mb-0.5 text-blue-400" />
+                                                <span>{t('打印设置')}</span>
+                                            </button>
+                                        </div>
+
+                                        {/* 快捷多张出纸选项 */}
+                                        <div className="flex items-center justify-between px-1 text-[11px] text-gray-400">
+                                            <span>{t('快捷出纸张数')}:</span>
+                                            <div className="flex gap-1.5">
+                                                {[1, 2, 5].map(num => (
+                                                    <button
+                                                        key={num}
+                                                        type="button"
+                                                        onClick={() => handlePrintCurrentLabel(num)}
+                                                        disabled={isPrintingCurrent}
+                                                        className="px-2.5 py-1 rounded-lg bg-white/5 hover:bg-white/10 text-gray-300 hover:text-white border border-white/10 font-mono font-bold transition cursor-pointer active:scale-95"
+                                                    >
+                                                        {num}张
+                                                    </button>
+                                                ))}
+                                            </div>
+                                        </div>
+                                    </div>
+
                                         {isControlMode ? (
                                             <button
                                                 onClick={toggleProductionRun}
@@ -742,7 +847,15 @@ const ProductionControl: React.FC<ProductionControlProps> = ({ user, jobs = [], 
     const hasScannedRef = useRef(false);
     const currentMachineName = machineMetadata?.name || selectedMachine || 'Unknown Machine';
     const [showInspectionModal, setShowInspectionModal] = useState(false);
+    const [showPrinterModal, setShowPrinterModal] = useState(false);
+    const [printerStatus, setPrinterStatus] = useState(thermalPrinterService.getStatus());
 
+    useEffect(() => {
+        const unsub = thermalPrinterService.subscribe((s) => {
+            setPrinterStatus(s);
+        });
+        return unsub;
+    }, []);
 
     // Active Job State
     const [activeJob, setActiveJob] = useState<JobOrder | null>(null);
@@ -2045,6 +2158,30 @@ const ProductionControl: React.FC<ProductionControlProps> = ({ user, jobs = [], 
         }
     };
 
+    const handleReprintLog = async (log: GroupedProductionLog) => {
+        const machineCode = machineMetadata?.code || selectedMachine || 'M01';
+        const now = new Date();
+        const lotNo = `LOT-${now.toISOString().slice(0, 10).replace(/-/g, '')}-${machineCode}`;
+        const labelData: LabelData = {
+            sku: log.SKU || 'BW-GENERAL',
+            productName: log.Name || '气泡膜成品',
+            machineCode: machineCode,
+            operatorName: operatorName || operatorId || 'OP',
+            operatorId: operatorId || 'OP',
+            lotNo: lotNo,
+            timestamp: log.Start_Time || now.toISOString(),
+            rolls: 1,
+            barcode: log.SKU || 'BW-GENERAL',
+            qrCode: `PS|${log.SKU}|${lotNo}|${machineCode}`
+        };
+        try {
+            await thermalPrinterService.printRollLabel(labelData, { copies: 1 });
+        } catch (e: any) {
+            console.error('Reprint failed:', e);
+            alert(e.message || '打印失败');
+        }
+    };
+
     useEffect(() => {
         if (selectedMachine) {
             fetchUserLogs();
@@ -2636,6 +2773,29 @@ const ProductionControl: React.FC<ProductionControlProps> = ({ user, jobs = [], 
                     )}
 
                     <div className="flex items-center gap-2 ml-auto flex-wrap sm:flex-nowrap">
+                        {/* 🖨️ SoonMark M4201 标签打印机直连状态胶囊按钮 */}
+                        <button
+                            type="button"
+                            onClick={() => setShowPrinterModal(true)}
+                            className={`px-3 py-1.5 rounded-xl border font-medium text-xs flex items-center gap-2 transition cursor-pointer shrink-0 ${
+                                printerStatus.connected
+                                    ? 'bg-emerald-600/20 hover:bg-emerald-600/30 text-emerald-300 border-emerald-500/40 shadow-sm shadow-emerald-900/20'
+                                    : 'bg-white/5 hover:bg-white/10 text-gray-300 hover:text-white border-white/10'
+                            }`}
+                            title={printerStatus.connected ? `打印机已直连: ${printerStatus.name}` : '点击配置并直连 SoonMark M4201 打印机'}
+                        >
+                            <Printer size={14} className={printerStatus.connected ? 'text-emerald-400' : 'text-gray-400'} />
+                            <span className="hidden sm:inline">
+                                {printerStatus.connected ? printerStatus.name : t('连接打印机')}
+                            </span>
+                            <span className="sm:hidden">
+                                {printerStatus.connected ? '已连' : '打标'}
+                            </span>
+                            <div className={`w-2 h-2 rounded-full ${
+                                printerStatus.connected ? 'bg-emerald-400 animate-pulse' : 'bg-gray-500'
+                            }`} />
+                        </button>
+
                         <button
                             type="button"
                             onClick={() => setShowInspectionModal(true)}
@@ -3614,6 +3774,7 @@ const ProductionControl: React.FC<ProductionControlProps> = ({ user, jobs = [], 
                                                 machineMetadata={machineMetadata}
                                                 user={user}
                                                 operatorId={operatorId}
+                                                operatorName={operatorName}
                                                 activeJob={activeJob}
                                                 jobs={jobs}
                                                 onProductionComplete={fetchUserLogs}
@@ -3621,6 +3782,7 @@ const ProductionControl: React.FC<ProductionControlProps> = ({ user, jobs = [], 
                                                 presetSku={presetSku}
                                                 isControlMode={isControlMode}
                                                 onTakeoverClick={() => initiateTakeover(selectedMachine!)}
+                                                onOpenPrinterModal={() => setShowPrinterModal(true)}
                                             />
                                         </div>
                                         <div className="flex-1 min-w-0">
@@ -3632,6 +3794,7 @@ const ProductionControl: React.FC<ProductionControlProps> = ({ user, jobs = [], 
                                                 machineMetadata={machineMetadata}
                                                 user={user}
                                                 operatorId={operatorId}
+                                                operatorName={operatorName}
                                                 activeJob={activeJob}
                                                 jobs={jobs}
                                                 onProductionComplete={fetchUserLogs}
@@ -3639,6 +3802,7 @@ const ProductionControl: React.FC<ProductionControlProps> = ({ user, jobs = [], 
                                                 presetSku={presetSku}
                                                 isControlMode={isControlMode}
                                                 onTakeoverClick={() => initiateTakeover(selectedMachine!)}
+                                                onOpenPrinterModal={() => setShowPrinterModal(true)}
                                             />
                                         </div>
                                     </div>
@@ -3648,6 +3812,7 @@ const ProductionControl: React.FC<ProductionControlProps> = ({ user, jobs = [], 
                                         machineMetadata={machineMetadata}
                                         user={user}
                                         operatorId={operatorId}
+                                        operatorName={operatorName}
                                         activeJob={activeJob}
                                         jobs={jobs}
                                         onProductionComplete={fetchUserLogs}
@@ -3655,6 +3820,7 @@ const ProductionControl: React.FC<ProductionControlProps> = ({ user, jobs = [], 
                                         presetSku={presetSku}
                                         isControlMode={isControlMode}
                                         onTakeoverClick={() => initiateTakeover(selectedMachine!)}
+                                        onOpenPrinterModal={() => setShowPrinterModal(true)}
                                     />
                                 )
                             )}
@@ -3956,7 +4122,17 @@ const ProductionControl: React.FC<ProductionControlProps> = ({ user, jobs = [], 
                                                         {timeRangeText}
                                                     </div>
                                                 </div>
-                                                <div className="text-sm font-black text-apple-blue">+{log.Output_Qty}</div>
+                                                <div className="flex items-center gap-2">
+                                                    <div className="text-sm font-black text-apple-blue">+{log.Output_Qty}</div>
+                                                    <button
+                                                        type="button"
+                                                        onClick={() => handleReprintLog(log)}
+                                                        className="p-1.5 rounded-lg bg-blue-500/10 hover:bg-blue-500/20 text-blue-400 hover:text-blue-300 border border-blue-500/20 transition cursor-pointer active:scale-95"
+                                                        title="补打该批次标签"
+                                                    >
+                                                        <Printer size={13} />
+                                                    </button>
+                                                </div>
                                             </div>
                                         );
                                     })}
@@ -4479,6 +4655,15 @@ const ProductionControl: React.FC<ProductionControlProps> = ({ user, jobs = [], 
                 machineName={currentMachineName || selectedMachine || 'T-01 吹膜机'}
                 currentUser={user}
                 activeFactoryId={user?.factoryId}
+            />
+
+            {/* SoonMark M4201 热敏打印机控制弹窗 */}
+            <ThermalPrinterModal
+                isOpen={showPrinterModal}
+                onClose={() => setShowPrinterModal(false)}
+                currentMachine={selectedMachine}
+                currentSku={activeSku}
+                operatorName={operatorName}
             />
             
             <style>{`

@@ -3,12 +3,24 @@ import { DragDropContext, Droppable, Draggable, DropResult } from '@hello-pangea
 import { supabase } from '../services/supabase';
 import { getV2Items } from '../services/apiV2';
 import { determineState, findBestFactory, calculateLoad } from '../utils/logistics';
-import { generateDraftTripsWithDrivers, DraftTrip } from '../utils/autoRouting';
+import { generateDraftTrips, generateDraftTripsWithDrivers, DraftTrip } from '../utils/autoRouting';
+import {
+    generateBalancedDriverAssignments,
+    loadDispatchRules,
+    saveDispatchRules,
+    resetDispatchRules,
+    validateManualDriverAssignment,
+    isShortDistanceTrip,
+    DispatchRuleConfig,
+    DriverStats,
+    BalancedTripDraft
+} from '../utils/driverBalanceDispatch';
 import {
     Plus, Search, Calendar, FileText, X, Truck,
     User as UserIcon, Box, Zap, Trash2, Scissors, AlertTriangle, MapPin, Wrench, LayoutGrid, List, ArrowUp, ArrowDown,
     CheckCircle, XCircle, Camera, Sparkles, ImagePlus, Download,
-    RotateCcw, RefreshCw
+    RotateCcw, RefreshCw, Settings, ShieldCheck, Clock, Award, TrendingUp, Info,
+    ChevronDown, ChevronUp, Edit3
 } from 'lucide-react';
 import { WAREHOUSES } from '../data/factoryData';
 import {
@@ -61,6 +73,16 @@ const normalizeLoc = (locId: string): string => {
 
 const getDefaultLocForOrigin = (origin: string): string => {
     return normalizeWarehouseName(origin);
+};
+
+const normalizeLocationCode = (loc?: string | null): string => {
+    if (!loc) return 'Taiping';
+    const l = loc.trim().toUpperCase();
+    if (l.includes('TAIPING') || l === 'T1' || l === 'SPD' || l.includes('OPM')) return 'Taiping';
+    if (l.includes('NILAI') || l === 'N1') return 'Nilai';
+    if (l.includes('JOHOR') || l === 'J1') return 'Johor';
+    if (l.includes('KELANTAN') || l === 'K1') return 'Kelantan';
+    return loc.trim();
 };
 
 const getAvailableWarehousesForOrigin = (origin: string): string[] => {
@@ -508,10 +530,18 @@ const DeliveryOrderManagement: React.FC<DeliveryOrderManagementProps> = ({ user 
     const [viewMode, setViewMode] = useState<'kanban' | 'table' | 'dispatch'>('kanban');
     const [sortConfig, setSortConfig] = useState<{ key: string, dir: 'asc'|'desc' } | null>(null);
 
-    // Dispatch Planner States
+    // Dispatch Planner & Balanced Driver States
     const [selectedOrderIds, setSelectedOrderIds] = useState<string[]>([]);
-    const [autoDispatchDrafts, setAutoDispatchDrafts] = useState<DraftTrip[] | null>(null);
+    const [autoDispatchDrafts, setAutoDispatchDrafts] = useState<BalancedTripDraft[] | null>(null);
     const [isAutoDispatchModalOpen, setIsAutoDispatchModalOpen] = useState(false);
+    const [dispatchDriverStats, setDispatchDriverStats] = useState<Record<string, DriverStats>>({});
+    const [dispatchGroupAvg, setDispatchGroupAvg] = useState<number>(0);
+    const [dispatchRules, setDispatchRules] = useState<DispatchRuleConfig>(loadDispatchRules);
+    const [isDispatchRulesOpen, setIsDispatchRulesOpen] = useState(false);
+    const [isDispatchLoading, setIsDispatchLoading] = useState(false);
+    const [isDashboardCollapsed, setIsDashboardCollapsed] = useState(false);
+    const [showDoubleConfirmModal, setShowDoubleConfirmModal] = useState(false);
+    const [pendingConfirmWarnings, setPendingConfirmWarnings] = useState<string[]>([]);
 
     // Location Split State
     const [activeLocation, setActiveLocation] = useState<string>(() => localStorage.getItem('tripActiveLocation') || 'Taiping');
@@ -856,7 +886,7 @@ const DeliveryOrderManagement: React.FC<DeliveryOrderManagementProps> = ({ user 
         );
 
         const originLoc = o.trip_origin || 'TAIPING';
-        const matchesLocation = originLoc.toUpperCase() === activeLocation.toUpperCase();
+        const matchesLocation = normalizeLocationCode(originLoc) === normalizeLocationCode(activeLocation);
 
         return matchesStatus && matchesSearch && matchesDeliveryDate && matchesLocation;
     });
@@ -864,7 +894,7 @@ const DeliveryOrderManagement: React.FC<DeliveryOrderManagementProps> = ({ user 
     const activeDriversForLanes = React.useMemo(() => {
         // 1. Base drivers for the current active location
         const baseDrivers = drivers.filter(
-            d => (d.base_location || 'Taiping').toLowerCase() === activeLocation.toLowerCase()
+            d => normalizeLocationCode(d.base_location) === normalizeLocationCode(activeLocation)
         );
 
         // 2. Identify all driver IDs assigned to currently filtered orders
@@ -877,7 +907,7 @@ const DeliveryOrderManagement: React.FC<DeliveryOrderManagementProps> = ({ user 
         // 3. Find any drivers from other locations who are assigned to filtered orders
         const additionalDrivers = drivers.filter(
             d => assignedDriverIds.has(d.uid) && 
-                 (d.base_location || 'Taiping').toLowerCase() !== activeLocation.toLowerCase()
+                 normalizeLocationCode(d.base_location) !== normalizeLocationCode(activeLocation)
         );
 
         // 4. Handle any driver IDs assigned but not present in the driver list (unregistered/missing role)
@@ -1334,9 +1364,21 @@ const DeliveryOrderManagement: React.FC<DeliveryOrderManagementProps> = ({ user 
         return v2Items.find(i => i.sku.toLowerCase().includes(s) || s.includes(i.sku.toLowerCase())) || null;
     };
 
-    const matchV2ItemFromScan = (sku?: string, product?: string): V2Item | null => {
+    const matchV2ItemFromScan = (sku?: string, product?: string, remark?: string): V2Item | null => {
         // Alias normalization: shorthand "SF CLEAR" or "SF BLACK" without explicit weight defaults to 2.2KG
-        const raw = `${sku || ''} ${product || ''}`.toLowerCase().replace(/[-_]/g, ' ');
+        const raw = `${sku || ''} ${product || ''} ${remark || ''}`.toLowerCase().replace(/[-_]/g, ' ');
+        if (raw.includes('baby') || raw.includes('babyroll')) {
+            if (raw.includes('black') || raw.includes('hitam')) {
+                const found = v2Items.find(i => i.sku === 'SF-BABYROLL-BLACK');
+                if (found) return found;
+            }
+            if (raw.includes('clear')) {
+                const found = v2Items.find(i => i.sku === 'SF-BABYROLL-CLEAR');
+                if (found) return found;
+            }
+            const defaultBaby = v2Items.find(i => i.sku === 'SF-BABYROLL-CLEAR' || i.sku === 'SF-BABYROLL');
+            if (defaultBaby) return defaultBaby;
+        }
         if (raw.includes('sf clear') && !raw.includes('2.0')) {
             const found = v2Items.find(i => i.sku === 'SF-CLEAR-2.2');
             if (found) return found;
@@ -1372,7 +1414,8 @@ const DeliveryOrderManagement: React.FC<DeliveryOrderManagementProps> = ({ user 
             const qty = Number(r.quantity) || 1;
             const v2 = matchV2ItemFromScan(
                 r.sku != null ? String(r.sku) : undefined,
-                r.product != null ? String(r.product) : undefined
+                r.product != null ? String(r.product) : undefined,
+                r.remark != null ? String(r.remark) : undefined
             );
             parsed.push({
                 product: v2?.name || String(r.product || r.sku || 'Unknown'),
@@ -1631,7 +1674,8 @@ const DeliveryOrderManagement: React.FC<DeliveryOrderManagementProps> = ({ user 
                 if (sku || product) {
                     const v2 = matchV2ItemFromScan(
                         sku != null ? String(sku) : undefined,
-                        product != null ? String(product) : undefined
+                        product != null ? String(product) : undefined,
+                        notes != null ? String(notes) : undefined
                     );
 
                     groups[groupKey].items.push({
@@ -2029,51 +2073,240 @@ const DeliveryOrderManagement: React.FC<DeliveryOrderManagementProps> = ({ user 
         }
     };
 
-    const handleTriggerAutoDispatch = () => {
-        const unassigned = filteredOrders.filter(o => !o.driverId && (o.trip_origin || 'TAIPING').toUpperCase() === activeLocation.toUpperCase());
-        const activeDrivers = drivers.filter(d => (d.base_location || 'Taiping').toLowerCase() === activeLocation.toLowerCase());
+    const handleTriggerAutoDispatch = async (overrideRules?: DispatchRuleConfig) => {
+        const rulesToUse = overrideRules || dispatchRules;
+        const unassigned = selectedOrderIds.length > 0
+            ? filteredOrders.filter(o => selectedOrderIds.includes(o.id))
+            : filteredOrders.filter(o => !o.driverId && normalizeLocationCode(o.trip_origin) === normalizeLocationCode(activeLocation));
+        const activeDrivers = drivers.filter(d => normalizeLocationCode(d.base_location) === normalizeLocationCode(activeLocation));
 
         if (unassigned.length === 0) {
-            alert(t('There are no unallocated orders for smart order scheduling. (No unassigned orders for auto-dispatch.)'));
+            setToast({ type: 'info', message: t('No unassigned orders found for current factory.') });
             return;
         }
         if (activeDrivers.length === 0) {
-            alert(t('There are currently no drivers available for the warehouse. (No available drivers for active warehouse.)'));
+            setToast({ type: 'warning', message: t('No available drivers found for current factory.') });
             return;
         }
 
-        const drafts = generateDraftTripsWithDrivers(unassigned, activeDrivers);
-        setAutoDispatchDrafts(drafts);
-        setIsAutoDispatchModalOpen(true);
+        setIsDispatchLoading(true);
+        try {
+            // 1. 获取近 72 小时的交车解绑日志与考勤下班打卡
+            const driverIds = activeDrivers.map(d => d.uid || d.id).filter(Boolean);
+            const employeeIds = activeDrivers.map(d => (d as any).employee_id || (d as any).employeeId).filter(Boolean);
+            const attendanceQueryIds = Array.from(new Set([...driverIds, ...employeeIds]));
+            const threeDaysAgo = new Date(Date.now() - 3 * 24 * 3600 * 1000).toISOString();
+
+            const [shiftLogsRes, attendanceRes] = await Promise.all([
+                driverIds.length > 0
+                    ? supabase.from('lorry_mileage_logs')
+                        .select('*')
+                        .in('driver_id', driverIds)
+                        .gte('created_at', threeDaysAgo)
+                        .order('created_at', { ascending: false })
+                    : Promise.resolve({ data: [] }),
+                attendanceQueryIds.length > 0
+                    ? supabase.from('operator_attendance')
+                        .select('*')
+                        .in('operator_id', attendanceQueryIds)
+                        .gte('date', threeDaysAgo.split('T')[0])
+                        .order('date', { ascending: false })
+                    : Promise.resolve({ data: [] })
+            ]);
+
+            // 2. 将订单按区域与地址城镇智能聚合为车次并打包
+            const baseDrafts = generateDraftTrips(unassigned);
+
+            // 3. 执行智能休息保护与本月运费平衡派单算法
+            const result = generateBalancedDriverAssignments(
+                baseDrafts,
+                activeDrivers,
+                orders,
+                deliveryRates,
+                shiftLogsRes.data || [],
+                attendanceRes.data || [],
+                driverLeaves || [],
+                activeLocation,
+                rulesToUse
+            );
+
+            setAutoDispatchDrafts(result.trips);
+            setDispatchDriverStats(result.driverStatsMap);
+            setDispatchGroupAvg(result.groupAverageEarnings);
+            setIsAutoDispatchModalOpen(true);
+        } catch (err) {
+            console.error("Failed to calculate balanced auto dispatch:", err);
+            const fallbackDrafts = generateDraftTripsWithDrivers(unassigned, activeDrivers);
+            setAutoDispatchDrafts(fallbackDrafts as any);
+            setIsAutoDispatchModalOpen(true);
+        } finally {
+            setIsDispatchLoading(false);
+        }
     };
 
     const handleUpdateDraftTripDriver = (tripId: string, driverId: string) => {
         if (!autoDispatchDrafts) return;
-        const driver = drivers.find(d => d.uid === driverId);
+        const selectedDriver = drivers.find(d => (d.uid || d.id) === driverId);
+
         setAutoDispatchDrafts(prev => {
             if (!prev) return null;
-            return prev.map(trip => {
+            const targetTrip = prev.find(t => t.id === tripId);
+            if (!targetTrip) return prev;
+
+            const validation = validateManualDriverAssignment(
+                driverId,
+                targetTrip.targetDate,
+                targetTrip,
+                prev,
+                dispatchDriverStats,
+                dispatchRules
+            );
+
+            const updated = prev.map(trip => {
                 if (trip.id === tripId) {
                     return {
                         ...trip,
                         recommendedDriverId: driverId || null,
-                        recommendedDriverName: driver?.name || t('Not assigned')
+                        recommendedDriverName: selectedDriver?.name || t('Not assigned'),
+                        recommendationReason: validation.reason,
+                        recommendationBadgeColor: validation.severity as any,
+                        hasFatigueWarning: !validation.isValid,
+                        fatigueWarningDetail: !validation.isValid ? validation.reason : undefined
                     };
                 }
                 return trip;
             });
+
+            // 联动重算每位司机在本次方案下的预估总运费
+            setDispatchDriverStats(oldStats => {
+                const newStats = { ...oldStats };
+                Object.keys(newStats).forEach(dId => {
+                    newStats[dId] = {
+                        ...newStats[dId],
+                        projectedEarnings: newStats[dId].currentMtdEarnings,
+                        assignedNewTripsCount: 0
+                    };
+                });
+                updated.forEach(t => {
+                    if (t.recommendedDriverId && newStats[t.recommendedDriverId]) {
+                        newStats[t.recommendedDriverId].projectedEarnings += (t.estimatedEarnings || 0);
+                        newStats[t.recommendedDriverId].assignedNewTripsCount += 1;
+                    }
+                });
+                return newStats;
+            });
+
+            return updated;
         });
     };
 
-    const handleApplyAutoDispatch = async () => {
+    const handleUpdateTripEarnings = (tripId: string, customRateStr: string) => {
+        const customRate = parseFloat(customRateStr);
+        if (isNaN(customRate) || customRate < 0) return;
+
+        setAutoDispatchDrafts(prev => {
+            if (!prev) return null;
+            const updated = prev.map(t => {
+                if (t.id === tripId) {
+                    return {
+                        ...t,
+                        estimatedEarnings: customRate,
+                        isShortTrip: isShortDistanceTrip(t.originWarehouse, t.destinationsSummary, customRate, dispatchRules.shortTripMaxRate)
+                    };
+                }
+                return t;
+            });
+
+            setDispatchDriverStats(oldStats => {
+                const newStats = { ...oldStats };
+                Object.keys(newStats).forEach(dId => {
+                    newStats[dId] = {
+                        ...newStats[dId],
+                        projectedEarnings: newStats[dId].currentMtdEarnings,
+                        assignedNewTripsCount: 0
+                    };
+                });
+                updated.forEach(t => {
+                    if (t.recommendedDriverId && newStats[t.recommendedDriverId]) {
+                        newStats[t.recommendedDriverId].projectedEarnings += (t.estimatedEarnings || 0);
+                        newStats[t.recommendedDriverId].assignedNewTripsCount += 1;
+                    }
+                });
+                return newStats;
+            });
+
+            return updated;
+        });
+        setToast({ type: 'success', message: t('Trip rate updated successfully') });
+    };
+
+    const handleQuickUpdateOrderAddress = async (orderId: string, currentAddr: string) => {
+        const inputAddr = window.prompt(t('Enter delivery address:'), currentAddr || '');
+        if (inputAddr === null) return;
+        const trimmed = inputAddr.trim();
+        if (!trimmed) return;
+
+        try {
+            await supabase.from('sales_orders').update({ delivery_address: trimmed }).eq('id', orderId);
+            setOrders(prev => prev.map(o => o.id === orderId ? { ...o, deliveryAddress: trimmed } : o));
+            setAutoDispatchDrafts(prev => {
+                if (!prev) return null;
+                return prev.map(trip => ({
+                    ...trip,
+                    orders: trip.orders.map(o => o.id === orderId ? { ...o, deliveryAddress: trimmed } : o)
+                }));
+            });
+            setToast({ type: 'success', message: t('Address updated successfully') });
+        } catch (e) {
+            console.error(e);
+            setToast({ type: 'error', message: t('Failed to update address') });
+        }
+    };
+
+    const handleSaveRulesAndRecalculate = (newRules: DispatchRuleConfig) => {
+        setDispatchRules(newRules);
+        saveDispatchRules(newRules);
+        handleTriggerAutoDispatch(newRules);
+    };
+
+    const handleResetRules = () => {
+        const def = resetDispatchRules();
+        setDispatchRules(def);
+        handleTriggerAutoDispatch(def);
+    };
+
+    const handleApplyAutoDispatch = async (forceApproved = false) => {
         if (!autoDispatchDrafts) return;
+
+        // 检查是否存在疲劳/长途超限风险
+        if (!forceApproved) {
+            const riskWarnings: string[] = [];
+            autoDispatchDrafts.forEach(t => {
+                if (t.hasFatigueWarning && t.fatigueWarningDetail) {
+                    riskWarnings.push(`${t.name} (${t.recommendedDriverName}): ${t.fatigueWarningDetail}`);
+                }
+            });
+
+            if (riskWarnings.length > 0) {
+                setPendingConfirmWarnings(riskWarnings);
+                setShowDoubleConfirmModal(true);
+                return;
+            }
+        }
+
+        setShowDoubleConfirmModal(false);
         setIsSubmitting(true);
         try {
             const updates: any[] = [];
+            const assignedDriverIds = new Set<string>();
+            let assignedTripsCount = 0;
 
             autoDispatchDrafts.forEach(trip => {
                 const driverId = trip.recommendedDriverId;
                 if (!driverId) return;
+
+                assignedDriverIds.add(driverId);
+                assignedTripsCount += 1;
 
                 trip.orders.forEach((order, index) => {
                     updates.push(
@@ -2090,11 +2323,18 @@ const DeliveryOrderManagement: React.FC<DeliveryOrderManagementProps> = ({ user 
             await Promise.all(updates);
             setIsAutoDispatchModalOpen(false);
             setAutoDispatchDrafts(null);
-            alert(t('The smart order scheduling solution has been successfully applied! (Auto dispatch applied successfully!)'));
+            setToast({
+                type: 'success',
+                message: t(`Successfully scheduled {{trips}} trips for {{drivers}} drivers!`, {
+                    trips: assignedTripsCount,
+                    drivers: assignedDriverIds.size,
+                    defaultValue: `🎉 智能排单完成！成功为 ${assignedDriverIds.size} 位司机指派了 ${assignedTripsCount} 趟车次。`
+                })
+            });
             await fetchData();
         } catch (err) {
             console.error("Failed to apply auto dispatch:", err);
-            alert(t('Application of order scheduling plan failed. (Failed to apply auto dispatch.)'));
+            setToast({ type: 'error', message: t('Application of order scheduling plan failed. (Failed to apply auto dispatch.)') });
         } finally {
             setIsSubmitting(false);
         }
@@ -2585,16 +2825,16 @@ const DeliveryOrderManagement: React.FC<DeliveryOrderManagementProps> = ({ user 
                 <div>
                     <h1 className="text-3xl font-black text-white italic flex items-center gap-2">
                         <div className="bg-gradient-to-r from-blue-600 to-cyan-500 w-3 h-10 rounded-full"></div>
-                        Trip Management
+                        {t('Trip Management')}
                     </h1>
-                    <p className="text-slate-400 mt-1 font-medium">Assign trips, track deliveries, and manage fleet.</p>
+                    <p className="text-slate-400 mt-1 font-medium">{t('Assign trips, track deliveries, and manage fleet.')}</p>
                 </div>
                 <button
                     onClick={() => setIsCreateModalOpen(true)}
                     className="group relative bg-gradient-to-r from-blue-600 to-blue-500 hover:from-blue-500 hover:to-blue-400 text-white px-6 py-3 rounded-xl flex items-center gap-3 font-bold shadow-xl shadow-blue-900/20 transition-all active:scale-95"
                 >
                     <Plus size={20} />
-                    New Trip
+                    {t('New Trip')}
                 </button>
             </div>
 
@@ -2829,29 +3069,46 @@ const DeliveryOrderManagement: React.FC<DeliveryOrderManagementProps> = ({ user 
                         ))}
                     </div>
 
-                    {/* View Mode Toggle */}
-                    <div className="flex bg-slate-900 p-1 rounded-xl border border-slate-800 shrink-0 self-start md:self-center gap-1">
+                    {/* View Mode & Global Auto-Dispatch */}
+                    <div className="flex flex-wrap items-center gap-2 shrink-0 self-start md:self-center">
                         <button
-                            onClick={() => setViewMode('dispatch')}
-                            className={`px-3 py-2 rounded-lg text-xs font-bold uppercase transition-all flex items-center gap-1.5 ${viewMode === 'dispatch' ? 'bg-blue-600 text-white shadow-lg shadow-blue-900/50' : 'text-slate-400 hover:bg-slate-800'}`}
-                            title={t('Dispatch Planner (intelligent/manual order scheduling)')}
+                            onClick={() => handleTriggerAutoDispatch()}
+                            disabled={isDispatchLoading}
+                            className="bg-gradient-to-r from-violet-600 to-indigo-600 hover:from-violet-500 hover:to-indigo-500 text-white px-3.5 py-2 rounded-xl text-xs font-bold flex items-center gap-2 shadow-lg shadow-violet-950/30 transition-all active:scale-95 shrink-0 cursor-pointer disabled:opacity-50"
+                            title={t('One-click smart order scheduling')}
                         >
-                            <Truck size={14} /> Dispatch Planner
+                            <Sparkles size={14} className={isDispatchLoading ? "animate-spin" : "animate-pulse"} />
+                            <span>{isDispatchLoading ? t('Calculating optimal dispatch...') : t('One-click smart order scheduling')}</span>
+                            {filteredOrders.filter(o => !o.driverId).length > 0 && (
+                                <span className="bg-white/20 text-white text-[10px] px-1.5 py-0.2 rounded-full font-mono font-bold">
+                                    {filteredOrders.filter(o => !o.driverId).length}
+                                </span>
+                            )}
                         </button>
-                        <button
-                            onClick={() => setViewMode('kanban')}
-                            className={`p-2 rounded-lg transition-all ${viewMode === 'kanban' ? 'bg-blue-600 text-white shadow-lg shadow-blue-900/50' : 'text-slate-400 hover:bg-slate-800'}`}
-                            title="Kanban Board"
-                        >
-                            <LayoutGrid size={18} />
-                        </button>
-                        <button
-                            onClick={() => setViewMode('table')}
-                            className={`p-2 rounded-lg transition-all ${viewMode === 'table' ? 'bg-blue-600 text-white shadow-lg shadow-blue-900/50' : 'text-slate-400 hover:bg-slate-800'}`}
-                            title="Table View"
-                        >
-                            <List size={18} />
-                        </button>
+
+                        <div className="flex bg-slate-900 p-1 rounded-xl border border-slate-800 gap-1">
+                            <button
+                                onClick={() => setViewMode('dispatch')}
+                                className={`px-3 py-2 rounded-lg text-xs font-bold uppercase transition-all flex items-center gap-1.5 ${viewMode === 'dispatch' ? 'bg-blue-600 text-white shadow-lg shadow-blue-900/50' : 'text-slate-400 hover:bg-slate-800'}`}
+                                title={t('Dispatch Planner (intelligent/manual order scheduling)')}
+                            >
+                                <Truck size={14} /> {t('Dispatch Planner')}
+                            </button>
+                            <button
+                                onClick={() => setViewMode('kanban')}
+                                className={`p-2 rounded-lg transition-all ${viewMode === 'kanban' ? 'bg-blue-600 text-white shadow-lg shadow-blue-900/50' : 'text-slate-400 hover:bg-slate-800'}`}
+                                title={t('Kanban Board')}
+                            >
+                                <LayoutGrid size={18} />
+                            </button>
+                            <button
+                                onClick={() => setViewMode('table')}
+                                className={`p-2 rounded-lg transition-all ${viewMode === 'table' ? 'bg-blue-600 text-white shadow-lg shadow-blue-900/50' : 'text-slate-400 hover:bg-slate-800'}`}
+                                title={t('Table View')}
+                            >
+                                <List size={18} />
+                            </button>
+                        </div>
                     </div>
                 </div>
 
@@ -3015,13 +3272,13 @@ const DeliveryOrderManagement: React.FC<DeliveryOrderManagementProps> = ({ user 
                                 </select>
 
                                 <button
-                                    onClick={handleTriggerAutoDispatch}
-                                    className="bg-gradient-to-r from-violet-600 to-indigo-600 hover:from-violet-500 hover:to-indigo-500 text-white px-3 py-1.5 rounded-lg text-xs font-bold flex items-center gap-1.5 shadow-lg shadow-violet-950/30 transition-all active:scale-95 shrink-0"
+                                    onClick={() => handleTriggerAutoDispatch()}
+                                    disabled={isDispatchLoading}
+                                    className="bg-gradient-to-r from-violet-600 to-indigo-600 hover:from-violet-500 hover:to-indigo-500 text-white px-3 py-1.5 rounded-lg text-xs font-bold flex items-center gap-1.5 shadow-lg shadow-violet-950/30 transition-all active:scale-95 shrink-0 cursor-pointer disabled:opacity-50"
                                 >
-                                    <Sparkles size={13} className="animate-pulse" />
-                                    
-                                                                        {t('One-click smart order scheduling')}
-                                                                    </button>
+                                    <Sparkles size={13} className={isDispatchLoading ? "animate-spin" : "animate-pulse"} />
+                                    {isDispatchLoading ? t('Calculating optimal dispatch...') : t('One-click smart order scheduling')}
+                                </button>
                             </div>
                         </div>
 
@@ -3325,7 +3582,7 @@ const DeliveryOrderManagement: React.FC<DeliveryOrderManagementProps> = ({ user 
                                         </div>
                                         <div>
                                             <div className="flex items-center gap-2">
-                                                <span className={`font-bold text-sm ${isUnassigned ? 'text-slate-400' : 'text-white'}`}>{driver.name || 'Unknown'}</span>
+                                                <span className={`font-bold text-sm ${isUnassigned ? 'text-slate-400' : 'text-white'}`}>{isUnassigned ? t('📦 Unassigned / New') : (driver.name || 'Unknown')}</span>
                                                 {!isUnassigned && driverLeaves.some(l => l.employee_id === driver.uid && l.status === 'Approved' && (() => {
                                                     const today = new Date().toLocaleDateString('en-CA');
                                                     const start = (l.start_date || '').slice(0, 10);
@@ -3351,7 +3608,7 @@ const DeliveryOrderManagement: React.FC<DeliveryOrderManagementProps> = ({ user 
                                                         )}
                                                     </>
                                                 )}
-                                                {isUnassigned && <><Box size={10} /> Pending Assign</>}
+                                                {isUnassigned && <><Box size={10} /> {t('Pending Assign')}</>}
                                             </div>
                                         </div>
                                     </div>
@@ -3360,6 +3617,21 @@ const DeliveryOrderManagement: React.FC<DeliveryOrderManagementProps> = ({ user 
                                         <div className="text-[9px] font-bold text-zinc-600 uppercase tracking-widest">Orders</div>
                                     </div>
                                 </div>
+
+                                {/* One-click Smart Auto-Dispatch Button for Unassigned Column */}
+                                {isUnassigned && (
+                                    <div className="pt-0.5">
+                                        <button
+                                            type="button"
+                                            onClick={() => handleTriggerAutoDispatch()}
+                                            disabled={isDispatchLoading || driverOrders.length === 0}
+                                            className="w-full bg-gradient-to-r from-violet-600 to-indigo-600 hover:from-violet-500 hover:to-indigo-500 disabled:opacity-50 text-white px-3 py-2 rounded-xl text-xs font-bold flex items-center justify-center gap-1.5 shadow-lg shadow-violet-950/30 transition-all active:scale-98 cursor-pointer"
+                                        >
+                                            <Sparkles size={13} className={isDispatchLoading ? "animate-spin" : "animate-pulse"} />
+                                            {isDispatchLoading ? t('Calculating optimal dispatch...') : t('One-click smart order scheduling')}
+                                        </button>
+                                    </div>
+                                )}
 
                                 {/* Orders List (Droppable) */}
                                 <Droppable droppableId={driver.uid}>
@@ -3496,6 +3768,42 @@ const DeliveryOrderManagement: React.FC<DeliveryOrderManagementProps> = ({ user 
                                                                     )}
                                                                 </div>
                                                             </div>
+
+                                                            {/* Customer & Address details with Missing Warning */}
+                                                            <div className="mb-2.5">
+                                                                <div className="text-xs text-white font-bold truncate">{order.customer || t('Unnamed Customer')}</div>
+                                                                {order.deliveryAddress && order.deliveryAddress.trim() ? (
+                                                                    <div className="text-[11px] text-slate-400 flex items-start gap-1 mt-0.5 group/addr">
+                                                                        <MapPin size={11} className="text-slate-500 shrink-0 mt-0.5" />
+                                                                        <span className="line-clamp-1 flex-1">{order.deliveryAddress}</span>
+                                                                        <button
+                                                                            type="button"
+                                                                            onClick={(e) => {
+                                                                                e.stopPropagation();
+                                                                                handleQuickUpdateOrderAddress(order.id, order.deliveryAddress || '');
+                                                                            }}
+                                                                            className="opacity-0 group-hover/addr:opacity-100 text-slate-500 hover:text-blue-400 p-0.5 transition-opacity"
+                                                                            title={t('Edit address')}
+                                                                        >
+                                                                            <Edit3 size={10} />
+                                                                        </button>
+                                                                    </div>
+                                                                ) : (
+                                                                    <button
+                                                                        type="button"
+                                                                        onClick={(e) => {
+                                                                            e.stopPropagation();
+                                                                            handleQuickUpdateOrderAddress(order.id, '');
+                                                                        }}
+                                                                        className="mt-1 text-[10px] font-bold text-amber-400 bg-amber-500/10 hover:bg-amber-500/20 border border-amber-500/30 px-2 py-0.5 rounded flex items-center gap-1 transition-colors cursor-pointer"
+                                                                        title={t('Click to fill address')}
+                                                                    >
+                                                                        <AlertTriangle size={11} className="text-amber-400 shrink-0" />
+                                                                        <span>⚠️ {t('Missing Delivery Address')} ({t('Click to fill address')})</span>
+                                                                    </button>
+                                                                )}
+                                                            </div>
+
                                                             <div className="text-xs text-slate-500 flex items-center gap-2 mb-3">
                                                                 <Calendar size={14} className="text-slate-600 shrink-0" />
                                                                 <div className="flex flex-col gap-0.5 leading-tight">
@@ -4703,78 +5011,322 @@ const DeliveryOrderManagement: React.FC<DeliveryOrderManagementProps> = ({ user 
             {/* --- SMART AUTO DISPATCH MODAL --- */}
             {isAutoDispatchModalOpen && autoDispatchDrafts && (
                 <div className="fixed inset-0 bg-black/85 backdrop-blur-sm flex items-center justify-center z-[100] p-4 animate-in fade-in duration-200">
-                    <div className="bg-[#09090b] w-full max-w-4xl rounded-2xl border border-slate-800 shadow-2xl overflow-hidden flex flex-col max-h-[90vh]">
+                    <div className="bg-[#09090b] w-full max-w-5xl rounded-2xl border border-slate-800 shadow-2xl overflow-hidden flex flex-col max-h-[92vh]">
                         {/* Header */}
-                        <div className="p-5 border-b border-slate-800 flex justify-between items-center bg-slate-900/50">
+                        <div className="p-5 border-b border-slate-800 flex justify-between items-center bg-slate-900/60">
                             <div>
                                 <h3 className="text-lg font-bold text-white flex items-center gap-2">
                                     <Sparkles size={20} className="text-violet-400" />
-                                    
-                                                                        {t('Smart Auto-Dispatch Recommendation')}
-                                                                    </h3>
-                                <p className="text-xs text-slate-500 mt-1">
-                                    
-                                                                        {t('The system has automatically aggregated carpooling based on the delivery area (Zone) and performed capacity packing. Please review and assign final driver.')}
-                                                                    </p>
+                                    {t('Smart Auto-Dispatch Recommendation')}
+                                    <span className="text-[10px] bg-emerald-500/10 text-emerald-400 border border-emerald-500/20 px-2 py-0.5 rounded-full font-bold">
+                                        {t('Earnings Balanced & Rest Protected')}
+                                    </span>
+                                </h3>
+                                <p className="text-xs text-slate-400 mt-1">
+                                    {t('Prioritizes drivers with lower MTD earnings while ensuring 10h rest and daily trip limits.')}
+                                </p>
                             </div>
-                            <button
-                                onClick={() => {
-                                    setIsAutoDispatchModalOpen(false);
-                                    setAutoDispatchDrafts(null);
-                                }}
-                                className="text-slate-500 hover:text-white p-2 hover:bg-slate-800 rounded-lg transition-colors"
-                            >
-                                <X size={20} />
-                            </button>
+                            <div className="flex items-center gap-2">
+                                <button
+                                    onClick={() => setIsDispatchRulesOpen(!isDispatchRulesOpen)}
+                                    className={`px-3 py-1.5 rounded-xl border text-xs font-bold flex items-center gap-1.5 transition-all ${
+                                        isDispatchRulesOpen
+                                            ? 'bg-violet-600 border-violet-500 text-white shadow-lg shadow-violet-900/40'
+                                            : 'bg-slate-800 border-slate-700 text-slate-300 hover:text-white hover:bg-slate-700'
+                                    }`}
+                                >
+                                    <Settings size={14} className={isDispatchRulesOpen ? 'animate-spin' : ''} />
+                                    {t('Rules Config')}
+                                </button>
+                                <button
+                                    onClick={() => {
+                                        setIsAutoDispatchModalOpen(false);
+                                        setAutoDispatchDrafts(null);
+                                    }}
+                                    className="text-slate-500 hover:text-white p-2 hover:bg-slate-800 rounded-lg transition-colors"
+                                >
+                                    <X size={20} />
+                                </button>
+                            </div>
                         </div>
+
+                        {/* Rules Config Drawer */}
+                        {isDispatchRulesOpen && (
+                            <div className="bg-slate-950/95 border-b border-slate-800 p-4 animate-in slide-in-from-top-2 duration-200">
+                                <div className="max-w-4xl mx-auto space-y-3">
+                                    <div className="flex items-center justify-between">
+                                        <div className="flex items-center gap-2 text-xs font-bold text-slate-300">
+                                            <ShieldCheck size={16} className="text-violet-400" />
+                                            <span>{t('Dispatch & Fatigue Protection Rules')}</span>
+                                            <span className="text-[10px] text-slate-500">({t('Adjust parameters and re-calculate')})</span>
+                                        </div>
+                                        <button
+                                            onClick={handleResetRules}
+                                            className="text-[11px] text-slate-400 hover:text-white underline decoration-slate-600 transition-colors"
+                                        >
+                                            {t('Reset to Defaults')}
+                                        </button>
+                                    </div>
+                                    <div className="grid grid-cols-2 sm:grid-cols-4 gap-3 text-xs">
+                                        <div className="bg-slate-900 p-2.5 rounded-xl border border-slate-800">
+                                            <label className="text-[10px] font-bold text-slate-400 block mb-1">
+                                                {t('Min Rest Hours (h)')}
+                                            </label>
+                                            <input
+                                                type="number"
+                                                min="4"
+                                                max="24"
+                                                step="0.5"
+                                                className="w-full bg-slate-950 border border-slate-700 rounded px-2 py-1 text-white font-mono font-bold"
+                                                value={dispatchRules.minRestHours}
+                                                onChange={(e) => setDispatchRules({ ...dispatchRules, minRestHours: parseFloat(e.target.value) || 0 })}
+                                            />
+                                        </div>
+                                        <div className="bg-slate-900 p-2.5 rounded-xl border border-slate-800">
+                                            <label className="text-[10px] font-bold text-slate-400 block mb-1">
+                                                {t('Short Trip Threshold (RM)')}
+                                            </label>
+                                            <input
+                                                type="number"
+                                                min="50"
+                                                max="1000"
+                                                step="10"
+                                                className="w-full bg-slate-950 border border-slate-700 rounded px-2 py-1 text-white font-mono font-bold"
+                                                value={dispatchRules.shortTripMaxRate}
+                                                onChange={(e) => setDispatchRules({ ...dispatchRules, shortTripMaxRate: parseFloat(e.target.value) || 0 })}
+                                            />
+                                        </div>
+                                        <div className="bg-slate-900 p-2.5 rounded-xl border border-slate-800">
+                                            <label className="text-[10px] font-bold text-slate-400 block mb-1">
+                                                {t('Max Short Trips / Day')}
+                                            </label>
+                                            <input
+                                                type="number"
+                                                min="1"
+                                                max="5"
+                                                className="w-full bg-slate-950 border border-slate-700 rounded px-2 py-1 text-white font-mono font-bold"
+                                                value={dispatchRules.maxShortTripsPerDay}
+                                                onChange={(e) => setDispatchRules({ ...dispatchRules, maxShortTripsPerDay: parseInt(e.target.value) || 1 })}
+                                            />
+                                        </div>
+                                        <div className="bg-slate-900 p-2.5 rounded-xl border border-slate-800">
+                                            <label className="text-[10px] font-bold text-slate-400 block mb-1">
+                                                {t('Max Daily Work Hours (h)')}
+                                            </label>
+                                            <input
+                                                type="number"
+                                                min="4"
+                                                max="24"
+                                                className="w-full bg-slate-950 border border-slate-700 rounded px-2 py-1 text-white font-mono font-bold"
+                                                value={dispatchRules.maxDailyWorkHours}
+                                                onChange={(e) => setDispatchRules({ ...dispatchRules, maxDailyWorkHours: parseFloat(e.target.value) || 0 })}
+                                            />
+                                        </div>
+                                    </div>
+                                    <div className="flex justify-end pt-1">
+                                        <button
+                                            onClick={() => handleSaveRulesAndRecalculate(dispatchRules)}
+                                            disabled={isDispatchLoading}
+                                            className="px-4 py-1.5 bg-violet-600 hover:bg-violet-500 text-white font-bold text-xs rounded-lg flex items-center gap-1.5 shadow-md shadow-violet-900/30 transition-all cursor-pointer"
+                                        >
+                                            <RefreshCw size={12} className={isDispatchLoading ? 'animate-spin' : ''} />
+                                            {t('Save & Re-calculate')}
+                                        </button>
+                                    </div>
+                                </div>
+                            </div>
+                        )}
 
                         {/* Body */}
                         <div className="p-6 overflow-y-auto custom-scrollbar flex-1 space-y-6">
+                            {/* Driver Month-to-Date Earnings & Rest Status Overview Bar */}
+                            {Object.keys(dispatchDriverStats).length > 0 && (
+                                <div className="bg-slate-950/80 border border-slate-800/80 rounded-xl p-4">
+                                    <div className="flex items-center justify-between">
+                                        <div className="flex items-center gap-2">
+                                            <TrendingUp size={16} className="text-emerald-400" />
+                                            <span className="text-xs font-bold text-slate-200">
+                                                {t('Driver Month-to-Date Earnings & Balance Overview')}
+                                            </span>
+                                            {dispatchGroupAvg > 0 && (
+                                                <span className="text-[10px] text-slate-400 font-mono bg-slate-900 px-2 py-0.5 rounded border border-slate-800">
+                                                    {t('Group Avg:')} RM {Math.round(dispatchGroupAvg).toLocaleString()}
+                                                </span>
+                                            )}
+                                        </div>
+                                        <div className="flex items-center gap-3">
+                                            <span className="text-[10px] text-slate-500 hidden sm:inline">
+                                                {t('Dynamic live recalculation upon reassignment')}
+                                            </span>
+                                            <button
+                                                type="button"
+                                                onClick={() => setIsDashboardCollapsed(!isDashboardCollapsed)}
+                                                className="text-xs text-slate-300 hover:text-white flex items-center gap-1 px-2.5 py-1 bg-slate-900 hover:bg-slate-800 rounded-lg border border-slate-800 cursor-pointer transition-colors"
+                                            >
+                                                {isDashboardCollapsed ? <ChevronDown size={14} /> : <ChevronUp size={14} />}
+                                                <span>{isDashboardCollapsed ? t('Expand Dashboard') : t('Collapse Dashboard')}</span>
+                                            </button>
+                                        </div>
+                                    </div>
+
+                                    {!isDashboardCollapsed && (
+                                        <div className="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-3 lg:grid-cols-4 gap-2.5 max-h-[175px] overflow-y-auto pr-1 custom-scrollbar mt-3 pt-3 border-t border-slate-800/60">
+                                            {Object.values(dispatchDriverStats).map(ds => {
+                                                const newlyAdded = ds.projectedEarnings - ds.currentMtdEarnings;
+                                                return (
+                                                    <div
+                                                        key={ds.driverId}
+                                                        className="bg-slate-900/80 border border-slate-800 rounded-lg p-2.5 flex flex-col justify-between"
+                                                    >
+                                                        <div className="flex justify-between items-start mb-1.5">
+                                                            <div className="font-bold text-xs text-white truncate max-w-[120px]">
+                                                                {ds.driverName}
+                                                            </div>
+                                                            <span className={`text-[9px] font-bold px-1.5 py-0.5 rounded border ${
+                                                                ds.isRestSufficient
+                                                                    ? 'bg-emerald-500/10 text-emerald-400 border-emerald-500/20'
+                                                                    : 'bg-amber-500/10 text-amber-400 border-amber-500/20'
+                                                            }`}>
+                                                                {ds.restStatusText}
+                                                            </span>
+                                                        </div>
+                                                        <div className="space-y-1">
+                                                            <div className="flex justify-between items-baseline text-[10px] font-mono">
+                                                                <span className="text-slate-400">{t('Current MTD:')}</span>
+                                                                <span className="text-slate-300 font-bold">RM {Math.round(ds.currentMtdEarnings).toLocaleString()}</span>
+                                                            </div>
+                                                            <div className="flex justify-between items-baseline text-[10px] font-mono border-t border-slate-800/60 pt-1">
+                                                                <span className="text-slate-400">{t('Projected:')}</span>
+                                                                <span className="text-emerald-400 font-black">
+                                                                    RM {Math.round(ds.projectedEarnings).toLocaleString()}
+                                                                    {newlyAdded > 0 && (
+                                                                        <span className="text-[9px] text-emerald-500 font-normal ml-1">
+                                                                            (+{Math.round(newlyAdded)})
+                                                                        </span>
+                                                                    )}
+                                                                </span>
+                                                            </div>
+                                                        </div>
+                                                    </div>
+                                                );
+                                            })}
+                                        </div>
+                                    )}
+                                </div>
+                            )}
+
                             {autoDispatchDrafts.length === 0 ? (
                                 <div className="text-center py-12 text-slate-500 italic">
-                                    
-                                                                        {t('No recommended carpool itineraries were generated.')}
-                                                                    </div>
+                                    {t('No recommended carpool itineraries were generated.')}
+                                </div>
                             ) : (
                                 autoDispatchDrafts.map((trip, tIdx) => (
                                     <div key={trip.id || tIdx} className="bg-slate-900/40 border border-slate-800 rounded-xl p-4 flex flex-col gap-3">
                                         <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3 pb-3 border-b border-slate-800/80">
                                             <div>
-                                                <div className="text-sm font-bold text-white flex items-center gap-2">
+                                                <div className="text-sm font-bold text-white flex flex-wrap items-center gap-2">
                                                     <Truck size={16} className="text-violet-400" />
                                                     {trip.name}
-                                                </div>
-                                                <div className="text-[10px] text-slate-500 font-mono mt-0.5">
                                                     
-                                                                                                        {t('Zone Zone:')} <span className="text-slate-300 font-bold">{trip.zone}</span>
+                                                    {/* Trip Rate with Quick Edit & 0-rate Warning */}
+                                                    <div className="flex items-center gap-1.5">
+                                                        {(!trip.estimatedEarnings || trip.estimatedEarnings <= 0) ? (
+                                                            <span className="text-[10px] font-bold text-amber-400 bg-amber-500/15 border border-amber-500/30 px-2 py-0.5 rounded animate-pulse flex items-center gap-1">
+                                                                ⚠️ {t('No delivery rate configured')}
+                                                            </span>
+                                                        ) : null}
+                                                        <div className="flex items-center gap-1 bg-slate-950 border border-slate-800 rounded px-2 py-0.5 focus-within:border-violet-500" title={t('Click to edit rate')}>
+                                                            <span className="text-[10px] text-slate-500 font-bold">RM</span>
+                                                            <input
+                                                                type="number"
+                                                                min="0"
+                                                                step="10"
+                                                                defaultValue={trip.estimatedEarnings ? Math.round(trip.estimatedEarnings) : 0}
+                                                                onBlur={(e) => handleUpdateTripEarnings(trip.id, e.target.value)}
+                                                                onKeyDown={(e) => {
+                                                                    if (e.key === 'Enter') {
+                                                                        handleUpdateTripEarnings(trip.id, (e.target as HTMLInputElement).value);
+                                                                        (e.target as HTMLInputElement).blur();
+                                                                    }
+                                                                }}
+                                                                className={`w-16 bg-transparent text-xs font-mono font-black focus:outline-none text-right ${
+                                                                    trip.estimatedEarnings && trip.estimatedEarnings > 0 ? 'text-amber-400' : 'text-amber-300'
+                                                                }`}
+                                                            />
+                                                            <Edit3 size={11} className="text-slate-600 ml-0.5 pointer-events-none" />
+                                                        </div>
+                                                    </div>
+
+                                                    <span className={`text-[9px] font-bold px-1.5 py-0.5 rounded uppercase ${
+                                                        trip.isShortTrip 
+                                                            ? 'bg-blue-500/10 text-blue-400 border border-blue-500/20' 
+                                                            : 'bg-orange-500/10 text-orange-400 border border-orange-500/20'
+                                                    }`}>
+                                                        {trip.isShortTrip ? t('Local Short Trip') : t('Outstation Long Trip')}
+                                                    </span>
                                                 </div>
+
+                                                {/* Structured Route Distribution */}
+                                                <div className="text-xs text-slate-300 font-medium mt-1.5 flex flex-wrap items-center gap-2">
+                                                    <span className="bg-slate-950 px-2 py-0.5 rounded border border-slate-800 font-mono text-[11px] text-slate-300 flex items-center gap-1.5">
+                                                        <MapPin size={12} className="text-violet-400 shrink-0" />
+                                                        <span className="text-slate-400">{t('Route:')}</span>
+                                                        <strong className="text-slate-100">{trip.destinationsSummary || trip.zone}</strong>
+                                                    </span>
+                                                    <span className="text-[10px] text-slate-500 font-mono">
+                                                        ({t('Zone:')} {trip.zone})
+                                                    </span>
+                                                </div>
+
+                                                {trip.recommendationReason && (
+                                                    <div className="mt-1.5">
+                                                        <span className={`text-[10px] font-bold px-2 py-0.5 rounded border inline-flex items-center gap-1 ${
+                                                            trip.recommendationBadgeColor === 'emerald'
+                                                                ? 'bg-emerald-500/10 text-emerald-400 border-emerald-500/20'
+                                                                : trip.recommendationBadgeColor === 'purple'
+                                                                ? 'bg-purple-500/10 text-purple-400 border-purple-500/20'
+                                                                : trip.recommendationBadgeColor === 'amber'
+                                                                ? 'bg-amber-500/10 text-amber-400 border-amber-500/20'
+                                                                : trip.recommendationBadgeColor === 'red'
+                                                                ? 'bg-red-500/10 text-red-400 border-red-500/20 animate-pulse font-black'
+                                                                : 'bg-blue-500/10 text-blue-400 border-blue-500/20'
+                                                        }`}>
+                                                            {trip.recommendationBadgeColor === 'red' ? (
+                                                                <AlertTriangle size={11} className="text-red-400" />
+                                                            ) : (
+                                                                <Sparkles size={11} />
+                                                            )}
+                                                            {trip.recommendationReason}
+                                                        </span>
+                                                    </div>
+                                                )}
                                             </div>
 
-                                            <div className="flex flex-wrap items-center gap-4 text-xs font-mono">
-                                                <div className="bg-slate-950 px-2.5 py-1 rounded border border-slate-800">
-                                                    
-                                                                                                        {t('Volume Vol:')} <span className={`font-bold ${trip.totalVol > 20 ? 'text-red-400 font-black' : 'text-emerald-400'}`}>{trip.totalVol.toFixed(2)} m³</span>
-                                                </div>
-                                                <div className="bg-slate-950 px-2.5 py-1 rounded border border-slate-800">
-                                                    
-                                                                                                        {t('Weight Wgt:')} <span className={`font-bold ${trip.totalWeight > 3000 ? 'text-red-400 font-black' : 'text-emerald-400'}`}>{trip.totalWeight.toFixed(2)} kg</span>
+                                            <div className="flex flex-wrap items-center gap-3 text-xs font-mono">
+                                                <div className="bg-slate-950 px-2.5 py-1 rounded border border-slate-800 text-[11px]">
+                                                    {t('Drops:')} <span className="font-bold text-slate-200">{trip.dropCount || trip.orders?.length || 1}</span>
                                                 </div>
                                                 
                                                 <div className="flex items-center gap-2">
-                                                    <span className="text-[10px] font-bold text-slate-400 uppercase">{t('Assigned driver:')}</span>
+                                                    <span className="text-[10px] font-bold text-slate-400 uppercase">{t('Driver:')}</span>
                                                     <select
-                                                        className="bg-slate-950 border border-slate-800 rounded px-2 py-1 text-xs text-white outline-none focus:border-violet-500"
+                                                        className="bg-slate-950 border border-slate-800 rounded px-2 py-1 text-xs text-white outline-none focus:border-violet-500 font-sans"
                                                         value={trip.recommendedDriverId || ''}
                                                         onChange={(e) => handleUpdateDraftTripDriver(trip.id, e.target.value)}
                                                     >
                                                         <option value="">{t('-- Unassigned --')}</option>
                                                         {drivers
                                                             .filter(d => (d.base_location || 'Taiping').toLowerCase() === activeLocation.toLowerCase())
-                                                            .map(d => (
-                                                                <option key={d.uid} value={d.uid}>
-                                                                    {d.name}
-                                                                </option>
-                                                            ))
+                                                            .map(d => {
+                                                                const stat = dispatchDriverStats[d.uid || d.id];
+                                                                const mtd = stat ? Math.round(stat.currentMtdEarnings) : 0;
+                                                                const rest = stat && stat.restHoursFromLastWork < 90 ? `(休${stat.restHoursFromLastWork.toFixed(0)}h)` : '';
+                                                                return (
+                                                                    <option key={d.uid || d.id} value={d.uid || d.id}>
+                                                                        {d.name} - RM {mtd} {rest}
+                                                                    </option>
+                                                                );
+                                                            })
                                                         }
                                                     </select>
                                                 </div>
@@ -4786,21 +5338,50 @@ const DeliveryOrderManagement: React.FC<DeliveryOrderManagementProps> = ({ user 
                                             <div className="text-[10px] font-bold text-slate-500 uppercase tracking-widest">{t('Contains delivery note (')}{trip.orders.length}  {t('one)')}</div>
                                             <div className="grid grid-cols-1 md:grid-cols-2 gap-3">
                                                 {trip.orders.map((order, oIdx) => (
-                                                    <div key={order.id || oIdx} className="bg-slate-950 p-3 rounded-lg border border-slate-800/80 text-xs">
-                                                        <div className="flex justify-between items-center gap-2 mb-1.5">
-                                                            <span className="font-mono font-black text-blue-400 bg-blue-500/10 px-1.5 py-0.5 rounded border border-blue-500/20 text-[10px]">
-                                                                {order.orderNumber}
-                                                            </span>
-                                                            {order.deliveryAddress && (
-                                                                <span className={`text-[8px] font-bold px-1 py-0.5 rounded border uppercase tracking-wider ${getStateColor(determineState(order.deliveryAddress))}`}>
-                                                                    {determineState(order.deliveryAddress)}
+                                                    <div key={order.id || oIdx} className="bg-slate-950 p-3 rounded-lg border border-slate-800/80 text-xs flex flex-col justify-between">
+                                                        <div>
+                                                            <div className="flex justify-between items-center gap-2 mb-1.5">
+                                                                <span className="font-mono font-black text-blue-400 bg-blue-500/10 px-1.5 py-0.5 rounded border border-blue-500/20 text-[10px]">
+                                                                    {order.orderNumber}
                                                                 </span>
+                                                                {order.deliveryAddress && (
+                                                                    <span className={`text-[8px] font-bold px-1 py-0.5 rounded border uppercase tracking-wider ${getStateColor(determineState(order.deliveryAddress))}`}>
+                                                                        {determineState(order.deliveryAddress)}
+                                                                    </span>
+                                                                )}
+                                                            </div>
+                                                            <div className="font-bold text-slate-200 mb-1 truncate">{order.customer || t('Customer')}</div>
+                                                            
+                                                            {/* Delivery Address with Missing Warning & Quick Edit */}
+                                                            {order.deliveryAddress && order.deliveryAddress.trim() ? (
+                                                                <div className="text-[10px] text-slate-400 flex items-start gap-1 mb-2 group/addr">
+                                                                    <MapPin size={11} className="text-slate-500 shrink-0 mt-0.5" />
+                                                                    <span className="line-clamp-2 flex-1">{order.deliveryAddress}</span>
+                                                                    <button
+                                                                        type="button"
+                                                                        onClick={() => handleQuickUpdateOrderAddress(order.id, order.deliveryAddress || '')}
+                                                                        className="opacity-0 group-hover/addr:opacity-100 text-slate-500 hover:text-violet-400 p-0.5 transition-opacity cursor-pointer"
+                                                                        title={t('Click to fill address')}
+                                                                    >
+                                                                        <Edit3 size={11} />
+                                                                    </button>
+                                                                </div>
+                                                            ) : (
+                                                                <div className="mb-2">
+                                                                    <button
+                                                                        type="button"
+                                                                        onClick={() => handleQuickUpdateOrderAddress(order.id, '')}
+                                                                        className="text-[10px] font-bold text-amber-400 bg-amber-500/10 hover:bg-amber-500/20 border border-amber-500/30 px-2 py-1 rounded flex items-center gap-1.5 transition-colors cursor-pointer w-full text-left"
+                                                                        title={t('Click to fill address')}
+                                                                    >
+                                                                        <AlertTriangle size={12} className="text-amber-400 shrink-0" />
+                                                                        <span>⚠️ {t('Missing Delivery Address')} ({t('Click to fill address')})</span>
+                                                                    </button>
+                                                                </div>
                                                             )}
                                                         </div>
-                                                        <div className="font-bold text-slate-200 mb-0.5 truncate">{order.customer}</div>
-                                                        <div className="text-[10px] text-slate-500 line-clamp-1 mb-2">{order.deliveryAddress}</div>
                                                         
-                                                        <div className="space-y-0.5 border-t border-slate-900 pt-1.5">
+                                                        <div className="space-y-0.5 border-t border-slate-900 pt-1.5 mt-1">
                                                             {order.items?.map((item: any, itemIdx: number) => (
                                                                 <div key={itemIdx} className="text-[9px] flex justify-between text-slate-400">
                                                                     <span className="truncate max-w-[150px]">{item.product}</span>
@@ -4818,27 +5399,90 @@ const DeliveryOrderManagement: React.FC<DeliveryOrderManagementProps> = ({ user 
                         </div>
 
                         {/* Footer */}
-                        <div className="p-4 border-t border-slate-800 bg-slate-900/50 flex justify-end gap-3 shrink-0">
+                        <div className="p-4 border-t border-slate-800 bg-slate-900/60 flex flex-col sm:flex-row items-center justify-between gap-3 shrink-0">
+                            <div className="text-xs text-slate-400 flex items-center gap-3">
+                                <span>{t('Total Recommended Trips:')} <strong className="text-white">{autoDispatchDrafts.length}</strong></span>
+                                <span className="text-slate-600">|</span>
+                                <span>{t('Total Estimated Earnings:')} <strong className="text-emerald-400 font-mono">RM {Math.round(autoDispatchDrafts.reduce((acc, t) => acc + (t.estimatedEarnings || 0), 0)).toLocaleString()}</strong></span>
+                            </div>
+                            <div className="flex items-center gap-3">
+                                <button
+                                    onClick={() => {
+                                        setIsAutoDispatchModalOpen(false);
+                                        setAutoDispatchDrafts(null);
+                                    }}
+                                    className="px-6 py-2 rounded-xl text-slate-400 hover:text-white font-bold text-sm transition-colors cursor-pointer"
+                                >
+                                    {t('Cancel')}
+                                </button>
+                                <button
+                                    onClick={handleApplyAutoDispatch}
+                                    disabled={isSubmitting || autoDispatchDrafts.length === 0}
+                                    className="px-8 py-2 bg-gradient-to-r from-violet-600 to-indigo-600 hover:from-violet-500 hover:to-indigo-500 disabled:opacity-50 text-white rounded-xl font-bold text-sm shadow-lg shadow-violet-900/30 transition-all active:scale-95 flex items-center gap-2 cursor-pointer"
+                                >
+                                    {isSubmitting ? (
+                                        <><span className="w-4 h-4 border-2 border-white/30 border-t-white rounded-full animate-spin" />{t('Applying...')}</>
+                                    ) : (
+                                        <>
+                                            <CheckCircle size={16} />
+                                            {t('Apply Scheme')}
+                                        </>
+                                    )}
+                                </button>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+            )}
+
+            {/* DOUBLE CONFIRMATION MODAL (FATIGUE / OVER-LIMIT SPECIAL APPROVAL) */}
+            {showDoubleConfirmModal && (
+                <div className="fixed inset-0 z-[260] flex items-center justify-center p-4 bg-black/80 backdrop-blur-sm animate-in fade-in">
+                    <div className="bg-slate-900 border border-amber-500/50 rounded-2xl w-full max-w-lg overflow-hidden shadow-2xl flex flex-col">
+                        <div className="p-5 border-b border-slate-800 bg-amber-500/10 flex items-center gap-3">
+                            <div className="p-2.5 bg-amber-500/20 text-amber-400 rounded-xl border border-amber-500/30 shrink-0">
+                                <AlertTriangle size={24} />
+                            </div>
+                            <div>
+                                <h3 className="text-base font-black text-white">
+                                    {t('Double Confirmation: Fatigue/Trip Limit Risk')}
+                                </h3>
+                                <p className="text-xs text-amber-400/90 mt-0.5">
+                                    {t('Are you sure you want to approve special dispatch?')}
+                                </p>
+                            </div>
+                        </div>
+
+                        <div className="p-5 overflow-y-auto max-h-[350px] space-y-2.5">
+                            {pendingConfirmWarnings.map((warning, idx) => (
+                                <div key={idx} className="bg-slate-950 border border-amber-500/30 rounded-xl p-3 text-xs text-slate-200 flex items-start gap-2.5">
+                                    <span className="text-amber-400 font-bold shrink-0">#{idx + 1}</span>
+                                    <div className="leading-relaxed">{warning}</div>
+                                </div>
+                            ))}
+                            <div className="bg-red-500/10 border border-red-500/20 rounded-xl p-3 text-xs text-red-300">
+                                <p className="font-bold mb-1">⚠️ {t('Dispatch Safety Reminder:')}</p>
+                                <p className="text-[11px] text-red-300/80">
+                                    {t('Assigning multiple long trips or scheduling drivers with insufficient rest (<10h) increases safety risks. Proceed only if fully evaluated.')}
+                                </p>
+                            </div>
+                        </div>
+
+                        <div className="p-4 border-t border-slate-800 bg-slate-950/60 flex items-center justify-end gap-3">
                             <button
-                                onClick={() => {
-                                    setIsAutoDispatchModalOpen(false);
-                                    setAutoDispatchDrafts(null);
-                                }}
-                                className="px-6 py-2 rounded-xl text-slate-400 hover:text-white font-bold text-sm transition-colors"
+                                type="button"
+                                onClick={() => setShowDoubleConfirmModal(false)}
+                                className="px-5 py-2 rounded-xl text-slate-400 hover:text-white font-bold text-xs transition-colors cursor-pointer"
                             >
-                                
-                                                                {t('Cancel')}
-                                                            </button>
+                                {t('Back to Adjust')}
+                            </button>
                             <button
-                                onClick={handleApplyAutoDispatch}
-                                disabled={isSubmitting || autoDispatchDrafts.length === 0}
-                                className="px-8 py-2 bg-gradient-to-r from-violet-600 to-indigo-600 hover:from-violet-500 hover:to-indigo-500 disabled:opacity-50 text-white rounded-xl font-bold text-sm shadow-lg shadow-violet-900/30 transition-all active:scale-95 flex items-center gap-2"
+                                type="button"
+                                onClick={() => handleApplyAutoDispatch(true)}
+                                className="px-6 py-2 bg-gradient-to-r from-amber-600 to-rose-600 hover:from-amber-500 hover:to-rose-500 text-white rounded-xl font-bold text-xs shadow-lg shadow-amber-950/40 transition-all active:scale-95 flex items-center gap-2 cursor-pointer"
                             >
-                                {isSubmitting ? (
-                                    <><span className="w-4 h-4 border-2 border-white/30 border-t-white rounded-full animate-spin" />{t('Applying...')}</>
-                                ) : (
-                                    t('Apply Scheme')
-                                )}
+                                <CheckCircle size={15} />
+                                {t('Special Approval & Apply Dispatch')}
                             </button>
                         </div>
                     </div>

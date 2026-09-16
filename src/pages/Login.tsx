@@ -69,6 +69,14 @@ const Login: React.FC<LoginProps> = ({ onLogin, onNavigate }) => {
         }
     };
 
+    // Helper for timeout protection to prevent UI freeze
+    const withTimeout = <T,>(promise: Promise<T>, ms: number, errorMsg: string): Promise<T> => {
+        return Promise.race([
+            promise,
+            new Promise<T>((_, reject) => setTimeout(() => reject(new Error(errorMsg)), ms))
+        ]);
+    };
+
     // STAFF LOGIN HANDLER
     const handleStaffLogin = async (e: React.FormEvent) => {
         e.preventDefault();
@@ -87,19 +95,24 @@ const Login: React.FC<LoginProps> = ({ onLogin, onNavigate }) => {
                 let resolvedEmail: string | null = null;
 
                 const resolveByField = async (idVal: string) => {
-                    const { data: v2 } = await supabase
-                        .from('sys_users_v2')
-                        .select('email')
-                        .eq('employee_id', idVal)
-                        .maybeSingle();
-                    if (v2?.email) return v2.email;
+                    try {
+                        const { data: v2 } = await withTimeout(
+                            supabase.from('sys_users_v2').select('email').eq('employee_id', idVal).maybeSingle(),
+                            4000,
+                            'Lookup timeout'
+                        );
+                        if (v2?.email) return v2.email;
 
-                    const { data: pub } = await supabase
-                        .from('users_public')
-                        .select('email')
-                        .eq('employee_id', idVal)
-                        .maybeSingle();
-                    return pub?.email ?? null;
+                        const { data: pub } = await withTimeout(
+                            supabase.from('users_public').select('email').eq('employee_id', idVal).maybeSingle(),
+                            4000,
+                            'Lookup timeout'
+                        );
+                        return pub?.email ?? null;
+                    } catch (lookupErr) {
+                        console.warn(`Lookup for ID ${idVal} timed out or failed:`, lookupErr);
+                        return null;
+                    }
                 };
 
                 resolvedEmail = await resolveByField(empId);
@@ -115,26 +128,69 @@ const Login: React.FC<LoginProps> = ({ onLogin, onNavigate }) => {
                     }
                 }
 
+                // Fallback for numeric employee IDs: if database lookup failed or timed out,
+                // assume standard company format (e.g. 8335 -> 8335@packsecure.com)
                 if (!resolvedEmail) {
-                    throw new Error('Invalid Employee ID or User not found.');
+                    const standardPadded = empId.padStart(4, '0');
+                    resolvedEmail = `${standardPadded}@packsecure.com`;
+                    console.log(`Fallback ID ${empId} to standard email ${resolvedEmail}`);
                 }
 
-                console.log(`Resolved ID ${empId} to ${resolvedEmail}`);
                 loginEmail = resolvedEmail;
             }
 
             // 2. Auth: company policy — 4-digit PIN → stored as PIN + "00"
             const finalPassword = loginPasswordFromInput(staffPassword);
 
-            const { data, error } = await supabase.auth.signInWithPassword({
-                email: loginEmail,
-                password: finalPassword,
-            });
+            let authRes = await withTimeout(
+                supabase.auth.signInWithPassword({
+                    email: loginEmail,
+                    password: finalPassword,
+                }),
+                10000,
+                '登录验证请求超时。若后端服务正在休眠，请稍候重试或唤醒 Supabase 项目。'
+            );
 
-            if (error) throw error;
+            // Legacy fallback: if standard PIN+00 fails, try raw input or doubled PIN (e.g., 83358335)
+            if (authRes.error && /invalid login credentials/i.test(authRes.error.message)) {
+                if (staffPassword !== finalPassword) {
+                    const retryRaw = await withTimeout(
+                        supabase.auth.signInWithPassword({
+                            email: loginEmail,
+                            password: staffPassword,
+                        }),
+                        6000,
+                        '重试请求超时'
+                    ).catch(() => ({ data: { user: null }, error: authRes.error }));
 
-            if (data.user) {
-                onLogin(data.user.email || null, "GPS_AUTO", 'Staff');
+                    if (retryRaw.data?.user) {
+                        authRes = retryRaw as any;
+                    } else if (staffPassword.length === 4) {
+                        const retryDoubled = await withTimeout(
+                            supabase.auth.signInWithPassword({
+                                email: loginEmail,
+                                password: `${staffPassword}${staffPassword}`,
+                            }),
+                            6000,
+                            '重试请求超时'
+                        ).catch(() => ({ data: { user: null }, error: authRes.error }));
+                        if (retryDoubled.data?.user) {
+                            authRes = retryDoubled as any;
+                        }
+                    }
+                }
+            }
+
+            if (authRes.error) throw authRes.error;
+
+            if (authRes.data.user) {
+                onLogin(authRes.data.user.email || null, "GPS_AUTO", 'Staff');
+                // Guard: reset loading state after 4 seconds if page navigation hasn't unmounted this component
+                setTimeout(() => {
+                    setIsLoading(false);
+                }, 4000);
+            } else {
+                setIsLoading(false);
             }
         } catch (err: any) {
             console.error("Staff Login Error:", err);

@@ -1,3 +1,5 @@
+import { determineState } from './logistics';
+
 export interface DeliveryRateRow {
     origin?: string;
     location_name?: string;
@@ -36,10 +38,36 @@ export function buildDeliveryRateMap(rates: DeliveryRateRow[]): Record<string, D
 
 export function calcTripEarnings(trip: TripForEarnings, rateMap: Record<string, DeliveryRateRow>): number {
     const origin = normalizeOrigin(trip.trip_origin);
-    const zoneRaw = trip.zone || trip.delivery_zone || trip.delivery_address || '';
-    const calcZone = zoneRaw.toLowerCase();
-    const rateInfo = rateMap[`${origin}-${calcZone}`];
     const drops = Math.max(1, trip.trip_drop_count || 1);
+
+    // 1. 优先尝试直接以 Zone / Delivery Zone 精确匹配
+    const primaryZone = (trip.zone || trip.delivery_zone || '').trim().toLowerCase();
+    let rateInfo = primaryZone ? rateMap[`${origin}-${primaryZone}`] : undefined;
+
+    // 2. 若未命中且存在送货地址，自动在 delivery_address 中扫描该出发地下配置的所有城市/区域名
+    const addr = (trip.delivery_address || '').trim();
+    if (!rateInfo && addr) {
+        const addrLower = addr.toLowerCase();
+        for (const key of Object.keys(rateMap)) {
+            if (key.startsWith(`${origin}-`)) {
+                const loc = (rateMap[key].location_name || '').trim().toLowerCase();
+                if (loc && loc.length >= 2) {
+                    if (addrLower.includes(loc) || new RegExp(`\\b${loc}\\b`, 'i').test(addrLower)) {
+                        rateInfo = rateMap[key];
+                        break;
+                    }
+                }
+            }
+        }
+    }
+
+    // 3. 若仍未命中，尝试使用从地址或区域解析出的省份（State）回退匹配
+    if (!rateInfo) {
+        const stateName = determineState(addr || primaryZone).toLowerCase();
+        if (stateName && stateName !== 'other') {
+            rateInfo = rateMap[`${origin}-${stateName}`];
+        }
+    }
 
     if (!rateInfo) return 0;
 

@@ -600,13 +600,13 @@ const PersonalMonthlyReport: React.FC<Props> = ({ user }) => {
 
             const { data } = await supabase
                 .from('sales_orders')
-                .select('id, driver_id, status, job_type, order_number, notes, deadline, created_at')
+                .select('id, driver_id, status, job_type, order_number, notes, deadline, created_at, order_date, pod_timestamp')
                 .or('status.eq.Pending Approval,status.eq.Pending,job_type.eq.Extra Job,order_number.ilike.TRIP-JOB%,order_number.ilike.TRIP-PU%,notes.ilike.%[PENDING%');
 
             if (data) {
                 const counts: Record<string, number> = {};
                 data.forEach((o: any) => {
-                    const rawDate = o.deadline || (o.created_at ? o.created_at.split('T')[0] : null);
+                    const rawDate = o.deadline?.split('T')[0] || (o.pod_timestamp ? o.pod_timestamp.split('T')[0] : (o.order_date ? o.order_date.split('T')[0] : (o.created_at ? o.created_at.split('T')[0] : null)));
                     if (rawDate && (rawDate < firstDay || rawDate > lastDayStr)) return;
                     if (isTripPending(o) && o.driver_id) {
                         counts[o.driver_id] = (counts[o.driver_id] || 0) + 1;
@@ -832,10 +832,15 @@ const PersonalMonthlyReport: React.FC<Props> = ({ user }) => {
 
             // H. Claims
             try {
-                const { data: claimsData } = await supabase
-                    .from('claims')
-                    .select('*')
-                    .or(`userId.eq.${selectedEmployeeId},userId.eq.${dbUserId || ''}`);
+                const claimUids = Array.from(new Set([selectedEmployeeId, dbUserId, activeEmpId].filter(Boolean)));
+                let claimsQuery = supabase.from('claims').select('*');
+                if (claimUids.length === 1) {
+                    claimsQuery = claimsQuery.eq('userId', claimUids[0]);
+                } else if (claimUids.length > 1) {
+                    claimsQuery = claimsQuery.in('userId', claimUids);
+                }
+                const { data: claimsData, error: claimsError } = await claimsQuery;
+                if (claimsError) console.warn("Claims query error:", claimsError);
 
                 const monthlyClaims = (claimsData || []).filter((c: any) => {
                     const cDate = c.date || (c.timestamp ? c.timestamp.split('T')[0] : (c.created_at ? c.created_at.split('T')[0] : null));
@@ -852,15 +857,33 @@ const PersonalMonthlyReport: React.FC<Props> = ({ user }) => {
             const { data: dr } = await supabase.from('delivery_rates').select('*');
             setDeliveryRates(dr || []);
 
-            const { data: rawDeliveryData } = await supabase
-                .from('sales_orders')
-                .select('*')
-                .eq('driver_id', selectedEmployeeId)
-                .or(`deadline.gte.${firstDay},created_at.gte.${startDateTs},pod_timestamp.gte.${startDateTs}`);
+            const uuidRegex = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
+            const driverUids = Array.from(new Set([selectedEmployeeId, profileData?.auth_user_id, profileData?.id].filter(Boolean)))
+                .filter(id => typeof id === 'string' && uuidRegex.test(id));
+
+            let rawDeliveryData: any[] = [];
+            if (driverUids.length > 0) {
+                let deliveryQuery = supabase.from('sales_orders').select('*');
+                if (driverUids.length === 1) {
+                    deliveryQuery = deliveryQuery.eq('driver_id', driverUids[0]);
+                } else {
+                    deliveryQuery = deliveryQuery.in('driver_id', driverUids);
+                }
+
+                const { data: dData, error: dError } = await deliveryQuery.or(
+                    `deadline.gte.${firstDay},created_at.gte.${startDateTs},pod_timestamp.gte.${startDateTs},order_date.gte.${firstDay}`
+                );
+
+                if (dError) {
+                    console.error("Fetch deliveries error:", dError);
+                } else if (dData) {
+                    rawDeliveryData = dData;
+                }
+            }
 
             const monthlyDeliveries = (rawDeliveryData || []).filter(d => {
-                if (d.status !== 'Delivered') return false; // 🔒 仅统计已实际送达完成的 Trip（排除未完成/未进行的计划单与装车单）
-                const rawDate = d.deadline || (d.pod_timestamp ? d.pod_timestamp.split('T')[0] : (d.created_at ? d.created_at.split('T')[0] : null));
+                if (d.status === 'Cancelled' || d.status === 'cancelled') return false; // 排除已取消的订单，未完成扫码/配送中的 Trip 予以保留展示
+                const rawDate = d.deadline?.split('T')[0] || (d.pod_timestamp ? d.pod_timestamp.split('T')[0] : (d.order_date ? d.order_date.split('T')[0] : (d.created_at ? d.created_at.split('T')[0] : null)));
                 if (!rawDate) return false;
                 return rawDate >= firstDay && rawDate <= lastDayStr;
             });
@@ -884,12 +907,16 @@ const PersonalMonthlyReport: React.FC<Props> = ({ user }) => {
             }
 
             // Fetch tied lorry for driver / Dapatkan lorry yang terikat untuk pemandu
-            const { data: lorryData } = await supabase
-                .from('lorries')
-                .select('plate_number')
-                .eq('driver_id', selectedEmployeeId)
-                .maybeSingle();
-            setDriverLorryPlate(lorryData?.plate_number || 'N/A');
+            let lorryPlate = 'N/A';
+            if (driverUids.length > 0) {
+                const { data: lorryData } = await supabase
+                    .from('lorries')
+                    .select('plate_number')
+                    .in('driver_id', driverUids)
+                    .maybeSingle();
+                if (lorryData?.plate_number) lorryPlate = lorryData.plate_number;
+            }
+            setDriverLorryPlate(lorryPlate);
 
         } catch (error) {
             console.error("Error fetching report data:", error);
@@ -899,7 +926,8 @@ const PersonalMonthlyReport: React.FC<Props> = ({ user }) => {
     };
 
     const handleSaveAttendance = async () => {
-        if (!viewedProfile?.employee_id) {
+        const empId = viewedProfile?.employee_id || viewedProfile?.id || (selectedEmployeeId === (user.uid || user.id) ? user.employeeId : selectedEmployeeId);
+        if (!empId) {
             alert("Sila pilih pekerja yang sah. / Please select a valid employee.");
             return;
         }
@@ -939,7 +967,7 @@ const PersonalMonthlyReport: React.FC<Props> = ({ user }) => {
                 const { error } = await supabase
                     .from('operator_attendance')
                     .insert({
-                        operator_id: viewedProfile.employee_id,
+                        operator_id: empId,
                         date: dateStr,
                         clock_in: clockInIso,
                         clock_out: clockOutIso,
@@ -1184,8 +1212,9 @@ const PersonalMonthlyReport: React.FC<Props> = ({ user }) => {
             return;
         }
 
+        const validDriverId = (selectedDriverId && /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i.test(selectedDriverId)) ? selectedDriverId : (selectedTrip.driver_id || null);
         const updatedTripPayload = {
-            driver_id: selectedDriverId || null,
+            driver_id: validDriverId,
             lorry_id: selectedLorryId || null,
             customer: orderCustomer || null,
             delivery_address: newOrderAddress || null,
@@ -1240,39 +1269,78 @@ const PersonalMonthlyReport: React.FC<Props> = ({ user }) => {
 
     const handleDownloadExcel = () => {
         if (isDriver) {
-            // Collect all tripDetails from dailyMetrics
-            const allTrips: any[] = [];
+            // Collect all days from dailyMetrics so all dates, non-working days, and leaves are fully visible
+            const excelRows: any[] = [];
             dailyMetrics.forEach(day => {
+                const weekday = new Date(day.dateStr.replace(/-/g, '/')).toLocaleDateString('ms-MY', { weekday: 'long' });
+                let attendanceText = '⚠️ 没有时间 / 未打卡 (No Clock In)';
+                if (day.leaveStatus) {
+                    attendanceText = `Cuti / Leave (${day.leaveType || 'Leave'})`;
+                } else if (day.hasAttendance) {
+                    attendanceText = `${day.shiftStart || '-'} → ${day.shiftEnd || 'Aktif'} (${day.hoursWorked.toFixed(1)} hrs)`;
+                }
+
                 if (day.tripDetails && day.tripDetails.length > 0) {
-                    day.tripDetails.forEach(trip => {
-                        allTrips.push({
-                            date: day.dateStr,
-                            plateNumber: driverLorryPlate,
-                            origin: trip.trip_origin || 'TAIPING',
-                            destinations: trip.delivery_address || 'Unknown',
-                            tripCategory: trip.zone || 'Unknown',
-                            totalDrops: trip.trip_drop_count || 1,
-                            price: trip.earnings || 0
+                    day.tripDetails.forEach((trip: any, tIdx: number) => {
+                        const statusLabel = trip.status === 'Delivered'
+                            ? '✅ Selesai / Delivered'
+                            : (trip.status === 'Cancelled' ? '❌ Batal / Cancelled' : '🚚 Belum Imbas / Pending Scan');
+
+                        excelRows.push({
+                            'Tarikh / Date': day.dateStr,
+                            'Hari / Day': weekday,
+                            'Masa Kerja / Working Time': tIdx === 0 ? attendanceText : `↳ (Trip #${tIdx + 1})`,
+                            'No. Pendaftaran Lorry / Lorry Plate': driverLorryPlate || '-',
+                            'No. DO / Order': trip.order_number || '-',
+                            'Pelanggan / Customer': trip.customer || '-',
+                            'Tempat Asal / Origin': trip.trip_origin || 'TAIPING',
+                            'Destinasi / Destinations': trip.delivery_address || trip.zone || '-',
+                            'Kategori Trip / Trip Category': trip.zone || '-',
+                            'Jumlah Drops / Total Drops': trip.trip_drop_count || 1,
+                            'Harga / Allowance (RM)': trip.status === 'Delivered' ? (trip.earnings || 0) : 0,
+                            'Status': statusLabel
                         });
+                    });
+                } else if (day.leaveStatus) {
+                    excelRows.push({
+                        'Tarikh / Date': day.dateStr,
+                        'Hari / Day': weekday,
+                        'Masa Kerja / Working Time': `Cuti / Leave (${day.leaveType || 'Leave'})`,
+                        'No. Pendaftaran Lorry / Lorry Plate': '-',
+                        'No. DO / Order': '-',
+                        'Pelanggan / Customer': day.leaveReason ? `Cuti: ${day.leaveReason}` : 'Cuti Diluluskan / Approved Leave',
+                        'Tempat Asal / Origin': '-',
+                        'Destinasi / Destinations': '-',
+                        'Kategori Trip / Trip Category': `Cuti / ${day.leaveType || 'Leave'}`,
+                        'Jumlah Drops / Total Drops': 0,
+                        'Harga / Allowance (RM)': 0,
+                        'Status': `🏖️ Cuti / Leave (${day.leaveType || 'Leave'})`
+                    });
+                } else {
+                    const restLabel = day.isSunday 
+                        ? 'Ahad / Sunday (Rest)' 
+                        : (day.isWeekend ? 'Hujung Minggu / Weekend' : 'Tiada Perjalanan / No Trip (Off)');
+                    excelRows.push({
+                        'Tarikh / Date': day.dateStr,
+                        'Hari / Day': weekday,
+                        'Masa Kerja / Working Time': attendanceText,
+                        'No. Pendaftaran Lorry / Lorry Plate': '-',
+                        'No. DO / Order': '-',
+                        'Pelanggan / Customer': '-',
+                        'Tempat Asal / Origin': '-',
+                        'Destinasi / Destinations': '-',
+                        'Kategori Trip / Trip Category': restLabel,
+                        'Jumlah Drops / Total Drops': 0,
+                        'Harga / Allowance (RM)': 0,
+                        'Status': day.isSunday ? '🛋️ Rehat Ahad / Sunday' : (day.isWeekend ? '🛋️ Weekend' : '🛋️ Tiada Trip / Off')
                     });
                 }
             });
 
-            if (allTrips.length === 0) {
+            if (excelRows.length === 0) {
                 alert("Tiada data perjalanan untuk dieksport. / No trip data to export.");
                 return;
             }
-
-            // Format data for sheet
-            const excelRows = allTrips.map(t => ({
-                'Tarikh / Date': t.date,
-                'No. Pendaftaran Lorry / Lorry Plate Number': t.plateNumber,
-                'Tempat Asal / Origin': t.origin,
-                'Destinasi / Destinations': t.destinations,
-                'Kategori Trip / Trip Category': t.tripCategory,
-                'Jumlah Drops / Total Drops': t.totalDrops,
-                'Harga / Price (RM)': t.price
-            }));
 
             const ws = XLSX.utils.json_to_sheet(excelRows);
             const wb = XLSX.utils.book_new();
@@ -1280,13 +1348,18 @@ const PersonalMonthlyReport: React.FC<Props> = ({ user }) => {
 
             // Set column widths for better layout
             ws['!cols'] = [
-                { wch: 15 }, // Date
-                { wch: 25 }, // Lorry Plate Number
-                { wch: 20 }, // Origin
-                { wch: 35 }, // Destinations
-                { wch: 20 }, // Trip Category
-                { wch: 15 }, // Total Drops
-                { wch: 15 }  // Price
+                { wch: 14 }, // Date
+                { wch: 12 }, // Day
+                { wch: 28 }, // Working Time
+                { wch: 18 }, // Lorry Plate Number
+                { wch: 16 }, // DO / Order
+                { wch: 25 }, // Customer
+                { wch: 16 }, // Origin
+                { wch: 32 }, // Destinations
+                { wch: 18 }, // Trip Category
+                { wch: 12 }, // Total Drops
+                { wch: 16 }, // Price (RM)
+                { wch: 25 }  // Status
             ];
 
             const driverName = viewedProfile?.name || user?.name || 'Driver';
@@ -1327,34 +1400,97 @@ const PersonalMonthlyReport: React.FC<Props> = ({ user }) => {
     };
 
     const handlePrintSingleDriver = () => {
-        const allTrips: any[] = [];
+        const rows: any[] = [];
+        let completedCount = 0;
+        let pendingScanCount = 0;
+        let actualTripsCount = 0;
+
         dailyMetrics.forEach(day => {
+            const weekdayShort = new Date(day.dateStr.replace(/-/g, '/')).toLocaleDateString('ms-MY', { weekday: 'short' });
+            const dateDisplay = `${day.dateStr} (${weekdayShort})`;
+
+            let workingTimeText = '⚠️ 没有时间 / 未打卡';
+            if (day.leaveStatus) {
+                workingTimeText = `Cuti / Leave (${day.leaveType || 'Leave'})`;
+            } else if (day.hasAttendance) {
+                workingTimeText = `${day.shiftStart || '-'} → ${day.shiftEnd || 'Aktif'} (${day.hoursWorked.toFixed(1)}h)`;
+            }
+
             if (day.tripDetails && day.tripDetails.length > 0) {
-                day.tripDetails.forEach(trip => {
-                    allTrips.push({
-                        date: day.dateStr,
-                        orderNumber: trip.order_number || 'N/A',
-                        customer: trip.customer || 'N/A',
+                day.tripDetails.forEach((trip: any, tIdx: number) => {
+                    actualTripsCount++;
+                    const isDelivered = trip.status === 'Delivered';
+                    const isUnscanned = trip.status !== 'Delivered' && trip.status !== 'Cancelled';
+                    if (isDelivered) completedCount++;
+                    if (isUnscanned) pendingScanCount++;
+
+                    rows.push({
+                        date: dateDisplay,
+                        workingTime: tIdx === 0 ? workingTimeText : '↳ (Trip tambahan)',
+                        orderNumber: trip.order_number || '-',
+                        customer: trip.customer || '-',
                         origin: trip.trip_origin || 'TAIPING',
-                        destination: trip.zone || trip.delivery_address || 'Unknown',
+                        destination: trip.delivery_address || trip.zone || '-',
                         drops: trip.trip_drop_count || 1,
-                        earnings: trip.earnings || 0
+                        status: isDelivered ? '✅ Selesai' : (trip.status === 'Cancelled' ? '❌ Batal' : '🚚 Belum Imbas'),
+                        earnings: isDelivered ? (trip.earnings || 0) : 0,
+                        potentialEarnings: trip.earnings || 0,
+                        isDelivered,
+                        isUnscanned,
+                        isLeave: false,
+                        isRest: false
                     });
+                });
+            } else if (day.leaveStatus) {
+                rows.push({
+                    date: dateDisplay,
+                    workingTime: `Cuti / Leave (${day.leaveType || 'Leave'})`,
+                    orderNumber: '-',
+                    customer: day.leaveReason ? `Cuti: ${day.leaveReason}` : 'Cuti Diluluskan / Approved Leave',
+                    origin: '-',
+                    destination: '-',
+                    drops: 0,
+                    status: `🏖️ Cuti (${day.leaveType || 'Leave'})`,
+                    earnings: 0,
+                    potentialEarnings: 0,
+                    isDelivered: false,
+                    isUnscanned: false,
+                    isLeave: true,
+                    isRest: false
+                });
+            } else {
+                const restTitle = day.isSunday ? 'Rehat (Ahad)' : (day.isWeekend ? 'Hujung Minggu' : 'Tiada Trip');
+                rows.push({
+                    date: dateDisplay,
+                    workingTime: workingTimeText,
+                    orderNumber: '-',
+                    customer: '-',
+                    origin: '-',
+                    destination: restTitle,
+                    drops: 0,
+                    status: day.isSunday ? '🛋️ Rehat Ahad' : (day.isWeekend ? '🛋️ Weekend' : '🛋️ Tiada Trip'),
+                    earnings: 0,
+                    potentialEarnings: 0,
+                    isDelivered: false,
+                    isUnscanned: false,
+                    isLeave: false,
+                    isRest: true
                 });
             }
         });
 
-        allTrips.sort((a, b) => a.date.localeCompare(b.date));
-        const totalEarnings = allTrips.reduce((sum, t) => sum + (t.earnings || 0), 0);
+        const totalEarnings = rows.reduce((sum, t) => sum + (t.earnings || 0), 0);
 
         const singleReport = {
             driverName: viewedProfile?.name || user?.name || 'Driver',
             employeeId: viewedProfile?.employee_id || user?.employeeId || 'N/A',
             baseLocation: viewedProfile?.base_location || 'Taiping',
             plateNumber: driverLorryPlate || 'N/A',
-            totalTrips: allTrips.length,
+            totalTrips: actualTripsCount,
+            completedTrips: completedCount,
+            pendingScanTrips: pendingScanCount,
             totalEarnings,
-            tripRows: allTrips
+            tripRows: rows
         };
 
         setBatchPrintData([singleReport]);
@@ -1369,6 +1505,7 @@ const PersonalMonthlyReport: React.FC<Props> = ({ user }) => {
             const firstDay = `${selectedYear}-${String(selectedMonth).padStart(2, '0')}-01`;
             const lastDayObj = new Date(selectedYear, selectedMonth, 0);
             const lastDayStr = `${lastDayObj.getFullYear()}-${String(lastDayObj.getMonth() + 1).padStart(2, '0')}-${String(lastDayObj.getDate()).padStart(2, '0')}`;
+            const daysInMonthCount = lastDayObj.getDate();
 
             // Fetch drivers from both tables
             const [v2Res, pubRes] = await Promise.all([
@@ -1410,19 +1547,22 @@ const PersonalMonthlyReport: React.FC<Props> = ({ user }) => {
                 if (l.driver_id) lorryMap[l.driver_id] = l.plate_number;
             });
 
-            const driverIds = driversList.map(d => d.uid || d.auth_user_id || d.id).filter(Boolean);
+            const uuidRegex = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
+            const driverIds = Array.from(new Set(driversList.map(d => d.uid || d.auth_user_id || d.id).filter(id => id && uuidRegex.test(id))));
+            const driverEmpIds = driversList.map(d => d.employee_id).filter(Boolean);
             const startDateTs = `${firstDay}T00:00:00.000Z`;
             let rawDeliveryData: any[] = [];
-            let hasMore = true;
+            let hasMore = driverIds.length > 0;
             let offset = 0;
 
+            // Fetch delivery orders including unscanned (excluding cancelled)
             while (hasMore) {
                 const { data, error } = await supabase
                     .from('sales_orders')
-                    .select('id, order_number, customer, items, notes, order_date, pod_timestamp, deadline, zone, delivery_address, created_at, trip_origin, trip_drop_count, driver_id, job_type')
+                    .select('id, order_number, customer, items, notes, order_date, pod_timestamp, deadline, zone, delivery_address, created_at, trip_origin, trip_drop_count, driver_id, job_type, status')
                     .in('driver_id', driverIds)
-                    .eq('status', 'Delivered')
-                    .or(`deadline.gte.${firstDay},created_at.gte.${startDateTs},pod_timestamp.gte.${startDateTs}`)
+                    .neq('status', 'Cancelled')
+                    .or(`deadline.gte.${firstDay},created_at.gte.${startDateTs},pod_timestamp.gte.${startDateTs},order_date.gte.${firstDay}`)
                     .order('created_at', { ascending: true })
                     .range(offset, offset + 999);
 
@@ -1440,8 +1580,35 @@ const PersonalMonthlyReport: React.FC<Props> = ({ user }) => {
                 }
             }
 
+            // Fetch attendance shifts for all drivers in the batch
+            let batchAttendance: any[] = [];
+            if (driverEmpIds.length > 0) {
+                const { data: attData } = await supabase
+                    .from('operator_attendance')
+                    .select('id, operator_id, date, clock_in, clock_out, hours_worked, notes')
+                    .in('operator_id', driverEmpIds)
+                    .gte('date', firstDay)
+                    .lte('date', lastDayStr);
+                batchAttendance = attData || [];
+            }
+
+            // Fetch approved leaves for all drivers in the batch
+            const allDriverKeys = Array.from(new Set([...driverEmpIds, ...driverIds]));
+            let batchLeaves: any[] = [];
+            if (allDriverKeys.length > 0) {
+                const { data: lData } = await supabase
+                    .from('employee_leave')
+                    .select('employee_id, start_date, end_date, status, reason, leave_type, type')
+                    .in('employee_id', allDriverKeys)
+                    .eq('status', 'Approved')
+                    .lte('start_date', lastDayStr)
+                    .gte('end_date', firstDay);
+                batchLeaves = lData || [];
+            }
+
             const allDeliveries = (rawDeliveryData || []).filter(order => {
-                const rawDate = order.deadline || (order.pod_timestamp ? order.pod_timestamp.split('T')[0] : (order.created_at ? order.created_at.split('T')[0] : null));
+                if (order.status === 'Cancelled' || order.status === 'cancelled') return false;
+                const rawDate = order.deadline?.split('T')[0] || (order.pod_timestamp ? order.pod_timestamp.split('T')[0] : (order.order_date ? order.order_date.split('T')[0] : (order.created_at ? order.created_at.split('T')[0] : null)));
                 if (!rawDate) return false;
                 return rawDate >= firstDay && rawDate <= lastDayStr;
             });
@@ -1452,52 +1619,135 @@ const PersonalMonthlyReport: React.FC<Props> = ({ user }) => {
                 const plate = lorryMap[driverUid] || 'N/A';
 
                 let totalEarnings = 0;
+                let completedCount = 0;
+                let pendingScanCount = 0;
+                let actualTripsCount = 0;
                 const tripRows: any[] = [];
 
-                driverDeliveries.forEach(t => {
-                    const originRaw = t.trip_origin || 'TAIPING';
-                    const origin = originRaw.toLowerCase();
-                    const zoneRaw = t.zone || t.delivery_address || 'Unknown';
-                    let calcZone = zoneRaw.toLowerCase();
-                    const key = `${origin}-${calcZone}`;
-                    const rateInfo = rateMap[key];
-                    const drops = Math.max(1, t.trip_drop_count || 1);
+                for (let i = 1; i <= daysInMonthCount; i++) {
+                    const dateStr = `${selectedYear}-${String(selectedMonth).padStart(2, '0')}-${String(i).padStart(2, '0')}`;
+                    const dateObj = new Date(selectedYear, selectedMonth - 1, i);
+                    const isSunday = dateObj.getDay() === 0;
+                    const isWeekend = dateObj.getDay() === 0 || dateObj.getDay() === 6;
+                    const weekdayShort = dateObj.toLocaleDateString('ms-MY', { weekday: 'short' });
+                    const dateDisplay = `${dateStr} (${weekdayShort})`;
 
-                    const approvedAmountMatch = t.notes?.match(/\[APPROVED_AMOUNT:\s*([\d.]+)\]/);
-                    let tEarnings = 0;
-                    if (approvedAmountMatch) {
-                        tEarnings = parseFloat(approvedAmountMatch[1]) || 0;
-                    } else if (rateInfo) {
-                        const base = Number(rateInfo.base_rate) || 0;
-                        const maxPlaces = Number(rateInfo.max_places) || 0;
-                        const extraPlaces = Math.max(0, drops - maxPlaces);
-                        const extraRate = extraPlaces * (Number(rateInfo.extra_rate_per_place) || 0);
-                        tEarnings = base + extraRate;
+                    const shift = batchAttendance.find(a => a.operator_id === driver.employee_id && a.date === dateStr);
+                    let workingTimeText = '⚠️ 没有时间 / 未打卡';
+                    if (shift) {
+                        const sIn = shift.clock_in ? new Date(shift.clock_in).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' }) : '-';
+                        const sOut = shift.clock_out ? new Date(shift.clock_out).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' }) : 'Aktif';
+                        const hWorked = shift.hours_worked ? Number(shift.hours_worked) : 0;
+                        workingTimeText = `${sIn} → ${sOut} (${hWorked.toFixed(1)}h)`;
                     }
 
-                    totalEarnings += tEarnings;
+                    const leave = batchLeaves.find(l => (l.employee_id === driver.employee_id || l.employee_id === driverUid) && dateStr >= l.start_date && dateStr <= l.end_date);
+                    if (leave) {
+                        const lType = leave.leave_type || leave.type || 'Leave';
+                        workingTimeText = `Cuti / Leave (${lType})`;
+                    }
 
-                    const dateStr = t.deadline || (t.pod_timestamp ? t.pod_timestamp.split('T')[0] : t.created_at.split('T')[0]);
-
-                    tripRows.push({
-                        date: dateStr,
-                        orderNumber: t.order_number || 'N/A',
-                        customer: t.customer || 'N/A',
-                        origin: originRaw,
-                        destination: zoneRaw,
-                        drops,
-                        earnings: tEarnings
+                    const dayTrips = driverDeliveries.filter(d => {
+                        const targetDay = d.deadline?.split('T')[0] || (d.pod_timestamp ? d.pod_timestamp.split('T')[0] : (d.order_date ? d.order_date.split('T')[0] : (d.created_at ? d.created_at.split('T')[0] : null)));
+                        return targetDay === dateStr;
                     });
-                });
 
-                tripRows.sort((a, b) => a.date.localeCompare(b.date));
+                    if (dayTrips.length > 0) {
+                        dayTrips.forEach((t, tIdx) => {
+                            actualTripsCount++;
+                            const originRaw = t.trip_origin || 'TAIPING';
+                            const origin = originRaw.toLowerCase();
+                            const zoneRaw = t.zone || t.delivery_address || 'Unknown';
+                            let calcZone = zoneRaw.toLowerCase();
+                            const key = `${origin}-${calcZone}`;
+                            const rateInfo = rateMap[key];
+                            const drops = Math.max(1, t.trip_drop_count || 1);
+
+                            const approvedAmountMatch = t.notes?.match(/\[APPROVED_AMOUNT:\s*([\d.]+)\]/);
+                            let tEarnings = 0;
+                            if (approvedAmountMatch) {
+                                tEarnings = parseFloat(approvedAmountMatch[1]) || 0;
+                            } else if (rateInfo) {
+                                const base = Number(rateInfo.base_rate) || 0;
+                                const maxPlaces = Number(rateInfo.max_places) || 0;
+                                const extraPlaces = Math.max(0, drops - maxPlaces);
+                                const extraRate = extraPlaces * (Number(rateInfo.extra_rate_per_place) || 0);
+                                tEarnings = base + extraRate;
+                            }
+
+                            const isDelivered = t.status === 'Delivered';
+                            const isUnscanned = t.status !== 'Delivered' && t.status !== 'Cancelled';
+                            if (isDelivered) {
+                                totalEarnings += tEarnings;
+                                completedCount++;
+                            }
+                            if (isUnscanned) {
+                                pendingScanCount++;
+                            }
+
+                            tripRows.push({
+                                date: dateDisplay,
+                                workingTime: tIdx === 0 ? workingTimeText : '↳ (Trip tambahan)',
+                                orderNumber: t.order_number || '-',
+                                customer: t.customer || '-',
+                                origin: originRaw,
+                                destination: zoneRaw,
+                                drops,
+                                status: isDelivered ? '✅ Selesai' : (t.status === 'Cancelled' ? '❌ Batal' : '🚚 Belum Imbas'),
+                                earnings: isDelivered ? tEarnings : 0,
+                                potentialEarnings: tEarnings,
+                                isDelivered,
+                                isUnscanned,
+                                isLeave: false,
+                                isRest: false
+                            });
+                        });
+                    } else if (leave) {
+                        tripRows.push({
+                            date: dateDisplay,
+                            workingTime: `Cuti / Leave (${leave.leave_type || leave.type || 'Leave'})`,
+                            orderNumber: '-',
+                            customer: leave.reason ? `Cuti: ${leave.reason}` : 'Cuti Diluluskan / Approved Leave',
+                            origin: '-',
+                            destination: '-',
+                            drops: 0,
+                            status: `🏖️ Cuti (${leave.leave_type || leave.type || 'Leave'})`,
+                            earnings: 0,
+                            potentialEarnings: 0,
+                            isDelivered: false,
+                            isUnscanned: false,
+                            isLeave: true,
+                            isRest: false
+                        });
+                    } else {
+                        const restTitle = isSunday ? 'Rehat (Ahad)' : (isWeekend ? 'Hujung Minggu' : 'Tiada Trip');
+                        tripRows.push({
+                            date: dateDisplay,
+                            workingTime: workingTimeText,
+                            orderNumber: '-',
+                            customer: '-',
+                            origin: '-',
+                            destination: restTitle,
+                            drops: 0,
+                            status: isSunday ? '🛋️ Rehat Ahad' : (isWeekend ? '🛋️ Weekend' : '🛋️ Tiada Trip'),
+                            earnings: 0,
+                            potentialEarnings: 0,
+                            isDelivered: false,
+                            isUnscanned: false,
+                            isLeave: false,
+                            isRest: true
+                        });
+                    }
+                }
 
                 return {
                     driverName: driver.name || driver.employee_id || 'Pemandu',
                     employeeId: driver.employee_id || 'N/A',
                     baseLocation: driver.base_location || 'Taiping',
                     plateNumber: plate,
-                    totalTrips: tripRows.length,
+                    totalTrips: actualTripsCount,
+                    completedTrips: completedCount,
+                    pendingScanTrips: pendingScanCount,
                     totalEarnings,
                     tripRows
                 };
@@ -1546,9 +1796,10 @@ const PersonalMonthlyReport: React.FC<Props> = ({ user }) => {
             };
 
             const dayDeliveries = deliveries.filter(d => {
-                const ts = d.deadline || d.created_at;
+                const targetDay = d.deadline?.split('T')[0] || (d.pod_timestamp ? d.pod_timestamp.split('T')[0] : (d.order_date ? d.order_date.split('T')[0] : (d.created_at ? d.created_at.split('T')[0] : null)));
+                if (targetDay && targetDay === dateStr) return true;
+                const ts = d.deadline || d.pod_timestamp || d.order_date || d.created_at;
                 if (!ts) return false;
-                if (d.deadline) return ts.startsWith(dateStr); // deadline is usually purely 'YYYY-MM-DD'
                 return matchDate(ts, dateStr);
             });
 
@@ -1760,6 +2011,8 @@ const PersonalMonthlyReport: React.FC<Props> = ({ user }) => {
                     deadline: t.deadline || null,
                     pod_timestamp: t.pod_timestamp || null,
                     pod_signed_by: t.pod_signed_by || null,
+                    isDelivered: t.status === 'Delivered',
+                    isUnscanned: t.status !== 'Delivered' && t.status !== 'Cancelled',
                     displayString
                 });
             });
@@ -1799,6 +2052,8 @@ const PersonalMonthlyReport: React.FC<Props> = ({ user }) => {
     const yieldRate = (totalOutput + totalRejects) > 0 ? (((totalOutput) / (totalOutput + totalRejects)) * 100).toFixed(1) : '100.0';
     const totalAlarms = dailyMetrics.reduce((sum, d) => sum + d.alarmCount, 0);
     const totalTrips = dailyMetrics.reduce((sum, d) => sum + d.tripCount, 0);
+    const completedTrips = dailyMetrics.reduce((sum, d) => sum + d.tripDetails.filter((t: any) => t.status === 'Delivered').length, 0);
+    const pendingScanTrips = dailyMetrics.reduce((sum, d) => sum + d.tripDetails.filter((t: any) => t.status !== 'Delivered' && t.status !== 'Cancelled').length, 0);
     const presentDays = dailyMetrics.filter(d => d.hasAttendance).length;
     const leaveDays = dailyMetrics.filter(d => d.leaveStatus).length;
     const totalPhotos = dailyMetrics.reduce((sum, d) => sum + d.photoCount, 0);
@@ -2034,7 +2289,11 @@ const PersonalMonthlyReport: React.FC<Props> = ({ user }) => {
                                         {isDriver ? 'Penghantaran / Deliveries' : 'Jumlah Output / Total Output'}
                                     </p>
                                     <h3 className="text-3xl font-black text-white">{isDriver ? totalTrips : totalOutput.toLocaleString()}</h3>
-                                    <p className="text-[10px] text-gray-400 mt-1">{isDriver ? `${totalDropCount} Total Drops` : `Unit Dihasilkan / Produced`}</p>
+                                    <p className="text-[10px] text-gray-400 mt-1">
+                                        {isDriver 
+                                            ? `${completedTrips} Selesai / Completed ${pendingScanTrips > 0 ? `(${pendingScanTrips} 未扫码 / Pending Scan)` : ''}`
+                                            : `Unit Dihasilkan / Produced`}
+                                    </p>
                                     {!isDriver && (
                                         <p className="text-[10px] text-blue-400 font-mono mt-1 font-bold">Yield: {yieldRate}% ({totalRejects} Reject)</p>
                                     )}
@@ -2495,7 +2754,28 @@ const PersonalMonthlyReport: React.FC<Props> = ({ user }) => {
                                                         </div>
                                                     </div>
                                                 ) : (
-                                                    <span className="text-gray-700 text-xs">—</span>
+                                                    day.leaveStatus ? (
+                                                        <span className="text-amber-400/80 text-xs font-medium">🏖️ Cuti / Leave</span>
+                                                    ) : (
+                                                        <button
+                                                            type="button"
+                                                            onClick={() => {
+                                                                if (isAdminOrHR) {
+                                                                    setSelectedAttendanceDay(day);
+                                                                }
+                                                            }}
+                                                            className={`inline-flex items-center gap-1.5 px-2.5 py-1 rounded-lg border text-xs transition-all ${
+                                                                isAdminOrHR
+                                                                    ? 'text-amber-300 bg-amber-500/10 border-amber-500/30 hover:bg-amber-500/20 cursor-pointer shadow-sm'
+                                                                    : 'text-amber-400/80 bg-amber-500/5 border-amber-500/15 cursor-default'
+                                                            }`}
+                                                            title={isAdminOrHR ? "点击去为该日打卡补录 / Click to log clock-in time" : "未打卡 / No Clock In"}
+                                                        >
+                                                            <AlertTriangle size={12} className="text-amber-400 shrink-0" />
+                                                            <span className="font-bold">没有时间 / 未打卡</span>
+                                                            {isAdminOrHR && <span className="text-[10px] text-amber-200 underline ml-0.5">去打卡 ➜</span>}
+                                                        </button>
+                                                    )
                                                 )}
                                             </td>
                                             <td className="px-5 py-4 whitespace-nowrap text-right">
@@ -2507,13 +2787,18 @@ const PersonalMonthlyReport: React.FC<Props> = ({ user }) => {
                                                                 <div className="flex flex-col items-end gap-0.5 font-mono text-[10px]">
                                                                     {day.tripDetails.map((td: any, tidx: number) => {
                                                                         const isPending = isTripPending(td);
+                                                                        const isUnscanned = td.status !== 'Delivered' && td.status !== 'Cancelled';
                                                                         return (
                                                                             <span key={tidx} className={`font-bold px-1.5 py-0.5 rounded border ${
-                                                                                isPending 
-                                                                                    ? 'text-amber-300 bg-amber-500/10 border-amber-500/30 animate-pulse' 
-                                                                                    : 'text-emerald-400 bg-emerald-500/10 border-emerald-500/20'
+                                                                                isUnscanned
+                                                                                    ? 'text-amber-300/90 bg-amber-500/10 border-amber-500/30'
+                                                                                    : isPending 
+                                                                                        ? 'text-amber-300 bg-amber-500/10 border-amber-500/30 animate-pulse' 
+                                                                                        : 'text-emerald-400 bg-emerald-500/10 border-emerald-500/20'
                                                                             }`} title={`Trip ${tidx+1}: Base RM${(td.baseRate||td.earnings||0).toFixed(2)} + Extra Drop RM${(td.extraRate||0).toFixed(2)}`}>
-                                                                                {isPending ? `Trip #${tidx + 1}: ⏳ 待审核 (RM ${(td.earnings || 0).toFixed(2)})` : `Trip #${tidx + 1}: RM ${(td.earnings || 0).toFixed(2)}`}
+                                                                                {isUnscanned
+                                                                                    ? `Trip #${tidx + 1}: 🚚 未扫码 (RM ${(td.earnings || 0).toFixed(2)})`
+                                                                                    : (isPending ? `Trip #${tidx + 1}: ⏳ 待审核 (RM ${(td.earnings || 0).toFixed(2)})` : `Trip #${tidx + 1}: RM ${(td.earnings || 0).toFixed(2)}`)}
                                                                             </span>
                                                                         );
                                                                     })}
@@ -2554,6 +2839,7 @@ const PersonalMonthlyReport: React.FC<Props> = ({ user }) => {
                                                             {day.tripDetails.map((td: any, idx: number) => {
                                                                 const isPending = isTripPending(td);
                                                                 const isTripConfirmed = confirmedTripIds.has(td.id) || td.notes?.includes('[DRIVER_CONFIRMED') || td.driver_confirmed === true;
+                                                                const isUnscanned = td.status !== 'Delivered' && td.status !== 'Cancelled';
 
                                                                 return (
                                                                     <div key={idx} className="flex items-center gap-2 justify-center">
@@ -2562,26 +2848,31 @@ const PersonalMonthlyReport: React.FC<Props> = ({ user }) => {
                                                                             className={`text-[10px] px-2.5 py-1 rounded-lg font-mono shadow-sm cursor-pointer transition-all flex items-center gap-1.5 ${
                                                                                 td.notes?.includes('[HR_APPROVED]')
                                                                                     ? 'bg-indigo-500/15 text-indigo-300 border border-indigo-500/30 font-bold'
-                                                                                    : isPending 
-                                                                                        ? 'bg-amber-500/20 text-amber-300 border border-amber-500/40 animate-pulse font-bold'
-                                                                                        : isTripConfirmed
-                                                                                            ? 'bg-emerald-500/15 text-emerald-300 border border-emerald-500/30 font-bold'
-                                                                                            : 'bg-blue-500/10 text-blue-400 border border-blue-500/20 hover:bg-blue-500/20 hover:text-blue-300'
+                                                                                    : isUnscanned
+                                                                                        ? 'bg-amber-500/15 text-amber-300 border border-amber-500/35 font-semibold'
+                                                                                        : isPending 
+                                                                                            ? 'bg-amber-500/20 text-amber-300 border border-amber-500/40 animate-pulse font-bold'
+                                                                                            : isTripConfirmed
+                                                                                                ? 'bg-emerald-500/15 text-emerald-300 border border-emerald-500/30 font-bold'
+                                                                                                : 'bg-blue-500/10 text-blue-400 border border-blue-500/20 hover:bg-blue-500/20 hover:text-blue-300'
                                                                             }`}
-                                                                            title={td.notes?.includes('[HR_APPROVED]') ? "🔒 已被 HR 锁定 / Locked by HR" : "点击查看或提交预修改申请 / Click to view or pre-edit"}
+                                                                            title={td.notes?.includes('[HR_APPROVED]') ? "🔒 已被 HR 锁定 / Locked by HR" : (isUnscanned ? "🚚 未完成扫码/进行中 / Pending POD Scan" : "点击查看或提交预修改申请 / Click to view or pre-edit")}
                                                                         >
                                                                             {td.notes?.includes('[HR_APPROVED]') && <div className="text-indigo-400 shrink-0">🔒</div>}
-                                                                            {isPending && !td.notes?.includes('[HR_APPROVED]') && <Clock size={10} className="text-amber-400 shrink-0" />}
-                                                                            {isTripConfirmed && !td.notes?.includes('[HR_APPROVED]') && <CheckCircle2 size={11} className="text-emerald-400 shrink-0" />}
-                                                                            <span>{isPending ? `⏳ [待审核] ${td.displayString}` : td.displayString}</span>
+                                                                            {isUnscanned && <span className="text-xs shrink-0">🚚</span>}
+                                                                            {isPending && !isUnscanned && !td.notes?.includes('[HR_APPROVED]') && <Clock size={10} className="text-amber-400 shrink-0" />}
+                                                                            {isTripConfirmed && !isUnscanned && !td.notes?.includes('[HR_APPROVED]') && <CheckCircle2 size={11} className="text-emerald-400 shrink-0" />}
+                                                                            <span>{isUnscanned ? `[未扫码] ${td.displayString}` : (isPending ? `⏳ [待审核] ${td.displayString}` : td.displayString)}</span>
                                                                             <span className={`ml-1 px-1.5 py-0.5 rounded font-black border text-[9.5px] ${
                                                                                 td.notes?.includes('[HR_APPROVED]') 
                                                                                     ? 'bg-indigo-500/20 text-indigo-300 border-indigo-500/30' 
-                                                                                    : isPending
-                                                                                        ? 'bg-amber-500/20 text-amber-300 border-amber-500/30'
-                                                                                        : 'bg-emerald-500/20 text-emerald-300 border-emerald-500/30'
+                                                                                    : isUnscanned
+                                                                                        ? 'bg-amber-500/10 text-amber-400 border-amber-500/20'
+                                                                                        : isPending
+                                                                                            ? 'bg-amber-500/20 text-amber-300 border-amber-500/30'
+                                                                                            : 'bg-emerald-500/20 text-emerald-300 border-emerald-500/30'
                                                                             }`}>
-                                                                                {isPending ? `待审核 RM ${(td.earnings || 0).toFixed(2)}` : `RM ${(td.earnings || 0).toFixed(2)}`}
+                                                                                {isUnscanned ? `未扫码 (RM ${(td.earnings || 0).toFixed(2)})` : (isPending ? `待审核 RM ${(td.earnings || 0).toFixed(2)}` : `RM ${(td.earnings || 0).toFixed(2)}`)}
                                                                             </span>
                                                                         </button>
 
@@ -3905,8 +4196,6 @@ const PersonalMonthlyReport: React.FC<Props> = ({ user }) => {
                                 break-before: page !important;
                                 page-break-after: always !important;
                                 break-after: page !important;
-                                page-break-inside: avoid !important;
-                                break-inside: avoid !important;
                                 padding: 10mm 12mm !important;
                                 margin: 0 !important;
                                 background: white !important;
@@ -3928,10 +4217,17 @@ const PersonalMonthlyReport: React.FC<Props> = ({ user }) => {
                                 margin-top: 10px;
                                 margin-bottom: 12px;
                             }
+                            thead {
+                                display: table-header-group;
+                            }
+                            tr {
+                                page-break-inside: avoid;
+                                break-inside: avoid;
+                            }
                             th, td {
                                 border: 1px solid #333;
-                                padding: 5px 8px;
-                                font-size: 10px;
+                                padding: 4px 6px;
+                                font-size: 9.5px;
                                 text-align: left;
                             }
                             th {
@@ -3949,7 +4245,7 @@ const PersonalMonthlyReport: React.FC<Props> = ({ user }) => {
                                 <div>
                                     <h1 className="text-xl font-bold uppercase tracking-wider text-black">PACKSECURE OS</h1>
                                     <h2 className="text-xs font-semibold text-gray-700 uppercase">Laporan Elaun Trip Pemandu Bulanan</h2>
-                                    <p className="text-[10px] text-gray-600">Monthly Driver Trip Allowance Report</p>
+                                    <p className="text-[10px] text-gray-600">Monthly Driver Trip Allowance & Attendance Report</p>
                                 </div>
                                 <div className="text-right">
                                     <p className="text-xs font-bold uppercase">Bulan / Month: {MONTH_NAMES[selectedMonth - 1]} {selectedYear}</p>
@@ -3979,17 +4275,29 @@ const PersonalMonthlyReport: React.FC<Props> = ({ user }) => {
 
                             {/* Summary Metrics */}
                             <div className="flex justify-between items-center mb-3 p-2 border-2 border-black bg-gray-50">
-                                <div>
-                                    <span className="text-xs font-bold uppercase text-gray-700">Jumlah Perjalanan / Total Trips: </span>
-                                    <span className="text-sm font-extrabold text-black ml-2">{report.totalTrips} Trips</span>
+                                <div className="flex gap-4">
+                                    <div>
+                                        <span className="text-xs font-bold uppercase text-gray-700">Jumlah Hari / Total Days: </span>
+                                        <span className="text-sm font-extrabold text-black ml-1">{daysInMonth} Hari</span>
+                                    </div>
+                                    <div>
+                                        <span className="text-xs font-bold uppercase text-gray-700">Selesai / Completed: </span>
+                                        <span className="text-sm font-extrabold text-emerald-800 ml-1">{report.completedTrips ?? report.totalTrips} Trips</span>
+                                    </div>
+                                    {(report.pendingScanTrips || 0) > 0 && (
+                                        <div>
+                                            <span className="text-xs font-bold uppercase text-amber-800">Belum Imbas / Pending Scan: </span>
+                                            <span className="text-sm font-extrabold text-amber-700 ml-1">{report.pendingScanTrips} Trips</span>
+                                        </div>
+                                    )}
                                 </div>
                                 <div>
-                                    <span className="text-xs font-bold uppercase text-gray-700">Jumlah Elaun Trip / Total Earnings: </span>
+                                    <span className="text-xs font-bold uppercase text-gray-700">Jumlah Elaun / Total Earnings: </span>
                                     <span className="text-base font-extrabold text-black ml-2">RM {report.totalEarnings.toFixed(2)}</span>
                                 </div>
                             </div>
 
-                            {/* Trips Table */}
+                            {/* Trips & Attendance Table */}
                             {report.tripRows.length === 0 ? (
                                 <div className="p-6 text-center border border-dashed border-gray-400 text-gray-500 text-xs italic">
                                     Tiada rekod perjalanan hantaran untuk bulan ini. / No trip records found for this month.
@@ -3998,33 +4306,51 @@ const PersonalMonthlyReport: React.FC<Props> = ({ user }) => {
                                 <table>
                                     <thead>
                                         <tr>
-                                            <th style={{ width: '5%' }}>Bil</th>
-                                            <th style={{ width: '12%' }}>Tarikh / Date</th>
-                                            <th style={{ width: '18%' }}>No. DO / Order</th>
-                                            <th style={{ width: '22%' }}>Pelanggan / Customer</th>
-                                            <th style={{ width: '25%' }}>Laluan / Route</th>
-                                            <th style={{ width: '8%', textAlign: 'center' }}>Drops</th>
+                                            <th style={{ width: '4%' }}>Bil</th>
+                                            <th style={{ width: '13%' }}>Tarikh / Date</th>
+                                            <th style={{ width: '16%' }}>Masa Kerja / Working Time</th>
+                                            <th style={{ width: '13%' }}>No. DO / Order</th>
+                                            <th style={{ width: '17%' }}>Pelanggan / Customer</th>
+                                            <th style={{ width: '18%' }}>Laluan / Route</th>
+                                            <th style={{ width: '5%', textAlign: 'center' }}>Drops</th>
+                                            <th style={{ width: '11%', textAlign: 'center' }}>Status</th>
                                             <th style={{ width: '10%', textAlign: 'right' }}>Elaun (RM)</th>
                                         </tr>
                                     </thead>
                                     <tbody>
-                                        {report.tripRows.map((row: any, rIdx: number) => (
-                                            <tr key={rIdx}>
-                                                <td>{rIdx + 1}</td>
-                                                <td>{row.date}</td>
-                                                <td className="font-mono font-bold">{row.orderNumber}</td>
-                                                <td>{row.customer}</td>
-                                                <td>{row.origin} ➞ {row.destination}</td>
-                                                <td style={{ textAlign: 'center' }}>{row.drops}</td>
-                                                <td style={{ textAlign: 'right', fontWeight: 'bold' }}>
-                                                    {row.earnings > 0 ? row.earnings.toFixed(2) : '-'}
-                                                </td>
-                                            </tr>
-                                        ))}
+                                        {report.tripRows.map((row: any, rIdx: number) => {
+                                            const isNoClockIn = row.workingTime?.includes('未打卡') || row.workingTime?.includes('没有时间');
+                                            return (
+                                                <tr key={rIdx} style={{ 
+                                                    backgroundColor: row.isLeave ? '#fffbeb' : (row.isRest ? '#fafafa' : (row.isUnscanned ? '#fff7ed' : 'transparent')),
+                                                    color: row.isRest ? '#6b7280' : 'inherit'
+                                                }}>
+                                                    <td>{rIdx + 1}</td>
+                                                    <td style={{ fontWeight: 600 }}>{row.date}</td>
+                                                    <td style={{ 
+                                                        fontSize: '9.5px', 
+                                                        color: isNoClockIn ? '#dc2626' : (row.isLeave ? '#b45309' : '#111827'), 
+                                                        fontWeight: isNoClockIn ? 'bold' : 'normal' 
+                                                    }}>
+                                                        {row.workingTime}
+                                                    </td>
+                                                    <td className="font-mono font-bold">{row.orderNumber}</td>
+                                                    <td>{row.customer}</td>
+                                                    <td>{row.origin && row.destination && row.origin !== '-' ? `${row.origin} ➞ ${row.destination}` : (row.destination || '-')}</td>
+                                                    <td style={{ textAlign: 'center' }}>{row.drops > 0 ? row.drops : '-'}</td>
+                                                    <td style={{ textAlign: 'center', fontSize: '9px', fontWeight: 600 }}>
+                                                        {row.status}
+                                                    </td>
+                                                    <td style={{ textAlign: 'right', fontWeight: 'bold' }}>
+                                                        {row.earnings > 0 ? row.earnings.toFixed(2) : (row.potentialEarnings > 0 ? `(${row.potentialEarnings.toFixed(2)})` : '-')}
+                                                    </td>
+                                                </tr>
+                                            );
+                                        })}
                                     </tbody>
                                     <tfoot>
                                         <tr style={{ background: '#f5f5f5', fontWeight: 'bold' }}>
-                                            <td colSpan={6} style={{ textAlign: 'right' }}>JUMLAH ELAUN / TOTAL ALLOWANCE (RM):</td>
+                                            <td colSpan={8} style={{ textAlign: 'right' }}>JUMLAH ELAUN / TOTAL ALLOWANCE (RM):</td>
                                             <td style={{ textAlign: 'right', fontSize: '11px' }}>RM {report.totalEarnings.toFixed(2)}</td>
                                         </tr>
                                     </tfoot>

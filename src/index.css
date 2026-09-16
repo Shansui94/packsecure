@@ -140,6 +140,17 @@ body {
 }
 
 /* --- UTILITIES --- */
+.apple-glass {
+  background: rgba(18, 18, 21, 0.7);
+  backdrop-filter: blur(20px);
+  -webkit-backdrop-filter: blur(20px);
+}
+
+html:not(.dark) .apple-glass {
+  background: rgba(255, 255, 255, 0.88);
+  border-color: rgba(0, 0, 0, 0.08);
+}
+
 .glass-panel {
   @apply bg-apple-surface/80 backdrop-blur-xl border border-apple-border shadow-2xl rounded-2xl;
 }
