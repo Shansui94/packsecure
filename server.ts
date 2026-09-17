@@ -8,7 +8,7 @@ import manageEmployeeHandler from './api/manage-employee';
 import visionHandler from './api/agent/vision';
 import geocodeHandler from './api/geocode';
 import aiPhotoHandler from './api/agent/ai-photo';
-import universalHandler, { handleIntake, handleQuery, handleParseText } from './api/agent/universal';
+import universalHandler, { handleIntake, handleQuery, handleParseText, handleParseTripPdf } from './api/agent/universal';
 import iotConfigHandler, { handleMachines } from './api/iot-config';
 import lorryLatestMileageHandler from './api/lorry-latest-mileage';
 import v2DocumentsHandler, {
@@ -18,7 +18,6 @@ import v2DocumentsHandler, {
     handleLogs as documentLogsHandler
 } from './api/v2-documents';
 import docsHandler from './api/docs';
-import parseTripPdfHandler from './lib/parse-trip-pdf';
 
 const app = express();
 const PORT = 8080;
@@ -57,7 +56,7 @@ mountVercelHandler('/api/v2/documents/entities', documentEntitiesHandler);
 mountVercelHandler('/api/v2/documents/logs', documentLogsHandler);
 mountVercelHandler('/api/agent/sop-assistant', sopAssistantHandler);
 mountVercelHandler('/api/docs', docsHandler);
-mountVercelHandler('/api/agent/parse-trip-pdf', parseTripPdfHandler);
+mountVercelHandler('/api/agent/parse-trip-pdf', handleParseTripPdf);
 
 // Mimic Vercel Request/Response for the handler
 app.post('/api/agent/chat', async (req, res) => {
