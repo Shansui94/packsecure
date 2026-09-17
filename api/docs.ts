@@ -156,7 +156,6 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
         }
 
         // 鉴权检查：仅 SuperAdmin 或 Admin 允许保存
-        const authHeader = req.headers.authorization || '';
         const userRoleHeader = req.headers['x-user-role'];
         const isDemoAdmin = (userRoleHeader === 'SuperAdmin' || userRoleHeader === 'Admin') &&
             process.env.NODE_ENV !== 'production';

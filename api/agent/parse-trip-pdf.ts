@@ -11,7 +11,7 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
     }
 
     try {
-        const { files, productsList, driversList } = req.body as {
+        const { files, productsList } = req.body as {
             files?: Array<{ base64: string; name: string; mimeType?: string }>;
             productsList?: Array<{ sku: string; name: string }>;
             driversList?: Array<{ uid: string; name: string }>;

@@ -1970,12 +1970,16 @@ const DeliveryOrderManagement: React.FC<DeliveryOrderManagementProps> = ({ user 
                 }
 
                 // 3. Keep trip_stops_v2 in sync
-                await supabase.from('trip_stops_v2').insert({
-                    trip_id: tripId,
-                    sales_order_id: orderId,
-                    stop_sequence: i + 1,
-                    status: 'Pending'
-                }).catch(() => {});
+                try {
+                    await supabase.from('trip_stops_v2').insert({
+                        trip_id: tripId,
+                        sales_order_id: orderId,
+                        stop_sequence: i + 1,
+                        status: 'Pending'
+                    });
+                } catch {
+                    // Non-blocking sync
+                }
             }
 
             handleCloseParsedTripModal();
