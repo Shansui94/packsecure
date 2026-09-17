@@ -1176,15 +1176,30 @@ export async function handleParseTripPdf(req: VercelRequest, res: VercelResponse
             console.warn("[DO PDF AI] Failed to query available models:", e.message);
         }
 
-        const candidateSet = [
-            ...apiDiscoveredModels.filter(m => m.includes('flash')),
-            ...apiDiscoveredModels,
-            "gemini-2.5-flash",
-            "gemini-2.5-flash-lite",
-            "gemini-2.0-flash",
-            "gemini-1.5-flash"
+        // Filter out deprecated or forbidden 2.5/legacy/tts models that fail with 403/404
+        const modernFlashModels = [
+            "gemini-3.5-flash-lite",
+            "gemini-3.5-flash",
+            "gemini-3.6-flash",
+            "gemini-3.7-flash",
+            "gemini-3.8-flash",
+            "gemini-3.1-flash-lite"
         ];
-        const candidates = [...new Set(candidateSet)].slice(0, 5);
+
+        const validDiscovered = apiDiscoveredModels.filter(m => 
+            !m.includes('2.5') && 
+            !m.includes('2.0') && 
+            !m.includes('1.5') &&
+            !m.includes('tts') &&
+            !m.includes('image') &&
+            !m.includes('clip')
+        );
+
+        const candidates = [...new Set([
+            ...modernFlashModels.filter(m => apiDiscoveredModels.includes(m)),
+            ...validDiscovered.filter(m => m.includes('flash')),
+            ...modernFlashModels
+        ])].slice(0, 5);
 
         // Build prompt
         let prompt = `You are an expert Malaysian logistics document intelligence AI for Packsecure OS (PackSecure / DIY Venture Sdn. Bhd.).
