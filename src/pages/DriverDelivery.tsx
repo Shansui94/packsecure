@@ -1508,6 +1508,32 @@ const DriverDelivery: React.FC<DriverDeliveryProps> = ({ user }) => {
     );
     const displayList = activeTab === 'todo' ? todoList : doneList;
 
+    const activeCargoBreakdown = React.useMemo(() => {
+        const map = new Map<string, { name: string; sku?: string; qty: number; warehouse?: string }>();
+        todoList.forEach(order => {
+            (order.items || []).forEach((it: any) => {
+                const key = it.product || it.sku || 'Item';
+                const qty = Number(it.quantity) || 0;
+                const wh = it.sourceLocation || ((order as any).trip_origin ? String((order as any).trip_origin) : 'OPM Lama');
+                if (map.has(key)) {
+                    map.get(key)!.qty += qty;
+                } else {
+                    map.set(key, {
+                        name: key,
+                        sku: it.sku,
+                        qty,
+                        warehouse: wh
+                    });
+                }
+            });
+        });
+        return Array.from(map.values()).sort((a, b) => b.qty - a.qty);
+    }, [todoList]);
+
+    const totalCargoPieces = React.useMemo(() => {
+        return activeCargoBreakdown.reduce((sum, i) => sum + i.qty, 0);
+    }, [activeCargoBreakdown]);
+
     return (
         <div className="min-h-screen bg-black text-slate-200 pb-20 font-sans">
             <div className="p-4 flex items-center justify-between border-b border-white/5 bg-slate-900/50">
@@ -1606,6 +1632,58 @@ const DriverDelivery: React.FC<DriverDeliveryProps> = ({ user }) => {
                     </button>
                 )}
             </div>
+
+            {/* 📦 Ringkasan Muatan Lori / Cargo Load Summary (Pemandu & Logistik) */}
+            {todoList.length > 0 && activeCargoBreakdown.length > 0 && (
+                <div className="px-4 pt-3">
+                    <div className="bg-gradient-to-br from-slate-900 via-[#131722] to-slate-950 border border-blue-500/40 rounded-2xl p-4 shadow-xl relative overflow-hidden">
+                        <div className="flex items-center justify-between mb-3">
+                            <div className="flex items-center gap-2">
+                                <span className="text-xl">📦</span>
+                                <div>
+                                    <h3 className="text-xs font-black text-white uppercase tracking-wider">
+                                        Ringkasan Muatan / Cargo Load Summary
+                                    </h3>
+                                    <p className="text-[10px] text-slate-400 font-bold">
+                                        Semak kuantiti barang sebelum keluar kilang / Check cargo before departure
+                                    </p>
+                                </div>
+                            </div>
+                            <div className="text-right">
+                                <span className="px-2.5 py-1 rounded-xl bg-amber-500/20 border border-amber-500/40 text-amber-300 text-xs font-mono font-black">
+                                    Jumlah: {totalCargoPieces} Rolls
+                                </span>
+                            </div>
+                        </div>
+
+                        {/* Grid of Product Totals */}
+                        <div className="grid grid-cols-2 sm:grid-cols-3 gap-2">
+                            {activeCargoBreakdown.map((item, idx) => (
+                                <div
+                                    key={idx}
+                                    className="bg-black/60 border border-slate-800/80 rounded-xl p-2.5 flex items-center justify-between gap-2 shadow-sm"
+                                >
+                                    <div className="min-w-0 flex-1">
+                                        <p className="text-xs font-black text-slate-100 truncate" title={item.name}>
+                                            {item.name}
+                                        </p>
+                                        {item.warehouse && (
+                                            <span className="text-[9px] font-bold text-blue-400 bg-blue-950/60 px-1.5 py-0.5 rounded border border-blue-800/60 inline-block mt-0.5">
+                                                📍 {item.warehouse}
+                                            </span>
+                                        )}
+                                    </div>
+                                    <div className="text-right shrink-0">
+                                        <span className="text-base font-mono font-black text-amber-400">
+                                            {item.qty}
+                                        </span>
+                                    </div>
+                                </div>
+                            ))}
+                        </div>
+                    </div>
+                </div>
+            )}
 
             {/* TABS */}
             <div className="p-4 flex gap-2">

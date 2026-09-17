@@ -600,6 +600,9 @@ const DeliveryOrderManagement: React.FC<DeliveryOrderManagementProps> = ({ user 
     const [scanReview, setScanReview] = useState<ScanSheetReview | null>(null);
     const [isBatchCreating, setIsBatchCreating] = useState(false);
 
+    const getTodayStr = () => new Date().toLocaleDateString('en-CA'); // YYYY-MM-DD 本地时间
+    const getTomorrowStr = () => { const d = new Date(); d.setDate(d.getDate() + 1); return d.toLocaleDateString('en-CA'); };
+
     // DO PDF Upload & Trip Review State (Max 15 PDFs)
     const [isTripPdfParsing, setIsTripPdfParsing] = useState(false);
     const [pdfParseProgress, setPdfParseProgress] = useState('');
@@ -608,8 +611,8 @@ const DeliveryOrderManagement: React.FC<DeliveryOrderManagementProps> = ({ user 
     const [parsedTripBatch, setParsedTripBatch] = useState<ParsedTripDOBatch | null>(null);
     const [isParsedTripModalOpen, setIsParsedTripModalOpen] = useState(false);
     const [parsedTripNumber, setParsedTripNumber] = useState('');
-    const [parsedTripDate, setParsedTripDate] = useState('');
-    const [parsedDeliveryDate, setParsedDeliveryDate] = useState('');
+    const [parsedTripDate, setParsedTripDate] = useState(getTodayStr);
+    const [parsedDeliveryDate, setParsedDeliveryDate] = useState(getTomorrowStr);
     const [parsedDriverId, setParsedDriverId] = useState('');
     const [parsedLorryId, setParsedLorryId] = useState('');
     const [parsedTripOrigin, setParsedTripOrigin] = useState('Taiping');
@@ -623,8 +626,6 @@ const DeliveryOrderManagement: React.FC<DeliveryOrderManagementProps> = ({ user 
     // New Order Form State
     const [selectedDriverId, setSelectedDriverId] = useState('');
     const [selectedLorryId, setSelectedLorryId] = useState('');
-    const getTodayStr = () => new Date().toLocaleDateString('en-CA'); // YYYY-MM-DD 本地时间
-    const getTomorrowStr = () => { const d = new Date(); d.setDate(d.getDate() + 1); return d.toLocaleDateString('en-CA'); };
     const [newOrderDate, setNewOrderDate] = useState(getTodayStr); // 默认今天
     const [newOrderDeliveryDate, setNewOrderDeliveryDate] = useState(getTomorrowStr); // 默认明天
     const [newOrderItems, setNewOrderItems] = useState<SalesOrder['items']>([]);
@@ -676,6 +677,33 @@ const DeliveryOrderManagement: React.FC<DeliveryOrderManagementProps> = ({ user 
     const [skuMappings, setSkuMappings] = useState<any[]>([]);
     const [tripsV2List, setTripsV2List] = useState<any[]>([]);
     const [expandedTripKeys, setExpandedTripKeys] = useState<Record<string, boolean>>({});
+
+    const parsedCargoSummary = React.useMemo(() => {
+        if (!parsedTripBatch) return [];
+        const prodMap = new Map<string, { name: string; sku: string; qty: number; uom: string; warehouse: string }>();
+        
+        parsedTripBatch.deliveryOrders.forEach(o => {
+            (o.items || []).forEach(it => {
+                const key = it.sku || it.rawProductName || it.product || 'Unknown';
+                const loc = it.sourceLocation || guessItemLocation(it, parsedTripOrigin);
+                const q = Number(it.quantity) || 0;
+                const existing = prodMap.get(key);
+                if (existing) {
+                    existing.qty += q;
+                } else {
+                    prodMap.set(key, {
+                        name: it.product || it.rawProductName || key,
+                        sku: it.sku || key,
+                        qty: q,
+                        uom: it.uom || 'Rolls',
+                        warehouse: loc
+                    });
+                }
+            });
+        });
+
+        return Array.from(prodMap.values()).sort((a, b) => b.qty - a.qty);
+    }, [parsedTripBatch, parsedTripOrigin]);
 
     // Fetch Data
     const fetchData = async () => {
@@ -1989,8 +2017,8 @@ const DeliveryOrderManagement: React.FC<DeliveryOrderManagementProps> = ({ user 
 
             setParsedTripBatch(alignedBatch);
             setParsedTripNumber(genTripNo);
-            setParsedTripDate(data.suggestedTripDate || new Date().toISOString().split('T')[0]);
-            setParsedDeliveryDate(data.suggestedTripDate || new Date().toISOString().split('T')[0]);
+            setParsedTripDate(getTodayStr());
+            setParsedDeliveryDate(getTomorrowStr());
             setParsedTripOrigin(activeLocation || 'Taiping');
             setParsedZone(data.primaryZone || '');
             setIsParsedTripModalOpen(true);
@@ -2068,7 +2096,26 @@ const DeliveryOrderManagement: React.FC<DeliveryOrderManagementProps> = ({ user 
         });
     };
 
-    const handleUpdateParsedItemSku = (doIndex: number, itemIndex: number, newSku: string) => {
+    const handleUpdateParsedItemQty = (doIndex: number, itemIndex: number, newQty: number) => {
+        setParsedTripBatch(prev => {
+            if (!prev) return null;
+            const orders = [...prev.deliveryOrders];
+            const order = { ...orders[doIndex] };
+            const items = [...(order.items || [])];
+            items[itemIndex] = { ...items[itemIndex], quantity: Math.max(0, newQty) };
+            order.items = items;
+            orders[doIndex] = order;
+
+            // Recalculate totalRolls for entire trip
+            const newTotalRolls = orders.reduce((sum, o) => {
+                return sum + (o.items || []).reduce((iSum, it) => iSum + (Number(it.quantity) || 0), 0);
+            }, 0);
+
+            return { ...prev, deliveryOrders: orders, totalRolls: newTotalRolls };
+        });
+    };
+
+    const handleUpdateParsedItemSku = (doIndex: number, itemIndex: number, inputVal: string) => {
         setParsedTripBatch(prev => {
             if (!prev) return null;
             const orders = [...prev.deliveryOrders];
@@ -2076,13 +2123,25 @@ const DeliveryOrderManagement: React.FC<DeliveryOrderManagementProps> = ({ user 
             const items = [...(order.items || [])];
             const currentItem = { ...items[itemIndex] };
 
-            const matchedProd = v2Items.find(x => x.sku === newSku);
-            currentItem.sku = newSku;
+            const trimmed = (inputVal || '').trim();
+            const matchedProd = v2Items.find(x => 
+                x.sku.toLowerCase() === trimmed.toLowerCase() || 
+                x.name.toLowerCase() === trimmed.toLowerCase() ||
+                `${x.name} (${x.sku})`.toLowerCase() === trimmed.toLowerCase() ||
+                `${x.sku} - ${x.name}`.toLowerCase() === trimmed.toLowerCase()
+            );
+
             if (matchedProd) {
+                currentItem.sku = matchedProd.sku;
                 currentItem.product = matchedProd.name;
                 currentItem.isMatched = true;
-                currentItem.sourceLocation = guessItemLocation({ sku: newSku, product: matchedProd.name, rawProductName: currentItem.rawProductName }, parsedTripOrigin);
-            } else if (!newSku) {
+                currentItem.sourceLocation = guessItemLocation({ sku: matchedProd.sku, product: matchedProd.name, rawProductName: currentItem.rawProductName }, parsedTripOrigin);
+            } else if (trimmed) {
+                currentItem.sku = trimmed;
+                currentItem.isMatched = true;
+                currentItem.sourceLocation = guessItemLocation({ sku: trimmed, rawProductName: currentItem.rawProductName }, parsedTripOrigin);
+            } else {
+                currentItem.sku = '';
                 currentItem.isMatched = false;
             }
 
@@ -4311,6 +4370,37 @@ const DeliveryOrderManagement: React.FC<DeliveryOrderManagementProps> = ({ user 
                                                                             </div>
                                                                         </div>
 
+                                                                        {/* Trip Product Breakdown Summary */}
+                                                                        {(() => {
+                                                                            const summary: Record<string, number> = {};
+                                                                            tripGroup.orders.forEach(o => {
+                                                                                (o.items || []).forEach(it => {
+                                                                                    const name = it.product || it.sku || 'Item';
+                                                                                    summary[name] = (summary[name] || 0) + (Number(it.quantity) || 0);
+                                                                                });
+                                                                            });
+                                                                            const entries = Object.entries(summary).sort((a, b) => b[1] - a[1]);
+                                                                            if (entries.length === 0) return null;
+
+                                                                            return (
+                                                                                <div className="flex flex-wrap items-center gap-1.5 my-2 pt-2 border-t border-slate-800/80">
+                                                                                    <span className="text-[9px] font-black uppercase text-slate-500 tracking-wider flex items-center gap-1 mr-0.5">
+                                                                                        <span>📦</span> {t('Cargo')}:
+                                                                                    </span>
+                                                                                    {entries.map(([prodName, qty]) => (
+                                                                                        <span
+                                                                                            key={prodName}
+                                                                                            className="inline-flex items-center gap-1 px-2 py-0.5 rounded-md bg-slate-950 border border-slate-800 text-[10px] font-mono shadow-sm"
+                                                                                            title={prodName}
+                                                                                        >
+                                                                                            <span className="text-slate-300 font-bold truncate max-w-[120px]">{prodName}</span>
+                                                                                            <span className="text-amber-400 font-black">x{qty}</span>
+                                                                                        </span>
+                                                                                    ))}
+                                                                                </div>
+                                                                            );
+                                                                        })()}
+
                                                                         {/* Trip Info Strip */}
                                                                         <div className="text-xs text-slate-500 flex items-center justify-between gap-2 mb-2 pb-2 border-b border-slate-800/80">
                                                                             <div className="flex items-center gap-1.5">
@@ -5766,15 +5856,19 @@ const DeliveryOrderManagement: React.FC<DeliveryOrderManagementProps> = ({ user 
                                         <label className="block text-[10px] font-bold text-slate-400 uppercase mb-1">
                                             {t('Origin Factory / 出发厂区')}
                                         </label>
-                                        <select
+                                        <input
+                                            type="text"
+                                            list="parsed-origin-datalist"
                                             className="w-full bg-slate-950 border border-slate-700/80 rounded-xl px-3 py-2 text-xs text-slate-200 outline-none focus:border-blue-500"
                                             value={parsedTripOrigin}
                                             onChange={e => setParsedTripOrigin(e.target.value)}
-                                        >
+                                            placeholder="Taiping"
+                                        />
+                                        <datalist id="parsed-origin-datalist">
                                             {['Taiping', 'Nilai', 'Kelantan', 'Johor'].map(loc => (
-                                                <option key={loc} value={loc}>{loc}</option>
+                                                <option key={loc} value={loc} />
                                             ))}
-                                        </select>
+                                        </datalist>
                                     </div>
                                 </div>
 
@@ -5783,44 +5877,74 @@ const DeliveryOrderManagement: React.FC<DeliveryOrderManagementProps> = ({ user 
                                         <label className="block text-[10px] font-bold text-slate-400 uppercase mb-1">
                                             {t('Assign Driver / 指派司机')}
                                         </label>
-                                        <select
-                                            className="w-full bg-slate-950 border border-slate-700/80 rounded-xl px-3 py-2 text-xs text-slate-200 outline-none focus:border-blue-500"
-                                            value={parsedDriverId}
+                                        <input
+                                            type="text"
+                                            list="modal-driver-datalist"
+                                            className="w-full bg-slate-950 border border-slate-700/80 rounded-xl px-3 py-2 text-xs text-slate-200 outline-none focus:border-blue-500 placeholder:text-slate-600"
+                                            placeholder={t('-- 输入或选择司机姓名 --')}
+                                            value={drivers.find(d => d.uid === parsedDriverId)?.name || parsedDriverId || ''}
                                             onChange={e => {
-                                                const dId = e.target.value;
-                                                setParsedDriverId(dId);
-                                                // Auto-select bound lorry if available
-                                                const matchedLorry = lorries.find(l => l.driverUserId === dId);
-                                                if (matchedLorry) {
-                                                    setParsedLorryId(matchedLorry.id);
+                                                const val = e.target.value;
+                                                const matched = drivers.find(d => 
+                                                    d.name?.toLowerCase() === val.toLowerCase() || 
+                                                    d.uid === val ||
+                                                    `${d.name || d.email} (${d.base_location || 'Taiping'})`.toLowerCase() === val.toLowerCase()
+                                                );
+                                                if (matched) {
+                                                    setParsedDriverId(matched.uid);
+                                                    const matchedLorry = lorries.find(l => l.driverUserId === matched.uid);
+                                                    if (matchedLorry) setParsedLorryId(matchedLorry.id);
+                                                } else if (!val) {
+                                                    setParsedDriverId('');
+                                                } else {
+                                                    const partial = drivers.find(d => d.name?.toLowerCase().includes(val.toLowerCase()));
+                                                    setParsedDriverId(partial ? partial.uid : val);
                                                 }
                                             }}
-                                        >
-                                            <option value="">-- {t('Select Driver (Optional)')} --</option>
+                                        />
+                                        <datalist id="modal-driver-datalist">
                                             {drivers.map(d => (
-                                                <option key={d.uid} value={d.uid}>
+                                                <option key={d.uid} value={d.name || d.email || ''}>
                                                     {d.name || d.email} ({d.base_location || 'Taiping'})
                                                 </option>
                                             ))}
-                                        </select>
+                                        </datalist>
                                     </div>
 
                                     <div>
                                         <label className="block text-[10px] font-bold text-slate-400 uppercase mb-1">
                                             {t('Assign Lorry / 绑定车辆')}
                                         </label>
-                                        <select
-                                            className="w-full bg-slate-950 border border-slate-700/80 rounded-xl px-3 py-2 text-xs text-slate-200 outline-none focus:border-blue-500"
-                                            value={parsedLorryId}
-                                            onChange={e => setParsedLorryId(e.target.value)}
-                                        >
-                                            <option value="">-- {t('Select Lorry (Optional)')} --</option>
+                                        <input
+                                            type="text"
+                                            list="modal-lorry-datalist"
+                                            className="w-full bg-slate-950 border border-slate-700/80 rounded-xl px-3 py-2 text-xs text-slate-200 outline-none focus:border-blue-500 placeholder:text-slate-600"
+                                            placeholder={t('-- 输入或选择车牌 --')}
+                                            value={lorries.find(l => l.id === parsedLorryId)?.plateNumber || parsedLorryId || ''}
+                                            onChange={e => {
+                                                const val = e.target.value;
+                                                const matched = lorries.find(l => 
+                                                    l.plateNumber?.toLowerCase() === val.toLowerCase() || 
+                                                    l.id === val ||
+                                                    `${l.plateNumber} ${(l as any).capacity ? `(${(l as any).capacity} rolls)` : ''}`.toLowerCase() === val.toLowerCase()
+                                                );
+                                                if (matched) {
+                                                    setParsedLorryId(matched.id);
+                                                } else if (!val) {
+                                                    setParsedLorryId('');
+                                                } else {
+                                                    const partial = lorries.find(l => l.plateNumber?.toLowerCase().includes(val.toLowerCase()));
+                                                    setParsedLorryId(partial ? partial.id : val);
+                                                }
+                                            }}
+                                        />
+                                        <datalist id="modal-lorry-datalist">
                                             {lorries.map(l => (
-                                                <option key={l.id} value={l.id}>
-                                                    {l.plate_number} {l.capacity ? `(${l.capacity} rolls)` : ''}
+                                                <option key={l.id} value={l.plateNumber}>
+                                                    {l.plateNumber} {(l as any).capacity ? `(${(l as any).capacity} rolls)` : ''}
                                                 </option>
                                             ))}
-                                        </select>
+                                        </datalist>
                                     </div>
 
                                     <div>
@@ -5829,14 +5953,69 @@ const DeliveryOrderManagement: React.FC<DeliveryOrderManagementProps> = ({ user 
                                         </label>
                                         <input
                                             type="text"
+                                            list="modal-zone-datalist"
                                             className="w-full bg-slate-950 border border-slate-700/80 rounded-xl px-3 py-2 text-xs text-slate-200 outline-none focus:border-blue-500"
                                             value={parsedZone}
                                             onChange={e => setParsedZone(e.target.value)}
                                             placeholder="e.g. KELANTAN, SELANGOR"
                                         />
+                                        <datalist id="modal-zone-datalist">
+                                            {Array.from(new Set(deliveryRates.map(r => r.location_name).filter(Boolean))).map(zone => (
+                                                <option key={zone} value={zone} />
+                                            ))}
+                                        </datalist>
                                     </div>
                                 </div>
                             </div>
+
+                            {/* 📦 Trip Cargo Breakdown Summary (车次装车总数清单) */}
+                            {parsedCargoSummary.length > 0 && (
+                                <div className="bg-slate-900/60 border border-blue-500/30 rounded-2xl p-4 space-y-3">
+                                    <div className="flex items-center justify-between">
+                                        <h4 className="text-xs font-black text-blue-300 uppercase tracking-wider flex items-center gap-2">
+                                            <span>📦</span>
+                                            <span>{t('Trip Cargo Breakdown / 各产品装车总数清单')}</span>
+                                            <span className="text-[10px] font-bold text-slate-400 normal-case font-mono">
+                                                ({parsedCargoSummary.length} {t('品类')}, {parsedTripBatch.totalRolls} {t('总件数')})
+                                            </span>
+                                        </h4>
+                                        <span className="text-[10px] font-black uppercase text-blue-400 bg-blue-500/10 px-2.5 py-0.5 rounded-full border border-blue-500/20">
+                                            {t('出库备货与装车核对')}
+                                        </span>
+                                    </div>
+
+                                    <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-2.5">
+                                        {parsedCargoSummary.map((prod, pIdx) => (
+                                            <div
+                                                key={pIdx}
+                                                className="flex items-center justify-between p-2.5 rounded-xl bg-slate-950/80 border border-slate-800"
+                                            >
+                                                <div className="min-w-0 flex-1 pr-2">
+                                                    <div className="text-xs font-bold text-white truncate" title={prod.name}>
+                                                        {prod.name}
+                                                    </div>
+                                                    <div className="flex items-center gap-1.5 mt-0.5">
+                                                        <span className="text-[9px] font-mono font-bold text-slate-400 truncate max-w-[130px]">
+                                                            {prod.sku}
+                                                        </span>
+                                                        <span className="text-[9px] font-bold px-1 rounded bg-blue-500/15 text-blue-300 border border-blue-500/20">
+                                                            {prod.warehouse}
+                                                        </span>
+                                                    </div>
+                                                </div>
+                                                <div className="text-right shrink-0">
+                                                    <div className="text-base font-mono font-black text-amber-300">
+                                                        {prod.qty}
+                                                    </div>
+                                                    <div className="text-[9px] font-bold text-slate-400 uppercase">
+                                                        {prod.uom}
+                                                    </div>
+                                                </div>
+                                            </div>
+                                        ))}
+                                    </div>
+                                </div>
+                            )}
 
                             {/* Drops Sequence List */}
                             <div className="space-y-3">
@@ -5974,10 +6153,18 @@ const DeliveryOrderManagement: React.FC<DeliveryOrderManagementProps> = ({ user 
                                                                 className="flex flex-col sm:flex-row sm:items-center justify-between gap-2 p-2 rounded-lg bg-slate-950/80 border border-slate-800/80 text-xs"
                                                             >
                                                                 <div className="flex items-center gap-2 min-w-0 flex-1">
-                                                                    <span className="px-2 py-0.5 rounded bg-amber-500/15 border border-amber-500/30 text-amber-300 font-black text-xs shrink-0">
-                                                                        x {it.quantity} {it.uom || t('Rolls')}
-                                                                    </span>
-                                                                    <div className="truncate">
+                                                                    <div className="flex items-center gap-1 shrink-0 bg-slate-900 border border-amber-500/40 rounded-lg px-2 py-0.5">
+                                                                        <span className="text-[10px] font-black text-amber-400">Qty:</span>
+                                                                        <input
+                                                                            type="number"
+                                                                            min="1"
+                                                                            className="w-14 bg-transparent text-xs font-mono font-black text-amber-300 outline-none text-center"
+                                                                            value={it.quantity}
+                                                                            onChange={e => handleUpdateParsedItemQty(idx, itemIdx, Number(e.target.value) || 0)}
+                                                                        />
+                                                                        <span className="text-[10px] text-slate-400 font-bold">{it.uom || t('Rolls')}</span>
+                                                                    </div>
+                                                                    <div className="truncate min-w-0 flex-1">
                                                                         <span className="font-semibold text-white block truncate" title={it.rawProductName || it.product}>
                                                                             {it.rawProductName || it.product}
                                                                         </span>
@@ -5994,37 +6181,32 @@ const DeliveryOrderManagement: React.FC<DeliveryOrderManagementProps> = ({ user 
                                                                         <label className="text-[10px] font-bold text-slate-400 uppercase">
                                                                             SKU:
                                                                         </label>
-                                                                        <select
-                                                                            className={`px-2.5 py-1 rounded-lg text-xs font-mono font-bold outline-none transition-all cursor-pointer max-w-[200px] sm:max-w-[250px] ${
+                                                                        <input
+                                                                            type="text"
+                                                                            list="global-v2items-datalist"
+                                                                            className={`px-2.5 py-1 rounded-lg text-xs font-mono font-bold outline-none transition-all w-44 sm:w-56 ${
                                                                                 it.sku
                                                                                     ? 'bg-emerald-950/40 border border-emerald-500/40 text-emerald-300 focus:border-emerald-400'
                                                                                     : 'bg-amber-950/40 border border-amber-500/50 text-amber-300 focus:border-amber-400 animate-pulse'
                                                                             }`}
-                                                                            value={it.sku || ''}
+                                                                            placeholder={t('-- 输入或选择标准料号 --')}
+                                                                            value={it.sku ? `${it.sku} - ${it.product || ''}` : ''}
                                                                             onChange={e => handleUpdateParsedItemSku(idx, itemIdx, e.target.value)}
-                                                                        >
-                                                                            <option value="">{t('⚠️ -- 请选择标准料号 (Unmapped) --')}</option>
-                                                                            {v2Items.map(prod => (
-                                                                                <option key={prod.sku} value={prod.sku}>
-                                                                                    {prod.sku} - {prod.name}
-                                                                                </option>
-                                                                            ))}
-                                                                        </select>
+                                                                        />
                                                                     </div>
 
                                                                     <div className="flex items-center gap-1.5 shrink-0">
                                                                         <label className="text-[10px] font-bold text-slate-400 uppercase">
                                                                             {t('Warehouse')}:
                                                                         </label>
-                                                                        <select
-                                                                            className="px-2 py-1 rounded-lg text-xs font-bold bg-slate-900 border border-slate-700 text-blue-400 outline-none cursor-pointer focus:border-blue-500"
+                                                                        <input
+                                                                            type="text"
+                                                                            list="modal-warehouse-datalist"
+                                                                            className="px-2 py-1 rounded-lg text-xs font-bold bg-slate-900 border border-slate-700 text-blue-400 outline-none focus:border-blue-500 w-28 sm:w-32"
                                                                             value={it.sourceLocation || guessItemLocation(it, parsedTripOrigin)}
                                                                             onChange={e => handleUpdateParsedItemLocation(idx, itemIdx, e.target.value)}
-                                                                        >
-                                                                            {getAvailableWarehousesForOrigin(parsedTripOrigin).map(loc => (
-                                                                                <option key={loc} value={loc}>{loc}</option>
-                                                                            ))}
-                                                                        </select>
+                                                                            placeholder="Warehouse"
+                                                                        />
                                                                     </div>
                                                                 </div>
                                                             </div>
@@ -6037,6 +6219,21 @@ const DeliveryOrderManagement: React.FC<DeliveryOrderManagementProps> = ({ user 
                                 </div>
                             </div>
                         </div>
+
+                        {/* Shared Datalists for Combobox Selection */}
+                        <datalist id="global-v2items-datalist">
+                            {v2Items.map(prod => (
+                                <option key={prod.sku} value={`${prod.sku} - ${prod.name}`}>
+                                    {prod.name}
+                                </option>
+                            ))}
+                        </datalist>
+
+                        <datalist id="modal-warehouse-datalist">
+                            {getAvailableWarehousesForOrigin(parsedTripOrigin).map(loc => (
+                                <option key={loc} value={loc} />
+                            ))}
+                        </datalist>
 
                         {/* Footer */}
                         <div className="p-4 sm:p-5 border-t border-slate-800 flex flex-col sm:flex-row items-center justify-between gap-3 bg-slate-900/60">
