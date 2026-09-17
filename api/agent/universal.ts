@@ -1402,11 +1402,22 @@ CRITICAL: Return strictly a valid JSON object. Do not wrap in markdown quotes.
                     doTotal: 10
                 }));
             } else if (totalEstimatedPages > 1 && files.length === 1) {
-                const baseName = (files[0].name || '').replace(/\.pdf$/i, '');
+                const rawName = (files[0].name || '').replace(/\.pdf$/i, '');
+                const doPrefixMatch = rawName.match(/^(DO-[A-Za-z0-9]+-[0-9]+|OPM[0-9-]+|[A-Za-z0-9-]+)/i);
+                const basePrefix = doPrefixMatch ? doPrefixMatch[1] : 'DO';
+                const cleanCustomerBase = rawName
+                    .replace(/_Proof_of_Delivery.*$/i, '')
+                    .replace(/^DO[-_]/i, '')
+                    .replace(/[-_][0-9]+$/g, '')
+                    .replace(/[-_]/g, ' ')
+                    .trim();
+
                 for (let i = 1; i <= totalEstimatedPages; i++) {
+                    const pageSeq = String(i).padStart(3, '0');
+                    const cleanDoNo = `${basePrefix}-${pageSeq}`;
                     fallbackOrders.push({
-                        doNumber: `${baseName}-P${i}`,
-                        customer: `${baseName} (Page ${i})`,
+                        doNumber: cleanDoNo,
+                        customer: cleanCustomerBase ? `${cleanCustomerBase} (Drop ${i})` : `Customer Stop ${i} (Page ${i})`,
                         deliveryAddress: 'Sila lengkapkan alamat penghantaran / Please check delivery address',
                         phone: '',
                         zone: 'NORTH',
@@ -1424,7 +1435,7 @@ CRITICAL: Return strictly a valid JSON object. Do not wrap in markdown quotes.
             } else {
                 fallbackOrders = files.map((f, idx) => {
                     const nameWithoutExt = (f.name || '').replace(/\.pdf$/i, '');
-                    const doMatch = nameWithoutExt.match(/(OPM[A-Za-z0-9-]+|[A-Za-z0-9_-]+)/i);
+                    const doMatch = nameWithoutExt.match(/(OPM[A-Za-z0-9-]+|DO-[A-Za-z0-9_-]+|[A-Za-z0-9_-]+)/i);
                     const doNumber = doMatch ? doMatch[1].toUpperCase() : `DO-${idx + 1}`;
                     return {
                         doNumber,
@@ -1461,6 +1472,11 @@ CRITICAL: Return strictly a valid JSON object. Do not wrap in markdown quotes.
             ? parsed.deliveryOrders.reduce((sum: number, d: any) => sum + (Number(d.doTotal) || 0), 0)
             : 0;
 
+        const isKeyBlocked = errorLogs.some(e => e.includes('403 Forbidden') || e.includes('denied access'));
+        const keyAlert = isKeyBlocked
+            ? "Google Gemini API 密钥被 Google 限制访问 (403 Forbidden: Your project has been denied access)。请在 Google AI Studio (aistudio.google.com) 创建新 Key 并更新。"
+            : undefined;
+
         return res.status(200).json({
             success: true,
             suggestedTripDate: parsed.suggestedTripDate || new Date().toISOString().split('T')[0],
@@ -1470,6 +1486,8 @@ CRITICAL: Return strictly a valid JSON object. Do not wrap in markdown quotes.
             destinationsSummary: parsed.destinationsSummary || '',
             deliveryOrders: Array.isArray(parsed.deliveryOrders) ? parsed.deliveryOrders : [],
             isFallback: !!parsed.isFallback,
+            isKeyBlocked,
+            keyAlert,
             modelUsed: modelUsed || (parsed.isFallback ? 'fallback' : 'none'),
             debugError: errorLogs.length > 0 ? errorLogs.join(' || ') : (lastError ? lastError.message : null),
             discoveredModels: apiDiscoveredModels

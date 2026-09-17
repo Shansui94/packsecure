@@ -164,6 +164,8 @@ export interface ParsedTripDOBatch {
     isFallback?: boolean;
     modelUsed?: string;
     debugError?: string;
+    isKeyBlocked?: boolean;
+    keyAlert?: string;
 }
 
 export interface DeliveryRate {

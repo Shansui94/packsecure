@@ -5220,6 +5220,23 @@ const DeliveryOrderManagement: React.FC<DeliveryOrderManagementProps> = ({ user 
 
                         {/* Scrollable Body */}
                         <div className="flex-1 overflow-y-auto p-4 sm:p-6 space-y-6 custom-scrollbar bg-slate-950">
+                            {/* Fallback Mode Notice if AI was restricted */}
+                            {parsedTripBatch.isFallback && (
+                                <div className="bg-amber-500/10 border border-amber-500/30 rounded-2xl p-4 flex items-start gap-3 text-amber-300 text-xs">
+                                    <AlertTriangle size={20} className="shrink-0 mt-0.5 text-amber-400" />
+                                    <div className="space-y-1">
+                                        <div className="font-bold text-sm text-amber-200">
+                                            ⚠️ {t('自动拆分草稿模式（已提取 {{count}} 个停靠点）', { count: parsedTripBatch.deliveryOrders.length })}
+                                        </div>
+                                        <div className="text-amber-300/80 leading-relaxed">
+                                            {parsedTripBatch.isKeyBlocked || parsedTripBatch.debugError?.includes('403') || parsedTripBatch.debugError?.includes('denied')
+                                                ? t('原因：服务端配置的 Google Gemini API 密钥被 Google 限制访问 (403 Forbidden: Your project has been denied access)。需在 Google AI Studio (aistudio.google.com) 创建新 API Key 并更新，方可恢复自动 OCR 与品名数量提取。当前已自动为您拆分出各页单据，请手动核对品名与数量。')
+                                                : t('原因：AI 模型暂不可用或多页识别异常，已为您生成包含 {{count}} 个停靠点的草稿单据，请核对各 DO 详情。', { count: parsedTripBatch.deliveryOrders.length })}
+                                        </div>
+                                    </div>
+                                </div>
+                            )}
+
                             {/* Trip Master Settings */}
                             <div className="bg-slate-900/50 border border-slate-800 rounded-2xl p-4 sm:p-5 space-y-4">
                                 <div className="flex items-center justify-between">
