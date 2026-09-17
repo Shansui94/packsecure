@@ -57,13 +57,13 @@ type ScanSheetReview = {
 };
 
 const normalizeWarehouseName = (loc: string): string => {
-    if (!loc) return 'SPD';
+    if (!loc) return 'OPM Lama';
     const lower = loc.trim().toLowerCase();
     if (lower === 'johor' || lower === 'j1') return 'Johor';
     if (lower === 'kelantan' || lower === 'k1') return 'Kelantan';
     if (lower === 'nilai' || lower === 'n1') return 'Nilai';
-    if (lower === 'spd' || lower === 'taiping' || lower === 't1') return 'SPD';
-    if (lower === 'opm lama' || lower === 'opm_lama') return 'OPM Lama';
+    if (lower === 'spd') return 'SPD';
+    if (lower === 'opm lama' || lower === 'opm_lama' || lower === 'taiping' || lower === 't1') return 'OPM Lama';
     if (lower === 'opm corner' || lower === 'opm_corner') return 'OPM Corner';
     if (lower === 'opm ali' || lower === 'opm_ali') return 'OPM Ali';
     return loc;
@@ -74,7 +74,41 @@ const normalizeLoc = (locId: string): string => {
 };
 
 const getDefaultLocForOrigin = (origin: string): string => {
+    const u = (origin || '').toUpperCase().trim();
+    if (u === 'NILAI' || u === 'N1') return 'Nilai';
+    if (u === 'KELANTAN' || u === 'K1') return 'Kelantan';
+    if (u === 'JOHOR' || u === 'J1') return 'Johor';
+    if (u === 'TAIPING' || u === 'T1' || u === 'SPD' || u === 'OPM') return 'OPM Lama';
     return normalizeWarehouseName(origin);
+};
+
+export const guessItemLocation = (item: { sku?: string; product?: string; rawProductName?: string }, origin: string): string => {
+    const orig = (origin || '').toUpperCase().trim();
+    if (orig === 'NILAI' || orig === 'N1') return 'Nilai';
+    if (orig === 'KELANTAN' || orig === 'K1') return 'Kelantan';
+    if (orig === 'JOHOR' || orig === 'J1') return 'Johor';
+
+    // Taiping Factory Hub:
+    const sku = (item.sku || '').toUpperCase();
+    const prod = (item.product || item.rawProductName || '').toUpperCase();
+
+    // 1. Bubble Wrap -> OPM Lama (T1/T2/T3 main lines and storage)
+    if (sku.startsWith('BW-') || prod.includes('BUBBLE') || prod.includes('MERAH') || prod.includes('DL-') || prod.includes('SL-') || prod.includes('OREN') || prod.includes('HITAM') || prod.includes('SILVER')) {
+        return 'OPM Lama';
+    }
+
+    // 2. Stretch Film -> OPM Lama (T1/T4 stretch film lines and storage)
+    if (sku.startsWith('SF-') || prod.includes('STRETCH') || prod.includes('FILM') || prod.includes('BABY ROLL') || prod.includes('BABYROLL')) {
+        return 'OPM Lama';
+    }
+
+    // 3. Tapes / Air tube / Converted products -> OPM Corner or SPD
+    if (sku.includes('TAPE') || sku.includes('CUKUPP') || prod.includes('TAPE') || sku.includes('AWB') || prod.includes('AWB') || sku.includes('AIRTUBE') || prod.includes('AIRTUBE')) {
+        return 'OPM Corner';
+    }
+
+    // Default for Taiping is OPM Lama
+    return 'OPM Lama';
 };
 
 const normalizeLocationCode = (loc?: string | null): string => {
@@ -93,9 +127,9 @@ const getAvailableWarehousesForOrigin = (origin: string): string[] => {
     if (u === 'KELANTAN') return ['Kelantan'];
     if (u === 'JOHOR') return ['Johor'];
     if (u === 'TAIPING' || u === 'SPD' || u === 'T1') {
-        return ['SPD', 'OPM Lama', 'OPM Corner', 'OPM Ali'];
+        return ['OPM Lama', 'OPM Corner', 'OPM Ali', 'SPD'];
     }
-    return ['SPD', 'OPM Lama', 'OPM Corner', 'OPM Ali'];
+    return ['OPM Lama', 'OPM Corner', 'OPM Ali', 'SPD'];
 };
 
 
@@ -640,6 +674,8 @@ const DeliveryOrderManagement: React.FC<DeliveryOrderManagementProps> = ({ user 
     // -- Mode A: V2 Search --
     const [v2Items, setV2Items] = useState<V2Item[]>([]);
     const [skuMappings, setSkuMappings] = useState<any[]>([]);
+    const [tripsV2List, setTripsV2List] = useState<any[]>([]);
+    const [expandedTripKeys, setExpandedTripKeys] = useState<Record<string, boolean>>({});
 
     // Fetch Data
     const fetchData = async () => {
@@ -665,7 +701,7 @@ const DeliveryOrderManagement: React.FC<DeliveryOrderManagementProps> = ({ user 
                 setLorryServices(filteredServices);
             }
 
-            const [usersRes, sysUsersRes, ordersRes, itemsRes, leavesRes, lorriesRes, servicesRes, ratesRes, customersRes, mappingsRes] = await Promise.all([
+            const [usersRes, sysUsersRes, ordersRes, itemsRes, leavesRes, lorriesRes, servicesRes, ratesRes, customersRes, mappingsRes, tripsRes] = await Promise.all([
                 supabase.from('users_public').select('*'),
                 supabase.from('sys_users_v2').select('id, auth_user_id, role_modules'),
                 supabase.from('sales_orders').select('*').order('trip_sequence', { ascending: true }).order('created_at', { ascending: false }),
@@ -675,10 +711,12 @@ const DeliveryOrderManagement: React.FC<DeliveryOrderManagementProps> = ({ user 
                 supabase.from('lorry_service_requests').select('*').eq('status', 'Scheduled'),
                 supabase.from('delivery_rates').select('*').order('location_name'),
                 supabase.from('sys_customers').select('*').order('name'),
-                supabase.from('customer_sku_mappings').select('*')
+                supabase.from('customer_sku_mappings').select('*'),
+                supabase.from('trips_v2').select('*').order('created_at', { ascending: false })
             ]);
 
             // ... (rest of existing logic)
+            if (tripsRes?.data) setTripsV2List(tripsRes.data);
             if (ratesRes.data) {
                 console.log("DEBUG: deliveryRates fetched -> ", ratesRes.data);
                 setDeliveryRates(ratesRes.data);
@@ -1044,98 +1082,102 @@ const DeliveryOrderManagement: React.FC<DeliveryOrderManagementProps> = ({ user 
         }
 
         const newDriverId = destination.droppableId === 'unassigned' ? null : destination.droppableId;
-        const oldDriverId = source.droppableId === 'unassigned' ? null : source.droppableId; // Could be 'unassigned' or a user ID
-        const orderId = draggableId;
+        const oldDriverId = source.droppableId === 'unassigned' ? null : source.droppableId;
+
+        // Identify if dragged element is a Trip Group or standalone Order
+        const isTrip = draggableId.startsWith('trip_');
+        const tripV2Id = isTrip ? draggableId.replace('trip_', '') : null;
+        const targetOrderId = draggableId.startsWith('order_') ? draggableId.replace('order_', '') : (!isTrip ? draggableId : null);
+
+        let movedOrders: SalesOrder[] = [];
+        if (tripV2Id) {
+            movedOrders = orders.filter(o => o.trip_id === tripV2Id);
+        } else if (targetOrderId) {
+            const found = orders.find(o => o.id === targetOrderId);
+            if (found) movedOrders = [found];
+        }
+
+        if (movedOrders.length === 0) return;
+        const movedOrderIds = movedOrders.map(o => o.id);
 
         // Smart Reminder
         if (newDriverId && newDriverId !== oldDriverId) {
-            const order = orders.find(o => o.id === orderId);
-            if (!checkDriverAvailability(newDriverId, order?.deadline)) return;
+            const anyDeadline = movedOrders.find(o => o.deadline)?.deadline;
+            if (!checkDriverAvailability(newDriverId, anyDeadline)) return;
         }
 
-        // 1. Get all orders for the DESTINATION driver
-        const destinationOrders = filteredOrders
-            .filter(o => o.driverId === newDriverId)
-            .sort((a, b) => {
-                const dateA = a.deadline || '';
-                const dateB = b.deadline || '';
-                if (dateA !== dateB) {
-                    return dateB.localeCompare(dateA); // Date descending (newest on top)
-                }
-                return (a.tripSequence || 0) - (b.tripSequence || 0);
-            });
-
-        // 2. Insert the moved item into the new position
-        const movedOrder = orders.find(o => o.id === orderId);
-        if (!movedOrder) return;
-
-        // If moving within same list
-        if (newDriverId === oldDriverId) {
-            destinationOrders.splice(source.index, 1); // Remove from old pos
-            destinationOrders.splice(destination.index, 0, movedOrder); // Insert at new pos
-        } else {
-            // Moving across lists
-            destinationOrders.splice(destination.index, 0, { ...movedOrder, driverId: newDriverId || undefined });
-        }
-
-        // 3. Optimistic Update (Global State)
-        const newOrdersState = orders.map(o => {
-            // Update the moved order
-            if (o.id === orderId) {
-                return { ...o, driverId: newDriverId || undefined }; // Cast null to undefined for state
+        // Optimistic update of local orders state
+        const updatedOrders = orders.map(o => {
+            if (movedOrderIds.includes(o.id)) {
+                return { ...o, driverId: newDriverId || undefined };
             }
             return o;
         });
+        setOrders(updatedOrders);
 
-        // We also need to reflect the sequence update immediately in UI (Badge)
-        // Let's create a map of id -> new sequence
-        const sequenceMap = new Map<string, number>();
-        destinationOrders.forEach((o, index) => {
-            sequenceMap.set(o.id, index + 1);
-        });
-
-        const finalOptimisticOrders = newOrdersState.map(o => {
-            if (sequenceMap.has(o.id)) {
-                return { ...o, tripSequence: sequenceMap.get(o.id) };
-            }
-            return o;
-        });
-
-        setOrders(finalOptimisticOrders);
-
-
-        // 4. Server Update (Batch)
+        // Update database
         try {
-            console.log("onDragEnd: Starting database updates...");
-            // A. Update the moved item's driver first (if changed)
-            if (newDriverId !== oldDriverId) {
-                console.log(`onDragEnd: Updating driver_id of ${orderId} to ${newDriverId}`);
-                const { error: driverErr } = await supabase.from('sales_orders').update({ driver_id: newDriverId }).eq('id', orderId);
-                if (driverErr) {
-                    console.error("onDragEnd: Driver update error", driverErr);
-                    throw new Error(`Driver update failed: ${driverErr.message}`);
-                }
+            console.log("onDragEnd: Updating driver_id for orders:", movedOrderIds, "to:", newDriverId);
+            const { error: soErr } = await supabase
+                .from('sales_orders')
+                .update({ driver_id: newDriverId })
+                .in('id', movedOrderIds);
+
+            if (soErr) {
+                console.error("onDragEnd: sales_orders driver update error", soErr);
+                throw soErr;
             }
 
-            // B. Update Sequences for ALL affected items in the destination column
-            console.log(`onDragEnd: Resequencing ${destinationOrders.length} orders for destination...`);
-            const updates = destinationOrders.map(async (o, index) => {
-                const newSeq = index + 1;
-                console.log(`onDragEnd: Updating order ${o.orderNumber || o.id} to trip_sequence=${newSeq}`);
-                const { error: seqErr } = await supabase.from('sales_orders').update({ trip_sequence: newSeq }).eq('id', o.id);
-                if (seqErr) {
-                    console.error(`onDragEnd: Resequence error for order ${o.id}`, seqErr);
-                    throw new Error(`Resequence failed for order ${o.id}: ${seqErr.message}`);
-                }
-            });
+            if (tripV2Id) {
+                await supabase
+                    .from('trips_v2')
+                    .update({ driver_id: newDriverId })
+                    .eq('id', tripV2Id);
+            }
 
-            await Promise.all(updates);
-            console.log("onDragEnd: All database updates completed successfully!");
+            // Sync trips list state
+            if (tripV2Id) {
+                setTripsV2List(prev => prev.map(t => t.id === tripV2Id ? { ...t, driver_id: newDriverId } : t));
+            }
 
         } catch (err: any) {
-            console.error("Failed to resequence:", err);
+            console.error("Failed to update trip driver:", err);
             alert(`Sync error: ${err.message || err}. Refreshing...`);
             fetchData();
+        }
+    };
+
+    // DELETE TRIP (Soft Delete all orders in trip)
+    const handleDeleteTrip = async (tripId: string, tripNumber: string) => {
+        if (!window.confirm(`Are you sure you want to CANCEL Trip ${tripNumber} and all its Delivery Orders?\nThis will move all orders in this trip to the Cancelled tab and reverse deducted stock if loaded.`)) return;
+
+        try {
+            const tripOrders = orders.filter(o => o.trip_id === tripId);
+            const orderIds = tripOrders.map(o => o.id);
+
+            // Soft Delete: Update status to 'Cancelled'
+            const { error } = await supabase.from('sales_orders').update({ status: 'Cancelled' }).in('id', orderIds);
+            if (error) throw error;
+
+            await supabase.from('trips_v2').update({ status: 'Cancelled' }).eq('id', tripId);
+
+            for (const target of tripOrders) {
+                if (['Loaded', 'Delivered', 'Pending Approval'].includes(target.status)) {
+                    await reverseStockForOrder({
+                        id: target.id,
+                        order_number: target.orderNumber,
+                        trip_origin: (target as any).trip_origin || (target as any).tripOrigin,
+                        items: target.items,
+                        reason: `Trip ${tripNumber} Cancelled by Admin`
+                    });
+                }
+            }
+
+            setToast({ type: 'success', message: `Trip ${tripNumber} cancelled successfully.` });
+            fetchData();
+        } catch (err: any) {
+            console.error("Failed to delete trip:", err);
+            alert(`Failed to delete trip: ${err.message}`);
         }
     };
 
@@ -1416,8 +1458,13 @@ const DeliveryOrderManagement: React.FC<DeliveryOrderManagementProps> = ({ user 
         rawProduct: string,
         aiSuggestedSku?: string,
         currentMappings: any[] = skuMappings,
-        itemsCatalog: V2Item[] = v2Items
-    ): { sku: string; product: string; rawProductName: string; isMatched: boolean } => {
+        itemsCatalog: V2Item[] = v2Items,
+        origin: string = parsedTripOrigin || activeLocation
+    ): { sku: string; product: string; rawProductName: string; sourceLocation: string; isMatched: boolean } => {
+        let resultSku = '';
+        let resultProduct = rawProduct;
+        let resultMatched = false;
+
         const custLower = (customerName || '').trim().toLowerCase();
         const rawLower = (rawProduct || '').trim().toLowerCase();
 
@@ -1431,45 +1478,44 @@ const DeliveryOrderManagement: React.FC<DeliveryOrderManagementProps> = ({ user 
                 return custMatched && itemMatched;
             });
             if (aliasMatch && aliasMatch.mapped_sku) {
-                return {
-                    sku: aliasMatch.mapped_sku,
-                    product: aliasMatch.mapped_product_name || rawProduct,
-                    rawProductName: rawProduct,
-                    isMatched: true
-                };
+                resultSku = aliasMatch.mapped_sku;
+                resultProduct = aliasMatch.mapped_product_name || rawProduct;
+                resultMatched = true;
             }
         }
 
         // Tier 1.5: If AI provided a valid SKU in itemsCatalog
-        if (aiSuggestedSku) {
+        if (!resultMatched && aiSuggestedSku) {
             const exactSku = itemsCatalog.find(i => i.sku.toLowerCase() === aiSuggestedSku.trim().toLowerCase());
             if (exactSku) {
-                return {
-                    sku: exactSku.sku,
-                    product: exactSku.name,
-                    rawProductName: rawProduct,
-                    isMatched: true
-                };
+                resultSku = exactSku.sku;
+                resultProduct = exactSku.name;
+                resultMatched = true;
             }
         }
 
         // Tier 2: Algorithmic catalog match using matchV2ItemFromScan
-        const fuzzyV2 = matchV2ItemFromScan(aiSuggestedSku, rawProduct);
-        if (fuzzyV2) {
-            return {
-                sku: fuzzyV2.sku,
-                product: fuzzyV2.name,
-                rawProductName: rawProduct,
-                isMatched: true
-            };
+        if (!resultMatched) {
+            const fuzzyV2 = matchV2ItemFromScan(aiSuggestedSku, rawProduct);
+            if (fuzzyV2) {
+                resultSku = fuzzyV2.sku;
+                resultProduct = fuzzyV2.name;
+                resultMatched = true;
+            } else {
+                resultSku = aiSuggestedSku || '';
+                resultProduct = rawProduct;
+                resultMatched = false;
+            }
         }
 
-        // Unmatched fallback
+        const sourceLoc = guessItemLocation({ sku: resultSku, product: resultProduct, rawProductName: rawProduct }, origin);
+
         return {
-            sku: aiSuggestedSku || '',
-            product: rawProduct,
+            sku: resultSku,
+            product: resultProduct,
             rawProductName: rawProduct,
-            isMatched: false
+            sourceLocation: sourceLoc,
+            isMatched: resultMatched
         };
     };
 
@@ -1916,6 +1962,7 @@ const DeliveryOrderManagement: React.FC<DeliveryOrderManagementProps> = ({ user 
                         rawProductName: it.rawProductName || it.product,
                         product: matchRes.product,
                         sku: matchRes.sku,
+                        sourceLocation: it.sourceLocation || matchRes.sourceLocation || guessItemLocation({ sku: matchRes.sku, product: matchRes.product, rawProductName: it.product }, parsedTripOrigin),
                         isMatched: matchRes.isMatched
                     };
                 });
@@ -2030,11 +2077,25 @@ const DeliveryOrderManagement: React.FC<DeliveryOrderManagementProps> = ({ user 
             if (matchedProd) {
                 currentItem.product = matchedProd.name;
                 currentItem.isMatched = true;
+                currentItem.sourceLocation = guessItemLocation({ sku: newSku, product: matchedProd.name, rawProductName: currentItem.rawProductName }, parsedTripOrigin);
             } else if (!newSku) {
                 currentItem.isMatched = false;
             }
 
             items[itemIndex] = currentItem;
+            order.items = items;
+            orders[doIndex] = order;
+            return { ...prev, deliveryOrders: orders };
+        });
+    };
+
+    const handleUpdateParsedItemLocation = (doIndex: number, itemIndex: number, newLocation: string) => {
+        setParsedTripBatch(prev => {
+            if (!prev) return null;
+            const orders = [...prev.deliveryOrders];
+            const order = { ...orders[doIndex] };
+            const items = [...(order.items || [])];
+            items[itemIndex] = { ...items[itemIndex], sourceLocation: newLocation };
             order.items = items;
             orders[doIndex] = order;
             return { ...prev, deliveryOrders: orders };
@@ -2096,7 +2157,7 @@ const DeliveryOrderManagement: React.FC<DeliveryOrderManagementProps> = ({ user 
                         quantity: Number(it.quantity) || 1,
                         sku: it.sku || '',
                         packaging: 'Unit',
-                        sourceLocation: it.sourceLocation || defaultLoc
+                        sourceLocation: it.sourceLocation || guessItemLocation(it, parsedTripOrigin) || defaultLoc
                     })),
                     notes: noteParts.join(' | ')
                 };
@@ -2759,15 +2820,17 @@ const DeliveryOrderManagement: React.FC<DeliveryOrderManagementProps> = ({ user 
     const handleReassignDriver = async (driverId: string) => {
         if (!reassignOrder) return;
 
-        if (!reassignOrder) return;
-
         // Smart Reminder / Blocker
         if (!checkDriverAvailability(driverId, reassignOrder.deadline)) return;
 
         try {
+            const tripId = reassignOrder.trip_id;
+            const targetOrders = tripId ? orders.filter(o => o.trip_id === tripId) : [reassignOrder];
+            const targetOrderIds = targetOrders.map(o => o.id);
+
             // Optimistic Update
             setOrders(prev => prev.map(o => {
-                if (o.id === reassignOrder.id) {
+                if (targetOrderIds.includes(o.id)) {
                     return { ...o, driverId: driverId };
                 }
                 return o;
@@ -2778,17 +2841,18 @@ const DeliveryOrderManagement: React.FC<DeliveryOrderManagementProps> = ({ user 
             setReassignOrder(null);
 
             // DB Update
-            const { error } = await supabase.from('sales_orders').update({ driver_id: driverId }).eq('id', reassignOrder.id);
+            const { error } = await supabase.from('sales_orders').update({ driver_id: driverId }).in('id', targetOrderIds);
             if (error) throw error;
 
-            // alert("Driver updated successfully!"); 
-            // Force Reload for safety
-            window.location.reload();
+            if (tripId) {
+                await supabase.from('trips_v2').update({ driver_id: driverId }).eq('id', tripId);
+            }
+
+            await fetchData();
 
         } catch (err: any) {
             alert("Error reassigning driver: " + err.message);
-            // fetchData(); 
-            window.location.reload();
+            fetchData();
         }
     };
 
@@ -4001,11 +4065,87 @@ const DeliveryOrderManagement: React.FC<DeliveryOrderManagementProps> = ({ user 
                                     return dateB.localeCompare(dateA); // Date descending (newest on top)
                                 }
                                 return (a.tripSequence || 0) - (b.tripSequence || 0);
-                            }); // Ensure visual order matches logical order for DnD
+                            });
 
-                        if (driverOrders.length === 0 && hasActiveListFilters && driver.uid !== 'unassigned') return null;
+                        // Group driverOrders by trip_id into board trip groups
+                        const driverTrips: {
+                            key: string;
+                            tripId?: string;
+                            tripNumber: string;
+                            driverId?: string;
+                            isMultiDrop: boolean;
+                            orders: SalesOrder[];
+                            totalDrops: number;
+                            totalRolls: number;
+                            status: string;
+                            zone?: string;
+                            tripOrigin?: string;
+                            orderDate?: string;
+                            deadline?: string;
+                            notes?: string;
+                        }[] = [];
+
+                        const tripGroupMap = new Map<string, typeof driverTrips[0]>();
+
+                        driverOrders.forEach(order => {
+                            if (order.trip_id) {
+                                if (!tripGroupMap.has(order.trip_id)) {
+                                    const v2Trip = tripsV2List.find(t => t.id === order.trip_id);
+                                    const group = {
+                                        key: `trip_${order.trip_id}`,
+                                        tripId: order.trip_id,
+                                        tripNumber: v2Trip?.trip_number || `TRIP-${order.orderNumber || order.trip_id.slice(0, 8)}`,
+                                        driverId: order.driverId,
+                                        isMultiDrop: true,
+                                        orders: [] as SalesOrder[],
+                                        totalDrops: 0,
+                                        totalRolls: 0,
+                                        status: order.status || 'Planned',
+                                        zone: order.zone,
+                                        tripOrigin: order.trip_origin,
+                                        orderDate: order.orderDate,
+                                        deadline: order.deadline,
+                                        notes: order.notes
+                                    };
+                                    tripGroupMap.set(order.trip_id, group);
+                                    driverTrips.push(group);
+                                }
+                                const grp = tripGroupMap.get(order.trip_id)!;
+                                grp.orders.push(order);
+                                grp.totalDrops = grp.orders.length;
+                                const rolls = (order.items || []).reduce((acc: number, it: any) => acc + (Number(it.quantity) || 0), 0);
+                                grp.totalRolls += rolls;
+                            } else {
+                                const rolls = (order.items || []).reduce((acc: number, it: any) => acc + (Number(it.quantity) || 0), 0);
+                                driverTrips.push({
+                                    key: `order_${order.id}`,
+                                    tripId: undefined,
+                                    tripNumber: order.orderNumber,
+                                    driverId: order.driverId,
+                                    isMultiDrop: false,
+                                    orders: [order],
+                                    totalDrops: 1,
+                                    totalRolls: rolls,
+                                    status: order.status || 'New',
+                                    zone: order.zone,
+                                    tripOrigin: order.trip_origin,
+                                    orderDate: order.orderDate,
+                                    deadline: order.deadline,
+                                    notes: order.notes
+                                });
+                            }
+                        });
+
+                        // Sort drops inside multi-drop trips by stop_sequence
+                        driverTrips.forEach(t => {
+                            if (t.isMultiDrop) {
+                                t.orders.sort((a, b) => ((a as any).stop_sequence || a.tripSequence || 0) - ((b as any).stop_sequence || b.tripSequence || 0));
+                            }
+                        });
+
+                        if (driverTrips.length === 0 && hasActiveListFilters && driver.uid !== 'unassigned') return null;
                         // Always show Unassigned column if there are orders, or if we are in default view
-                        if (driver.uid === 'unassigned' && driverOrders.length === 0 && hasActiveListFilters) return null;
+                        if (driver.uid === 'unassigned' && driverTrips.length === 0 && hasActiveListFilters) return null;
 
                         const isUnassigned = driver.uid === 'unassigned';
 
@@ -4043,7 +4183,7 @@ const DeliveryOrderManagement: React.FC<DeliveryOrderManagementProps> = ({ user 
                                                                 <MapPin size={10} className="text-slate-600" /> {lorries.find(l => l.driverUserId === driver.uid)?.preferredZone}
                                                             </span>
                                                         ) : (
-                                                            <><Truck size={10} /> {driverOrders.length} Orders</>
+                                                            <><Truck size={10} /> {driverTrips.length} {driverTrips.length <= 1 ? 'Trip' : 'Trips'}</>
                                                         )}
                                                     </>
                                                 )}
@@ -4052,8 +4192,10 @@ const DeliveryOrderManagement: React.FC<DeliveryOrderManagementProps> = ({ user 
                                         </div>
                                     </div>
                                     <div className="flex flex-col items-end">
-                                        <div className="text-2xl font-black text-white">{driverOrders.length}</div>
-                                        <div className="text-[9px] font-bold text-zinc-600 uppercase tracking-widest">Orders</div>
+                                        <div className="text-2xl font-black text-white">{driverTrips.length}</div>
+                                        <div className="text-[9px] font-bold text-zinc-600 uppercase tracking-widest">
+                                            {driverTrips.length <= 1 ? 'Trip' : 'Trips'} ({driverOrders.length} {driverOrders.length <= 1 ? 'DO' : 'DOs'})
+                                        </div>
                                     </div>
                                 </div>
 
@@ -4072,7 +4214,7 @@ const DeliveryOrderManagement: React.FC<DeliveryOrderManagementProps> = ({ user 
                                     </div>
                                 )}
 
-                                {/* Orders List (Droppable) */}
+                                {/* Trips List (Droppable) */}
                                 <Droppable droppableId={driver.uid}>
                                     {(provided, snapshot) => (
                                         <div
@@ -4080,261 +4222,440 @@ const DeliveryOrderManagement: React.FC<DeliveryOrderManagementProps> = ({ user 
                                             {...provided.droppableProps}
                                             className={`flex-1 p-3 space-y-3 max-h-[600px] overflow-y-auto custom-scrollbar bg-[#09090b] ${snapshot.isDraggingOver ? 'bg-slate-900/50' : ''}`}
                                         >
-                                            {driverOrders.map((order, index) => (
-                                                <Draggable key={order.id} draggableId={order.id} index={index}>
-                                                    {(provided, snapshot) => (
-                                                        <div
-                                                            ref={provided.innerRef}
-                                                            {...provided.draggableProps}
-                                                            {...provided.dragHandleProps}
-                                                            onClick={() => {
-                                                                setEditingOrderId(order.id); setNewOrderDate(order.orderDate || '');
-                                                                setSelectedDriverId(order.driverId || '');
-                                                                const initialLorry = lorries.find(l => l.driverUserId === order.driverId);
-                                                                setSelectedLorryId(initialLorry ? initialLorry.id : '');
-                                                                setOrderCustomer(order.customer);
-                                                                setNewOrderAddress(order.deliveryAddress || '');
-                                                                setNewOrderDeliveryDate(order.deadline || '');
-                                                                setNewOrderNotes(order.notes || '');
-                                                                const orderOrigin = order.trip_origin || 'TAIPING';
-                                                                setTripOrigin(orderOrigin);
-                                                                setCurrentItemLoc(getDefaultLocForOrigin(orderOrigin));
-                                                                setTripCategory(order.zone || '');
-                                                                setTripDropCount(order.trip_drop_count || 1);
+                                            {driverTrips.map((tripGroup, tripIndex) => {
+                                                const isMulti = tripGroup.isMultiDrop;
+                                                const order = tripGroup.orders[0];
+                                                const isExpanded = expandedTripKeys[tripGroup.key] !== false;
 
-                                                                // Extract legacy location from remark if sourceLocation is missing, fallback to default
-                                                                const defaultLoc = getDefaultLocForOrigin(orderOrigin);
-                                                                const itemsWithExtractedLoc = (order.items || []).map(item => {
-                                                                    let loc = item.sourceLocation;
-                                                                    if (!loc && item.remark && item.remark.includes('(Loc:')) {
-                                                                        const locMatch = item.remark.match(/\(Loc:\s*(.*?)\)/);
-                                                                        if (locMatch && locMatch[1]) {
-                                                                            loc = locMatch[1];
-                                                                        }
-                                                                    }
-                                                                    return { ...item, sourceLocation: loc || defaultLoc };
-                                                                });
-                                                                setNewOrderItems(itemsWithExtractedLoc);
-                                                                setEditingOrderPhoto(order.proof_of_load_url || null);
-
-                                                                setIsCreateModalOpen(true);
-                                                            }}
-                                                            style={{ ...provided.draggableProps.style }}
-                                                            className={`bg-[#18181b] border border-[#27272a] p-4 rounded-xl hover:bg-[#27272a] hover:border-blue-500/50 cursor-pointer transition-all relative group/card shadow-sm ${snapshot.isDragging ? 'shadow-2xl border-blue-500 z-50' : ''}`}
-                                                        >
-                                                            {/* Trip Sequence Badge */}
-                                                            <div className="absolute -top-2 -right-2 bg-slate-950 border border-slate-700 text-slate-400 text-[9px] font-bold uppercase py-0.5 px-2 rounded-full shadow-lg z-10">
-                                                                {index + 1}{index === 0 ? 'st' : index === 1 ? 'nd' : index === 2 ? 'rd' : 'th'} Trip
-                                                            </div>
-
-                                                            <div className="flex justify-between items-start mb-2">
-                                                                <div className="flex items-center gap-2">
-                                                                    <div className="font-mono text-sm font-black text-blue-400 bg-blue-500/10 px-2 py-1 rounded border border-blue-500/20 tracking-wide">
-                                                                        {order.orderNumber}
-                                                                    </div>
-                                                                    {order.deliveryAddress && (
-                                                                        <div className={`text-[10px] font-bold px-1.5 py-0.5 rounded border uppercase tracking-wider ${getStateColor(determineState(order.deliveryAddress))}`}>
-                                                                            {determineState(order.deliveryAddress)}
-                                                                        </div>
-                                                                    )}
-                                                                    {/* Delete Button */}
-                                                                    <button
-                                                                        onClick={(e) => {
-                                                                            e.stopPropagation();
-                                                                            handleDeleteOrder(order.id, order.orderNumber);
-                                                                        }}
-                                                                        className="p-1.5 text-red-400 bg-red-500/10 hover:bg-red-500/20 hover:text-red-300 rounded-md transition-colors"
-                                                                        title="Cancel Order"
-                                                                    >
-                                                                        <Trash2 size={14} />
-                                                                    </button>
-
-                                                                    {/* Reassign Button */}
-                                                                    <button
-                                                                        onClick={(e) => {
-                                                                            e.stopPropagation();
-                                                                            setReassignOrder(order);
-                                                                            setIsReassignModalOpen(true);
-                                                                        }}
-                                                                        className="p-1.5 text-blue-400 bg-blue-500/10 hover:bg-blue-500/20 hover:text-blue-300 rounded-md transition-colors ml-1"
-                                                                        title="Change Driver"
-                                                                    >
-                                                                        <UserIcon size={14} />
-                                                                    </button>
-
-                                                                    {/* Split Button */}
-                                                                    <button
-                                                                        onClick={(e) => {
-                                                                            e.stopPropagation();
-                                                                            setSplitOrder(order);
-                                                                            setSplitItems({}); // Reset
-                                                                            setSplitTargetDriverId('');
-                                                                            setSplitTargetDate('');
-                                                                            setIsSplitModalOpen(true);
-                                                                        }}
-                                                                        className="p-1.5 text-orange-400 bg-orange-500/10 hover:bg-orange-500/20 hover:text-orange-300 rounded-md transition-colors ml-1"
-                                                                        title="Split Order / Partial Delivery"
-                                                                    >
-                                                                        <Scissors size={14} />
-                                                                    </button>
+                                                return (
+                                                    <Draggable key={tripGroup.key} draggableId={tripGroup.key} index={tripIndex}>
+                                                        {(provided, snapshot) => (
+                                                            <div
+                                                                ref={provided.innerRef}
+                                                                {...provided.draggableProps}
+                                                                {...provided.dragHandleProps}
+                                                                style={{ ...provided.draggableProps.style }}
+                                                                className={`bg-[#18181b] border ${isMulti ? 'border-blue-500/30 hover:border-blue-500/60' : 'border-[#27272a] hover:border-blue-500/50'} p-4 rounded-xl hover:bg-[#202024] cursor-pointer transition-all relative group/card shadow-sm ${snapshot.isDragging ? 'shadow-2xl border-blue-500 z-50' : ''}`}
+                                                            >
+                                                                {/* Trip Sequence Badge */}
+                                                                <div className="absolute -top-2 -right-2 bg-slate-950 border border-blue-500/60 text-blue-300 text-[9px] font-black uppercase py-0.5 px-2.5 rounded-full shadow-lg z-10 flex items-center gap-1">
+                                                                    <span>🚚</span> {tripIndex + 1}{tripIndex === 0 ? 'st' : tripIndex === 1 ? 'nd' : tripIndex === 2 ? 'rd' : 'th'} Trip
                                                                 </div>
-                                                                <div className="flex flex-col items-end gap-1.5">
-                                                                    <div className={`text-[10px] font-bold px-2 py-1 rounded uppercase tracking-wider border ${order.status === 'New' ? 'text-amber-400 border-amber-500/20 bg-amber-500/10' :
-                                                                        order.status === 'Delivered' ? 'text-emerald-400 border-emerald-500/20 bg-emerald-500/10' :
-                                                                            order.status === 'Pending Approval' ? 'text-red-400 border-red-500/20 bg-red-500/10 animate-pulse' :
-                                                                                'text-slate-400 border-slate-700 bg-slate-800'
-                                                                        }`}>
-                                                                        {order.status}
-                                                                    </div>
-                                                                    {(order.pod_photo_url || order.pod_signature_url || (order.notes && order.notes.includes(']'))) && (
-                                                                        <div className="flex flex-wrap items-center justify-end gap-1 max-w-[120px]">
-                                                                            {order.pod_photo_url && (
-                                                                                <span className="text-[8px] bg-emerald-500/20 text-emerald-400 border border-emerald-500/30 px-1 py-0.5 rounded font-black tracking-wider flex items-center gap-0.5" title="Has delivery photo">
-                                                                                    📸 POD
+
+                                                                {isMulti ? (
+                                                                    /* MULTI-DROP TRIP CARD */
+                                                                    <div>
+                                                                        {/* Trip Header */}
+                                                                        <div className="flex justify-between items-start mb-2.5">
+                                                                            <div className="flex items-center gap-1.5 flex-wrap">
+                                                                                <div className="font-mono text-sm font-black text-blue-400 bg-blue-500/15 px-2.5 py-1 rounded border border-blue-500/30 tracking-wide">
+                                                                                    {tripGroup.tripNumber}
+                                                                                </div>
+                                                                                <span className="px-2 py-0.5 rounded-full text-[10px] font-black uppercase tracking-wider bg-indigo-500/20 text-indigo-300 border border-indigo-500/30">
+                                                                                    {tripGroup.totalDrops} Drops
                                                                                 </span>
-                                                                            )}
-                                                                            {order.pod_signature_url && (
-                                                                                <span className="text-[8px] bg-teal-500/20 text-teal-400 border border-teal-500/30 px-1 py-0.5 rounded font-black tracking-wider flex items-center gap-0.5" title="Has customer signature">
-                                                                                    ✍️ SIGN
+                                                                                <span className="px-2 py-0.5 rounded-full text-[10px] font-black uppercase tracking-wider bg-amber-500/15 text-amber-300 border border-amber-500/30">
+                                                                                    {tripGroup.totalRolls} {t('Rolls')}
                                                                                 </span>
-                                                                            )}
-                                                                            {order.notes && order.notes.includes(']') && (
-                                                                                <span className="text-[8px] bg-blue-500/20 text-blue-400 border border-blue-500/30 px-1 py-0.5 rounded font-black tracking-wider flex items-center gap-0.5" title="Has driver notes">
-                                                                                    💬 NOTE
-                                                                                </span>
-                                                                            )}
-                                                                        </div>
-                                                                    )}
-                                                                </div>
-                                                            </div>
-
-                                                            {/* Customer & Address details with Missing Warning */}
-                                                            <div className="mb-2.5">
-                                                                <div className="text-xs text-white font-bold truncate">{order.customer || t('Unnamed Customer')}</div>
-                                                                {order.deliveryAddress && order.deliveryAddress.trim() ? (
-                                                                    <div className="text-[11px] text-slate-400 flex items-start gap-1 mt-0.5 group/addr">
-                                                                        <MapPin size={11} className="text-slate-500 shrink-0 mt-0.5" />
-                                                                        <span className="line-clamp-1 flex-1">{order.deliveryAddress}</span>
-                                                                        <button
-                                                                            type="button"
-                                                                            onClick={(e) => {
-                                                                                e.stopPropagation();
-                                                                                handleQuickUpdateOrderAddress(order.id, order.deliveryAddress || '');
-                                                                            }}
-                                                                            className="opacity-0 group-hover/addr:opacity-100 text-slate-500 hover:text-blue-400 p-0.5 transition-opacity"
-                                                                            title={t('Edit address')}
-                                                                        >
-                                                                            <Edit3 size={10} />
-                                                                        </button>
-                                                                    </div>
-                                                                ) : (
-                                                                    <button
-                                                                        type="button"
-                                                                        onClick={(e) => {
-                                                                            e.stopPropagation();
-                                                                            handleQuickUpdateOrderAddress(order.id, '');
-                                                                        }}
-                                                                        className="mt-1 text-[10px] font-bold text-amber-400 bg-amber-500/10 hover:bg-amber-500/20 border border-amber-500/30 px-2 py-0.5 rounded flex items-center gap-1 transition-colors cursor-pointer"
-                                                                        title={t('Click to fill address')}
-                                                                    >
-                                                                        <AlertTriangle size={11} className="text-amber-400 shrink-0" />
-                                                                        <span>⚠️ {t('Missing Delivery Address')} ({t('Click to fill address')})</span>
-                                                                    </button>
-                                                                )}
-                                                            </div>
-
-                                                            <div className="text-xs text-slate-500 flex items-center gap-2 mb-3">
-                                                                <Calendar size={14} className="text-slate-600 shrink-0" />
-                                                                <div className="flex flex-col gap-0.5 leading-tight">
-                                                                    <div className="flex items-center gap-1">
-                                                                        <span className="text-[9px] font-black text-slate-600 uppercase tracking-tighter">📦 Ord:</span>
-                                                                        <span className="text-[10px] text-slate-500 font-bold">{formatDateDMY(order.orderDate)}</span>
-                                                                    </div>
-                                                                    <div className="flex items-center gap-1">
-                                                                        <span className="text-[9px] font-black text-blue-500/50 uppercase tracking-tighter">🚚 Del:</span>
-                                                                        <span className="text-[10px] text-blue-400 font-black">{formatDateDMY(order.deadline) || "No Date"}</span>
-                                                                    </div>
-                                                                </div>
-                                                            </div>
-
-                                                            {order.notes && (
-                                                                <div className="text-[10px] text-amber-400/90 bg-amber-500/10 px-2.5 py-1.5 rounded-lg border border-amber-500/20 mb-3 break-words font-mono leading-relaxed">
-                                                                    📝 {order.notes.replace(/^\|\s*/, '').trim()}
-                                                                </div>
-                                                            )}
-
-                                                            {/* Items Preview */}
-                                                            <div className="space-y-1.5 bg-[#121214] p-3 rounded-lg border border-[#27272a]">
-                                                                {order.items?.length === 0 ? (
-                                                                    <div className="text-[10px] text-slate-600 italic text-center py-1">No Items</div>
-                                                                ) : (
-                                                                    order.items?.slice(0, 3).map((item, i) => (
-                                                                        <div key={i} className="text-[11px] flex justify-between items-center gap-2">
-                                                                            <div className="flex items-center gap-2 overflow-hidden flex-1">
-                                                                                <div className="w-1 h-1 rounded-full bg-slate-600 shrink-0"></div>
-                                                                                <span className="text-slate-400 truncate">{item.product}</span>
-                                                                            </div>
-                                                                            <div className="flex items-center gap-2 shrink-0">
-                                                                                {item.sourceLocation && (
-                                                                                    <span className="text-[9px] px-1.5 py-0.5 rounded bg-blue-500/10 text-blue-400 border border-blue-500/20 uppercase tracking-widest font-black">
-                                                                                        {item.sourceLocation}
-                                                                                    </span>
+                                                                                {tripGroup.zone && (
+                                                                                    <div className={`text-[10px] font-bold px-1.5 py-0.5 rounded border uppercase tracking-wider ${getStateColor(determineState(tripGroup.zone))}`}>
+                                                                                        {tripGroup.zone}
+                                                                                    </div>
                                                                                 )}
-                                                                                <span className="text-slate-200 font-bold font-mono whitespace-nowrap">x{item.quantity}</span>
+                                                                            </div>
+
+                                                                            <div className="flex items-center gap-1">
+                                                                                {/* Delete Trip Button */}
+                                                                                <button
+                                                                                    type="button"
+                                                                                    onClick={(e) => {
+                                                                                        e.stopPropagation();
+                                                                                        if (tripGroup.tripId) handleDeleteTrip(tripGroup.tripId, tripGroup.tripNumber);
+                                                                                    }}
+                                                                                    className="p-1.5 text-red-400 bg-red-500/10 hover:bg-red-500/20 hover:text-red-300 rounded-md transition-colors"
+                                                                                    title="Cancel Entire Trip"
+                                                                                >
+                                                                                    <Trash2 size={14} />
+                                                                                </button>
+
+                                                                                {/* Reassign Driver Button */}
+                                                                                <button
+                                                                                    type="button"
+                                                                                    onClick={(e) => {
+                                                                                        e.stopPropagation();
+                                                                                        setReassignOrder(tripGroup.orders[0]);
+                                                                                        setIsReassignModalOpen(true);
+                                                                                    }}
+                                                                                    className="p-1.5 text-blue-400 bg-blue-500/10 hover:bg-blue-500/20 hover:text-blue-300 rounded-md transition-colors"
+                                                                                    title="Reassign Entire Trip"
+                                                                                >
+                                                                                    <UserIcon size={14} />
+                                                                                </button>
+
+                                                                                {/* Toggle Expand */}
+                                                                                <button
+                                                                                    type="button"
+                                                                                    onClick={(e) => {
+                                                                                        e.stopPropagation();
+                                                                                        setExpandedTripKeys(prev => ({ ...prev, [tripGroup.key]: !isExpanded }));
+                                                                                    }}
+                                                                                    className="p-1 text-slate-400 hover:text-white"
+                                                                                    title={isExpanded ? "Collapse" : "Expand"}
+                                                                                >
+                                                                                    {isExpanded ? <ChevronUp size={14} /> : <ChevronDown size={14} />}
+                                                                                </button>
                                                                             </div>
                                                                         </div>
-                                                                    ))
-                                                                )}
-                                                                {order.items && order.items.length > 3 && (
-                                                                    <div className="text-[9px] text-zinc-600 font-bold text-center pt-1 uppercase tracking-wide">
-                                                                        + {order.items.length - 3} more
+
+                                                                        {/* Trip Info Strip */}
+                                                                        <div className="text-xs text-slate-500 flex items-center justify-between gap-2 mb-2 pb-2 border-b border-slate-800/80">
+                                                                            <div className="flex items-center gap-1.5">
+                                                                                <Calendar size={13} className="text-slate-500" />
+                                                                                <span className="text-[10px] font-bold text-blue-400">
+                                                                                    Del: {formatDateDMY(tripGroup.deadline || tripGroup.orders[0]?.deadline) || "Today"}
+                                                                                </span>
+                                                                            </div>
+                                                                            <div className="text-[10px] text-slate-400 font-mono">
+                                                                                Origin: <span className="text-white font-bold">{tripGroup.tripOrigin || 'TAIPING'}</span>
+                                                                            </div>
+                                                                        </div>
+
+                                                                        {/* Drops List */}
+                                                                        {isExpanded && (
+                                                                            <div className="space-y-2 pt-1">
+                                                                                {tripGroup.orders.map((doOrder, dropIdx) => (
+                                                                                    <div
+                                                                                        key={doOrder.id}
+                                                                                        onClick={(e) => {
+                                                                                            e.stopPropagation();
+                                                                                            setEditingOrderId(doOrder.id);
+                                                                                            setNewOrderDate(doOrder.orderDate || '');
+                                                                                            setSelectedDriverId(doOrder.driverId || '');
+                                                                                            const initialLorry = lorries.find(l => l.driverUserId === doOrder.driverId);
+                                                                                            setSelectedLorryId(initialLorry ? initialLorry.id : '');
+                                                                                            setOrderCustomer(doOrder.customer);
+                                                                                            setNewOrderAddress(doOrder.deliveryAddress || '');
+                                                                                            setNewOrderDeliveryDate(doOrder.deadline || '');
+                                                                                            setNewOrderNotes(doOrder.notes || '');
+                                                                                            const orderOrigin = doOrder.trip_origin || 'TAIPING';
+                                                                                            setTripOrigin(orderOrigin);
+                                                                                            setCurrentItemLoc(getDefaultLocForOrigin(orderOrigin));
+                                                                                            setTripCategory(doOrder.zone || '');
+                                                                                            setTripDropCount(doOrder.trip_drop_count || 1);
+                                                                                            const defaultLoc = getDefaultLocForOrigin(orderOrigin);
+                                                                                            const itemsWithExtractedLoc = (doOrder.items || []).map(item => {
+                                                                                                let loc = item.sourceLocation;
+                                                                                                if (!loc && item.remark && item.remark.includes('(Loc:')) {
+                                                                                                    const locMatch = item.remark.match(/\(Loc:\s*(.*?)\)/);
+                                                                                                    if (locMatch && locMatch[1]) loc = locMatch[1];
+                                                                                                }
+                                                                                                return { ...item, sourceLocation: loc || defaultLoc };
+                                                                                            });
+                                                                                            setNewOrderItems(itemsWithExtractedLoc);
+                                                                                            setEditingOrderPhoto(doOrder.proof_of_load_url || null);
+                                                                                            setIsCreateModalOpen(true);
+                                                                                        }}
+                                                                                        className="p-2.5 rounded-lg bg-[#0f0f12] border border-slate-800 hover:border-blue-500/50 transition-all cursor-pointer space-y-1.5"
+                                                                                    >
+                                                                                        <div className="flex items-center justify-between gap-1">
+                                                                                            <div className="flex items-center gap-1.5 min-w-0">
+                                                                                                <span className="px-1.5 py-0.5 rounded bg-blue-500/20 text-blue-300 font-mono text-[9px] font-black shrink-0">
+                                                                                                    Drop #{dropIdx + 1}
+                                                                                                </span>
+                                                                                                <span className="font-mono text-xs font-bold text-amber-300 truncate">
+                                                                                                    {doOrder.orderNumber}
+                                                                                                </span>
+                                                                                                {doOrder.deliveryAddress && (
+                                                                                                    <span className={`text-[9px] font-bold px-1 rounded uppercase shrink-0 ${getStateColor(determineState(doOrder.deliveryAddress))}`}>
+                                                                                                        {determineState(doOrder.deliveryAddress)}
+                                                                                                    </span>
+                                                                                                )}
+                                                                                            </div>
+                                                                                            <button
+                                                                                                type="button"
+                                                                                                onClick={(e) => {
+                                                                                                    e.stopPropagation();
+                                                                                                    handleDeleteOrder(doOrder.id, doOrder.orderNumber);
+                                                                                                }}
+                                                                                                className="p-1 text-slate-500 hover:text-red-400 transition-colors"
+                                                                                                title="Cancel this DO"
+                                                                                            >
+                                                                                                <Trash2 size={12} />
+                                                                                            </button>
+                                                                                        </div>
+
+                                                                                        <div className="text-xs text-white font-bold truncate">
+                                                                                            {doOrder.customer || t('Unnamed Customer')}
+                                                                                        </div>
+
+                                                                                        {doOrder.deliveryAddress && (
+                                                                                            <div className="text-[11px] text-slate-400 flex items-start gap-1">
+                                                                                                <MapPin size={11} className="text-slate-500 shrink-0 mt-0.5" />
+                                                                                                <span className="line-clamp-1 flex-1">{doOrder.deliveryAddress}</span>
+                                                                                            </div>
+                                                                                        )}
+
+                                                                                        {doOrder.notes && (
+                                                                                            <div className="text-[10px] text-amber-400/90 bg-amber-500/10 px-2 py-0.5 rounded border border-amber-500/20 break-words font-mono">
+                                                                                                📝 {doOrder.notes.replace(/^\|\s*/, '').trim()}
+                                                                                            </div>
+                                                                                        )}
+
+                                                                                        {/* Items preview inside drop */}
+                                                                                        <div className="space-y-1 pt-1 border-t border-slate-800/60">
+                                                                                            {(doOrder.items || []).slice(0, 3).map((item, i) => (
+                                                                                                <div key={i} className="text-[10px] flex justify-between items-center gap-1">
+                                                                                                    <div className="flex items-center gap-1.5 overflow-hidden flex-1">
+                                                                                                        <div className="w-1 h-1 rounded-full bg-slate-500 shrink-0"></div>
+                                                                                                        <span className="text-slate-400 truncate">{item.product}</span>
+                                                                                                    </div>
+                                                                                                    <div className="flex items-center gap-1.5 shrink-0">
+                                                                                                        {item.sourceLocation && (
+                                                                                                            <span className="text-[8px] px-1 py-0.5 rounded bg-blue-500/15 text-blue-400 border border-blue-500/30 uppercase tracking-widest font-black">
+                                                                                                                {item.sourceLocation}
+                                                                                                            </span>
+                                                                                                        )}
+                                                                                                        <span className="text-slate-200 font-bold font-mono">x{item.quantity}</span>
+                                                                                                    </div>
+                                                                                                </div>
+                                                                                            ))}
+                                                                                            {(doOrder.items || []).length > 3 && (
+                                                                                                <div className="text-[8px] text-zinc-500 font-bold text-center pt-0.5">
+                                                                                                    + {(doOrder.items || []).length - 3} more items
+                                                                                                </div>
+                                                                                            )}
+                                                                                        </div>
+                                                                                    </div>
+                                                                                ))}
+                                                                            </div>
+                                                                        )}
+                                                                    </div>
+                                                                ) : (
+                                                                    /* STANDALONE SINGLE ORDER CARD */
+                                                                    <div onClick={() => {
+                                                                        setEditingOrderId(order.id); setNewOrderDate(order.orderDate || '');
+                                                                        setSelectedDriverId(order.driverId || '');
+                                                                        const initialLorry = lorries.find(l => l.driverUserId === order.driverId);
+                                                                        setSelectedLorryId(initialLorry ? initialLorry.id : '');
+                                                                        setOrderCustomer(order.customer);
+                                                                        setNewOrderAddress(order.deliveryAddress || '');
+                                                                        setNewOrderDeliveryDate(order.deadline || '');
+                                                                        setNewOrderNotes(order.notes || '');
+                                                                        const orderOrigin = order.trip_origin || 'TAIPING';
+                                                                        setTripOrigin(orderOrigin);
+                                                                        setCurrentItemLoc(getDefaultLocForOrigin(orderOrigin));
+                                                                        setTripCategory(order.zone || '');
+                                                                        setTripDropCount(order.trip_drop_count || 1);
+
+                                                                        const defaultLoc = getDefaultLocForOrigin(orderOrigin);
+                                                                        const itemsWithExtractedLoc = (order.items || []).map(item => {
+                                                                            let loc = item.sourceLocation;
+                                                                            if (!loc && item.remark && item.remark.includes('(Loc:')) {
+                                                                                const locMatch = item.remark.match(/\(Loc:\s*(.*?)\)/);
+                                                                                if (locMatch && locMatch[1]) loc = locMatch[1];
+                                                                            }
+                                                                            return { ...item, sourceLocation: loc || defaultLoc };
+                                                                        });
+                                                                        setNewOrderItems(itemsWithExtractedLoc);
+                                                                        setEditingOrderPhoto(order.proof_of_load_url || null);
+                                                                        setIsCreateModalOpen(true);
+                                                                    }}>
+                                                                        <div className="flex justify-between items-start mb-2">
+                                                                            <div className="flex items-center gap-2">
+                                                                                <div className="font-mono text-sm font-black text-blue-400 bg-blue-500/10 px-2 py-1 rounded border border-blue-500/20 tracking-wide">
+                                                                                    {order.orderNumber}
+                                                                                </div>
+                                                                                {order.deliveryAddress && (
+                                                                                    <div className={`text-[10px] font-bold px-1.5 py-0.5 rounded border uppercase tracking-wider ${getStateColor(determineState(order.deliveryAddress))}`}>
+                                                                                        {determineState(order.deliveryAddress)}
+                                                                                    </div>
+                                                                                )}
+                                                                                <button
+                                                                                    onClick={(e) => {
+                                                                                        e.stopPropagation();
+                                                                                        handleDeleteOrder(order.id, order.orderNumber);
+                                                                                    }}
+                                                                                    className="p-1.5 text-red-400 bg-red-500/10 hover:bg-red-500/20 hover:text-red-300 rounded-md transition-colors"
+                                                                                    title="Cancel Order"
+                                                                                >
+                                                                                    <Trash2 size={14} />
+                                                                                </button>
+
+                                                                                <button
+                                                                                    onClick={(e) => {
+                                                                                        e.stopPropagation();
+                                                                                        setReassignOrder(order);
+                                                                                        setIsReassignModalOpen(true);
+                                                                                    }}
+                                                                                    className="p-1.5 text-blue-400 bg-blue-500/10 hover:bg-blue-500/20 hover:text-blue-300 rounded-md transition-colors ml-1"
+                                                                                    title="Change Driver"
+                                                                                >
+                                                                                    <UserIcon size={14} />
+                                                                                </button>
+
+                                                                                <button
+                                                                                    onClick={(e) => {
+                                                                                        e.stopPropagation();
+                                                                                        setSplitOrder(order);
+                                                                                        setSplitItems({});
+                                                                                        setSplitTargetDriverId('');
+                                                                                        setSplitTargetDate('');
+                                                                                        setIsSplitModalOpen(true);
+                                                                                    }}
+                                                                                    className="p-1.5 text-orange-400 bg-orange-500/10 hover:bg-orange-500/20 hover:text-orange-300 rounded-md transition-colors ml-1"
+                                                                                    title="Split Order / Partial Delivery"
+                                                                                >
+                                                                                    <Scissors size={14} />
+                                                                                </button>
+                                                                            </div>
+                                                                            <div className="flex flex-col items-end gap-1.5">
+                                                                                <div className={`text-[10px] font-bold px-2 py-1 rounded uppercase tracking-wider border ${order.status === 'New' ? 'text-amber-400 border-amber-500/20 bg-amber-500/10' :
+                                                                                    order.status === 'Delivered' ? 'text-emerald-400 border-emerald-500/20 bg-emerald-500/10' :
+                                                                                        order.status === 'Pending Approval' ? 'text-red-400 border-red-500/20 bg-red-500/10 animate-pulse' :
+                                                                                            'text-slate-400 border-slate-700 bg-slate-800'
+                                                                                    }`}>
+                                                                                    {order.status}
+                                                                                </div>
+                                                                                {(order.pod_photo_url || order.pod_signature_url || (order.notes && order.notes.includes(']'))) && (
+                                                                                    <div className="flex flex-wrap items-center justify-end gap-1 max-w-[120px]">
+                                                                                        {order.pod_photo_url && (
+                                                                                            <span className="text-[8px] bg-emerald-500/20 text-emerald-400 border border-emerald-500/30 px-1 py-0.5 rounded font-black tracking-wider flex items-center gap-0.5" title="Has delivery photo">
+                                                                                                📸 POD
+                                                                                            </span>
+                                                                                        )}
+                                                                                        {order.pod_signature_url && (
+                                                                                            <span className="text-[8px] bg-teal-500/20 text-teal-400 border border-teal-500/30 px-1 py-0.5 rounded font-black tracking-wider flex items-center gap-0.5" title="Has customer signature">
+                                                                                                ✍️ SIGN
+                                                                                            </span>
+                                                                                        )}
+                                                                                        {order.notes && order.notes.includes(']') && (
+                                                                                            <span className="text-[8px] bg-blue-500/20 text-blue-400 border border-blue-500/30 px-1 py-0.5 rounded font-black tracking-wider flex items-center gap-0.5" title="Has driver notes">
+                                                                                                💬 NOTE
+                                                                                            </span>
+                                                                                        )}
+                                                                                    </div>
+                                                                                )}
+                                                                            </div>
+                                                                        </div>
+
+                                                                        <div className="mb-2.5">
+                                                                            <div className="text-xs text-white font-bold truncate">{order.customer || t('Unnamed Customer')}</div>
+                                                                            {order.deliveryAddress && order.deliveryAddress.trim() ? (
+                                                                                <div className="text-[11px] text-slate-400 flex items-start gap-1 mt-0.5 group/addr">
+                                                                                    <MapPin size={11} className="text-slate-500 shrink-0 mt-0.5" />
+                                                                                    <span className="line-clamp-1 flex-1">{order.deliveryAddress}</span>
+                                                                                </div>
+                                                                            ) : (
+                                                                                <button
+                                                                                    type="button"
+                                                                                    onClick={(e) => {
+                                                                                        e.stopPropagation();
+                                                                                        handleQuickUpdateOrderAddress(order.id, '');
+                                                                                    }}
+                                                                                    className="mt-1 text-[10px] font-bold text-amber-400 bg-amber-500/10 hover:bg-amber-500/20 border border-amber-500/30 px-2 py-0.5 rounded flex items-center gap-1 transition-colors cursor-pointer"
+                                                                                    title={t('Click to fill address')}
+                                                                                >
+                                                                                    <AlertTriangle size={11} className="text-amber-400 shrink-0" />
+                                                                                    <span>⚠️ {t('Missing Delivery Address')} ({t('Click to fill address')})</span>
+                                                                                </button>
+                                                                            )}
+                                                                        </div>
+
+                                                                        <div className="text-xs text-slate-500 flex items-center gap-2 mb-3">
+                                                                            <Calendar size={14} className="text-slate-600 shrink-0" />
+                                                                            <div className="flex flex-col gap-0.5 leading-tight">
+                                                                                <div className="flex items-center gap-1">
+                                                                                    <span className="text-[9px] font-black text-slate-600 uppercase tracking-tighter">📦 Ord:</span>
+                                                                                    <span className="text-[10px] text-slate-500 font-bold">{formatDateDMY(order.orderDate)}</span>
+                                                                                </div>
+                                                                                <div className="flex items-center gap-1">
+                                                                                    <span className="text-[9px] font-black text-blue-500/50 uppercase tracking-tighter">🚚 Del:</span>
+                                                                                    <span className="text-[10px] text-blue-400 font-black">{formatDateDMY(order.deadline) || "No Date"}</span>
+                                                                                </div>
+                                                                            </div>
+                                                                        </div>
+
+                                                                        {order.notes && (
+                                                                            <div className="text-[10px] text-amber-400/90 bg-amber-500/10 px-2.5 py-1.5 rounded-lg border border-amber-500/20 mb-3 break-words font-mono leading-relaxed">
+                                                                                📝 {order.notes.replace(/^\|\s*/, '').trim()}
+                                                                            </div>
+                                                                        )}
+
+                                                                        {/* Items Preview */}
+                                                                        <div className="space-y-1.5 bg-[#121214] p-3 rounded-lg border border-[#27272a]">
+                                                                            {order.items?.length === 0 ? (
+                                                                                <div className="text-[10px] text-slate-600 italic text-center py-1">No Items</div>
+                                                                            ) : (
+                                                                                order.items?.slice(0, 3).map((item, i) => (
+                                                                                    <div key={i} className="text-[11px] flex justify-between items-center gap-2">
+                                                                                        <div className="flex items-center gap-2 overflow-hidden flex-1">
+                                                                                            <div className="w-1 h-1 rounded-full bg-slate-600 shrink-0"></div>
+                                                                                            <span className="text-slate-400 truncate">{item.product}</span>
+                                                                                        </div>
+                                                                                        <div className="flex items-center gap-2 shrink-0">
+                                                                                            {item.sourceLocation && (
+                                                                                                <span className="text-[9px] px-1.5 py-0.5 rounded bg-blue-500/10 text-blue-400 border border-blue-500/20 uppercase tracking-widest font-black">
+                                                                                                    {item.sourceLocation}
+                                                                                                </span>
+                                                                                            )}
+                                                                                            <span className="text-slate-200 font-bold font-mono whitespace-nowrap">x{item.quantity}</span>
+                                                                                        </div>
+                                                                                    </div>
+                                                                                ))
+                                                                            )}
+                                                                            {order.items && order.items.length > 3 && (
+                                                                                <div className="text-[9px] text-zinc-600 font-bold text-center pt-1 uppercase tracking-wide">
+                                                                                    + {order.items.length - 3} more
+                                                                                </div>
+                                                                            )}
+                                                                        </div>
+
+                                                                        {/* Approve driver quantity amendments or Extra Job */}
+                                                                        {order.status === 'Pending Approval' && (() => {
+                                                                            const isExtraJob = (order as any).job_type === 'Extra Job' || (order.orderNumber && order.orderNumber.startsWith('TRIP-JOB')) || (order.notes && order.notes.startsWith('[') && (!order.items || order.items.length === 0));
+
+                                                                            if (isExtraJob) {
+                                                                                return (
+                                                                                    <div className="mt-4">
+                                                                                        <button
+                                                                                            onClick={(e) => {
+                                                                                                e.stopPropagation();
+                                                                                                handleApproveAmendment(order);
+                                                                                            }}
+                                                                                            className="w-full py-2.5 bg-gradient-to-r from-emerald-600 to-teal-600 hover:from-emerald-500 hover:to-teal-500 text-white rounded-lg font-black text-[10px] uppercase tracking-wider flex items-center justify-center gap-2 shadow-lg shadow-emerald-950/40 transition-all active:scale-95 border border-emerald-500/30 cursor-pointer"
+                                                                                        >
+                                                                                            <span>📸</span> Semak & Lulus Tugasan / Review Extra Job
+                                                                                        </button>
+                                                                                    </div>
+                                                                                );
+                                                                            }
+
+                                                                            return (
+                                                                                <div className="mt-4">
+                                                                                    <button
+                                                                                        onClick={(e) => {
+                                                                                            e.stopPropagation();
+                                                                                            handleApproveAmendment(order);
+                                                                                        }}
+                                                                                        className="w-full py-2.5 bg-gradient-to-r from-amber-600 to-orange-600 hover:from-amber-500 hover:to-orange-500 text-white rounded-lg font-black text-[10px] uppercase tracking-wider flex items-center justify-center gap-2 shadow-lg shadow-amber-950/40 transition-all active:scale-95 border border-amber-500/30 cursor-pointer"
+                                                                                    >
+                                                                                        <Zap size={14} className="fill-white" /> Lulus Pindaan & Tolak Stok / Approve & Deduct Stock
+                                                                                    </button>
+                                                                                </div>
+                                                                            );
+                                                                        })()}
                                                                     </div>
                                                                 )}
                                                             </div>
-
-                                                            {/* Approve driver quantity amendments or Extra Job */}
-                                                            {order.status === 'Pending Approval' && (() => {
-                                                                const isExtraJob = (order as any).job_type === 'Extra Job' || (order.orderNumber && order.orderNumber.startsWith('TRIP-JOB')) || (order.notes && order.notes.startsWith('[') && (!order.items || order.items.length === 0));
-
-                                                                if (isExtraJob) {
-                                                                    return (
-                                                                        <div className="mt-4">
-                                                                            <button
-                                                                                onClick={(e) => {
-                                                                                    e.stopPropagation();
-                                                                                    handleApproveAmendment(order);
-                                                                                }}
-                                                                                className="w-full py-2.5 bg-gradient-to-r from-emerald-600 to-teal-600 hover:from-emerald-500 hover:to-teal-500 text-white rounded-lg font-black text-[10px] uppercase tracking-wider flex items-center justify-center gap-2 shadow-lg shadow-emerald-950/40 transition-all active:scale-95 border border-emerald-500/30 cursor-pointer"
-                                                                            >
-                                                                                <span>📸</span> Semak & Lulus Tugasan / Review Extra Job
-                                                                            </button>
-                                                                        </div>
-                                                                    );
-                                                                }
-
-                                                                return (
-                                                                    <div className="mt-4">
-                                                                        <button
-                                                                            onClick={(e) => {
-                                                                                e.stopPropagation();
-                                                                                handleApproveAmendment(order);
-                                                                            }}
-                                                                            className="w-full py-2.5 bg-gradient-to-r from-amber-600 to-orange-600 hover:from-amber-500 hover:to-orange-500 text-white rounded-lg font-black text-[10px] uppercase tracking-wider flex items-center justify-center gap-2 shadow-lg shadow-amber-950/40 transition-all active:scale-95 border border-amber-500/30 cursor-pointer"
-                                                                        >
-                                                                            <Zap size={14} className="fill-white" /> Lulus Pindaan & Tolak Stok / Approve & Deduct Stock
-                                                                        </button>
-                                                                    </div>
-                                                                );
-                                                            })()}
-                                                        </div>
-                                                    )}
-                                                </Draggable>
-                                            ))}
+                                                        )}
+                                                    </Draggable>
+                                                );
+                                            })}
                                             {provided.placeholder}
                                         </div>
                                     )}
                                 </Droppable>
-                                {driverOrders.length === 0 && (
+                                {driverTrips.length === 0 && (
                                     <div className="h-40 flex flex-col items-center justify-center text-slate-700 opacity-50">
                                         <Truck size={40} className="mb-3" />
                                         <span className="text-xs font-bold uppercase tracking-wider">No Trips</span>
@@ -5664,26 +5985,43 @@ const DeliveryOrderManagement: React.FC<DeliveryOrderManagementProps> = ({ user 
                                                                     </div>
                                                                 </div>
 
-                                                                <div className="flex items-center gap-1.5 shrink-0">
-                                                                    <label className="text-[10px] font-bold text-slate-400 uppercase">
-                                                                        SKU:
-                                                                    </label>
-                                                                    <select
-                                                                        className={`px-2.5 py-1 rounded-lg text-xs font-mono font-bold outline-none transition-all cursor-pointer max-w-[240px] sm:max-w-[280px] ${
-                                                                            it.sku
-                                                                                ? 'bg-emerald-950/40 border border-emerald-500/40 text-emerald-300 focus:border-emerald-400'
-                                                                                : 'bg-amber-950/40 border border-amber-500/50 text-amber-300 focus:border-amber-400 animate-pulse'
-                                                                        }`}
-                                                                        value={it.sku || ''}
-                                                                        onChange={e => handleUpdateParsedItemSku(idx, itemIdx, e.target.value)}
-                                                                    >
-                                                                        <option value="">{t('⚠️ -- 请选择标准料号 (Unmapped) --')}</option>
-                                                                        {v2Items.map(prod => (
-                                                                            <option key={prod.sku} value={prod.sku}>
-                                                                                {prod.sku} - {prod.name}
-                                                                            </option>
-                                                                        ))}
-                                                                    </select>
+                                                                <div className="flex flex-wrap items-center gap-2 shrink-0">
+                                                                    <div className="flex items-center gap-1.5 shrink-0">
+                                                                        <label className="text-[10px] font-bold text-slate-400 uppercase">
+                                                                            SKU:
+                                                                        </label>
+                                                                        <select
+                                                                            className={`px-2.5 py-1 rounded-lg text-xs font-mono font-bold outline-none transition-all cursor-pointer max-w-[200px] sm:max-w-[250px] ${
+                                                                                it.sku
+                                                                                    ? 'bg-emerald-950/40 border border-emerald-500/40 text-emerald-300 focus:border-emerald-400'
+                                                                                    : 'bg-amber-950/40 border border-amber-500/50 text-amber-300 focus:border-amber-400 animate-pulse'
+                                                                            }`}
+                                                                            value={it.sku || ''}
+                                                                            onChange={e => handleUpdateParsedItemSku(idx, itemIdx, e.target.value)}
+                                                                        >
+                                                                            <option value="">{t('⚠️ -- 请选择标准料号 (Unmapped) --')}</option>
+                                                                            {v2Items.map(prod => (
+                                                                                <option key={prod.sku} value={prod.sku}>
+                                                                                    {prod.sku} - {prod.name}
+                                                                                </option>
+                                                                            ))}
+                                                                        </select>
+                                                                    </div>
+
+                                                                    <div className="flex items-center gap-1.5 shrink-0">
+                                                                        <label className="text-[10px] font-bold text-slate-400 uppercase">
+                                                                            {t('Warehouse')}:
+                                                                        </label>
+                                                                        <select
+                                                                            className="px-2 py-1 rounded-lg text-xs font-bold bg-slate-900 border border-slate-700 text-blue-400 outline-none cursor-pointer focus:border-blue-500"
+                                                                            value={it.sourceLocation || guessItemLocation(it, parsedTripOrigin)}
+                                                                            onChange={e => handleUpdateParsedItemLocation(idx, itemIdx, e.target.value)}
+                                                                        >
+                                                                            {getAvailableWarehousesForOrigin(parsedTripOrigin).map(loc => (
+                                                                                <option key={loc} value={loc}>{loc}</option>
+                                                                            ))}
+                                                                        </select>
+                                                                    </div>
                                                                 </div>
                                                             </div>
                                                         ))}
