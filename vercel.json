@@ -22,6 +22,10 @@
             "destination": "/api/agent/universal?action=parse-trip-pdf"
         },
         {
+            "source": "/api/agent/omni-command",
+            "destination": "/api/agent/universal?action=omni-command"
+        },
+        {
             "source": "/api/machines",
             "destination": "/api/iot-config?action=machines"
         },

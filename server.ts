@@ -57,6 +57,11 @@ mountVercelHandler('/api/v2/documents/logs', documentLogsHandler);
 mountVercelHandler('/api/agent/sop-assistant', sopAssistantHandler);
 mountVercelHandler('/api/docs', docsHandler);
 mountVercelHandler('/api/agent/parse-trip-pdf', handleParseTripPdf);
+mountVercelHandler('/api/agent/omni-command', async (req, res) => {
+    req.query = req.query || {};
+    req.query.action = 'omni-command';
+    return universalHandler(req, res);
+});
 
 // Mimic Vercel Request/Response for the handler
 app.post('/api/agent/chat', async (req, res) => {

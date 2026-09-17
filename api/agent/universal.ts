@@ -1528,6 +1528,140 @@ CRITICAL: Return strictly a valid JSON object. Do not wrap in markdown quotes.
 }
 
 // =====================================================================
+// OMNI COMMAND HANDLER
+// =====================================================================
+
+async function handleOmniCommand(req: VercelRequest, res: VercelResponse) {
+    if (req.method !== 'POST') {
+        return res.status(405).json({ error: 'Method Not Allowed' });
+    }
+
+    const { query, context = {} } = req.body || {};
+    const rawQuery = (query || '').trim();
+    const userRole = context.userRole || 'Operator';
+    const isManagement = ['Boss', 'SuperAdmin', 'Admin', 'Manager', 'LogisticsCoordinator'].includes(userRole);
+
+    if (!rawQuery) {
+        return res.status(400).json({ error: 'Query is required' });
+    }
+
+    // 1. RBAC Guardrail check: Non-management users cannot query payroll/price
+    const sensitiveKeywords = /(?:工资|薪水|薪资|底薪|单价|成本|毛利|利润|profit|margin|salary|payroll|wage)/i;
+    if (!isManagement && sensitiveKeywords.test(rawQuery)) {
+        return res.status(200).json({
+            type: 'unknown',
+            message: `🛡️ 权限拦截：您的角色 (${userRole}) 无权在万能输入口检索或统计薪酬与财务数据。`
+        });
+    }
+
+    try {
+        // 2. Statistical / Business Query Detection
+        const isStatQuery = /(?:产量|产能|效率|稼动率|出库|入库|送货|单量|多少|统计|概况|汇总|状态|排行|summary|total|count|status)/i.test(rawQuery);
+
+        if (isStatQuery) {
+            const [machinesRes, ordersRes] = await Promise.all([
+                supabase.from('sys_machines_v2').select('machine_id, status'),
+                supabase.from('sales_orders').select('id, status, zone').limit(100)
+            ]);
+
+            const machines = machinesRes.data || [];
+            const runningMachines = machines.filter(m => m.status === 'RUNNING' || m.status === 'Active').length;
+            const totalMachines = machines.length || 15;
+            const machineUtilization = Math.round((runningMachines / (totalMachines || 1)) * 100);
+
+            const orders = ordersRes.data || [];
+            const pendingOrders = orders.filter(o => o.status !== 'Delivered' && o.status !== 'Cancelled').length;
+            const deliveredOrders = orders.filter(o => o.status === 'Delivered').length;
+
+            return res.status(200).json({
+                type: 'insight',
+                insightData: {
+                    query: rawQuery,
+                    title: '全厂实时运营指标速览',
+                    summary: `当前全厂共 ${totalMachines} 台主力生产设备，${runningMachines} 台处于运行状态；待交付送货单 ${pendingOrders} 笔，累计已签收 ${deliveredOrders} 笔。`,
+                    keyMetrics: [
+                        {
+                            label: '设备稼动率',
+                            value: `${machineUtilization}%`,
+                            subtext: `${runningMachines} 运行 / ${totalMachines} 总机台`,
+                            trend: machineUtilization >= 75 ? 'up' : 'down'
+                        },
+                        {
+                            label: '待派送 DO',
+                            value: `${pendingOrders} 笔`,
+                            subtext: '包含今天与明日排单',
+                            trend: 'neutral'
+                        },
+                        {
+                            label: '已完成签收',
+                            value: `${deliveredOrders} 笔`,
+                            subtext: '历史履约完成单量',
+                            trend: 'up'
+                        }
+                    ],
+                    targetPage: 'factory-live-os',
+                    targetPageLabel: '进入全厂实时大屏 (Factory Live OS)'
+                }
+            });
+        }
+
+        // 3. Fallback to Gemini if AI key exists
+        const geminiKey = process.env.GOOGLE_API_KEY || '';
+        if (geminiKey) {
+            const genAI = new GoogleGenerativeAI(geminiKey);
+            const model = genAI.getGenerativeModel({ model: 'gemini-2.0-flash' });
+            const prompt = `你是一个工业制造系统(Packsecure OS)的指令解析核心。
+用户角色: ${userRole}, 用户输入: "${rawQuery}".
+
+请判断该输入属于哪一类：
+1. "action": 用户想要执行业务操作（如报修、创建待办、请假、登记报废）。
+2. "insight": 用户想要查看业务统计或数据分析。
+3. "unknown": 无法识别或仅仅是模糊搜索。
+
+请严格输出 JSON 格式（不要输出 markdown 标记）：
+{
+  "type": "action" | "insight" | "unknown",
+  "actionDraft": {
+    "intent": "report_machine_issue" | "create_task" | "submit_leave" | "quick_scrap" | "general_action",
+    "title": "卡片简短标题",
+    "summary": "业务说明描述",
+    "isDangerous": boolean,
+    "dangerReason": "若危险请说明原因",
+    "fields": [
+      { "key": "fieldName", "label": "字段名", "value": "解析值", "type": "text"|"number"|"select"|"date" }
+    ],
+    "payload": { }
+  },
+  "message": "若是unknown或需解释时的反馈文案"
+}`;
+
+            const result = await model.generateContent(prompt);
+            const text = result.response.text();
+            try {
+                const cleanedJson = text.replace(/```json/g, '').replace(/```/g, '').trim();
+                const parsed = JSON.parse(cleanedJson);
+                return res.status(200).json(parsed);
+            } catch {
+                // fallback
+            }
+        }
+
+        // 4. Default Heuristic Match
+        return res.status(200).json({
+            type: 'unknown',
+            message: '未能精确识别该动作，您可输入关键词直接检索单据/客户，或使用如：“报修 T1-M03 切刀故障”、“待办 盘点成品仓” 等明确指令。'
+        });
+
+    } catch (err: any) {
+        console.error('omni-command handler error:', err);
+        return res.status(500).json({
+            error: 'Failed to process omni command',
+            details: err.message
+        });
+    }
+}
+
+// =====================================================================
 // MASTER HANDLER ROUTER
 // =====================================================================
 
@@ -1573,6 +1707,11 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
         return handleParseTripPdf(req, res);
     }
 
-    // 4. Default: Universal Intake (parse / commit)
+    // 4. Omni Command requests
+    if (action === 'omni-command' || req.query?.action === 'omni-command' || req.body?.action === 'omni-command') {
+        return handleOmniCommand(req, res);
+    }
+
+    // 5. Default: Universal Intake (parse / commit)
     return handleIntake(req, res);
 }

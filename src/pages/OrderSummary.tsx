@@ -1,78 +1,45 @@
-import React, { useState, useEffect, useCallback, useRef } from 'react';
+import React, { useState, useEffect, useCallback, useRef, useMemo } from 'react';
 import { DragDropContext, Droppable, Draggable, DropResult } from '@hello-pangea/dnd';
 import { supabase } from '../services/supabase';
 import { getV2Items, getInventoryStatus } from '../services/apiV2';
-import { WAREHOUSES } from '../data/factoryData';
 import { SalesOrder, SalesOrderItem, User } from '../types';
-import { Calendar, User as UserIcon, Truck, MapPin, Package, Camera, Trash2, X } from 'lucide-react';
+import { Calendar, User as UserIcon, Truck, MapPin, Package, Camera, Trash2, X, ChevronDown, ChevronUp, CheckCircle, RefreshCw, Clock, AlertTriangle, Search, Phone, ExternalLink, Zap } from 'lucide-react';
 import { parsePrepPhotos, stringifyPrepPhotos, PrepPhoto } from '../utils/prepPhotos';
 import { compressImage, dataURLtoBlob } from '../utils/imageCompress';
+import { guessItemLocation } from './DeliveryOrderManagement';
 import { useTranslation } from "react-i18next";
 
-const LOCATIONS = WAREHOUSES;
-type Location = string;
+// ─── TYPES & CONSTANTS ────────────────────────────────────────────────────────
 
-const LOCATION_COLOR_PALETTES = ['blue', 'emerald', 'purple', 'orange', 'rose'];
-const LOCATION_COLOR: Record<string, string> = {};
-LOCATIONS.forEach((loc, i) => {
-    LOCATION_COLOR[loc] = LOCATION_COLOR_PALETTES[i % LOCATION_COLOR_PALETTES.length];
-});
+type FactoryHub = 'Taiping' | 'Nilai' | 'Kelantan' | 'Johor';
 
-// Normalize inventory loc_id to match WAREHOUSES display names
+const FACTORY_HUBS: FactoryHub[] = ['Taiping', 'Nilai', 'Kelantan', 'Johor'];
+
+const TAIPING_WAREHOUSES = ['OPM Lama', 'OPM Corner', 'OPM Ali', 'SPD', 'All'] as const;
+
+// Normalize inventory loc_id to match warehouse names
 const normalizeLoc = (locId: string): string => {
     const lower = (locId || '').toLowerCase().trim();
     const LOC_ALIASES: Record<string, string> = {
-        'spd': 'SPD', 'opm lama': 'OPM Lama', 'opm_lama': 'OPM Lama',
-        'opm corner': 'OPM Corner', 'opm_corner': 'OPM Corner',
-        'opm ali': 'OPM Ali', 'opm_ali': 'OPM Ali',
+        'spd': 'SPD', 
+        'opm lama': 'OPM Lama', 
+        'opm_lama': 'OPM Lama',
+        'opm corner': 'OPM Corner', 
+        'opm_corner': 'OPM Corner',
+        'opm ali': 'OPM Ali', 
+        'opm_ali': 'OPM Ali',
         'nilai': 'Nilai',
+        'kelantan': 'Kelantan',
+        'johor': 'Johor'
     };
     return LOC_ALIASES[lower] || locId;
 };
 
-// Sub-locations without independent inventory data fall back to parent warehouse
+// Sub-locations sharing stock fallback
 const STOCK_FALLBACK: Record<string, string> = {
     'OPM Corner': 'SPD',
     'OPM Lama': 'SPD',
     'OPM Ali': 'SPD',
-};
-
-// Determine which warehouse tab a single item belongs to
-const getItemLocation = (item: SalesOrderItem, order: SalesOrder): string => {
-    // 1. Explicit sourceLocation on the item
-    if (item.sourceLocation) {
-        const src = item.sourceLocation.toLowerCase();
-        if (src.includes('opm lama')) return 'OPM Lama';
-        if (src.includes('opm corner')) return 'OPM Corner';
-        if (src.includes('opm ali')) return 'OPM Ali';
-        if (src.includes('nilai')) return 'Nilai';
-        if (src.includes('spd')) return 'SPD';
-    }
-    // 2. Legacy: location encoded in remark field
-    if (item.remark) {
-        const r = item.remark.toLowerCase();
-        if (r.includes('opm lama')) return 'OPM Lama';
-        if (r.includes('opm corner')) return 'OPM Corner';
-        if (r.includes('opm ali')) return 'OPM Ali';
-        if (r.includes('nilai')) return 'Nilai';
-        if (r.includes('kelantan')) return 'Kelantan';
-        if (r.includes('johor')) return 'Johor';
-        if (r.includes('spd')) return 'SPD';
-    }
-    // 3. Order-level trip_origin
-    if (order.trip_origin) {
-        const origin = order.trip_origin.toUpperCase();
-        if (origin === 'NILAI') return 'Nilai';
-        if (origin === 'KELANTAN') return 'Kelantan';
-        if (origin === 'JOHOR') return 'Johor';
-        if (origin === 'TAIPING' || origin === 'SPD') return 'SPD';
-    }
-    // 4. Zone / address text matching
-    const text = `${order.zone || ''} ${order.deliveryAddress || ''}`.toLowerCase();
-    if (text.includes('nilai') || text.includes('seremban')) return 'Nilai';
-    if (text.includes('kelantan') || text.includes('kota bharu')) return 'Kelantan';
-    if (text.includes('johor') || text.includes('skudai') || text.includes('senai')) return 'Johor';
-    return LOCATIONS[0] || 'SPD';
 };
 
 const getLocalDateString = (d: Date = new Date()): string => {
@@ -82,143 +49,162 @@ const getLocalDateString = (d: Date = new Date()): string => {
     return `${year}-${month}-${day}`;
 };
 
+// Determine the factory hub of an order
+const getOrderFactory = (order: any): FactoryHub => {
+    const orig = (order.trip_origin || '').toUpperCase().trim();
+    if (orig.includes('NILAI') || orig === 'N1') return 'Nilai';
+    if (orig.includes('KELANTAN') || orig === 'K1') return 'Kelantan';
+    if (orig.includes('JOHOR') || orig === 'J1') return 'Johor';
+    if (orig.includes('TAIPING') || orig === 'T1' || orig.includes('OPM') || orig.includes('SPD')) return 'Taiping';
+
+    const text = `${order.zone || ''} ${order.delivery_address || ''}`.toLowerCase();
+    if (text.includes('nilai') || text.includes('seremban') || text.includes('kl') || text.includes('selangor') || text.includes('kuala lumpur')) return 'Nilai';
+    if (text.includes('kelantan') || text.includes('kota bharu') || text.includes('terengganu')) return 'Kelantan';
+    if (text.includes('johor') || text.includes('skudai') || text.includes('senai') || text.includes('jb')) return 'Johor';
+    return 'Taiping';
+};
+
+// Determine specific item warehouse
+const getItemWarehouse = (item: SalesOrderItem, order: any, activeFactory: FactoryHub): string => {
+    if (item.sourceLocation && item.sourceLocation.trim()) {
+        return normalizeLoc(item.sourceLocation.trim());
+    }
+    const origin = order.trip_origin || activeFactory;
+    return guessItemLocation(item, origin) || (activeFactory === 'Taiping' ? 'OPM Lama' : activeFactory);
+};
+
+// Determine item unit of measurement (UOM)
+const getItemUom = (productName: string, sku?: string): string => {
+    const s = (sku || '').toUpperCase();
+    const p = productName.toUpperCase();
+    if (s.startsWith('BW-') || p.includes('BUBBLE') || p.includes('MERAH') || p.includes('HITAM') || p.includes('OREN') || p.includes('DL-') || p.includes('SL-')) {
+        return 'Rolls / 卷';
+    }
+    if (s.startsWith('SF-') || p.includes('STRETCH') || p.includes('BABY ROLL') || p.includes('BABYROLL')) {
+        return 'Rolls / 卷';
+    }
+    if (s.includes('TAPE') || p.includes('TAPE') || p.includes('CUKUPP') || s.includes('AWB')) {
+        return 'Box / 箱';
+    }
+    if (p.includes('FOAM')) {
+        return 'Rolls / 卷';
+    }
+    return 'Units / 件';
+};
+
+// Helper to extract trip number or tag from order notes or orderNumber
+const extractTripIdentifier = (notes?: string): { tripSeq?: number; tripTag?: string } => {
+    if (!notes) return {};
+    const lower = notes.toLowerCase();
+
+    // 1. Check bracket format: [Trip: trip 2 malam hantar]
+    const mBracket = notes.match(/\[Trip:\s*([^\]]+)\]/i);
+    if (mBracket) {
+        const content = mBracket[1].trim();
+        const numMatch = content.match(/\b(\d+)\b/);
+        if (numMatch) {
+            return { tripSeq: parseInt(numMatch[1], 10), tripTag: `Trip ${numMatch[1]}` };
+        }
+        return { tripTag: content };
+    }
+
+    // 2. Check "trip 1", "trip 2", "trip 3"
+    const mTrip = lower.match(/\btrip\s*(\d+)\b/);
+    if (mTrip) {
+        return { tripSeq: parseInt(mTrip[1], 10), tripTag: `Trip ${mTrip[1]}` };
+    }
+
+    // 3. Check "1p", "2p", "3p" (Malaysian pusingan / trip shorthand)
+    const mP = lower.match(/\b(\d+)\s*p\b/);
+    if (mP) {
+        return { tripSeq: parseInt(mP[1], 10), tripTag: `Trip ${mP[1]}` };
+    }
+
+    return {};
+};
+
+export interface TripGroup {
+    tripId: string;
+    tripNumber: string;
+    driverId: string | null;
+    driverName: string;
+    lorryId: string | null;
+    lorryPlate: string;
+    tripOrigin: FactoryHub;
+    orders: SalesOrder[];
+    totalRolls: number;
+    totalDrops: number;
+    zones: string[];
+    photos: PrepPhoto[];
+    isPrepared: boolean;
+    tripSequence: number;
+    createdDate?: string;
+    // Special Badges
+    hasCod: boolean;
+    hasNightDelivery: boolean;
+    hasSelfPickup: boolean;
+    specialNotes: string[];
+}
+
 interface OrderSummaryProps {
     user?: any;
 }
 
+// ─── MAIN COMPONENT ───────────────────────────────────────────────────────────
+
 const OrderSummary: React.FC<OrderSummaryProps> = ({ user }) => {
     const { t } = useTranslation();
-    const [orders, setOrders] = useState<SalesOrder[]>([]);
-    const [previewImageUrl, setPreviewImageUrl] = useState<string | null>(null);
-    const [drivers, setDrivers] = useState<User[]>([]);
+
+    // Factory & Warehouse Tab States
+    const [activeFactory, setActiveFactory] = useState<FactoryHub>('Taiping');
+    const [activeTaipingWarehouse, setActiveTaipingWarehouse] = useState<string>('OPM Lama');
+
+    // Date Filtering States (Added 'pending_prep' mode)
     const [selectedDate, setSelectedDate] = useState<string>(getLocalDateString());
-    const [loading, setLoading] = useState(false);
-    const [activeTab, setActiveTab] = useState<Location>(LOCATIONS[0] || 'Unknown');
+    const [dateMode, setDateMode] = useState<'today' | 'tomorrow' | 'pending_prep' | 'all_active' | 'custom'>('today');
 
-    const [uploadingId, setUploadingId] = useState<string | null>(null);
-    const fileInputRef = useRef<HTMLInputElement>(null);
-    const [selectedOrderIdForUpload, setSelectedOrderIdForUpload] = useState<string | null>(null);
-
-    const handleUploadButtonClick = (orderId: string) => {
-        setSelectedOrderIdForUpload(orderId);
-        if (fileInputRef.current) {
-            fileInputRef.current.value = '';
-            fileInputRef.current.click();
-        }
-    };
-
-    const handlePhotoSelect = async (e: React.ChangeEvent<HTMLInputElement>) => {
-        const file = e.target.files?.[0];
-        const orderId = selectedOrderIdForUpload;
-        if (!file || !orderId) return;
-
-        setUploadingId(orderId);
-        try {
-            const currentOrder = orders.find(o => o.id === orderId);
-            const existingPhotos = parsePrepPhotos(currentOrder?.preparation_photo_url);
-
-            const compressedDataUrl = await compressImage(file);
-            const blob = dataURLtoBlob(compressedDataUrl);
-
-            const filename = `prep_${orderId}_${Date.now()}.jpg`;
-
-            const { error: uploadError } = await supabase.storage
-                .from('work-photos')
-                .upload(filename, blob, { contentType: 'image/jpeg' });
-
-            if (uploadError) throw uploadError;
-
-            const { data: urlData } = supabase.storage.from('work-photos').getPublicUrl(filename);
-            const publicUrl = urlData.publicUrl;
-
-            // Create new photo item and append to existing
-            const newPhoto: PrepPhoto = { url: publicUrl, location: activeTab };
-            const updatedPhotos = [...existingPhotos, newPhoto];
-            const updatedPhotoUrlField = stringifyPrepPhotos(updatedPhotos);
-
-            const { error: updateError } = await supabase
-                .from('sales_orders')
-                .update({ preparation_photo_url: updatedPhotoUrlField })
-                .eq('id', orderId);
-
-            if (updateError) throw updateError;
-
-            // 同步记录到 work_photos 表，以便在 Monthly Report (月度报告) 中能展示对应员工的备货照片
-            if (user) {
-                try {
-                    const uid = user.uid || user.id;
-                    const { data: pubUser } = await supabase
-                        .from('users_public')
-                        .select('employee_id, name')
-                        .eq('id', uid)
-                        .single();
-                        
-                    const empId = pubUser?.employee_id || user.employeeId || 'unknown';
-                    const empName = pubUser?.name || user.name || user.email?.split('@')[0] || 'Unknown';
-                    
-                    await supabase.from('work_photos').insert({
-                        employee_id: empId,
-                        employee_name: empName,
-                        photo_url: publicUrl,
-                        category: t('Cargo Prep / Stocking Photos'),
-                        user_note: t('Daily Prep Stocking Location Map - Order: {{var0}} - Location: {{var1}}', { var0: currentOrder?.orderNumber || 'Unknown', var1: activeTab }),
-                        location: activeTab,
-                        risk_flag: false
-                    });
-                } catch (dbErr) {
-                    console.error("Failed to insert cargo prep photo log:", dbErr);
-                }
-            }
-
-            setOrders(prev => prev.map(o => o.id === orderId ? { ...o, preparation_photo_url: updatedPhotoUrlField } : o));
-            alert(t('✅ {{var0}} stocking pictures uploaded successfully! / Cargo photo uploaded successfully!', { var0: activeTab }));
-        } catch (err: any) {
-            console.error("Failed to upload photo:", err);
-            alert("Upload failed: " + err.message);
-        } finally {
-            setUploadingId(null);
-            setSelectedOrderIdForUpload(null);
-        }
-    };
-
-
-    const handleDeletePhoto = async (orderId: string, photoIndex: number) => {
-        if (!window.confirm(t('Are you sure you want to delete this stocking photo? / Are you sure you want to delete this photo?'))) return;
-        
-        try {
-            const currentOrder = orders.find(o => o.id === orderId);
-            if (!currentOrder) return;
-            const existingPhotos = parsePrepPhotos(currentOrder.preparation_photo_url);
-            
-            const updatedPhotos = existingPhotos.filter((_, idx) => idx !== photoIndex);
-            const updatedPhotoUrlField = updatedPhotos.length > 0 ? stringifyPrepPhotos(updatedPhotos) : null;
-            
-            const { error } = await supabase
-                .from('sales_orders')
-                .update({ preparation_photo_url: updatedPhotoUrlField })
-                .eq('id', orderId);
-                
-            if (error) throw error;
-            
-            setOrders(prev => prev.map(o => o.id === orderId ? { ...o, preparation_photo_url: updatedPhotoUrlField } : o));
-            alert(t('✅ The photo has been successfully deleted! / Photo deleted successfully!'));
-        } catch (err: any) {
-            console.error("Failed to delete photo:", err);
-            alert("Delete failed: " + err.message);
-        }
-    };
-
+    // Data States
+    const [orders, setOrders] = useState<SalesOrder[]>([]);
+    const [tripsMap, setTripsMap] = useState<Record<string, any>>({});
+    const [lorries, setLorries] = useState<any[]>([]);
+    const [drivers, setDrivers] = useState<User[]>([]);
     const [skuNameMap, setSkuNameMap] = useState<Record<string, string>>({});
-    // Maps [LocationName] -> [ItemName] -> StockQty
     const [stockMapByLoc, setStockMapByLoc] = useState<Record<string, Record<string, number>>>({});
+    const [loading, setLoading] = useState(false);
 
-    // Fetch master item names and inventory status for SKU resolution and stock display
+    // Search & Expand States
+    const [searchTerm, setSearchTerm] = useState('');
+    const [expandedTripIds, setExpandedTripIds] = useState<Record<string, boolean>>({});
+
+    // Photo Upload States
+    const [uploadingTarget, setUploadingTarget] = useState<{ type: 'trip' | 'order'; id: string } | null>(null);
+    const [previewImageUrl, setPreviewImageUrl] = useState<string | null>(null);
+    const fileInputRef = useRef<HTMLInputElement>(null);
+
+    // ─── DATE HELPERS ─────────────────────────────────────────────────────────
+
+    const handleDateModeChange = (mode: 'today' | 'tomorrow' | 'pending_prep' | 'all_active' | 'custom') => {
+        setDateMode(mode);
+        if (mode === 'today') {
+            setSelectedDate(getLocalDateString());
+        } else if (mode === 'tomorrow') {
+            const tmr = new Date();
+            tmr.setDate(tmr.getDate() + 1);
+            setSelectedDate(getLocalDateString(tmr));
+        }
+    };
+
+    // ─── FETCH INITIAL DATA (Items, Stock, Lorries, Drivers) ──────────────────
+
     useEffect(() => {
-        const fetchItemData = async () => {
+        const fetchMasterData = async () => {
             try {
-                const [items, inventory] = await Promise.all([
+                const [items, inventory, lorriesRes, usersRes, sysUsersRes] = await Promise.all([
                     getV2Items(),
-                    getInventoryStatus()
+                    getInventoryStatus(),
+                    supabase.from('lorries').select('id, plate_number, driver_id, driver_name'),
+                    supabase.from('users_public').select('*'),
+                    supabase.from('sys_users_v2').select('id, auth_user_id, role_modules')
                 ]);
 
                 if (items) {
@@ -227,7 +213,6 @@ const OrderSummary: React.FC<OrderSummaryProps> = ({ user }) => {
                     setSkuNameMap(nameMap);
 
                     if (inventory) {
-                        // 1. Group stock by Location -> SKU
                         const locSkuStock: Record<string, Record<string, number>> = {};
                         inventory.forEach(inv => {
                             const loc = normalizeLoc(inv.loc_id || 'Unknown');
@@ -235,7 +220,6 @@ const OrderSummary: React.FC<OrderSummaryProps> = ({ user }) => {
                             locSkuStock[loc][inv.sku] = (locSkuStock[loc][inv.sku] || 0) + inv.current_stock;
                         });
 
-                        // 2. Map SKU back to Item Name per location
                         const finalStockMap: Record<string, Record<string, number>> = {};
                         Object.keys(locSkuStock).forEach(loc => {
                             finalStockMap[loc] = {};
@@ -246,14 +230,115 @@ const OrderSummary: React.FC<OrderSummaryProps> = ({ user }) => {
                         setStockMapByLoc(finalStockMap);
                     }
                 }
+
+                if (lorriesRes.data) {
+                    setLorries(lorriesRes.data);
+                }
+
+                if (usersRes.data) {
+                    const driverCapableSet = new Set<string>();
+                    (sysUsersRes.data || []).forEach((su: any) => {
+                        if (su.role_modules && Array.isArray(su.role_modules) && su.role_modules.includes('delivery-driver')) {
+                            if (su.id) driverCapableSet.add(su.id);
+                            if (su.auth_user_id) driverCapableSet.add(su.auth_user_id);
+                        }
+                    });
+
+                    const filteredDrivers = usersRes.data.filter(u =>
+                        u.role === 'Driver' || driverCapableSet.has(u.id)
+                    );
+                    setDrivers(filteredDrivers.map(u => ({
+                        uid: u.id,
+                        email: u.email,
+                        name: (u.name && u.name.trim() !== '') ? u.name : (u.email?.split('@')[0] || 'Driver'),
+                        role: 'Driver',
+                        factoryId: u.factory_id,
+                        base_location: u.base_location || u.factory_id,
+                    } as any)));
+                }
             } catch (err) {
-                console.error('Failed to fetch item data:', err);
+                console.error("Master data fetch failed:", err);
             }
         };
-        fetchItemData();
+
+        fetchMasterData();
     }, []);
 
-    // Resolve item name: prefer current name from master catalog, fallback to stored name
+    // ─── FETCH ORDERS & TRIPS ─────────────────────────────────────────────────
+
+    const fetchOrdersAndTrips = useCallback(async () => {
+        setLoading(true);
+        try {
+            let query = supabase
+                .from('sales_orders')
+                .select('*')
+                .neq('status', 'Cancelled')
+                .neq('status', 'Delivered');
+
+            if (dateMode === 'pending_prep') {
+                // Fetch all orders that still need prep / loading
+                query = query.in('status', ['New', 'Planned', 'Assigned', 'Ready-to-Ship', 'Loading']);
+            } else if (dateMode === 'all_active') {
+                // All active open orders
+            } else {
+                // today / tomorrow / custom
+                query = query.or(`order_date.eq.${selectedDate},deadline.eq.${selectedDate}`);
+            }
+
+            const { data: ordersData, error: ordersErr } = await query;
+            if (ordersErr) throw ordersErr;
+
+            const mappedOrders: SalesOrder[] = (ordersData || []).map(o => ({
+                id: o.id,
+                orderNumber: o.order_number || o.id.substring(0, 8),
+                customer: o.customer,
+                driverId: o.driver_id,
+                items: o.items || [],
+                status: o.status,
+                orderDate: o.order_date,
+                deadline: o.deadline,
+                notes: o.notes,
+                zone: o.zone,
+                deliveryAddress: o.delivery_address,
+                tripSequence: o.trip_sequence || o.stop_sequence || 0,
+                factoryId: o.factory_id,
+                trip_origin: o.trip_origin,
+                trip_drop_count: o.trip_drop_count,
+                trip_id: o.trip_id,
+                preparation_photo_url: o.preparation_photo_url,
+            }));
+
+            setOrders(mappedOrders);
+
+            // Fetch associated trips_v2
+            const tripIds = Array.from(new Set(mappedOrders.map(o => o.trip_id).filter(Boolean))) as string[];
+            if (tripIds.length > 0) {
+                const { data: tripsData } = await supabase
+                    .from('trips_v2')
+                    .select('*')
+                    .in('id', tripIds);
+
+                const tMap: Record<string, any> = {};
+                (tripsData || []).forEach(t => {
+                    tMap[t.id] = t;
+                });
+                setTripsMap(tMap);
+            } else {
+                setTripsMap({});
+            }
+        } catch (err) {
+            console.error("Failed to fetch orders/trips:", err);
+        } finally {
+            setLoading(false);
+        }
+    }, [selectedDate, dateMode]);
+
+    useEffect(() => {
+        fetchOrdersAndTrips();
+    }, [fetchOrdersAndTrips]);
+
+    // ─── ITEM NAME RESOLUTION ─────────────────────────────────────────────────
+
     const resolveItemName = (item: { product: string; sku?: string }) => {
         let name = (item.sku && skuNameMap[item.sku]) ? skuNameMap[item.sku] : item.product;
         if (name && name.includes('STRECTH FIL')) {
@@ -262,378 +347,721 @@ const OrderSummary: React.FC<OrderSummaryProps> = ({ user }) => {
         return name || item.product;
     };
 
-    // --- FETCH ---
-    const fetchData = useCallback(async () => {
+    // ─── AGGREGATE ORDERS INTO TRIPS (Smart Grouping) ─────────────────────────
+
+    const allTripGroups = useMemo(() => {
+        const groups: Record<string, TripGroup> = {};
+
+        orders.forEach(order => {
+            const extracted = extractTripIdentifier(order.notes);
+            const driverId = order.driverId || null;
+            const dateKey = (order.deadline || order.orderDate || '').slice(0, 10);
+            const factory = getOrderFactory(order);
+
+            let tripKey = '';
+            let tripNum = '';
+            let isFromV2 = false;
+
+            if (order.trip_id) {
+                tripKey = order.trip_id;
+                const tripV2 = tripsMap[order.trip_id];
+                tripNum = tripV2?.trip_number || `TRIP-${order.trip_id.slice(0, 8).toUpperCase()}`;
+                isFromV2 = true;
+            } else {
+                // Smart Grouping for manual / legacy orders without trip_id:
+                // Group orders for the same driver on the same delivery date with the same trip identifier/sequence
+                const driverObj = drivers.find(d => d.uid === driverId);
+                const driverPrefix = driverObj?.name ? driverObj.name.split(' ')[0].toUpperCase() : 'UNASSIGNED';
+                const dateCode = dateKey ? dateKey.replace(/-/g, '').slice(2) : '260917';
+                const tripTag = extracted.tripTag || (order.tripSequence ? `Trip ${order.tripSequence}` : 'Trip 1');
+
+                tripKey = `grouped_${driverId || 'unassigned'}_${dateKey}_${tripTag.replace(/\s+/g, '_')}`;
+                tripNum = `TRIP-${driverPrefix}-${dateCode}-${tripTag}`;
+            }
+
+            if (!groups[tripKey]) {
+                const tripV2 = isFromV2 ? tripsMap[tripKey] : null;
+                const resolvedDriverId = tripV2?.driver_id || driverId;
+                const driver = drivers.find(d => d.uid === resolvedDriverId);
+                const driverName = driver?.name || (resolvedDriverId ? 'Assigned Driver' : 'Unassigned / 待指派');
+
+                const lorryId = tripV2?.lorry_id || null;
+                let lorryPlate = '';
+                if (lorryId) {
+                    const l = lorries.find(x => x.id === lorryId);
+                    lorryPlate = l?.plate_number || '';
+                } else if (resolvedDriverId) {
+                    const l = lorries.find(x => x.driver_id === resolvedDriverId);
+                    lorryPlate = l?.plate_number || '';
+                }
+
+                groups[tripKey] = {
+                    tripId: tripKey,
+                    tripNumber: tripNum,
+                    driverId: resolvedDriverId,
+                    driverName,
+                    lorryId,
+                    lorryPlate,
+                    tripOrigin: factory,
+                    orders: [],
+                    totalRolls: 0,
+                    totalDrops: 0,
+                    zones: [],
+                    photos: [],
+                    isPrepared: tripV2?.status === 'Prepared' || tripV2?.status === 'Loading',
+                    tripSequence: order.tripSequence || extracted.tripSeq || 1,
+                    createdDate: dateKey,
+                    hasCod: false,
+                    hasNightDelivery: false,
+                    hasSelfPickup: false,
+                    specialNotes: []
+                };
+            }
+
+            groups[tripKey].orders.push(order);
+
+            // Tally rolls
+            const rollsInOrder = (order.items || []).reduce((sum, it) => sum + (Number(it.quantity) || 0), 0);
+            groups[tripKey].totalRolls += rollsInOrder;
+
+            // Collect zones
+            if (order.zone && !groups[tripKey].zones.includes(order.zone)) {
+                groups[tripKey].zones.push(order.zone);
+            }
+
+            // Check Special Badges (COD, Night Delivery, Self Pickup)
+            const noteText = `${order.notes || ''} ${(order as any).terms || ''}`.toLowerCase();
+            if (noteText.includes('c.o.d') || noteText.includes('cod') || noteText.includes('cash on delivery') || noteText.includes('bayar tunai')) {
+                groups[tripKey].hasCod = true;
+            }
+            if (noteText.includes('malam') || noteText.includes('night') || noteText.includes('petang')) {
+                groups[tripKey].hasNightDelivery = true;
+            }
+            if (noteText.includes('pickup') || noteText.includes('ambil sendiri') || noteText.includes('walk in')) {
+                groups[tripKey].hasSelfPickup = true;
+            }
+            if (order.notes && order.notes.trim() && !groups[tripKey].specialNotes.includes(order.notes.trim())) {
+                groups[tripKey].specialNotes.push(order.notes.trim());
+            }
+
+            // Collect prep photos
+            const orderPhotos = parsePrepPhotos(order.preparation_photo_url);
+            orderPhotos.forEach(p => {
+                if (!groups[tripKey].photos.some(existing => existing.url === p.url)) {
+                    groups[tripKey].photos.push(p);
+                }
+            });
+        });
+
+        // Finalize trip properties
+        Object.values(groups).forEach(g => {
+            g.totalDrops = g.orders.length;
+            if (g.photos.length > 0 || tripsMap[g.tripId]?.status === 'Prepared') {
+                g.isPrepared = true;
+            }
+            // Sort orders inside trip by stop sequence
+            g.orders.sort((a, b) => (a.tripSequence || 0) - (b.tripSequence || 0));
+        });
+
+        return Object.values(groups);
+    }, [orders, tripsMap, drivers, lorries]);
+
+    // ─── FILTER TRIPS BY FACTORY & WAREHOUSE ───────────────────────────────────
+
+    const filteredTrips = useMemo(() => {
+        return allTripGroups.filter(trip => {
+            // 1. Factory Hub check
+            if (trip.tripOrigin !== activeFactory) {
+                return false;
+            }
+
+            // 2. Sub-warehouse check (for Taiping)
+            if (activeFactory === 'Taiping' && activeTaipingWarehouse !== 'All') {
+                const hasItemInWarehouse = trip.orders.some(o =>
+                    (o.items || []).some(it => getItemWarehouse(it, o, activeFactory) === activeTaipingWarehouse)
+                );
+                if (!hasItemInWarehouse) return false;
+            }
+
+            // 3. Search Term filter
+            if (searchTerm.trim()) {
+                const term = searchTerm.toLowerCase();
+                const matchTrip = trip.tripNumber.toLowerCase().includes(term);
+                const matchDriver = trip.driverName.toLowerCase().includes(term);
+                const matchLorry = trip.lorryPlate.toLowerCase().includes(term);
+                const matchOrder = trip.orders.some(o =>
+                    o.orderNumber.toLowerCase().includes(term) ||
+                    o.customer.toLowerCase().includes(term) ||
+                    (o.deliveryAddress || '').toLowerCase().includes(term) ||
+                    (o.items || []).some(it => (it.product || '').toLowerCase().includes(term) || (it.sku || '').toLowerCase().includes(term))
+                );
+                return matchTrip || matchDriver || matchLorry || matchOrder;
+            }
+
+            return true;
+        });
+    }, [allTripGroups, activeFactory, activeTaipingWarehouse, searchTerm]);
+
+    // ─── PRODUCTION REQUIREMENTS SUMMARY ──────────────────────────────────────
+
+    const productionRequirements = useMemo(() => {
+        const summary: Record<string, { qty: number; sku?: string; category: string; uom: string }> = {};
+
+        filteredTrips.forEach(trip => {
+            trip.orders.forEach(order => {
+                if (order.status === 'Loaded' || order.status === 'Delivered' || order.status === 'Pending Approval') return;
+
+                (order.items || []).forEach(item => {
+                    const itemLoc = getItemWarehouse(item, order, activeFactory);
+
+                    // If Taiping and sub-warehouse is selected, only count items from that sub-warehouse
+                    if (activeFactory === 'Taiping' && activeTaipingWarehouse !== 'All' && itemLoc !== activeTaipingWarehouse) {
+                        return;
+                    }
+
+                    const name = resolveItemName(item);
+                    const uom = getItemUom(name, item.sku);
+
+                    if (!summary[name]) {
+                        summary[name] = { qty: 0, sku: item.sku, category: categorizeProduct(name, item.sku), uom };
+                    }
+                    summary[name].qty += Number(item.quantity) || 0;
+                    if (item.sku && !summary[name].sku) summary[name].sku = item.sku;
+                });
+            });
+        });
+
+        // Group by category
+        const grouped: Record<string, { product: string; qty: number; sku?: string; uom: string }[]> = {};
+        Object.entries(summary).forEach(([product, data]) => {
+            if (!grouped[data.category]) grouped[data.category] = [];
+            grouped[data.category].push({ product, qty: data.qty, sku: data.sku, uom: data.uom });
+        });
+
+        return grouped;
+    }, [filteredTrips, activeFactory, activeTaipingWarehouse]);
+
+    // ─── CATEGORIZE PRODUCTS ──────────────────────────────────────────────────
+
+    function categorizeProduct(name: string, sku?: string): string {
+        const s = (sku || '').toLowerCase();
+        const lower = name.toLowerCase();
+
+        if (s.startsWith('bw') || lower.includes('single') || lower.includes('double') || lower.includes('layer') || lower.includes('bubble')) return '🫧 Bubble Wrap / 气泡膜';
+        if (s.startsWith('sf') || s.includes('sf-') || lower.includes('stretch film') || lower.includes('strecth') || lower.includes('sf') || lower.includes('hand roll') || lower.includes('baby roll')) return '📦 Stretch Film / 拉伸膜';
+        if (lower.includes('tape') || lower.includes('awb') || lower.includes('cukupp') || lower.includes('airtube')) return '🏷️ Tapes & Packing / 胶带耗材';
+        if (lower.includes('foam') || lower.includes('pe foam')) return '🛡️ PE Foam / 珍珠棉';
+        if (lower.includes('corrugated') || lower.includes('box') || lower.includes('carton') || lower.includes('edge')) return '🗂️ Cartons / 纸箱角纸';
+        if (lower.includes('core') || lower.includes('paper')) return '📜 Paper Cores / 纸管';
+        return '🔹 Others / 其他';
+    }
+
+    // ─── PHOTO UPLOAD HANDLERS ────────────────────────────────────────────────
+
+    const triggerUpload = (type: 'trip' | 'order', id: string) => {
+        setUploadingTarget({ type, id });
+        if (fileInputRef.current) {
+            fileInputRef.current.value = '';
+            fileInputRef.current.click();
+        }
+    };
+
+    const handlePhotoSelect = async (e: React.ChangeEvent<HTMLInputElement>) => {
+        const file = e.target.files?.[0];
+        const target = uploadingTarget;
+        if (!file || !target) return;
+
         setLoading(true);
         try {
-            const [allUsersRes, sysUsersRes] = await Promise.all([
-                supabase.from('users_public').select('*'),
-                supabase.from('sys_users_v2').select('id, auth_user_id, role_modules')
-            ]);
+            const compressed = await compressImage(file);
+            const blob = dataURLtoBlob(compressed);
+            const uploadWarehouse = activeFactory === 'Taiping' ? activeTaipingWarehouse : activeFactory;
+            const filename = `prep_${target.type}_${target.id}_${Date.now()}.jpg`;
 
-            const allUsers = allUsersRes.data;
-            if (allUsers) {
-                const driverCapableSet = new Set<string>();
-                (sysUsersRes.data || []).forEach((su: any) => {
-                    if (su.role_modules && Array.isArray(su.role_modules) && su.role_modules.includes('delivery-driver')) {
-                        if (su.id) driverCapableSet.add(su.id);
-                        if (su.auth_user_id) driverCapableSet.add(su.auth_user_id);
+            const { error: uploadError } = await supabase.storage
+                .from('work-photos')
+                .upload(filename, blob, { contentType: 'image/jpeg' });
+
+            if (uploadError) throw uploadError;
+
+            const { data: urlData } = supabase.storage.from('work-photos').getPublicUrl(filename);
+            const publicUrl = urlData.publicUrl;
+            const newPhoto: PrepPhoto = { url: publicUrl, location: uploadWarehouse };
+
+            if (target.type === 'trip') {
+                // Whole Trip Upload: update trips_v2 and all orders in this trip
+                const trip = allTripGroups.find(g => g.tripId === target.id);
+                if (trip) {
+                    const updatedPhotos = [...trip.photos, newPhoto];
+                    const photoString = stringifyPrepPhotos(updatedPhotos);
+
+                    // 1. Update trip in trips_v2 if real trip
+                    if (!target.id.startsWith('grouped_') && !target.id.startsWith('solo_')) {
+                        await supabase
+                            .from('trips_v2')
+                            .update({
+                                preparation_photo_url: photoString,
+                                status: 'Prepared'
+                            })
+                            .eq('id', target.id);
                     }
-                });
 
-                const filtered = allUsers.filter(u =>
-                    u.role === 'Driver' || driverCapableSet.has(u.id)
-                );
-                setDrivers(filtered.map(u => ({
-                    uid: u.id,
-                    email: u.email,
-                    name: (u.name && u.name.trim() !== '') ? u.name : (u.email?.split('@')[0] || 'Unknown Driver'),
-                    role: 'Driver',
-                    factoryId: u.factory_id,
-                } as any)));
+                    // 2. Cascade to all sales_orders in this trip
+                    const orderIds = trip.orders.map(o => o.id);
+                    await supabase
+                        .from('sales_orders')
+                        .update({ preparation_photo_url: photoString })
+                        .in('id', orderIds);
+                }
+            } else {
+                // Single DO Upload
+                const order = orders.find(o => o.id === target.id);
+                if (order) {
+                    const existingPhotos = parsePrepPhotos(order.preparation_photo_url);
+                    const updatedPhotos = [...existingPhotos, newPhoto];
+                    const photoString = stringifyPrepPhotos(updatedPhotos);
+
+                    await supabase
+                        .from('sales_orders')
+                        .update({ preparation_photo_url: photoString })
+                        .eq('id', target.id);
+                }
             }
 
-            const { data: ordersData } = await supabase
-                .from('sales_orders')
-                .select('*')
-                .neq('status', 'Cancelled')
-                .neq('status', 'Delivered')
-                .neq('status', 'Loaded')
-                .or(`order_date.eq.${selectedDate},deadline.eq.${selectedDate}`);
-
-            if (ordersData) {
-                const mapped: SalesOrder[] = ordersData.map(o => ({
-                    id: o.id,
-                    orderNumber: o.order_number || o.id.substring(0, 8),
-                    customer: o.customer,
-                    driverId: o.driver_id,
-                    items: o.items || [],
-                    status: o.status,
-                    orderDate: o.order_date,
-                    deadline: o.deadline,
-                    notes: o.notes,
-                    zone: o.zone,
-                    deliveryAddress: o.delivery_address,
-                    tripSequence: o.trip_sequence || 0,
-                    factoryId: o.factory_id,
-                    trip_origin: o.trip_origin,
-                    trip_drop_count: o.trip_drop_count,
-                    preparation_photo_url: o.preparation_photo_url,
-                }));
-                
-                const getTenChars = (s?: string) => s ? s.slice(0, 10) : '';
-                const filtered = mapped.filter(o => {
-                    const effective = getTenChars(o.deadline) || getTenChars(o.orderDate);
-                    return effective === selectedDate;
-                });
-                setOrders(filtered);
+            // Sync to work_photos log for HR monthly reports
+            if (user) {
+                try {
+                    const uid = user.uid || user.id;
+                    const empName = user.name || user.email?.split('@')[0] || 'Operator';
+                    await supabase.from('work_photos').insert({
+                        employee_id: uid,
+                        employee_name: empName,
+                        photo_url: publicUrl,
+                        category: t('Cargo Prep / Stocking Photos'),
+                        user_note: `Daily Prep - ${target.type.toUpperCase()}: ${target.id} - Factory: ${activeFactory}`,
+                        location: uploadWarehouse,
+                        risk_flag: false
+                    });
+                } catch (dbErr) {
+                    console.error("work_photos insert error:", dbErr);
+                }
             }
-        } catch (err) {
-            console.error('fetchData error:', err);
+
+            await fetchOrdersAndTrips();
+            alert(t('✅ {{var0}} stocking pictures uploaded successfully! / Cargo photo uploaded successfully!', { var0: uploadWarehouse }));
+        } catch (err: any) {
+            console.error("Upload failed:", err);
+            alert("Upload failed: " + err.message);
         } finally {
             setLoading(false);
+            setUploadingTarget(null);
         }
-    }, [selectedDate]);
+    };
 
-    useEffect(() => { fetchData(); }, [fetchData]);
-
-    // --- LOCATION CLASSIFICATION (Item-Level) ---
-    // Each order can appear in multiple tabs if its items span different warehouses.
-    const locationOrders: Record<Location, SalesOrder[]> = {};
-    LOCATIONS.forEach(loc => locationOrders[loc] = []);
-
-    orders.forEach(o => {
-        const seenLocs = new Set<string>();
-        if (o.items.length === 0) {
-            // No items: use order-level fallback
-            const origin = o.trip_origin?.toUpperCase();
-            const fallbackLoc = origin === 'NILAI' ? 'Nilai' : (origin === 'KELANTAN' ? 'Kelantan' : (origin === 'JOHOR' ? 'Johor' : (LOCATIONS[0] || 'SPD')));
-            seenLocs.add(fallbackLoc);
-        } else {
-            o.items.forEach(item => {
-                seenLocs.add(getItemLocation(item, o));
-            });
+    // Toggle Mark Prepared for Trip
+    const handleToggleMarkPrepared = async (trip: TripGroup) => {
+        const newStatus = trip.isPrepared ? 'Planning' : 'Prepared';
+        try {
+            if (!trip.tripId.startsWith('grouped_') && !trip.tripId.startsWith('solo_')) {
+                await supabase
+                    .from('trips_v2')
+                    .update({ status: newStatus })
+                    .eq('id', trip.tripId);
+            }
+            await fetchOrdersAndTrips();
+        } catch (err: any) {
+            console.error("Toggle prepared status failed:", err);
         }
-        seenLocs.forEach(loc => {
-            if (!locationOrders[loc]) locationOrders[loc] = [];
-            locationOrders[loc].push(o);
-        });
-    });
+    };
 
-    const activeTabOrders = [...(locationOrders[activeTab] || [])].sort(
-        (a, b) => (a.tripSequence ?? 99) - (b.tripSequence ?? 99)
-    );
+    // Toggle Trip expansion
+    const toggleTripExpand = (tripId: string) => {
+        setExpandedTripIds(prev => ({
+            ...prev,
+            [tripId]: !prev[tripId]
+        }));
+    };
 
-    const getDriverName = (id?: string) =>
-        drivers.find(d => d.uid === id)?.name || 'Unknown Driver';
+    // ─── DND REASSIGNMENT WITH CROSS-FACTORY GUARDRAIL ────────────────────────
 
-    // --- DND HANDLER (mirrors DeliveryOrderManagement logic) ---
     const onDragEnd = async (result: DropResult) => {
         const { destination, source, draggableId } = result;
         if (!destination) return;
         if (destination.droppableId === source.droppableId && destination.index === source.index) return;
 
         const newDriverId = destination.droppableId === 'unassigned' ? null : destination.droppableId;
-        const oldDriverId = source.droppableId === 'unassigned' ? null : source.droppableId;
-        const orderId = draggableId;
+        const tripId = draggableId;
+        const targetTrip = allTripGroups.find(g => g.tripId === tripId);
+        if (!targetTrip) return;
 
-        // Get destination column's current orders
-        const destOrders = activeTabOrders
-            .filter(o => {
-                if (destination.droppableId === 'unassigned') return !o.driverId;
-                return o.driverId === destination.droppableId;
-            })
-            .sort((a, b) => (a.tripSequence || 0) - (b.tripSequence || 0));
+        // 🛡️ Cross-Factory Guardrail Check
+        if (newDriverId) {
+            const targetDriver = drivers.find(d => d.uid === newDriverId);
+            const driverBase = (targetDriver as any)?.base_location || targetDriver?.factoryId;
+            if (driverBase && targetTrip.tripOrigin) {
+                const normBase = driverBase.toLowerCase().trim();
+                const normTrip = targetTrip.tripOrigin.toLowerCase().trim();
+                const isMatch = normBase === normTrip ||
+                               (normTrip === 'taiping' && (normBase === 't1' || normBase === 'spd' || normBase.includes('opm'))) ||
+                               (normTrip === 'nilai' && normBase === 'n1');
 
-        const movedOrder = orders.find(o => o.id === orderId);
-        if (!movedOrder) return;
-
-        // Build new order for destination
-        if (newDriverId === oldDriverId) {
-            // Same column reorder
-            destOrders.splice(source.index, 1);
-            destOrders.splice(destination.index, 0, movedOrder);
-        } else {
-            // Cross-column move
-            destOrders.splice(destination.index, 0, { ...movedOrder, driverId: newDriverId || undefined });
+                if (!isMatch) {
+                    const proceed = window.confirm(
+                        `⚠️ 跨厂区指派提醒 / Cross-hub Reassignment Warning:\n\n` +
+                        `司机 ${targetDriver?.name} 的常驻基地是 [${driverBase}]，而当前车次的出发厂区是 [${targetTrip.tripOrigin}]。\n\n` +
+                        `确定要将此车次指派给跨区域司机吗？`
+                    );
+                    if (!proceed) {
+                        return; // Abort drag & drop
+                    }
+                }
+            }
         }
 
-        // Optimistic update
-        const sequenceMap = new Map<string, number>();
-        destOrders.forEach((o, i) => sequenceMap.set(o.id, i + 1));
-
-        setOrders(prev => prev.map(o => {
-            let updated = o;
-            if (o.id === orderId && newDriverId !== oldDriverId) {
-                updated = { ...o, driverId: newDriverId || undefined };
-            }
-            if (sequenceMap.has(o.id)) {
-                updated = { ...updated, tripSequence: sequenceMap.get(o.id) };
-            }
-            return updated;
-        }));
-
-        // Persist
         try {
-            if (newDriverId !== oldDriverId) {
-                await supabase.from('sales_orders').update({ driver_id: newDriverId }).eq('id', orderId);
+            // Find lorry tied to driver if applicable
+            const matchedLorry = lorries.find(l => l.driver_id === newDriverId);
+            const lorryId = matchedLorry ? matchedLorry.id : null;
+
+            if (!tripId.startsWith('grouped_') && !tripId.startsWith('solo_')) {
+                await supabase
+                    .from('trips_v2')
+                    .update({
+                        driver_id: newDriverId,
+                        lorry_id: lorryId
+                    })
+                    .eq('id', tripId);
             }
-            await Promise.all(
-                destOrders.map((o, i) =>
-                    supabase.from('sales_orders').update({ trip_sequence: i + 1 }).eq('id', o.id)
-                )
-            );
+
+            // Cascade driver assignment to all orders in this trip
+            const orderIds = targetTrip.orders.map(o => o.id);
+            await supabase
+                .from('sales_orders')
+                .update({ driver_id: newDriverId })
+                .in('id', orderIds);
+
+            await fetchOrdersAndTrips();
         } catch (err) {
-            console.error('DnD persist error:', err);
-            fetchData();
+            console.error("Trip reassignment error:", err);
+            await fetchOrdersAndTrips();
         }
     };
 
-    // Production summary — only count items belonging to the active tab
-    const productSummary = activeTabOrders.reduce((acc, order) => {
-        // Exclude orders that have already been loaded, delivered, or are pending amendment approval
-        if (order.status === 'Loaded' || order.status === 'Delivered' || order.status === 'Pending Approval') return acc;
+    // ─── BUILD COLUMNS FOR CURRENT FACTORY ────────────────────────────────────
 
-        order.items.forEach(item => {
-            if (getItemLocation(item, order) !== activeTab) return;
-            const name = resolveItemName(item);
-            if (!acc[name]) acc[name] = { qty: 0, sku: item.sku };
-            acc[name].qty += (item.quantity || 0);
-            if (item.sku && !acc[name].sku) acc[name].sku = item.sku;
+    const factoryDrivers = useMemo(() => {
+        const activeDriverIdsInTrips = new Set(filteredTrips.map(t => t.driverId).filter(Boolean));
+        return drivers.filter(d =>
+            activeDriverIdsInTrips.has(d.uid) ||
+            !d.factoryId ||
+            d.factoryId.toLowerCase() === activeFactory.toLowerCase() ||
+            (activeFactory === 'Taiping' && (d.factoryId === 'T1' || d.factoryId === 'SPD'))
+        );
+    }, [drivers, filteredTrips, activeFactory]);
+
+    // Trips counts for Tab badges
+    const factoryTripCounts = useMemo(() => {
+        const counts: Record<FactoryHub, number> = {
+            Taiping: 0,
+            Nilai: 0,
+            Kelantan: 0,
+            Johor: 0
+        };
+        allTripGroups.forEach(t => {
+            if (counts[t.tripOrigin] !== undefined) {
+                counts[t.tripOrigin]++;
+            }
         });
-        return acc;
-    }, {} as Record<string, { qty: number; sku?: string }>);
-
-    // Categorization logic
-    const categorizeProduct = (name: string, sku?: string): string => {
-        const s = (sku || '').toLowerCase();
-        const lower = name.toLowerCase();
-        
-        if (s.startsWith('bw') || lower.includes('single') || lower.includes('double') || lower.includes('layer') || lower.includes('bubble')) return '🫧 Bubble Wrap';
-        if (s.startsWith('sf') || s.includes('sf-') || lower.includes('stretch film') || lower.includes('strecth') || lower.includes('sf') || lower.includes('hand roll')) return '📦 Stretch Film';
-        if (lower.includes('foam') || lower.includes('pe foam')) return '🛡️ PE Foam';
-        if (lower.includes('corrugated') || lower.includes('box') || lower.includes('carton') || lower.includes('edge')) return '🗂️ Cartons & Edge Protectors';
-        if (lower.includes('core') || lower.includes('paper')) return '📜 Paper Cores';
-        return '🔹 Others';
-    };
-
-    const groupedSummary = Object.entries(productSummary).reduce((acc, [product, data]) => {
-        const cat = categorizeProduct(product, data.sku);
-        if (!acc[cat]) acc[cat] = [];
-        acc[cat].push({ product, qty: data.qty, sku: data.sku });
-        return acc;
-    }, {} as Record<string, { product: string; qty: number; sku?: string }[]>);
-
-    // Build column list: unassigned + all drivers who have orders in this tab
-    const driverIdsInTab = [...new Set(
-        activeTabOrders.filter(o => o.driverId).map(o => o.driverId!)
-    )];
+        return counts;
+    }, [allTripGroups]);
 
     return (
         <DragDropContext onDragEnd={onDragEnd}>
-            <div className="p-6 max-w-7xl mx-auto pb-20">
-                {/* Header */}
-                <div className="flex flex-col md:flex-row justify-between items-start md:items-center mb-8 gap-4">
+            <div className="p-4 sm:p-6 max-w-7xl mx-auto pb-24 text-slate-200">
+                {/* ── Top Header ─────────────────────────────────────────────── */}
+                <div className="flex flex-col md:flex-row justify-between items-start md:items-center mb-6 gap-4">
                     <div>
-                        <h1 className="text-2xl font-bold text-white mb-1">Daily Prep List</h1>
-                        <p className="text-slate-400 text-sm">Drag trips to reassign drivers or reorder sequence</p>
+                        <div className="flex items-center gap-2 mb-1">
+                            <h1 className="text-xl sm:text-2xl font-black tracking-tight text-white flex items-center gap-2">
+                                <span>{t('Daily Prep (production preparation)')}</span>
+                                <span className="text-xs px-2.5 py-0.5 rounded-full bg-blue-500/20 text-blue-400 font-mono font-bold border border-blue-500/30">
+                                    V2 Trip-Based
+                                </span>
+                            </h1>
+                        </div>
+                        <p className="text-slate-400 text-xs">
+                            {t('Drag trips to reassign drivers or reorder sequence')} · {t('支持整车一键备货拍照与总卷数清点')}
+                        </p>
                     </div>
-                    <div className="flex items-center gap-2 bg-[#1a1a1e] border border-white/10 p-1.5 rounded-xl">
-                        <Calendar className="text-gray-500 ml-2" size={18} />
-                        <input
-                            type="date"
-                            value={selectedDate}
-                            onChange={(e) => setSelectedDate(e.target.value)}
-                            className="bg-transparent border-none text-white font-mono text-sm focus:ring-0 outline-none [color-scheme:dark]"
-                        />
+
+                    {/* Date Selector & Quick Filters */}
+                    <div className="flex flex-wrap items-center gap-2">
+                        <div className="flex items-center bg-slate-900/80 border border-slate-800 rounded-xl p-1 text-xs">
+                            <button
+                                onClick={() => handleDateModeChange('today')}
+                                className={`px-2.5 py-1 rounded-lg font-bold transition-all ${dateMode === 'today' ? 'bg-blue-600 text-white shadow-sm' : 'text-slate-400 hover:text-white'}`}
+                            >
+                                {t('Today')}
+                            </button>
+                            <button
+                                onClick={() => handleDateModeChange('tomorrow')}
+                                className={`px-2.5 py-1 rounded-lg font-bold transition-all ${dateMode === 'tomorrow' ? 'bg-blue-600 text-white shadow-sm' : 'text-slate-400 hover:text-white'}`}
+                            >
+                                {t('Tomorrow')}
+                            </button>
+                            <button
+                                onClick={() => handleDateModeChange('pending_prep')}
+                                className={`px-2.5 py-1 rounded-lg font-bold flex items-center gap-1 transition-all ${dateMode === 'pending_prep' ? 'bg-emerald-600 text-white shadow-sm' : 'text-emerald-400 hover:text-emerald-300'}`}
+                                title="Show all active orders needing preparation"
+                            >
+                                <Zap size={12} />
+                                <span>{t('待备货')}</span>
+                            </button>
+                            <button
+                                onClick={() => handleDateModeChange('all_active')}
+                                className={`px-2.5 py-1 rounded-lg font-bold transition-all ${dateMode === 'all_active' ? 'bg-amber-600 text-white shadow-sm' : 'text-slate-400 hover:text-white'}`}
+                            >
+                                {t('All Active')}
+                            </button>
+                        </div>
+
+                        <div className="flex items-center gap-2 bg-slate-900 border border-slate-800 px-3 py-1.5 rounded-xl">
+                            <Calendar className="text-slate-500 shrink-0" size={15} />
+                            <input
+                                type="date"
+                                value={selectedDate}
+                                onChange={(e) => {
+                                    setSelectedDate(e.target.value);
+                                    setDateMode('custom');
+                                }}
+                                className="bg-transparent border-none text-white font-mono text-xs focus:ring-0 outline-none [color-scheme:dark]"
+                            />
+                        </div>
+
+                        <button
+                            onClick={fetchOrdersAndTrips}
+                            className="p-2 bg-slate-900 border border-slate-800 rounded-xl hover:bg-slate-800 text-slate-400 hover:text-white transition-all active:scale-95"
+                            title="Refresh"
+                        >
+                            <RefreshCw size={15} className={loading ? 'animate-spin text-blue-400' : ''} />
+                        </button>
                     </div>
                 </div>
 
-                {/* Location Tabs */}
-                <div className="flex mb-6 bg-[#0a0a0c] rounded-xl overflow-hidden border border-white/5">
-                    {LOCATIONS.map(loc => {
-                        const c = LOCATION_COLOR[loc];
-                        const isActive = activeTab === loc;
-                        const activeStyle = {
-                            blue: 'border-blue-500 text-blue-400 bg-blue-500/10',
-                            emerald: 'border-emerald-500 text-emerald-400 bg-emerald-500/10',
-                        }[c];
+                {/* ── Search Bar ─────────────────────────────────────────────── */}
+                <div className="mb-5 relative">
+                    <Search size={15} className="absolute left-3.5 top-3 text-slate-500" />
+                    <input
+                        type="text"
+                        value={searchTerm}
+                        onChange={e => setSearchTerm(e.target.value)}
+                        placeholder={t('Search DO, customer, product, driver, or lorry plate...')}
+                        className="w-full bg-slate-900/90 border border-slate-800 pl-10 pr-4 py-2 rounded-xl text-xs text-white placeholder:text-slate-600 focus:outline-none focus:border-blue-500/60"
+                    />
+                </div>
+
+                {/* ── Top Factory Tabs (4 Hubs) ─────────────────────────────── */}
+                <div className="flex mb-3 bg-slate-950 p-1.5 rounded-2xl border border-slate-800/80 shadow-inner overflow-x-auto gap-1">
+                    {FACTORY_HUBS.map(hub => {
+                        const isActive = activeFactory === hub;
+                        const count = factoryTripCounts[hub] || 0;
                         return (
                             <button
-                                key={loc}
-                                onClick={() => setActiveTab(loc)}
-                                className={`flex-1 py-4 text-center font-bold text-sm uppercase tracking-wider transition-all border-b-2 ${isActive ? activeStyle : 'border-transparent text-gray-500 hover:text-gray-300 hover:bg-white/5'
-                                    }`}
+                                key={hub}
+                                onClick={() => setActiveFactory(hub)}
+                                className={`flex-1 min-w-[110px] py-2.5 px-3 rounded-xl font-bold text-xs uppercase tracking-wider transition-all flex items-center justify-center gap-2 ${
+                                    isActive
+                                        ? 'bg-gradient-to-r from-blue-600 to-indigo-600 text-white shadow-lg shadow-blue-500/20'
+                                        : 'text-slate-400 hover:text-slate-200 hover:bg-slate-900/60'
+                                }`}
                             >
-                                {loc}
-                                <span className="ml-2 px-2 py-0.5 rounded-full bg-white/10 text-xs">
-                                    {locationOrders[loc].length}
+                                <span>{hub}</span>
+                                <span className={`px-1.5 py-0.2 rounded-full text-[10px] font-mono ${isActive ? 'bg-white/20 text-white' : 'bg-slate-800 text-slate-400'}`}>
+                                    {count} {t('Trips')}
                                 </span>
                             </button>
                         );
                     })}
                 </div>
 
-                {loading ? (
-                    <div className="text-center py-20 text-gray-500 animate-pulse">Loading orders...</div>
-                ) : (
-                    <div>
-                        {/* Production Summary */}
-                        <div className="mb-8 bg-blue-500/5 border border-blue-500/20 rounded-xl p-4">
-                            <h2 className="text-sm font-bold text-blue-400 uppercase tracking-wider mb-3 flex items-center gap-2">
-                                <Package size={16} /> Production Requirements — {activeTab}
-                            </h2>
-                            {Object.keys(productSummary).length === 0 ? (
-                                <div className="text-xs text-gray-500 italic">No production requirements found.</div>
-                            ) : (
-                                <div className="flex flex-col gap-6">
-                                    {Object.entries(groupedSummary).map(([category, items]) => (
-                                        <div key={category}>
-                                            <h3 className="text-[11px] font-bold text-blue-300/70 border-b border-blue-500/20 pb-1 mb-3 uppercase tracking-wider">
-                                                {category}
-                                            </h3>
-                                            <div className="grid grid-cols-2 md:grid-cols-4 lg:grid-cols-6 gap-3">
-                                                {items.map(({ product, qty, sku }) => {
-                                                    let lookupLoc = activeTab;
-                                                    // Generalized fallback for sub-locations sharing a parent warehouse
-                                                    if (!stockMapByLoc[lookupLoc] && STOCK_FALLBACK[lookupLoc]) {
-                                                        lookupLoc = STOCK_FALLBACK[lookupLoc];
-                                                    }
-                                                    const stock = stockMapByLoc[lookupLoc]?.[product] || 0;
-                                                    const deficit = qty - stock;
-                                                    const hasDeficit = deficit > 0;
-                                                    return (
-                                                    <div key={product} className={`bg-[#121215] border rounded-xl p-3 flex flex-col justify-between relative overflow-hidden transition-all ${hasDeficit ? 'border-red-500/40 shadow-[0_0_15px_rgba(239,68,68,0.08)]' : 'border-white/10 hover:border-white/20'}`}>
-                                                        {hasDeficit && (
-                                                            <div className="absolute top-2.5 right-2.5 w-2 h-2 bg-red-500 rounded-full shadow-[0_0_8px_rgba(239,68,68,0.9)]" title="Shortage"></div>
-                                                        )}
-                                                        {/* 名字为主，SKU为辅 */}
-                                                        <div className="flex flex-col mb-2.5 pr-3 min-w-0">
-                                                            <span className="text-xs sm:text-sm font-black text-white tracking-wide truncate leading-snug" title={product}>
-                                                                {product}
-                                                            </span>
-                                                            <span className="text-[10px] text-cyan-400 font-mono font-medium truncate mt-0.5" title={sku ? `SKU: ${sku}` : product}>
-                                                                {sku || product}
-                                                            </span>
-                                                        </div>
-                                                        <div className="flex items-end justify-between pt-2 border-t border-white/5">
-                                                            <div className="flex flex-col">
-                                                                <span className="text-[9px] text-gray-400 font-bold uppercase tracking-wider">Req</span>
-                                                                <span className="text-lg font-black text-white leading-none mt-1">{qty}</span>
-                                                            </div>
-                                                            <div className="w-px h-6 bg-white/10 mx-2"></div>
-                                                            <div className="flex flex-col items-end">
-                                                                <span className="text-[9px] text-gray-400 font-bold uppercase tracking-wider">Phy Stock</span>
-                                                                <span className={`text-sm font-black leading-none mt-1 ${stock >= qty ? 'text-green-400' : 'text-amber-400'}`}>{stock}</span>
-                                                            </div>
-                                                        </div>
-                                                        {hasDeficit && (
-                                                            <div className="mt-2 text-[9px] font-bold text-red-400 bg-red-500/10 border border-red-500/20 px-2 py-0.5 rounded-md truncate w-fit">
-                                                                Shortage: {deficit}
-                                                            </div>
-                                                        )}
-                                                    </div>
-                                                    );
-                                                })}
-                                            </div>
-                                        </div>
-                                    ))}
-                                </div>
-                            )}
-                        </div>
-
-                        {/* Kanban Columns */}
-                        {activeTabOrders.length === 0 ? (
-                            <div className="text-center py-20 text-gray-600 italic border border-dashed border-white/5 rounded-xl">
-                                No orders for {activeTab} on this date.
-                            </div>
-                        ) : (
-                            <div className="grid grid-cols-1 md:grid-cols-2 xl:grid-cols-3 gap-6">
-                                {/* Unassigned Column */}
-                                {(() => {
-                                    const colOrders = activeTabOrders.filter(o => !o.driverId).sort((a, b) => (a.tripSequence || 0) - (b.tripSequence || 0));
-                                    if (colOrders.length === 0 && driverIdsInTab.length > 0) return null;
-                                    return (
-                                        <DriverColumn
-                                            key="unassigned"
-                                            droppableId="unassigned"
-                                            label="📦 Unassigned"
-                                            orders={colOrders}
-                                            isUnassigned
-                                            resolveItemName={resolveItemName}
-                                            onUploadClick={handleUploadButtonClick}
-                                            onDeleteClick={handleDeletePhoto}
-                                            onPhotoClick={setPreviewImageUrl}
-                                            uploadingId={uploadingId}
-                                            isDragDisabled={user?.role === 'Operator'}
-                                        />
-                                    );
-                                })()}
-
-                                {/* Driver Columns */}
-                                {driverIdsInTab.map(driverId => {
-                                    const colOrders = activeTabOrders.filter(o => o.driverId === driverId).sort((a, b) => (a.tripSequence || 0) - (b.tripSequence || 0));
-                                    return (
-                                        <DriverColumn
-                                            key={driverId}
-                                            droppableId={driverId}
-                                            label={getDriverName(driverId)}
-                                            orders={colOrders}
-                                            resolveItemName={resolveItemName}
-                                            onUploadClick={handleUploadButtonClick}
-                                            onDeleteClick={handleDeletePhoto}
-                                            onPhotoClick={setPreviewImageUrl}
-                                            uploadingId={uploadingId}
-                                            isDragDisabled={user?.role === 'Operator'}
-                                        />
-                                    );
-                                })}
-                            </div>
-                        )}
+                {/* ── Sub-Warehouse Tabs (For Taiping Hub) ────────────────────── */}
+                {activeFactory === 'Taiping' && (
+                    <div className="flex flex-wrap items-center gap-1.5 mb-6 px-1">
+                        <span className="text-[10px] font-black text-slate-500 uppercase tracking-widest mr-1">
+                            {t('Warehouse')}:
+                        </span>
+                        {TAIPING_WAREHOUSES.map(wh => {
+                            const isActive = activeTaipingWarehouse === wh;
+                            return (
+                                <button
+                                    key={wh}
+                                    onClick={() => setActiveTaipingWarehouse(wh)}
+                                    className={`px-3 py-1 rounded-lg text-xs font-bold transition-all ${
+                                        isActive
+                                            ? 'bg-blue-500/20 border border-blue-500/50 text-blue-400 shadow-sm'
+                                            : 'bg-slate-900/70 border border-slate-800/80 text-slate-400 hover:text-slate-200'
+                                    }`}
+                                >
+                                    {wh === 'All' ? t('All Warehouses') : wh}
+                                </button>
+                            );
+                        })}
                     </div>
                 )}
-                {/* Hidden input for mobile camera upload */}
-                <input 
+
+                {/* ── Production Requirements Summary Card ──────────────────── */}
+                <div className="mb-8 bg-slate-950/80 border border-blue-500/20 rounded-2xl p-4 sm:p-5 shadow-xl relative overflow-hidden">
+                    <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-2 mb-4 pb-3 border-b border-white/5">
+                        <h2 className="text-xs sm:text-sm font-bold text-blue-400 uppercase tracking-wider flex items-center gap-2">
+                            <Package size={16} className="text-blue-400" />
+                            <span>{t('Production Requirements')}</span>
+                            <span className="text-slate-400 text-xs font-mono font-normal">
+                                ({activeFactory}{activeFactory === 'Taiping' ? ` · ${activeTaipingWarehouse}` : ''})
+                            </span>
+                        </h2>
+                        <div className="text-[11px] text-slate-400 font-mono">
+                            {t('Total Trips')}: <strong className="text-white font-bold">{filteredTrips.length}</strong> · {t('Total Rolls')}: <strong className="text-amber-400 font-bold">{filteredTrips.reduce((acc, t) => acc + t.totalRolls, 0)}</strong>
+                        </div>
+                    </div>
+
+                    {Object.keys(productionRequirements).length === 0 ? (
+                        <div className="text-xs text-slate-500 italic py-4 text-center">
+                            {t('No production requirements found for this selection.')}
+                        </div>
+                    ) : (
+                        <div className="space-y-6">
+                            {Object.entries(productionRequirements).map(([category, items]) => (
+                                <div key={category}>
+                                    <h3 className="text-[10px] font-black text-blue-300/80 uppercase tracking-widest mb-2.5 pb-1 border-b border-blue-500/10">
+                                        {category}
+                                    </h3>
+                                    <div className="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-4 lg:grid-cols-6 gap-2.5">
+                                        {items.map(({ product, qty, sku, uom }) => {
+                                            let lookupLoc = activeFactory === 'Taiping' ? (activeTaipingWarehouse === 'All' ? 'OPM Lama' : activeTaipingWarehouse) : activeFactory;
+                                            if (!stockMapByLoc[lookupLoc] && STOCK_FALLBACK[lookupLoc]) {
+                                                lookupLoc = STOCK_FALLBACK[lookupLoc];
+                                            }
+                                            const stock = stockMapByLoc[lookupLoc]?.[product] || 0;
+                                            const deficit = qty - stock;
+                                            const hasDeficit = deficit > 0;
+                                            const uomShort = uom.split('/')[0].trim();
+
+                                            return (
+                                                <div
+                                                    key={product}
+                                                    className={`bg-slate-900/90 border rounded-xl p-2.5 flex flex-col justify-between relative transition-all ${
+                                                        hasDeficit
+                                                            ? 'border-red-500/50 shadow-[0_0_12px_rgba(239,68,68,0.12)]'
+                                                            : 'border-slate-800 hover:border-slate-700'
+                                                    }`}
+                                                >
+                                                    {hasDeficit && (
+                                                        <div className="absolute top-2 right-2 w-2 h-2 bg-red-500 rounded-full animate-pulse shadow-[0_0_8px_rgba(239,68,68,0.9)]" title="Shortage" />
+                                                    )}
+                                                    <div className="pr-2 min-w-0 mb-2">
+                                                        <div className="text-xs font-black text-white truncate" title={product}>
+                                                            {product}
+                                                        </div>
+                                                        <div className="text-[9px] text-cyan-400 font-mono truncate" title={sku || product}>
+                                                            {sku || product}
+                                                        </div>
+                                                    </div>
+
+                                                    <div className="pt-2 border-t border-white/5 flex items-end justify-between">
+                                                        <div>
+                                                            <div className="text-[8px] font-black text-slate-400 uppercase tracking-wider">
+                                                                {t('Req')} ({uomShort})
+                                                            </div>
+                                                            <div className="text-base font-black text-amber-300 font-mono leading-none mt-0.5">
+                                                                {qty} <span className="text-[9px] text-amber-400/60 font-normal">{uomShort}</span>
+                                                            </div>
+                                                        </div>
+                                                        <div className="text-right">
+                                                            <div className="text-[8px] font-black text-slate-400 uppercase tracking-wider">
+                                                                {t('Stock')}
+                                                            </div>
+                                                            <div className={`text-xs font-black font-mono leading-none mt-0.5 ${stock >= qty ? 'text-emerald-400' : 'text-amber-500'}`}>
+                                                                {stock}
+                                                            </div>
+                                                        </div>
+                                                    </div>
+
+                                                    {hasDeficit && (
+                                                        <div className="mt-1.5 text-[8px] font-black text-red-400 bg-red-500/10 border border-red-500/20 px-1.5 py-0.5 rounded flex items-center justify-between">
+                                                            <span>{t('Shortage')}</span>
+                                                            <span className="font-mono">-{deficit} {uomShort}</span>
+                                                        </div>
+                                                    )}
+                                                </div>
+                                            );
+                                        })}
+                                    </div>
+                                </div>
+                            ))}
+                        </div>
+                    )}
+                </div>
+
+                {/* ── Kanban Columns ────────────────────────────────────────── */}
+                {loading && filteredTrips.length === 0 ? (
+                    <div className="text-center py-20 text-slate-500 animate-pulse font-mono text-sm">
+                        Loading daily preparation trips...
+                    </div>
+                ) : filteredTrips.length === 0 ? (
+                    <div className="text-center py-16 text-slate-600 italic border border-dashed border-slate-800 rounded-2xl">
+                        {t('No trips found for {{var0}} on this date.', { var0: activeFactory })}
+                    </div>
+                ) : (
+                    <div className="grid grid-cols-1 md:grid-cols-2 xl:grid-cols-3 gap-5">
+                        {/* Unassigned Trips Column */}
+                        {(() => {
+                            const unassignedTrips = filteredTrips.filter(t => !t.driverId);
+                            if (unassignedTrips.length === 0 && factoryDrivers.length > 0) return null;
+                            return (
+                                <TripColumn
+                                    key="unassigned"
+                                    droppableId="unassigned"
+                                    label={t('Unassigned Trips / 待指派车次')}
+                                    trips={unassignedTrips}
+                                    isUnassigned
+                                    expandedTripIds={expandedTripIds}
+                                    onToggleExpand={toggleTripExpand}
+                                    onUploadTripPhoto={(tripId) => triggerUpload('trip', tripId)}
+                                    onUploadOrderPhoto={(orderId) => triggerUpload('order', orderId)}
+                                    onTogglePrepared={handleToggleMarkPrepared}
+                                    onPhotoClick={setPreviewImageUrl}
+                                    resolveItemName={resolveItemName}
+                                    activeFactory={activeFactory}
+                                />
+                            );
+                        })()}
+
+                        {/* Driver Assigned Columns */}
+                        {factoryDrivers.map(driver => {
+                            const driverTrips = filteredTrips.filter(t => t.driverId === driver.uid);
+                            if (driverTrips.length === 0) return null;
+                            return (
+                                <TripColumn
+                                    key={driver.uid}
+                                    droppableId={driver.uid}
+                                    label={driver.name || driver.email || 'Driver'}
+                                    trips={driverTrips}
+                                    expandedTripIds={expandedTripIds}
+                                    onToggleExpand={toggleTripExpand}
+                                    onUploadTripPhoto={(tripId) => triggerUpload('trip', tripId)}
+                                    onUploadOrderPhoto={(orderId) => triggerUpload('order', orderId)}
+                                    onTogglePrepared={handleToggleMarkPrepared}
+                                    onPhotoClick={setPreviewImageUrl}
+                                    resolveItemName={resolveItemName}
+                                    activeFactory={activeFactory}
+                                />
+                            );
+                        })}
+                    </div>
+                )}
+
+                {/* Hidden File Input for Camera/Gallery Upload */}
+                <input
                     ref={fileInputRef}
                     type="file"
                     accept="image/*"
@@ -641,25 +1069,25 @@ const OrderSummary: React.FC<OrderSummaryProps> = ({ user }) => {
                     onChange={handlePhotoSelect}
                 />
 
-                {/* Full Screen Image Preview Modal */}
+                {/* Image Preview Modal */}
                 {previewImageUrl && (
-                    <div 
-                        className="fixed inset-0 z-[9999] bg-black/95 flex flex-col items-center justify-center p-4 backdrop-blur-sm"
+                    <div
+                        className="fixed inset-0 z-[9999] bg-black/95 flex flex-col items-center justify-center p-4 backdrop-blur-md cursor-zoom-out"
                         onClick={() => setPreviewImageUrl(null)}
                     >
-                        <button 
-                            onClick={() => setPreviewImageUrl(null)} 
+                        <button
+                            onClick={() => setPreviewImageUrl(null)}
                             className="absolute top-4 right-4 p-3 bg-white/10 hover:bg-white/20 active:scale-95 text-white rounded-full transition-all"
                         >
                             <X size={24} />
                         </button>
-                        <img 
-                            src={previewImageUrl} 
-                            alt="Preview" 
-                            className="max-w-full max-h-[85vh] object-contain rounded-xl shadow-2xl border border-white/10 animate-in zoom-in-95 duration-200" 
+                        <img
+                            src={previewImageUrl}
+                            alt="Stocking Preview"
+                            className="max-w-full max-h-[85vh] object-contain rounded-xl shadow-2xl border border-white/10 animate-in zoom-in-95 duration-200"
                             onClick={(e) => e.stopPropagation()}
                         />
-                        <p className="text-xs text-slate-500 font-bold uppercase tracking-widest mt-4">
+                        <p className="text-xs text-slate-400 font-bold uppercase tracking-widest mt-4">
                             Ketik di mana-mana untuk tutup / Tap anywhere to close
                         </p>
                     </div>
@@ -669,180 +1097,332 @@ const OrderSummary: React.FC<OrderSummaryProps> = ({ user }) => {
     );
 };
 
-// ─── Driver Column Component ─────────────────────────────────────────────────
-const DriverColumn: React.FC<{
+// ─── TRIP COLUMN COMPONENT ───────────────────────────────────────────────────
+
+interface TripColumnProps {
     droppableId: string;
     label: string;
-    orders: SalesOrder[];
+    trips: TripGroup[];
     isUnassigned?: boolean;
-    resolveItemName: (item: { product: string; sku?: string }) => string;
-    onUploadClick: (orderId: string) => void;
-    onDeleteClick: (orderId: string, photoIndex: number) => void;
+    expandedTripIds: Record<string, boolean>;
+    onToggleExpand: (tripId: string) => void;
+    onUploadTripPhoto: (tripId: string) => void;
+    onUploadOrderPhoto: (orderId: string) => void;
+    onTogglePrepared: (trip: TripGroup) => void;
     onPhotoClick: (url: string) => void;
-    uploadingId: string | null;
-    isDragDisabled?: boolean;
-}> = ({ droppableId, label, orders, isUnassigned, resolveItemName, onUploadClick, onDeleteClick, onPhotoClick, uploadingId, isDragDisabled }) => (
-    <div className={`flex flex-col gap-4 rounded-2xl p-4 border transition-all ${isUnassigned ? 'bg-slate-900/50 border-dashed border-slate-700' : 'bg-slate-900/50 border-slate-800'
+    resolveItemName: (item: { product: string; sku?: string }) => string;
+    activeFactory: FactoryHub;
+}
+
+const TripColumn: React.FC<TripColumnProps> = ({
+    droppableId,
+    label,
+    trips,
+    isUnassigned,
+    expandedTripIds,
+    onToggleExpand,
+    onUploadTripPhoto,
+    onUploadOrderPhoto,
+    onTogglePrepared,
+    onPhotoClick,
+    resolveItemName,
+    activeFactory
+}) => {
+    const { t } = useTranslation();
+
+    const totalColumnRolls = trips.reduce((acc, t) => acc + t.totalRolls, 0);
+
+    return (
+        <div className={`flex flex-col gap-3 rounded-2xl p-3 sm:p-4 border transition-all ${
+            isUnassigned ? 'bg-slate-950/60 border-dashed border-slate-700' : 'bg-slate-950/80 border-slate-800'
         }`}>
-        {/* Column Header */}
-        <div className="flex items-center justify-between pb-2 border-b border-white/5">
-            <div className="flex items-center gap-3">
-                <div className={`w-10 h-10 rounded-full flex items-center justify-center text-lg font-bold shadow-lg ${isUnassigned ? 'bg-slate-700 text-slate-400' : 'bg-gradient-to-br from-blue-600 to-cyan-600 text-white'
+            {/* Column Header */}
+            <div className="flex items-center justify-between pb-3 border-b border-slate-800/80">
+                <div className="flex items-center gap-2.5 min-w-0">
+                    <div className={`w-9 h-9 rounded-xl flex items-center justify-center text-sm font-black shrink-0 shadow-md ${
+                        isUnassigned ? 'bg-slate-800 text-slate-400' : 'bg-gradient-to-br from-blue-600 to-indigo-600 text-white'
                     }`}>
-                    {isUnassigned ? '?' : label.charAt(0).toUpperCase()}
-                </div>
-                <div>
-                    <div className={`font-bold text-sm ${isUnassigned ? 'text-slate-400' : 'text-white'}`}>{label}</div>
-                    <div className="text-[10px] text-slate-500 font-mono flex items-center gap-1">
-                        {isUnassigned ? <><UserIcon size={10} /> Pending Assign</> : <><Truck size={10} /> {orders.length} Orders</>}
+                        {isUnassigned ? '?' : label.charAt(0).toUpperCase()}
+                    </div>
+                    <div className="min-w-0">
+                        <div className="font-bold text-xs sm:text-sm text-white truncate" title={label}>
+                            {label}
+                        </div>
+                        <div className="text-[10px] text-slate-500 font-mono flex items-center gap-1.5">
+                            <Truck size={11} className="text-slate-500" />
+                            <span>{trips.length} {t('Trips')}</span>
+                            <span>·</span>
+                            <span className="text-amber-400 font-bold">{totalColumnRolls} {t('Rolls')}</span>
+                        </div>
                     </div>
                 </div>
             </div>
-            <div className="flex flex-col items-end">
-                <div className="text-2xl font-black text-white">{orders.length}</div>
-                <div className="text-[9px] font-bold text-zinc-600 uppercase tracking-widest">Orders</div>
-            </div>
-        </div>
 
-        {/* Droppable Area */}
-        <Droppable droppableId={droppableId}>
-            {(provided, snapshot) => (
-                <div
-                     ref={provided.innerRef}
-                     {...provided.droppableProps}
-                     className={`flex-1 p-1 space-y-3 min-h-[80px] transition-colors rounded-xl ${snapshot.isDraggingOver ? 'bg-blue-500/5 border border-blue-500/20' : ''
-                         }`}
-                >
-                    {orders.map((order, index) => (
-                        <Draggable key={order.id} draggableId={order.id} index={index} isDragDisabled={isDragDisabled}>
-                            {(provided, snapshot) => (
-                                <div
-                                    ref={provided.innerRef}
-                                    {...provided.draggableProps}
-                                    {...provided.dragHandleProps}
-                                    style={{ ...provided.draggableProps.style }}
-                                    className={`bg-[#18181b] border border-[#27272a] p-4 rounded-xl cursor-grab active:cursor-grabbing transition-all relative group/card ${snapshot.isDragging
-                                        ? 'shadow-2xl border-blue-500 z-50 rotate-1'
-                                        : 'hover:bg-[#27272a] hover:border-blue-500/50'
+            {/* Droppable Area for Trips */}
+            <Droppable droppableId={droppableId}>
+                {(provided, snapshot) => (
+                    <div
+                        ref={provided.innerRef}
+                        {...provided.droppableProps}
+                        className={`flex-1 space-y-3 min-h-[100px] transition-colors rounded-xl p-1 ${
+                            snapshot.isDraggingOver ? 'bg-blue-500/5 border border-blue-500/20' : ''
+                        }`}
+                    >
+                        {trips.map((trip, index) => (
+                            <Draggable key={trip.tripId} draggableId={trip.tripId} index={index}>
+                                {(dragProvided, dragSnapshot) => (
+                                    <div
+                                        ref={dragProvided.innerRef}
+                                        {...dragProvided.draggableProps}
+                                        {...dragProvided.dragHandleProps}
+                                        className={`bg-slate-900 border rounded-2xl p-3.5 transition-all shadow-md group ${
+                                            dragSnapshot.isDragging
+                                                ? 'shadow-2xl border-blue-500 ring-2 ring-blue-500/20 z-50 rotate-1'
+                                                : 'border-slate-800/90 hover:border-slate-700'
                                         }`}
-                                >
-                                    {/* Trip Sequence Badge */}
-                                    <div className="absolute -top-2 -right-2 bg-slate-950 border border-slate-700 text-slate-400 text-[9px] font-bold uppercase py-0.5 px-2 rounded-full shadow-lg z-10">
-                                        {index + 1}{index === 0 ? 'st' : index === 1 ? 'nd' : index === 2 ? 'rd' : 'th'} Trip
-                                    </div>
-
-                                    {/* Order Header */}
-                                    <div className="flex justify-between items-start mb-2">
-                                        <div className="font-mono text-sm font-black text-blue-400 bg-blue-500/10 px-2 py-1 rounded border border-blue-500/20 tracking-wide">
-                                            {order.orderNumber}
-                                        </div>
-                                        <div className={`px-2 py-1 rounded text-[10px] font-bold uppercase ${order.status === 'Delivered' ? 'bg-green-500/20 text-green-400' : 'bg-yellow-500/20 text-yellow-400'
-                                            }`}>
-                                            {order.status}
-                                        </div>
-                                    </div>
-
-                                    <div className="text-white font-medium text-sm mb-2">{order.customer}</div>
-
-                                    <div className="text-xs text-gray-400 mb-3 flex items-start gap-1.5">
-                                        <MapPin size={12} className="mt-0.5 shrink-0" />
-                                        {order.deliveryAddress || 'No Address'}
-                                    </div>
-
-                                    <div className="bg-black/30 rounded-lg p-2 space-y-2">
-                                        {order.items.map((item, idx) => {
-                                            const resolvedName = resolveItemName(item);
-                                            return (
-                                            <div key={idx} className="text-xs border-b border-white/[0.02] last:border-0 pb-1.5 last:pb-0">
-                                                <div className="flex justify-between items-start">
-                                                    <div className="flex flex-col min-w-0 pr-2">
-                                                        <span className="text-gray-200 font-semibold">{resolvedName}</span>
-                                                        {item.sku && item.sku !== resolvedName && (
-                                                            <span className="text-[10px] text-cyan-400 font-mono">{item.sku}</span>
-                                                        )}
-                                                    </div>
-                                                    <span className="font-mono text-gray-300 font-bold shrink-0">x{item.quantity}</span>
-                                                </div>
-                                                {item.remark && (
-                                                    <p className="text-[10px] text-amber-500/80 font-mono tracking-wide mt-1 bg-amber-500/5 px-1.5 py-0.5 rounded border border-amber-500/10 w-fit max-w-full whitespace-pre-wrap">
-                                                        {item.remark}
-                                                    </p>
+                                    >
+                                        {/* Trip Card Top Header */}
+                                        <div className="flex items-start justify-between gap-2 mb-2">
+                                            <div className="flex flex-wrap items-center gap-1.5 min-w-0">
+                                                <span className="font-mono text-xs font-black text-blue-400 bg-blue-500/10 px-2 py-0.5 rounded-md border border-blue-500/20">
+                                                    {trip.tripNumber}
+                                                </span>
+                                                {trip.lorryPlate && (
+                                                    <span className="font-mono text-[10px] font-bold text-slate-300 bg-slate-800 px-1.5 py-0.5 rounded border border-slate-700 flex items-center gap-1">
+                                                        <Truck size={10} className="text-slate-400" />
+                                                        {trip.lorryPlate}
+                                                    </span>
                                                 )}
                                             </div>
-                                            );
-                                        })}
-                                    </div>
 
-                                    {order.notes && (
-                                        <div className="mt-2 text-[10px] text-yellow-500/80 italic">
-                                            Note: {order.notes}
-                                        </div>
-                                    )}
-
-                                    {/* Cargo Prep Photo Upload / Thumbnail */}
-                                    {(() => {
-                                        const photos = parsePrepPhotos(order.preparation_photo_url);
-                                        return (
-                                            <div className="mt-3 border-t border-white/5 pt-3 space-y-2">
-                                                {photos.length > 0 && (
-                                                    <div className="flex flex-wrap gap-2">
-                                                        {photos.map((p, idx) => (
-                                                            <div key={idx} className="relative w-12 h-12 rounded-lg overflow-hidden border border-white/10 shrink-0 bg-black/40 shadow-inner group cursor-zoom-in" onClick={() => onPhotoClick(p.url)}>
-                                                                <img 
-                                                                    src={p.url} 
-                                                                    alt={`Cargo Prep - ${p.location}`} 
-                                                                    className="w-full h-full object-cover group-hover:scale-105 transition-transform duration-300"
-                                                                />
-                                                                {/* Location tag label overlay */}
-                                                                <div className="absolute bottom-0 inset-x-0 bg-black/75 text-[8px] font-black text-center text-amber-400 uppercase py-0.5 truncate leading-none">
-                                                                    {p.location}
-                                                                </div>
-                                                                {/* Delete overlay */}
-                                                                <button
-                                                                    onClick={(e) => {
-                                                                        e.stopPropagation();
-                                                                        onDeleteClick(order.id, idx);
-                                                                    }}
-                                                                    className="absolute top-0 right-0 p-0.5 bg-red-600/90 hover:bg-red-600 rounded text-white opacity-0 group-hover:opacity-100 transition-opacity"
-                                                                    title="Delete Photo"
-                                                                >
-                                                                    <Trash2 size={8} />
-                                                                </button>
-                                                            </div>
-                                                        ))}
-                                                    </div>
+                                            {/* Prepared / Pending Badge */}
+                                            <button
+                                                onClick={(e) => {
+                                                    e.stopPropagation();
+                                                    onTogglePrepared(trip);
+                                                }}
+                                                className={`px-2 py-0.5 rounded-full text-[9px] font-black uppercase tracking-wider flex items-center gap-1 transition-all ${
+                                                    trip.isPrepared
+                                                        ? 'bg-emerald-500/20 text-emerald-300 border border-emerald-500/40 hover:bg-emerald-500/30'
+                                                        : 'bg-amber-500/10 text-amber-400 border border-amber-500/30 hover:bg-amber-500/20'
+                                                }`}
+                                                title="Click to toggle prepared status"
+                                            >
+                                                {trip.isPrepared ? (
+                                                    <>
+                                                        <CheckCircle size={10} className="text-emerald-400" />
+                                                        <span>{t('Prepared')}</span>
+                                                    </>
+                                                ) : (
+                                                    <>
+                                                        <Clock size={10} className="text-amber-400" />
+                                                        <span>{t('Pending Prep')}</span>
+                                                    </>
                                                 )}
-                                                
-                                                <div className="flex justify-between items-center">
-                                                    <span className="text-[9px] text-zinc-600 font-bold uppercase tracking-widest">
-                                                        {photos.length > 0 ? `${photos.length} Photos` : 'No Cargo Photo'}
+                                            </button>
+                                        </div>
+
+                                        {/* 🏷️ Special Flags & Indicators (COD, Malam, Pickup) */}
+                                        {(trip.hasCod || trip.hasNightDelivery || trip.hasSelfPickup) && (
+                                            <div className="flex flex-wrap items-center gap-1.5 mb-2">
+                                                {trip.hasCod && (
+                                                    <span className="px-2 py-0.5 rounded-full text-[9px] font-black uppercase tracking-wider bg-rose-500/20 text-rose-300 border border-rose-500/40 animate-pulse flex items-center gap-1">
+                                                        💵 C.O.D. ({t('货到付款')})
                                                     </span>
-                                                    <button
-                                                        onClick={() => onUploadClick(order.id)}
-                                                        disabled={uploadingId === order.id}
-                                                        className="px-2.5 py-1.5 bg-amber-600/10 hover:bg-amber-600/20 border border-amber-500/20 rounded-lg text-[10px] font-bold text-amber-400 uppercase tracking-wider flex items-center gap-1.5 transition-colors"
+                                                )}
+                                                {trip.hasNightDelivery && (
+                                                    <span className="px-2 py-0.5 rounded-full text-[9px] font-black uppercase tracking-wider bg-purple-500/20 text-purple-300 border border-purple-500/40 flex items-center gap-1">
+                                                        🌙 Malam ({t('夜间送货')})
+                                                    </span>
+                                                )}
+                                                {trip.hasSelfPickup && (
+                                                    <span className="px-2 py-0.5 rounded-full text-[9px] font-black uppercase tracking-wider bg-cyan-500/20 text-cyan-300 border border-cyan-500/40 flex items-center gap-1">
+                                                        📦 Self Pickup ({t('自提')})
+                                                    </span>
+                                                )}
+                                            </div>
+                                        )}
+
+                                        {/* Total Rolls & Drops Counter Banner */}
+                                        <div className="bg-slate-950/70 border border-slate-800/80 rounded-xl p-2 mb-3 flex items-center justify-between text-xs">
+                                            <div className="flex items-center gap-1.5">
+                                                <span className="text-[10px] font-black text-slate-500 uppercase">{t('Total')}:</span>
+                                                <span className="font-mono font-black text-sm text-amber-300">
+                                                    {trip.totalRolls} {t('Rolls')}
+                                                </span>
+                                            </div>
+                                            <div className="text-[11px] font-mono text-slate-400">
+                                                {trip.totalDrops} {t('DOs')} {trip.zones.length > 0 ? `· ${trip.zones.join(', ')}` : ''}
+                                            </div>
+                                        </div>
+
+                                        {/* Trip Action Buttons */}
+                                        <div className="flex items-center gap-2 mb-2">
+                                            {/* Trip Prep Camera Button */}
+                                            <button
+                                                onClick={(e) => {
+                                                    e.stopPropagation();
+                                                    onUploadTripPhoto(trip.tripId);
+                                                }}
+                                                className="flex-1 py-1.5 px-2.5 bg-gradient-to-r from-amber-600/20 to-orange-600/20 hover:from-amber-600/30 hover:to-orange-600/30 border border-amber-500/30 rounded-xl text-[10px] font-bold text-amber-300 flex items-center justify-center gap-1.5 transition-all active:scale-95"
+                                            >
+                                                <Camera size={12} className="text-amber-400" />
+                                                <span>{t('Trip Prep Photo')}</span>
+                                            </button>
+
+                                            {/* Expand/Collapse Toggle */}
+                                            <button
+                                                onClick={(e) => {
+                                                    e.stopPropagation();
+                                                    onToggleExpand(trip.tripId);
+                                                }}
+                                                className="py-1.5 px-2.5 bg-slate-800/80 hover:bg-slate-800 border border-slate-700/80 rounded-xl text-[10px] font-bold text-slate-300 flex items-center gap-1 transition-all"
+                                                title="Toggle DO list"
+                                            >
+                                                <span>{expandedTripIds[trip.tripId] ? t('Collapse') : t('Expand')}</span>
+                                                {expandedTripIds[trip.tripId] ? <ChevronUp size={12} /> : <ChevronDown size={12} />}
+                                            </button>
+                                        </div>
+
+                                        {/* Trip Photo Thumbnails */}
+                                        {trip.photos.length > 0 && (
+                                            <div className="flex flex-wrap gap-1.5 mb-2 pt-1 border-t border-slate-800/50">
+                                                {trip.photos.map((p, pIdx) => (
+                                                    <div
+                                                        key={pIdx}
+                                                        className="relative w-11 h-11 rounded-lg overflow-hidden border border-white/10 shrink-0 bg-black shadow-inner cursor-zoom-in group/img"
+                                                        onClick={() => onPhotoClick(p.url)}
                                                     >
-                                                        <Camera size={11} />
-                                                        {uploadingId === order.id ? 'Uploading...' : 'Add Photo'}
+                                                        <img
+                                                            src={p.url}
+                                                            alt={`Prep - ${p.location}`}
+                                                            className="w-full h-full object-cover group-hover/img:scale-110 transition-transform duration-200"
+                                                        />
+                                                        <div className="absolute bottom-0 inset-x-0 bg-black/80 text-[7px] font-bold text-center text-amber-400 uppercase py-0.5 truncate leading-none">
+                                                            {p.location}
+                                                        </div>
+                                                    </div>
+                                                ))}
+                                            </div>
+                                        )}
+
+                                        {/* ── Expanded Section: DO Cards ────────────────── */}
+                                        {expandedTripIds[trip.tripId] && (
+                                            <div className="mt-3 pt-3 border-t border-slate-800/80 space-y-2.5 animate-in fade-in-50 duration-200">
+                                                <div className="text-[10px] font-black text-slate-500 uppercase tracking-widest flex items-center justify-between">
+                                                    <span>{t('Delivery Orders in this trip')}</span>
+                                                    <span>({trip.orders.length})</span>
+                                                </div>
+
+                                                {trip.orders.map((order, oIdx) => (
+                                                    <div
+                                                        key={order.id}
+                                                        className="bg-slate-950/80 border border-slate-800/80 rounded-xl p-2.5 text-xs space-y-1.5"
+                                                    >
+                                                        <div className="flex items-center justify-between gap-1">
+                                                            <span className="font-mono font-bold text-blue-400 text-[11px]">
+                                                                #{oIdx + 1} {order.orderNumber}
+                                                            </span>
+                                                            <span className={`px-1.5 py-0.2 rounded text-[9px] font-bold uppercase ${
+                                                                order.status === 'Delivered' ? 'bg-emerald-500/20 text-emerald-400' : 'bg-slate-800 text-slate-400'
+                                                            }`}>
+                                                                {order.status}
+                                                            </span>
+                                                        </div>
+
+                                                        <div className="font-medium text-slate-200 truncate" title={order.customer}>
+                                                            {order.customer}
+                                                        </div>
+
+                                                        {order.deliveryAddress && (
+                                                            <div className="text-[10px] text-slate-400 flex items-start gap-1 truncate" title={order.deliveryAddress}>
+                                                                <MapPin size={10} className="mt-0.5 shrink-0 text-slate-500" />
+                                                                <span className="truncate">{order.deliveryAddress}</span>
+                                                            </div>
+                                                        )}
+
+                                                        {/* Special Note highlight */}
+                                                        {order.notes && (
+                                                            <div className="text-[10px] text-amber-400/90 font-mono bg-amber-500/10 border border-amber-500/20 px-2 py-1 rounded-lg">
+                                                                💡 {order.notes}
+                                                            </div>
+                                                        )}
+
+                                                        {/* Item Breakdown */}
+                                                        <div className="bg-black/30 rounded-lg p-1.5 space-y-1 mt-1">
+                                                            {(order.items || []).map((it, itIdx) => {
+                                                                const resolved = resolveItemName(it);
+                                                                const wh = getItemWarehouse(it, order, activeFactory);
+                                                                return (
+                                                                    <div key={itIdx} className="flex items-center justify-between text-[11px] gap-1">
+                                                                        <div className="truncate flex-1" title={resolved}>
+                                                                            <span className="text-slate-300 font-semibold">{resolved}</span>
+                                                                            <span className="ml-1 text-[9px] font-bold text-blue-400 bg-blue-500/10 px-1 py-0.2 rounded border border-blue-500/20">
+                                                                                {wh}
+                                                                            </span>
+                                                                        </div>
+                                                                        <span className="font-mono font-bold text-amber-300 shrink-0">
+                                                                            x{it.quantity}
+                                                                        </span>
+                                                                    </div>
+                                                                );
+                                                            })}
+                                                        </div>
+
+                                                        {/* Single DO Photo Upload Button */}
+                                                        <div className="pt-1 flex items-center justify-between text-[10px]">
+                                                            <span className="text-slate-500 text-[9px]">
+                                                                {parsePrepPhotos(order.preparation_photo_url).length} {t('Photos')}
+                                                            </span>
+                                                            <button
+                                                                onClick={(e) => {
+                                                                    e.stopPropagation();
+                                                                    onUploadOrderPhoto(order.id);
+                                                                }}
+                                                                className="text-[9px] font-bold text-slate-400 hover:text-amber-400 flex items-center gap-1 transition-colors"
+                                                            >
+                                                                <Camera size={10} />
+                                                                <span>{t('Add DO Photo')}</span>
+                                                            </button>
+                                                        </div>
+                                                    </div>
+                                                ))}
+
+                                                {/* Bottom Sticky Action Bar for long lists on mobile */}
+                                                <div className="pt-2 border-t border-slate-800/80 flex items-center justify-between gap-2">
+                                                    <button
+                                                        onClick={(e) => {
+                                                            e.stopPropagation();
+                                                            onUploadTripPhoto(trip.tripId);
+                                                        }}
+                                                        className="flex-1 py-1.5 px-3 bg-amber-600/20 hover:bg-amber-600/30 border border-amber-500/30 rounded-xl text-[10px] font-bold text-amber-300 flex items-center justify-center gap-1.5 transition-all active:scale-95"
+                                                    >
+                                                        <Camera size={12} className="text-amber-400" />
+                                                        <span>{t('Trip Prep Photo')}</span>
+                                                    </button>
+                                                    <button
+                                                        onClick={(e) => {
+                                                            e.stopPropagation();
+                                                            onToggleExpand(trip.tripId);
+                                                        }}
+                                                        className="py-1.5 px-3 bg-slate-800 hover:bg-slate-700 border border-slate-700 rounded-xl text-[10px] font-bold text-slate-300 flex items-center gap-1 transition-all active:scale-95"
+                                                    >
+                                                        <ChevronUp size={12} />
+                                                        <span>{t('Collapse DOs')}</span>
                                                     </button>
                                                 </div>
                                             </div>
-                                        );
-                                    })()}
-                                </div>
-                            )}
-                        </Draggable>
-                    ))}
-                    {provided.placeholder}
-                    {orders.length === 0 && !snapshot.isDraggingOver && (
-                        <div className="flex items-center justify-center h-16 text-[10px] text-gray-700 uppercase tracking-widest border border-dashed border-white/5 rounded-lg">
-                            Drop here
-                        </div>
-                    )}
-                </div>
-            )}
-        </Droppable>
-    </div>
-);
+                                        )}
+                                    </div>
+                                )}
+                            </Draggable>
+                        ))}
+                        {provided.placeholder}
+                    </div>
+                )}
+            </Droppable>
+        </div>
+    );
+};
 
 export default OrderSummary;

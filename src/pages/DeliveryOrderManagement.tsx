@@ -586,6 +586,7 @@ const DeliveryOrderManagement: React.FC<DeliveryOrderManagementProps> = ({ user 
         localStorage.setItem('tripActiveLocation', activeLocation);
         const origin = activeLocation.toUpperCase();
         setTripOrigin(origin);
+        setParsedTripOrigin(activeLocation);
         setCurrentItemLoc(origin === 'NILAI' ? 'Nilai' : origin === 'KELANTAN' ? 'Kelantan' : origin === 'JOHOR' ? 'Johor' : 'SPD');
         setSelectedOrderIds([]); // Clear selection when location changes
     }, [activeLocation]);
@@ -1980,6 +1981,8 @@ const DeliveryOrderManagement: React.FC<DeliveryOrderManagementProps> = ({ user 
                 throw new Error(t('No valid Delivery Orders detected in the uploaded PDFs. Try a clearer PDF.'));
             }
 
+            const initialOrigin = activeLocation || parsedTripOrigin || 'Taiping';
+
             // Execute 2-tier mapping alignment (customer_sku_mappings + master_items_v2)
             const processedOrders: ParsedDeliveryOrder[] = data.deliveryOrders.map(doOrder => {
                 const alignedItems: ParsedDOItem[] = (doOrder.items || []).map(it => {
@@ -1995,7 +1998,7 @@ const DeliveryOrderManagement: React.FC<DeliveryOrderManagementProps> = ({ user 
                         rawProductName: it.rawProductName || it.product,
                         product: matchRes.product,
                         sku: matchRes.sku,
-                        sourceLocation: it.sourceLocation || matchRes.sourceLocation || guessItemLocation({ sku: matchRes.sku, product: matchRes.product, rawProductName: it.product }, parsedTripOrigin),
+                        sourceLocation: it.sourceLocation || matchRes.sourceLocation || guessItemLocation({ sku: matchRes.sku, product: matchRes.product, rawProductName: it.product }, initialOrigin),
                         isMatched: matchRes.isMatched
                     };
                 });
@@ -2020,7 +2023,7 @@ const DeliveryOrderManagement: React.FC<DeliveryOrderManagementProps> = ({ user 
             setParsedTripNumber(genTripNo);
             setParsedTripDate(getTodayStr());
             setParsedDeliveryDate(getTomorrowStr());
-            setParsedTripOrigin(activeLocation || 'Taiping');
+            setParsedTripOrigin(initialOrigin);
             setParsedZone(data.primaryZone || '');
             setParsedTripRemark(data.tripRemarks || '');
             setIsParsedTripModalOpen(true);
@@ -2168,6 +2171,27 @@ const DeliveryOrderManagement: React.FC<DeliveryOrderManagementProps> = ({ user 
         });
     };
 
+    const handleUpdateParsedTripOrigin = (newOrigin: string) => {
+        setParsedTripOrigin(newOrigin);
+        if (!parsedTripBatch) return;
+        const validWarehouses = getAvailableWarehousesForOrigin(newOrigin);
+        const defaultLoc = getDefaultLocForOrigin(newOrigin);
+        setParsedTripBatch(prev => {
+            if (!prev) return null;
+            const updatedOrders = prev.deliveryOrders.map(order => ({
+                ...order,
+                items: (order.items || []).map(it => {
+                    const currentLoc = it.sourceLocation;
+                    if (!currentLoc || !validWarehouses.includes(currentLoc)) {
+                        return { ...it, sourceLocation: guessItemLocation(it, newOrigin) || defaultLoc };
+                    }
+                    return it;
+                })
+            }));
+            return { ...prev, deliveryOrders: updatedOrders };
+        });
+    };
+
     const handleConfirmCreateTrip = async () => {
         if (!parsedTripBatch || parsedTripBatch.deliveryOrders.length === 0) return;
         setIsCreatingTrip(true);
@@ -2177,6 +2201,7 @@ const DeliveryOrderManagement: React.FC<DeliveryOrderManagementProps> = ({ user 
             const tripId = crypto.randomUUID();
             const totalDrops = parsedTripBatch.deliveryOrders.length;
             const defaultLoc = getDefaultLocForOrigin(parsedTripOrigin);
+            const validWarehouses = getAvailableWarehousesForOrigin(parsedTripOrigin);
 
             // 1. Insert into trips_v2
             const { error: tripError } = await supabase
@@ -2228,13 +2253,19 @@ const DeliveryOrderManagement: React.FC<DeliveryOrderManagementProps> = ({ user 
                     trip_drop_count: totalDrops,
                     stop_sequence: i + 1,
                     trip_sequence: i + 1,
-                    items: (doItem.items || []).map(it => ({
-                        product: it.product,
-                        quantity: Number(it.quantity) || 1,
-                        sku: it.sku || '',
-                        packaging: 'Unit',
-                        sourceLocation: it.sourceLocation || guessItemLocation(it, parsedTripOrigin) || defaultLoc
-                    })),
+                    items: (doItem.items || []).map(it => {
+                        let loc = it.sourceLocation;
+                        if (!loc || !validWarehouses.includes(loc)) {
+                            loc = guessItemLocation(it, parsedTripOrigin) || defaultLoc;
+                        }
+                        return {
+                            product: it.product,
+                            quantity: Number(it.quantity) || 1,
+                            sku: it.sku || '',
+                            packaging: 'Unit',
+                            sourceLocation: loc
+                        };
+                    }),
                     notes: noteParts.join(' | ')
                 };
 
@@ -3059,12 +3090,19 @@ const DeliveryOrderManagement: React.FC<DeliveryOrderManagementProps> = ({ user 
             }
         }
 
-        // Force assign default location if somehow blank
+        // Force assign default location if somehow blank and validate against origin
         const defaultLoc = getDefaultLocForOrigin(tripOrigin);
-        const finalizedItems = newOrderItems.map(item => ({
-            ...item,
-            sourceLocation: (item.sourceLocation && item.sourceLocation.trim() !== '') ? item.sourceLocation.trim() : defaultLoc
-        }));
+        const validWarehouses = getAvailableWarehousesForOrigin(tripOrigin);
+        const finalizedItems = newOrderItems.map(item => {
+            let loc = (item.sourceLocation && item.sourceLocation.trim() !== '') ? item.sourceLocation.trim() : defaultLoc;
+            if (!validWarehouses.includes(loc)) {
+                loc = guessItemLocation(item, tripOrigin) || defaultLoc;
+            }
+            return {
+                ...item,
+                sourceLocation: loc
+            };
+        });
 
         setIsSubmitting(true);
         try {
@@ -5180,6 +5218,10 @@ const DeliveryOrderManagement: React.FC<DeliveryOrderManagementProps> = ({ user 
                                                           if (l && !selectedLorryId) {
                                                               setSelectedLorryId(l.id);
                                                           }
+                                                          const d = drivers.find(x => x.uid === driverId);
+                                                          if (d && d.base_location && d.base_location.trim().toLowerCase() !== tripOrigin.toLowerCase()) {
+                                                              setTripOrigin(d.base_location.trim());
+                                                          }
                                                       }}
                                                  >
                                                      <option value="">-- Select Driver --</option>
@@ -5945,12 +5987,12 @@ const DeliveryOrderManagement: React.FC<DeliveryOrderManagementProps> = ({ user 
                                             list="parsed-origin-datalist"
                                             className="w-full bg-slate-950 border border-slate-700/80 rounded-xl px-3 py-2 text-xs text-slate-200 outline-none focus:border-blue-500"
                                             value={parsedTripOrigin}
-                                            onChange={e => setParsedTripOrigin(e.target.value)}
+                                            onChange={e => handleUpdateParsedTripOrigin(e.target.value)}
                                             placeholder="Taiping"
                                         />
                                         <datalist id="parsed-origin-datalist">
                                             {['Taiping', 'Nilai', 'Kelantan', 'Johor'].map(loc => (
-                                                <option key={loc} value={loc} />
+                                                 <option key={loc} value={loc} />
                                             ))}
                                         </datalist>
                                     </div>
@@ -5978,11 +6020,29 @@ const DeliveryOrderManagement: React.FC<DeliveryOrderManagementProps> = ({ user 
                                                     setParsedDriverId(matched.uid);
                                                     const matchedLorry = lorries.find(l => l.driverUserId === matched.uid);
                                                     if (matchedLorry) setParsedLorryId(matchedLorry.id);
+                                                    if (matched.base_location && matched.base_location.trim().toLowerCase() !== parsedTripOrigin.toLowerCase()) {
+                                                        handleUpdateParsedTripOrigin(matched.base_location.trim());
+                                                        setToast({
+                                                            message: `🚚 已根据司机 ${matched.name || ''} 基地自动将出发厂区切换为 [${matched.base_location}] 并更新仓库分配！`,
+                                                            type: 'info'
+                                                        });
+                                                    }
                                                 } else if (!val) {
                                                     setParsedDriverId('');
                                                 } else {
                                                     const partial = drivers.find(d => d.name?.toLowerCase().includes(val.toLowerCase()));
-                                                    setParsedDriverId(partial ? partial.uid : val);
+                                                    if (partial) {
+                                                        setParsedDriverId(partial.uid);
+                                                        if (partial.base_location && partial.base_location.trim().toLowerCase() !== parsedTripOrigin.toLowerCase()) {
+                                                            handleUpdateParsedTripOrigin(partial.base_location.trim());
+                                                            setToast({
+                                                                message: `🚚 已根据司机 ${partial.name || ''} 基地自动将出发厂区切换为 [${partial.base_location}] 并更新仓库分配！`,
+                                                                type: 'info'
+                                                            });
+                                                        }
+                                                    } else {
+                                                        setParsedDriverId(val);
+                                                    }
                                                 }
                                             }}
                                         />
