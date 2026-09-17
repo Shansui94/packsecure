@@ -2072,13 +2072,16 @@ const DeliveryOrderManagement: React.FC<DeliveryOrderManagementProps> = ({ user 
                 const doItem = parsedTripBatch.deliveryOrders[i];
                 const orderId = crypto.randomUUID();
 
+                const noteParts: string[] = [];
+                if (doItem.phone) noteParts.push(`Tel: ${doItem.phone}`);
+                if (doItem.terms) noteParts.push(`Terms: ${doItem.terms}`);
+
                 const orderPayload: any = {
                     id: orderId,
                     trip_id: tripId,
                     order_number: doItem.doNumber || `DO-${parsedTripNumber}-${i + 1}`,
                     customer: doItem.customer || 'General Customer',
                     delivery_address: doItem.deliveryAddress || '',
-                    customer_phone: doItem.phone || null,
                     zone: doItem.zone || parsedZone || 'Central',
                     driver_id: parsedDriverId || null,
                     status: 'Planned',
@@ -2095,7 +2098,7 @@ const DeliveryOrderManagement: React.FC<DeliveryOrderManagementProps> = ({ user 
                         packaging: 'Unit',
                         sourceLocation: it.sourceLocation || defaultLoc
                     })),
-                    notes: doItem.terms ? `Terms: ${doItem.terms}` : ''
+                    notes: noteParts.join(' | ')
                 };
 
                 const { error: soError } = await supabase
