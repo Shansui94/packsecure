@@ -1,6 +1,6 @@
 import React, { useState, useEffect, useRef } from 'react';
 import { supabase } from '../services/supabase';
-import { Truck, CheckCircle, Package, ChevronRight, X, RefreshCw, Camera, Image as ImageIcon, QrCode, Upload, Phone, MapPin, ExternalLink, MessageCircle } from 'lucide-react';
+import { Truck, CheckCircle, Package, ChevronRight, ChevronDown, ChevronUp, X, RefreshCw, Camera, Image as ImageIcon, QrCode, Upload, Phone, MapPin, ExternalLink, MessageCircle } from 'lucide-react';
 import { SalesOrder } from '../types';
 import { Scanner } from '@yudiel/react-qr-scanner';
 import { parsePrepPhotos } from '../utils/prepPhotos';
@@ -117,6 +117,8 @@ const fetchAddressFromCoords = async (lat: number, lng: number): Promise<string>
 const DriverDelivery: React.FC<DriverDeliveryProps> = ({ user }) => {
     // State
     const [tasks, setTasks] = useState<SalesOrder[]>([]);
+    const [tripsV2List, setTripsV2List] = useState<any[]>([]);
+    const [expandedTripKeys, setExpandedTripKeys] = useState<Record<string, boolean>>({});
     const [previewImageUrl, setPreviewImageUrl] = useState<string | null>(null);
     const [loading, setLoading] = useState(true);
     const [activeTab, setActiveTab] = useState<'todo' | 'done'>('todo');
@@ -273,6 +275,39 @@ const DriverDelivery: React.FC<DriverDeliveryProps> = ({ user }) => {
                 .order('deadline', { ascending: false });
 
             if (data) {
+                // Fetch related trips_v2 for accurate trip numbers & metadata
+                const tripIds = Array.from(new Set(data.map((item: any) => item.trip_id).filter(Boolean)));
+                const tripsV2Acc: any[] = [];
+                if (tripIds.length > 0) {
+                    try {
+                        const { data: tripsData } = await supabase
+                            .from('trips_v2')
+                            .select('*')
+                            .in('id', tripIds);
+                        if (tripsData) {
+                            tripsV2Acc.push(...tripsData);
+                        }
+                    } catch (tErr) {
+                        console.warn("trips_v2 fetch warning:", tErr);
+                    }
+                }
+                try {
+                    const { data: driverTrips } = await supabase
+                        .from('trips_v2')
+                        .select('*')
+                        .eq('driver_id', user.uid);
+                    if (driverTrips) {
+                        driverTrips.forEach(dt => {
+                            if (!tripsV2Acc.some(t => t.id === dt.id)) {
+                                tripsV2Acc.push(dt);
+                            }
+                        });
+                    }
+                } catch (dtErr) {
+                    console.warn("driver trips_v2 direct fetch notice:", dtErr);
+                }
+                setTripsV2List(tripsV2Acc);
+
                 // Map DB snake_case to TS camelCase
                 const mapped = data.map((item: any) => ({
                     ...item,
@@ -1506,33 +1541,680 @@ const DriverDelivery: React.FC<DriverDeliveryProps> = ({ user }) => {
         t.status === 'Delivered' || 
         isPendingApprovalDone(t)
     );
-    const displayList = activeTab === 'todo' ? todoList : doneList;
 
-    const activeCargoBreakdown = React.useMemo(() => {
-        const map = new Map<string, { name: string; sku?: string; qty: number; warehouse?: string }>();
-        todoList.forEach(order => {
-            (order.items || []).forEach((it: any) => {
-                const key = it.product || it.sku || 'Item';
-                const qty = Number(it.quantity) || 0;
-                const wh = it.sourceLocation || ((order as any).trip_origin ? String((order as any).trip_origin) : 'OPM Lama');
-                if (map.has(key)) {
-                    map.get(key)!.qty += qty;
-                } else {
-                    map.set(key, {
-                        name: key,
-                        sku: it.sku,
-                        qty,
-                        warehouse: wh
+    interface DriverTripGroup {
+        key: string;
+        tripId?: string;
+        tripNumber: string;
+        tripIndexLabel?: string;
+        isAdHoc: boolean;
+        orders: SalesOrder[];
+        totalDrops: number;
+        completedDrops: number;
+        totalRolls: number;
+        cargoBreakdown: Array<{ name: string; sku?: string; qty: number; warehouse?: string }>;
+        zone?: string;
+        tripOrigin?: string;
+        deliveryDate?: string;
+        tripNotes?: string;
+        isAllDone: boolean;
+    }
+
+    const tripGroups = React.useMemo<DriverTripGroup[]>(() => {
+        const groupMap = new Map<string, DriverTripGroup>();
+        const adhocOrders: SalesOrder[] = [];
+
+        tasks.forEach(order => {
+            const isExtraJob = (order as any).job_type === 'Extra Job' || (order as any).job_type === 'Pick Up' || order.orderNumber?.startsWith('TRIP-JOB') || order.orderNumber?.startsWith('TRIP-PU');
+            const tripId = (order as any).trip_id;
+
+            if (tripId && !isExtraJob) {
+                if (!groupMap.has(tripId)) {
+                    const v2Trip = tripsV2List.find(t => t.id === tripId);
+                    const tripNum = v2Trip?.trip_number || (order as any).trip_number || (order.orderNumber ? `TRIP-${order.orderNumber}` : `TRIP-${tripId.slice(0, 8)}`);
+                    
+                    groupMap.set(tripId, {
+                        key: `trip_${tripId}`,
+                        tripId,
+                        tripNumber: tripNum,
+                        isAdHoc: false,
+                        orders: [],
+                        totalDrops: 0,
+                        completedDrops: 0,
+                        totalRolls: 0,
+                        cargoBreakdown: [],
+                        zone: order.zone,
+                        tripOrigin: (order as any).trip_origin,
+                        deliveryDate: (order as any).deliveryDate,
+                        tripNotes: undefined,
+                        isAllDone: false
                     });
                 }
-            });
+                const grp = groupMap.get(tripId)!;
+                grp.orders.push(order);
+            } else {
+                adhocOrders.push(order);
+            }
         });
-        return Array.from(map.values()).sort((a, b) => b.qty - a.qty);
-    }, [todoList]);
 
-    const totalCargoPieces = React.useMemo(() => {
-        return activeCargoBreakdown.reduce((sum, i) => sum + i.qty, 0);
-    }, [activeCargoBreakdown]);
+        const result: DriverTripGroup[] = [];
+
+        // Process Trips
+        groupMap.forEach(grp => {
+            // Sort orders inside by stop_sequence
+            grp.orders.sort((a: any, b: any) => {
+                const stopA = (a.stop_sequence !== undefined && a.stop_sequence !== null && a.stop_sequence !== 999) ? a.stop_sequence : 999;
+                const stopB = (b.stop_sequence !== undefined && b.stop_sequence !== null && b.stop_sequence !== 999) ? b.stop_sequence : 999;
+                if (stopA !== stopB) return stopA - stopB;
+                return (a.orderNumber || '').localeCompare(b.orderNumber || '');
+            });
+
+            grp.totalDrops = grp.orders.length;
+            grp.completedDrops = grp.orders.filter(o => o.status === 'Delivered' || isPendingApprovalDone(o)).length;
+            grp.isAllDone = grp.completedDrops === grp.totalDrops && grp.totalDrops > 0;
+
+            // Extract Trip Remark if present in order notes
+            for (const ord of grp.orders) {
+                if (ord.notes && ord.notes.includes('[Trip:')) {
+                    const m = ord.notes.match(/\[Trip:\s*([^\]]+)\]/);
+                    if (m) {
+                        grp.tripNotes = m[1].trim();
+                        break;
+                    }
+                }
+            }
+
+            // Fallback metadata
+            if (!grp.zone) grp.zone = grp.orders.find(o => o.zone)?.zone;
+            if (!grp.tripOrigin) grp.tripOrigin = grp.orders.find(o => (o as any).trip_origin)?.trip_origin;
+            if (!grp.deliveryDate) grp.deliveryDate = grp.orders.find(o => (o as any).deliveryDate)?.deliveryDate;
+
+            // Calculate per-trip cargo breakdown
+            const itemMap = new Map<string, { name: string; sku?: string; qty: number; warehouse?: string }>();
+            grp.orders.forEach(order => {
+                (order.items || []).forEach((it: any) => {
+                    const key = it.product || it.sku || 'Item';
+                    const qty = Number(it.quantity) || 0;
+                    const wh = it.sourceLocation || ((order as any).trip_origin ? String((order as any).trip_origin) : 'OPM Lama');
+                    if (itemMap.has(key)) {
+                        itemMap.get(key)!.qty += qty;
+                    } else {
+                        itemMap.set(key, {
+                            name: key,
+                            sku: it.sku,
+                            qty,
+                            warehouse: wh
+                        });
+                    }
+                });
+            });
+            grp.cargoBreakdown = Array.from(itemMap.values()).sort((a, b) => b.qty - a.qty);
+            grp.totalRolls = grp.cargoBreakdown.reduce((sum, i) => sum + i.qty, 0);
+
+            result.push(grp);
+        });
+
+        // Chronological sort
+        result.sort((a, b) => {
+            const dateA = a.deliveryDate || '';
+            const dateB = b.deliveryDate || '';
+            if (dateA !== dateB) return dateB.localeCompare(dateA);
+            return a.tripNumber.localeCompare(b.tripNumber);
+        });
+
+        // Assign Trip Index Label if there are multiple trips
+        if (result.length > 1) {
+            result.forEach((grp, idx) => {
+                const num = idx + 1;
+                const suffix = num === 1 ? 'st' : num === 2 ? 'nd' : num === 3 ? 'rd' : 'th';
+                grp.tripIndexLabel = `${num}${suffix} Trip`;
+            });
+        }
+
+        // Ad-hoc group if any
+        if (adhocOrders.length > 0) {
+            const itemMap = new Map<string, { name: string; sku?: string; qty: number; warehouse?: string }>();
+            adhocOrders.forEach(order => {
+                (order.items || []).forEach((it: any) => {
+                    const key = it.product || it.sku || 'Item';
+                    const qty = Number(it.quantity) || 0;
+                    const wh = it.sourceLocation || ((order as any).trip_origin ? String((order as any).trip_origin) : 'OPM Lama');
+                    if (itemMap.has(key)) {
+                        itemMap.get(key)!.qty += qty;
+                    } else {
+                        itemMap.set(key, {
+                            name: key,
+                            sku: it.sku,
+                            qty,
+                            warehouse: wh
+                        });
+                    }
+                });
+            });
+            const adhocCargo = Array.from(itemMap.values()).sort((a, b) => b.qty - a.qty);
+            const adhocRolls = adhocCargo.reduce((sum, i) => sum + i.qty, 0);
+            const adhocCompleted = adhocOrders.filter(o => o.status === 'Delivered' || isPendingApprovalDone(o)).length;
+
+            result.push({
+                key: 'adhoc_extra_jobs',
+                tripNumber: 'Tugasan Luar & Pesanan Tambahan / Ad-hoc & Extra Jobs',
+                tripIndexLabel: 'Ad-hoc',
+                isAdHoc: true,
+                orders: adhocOrders,
+                totalDrops: adhocOrders.length,
+                completedDrops: adhocCompleted,
+                totalRolls: adhocRolls,
+                cargoBreakdown: adhocCargo,
+                isAllDone: adhocCompleted === adhocOrders.length && adhocOrders.length > 0
+            });
+        }
+
+        return result;
+    }, [tasks, tripsV2List, currentLorry]);
+
+    const pendingTrips = React.useMemo(() => tripGroups.filter(t => !t.isAllDone), [tripGroups]);
+    const doneTrips = React.useMemo(() => tripGroups.filter(t => t.isAllDone), [tripGroups]);
+    const currentTripList = activeTab === 'todo' ? pendingTrips : doneTrips;
+
+    const pendingDropsCount = React.useMemo(() => pendingTrips.reduce((acc, t) => acc + (t.totalDrops - t.completedDrops), 0), [pendingTrips]);
+    const doneDropsCount = React.useMemo(() => doneTrips.reduce((acc, t) => acc + t.completedDrops, 0), [doneTrips]);
+
+    const toggleTripExpand = (tripKey: string, defaultExpanded: boolean) => {
+        setExpandedTripKeys(prev => {
+            const isCurrentExpanded = prev[tripKey] !== undefined ? prev[tripKey] : defaultExpanded;
+            return {
+                ...prev,
+                [tripKey]: !isCurrentExpanded
+            };
+        });
+    };
+
+    const renderOrderCard = (order: SalesOrder) => {
+        const isExtraJob = (order as any).job_type === 'Extra Job' || (order as any).job_type === 'Pick Up' || order.orderNumber?.startsWith('TRIP-JOB') || order.orderNumber?.startsWith('TRIP-PU') || (order.notes && order.notes.startsWith('[') && (!order.items || order.items.length === 0));
+
+        if (isExtraJob) {
+            const extraJobPhoto = (order as any).proof_of_load_url || (order as any).proofOfLoadUrl;
+            const categoryIconMap: Record<string, string> = {
+                'SHOPEE': '🛍️',
+                'AMBIK PALLET': '🪵',
+                'LORRY SERVICE': '🔧',
+                'RETURN': '↩️',
+                'OTHER': '🛠️'
+            };
+            const categoryIcon = categoryIconMap[order.zone?.toUpperCase() || ''] || '📸';
+
+            return (
+                <div key={order.id} className="bg-slate-900 border border-slate-800 rounded-2xl overflow-hidden shadow-lg relative">
+                    {/* Status Strip */}
+                    <div className={`absolute left-0 top-0 bottom-0 w-1.5 ${
+                        order.status === 'Delivered' ? 'bg-emerald-500' :
+                        order.status === 'Pending Approval' ? 'bg-amber-500' : 'bg-red-500'
+                    }`} />
+
+                    <div className="p-4 sm:p-5 pl-6 sm:pl-7">
+                        {/* Header */}
+                        <div className="flex justify-between items-start mb-4">
+                            <div>
+                                <div className="flex items-center flex-wrap gap-2 mb-1.5">
+                                    <span className="text-[10px] font-black uppercase bg-emerald-500/20 text-emerald-400 px-2 py-0.5 rounded border border-emerald-500/30 flex items-center gap-1">
+                                        <span>{categoryIcon}</span>
+                                        <span>{order.zone || 'Extra Job'}</span>
+                                    </span>
+                                    <span className="text-[10px] font-mono font-bold text-slate-400">
+                                        {order.orderNumber}
+                                    </span>
+                                </div>
+                                <h2 className="text-base font-black text-white leading-tight">
+                                    {order.deliveryAddress || 'Tugasan Luar / Ad-hoc Task'}
+                                </h2>
+                                {order.deliveryDate && (
+                                    <div className="flex items-center gap-2 mt-1 text-xs font-bold uppercase tracking-wider">
+                                        <span className="text-orange-400">
+                                            {['Ahad', 'Isnin', 'Selasa', 'Rabu', 'Khamis', 'Jumaat', 'Sabtu'][new Date(order.deliveryDate).getDay()]}
+                                        </span>
+                                        <span className="text-slate-400">
+                                            {new Date(order.deliveryDate).toLocaleDateString('en-GB', { day: '2-digit', month: 'short', year: 'numeric' })}
+                                        </span>
+                                    </div>
+                                )}
+                            </div>
+                        </div>
+
+                        {/* Driver Photo Proof */}
+                        {extraJobPhoto && (
+                            <div className="mb-4 bg-slate-950/60 p-3 rounded-xl border border-slate-800">
+                                <p className="text-[10px] text-emerald-400 uppercase font-black mb-2 flex items-center gap-1">
+                                    📸 Bukti Gambar Tugasan / Task Photo Proof
+                                </p>
+                                <div className="w-full h-44 rounded-lg overflow-hidden border border-slate-700 bg-black relative group">
+                                    <img
+                                        src={extraJobPhoto}
+                                        alt="Proof"
+                                        className="w-full h-full object-cover cursor-zoom-in group-hover:scale-105 transition-transform"
+                                        onClick={() => setPreviewImageUrl(extraJobPhoto)}
+                                    />
+                                    <div className="absolute bottom-2 left-2 bg-black/80 backdrop-blur-sm px-2 py-0.5 rounded text-[9px] text-emerald-300 font-bold">
+                                        Ketik untuk besarkan gambar
+                                    </div>
+                                </div>
+                            </div>
+                        )}
+
+                        {/* Notes */}
+                        {order.notes && (
+                            <div className="mb-4 bg-slate-800/50 p-2.5 rounded-lg border border-slate-700/50 text-xs">
+                                <p className="text-[10px] text-slate-500 uppercase font-black mb-1">Catatan / Notes</p>
+                                <p className="text-slate-300 italic whitespace-pre-line">{order.notes}</p>
+                            </div>
+                        )}
+
+                        {/* Status Bar */}
+                        <div className={`p-3 rounded-xl text-xs font-bold uppercase flex items-center justify-center gap-2 ${
+                            order.status === 'Pending Approval'
+                                ? 'bg-amber-500/15 border border-amber-500/30 text-amber-300'
+                                : order.status === 'Delivered'
+                                ? 'bg-emerald-500/15 border border-emerald-500/30 text-emerald-300'
+                                : 'bg-red-500/15 border border-red-500/30 text-red-300'
+                        }`}>
+                            {order.status === 'Pending Approval' ? (
+                                <>
+                                    <div className="w-2 h-2 rounded-full bg-amber-400 animate-pulse"></div>
+                                    <span>🟡 Sedang Menunggu Kelulusan Admin / Pending Approval</span>
+                                </>
+                            ) : order.status === 'Delivered' ? (
+                                <>
+                                    <CheckCircle size={15} />
+                                    <span>✅ Diluluskan & Gaji Dikreditkan / Approved</span>
+                                </>
+                            ) : (
+                                <>
+                                    <X size={15} />
+                                    <span>❌ Ditolak / Rejected</span>
+                                </>
+                            )}
+                        </div>
+                    </div>
+                </div>
+            );
+        }
+
+        const isDeliveredOrDone = order.status === 'Delivered' || isPendingApprovalDone(order);
+
+        return (
+            <div key={order.id} className="bg-slate-900 border border-slate-800 rounded-2xl overflow-hidden shadow-lg relative">
+                {/* Status Strip */}
+                <div className={`absolute left-0 top-0 bottom-0 w-1.5 ${
+                    isDeliveredOrDone ? 'bg-emerald-500' :
+                    order.status === 'Pending Approval' ? 'bg-yellow-500' :
+                    order.status === 'Loaded' ? 'bg-blue-500' :
+                    'bg-slate-600'
+                }`} />
+
+                {/* Card Body */}
+                <div className="p-4 sm:p-5 pl-6 sm:pl-7">
+                    <div className="mb-4">
+                        {/* Badges bar */}
+                        <div className="flex items-center flex-wrap gap-1.5 mb-2">
+                            {(order as any).stop_sequence !== undefined && (order as any).stop_sequence !== null && (
+                                <span className="text-[11px] font-black uppercase bg-purple-600/30 text-purple-300 px-2.5 py-0.5 rounded-md border border-purple-500/40 flex items-center gap-1">
+                                    🎯 Hentian / Drop #{(order as any).stop_sequence}
+                                </span>
+                            )}
+                            {order.orderNumber && (
+                                <span className="text-[11px] font-mono font-black uppercase bg-blue-600/20 text-blue-300 px-2.5 py-0.5 rounded-md border border-blue-500/30">
+                                    DO: {order.orderNumber}
+                                </span>
+                            )}
+                            {(order as any).terms && (
+                                <span className={`text-[10px] font-black uppercase px-2 py-0.5 rounded-md border ${
+                                    (order as any).terms.toUpperCase().includes('C.O.D') 
+                                        ? 'bg-rose-500/20 text-rose-300 border-rose-500/40' 
+                                        : 'bg-slate-700/50 text-slate-300 border-slate-600'
+                                }`}>
+                                    {(order as any).terms}
+                                </span>
+                            )}
+                            {(order as any).do_total && (
+                                <span className="text-[10px] font-mono font-bold bg-amber-500/20 text-amber-300 px-2 py-0.5 rounded-md border border-amber-500/30">
+                                    {(order as any).do_total} Rolls
+                                </span>
+                            )}
+                            {(order as any).trip_origin && <span className="text-[10px] font-black uppercase bg-slate-800 text-slate-300 px-2 py-0.5 rounded border border-slate-700">{(order as any).trip_origin}</span>}
+                            {order.zone && <span className="text-[10px] font-black uppercase bg-amber-500/20 text-amber-400 px-2 py-0.5 rounded border border-amber-500/20">{order.zone}</span>}
+                            {!(order as any).stop_sequence && (order as any).trip_drop_count > 1 && (
+                                <span className="text-[10px] font-black uppercase bg-emerald-500/20 text-emerald-400 px-2 py-0.5 rounded border border-emerald-500/20">
+                                    {(order as any).trip_drop_count} Hentian / Drops
+                                </span>
+                            )}
+                        </div>
+
+                        {/* Customer Name */}
+                        {order.customer && (
+                            <h2 className="text-lg font-black text-white leading-tight tracking-tight flex items-baseline gap-1.5 mb-1.5">
+                                <span>🏢</span>
+                                <span>{order.customer}</span>
+                            </h2>
+                        )}
+
+                        {/* Address & Navigation */}
+                        {order.deliveryAddress && (
+                            <div className="bg-slate-950/70 p-2.5 rounded-xl border border-slate-800 flex items-start justify-between gap-2.5 mt-2">
+                                <div className="text-xs text-slate-300 whitespace-pre-line leading-relaxed flex items-start gap-1.5">
+                                    <MapPin size={14} className="text-rose-400 shrink-0 mt-0.5" />
+                                    <span>{order.deliveryAddress}</span>
+                                </div>
+                                <a
+                                    href={`https://www.google.com/maps/search/?api=1&query=${encodeURIComponent(order.deliveryAddress)}`}
+                                    target="_blank"
+                                    rel="noopener noreferrer"
+                                    onClick={(e) => e.stopPropagation()}
+                                    className="shrink-0 px-2.5 py-1.5 bg-blue-600 hover:bg-blue-500 active:scale-95 text-white rounded-lg text-[11px] font-black flex items-center gap-1 shadow transition-all"
+                                >
+                                    <span>Peta</span>
+                                    <ExternalLink size={10} />
+                                </a>
+                            </div>
+                        )}
+
+                        {/* Phone / WhatsApp Action Bar */}
+                        {(order as any).customer_phone && (
+                            <div className="flex items-center gap-2 mt-2.5 flex-wrap">
+                                <a
+                                    href={`tel:${(order as any).customer_phone}`}
+                                    onClick={(e) => e.stopPropagation()}
+                                    className="inline-flex items-center gap-1.5 px-3 py-1.5 bg-emerald-600 hover:bg-emerald-500 active:scale-95 text-white rounded-lg text-xs font-black shadow-md shadow-emerald-950/30 transition-all"
+                                >
+                                    <Phone size={12} />
+                                    <span>Hubungi / Call: {(order as any).customer_phone}</span>
+                                </a>
+                                <a
+                                    href={`https://wa.me/${String((order as any).customer_phone).replace(/[^0-9]/g, '').replace(/^0/, '60')}`}
+                                    target="_blank"
+                                    rel="noopener noreferrer"
+                                    onClick={(e) => e.stopPropagation()}
+                                    className="inline-flex items-center gap-1.5 px-3 py-1.5 bg-green-700 hover:bg-green-600 active:scale-95 text-white rounded-lg text-xs font-black shadow transition-all"
+                                >
+                                    <MessageCircle size={12} />
+                                    <span>WhatsApp</span>
+                                </a>
+                            </div>
+                        )}
+
+                        {/* Delivery Date */}
+                        {(order as any).deliveryDate && (
+                            <div className="flex items-center gap-2 mt-2 text-xs font-bold uppercase tracking-wider">
+                                <span className="text-orange-400">
+                                    {['Ahad', 'Isnin', 'Selasa', 'Rabu', 'Khamis', 'Jumaat', 'Sabtu'][new Date((order as any).deliveryDate).getDay()]}
+                                </span>
+                                <span className="text-slate-400">
+                                    {new Date((order as any).deliveryDate).toLocaleDateString('en-GB', { day: '2-digit', month: 'short', year: 'numeric' })}
+                                </span>
+                            </div>
+                        )}
+                    </div>
+
+                    {/* Order Notes */}
+                    {order.notes && (
+                        <div className="mb-4 bg-slate-800/50 p-2 rounded-lg border border-slate-700/50">
+                            <p className="text-[10px] text-slate-500 uppercase font-black mb-1">Nota / Notes</p>
+                            <p className="text-sm text-slate-300 whitespace-pre-line">{order.notes}</p>
+                        </div>
+                    )}
+
+                    {/* Cargo Preparation Photo */}
+                    {(() => {
+                        const photos = parsePrepPhotos((order as any).preparation_photo_url);
+                        if (photos.length === 0) return null;
+                        return (
+                            <div className="mb-4 bg-slate-800/30 p-3 rounded-xl border border-slate-800/80">
+                                <p className="text-[10px] text-amber-500 uppercase font-black mb-2 flex items-center gap-1">📦 Gambar Barang Bersedia / Cargo Prep Photo</p>
+                                <div className={`grid gap-2 max-w-md mx-auto ${photos.length > 1 ? 'grid-cols-2' : 'grid-cols-1'}`}>
+                                    {photos.map((p, idx) => (
+                                        <div key={idx} className="relative rounded-lg overflow-hidden border border-white/5 bg-black/40 aspect-video">
+                                            <img 
+                                                src={p.url} 
+                                                alt={`Cargo Prep - ${p.location}`} 
+                                                className="w-full h-full object-cover cursor-zoom-in hover:scale-105 transition-transform duration-300" 
+                                                onClick={() => setPreviewImageUrl(p.url)}
+                                            />
+                                            <div className="absolute top-1 left-1 bg-black/80 backdrop-blur-sm text-[8px] font-black text-amber-400 px-1.5 py-0.5 rounded border border-amber-500/20 uppercase tracking-wider">
+                                                {p.location}
+                                            </div>
+                                        </div>
+                                    ))}
+                                </div>
+                            </div>
+                        );
+                    })()}
+
+                    {/* Order Items */}
+                    <div className="space-y-3 mb-6">
+                        {(() => {
+                            const grouped = (order.items || []).reduce((acc: any, item: any) => {
+                                let loc = item.sourceLocation || 'Other Items';
+
+                                if (loc === 'Other Items' && item.remark && item.remark.includes('Loc:')) {
+                                    const match = item.remark.match(/Loc:\s*([^)\n\r,]+)/);
+                                    if (match) loc = match[1].trim();
+                                }
+
+                                if (loc.toLowerCase() === 'general') loc = 'Other Items';
+                                if (!acc[loc]) acc[loc] = [];
+                                acc[loc].push(item);
+                                return acc;
+                            }, {});
+
+                            return Object.entries(grouped).map(([loc, items]: [string, any]) => (
+                                <div key={loc} className="bg-slate-950/50 p-3 rounded-xl border border-slate-800">
+                                    <div className="text-[10px] font-bold text-slate-500 uppercase mb-2 flex items-center gap-1">
+                                        <Package size={10} /> {loc === 'Other Items' ? 'Barangan Lain / Other Items' : loc}
+                                    </div>
+                                    <div className="space-y-2">
+                                        {items.map((item: any, idx: number) => (
+                                            <div key={idx} className="flex justify-between items-center text-sm border-b border-slate-800/50 last:border-0 pb-1 last:pb-0">
+                                                <div>
+                                                    <span className="font-bold text-white">{item.quantity} x {item.product || item.sku}</span>
+                                                    {item.remark && (
+                                                        <div className="text-[11px] text-amber-500 font-mono mt-0.5">
+                                                            {item.remark.replace(/Loc:\s*[^)\n\r,]+/, '').trim() || item.remark}
+                                                        </div>
+                                                    )}
+                                                </div>
+                                            </div>
+                                        ))}
+                                    </div>
+                                </div>
+                            ));
+                        })()}
+                    </div>
+
+                    {/* POD Photos, Drop/DO Mismatch Check and Actions */}
+                    {(() => {
+                        const orderTotalDrops = (order as any).trip_drop_count || 1;
+                        const rawPodStr = order.pod_photo_url ? order.pod_photo_url.trim() : '';
+                        const rawPhotosList = rawPodStr ? rawPodStr.split(',') : [];
+                        const completedDropsCount = Math.floor(rawPhotosList.filter(Boolean).length / 2);
+                        const validDoPhotosCount = rawPhotosList.filter((url, idx) => idx % 2 === 0 && Boolean(url.trim())).length;
+                        const hasMissingDoSlot = rawPhotosList.some((url, idx) => idx % 2 === 0 && !url.trim());
+                        const isDropMismatch = (completedDropsCount !== orderTotalDrops) || (validDoPhotosCount !== orderTotalDrops) || hasMissingDoSlot;
+
+                        return (
+                            <>
+                                {/* Drop / DO Mismatch Warning Alert */}
+                                {isDropMismatch && (
+                                    <div className="mb-4 bg-amber-950/40 border border-amber-500/40 rounded-xl p-3 flex items-start gap-2.5 text-xs">
+                                        <div className="text-amber-400 font-black text-sm shrink-0 mt-0.5">⚠️</div>
+                                        <div className="flex-1">
+                                            <div className="font-black text-amber-400 uppercase tracking-wide flex items-center justify-between flex-wrap gap-1">
+                                                <span>Drop & DO Tidak Padan / Mismatch</span>
+                                                <span className="font-mono bg-amber-500/20 text-amber-300 px-1.5 py-0.5 rounded border border-amber-500/30 text-[10px]">
+                                                    {completedDropsCount}/{orderTotalDrops} Drops ({validDoPhotosCount} DO)
+                                                </span>
+                                            </div>
+                                            <p className="text-[11px] text-amber-200/80 mt-1 leading-snug">
+                                                {completedDropsCount < orderTotalDrops 
+                                                    ? `Perlu ${orderTotalDrops - completedDropsCount} lagi Drop untuk disahkan.` 
+                                                    : hasMissingDoSlot 
+                                                        ? 'Terdapat Drop yang belum mempunyai gambar DO bertandatangan.' 
+                                                        : `Dihantar ${completedDropsCount} Drops melebihi rekod asal (${orderTotalDrops} Drops).`}
+                                            </p>
+                                        </div>
+                                    </div>
+                                )}
+
+                                {/* POD Photos and Notes */}
+                                {(order.pod_photo_url || isDropMismatch) && (
+                                    <div className="mb-4 bg-slate-950/40 p-3 rounded-xl border border-slate-800/80">
+                                        <div className="flex justify-between items-center mb-2">
+                                            <p className="text-[10px] text-emerald-400 uppercase font-black flex items-center gap-1">
+                                                📸 Bukti Penghantaran / Proof of Delivery (POD)
+                                            </p>
+                                            <span className="text-[10px] font-mono font-bold text-slate-400">
+                                                {completedDropsCount} / {orderTotalDrops} Drops
+                                            </span>
+                                        </div>
+                                        <div className="grid grid-cols-4 gap-2">
+                                            {rawPhotosList.map((url, idx) => {
+                                                const isDo = idx % 2 === 0;
+                                                if (!url || url.trim() === '') {
+                                                    if (isDo) {
+                                                        const isUploadingThis = laterUploading && 
+                                                            laterUploadTarget?.orderId === order.id && 
+                                                            laterUploadTarget?.photoIndex === idx;
+
+                                                        return (
+                                                            <div key={idx} className="relative rounded-lg border border-dashed border-slate-700 bg-slate-900/50 hover:bg-slate-900 hover:border-blue-500/50 transition-all aspect-square flex flex-col items-center justify-center gap-1 group cursor-pointer"
+                                                                onClick={(e) => {
+                                                                    e.stopPropagation();
+                                                                    if (!isUploadingThis) handleTriggerLaterUpload(order.id, idx);
+                                                                }}
+                                                            >
+                                                                {isUploadingThis ? (
+                                                                    <>
+                                                                        <div className="w-4 h-4 border-2 border-blue-500/30 border-t-blue-500 rounded-full animate-spin"></div>
+                                                                        <span className="text-[6px] text-blue-400 font-bold uppercase text-center">UPLOADING...</span>
+                                                                    </>
+                                                                ) : (
+                                                                    <>
+                                                                        <Upload size={16} className="text-slate-500 group-hover:text-blue-400 transition-colors" />
+                                                                        <span className="text-[8px] font-black text-slate-400 group-hover:text-slate-200 uppercase tracking-wider text-center px-1">
+                                                                            UPLOAD DO
+                                                                        </span>
+                                                                    </>
+                                                                )}
+                                                            </div>
+                                                        );
+                                                    }
+                                                    return (
+                                                        <div key={idx} className="relative rounded-lg border border-dashed border-slate-800 bg-slate-950/50 aspect-square flex items-center justify-center">
+                                                            <span className="text-[8px] font-black text-slate-600 uppercase tracking-wider text-center">NO PHOTO</span>
+                                                        </div>
+                                                    );
+                                                }
+                                                return (
+                                                    <div key={idx} className="relative rounded-lg overflow-hidden border border-white/5 bg-black/40 aspect-square group">
+                                                        <img 
+                                                            src={url} 
+                                                            alt={`POD - ${idx + 1}`} 
+                                                            className="w-full h-full object-cover cursor-zoom-in hover:scale-105 transition-transform duration-300" 
+                                                            onClick={() => setPreviewImageUrl(url)}
+                                                        />
+                                                        <div className="absolute top-1 left-1 bg-black/80 backdrop-blur-sm text-[8px] font-black text-emerald-400 px-1.5 py-0.5 rounded border border-emerald-500/20 uppercase tracking-wider">
+                                                            {isDo ? 'DO' : 'Barang'}
+                                                        </div>
+                                                    </div>
+                                                );
+                                            })}
+
+                                            {/* Missing Drops Placeholders */}
+                                            {Array.from({ length: Math.max(0, orderTotalDrops - Math.ceil(rawPhotosList.length / 2)) }).map((_, missingIdx) => {
+                                                const dropNum = Math.ceil(rawPhotosList.length / 2) + missingIdx + 1;
+                                                return (
+                                                    <div 
+                                                        key={`missing-drop-${dropNum}`} 
+                                                        onClick={() => handleOpenUnloadModal(order)}
+                                                        className="col-span-2 relative rounded-lg border border-dashed border-amber-500/50 bg-amber-950/20 hover:bg-amber-900/30 transition-all p-2 flex items-center justify-between gap-2 cursor-pointer group"
+                                                    >
+                                                        <div className="flex items-center gap-2">
+                                                            <div className="w-6 h-6 rounded-full bg-amber-500/20 text-amber-400 flex items-center justify-center font-black text-[10px]">
+                                                                {dropNum}
+                                                            </div>
+                                                            <div>
+                                                                <span className="text-[9px] font-black text-amber-300 uppercase block">Drop #{dropNum} Belum Selesai</span>
+                                                                <span className="text-[8px] text-slate-400">Ketik untuk muat naik DO & Barang</span>
+                                                            </div>
+                                                        </div>
+                                                        <Camera size={14} className="text-amber-400 group-hover:scale-110 transition-transform shrink-0" />
+                                                    </div>
+                                                );
+                                            })}
+                                        </div>
+                                        {order.pod_timestamp && (
+                                            <p className="text-[9px] text-slate-500 mt-2 font-mono uppercase">
+                                                Dihantar pada / Delivered: {new Date(order.pod_timestamp).toLocaleString('en-GB')}
+                                            </p>
+                                        )}
+                                    </div>
+                                )}
+                            </>
+                        );
+                    })()}
+
+                    {/* ACTION BUTTONS */}
+                    {isDeliveredOrDone ? (
+                        <div className="space-y-2">
+                            <div className={`text-center py-2 rounded-xl text-xs font-bold uppercase flex items-center justify-center gap-2 ${
+                                order.status === 'Pending Approval'
+                                    ? 'bg-yellow-500/10 border border-yellow-500/20 text-yellow-500'
+                                    : 'bg-green-500/10 border border-green-500/20 text-green-400'
+                            }`}>
+                                {order.status === 'Pending Approval' ? (
+                                    <>
+                                        <Truck size={14} /> Menunggu kelulusan logistik / Pending logistics approval
+                                    </>
+                                ) : (
+                                    <>
+                                        <CheckCircle size={14} /> Stok Ditolak & Hantar / Delivered & Stock Deducted
+                                    </>
+                                )}
+                            </div>
+                            <button
+                                onClick={() => handleOpenUnloadModal(order)}
+                                data-action="OPEN_APPEND_DROP_MODAL"
+                                data-action-name="补充添加送货点与照片"
+                                data-target={`工单 #${order.orderNumber || order.id}`}
+                                className="w-full py-2.5 bg-slate-800 hover:bg-slate-750 text-slate-300 hover:text-white border border-slate-700 hover:border-emerald-500/50 rounded-xl font-bold uppercase text-xs tracking-wider flex items-center justify-center gap-2 transition-all active:scale-98 shadow-sm"
+                            >
+                                <Camera size={14} className="text-emerald-400" />
+                                <span>+ Tambah Drop / DO & Foto (Kemaskini POD)</span>
+                            </button>
+                        </div>
+                    ) : (
+                        (order.status === 'Loaded' || order.status === 'Pending Approval') ? (
+                            <button
+                                onClick={() => handleOpenUnloadModal(order)}
+                                data-action="OPEN_UNLOAD_MODAL"
+                                data-action-name="打开送货签收窗口"
+                                data-target={`工单 #${order.orderNumber || order.id}`}
+                                className="w-full py-4 bg-emerald-600 hover:bg-emerald-500 text-white rounded-xl font-bold uppercase text-sm tracking-widest flex items-center justify-center gap-3 shadow-lg shadow-emerald-950/30 active:scale-95 transition-all"
+                            >
+                                <CheckCircle size={18} /> Sahkan Hantaran / Confirm Delivery
+                                <ChevronRight size={16} className="opacity-50" />
+                            </button>
+                        ) : (
+                            <button
+                                onClick={() => handleOpenLoadModal(order)}
+                                className="w-full py-4 bg-blue-600 hover:bg-blue-500 text-white rounded-xl font-bold uppercase text-sm tracking-widest flex items-center justify-center gap-3 shadow-lg shadow-blue-900/30 active:scale-95 transition-all"
+                            >
+                                <Truck size={18} /> Naik Barang
+                                <ChevronRight size={16} className="opacity-50" />
+                            </button>
+                        )
+                    )}
+                </div>
+            </div>
+        );
+    };
 
     return (
         <div className="min-h-screen bg-black text-slate-200 pb-20 font-sans">
@@ -1633,570 +2315,183 @@ const DriverDelivery: React.FC<DriverDeliveryProps> = ({ user }) => {
                 )}
             </div>
 
-            {/* 📦 Ringkasan Muatan Lori / Cargo Load Summary (Pemandu & Logistik) */}
-            {todoList.length > 0 && activeCargoBreakdown.length > 0 && (
-                <div className="px-4 pt-3">
-                    <div className="bg-gradient-to-br from-slate-900 via-[#131722] to-slate-950 border border-blue-500/40 rounded-2xl p-4 shadow-xl relative overflow-hidden">
-                        <div className="flex items-center justify-between mb-3">
-                            <div className="flex items-center gap-2">
-                                <span className="text-xl">📦</span>
-                                <div>
-                                    <h3 className="text-xs font-black text-white uppercase tracking-wider">
-                                        Ringkasan Muatan / Cargo Load Summary
-                                    </h3>
-                                    <p className="text-[10px] text-slate-400 font-bold">
-                                        Semak kuantiti barang sebelum keluar kilang / Check cargo before departure
-                                    </p>
-                                </div>
-                            </div>
-                            <div className="text-right">
-                                <span className="px-2.5 py-1 rounded-xl bg-amber-500/20 border border-amber-500/40 text-amber-300 text-xs font-mono font-black">
-                                    Jumlah: {totalCargoPieces} Rolls
-                                </span>
-                            </div>
-                        </div>
-
-                        {/* Grid of Product Totals */}
-                        <div className="grid grid-cols-2 sm:grid-cols-3 gap-2">
-                            {activeCargoBreakdown.map((item, idx) => (
-                                <div
-                                    key={idx}
-                                    className="bg-black/60 border border-slate-800/80 rounded-xl p-2.5 flex items-center justify-between gap-2 shadow-sm"
-                                >
-                                    <div className="min-w-0 flex-1">
-                                        <p className="text-xs font-black text-slate-100 truncate" title={item.name}>
-                                            {item.name}
-                                        </p>
-                                        {item.warehouse && (
-                                            <span className="text-[9px] font-bold text-blue-400 bg-blue-950/60 px-1.5 py-0.5 rounded border border-blue-800/60 inline-block mt-0.5">
-                                                📍 {item.warehouse}
-                                            </span>
-                                        )}
-                                    </div>
-                                    <div className="text-right shrink-0">
-                                        <span className="text-base font-mono font-black text-amber-400">
-                                            {item.qty}
-                                        </span>
-                                    </div>
-                                </div>
-                            ))}
-                        </div>
-                    </div>
-                </div>
-            )}
-
             {/* TABS */}
             <div className="p-4 flex gap-2">
                 <button
                     onClick={() => setActiveTab('todo')}
-                    className={`flex-1 py-3 rounded-xl font-black uppercase text-sm tracking-wider transition-all ${activeTab === 'todo' ? 'bg-blue-600 text-white shadow-lg shadow-blue-900/40' : 'bg-slate-900 text-slate-500'
-                        }`}
+                    className={`flex-1 py-3 rounded-xl font-black uppercase text-sm tracking-wider transition-all ${
+                        activeTab === 'todo' ? 'bg-blue-600 text-white shadow-lg shadow-blue-900/40' : 'bg-slate-900 text-slate-500'
+                    }`}
                 >
-                    Dalam Proses / Pending ({todoList.length})
+                    Dalam Proses / Pending ({pendingTrips.length} {pendingTrips.length === 1 ? 'Trip' : 'Trips'})
                 </button>
                 <button
                     onClick={() => setActiveTab('done')}
-                    className={`flex-1 py-3 rounded-xl font-black uppercase text-sm tracking-wider transition-all ${activeTab === 'done' ? 'bg-green-600/20 text-green-500 border border-green-500/30' : 'bg-slate-900 text-slate-500'
-                        }`}
+                    className={`flex-1 py-3 rounded-xl font-black uppercase text-sm tracking-wider transition-all ${
+                        activeTab === 'done' ? 'bg-green-600/20 text-green-500 border border-green-500/30' : 'bg-slate-900 text-slate-500'
+                    }`}
                 >
-                    Selesai / Done ({doneList.length})
+                    Selesai / Done ({doneTrips.length} {doneTrips.length === 1 ? 'Trip' : 'Trips'})
                 </button>
             </div>
 
-            {/* LIST */}
+            {/* LIST (TRIP ACCORDION) */}
             <div className="px-4 space-y-4">
                 {loading ? (
                     <div className="text-center py-10 text-slate-500 animate-pulse">Memuatkan... / Loading...</div>
-                ) : displayList.length === 0 ? (
+                ) : currentTripList.length === 0 ? (
                     <div className="text-center py-12 bg-slate-900/50 rounded-2xl border-2 border-dashed border-slate-800">
                         <Package size={40} className="mx-auto mb-3 text-slate-700" />
                         <h3 className="font-bold text-slate-500">Tiada pesanan ditemui. / No orders found.</h3>
                     </div>
                 ) : (
-                    displayList.map((order) => {
-                        const isExtraJob = (order as any).job_type === 'Extra Job' || (order as any).job_type === 'Pick Up' || order.orderNumber?.startsWith('TRIP-JOB') || order.orderNumber?.startsWith('TRIP-PU') || (order.notes && order.notes.startsWith('[') && (!order.items || order.items.length === 0));
-
-                        if (isExtraJob) {
-                            const extraJobPhoto = (order as any).proof_of_load_url || (order as any).proofOfLoadUrl;
-                            const categoryIconMap: Record<string, string> = {
-                                'SHOPEE': '🛍️',
-                                'AMBIK PALLET': '🪵',
-                                'LORRY SERVICE': '🔧',
-                                'RETURN': '↩️',
-                                'OTHER': '🛠️'
-                            };
-                            const categoryIcon = categoryIconMap[order.zone?.toUpperCase() || ''] || '📸';
-
-                            return (
-                                <div key={order.id} className="bg-slate-900 border border-slate-800 rounded-2xl overflow-hidden shadow-lg relative">
-                                    {/* Status Strip */}
-                                    <div className={`absolute left-0 top-0 bottom-0 w-1.5 ${
-                                        order.status === 'Delivered' ? 'bg-emerald-500' :
-                                        order.status === 'Pending Approval' ? 'bg-amber-500' : 'bg-red-500'
-                                    }`} />
-
-                                    <div className="p-5 pl-7">
-                                        {/* Header */}
-                                        <div className="flex justify-between items-start mb-4">
-                                            <div>
-                                                <div className="flex items-center flex-wrap gap-2 mb-1.5">
-                                                    <span className="text-[10px] font-black uppercase bg-emerald-500/20 text-emerald-400 px-2 py-0.5 rounded border border-emerald-500/30 flex items-center gap-1">
-                                                        <span>{categoryIcon}</span>
-                                                        <span>{order.zone || 'Extra Job'}</span>
-                                                    </span>
-                                                    <span className="text-[10px] font-mono font-bold text-slate-400">
-                                                        {order.orderNumber}
-                                                    </span>
-                                                </div>
-                                                <h2 className="text-base font-black text-white leading-tight">
-                                                    {order.deliveryAddress || 'Tugasan Luar / Ad-hoc Task'}
-                                                </h2>
-                                                {order.deliveryDate && (
-                                                    <div className="flex items-center gap-2 mt-1 text-xs font-bold uppercase tracking-wider">
-                                                        <span className="text-orange-400">
-                                                            {['Ahad', 'Isnin', 'Selasa', 'Rabu', 'Khamis', 'Jumaat', 'Sabtu'][new Date(order.deliveryDate).getDay()]}
-                                                        </span>
-                                                        <span className="text-slate-400">
-                                                            {new Date(order.deliveryDate).toLocaleDateString('en-GB', { day: '2-digit', month: 'short', year: 'numeric' })}
-                                                        </span>
-                                                    </div>
-                                                )}
-                                            </div>
-                                        </div>
-
-                                        {/* Driver Photo Proof */}
-                                        {extraJobPhoto && (
-                                            <div className="mb-4 bg-slate-950/60 p-3 rounded-xl border border-slate-800">
-                                                <p className="text-[10px] text-emerald-400 uppercase font-black mb-2 flex items-center gap-1">
-                                                    📸 Bukti Gambar Tugasan / Task Photo Proof
-                                                </p>
-                                                <div className="w-full h-44 rounded-lg overflow-hidden border border-slate-700 bg-black relative group">
-                                                    <img
-                                                        src={extraJobPhoto}
-                                                        alt="Proof"
-                                                        className="w-full h-full object-cover cursor-zoom-in group-hover:scale-105 transition-transform"
-                                                        onClick={() => setPreviewImageUrl(extraJobPhoto)}
-                                                    />
-                                                    <div className="absolute bottom-2 left-2 bg-black/80 backdrop-blur-sm px-2 py-0.5 rounded text-[9px] text-emerald-300 font-bold">
-                                                        Ketik untuk besarkan gambar
-                                                    </div>
-                                                </div>
-                                            </div>
-                                        )}
-
-                                        {/* Notes */}
-                                        {order.notes && (
-                                            <div className="mb-4 bg-slate-800/50 p-2.5 rounded-lg border border-slate-700/50 text-xs">
-                                                <p className="text-[10px] text-slate-500 uppercase font-black mb-1">Catatan / Notes</p>
-                                                <p className="text-slate-300 italic whitespace-pre-line">{order.notes}</p>
-                                            </div>
-                                        )}
-
-                                        {/* Status Bar */}
-                                        <div className={`p-3 rounded-xl text-xs font-bold uppercase flex items-center justify-center gap-2 ${
-                                            order.status === 'Pending Approval'
-                                                ? 'bg-amber-500/15 border border-amber-500/30 text-amber-300'
-                                                : order.status === 'Delivered'
-                                                ? 'bg-emerald-500/15 border border-emerald-500/30 text-emerald-300'
-                                                : 'bg-red-500/15 border border-red-500/30 text-red-300'
-                                        }`}>
-                                            {order.status === 'Pending Approval' ? (
-                                                <>
-                                                    <div className="w-2 h-2 rounded-full bg-amber-400 animate-pulse"></div>
-                                                    <span>🟡 Sedang Menunggu Kelulusan Admin / Pending Approval</span>
-                                                </>
-                                            ) : order.status === 'Delivered' ? (
-                                                <>
-                                                    <CheckCircle size={15} />
-                                                    <span>✅ Diluluskan & Gaji Dikreditkan / Approved</span>
-                                                </>
-                                            ) : (
-                                                <>
-                                                    <X size={15} />
-                                                    <span>❌ Ditolak / Rejected</span>
-                                                </>
-                                            )}
-                                        </div>
-                                    </div>
-                                </div>
-                            );
-                        }
+                    currentTripList.map((trip, tripIndex) => {
+                        const defaultOpen = activeTab === 'todo' && tripIndex === 0;
+                        const isExpanded = expandedTripKeys[trip.key] !== undefined ? expandedTripKeys[trip.key] : defaultOpen;
 
                         return (
-                        <div key={order.id} className="bg-slate-900 border border-slate-800 rounded-2xl overflow-hidden shadow-lg relative">
-                            {/* Status Strip */}
-                            <div className={`absolute left-0 top-0 bottom-0 w-1.5 ${order.status === 'Delivered' ? 'bg-green-500' :
-                                order.status === 'Pending Approval' ? 'bg-yellow-500' :
-                                    'bg-blue-500'
-                                }`} />
-
-                            {/* Card Body */}
-                            <div className="p-4 sm:p-5 pl-6 sm:pl-7">
-                                <div className="mb-4">
-                                    {/* Badges bar */}
-                                    <div className="flex items-center flex-wrap gap-1.5 mb-2">
-                                        {(order as any).stop_sequence !== undefined && (order as any).stop_sequence !== null && (
-                                            <span className="text-[11px] font-black uppercase bg-purple-600/30 text-purple-300 px-2.5 py-0.5 rounded-md border border-purple-500/40 flex items-center gap-1">
-                                                🎯 Hentian / Drop #{(order as any).stop_sequence}
-                                            </span>
-                                        )}
-                                        {order.orderNumber && (
-                                            <span className="text-[11px] font-mono font-black uppercase bg-blue-600/20 text-blue-300 px-2.5 py-0.5 rounded-md border border-blue-500/30">
-                                                DO: {order.orderNumber}
-                                            </span>
-                                        )}
-                                        {(order as any).terms && (
-                                            <span className={`text-[10px] font-black uppercase px-2 py-0.5 rounded-md border ${
-                                                (order as any).terms.toUpperCase().includes('C.O.D') 
-                                                    ? 'bg-rose-500/20 text-rose-300 border-rose-500/40' 
-                                                    : 'bg-slate-700/50 text-slate-300 border-slate-600'
+                            <div
+                                key={trip.key}
+                                className={`border rounded-2xl overflow-hidden shadow-xl transition-all ${
+                                    trip.isAllDone 
+                                        ? 'bg-slate-900/90 border-emerald-500/40' 
+                                        : 'bg-slate-900 border-blue-500/40'
+                                }`}
+                            >
+                                {/* Header (Click to toggle expand/collapse) */}
+                                <div
+                                    onClick={() => toggleTripExpand(trip.key, defaultOpen)}
+                                    className="p-4 cursor-pointer select-none hover:bg-slate-800/40 active:bg-slate-800/60 transition-colors flex items-center justify-between gap-3"
+                                >
+                                    <div className="flex-1 min-w-0">
+                                        <div className="flex items-center flex-wrap gap-1.5 mb-1.5">
+                                            <span className={`text-xs font-mono font-black uppercase px-2.5 py-0.5 rounded-md border flex items-center gap-1.5 ${
+                                                trip.isAdHoc 
+                                                    ? 'bg-emerald-600/20 text-emerald-300 border-emerald-500/40'
+                                                    : 'bg-blue-600/25 text-blue-300 border-blue-500/40'
                                             }`}>
-                                                {(order as any).terms}
+                                                <Truck size={13} />
+                                                <span>{trip.tripNumber}</span>
                                             </span>
-                                        )}
-                                        {(order as any).do_total && (
-                                            <span className="text-[10px] font-mono font-bold bg-amber-500/20 text-amber-300 px-2 py-0.5 rounded-md border border-amber-500/30">
-                                                {(order as any).do_total} Rolls
-                                            </span>
-                                        )}
-                                        {(order as any).trip_origin && <span className="text-[10px] font-black uppercase bg-slate-800 text-slate-300 px-2 py-0.5 rounded border border-slate-700">{(order as any).trip_origin}</span>}
-                                        {order.zone && <span className="text-[10px] font-black uppercase bg-amber-500/20 text-amber-400 px-2 py-0.5 rounded border border-amber-500/20">{order.zone}</span>}
-                                        {!(order as any).stop_sequence && (order as any).trip_drop_count > 1 && (
-                                            <span className="text-[10px] font-black uppercase bg-emerald-500/20 text-emerald-400 px-2 py-0.5 rounded border border-emerald-500/20">
-                                                {(order as any).trip_drop_count} Hentian / Drops
-                                            </span>
-                                        )}
-                                    </div>
 
-                                    {/* Customer Name */}
-                                    {order.customer && (
-                                        <h2 className="text-lg font-black text-white leading-tight tracking-tight flex items-baseline gap-1.5 mb-1.5">
-                                            <span>🏢</span>
-                                            <span>{order.customer}</span>
-                                        </h2>
-                                    )}
+                                            {trip.tripIndexLabel && (
+                                                <span className="text-[10px] font-black uppercase bg-purple-600/25 text-purple-300 px-2 py-0.5 rounded border border-purple-500/40">
+                                                    {trip.tripIndexLabel}
+                                                </span>
+                                            )}
 
-                                    {/* Address & Navigation */}
-                                    {order.deliveryAddress && (
-                                        <div className="bg-slate-950/70 p-2.5 rounded-xl border border-slate-800 flex items-start justify-between gap-2.5 mt-2">
-                                            <div className="text-xs text-slate-300 whitespace-pre-line leading-relaxed flex items-start gap-1.5">
-                                                <MapPin size={14} className="text-rose-400 shrink-0 mt-0.5" />
-                                                <span>{order.deliveryAddress}</span>
-                                            </div>
-                                            <a
-                                                href={`https://www.google.com/maps/search/?api=1&query=${encodeURIComponent(order.deliveryAddress)}`}
-                                                target="_blank"
-                                                rel="noopener noreferrer"
-                                                onClick={(e) => e.stopPropagation()}
-                                                className="shrink-0 px-2.5 py-1.5 bg-blue-600 hover:bg-blue-500 active:scale-95 text-white rounded-lg text-[11px] font-black flex items-center gap-1 shadow transition-all"
-                                            >
-                                                <span>Peta</span>
-                                                <ExternalLink size={10} />
-                                            </a>
+                                            {trip.tripOrigin && (
+                                                <span className="text-[10px] font-bold text-slate-300 bg-slate-800 px-2 py-0.5 rounded border border-slate-700">
+                                                    🏭 {trip.tripOrigin}
+                                                </span>
+                                            )}
+
+                                            {trip.zone && (
+                                                <span className="text-[10px] font-black uppercase bg-amber-500/20 text-amber-400 px-2 py-0.5 rounded border border-amber-500/30">
+                                                    📍 {trip.zone}
+                                                </span>
+                                            )}
                                         </div>
-                                    )}
 
-                                    {/* Phone / WhatsApp Action Bar */}
-                                    {(order as any).customer_phone && (
-                                        <div className="flex items-center gap-2 mt-2.5 flex-wrap">
-                                            <a
-                                                href={`tel:${(order as any).customer_phone}`}
-                                                onClick={(e) => e.stopPropagation()}
-                                                className="inline-flex items-center gap-1.5 px-3 py-1.5 bg-emerald-600 hover:bg-emerald-500 active:scale-95 text-white rounded-lg text-xs font-black shadow-md shadow-emerald-950/30 transition-all"
-                                            >
-                                                <Phone size={12} />
-                                                <span>Hubungi / Call: {(order as any).customer_phone}</span>
-                                            </a>
-                                            <a
-                                                href={`https://wa.me/${String((order as any).customer_phone).replace(/[^0-9]/g, '').replace(/^0/, '60')}`}
-                                                target="_blank"
-                                                rel="noopener noreferrer"
-                                                onClick={(e) => e.stopPropagation()}
-                                                className="inline-flex items-center gap-1.5 px-3 py-1.5 bg-green-700 hover:bg-green-600 active:scale-95 text-white rounded-lg text-xs font-black shadow transition-all"
-                                            >
-                                                <MessageCircle size={12} />
-                                                <span>WhatsApp</span>
-                                            </a>
-                                        </div>
-                                    )}
-
-                                    {/* Delivery Date */}
-                                    {(order as any).deliveryDate && (
-                                        <div className="flex items-center gap-2 mt-2 text-xs font-bold uppercase tracking-wider">
-                                            <span className="text-orange-400">
-                                                {['Ahad', 'Isnin', 'Selasa', 'Rabu', 'Khamis', 'Jumaat', 'Sabtu'][new Date((order as any).deliveryDate).getDay()]}
-                                            </span>
+                                        <div className="flex items-center gap-2 text-xs font-bold">
                                             <span className="text-slate-400">
-                                                {new Date((order as any).deliveryDate).toLocaleDateString('en-GB', { day: '2-digit', month: 'short', year: 'numeric' })}
+                                                {trip.deliveryDate ? new Date(trip.deliveryDate).toLocaleDateString('en-GB', { day: '2-digit', month: 'short' }) : 'Hari Ini'}
+                                            </span>
+                                            <span className="text-slate-600">•</span>
+                                            <span className={trip.completedDrops === trip.totalDrops ? 'text-emerald-400 font-black' : 'text-blue-400'}>
+                                                {trip.completedDrops}/{trip.totalDrops} Hentian Selesai ({trip.totalDrops} Drops)
                                             </span>
                                         </div>
-                                    )}
-                                </div>
+                                    </div>
 
-                            {/* Order Notes */}
-                            {order.notes && (
-                                <div className="mb-4 bg-slate-800/50 p-2 rounded-lg border border-slate-700/50">
-                                    <p className="text-[10px] text-slate-500 uppercase font-black mb-1">Nota / Notes</p>
-                                    <p className="text-sm text-slate-300 whitespace-pre-line">{order.notes}</p>
-                                </div>
-                            )}
-
-                            {/* Cargo Preparation Photo */}
-                            {(() => {
-                                const photos = parsePrepPhotos((order as any).preparation_photo_url);
-                                if (photos.length === 0) return null;
-                                return (
-                                    <div className="mb-4 bg-slate-800/30 p-3 rounded-xl border border-slate-800/80">
-                                        <p className="text-[10px] text-amber-500 uppercase font-black mb-2 flex items-center gap-1">📦 Gambar Barang Bersedia / Cargo Prep Photo</p>
-                                        <div className={`grid gap-2 max-w-md mx-auto ${photos.length > 1 ? 'grid-cols-2' : 'grid-cols-1'}`}>
-                                            {photos.map((p, idx) => (
-                                                <div key={idx} className="relative rounded-lg overflow-hidden border border-white/5 bg-black/40 aspect-video">
-                                                    <img 
-                                                        src={p.url} 
-                                                        alt={`Cargo Prep - ${p.location}`} 
-                                                        className="w-full h-full object-cover cursor-zoom-in hover:scale-105 transition-transform duration-300" 
-                                                        onClick={() => setPreviewImageUrl(p.url)}
-                                                    />
-                                                    <div className="absolute top-1 left-1 bg-black/80 backdrop-blur-sm text-[8px] font-black text-amber-400 px-1.5 py-0.5 rounded border border-amber-500/20 uppercase tracking-wider">
-                                                        {p.location}
-                                                    </div>
-                                                </div>
-                                            ))}
+                                    {/* Right: Rolls badge & Toggle arrow */}
+                                    <div className="flex items-center gap-2 shrink-0">
+                                        {trip.totalRolls > 0 && (
+                                            <span className="px-2.5 py-1 rounded-xl bg-amber-500/20 border border-amber-500/40 text-amber-300 text-xs font-mono font-black">
+                                                {trip.totalRolls} Rolls
+                                            </span>
+                                        )}
+                                        <div className="w-8 h-8 rounded-lg bg-slate-800 flex items-center justify-center text-slate-400">
+                                            {isExpanded ? <ChevronUp size={18} /> : <ChevronDown size={18} />}
                                         </div>
                                     </div>
-                                );
-                            })()}
+                                </div>
 
-                            <div className="space-y-3 mb-6">
-                                {(() => {
-                                    const grouped = (order.items || []).reduce((acc: any, item: any) => {
-                                        let loc = item.sourceLocation || 'Other Items';
-
-                                        // Fallback legacy support if an old order STILL has Loc: hardcoded in its remark
-                                        if (loc === 'Other Items' && item.remark && item.remark.includes('Loc:')) {
-                                            const match = item.remark.match(/Loc:\s*([^)\n\r,]+)/);
-                                            if (match) loc = match[1].trim();
-                                        }
-
-                                        if (loc.toLowerCase() === 'general') loc = 'Other Items';
-                                        if (!acc[loc]) acc[loc] = [];
-                                        acc[loc].push(item);
-                                        return acc;
-                                    }, {});
-
-                                    return Object.entries(grouped).map(([loc, items]: [string, any]) => (
-                                        <div key={loc} className="bg-slate-950/50 p-3 rounded-xl border border-slate-800">
-                                            <div className="text-[10px] font-bold text-slate-500 uppercase mb-2 flex items-center gap-1">
-                                                <Package size={10} /> {loc === 'Other Items' ? 'Barangan Lain / Other Items' : loc}
+                                {/* Expandable Body */}
+                                {isExpanded && (
+                                    <div className="border-t border-slate-800/80 bg-black/40 p-3 sm:p-4 space-y-4">
+                                        {/* Trip Remark Banner */}
+                                        {trip.tripNotes && (
+                                            <div className="bg-amber-500/10 border border-amber-500/30 rounded-xl p-3 flex items-start gap-2.5">
+                                                <span className="text-amber-400 text-base mt-0.5">📢</span>
+                                                <div className="flex-1">
+                                                    <span className="text-[10px] font-black uppercase text-amber-400 tracking-wider block">
+                                                        Nota Trip / Trip Remark
+                                                    </span>
+                                                    <p className="text-xs text-amber-200 font-medium whitespace-pre-line leading-relaxed">
+                                                        {trip.tripNotes}
+                                                    </p>
+                                                </div>
                                             </div>
-                                            <div className="space-y-2">
-                                                {items.map((item: any, idx: number) => (
-                                                    <div key={idx} className="flex justify-between items-center text-sm border-b border-slate-800/50 last:border-0 pb-1 last:pb-0">
+                                        )}
+
+                                        {/* Per-Trip Cargo Summary */}
+                                        {trip.cargoBreakdown.length > 0 && (
+                                            <div className="bg-gradient-to-br from-slate-900 via-[#131722] to-slate-950 border border-blue-500/30 rounded-xl p-3.5 shadow-inner">
+                                                <div className="flex items-center justify-between mb-2.5">
+                                                    <div className="flex items-center gap-2">
+                                                        <span className="text-lg">📦</span>
                                                         <div>
-                                                            <span className="font-bold text-white">{item.quantity} x {item.product || item.sku}</span>
-                                                            {/* Display Remark (Legacy strip Loc: just in case) */}
-                                                            {item.remark && (
-                                                                <div className="text-[11px] text-amber-500 font-mono mt-0.5">
-                                                                    {item.remark.replace(/Loc:\s*[^)\n\r,]+/, '').trim() || item.remark}
-                                                                </div>
-                                                            )}
+                                                            <h4 className="text-xs font-black text-white uppercase tracking-wider">
+                                                                Muatan Khas Trip Ini / This Trip's Cargo
+                                                            </h4>
+                                                            <p className="text-[10px] text-slate-400 font-bold">
+                                                                Semak kuantiti sebelum muat / Check items before departure
+                                                            </p>
                                                         </div>
                                                     </div>
-                                                ))}
-                                            </div>
-                                        </div>
-                                    ));
-                                })()}
-                            </div>
-
-                            {/* POD Photos, Drop/DO Mismatch Check and Actions */}
-                            {(() => {
-                                const orderTotalDrops = (order as any).trip_drop_count || 1;
-                                const rawPodStr = order.pod_photo_url ? order.pod_photo_url.trim() : '';
-                                const rawPhotosList = rawPodStr ? rawPodStr.split(',') : [];
-                                const completedDropsCount = Math.floor(rawPhotosList.filter(Boolean).length / 2);
-                                const validDoPhotosCount = rawPhotosList.filter((url, idx) => idx % 2 === 0 && Boolean(url.trim())).length;
-                                const hasMissingDoSlot = rawPhotosList.some((url, idx) => idx % 2 === 0 && !url.trim());
-                                const isDropMismatch = (completedDropsCount !== orderTotalDrops) || (validDoPhotosCount !== orderTotalDrops) || hasMissingDoSlot;
-
-                                return (
-                                    <>
-                                        {/* Drop / DO Mismatch Warning Alert */}
-                                        {isDropMismatch && (
-                                            <div className="mb-4 bg-amber-950/40 border border-amber-500/40 rounded-xl p-3 flex items-start gap-2.5 text-xs">
-                                                <div className="text-amber-400 font-black text-sm shrink-0 mt-0.5">⚠️</div>
-                                                <div className="flex-1">
-                                                    <div className="font-black text-amber-400 uppercase tracking-wide flex items-center justify-between flex-wrap gap-1">
-                                                        <span>Drop & DO Tidak Padan / Mismatch</span>
-                                                        <span className="font-mono bg-amber-500/20 text-amber-300 px-1.5 py-0.5 rounded border border-amber-500/30 text-[10px]">
-                                                            {completedDropsCount}/{orderTotalDrops} Drops ({validDoPhotosCount} DO)
-                                                        </span>
-                                                    </div>
-                                                    <p className="text-[11px] text-amber-200/80 mt-1 leading-snug">
-                                                        {completedDropsCount < orderTotalDrops 
-                                                            ? `Perlu ${orderTotalDrops - completedDropsCount} lagi Drop untuk disahkan.` 
-                                                            : hasMissingDoSlot 
-                                                                ? 'Terdapat Drop yang belum mempunyai gambar DO bertandatangan.' 
-                                                                : `Dihantar ${completedDropsCount} Drops melebihi rekod asal (${orderTotalDrops} Drops).`}
-                                                    </p>
-                                                </div>
-                                            </div>
-                                        )}
-
-                                        {/* POD Photos and Notes */}
-                                        {(order.pod_photo_url || isDropMismatch) && (
-                                            <div className="mb-4 bg-slate-950/40 p-3 rounded-xl border border-slate-800/80">
-                                                <div className="flex justify-between items-center mb-2">
-                                                    <p className="text-[10px] text-emerald-400 uppercase font-black flex items-center gap-1">
-                                                        📸 Bukti Penghantaran / Proof of Delivery (POD)
-                                                    </p>
-                                                    <span className="text-[10px] font-mono font-bold text-slate-400">
-                                                        {completedDropsCount} / {orderTotalDrops} Drops
+                                                    <span className="px-2.5 py-1 rounded-xl bg-amber-500/20 border border-amber-500/40 text-amber-300 text-xs font-mono font-black">
+                                                        Jumlah: {trip.totalRolls} Rolls
                                                     </span>
                                                 </div>
-                                                <div className="grid grid-cols-4 gap-2">
-                                                    {rawPhotosList.map((url, idx) => {
-                                                        const isDo = idx % 2 === 0;
-                                                        if (!url || url.trim() === '') {
-                                                            if (isDo) {
-                                                                const isUploadingThis = laterUploading && 
-                                                                    laterUploadTarget?.orderId === order.id && 
-                                                                    laterUploadTarget?.photoIndex === idx;
 
-                                                                return (
-                                                                    <div key={idx} className="relative rounded-lg border border-dashed border-slate-700 bg-slate-900/50 hover:bg-slate-900 hover:border-blue-500/50 transition-all aspect-square flex flex-col items-center justify-center gap-1 group cursor-pointer"
-                                                                        onClick={(e) => {
-                                                                            e.stopPropagation();
-                                                                            if (!isUploadingThis) handleTriggerLaterUpload(order.id, idx);
-                                                                        }}
-                                                                    >
-                                                                        {isUploadingThis ? (
-                                                                            <>
-                                                                                <div className="w-4 h-4 border-2 border-blue-500/30 border-t-blue-500 rounded-full animate-spin"></div>
-                                                                                <span className="text-[6px] text-blue-400 font-bold uppercase text-center">UPLOADING...</span>
-                                                                            </>
-                                                                        ) : (
-                                                                            <>
-                                                                                <Upload size={16} className="text-slate-500 group-hover:text-blue-400 transition-colors" />
-                                                                                <span className="text-[8px] font-black text-slate-400 group-hover:text-slate-200 uppercase tracking-wider text-center px-1">
-                                                                                    UPLOAD DO
-                                                                                </span>
-                                                                            </>
-                                                                        )}
-                                                                    </div>
-                                                                );
-                                                            }
-                                                            return (
-                                                                <div key={idx} className="relative rounded-lg border border-dashed border-slate-800 bg-slate-950/50 aspect-square flex items-center justify-center">
-                                                                    <span className="text-[8px] font-black text-slate-600 uppercase tracking-wider text-center">NO PHOTO</span>
-                                                                </div>
-                                                            );
-                                                        }
-                                                        return (
-                                                            <div key={idx} className="relative rounded-lg overflow-hidden border border-white/5 bg-black/40 aspect-square group">
-                                                                <img 
-                                                                    src={url} 
-                                                                    alt={`POD - ${idx + 1}`} 
-                                                                    className="w-full h-full object-cover cursor-zoom-in hover:scale-105 transition-transform duration-300" 
-                                                                    onClick={() => setPreviewImageUrl(url)}
-                                                                />
-                                                                <div className="absolute top-1 left-1 bg-black/80 backdrop-blur-sm text-[8px] font-black text-emerald-400 px-1.5 py-0.5 rounded border border-emerald-500/20 uppercase tracking-wider">
-                                                                    {isDo ? 'DO' : 'Barang'}
-                                                                </div>
+                                                {/* Grid */}
+                                                <div className="grid grid-cols-2 sm:grid-cols-3 gap-2">
+                                                    {trip.cargoBreakdown.map((item, idx) => (
+                                                        <div
+                                                            key={idx}
+                                                            className="bg-black/60 border border-slate-800 rounded-lg p-2.5 flex items-center justify-between gap-2 shadow-sm"
+                                                        >
+                                                            <div className="min-w-0 flex-1">
+                                                                <p className="text-xs font-black text-slate-100 truncate" title={item.name}>
+                                                                    {item.name}
+                                                                </p>
+                                                                {item.warehouse && (
+                                                                    <span className="text-[9px] font-bold text-blue-400 bg-blue-950/60 px-1.5 py-0.5 rounded border border-blue-800/60 inline-block mt-0.5">
+                                                                        📍 {item.warehouse}
+                                                                    </span>
+                                                                )}
                                                             </div>
-                                                        );
-                                                    })}
-
-                                                    {/* Missing Drops Placeholders */}
-                                                    {Array.from({ length: Math.max(0, orderTotalDrops - Math.ceil(rawPhotosList.length / 2)) }).map((_, missingIdx) => {
-                                                        const dropNum = Math.ceil(rawPhotosList.length / 2) + missingIdx + 1;
-                                                        return (
-                                                            <div 
-                                                                key={`missing-drop-${dropNum}`} 
-                                                                onClick={() => handleOpenUnloadModal(order)}
-                                                                className="col-span-2 relative rounded-lg border border-dashed border-amber-500/50 bg-amber-950/20 hover:bg-amber-900/30 transition-all p-2 flex items-center justify-between gap-2 cursor-pointer group"
-                                                            >
-                                                                <div className="flex items-center gap-2">
-                                                                    <div className="w-6 h-6 rounded-full bg-amber-500/20 text-amber-400 flex items-center justify-center font-black text-[10px]">
-                                                                        {dropNum}
-                                                                    </div>
-                                                                    <div>
-                                                                        <span className="text-[9px] font-black text-amber-300 uppercase block">Drop #{dropNum} Belum Selesai</span>
-                                                                        <span className="text-[8px] text-slate-400">Ketik untuk muat naik DO & Barang</span>
-                                                                    </div>
-                                                                </div>
-                                                                <Camera size={14} className="text-amber-400 group-hover:scale-110 transition-transform shrink-0" />
+                                                            <div className="text-right shrink-0">
+                                                                <span className="text-base font-mono font-black text-amber-400">
+                                                                    {item.qty}
+                                                                </span>
                                                             </div>
-                                                        );
-                                                    })}
+                                                        </div>
+                                                    ))}
                                                 </div>
-                                                {order.pod_timestamp && (
-                                                    <p className="text-[9px] text-slate-500 mt-2 font-mono uppercase">
-                                                        Dihantar pada / Delivered: {new Date(order.pod_timestamp).toLocaleString('en-GB')}
-                                                    </p>
-                                                )}
                                             </div>
                                         )}
-                                    </>
-                                );
-                            })()}
 
-                            {/* ACTION BUTTON (Only for To-Do) */}
-                            {activeTab === 'todo' && (
-                                (order.status === 'Loaded' || order.status === 'Pending Approval') ? (
-                                    <button
-                                        onClick={() => handleOpenUnloadModal(order)}
-                                        data-action="OPEN_UNLOAD_MODAL"
-                                        data-action-name="打开送货签收窗口"
-                                        data-target={`工单 #${order.orderNumber || order.id}`}
-                                        className="w-full py-4 bg-emerald-600 hover:bg-emerald-500 text-white rounded-xl font-bold uppercase text-sm tracking-widest flex items-center justify-center gap-3 shadow-lg shadow-emerald-950/30 active:scale-95 transition-all"
-                                    >
-                                        <CheckCircle size={18} /> Sahkan Hantaran / Confirm Delivery
-                                        <ChevronRight size={16} className="opacity-50" />
-                                    </button>
-                                ) : (
-                                    <button
-                                        onClick={() => handleOpenLoadModal(order)}
-                                        className="w-full py-4 bg-blue-600 hover:bg-blue-500 text-white rounded-xl font-bold uppercase text-sm tracking-widest flex items-center justify-center gap-3 shadow-lg shadow-blue-900/30 active:scale-95 transition-all"
-                                    >
-                                        <Truck size={18} /> Naik Barang
-                                        <ChevronRight size={16} className="opacity-50" />
-                                    </button>
-                                )
-                            )}
-
-                            {activeTab === 'done' && (
-                                <div className="space-y-2">
-                                    <div className={`text-center py-2 rounded-xl text-xs font-bold uppercase flex items-center justify-center gap-2 ${order.status === 'Pending Approval'
-                                        ? 'bg-yellow-500/10 border border-yellow-500/20 text-yellow-500'
-                                        : 'bg-green-500/10 border border-green-500/20 text-green-400'
-                                        }`}>
-                                        {order.status === 'Pending Approval' ? (
-                                            <>
-                                                <Truck size={14} /> Menunggu kelulusan logistik / Pending logistics approval
-                                            </>
-                                        ) : (
-                                            <>
-                                                <CheckCircle size={14} /> Stok Ditolak & Hantar / Delivered & Stock Deducted
-                                            </>
-                                        )}
+                                        {/* Drops List */}
+                                        <div className="space-y-3">
+                                            {trip.orders.map((order) => renderOrderCard(order))}
+                                        </div>
                                     </div>
-                                    <button
-                                        onClick={() => handleOpenUnloadModal(order)}
-                                        data-action="OPEN_APPEND_DROP_MODAL"
-                                        data-action-name="补充添加送货点与照片"
-                                        data-target={`工单 #${order.orderNumber || order.id}`}
-                                        className="w-full py-2.5 bg-slate-800 hover:bg-slate-750 text-slate-300 hover:text-white border border-slate-700 hover:border-emerald-500/50 rounded-xl font-bold uppercase text-xs tracking-wider flex items-center justify-center gap-2 transition-all active:scale-98 shadow-sm"
-                                    >
-                                        <Camera size={14} className="text-emerald-400" />
-                                        <span>+ Tambah Drop / DO & Foto (Kemaskini POD)</span>
-                                    </button>
-                                </div>
-                            )}
+                                )}
                             </div>
-                        </div>
-                    );
-                })
+                        );
+                    })
                 )}
             </div>
 
