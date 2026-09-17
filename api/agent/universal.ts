@@ -1,6 +1,7 @@
 import { VercelRequest, VercelResponse } from '@vercel/node';
 import { GoogleGenerativeAI } from '@google/generative-ai';
 import { createClient } from '@supabase/supabase-js';
+import { handleParseTripPdf } from '../../lib/parse-trip-pdf';
 
 // Initialize Supabase Client
 const supabaseUrl = process.env.VITE_SUPABASE_URL || process.env.SUPABASE_URL || '';
@@ -1135,6 +1136,11 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
         return handleParseText(req, res);
     }
 
-    // 3. Default: Universal Intake (parse / commit)
+    // 3. DO PDF Trip Batch Parsing requests
+    if (action === 'parse-trip-pdf' || req.query?.action === 'parse-trip-pdf' || req.body?.action === 'parse-trip-pdf') {
+        return handleParseTripPdf(req, res);
+    }
+
+    // 4. Default: Universal Intake (parse / commit)
     return handleIntake(req, res);
 }

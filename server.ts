@@ -18,7 +18,7 @@ import v2DocumentsHandler, {
     handleLogs as documentLogsHandler
 } from './api/v2-documents';
 import docsHandler from './api/docs';
-import parseTripPdfHandler from './api/agent/parse-trip-pdf';
+import parseTripPdfHandler from './lib/parse-trip-pdf';
 
 const app = express();
 const PORT = 8080;
