@@ -1490,7 +1490,8 @@ CRITICAL: Return strictly a valid JSON object. Do not wrap in markdown quotes.
             keyAlert,
             modelUsed: modelUsed || (parsed.isFallback ? 'fallback' : 'none'),
             debugError: errorLogs.length > 0 ? errorLogs.join(' || ') : (lastError ? lastError.message : null),
-            discoveredModels: apiDiscoveredModels
+            discoveredModels: apiDiscoveredModels,
+            keySuffix: (process.env.GOOGLE_API_KEY || process.env.GEMINI_API_KEY || '').slice(-4)
         });
 
     } catch (err: any) {
