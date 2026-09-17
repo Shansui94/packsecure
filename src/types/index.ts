@@ -152,6 +152,7 @@ export interface ParsedDeliveryOrder {
     zone?: string;
     orderDate?: string;
     terms?: string;
+    remarks?: string;
     items: ParsedDOItem[];
     doTotal: number;
 }
@@ -163,6 +164,7 @@ export interface ParsedTripDOBatch {
     totalRolls: number;
     destinationsSummary: string;
     deliveryOrders: ParsedDeliveryOrder[];
+    tripRemarks?: string;
     isFallback?: boolean;
     modelUsed?: string;
     debugError?: string;

@@ -617,6 +617,7 @@ const DeliveryOrderManagement: React.FC<DeliveryOrderManagementProps> = ({ user 
     const [parsedLorryId, setParsedLorryId] = useState('');
     const [parsedTripOrigin, setParsedTripOrigin] = useState('Taiping');
     const [parsedZone, setParsedZone] = useState('');
+    const [parsedTripRemark, setParsedTripRemark] = useState('');
     const [isCreatingTrip, setIsCreatingTrip] = useState(false);
 
     // Editing State
@@ -2021,6 +2022,7 @@ const DeliveryOrderManagement: React.FC<DeliveryOrderManagementProps> = ({ user 
             setParsedDeliveryDate(getTomorrowStr());
             setParsedTripOrigin(activeLocation || 'Taiping');
             setParsedZone(data.primaryZone || '');
+            setParsedTripRemark(data.tripRemarks || '');
             setIsParsedTripModalOpen(true);
 
             if (data.isFallback) {
@@ -2054,6 +2056,7 @@ const DeliveryOrderManagement: React.FC<DeliveryOrderManagementProps> = ({ user 
     const handleCloseParsedTripModal = () => {
         setIsParsedTripModalOpen(false);
         setParsedTripBatch(null);
+        setParsedTripRemark('');
     };
 
     const handleRemoveParsedDO = (index: number) => {
@@ -2197,8 +2200,18 @@ const DeliveryOrderManagement: React.FC<DeliveryOrderManagementProps> = ({ user 
                 const orderId = crypto.randomUUID();
 
                 const noteParts: string[] = [];
-                if (doItem.phone) noteParts.push(`Tel: ${doItem.phone}`);
-                if (doItem.terms) noteParts.push(`Terms: ${doItem.terms}`);
+                if (doItem.remarks && doItem.remarks.trim()) {
+                    noteParts.push(doItem.remarks.trim());
+                }
+                if (parsedTripRemark && parsedTripRemark.trim() && !noteParts.some(p => p.includes(parsedTripRemark.trim()))) {
+                    noteParts.push(`[Trip: ${parsedTripRemark.trim()}]`);
+                }
+                if (doItem.phone && !noteParts.some(p => p.includes(doItem.phone))) {
+                    noteParts.push(`Tel: ${doItem.phone}`);
+                }
+                if (doItem.terms && !noteParts.some(p => p.includes(doItem.terms))) {
+                    noteParts.push(`Terms: ${doItem.terms}`);
+                }
 
                 const orderPayload: any = {
                     id: orderId,
@@ -2799,6 +2812,20 @@ const DeliveryOrderManagement: React.FC<DeliveryOrderManagementProps> = ({ user 
         } catch (e) {
             console.error(e);
             setToast({ type: 'error', message: t('Failed to update address') });
+        }
+    };
+
+    const handleQuickUpdateOrderNotes = async (orderId: string, currentNotes: string) => {
+        const input = window.prompt(t('Edit / Add Remark for this DO (订单备注与司机须知):'), currentNotes || '');
+        if (input === null) return;
+        const trimmed = input.trim();
+        try {
+            await supabase.from('sales_orders').update({ notes: trimmed || null }).eq('id', orderId);
+            setOrders(prev => prev.map(o => o.id === orderId ? { ...o, notes: trimmed || null } : o));
+            setToast({ type: 'success', message: t('Remark updated successfully') });
+        } catch (e: any) {
+            console.error("Failed to update remark:", e);
+            setToast({ type: 'error', message: e.message || t('Failed to update remark') });
         }
     };
 
@@ -4414,6 +4441,19 @@ const DeliveryOrderManagement: React.FC<DeliveryOrderManagementProps> = ({ user 
                                                                             </div>
                                                                         </div>
 
+                                                                        {/* Trip Master Remark Banner */}
+                                                                        {(() => {
+                                                                            const tripNoteMatch = tripGroup.orders.find(o => o.notes?.includes('[Trip:'))?.notes?.match(/\[Trip:\s*([^\]]+)\]/)?.[1];
+                                                                            if (!tripNoteMatch) return null;
+                                                                            return (
+                                                                                <div className="text-[10px] text-amber-300 bg-amber-500/10 px-2.5 py-1 rounded-lg border border-amber-500/20 mb-2 font-mono flex items-center gap-1.5">
+                                                                                    <span className="shrink-0">📢</span>
+                                                                                    <span className="font-bold text-amber-400">{t('Trip Note')}:</span>
+                                                                                    <span className="truncate">{tripNoteMatch}</span>
+                                                                                </div>
+                                                                            );
+                                                                        })()}
+
                                                                         {/* Drops List */}
                                                                         {isExpanded && (
                                                                             <div className="space-y-2 pt-1">
@@ -4489,10 +4529,31 @@ const DeliveryOrderManagement: React.FC<DeliveryOrderManagementProps> = ({ user 
                                                                                             </div>
                                                                                         )}
 
-                                                                                        {doOrder.notes && (
-                                                                                            <div className="text-[10px] text-amber-400/90 bg-amber-500/10 px-2 py-0.5 rounded border border-amber-500/20 break-words font-mono">
-                                                                                                📝 {doOrder.notes.replace(/^\|\s*/, '').trim()}
+                                                                                        {doOrder.notes ? (
+                                                                                            <div
+                                                                                                onClick={(e) => {
+                                                                                                    e.stopPropagation();
+                                                                                                    handleQuickUpdateOrderNotes(doOrder.id, doOrder.notes || '');
+                                                                                                }}
+                                                                                                className="group/note flex items-center justify-between gap-1 text-[10px] text-amber-400/90 bg-amber-500/10 hover:bg-amber-500/20 px-2 py-0.5 rounded border border-amber-500/20 break-words font-mono cursor-pointer transition-colors"
+                                                                                                title={t('Click to edit remark')}
+                                                                                            >
+                                                                                                <span className="truncate flex-1">📝 {doOrder.notes.replace(/^\|\s*/, '').trim()}</span>
+                                                                                                <Edit3 size={10} className="opacity-0 group-hover/note:opacity-100 text-amber-300 shrink-0" />
                                                                                             </div>
+                                                                                        ) : (
+                                                                                            <button
+                                                                                                type="button"
+                                                                                                onClick={(e) => {
+                                                                                                    e.stopPropagation();
+                                                                                                    handleQuickUpdateOrderNotes(doOrder.id, '');
+                                                                                                }}
+                                                                                                className="text-[9px] text-slate-500 hover:text-amber-300 px-1.5 py-0.5 rounded hover:bg-slate-800 transition-colors flex items-center gap-1 cursor-pointer w-fit"
+                                                                                                title={t('Add Remark')}
+                                                                                            >
+                                                                                                <Edit3 size={10} />
+                                                                                                <span>+ {t('Remark')}</span>
+                                                                                            </button>
                                                                                         )}
 
                                                                                         {/* Items preview inside drop */}
@@ -4669,9 +4730,32 @@ const DeliveryOrderManagement: React.FC<DeliveryOrderManagementProps> = ({ user 
                                                                             </div>
                                                                         </div>
 
-                                                                        {order.notes && (
-                                                                            <div className="text-[10px] text-amber-400/90 bg-amber-500/10 px-2.5 py-1.5 rounded-lg border border-amber-500/20 mb-3 break-words font-mono leading-relaxed">
-                                                                                📝 {order.notes.replace(/^\|\s*/, '').trim()}
+                                                                        {order.notes ? (
+                                                                            <div 
+                                                                                onClick={(e) => {
+                                                                                    e.stopPropagation();
+                                                                                    handleQuickUpdateOrderNotes(order.id, order.notes || '');
+                                                                                }}
+                                                                                className="group/note flex items-center justify-between gap-1 text-[10px] text-amber-400/90 bg-amber-500/10 hover:bg-amber-500/20 px-2.5 py-1.5 rounded-lg border border-amber-500/20 mb-3 break-words font-mono leading-relaxed cursor-pointer transition-colors"
+                                                                                title={t('Click to edit remark')}
+                                                                            >
+                                                                                <span className="truncate flex-1">📝 {order.notes.replace(/^\|\s*/, '').trim()}</span>
+                                                                                <Edit3 size={11} className="opacity-0 group-hover/note:opacity-100 text-amber-300 shrink-0" />
+                                                                            </div>
+                                                                        ) : (
+                                                                            <div className="mb-2">
+                                                                                <button
+                                                                                    type="button"
+                                                                                    onClick={(e) => {
+                                                                                        e.stopPropagation();
+                                                                                        handleQuickUpdateOrderNotes(order.id, '');
+                                                                                    }}
+                                                                                    className="text-[10px] text-slate-500 hover:text-amber-300 px-2 py-0.5 rounded hover:bg-slate-800 transition-colors flex items-center gap-1 cursor-pointer"
+                                                                                    title={t('Add Remark')}
+                                                                                >
+                                                                                    <Edit3 size={11} />
+                                                                                    <span>+ {t('Add Remark')}</span>
+                                                                                </button>
                                                                             </div>
                                                                         )}
 
@@ -5966,6 +6050,21 @@ const DeliveryOrderManagement: React.FC<DeliveryOrderManagementProps> = ({ user 
                                         </datalist>
                                     </div>
                                 </div>
+
+                                {/* Trip Master Remark / Notes */}
+                                <div className="pt-2 border-t border-slate-800/60">
+                                    <label className="block text-[10px] font-bold text-slate-400 uppercase mb-1 flex items-center gap-1.5">
+                                        <Edit3 size={12} className="text-amber-400" />
+                                        <span>{t('Trip Remark / 车次总说明与司机指引')}</span>
+                                    </label>
+                                    <input
+                                        type="text"
+                                        className="w-full bg-slate-950 border border-slate-700/80 rounded-xl px-3 py-2 text-xs text-amber-200 outline-none focus:border-amber-500 placeholder:text-slate-600"
+                                        value={parsedTripRemark}
+                                        onChange={e => setParsedTripRemark(e.target.value)}
+                                        placeholder={t('例如：整车派送注意事项、回程收栈板、司机指引等...')}
+                                    />
+                                </div>
                             </div>
 
                             {/* 📦 Trip Cargo Breakdown Summary (车次装车总数清单) */}
@@ -6132,6 +6231,20 @@ const DeliveryOrderManagement: React.FC<DeliveryOrderManagementProps> = ({ user 
                                                     value={doItem.deliveryAddress}
                                                     onChange={e => handleUpdateParsedDO(idx, 'deliveryAddress', e.target.value)}
                                                     placeholder="Detailed address"
+                                                />
+                                            </div>
+
+                                            <div>
+                                                <label className="block text-[9px] font-bold text-slate-400 uppercase mb-0.5 flex items-center gap-1">
+                                                    <Edit3 size={11} className="text-amber-400" />
+                                                    <span>{t('DO Remark / 订单备注与司机须知')}</span>
+                                                </label>
+                                                <input
+                                                    type="text"
+                                                    className="w-full bg-slate-950 border border-slate-800 rounded-lg px-2.5 py-1.5 text-xs text-amber-300 placeholder:text-slate-600 outline-none focus:border-amber-500 transition-all"
+                                                    value={doItem.remarks || ''}
+                                                    onChange={e => handleUpdateParsedDO(idx, 'remarks', e.target.value)}
+                                                    placeholder={t('例如：货款现结、到达前先致电、放门卫处等...')}
                                                 />
                                             </div>
 

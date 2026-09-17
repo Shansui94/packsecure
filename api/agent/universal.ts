@@ -1230,6 +1230,7 @@ FOR EACH DELIVERY ORDER:
 - "zone": Primary Malaysian state/region (e.g., KELANTAN, PERAK, PENANG, KEDAH, SELANGOR, KL, NEGERI SEMBILAN, MELAKA, JOHOR, PAHANG, TERENGGANU).
 - "orderDate": DO issue date in YYYY-MM-DD format (e.g., "2026-09-17").
 - "terms": Payment term if visible (e.g., "C.O.D.", "30 Days").
+- "remarks": Any printed remarks, notes, special delivery instructions, payment/cheque notes, timing requests (e.g. "Tolong hantar pagi", "Collect cash RM1200", "Call sebelum sampai", or empty string if none).
 - "items": Array of products on this DO:
   [
     {
@@ -1247,6 +1248,7 @@ FOR THE OVERALL TRIP:
 - "totalDrops": Total count of distinct DO stops (count of objects in deliveryOrders).
 - "totalRolls": Sum of all item quantities across all DOs.
 - "destinationsSummary": Comma-separated list of towns/areas visited (e.g., "Kota Bharu, Pasir Puteh, Pasir Mas").
+- "tripRemarks": Any overall trip-level remark or driver instruction, or empty string.
 
 EXACT JSON OUTPUT FORMAT REQUIRED:
 {
@@ -1255,6 +1257,7 @@ EXACT JSON OUTPUT FORMAT REQUIRED:
   "totalDrops": 2,
   "totalRolls": 45,
   "destinationsSummary": "Kota Bharu, Pasir Mas",
+  "tripRemarks": "",
   "deliveryOrders": [
     {
       "doNumber": "OPM2609-0551",
@@ -1264,6 +1267,7 @@ EXACT JSON OUTPUT FORMAT REQUIRED:
       "zone": "KELANTAN",
       "orderDate": "2026-09-17",
       "terms": "C.O.D.",
+      "remarks": "Call before arrival",
       "items": [
         { "product": "Bubble Wrap Single Layer 1m x 100m (MERAH)", "quantity": 20, "uom": "ROLL", "sku": "B17-ROLL" }
       ],
@@ -1277,6 +1281,7 @@ EXACT JSON OUTPUT FORMAT REQUIRED:
       "zone": "KELANTAN",
       "orderDate": "2026-09-17",
       "terms": "30 Days",
+      "remarks": "",
       "items": [
         { "product": "Stretch Film 500mm x 2.2kg", "quantity": 25, "uom": "ROLL", "sku": "SF-22" }
       ],
@@ -1440,6 +1445,7 @@ CRITICAL: Return strictly a valid JSON object. Do not wrap in markdown quotes.
                         zone: 'NORTH',
                         orderDate: today,
                         terms: 'C.O.D.',
+                        remarks: '',
                         items: [{
                             product: 'Bubble Wrap Single Layer 1m x 100m (B17-ROLL)',
                             quantity: 10,
@@ -1462,6 +1468,7 @@ CRITICAL: Return strictly a valid JSON object. Do not wrap in markdown quotes.
                         zone: 'NORTH',
                         orderDate: today,
                         terms: 'C.O.D.',
+                        remarks: '',
                         items: [{
                             product: 'Bubble Wrap Single Layer 1m x 100m (B17-ROLL)',
                             quantity: 10,
@@ -1501,6 +1508,7 @@ CRITICAL: Return strictly a valid JSON object. Do not wrap in markdown quotes.
             totalDrops: typeof parsed.totalDrops === 'number' ? parsed.totalDrops : calculatedDrops,
             totalRolls: typeof parsed.totalRolls === 'number' && parsed.totalRolls > 0 ? parsed.totalRolls : calculatedRolls,
             destinationsSummary: parsed.destinationsSummary || '',
+            tripRemarks: parsed.tripRemarks || '',
             deliveryOrders: Array.isArray(parsed.deliveryOrders) ? parsed.deliveryOrders : [],
             isFallback: !!parsed.isFallback,
             isKeyBlocked,
