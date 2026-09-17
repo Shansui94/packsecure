@@ -12,7 +12,7 @@ interface StockRow {
     uom: string;
     loc_id?: string;
     current_stock: number; // Physical Stock
-    reserved_stock?: number; // Pending orders
+    reserved_stock?: number; // 待装车发货订单预留量（排除已装车 Pending/Loaded）
     available_stock?: number; // Physical - Reserved
     last_updated: string;
 }
@@ -611,7 +611,7 @@ const LiveStock: React.FC<LiveStockProps> = ({ onNavigate }) => {
                 supabase
                     .from('sales_orders')
                     .select('id, order_number, customer, status, items, delivery_address, created_at, trip_origin')
-                    .in('status', ['New', 'Production', 'Ready', 'Pending Approval'])
+                    .in('status', ['New', 'Production', 'Ready'])
             ]);
 
             if (invRes.error) throw invRes.error;
@@ -671,9 +671,14 @@ const LiveStock: React.FC<LiveStockProps> = ({ onNavigate }) => {
             });
 
             // 2. 统计待出货订单预留量 (SKU + 归一化仓库)
+            // ⚠️ 规则：Pending / Loaded 代表已装车离开库位，不计入仓库地面预留(Res)
             const reservedMap = new Map<string, number>();
             const pendingOrders = ordersRes.data || [];
             pendingOrders.forEach(order => {
+                const s = String(order.status || '').toLowerCase().trim();
+                if (s === 'pending' || s === 'pending approval' || s === 'loaded' || s === 'delivered' || s === 'cancelled') {
+                    return;
+                }
                 if (order.items && Array.isArray(order.items)) {
                     order.items.forEach(item => {
                         const sku = item.sku?.trim();
