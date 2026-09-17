@@ -1171,9 +1171,14 @@ FOR THE OVERALL TRIP:
 - "destinationsSummary": Comma-separated list of towns/areas visited (e.g., "Kota Bharu, Pasir Puteh, Pasir Mas").
 
 CRITICAL RULES:
-1. QUANTITY MUST BE ACCURATE: Extract the exact printed quantity in the "Qty" column.
-2. CLEAN TEXT: Strip unnecessary carriage returns from customer names or product titles.
-3. RAW JSON ONLY: Return strictly valid JSON object without markdown formatting, ticks, or backticks.
+1. MULTI-PAGE & MULTI-DO SPLITTING:
+   - A single PDF file CAN CONTAIN MULTIPLE PAGES, and each page (or group of pages) can be a SEPARATE Delivery Order (DO).
+   - Inspect every page carefully. Whenever a new DO number (e.g. "OPM...", "DO...") or a different customer name/address appears, DO NOT MERGE THEM.
+   - You MUST extract each distinct DO as a separate object in the "deliveryOrders" array (each represents one delivery drop stop).
+   - If one DO spans multiple pages (e.g. Page 1 of 2 and Page 2 of 2 with the SAME DO number), merge the items into that single DO.
+2. QUANTITY MUST BE ACCURATE: Extract the exact printed quantity in the "Qty" column.
+3. CLEAN TEXT: Strip unnecessary carriage returns from customer names or product titles.
+4. RAW JSON ONLY: Return strictly valid JSON object without markdown formatting, ticks, or backticks.
 `;
 
         if (productsList && Array.isArray(productsList) && productsList.length > 0) {
