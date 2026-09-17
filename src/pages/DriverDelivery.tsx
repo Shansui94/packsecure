@@ -1219,6 +1219,7 @@ const DriverDelivery: React.FC<DriverDeliveryProps> = ({ user }) => {
                         .from('lorry_mileage_logs')
                         .select('mileage')
                         .eq('lorry_id', lorryId)
+                        .lte('created_at', new Date().toISOString())
                         .order('created_at', { ascending: false })
                         .limit(1)
                         .maybeSingle();

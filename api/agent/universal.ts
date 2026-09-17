@@ -1150,13 +1150,21 @@ export async function handleParseTripPdf(req: VercelRequest, res: VercelResponse
             console.warn("Failed to fetch product aliases:", err);
         }
 
+        const cleanBase64Payload = (rawStr: string = '') => {
+            const idx = rawStr.indexOf(';base64,');
+            if (idx !== -1) {
+                return rawStr.substring(idx + 8).replace(/\s+/g, '');
+            }
+            return rawStr.replace(/^data:[^,]+,/, '').replace(/\s+/g, '');
+        };
+
         // Pre-inspect PDF buffers for page count and embedded DO number patterns
         let totalEstimatedPages = 0;
         const allDetectedDoNumbers: string[] = [];
 
         files.forEach(f => {
             try {
-                const cleanB64 = (f.base64 || '').replace(/^data:[^;]+;base64,/, '').replace(/\s+/g, '');
+                const cleanB64 = cleanBase64Payload(f.base64 || f.data || '');
                 const rawStr = Buffer.from(cleanB64, 'base64').toString('latin1');
                 const pageMatches = rawStr.match(/\/Type\s*\/Page\b/g);
                 const pages = pageMatches ? pageMatches.length : 1;
@@ -1287,7 +1295,7 @@ CRITICAL: Return strictly a valid JSON object. Do not wrap in markdown quotes.
             if (f.name && f.name.toLowerCase().endsWith('.pdf')) {
                 mime = 'application/pdf';
             }
-            const cleanBase64 = (f.base64 || '').replace(/^data:[^;]+;base64,/, '').replace(/\s+/g, '');
+            const cleanBase64 = cleanBase64Payload(f.base64 || f.data || '');
             return {
                 inlineData: {
                     data: cleanBase64,

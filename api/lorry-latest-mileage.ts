@@ -31,6 +31,7 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
             .from('lorry_mileage_logs')
             .select('id, mileage, created_at, log_type, driver_id')
             .eq('lorry_id', lorryId)
+            .lte('created_at', new Date().toISOString())
             .order('created_at', { ascending: false })
             .limit(1)
             .maybeSingle();

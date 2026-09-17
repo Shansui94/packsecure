@@ -313,6 +313,12 @@ const LorryManagement: React.FC = () => {
             return;
         }
 
+        const calDate = new Date(calibrationData.date);
+        if (calDate.getTime() > Date.now() + 5 * 60 * 1000) {
+            const confirmFuture = window.confirm("⚠️ 警告：您选择的校准时间处于未来！\n录入未来时间会导致司机日常打卡与月度统计异常。\n\n确定仍要使用该未来时间录入吗？");
+            if (!confirmFuture) return;
+        }
+
         setIsSavingCalibration(true);
         try {
             const { data: { user: authUser } } = await supabase.auth.getUser();
@@ -1308,10 +1314,15 @@ const LorryManagement: React.FC = () => {
                                                         <button
                                                             onClick={() => {
                                                                 setCalibrationModalLorry(s);
+                                                                const now = new Date();
+                                                                const isCurrentMonth = selectedOdoYear === now.getFullYear() && selectedOdoMonth === (now.getMonth() + 1);
+                                                                const defaultDateStr = isCurrentMonth
+                                                                    ? `${selectedOdoYear}-${String(selectedOdoMonth).padStart(2, '0')}-${String(now.getDate()).padStart(2, '0')}T${String(now.getHours()).padStart(2, '0')}:${String(now.getMinutes()).padStart(2, '0')}`
+                                                                    : `${selectedOdoYear}-${String(selectedOdoMonth).padStart(2, '0')}-${String(new Date(selectedOdoYear, selectedOdoMonth, 0).getDate()).padStart(2, '0')}T18:00`;
                                                                 setCalibrationData({
                                                                     mileage: s.endLog?.mileage ? String(s.endLog.mileage) : '',
                                                                     log_type: 'end',
-                                                                    date: `${selectedOdoYear}-${String(selectedOdoMonth).padStart(2, '0')}-${String(new Date(selectedOdoYear, selectedOdoMonth, 0).getDate()).padStart(2, '0')}T18:00`,
+                                                                    date: defaultDateStr,
                                                                     notes: '管理员校准里程'
                                                                 });
                                                             }}
