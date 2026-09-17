@@ -1558,22 +1558,52 @@ const DriverDelivery: React.FC<DriverDeliveryProps> = ({ user }) => {
         deliveryDate?: string;
         tripNotes?: string;
         isAllDone: boolean;
+        sortSeq?: number;
     }
 
     const tripGroups = React.useMemo<DriverTripGroup[]>(() => {
-        const groupMap = new Map<string, DriverTripGroup>();
-        const adhocOrders: SalesOrder[] = [];
+        const multiDropMap = new Map<string, DriverTripGroup>();
+        const singleOrders: SalesOrder[] = [];
+        const extraJobOrders: SalesOrder[] = [];
 
+        // Helper to compute items breakdown
+        const getCargoSummary = (orderList: SalesOrder[]) => {
+            const itemMap = new Map<string, { name: string; sku?: string; qty: number; warehouse?: string }>();
+            orderList.forEach(order => {
+                (order.items || []).forEach((it: any) => {
+                    const key = it.product || it.sku || 'Item';
+                    const qty = Number(it.quantity) || 0;
+                    const wh = it.sourceLocation || ((order as any).trip_origin ? String((order as any).trip_origin) : 'OPM Lama');
+                    if (itemMap.has(key)) {
+                        itemMap.get(key)!.qty += qty;
+                    } else {
+                        itemMap.set(key, {
+                            name: key,
+                            sku: it.sku,
+                            qty,
+                            warehouse: wh
+                        });
+                    }
+                });
+            });
+            const cargoBreakdown = Array.from(itemMap.values()).sort((a, b) => b.qty - a.qty);
+            const totalRolls = cargoBreakdown.reduce((sum, i) => sum + i.qty, 0);
+            return { cargoBreakdown, totalRolls };
+        };
+
+        // Classify orders
         tasks.forEach(order => {
             const isExtraJob = (order as any).job_type === 'Extra Job' || (order as any).job_type === 'Pick Up' || order.orderNumber?.startsWith('TRIP-JOB') || order.orderNumber?.startsWith('TRIP-PU');
             const tripId = (order as any).trip_id;
 
-            if (tripId && !isExtraJob) {
-                if (!groupMap.has(tripId)) {
+            if (isExtraJob) {
+                extraJobOrders.push(order);
+            } else if (tripId) {
+                if (!multiDropMap.has(tripId)) {
                     const v2Trip = tripsV2List.find(t => t.id === tripId);
                     const tripNum = v2Trip?.trip_number || (order as any).trip_number || (order.orderNumber ? `TRIP-${order.orderNumber}` : `TRIP-${tripId.slice(0, 8)}`);
                     
-                    groupMap.set(tripId, {
+                    multiDropMap.set(tripId, {
                         key: `trip_${tripId}`,
                         tripId,
                         tripNumber: tripNum,
@@ -1585,23 +1615,24 @@ const DriverDelivery: React.FC<DriverDeliveryProps> = ({ user }) => {
                         cargoBreakdown: [],
                         zone: order.zone,
                         tripOrigin: (order as any).trip_origin,
-                        deliveryDate: (order as any).deliveryDate,
+                        deliveryDate: (order as any).deliveryDate || (order as any).deadline,
                         tripNotes: undefined,
-                        isAllDone: false
+                        isAllDone: false,
+                        sortSeq: 999
                     });
                 }
-                const grp = groupMap.get(tripId)!;
+                const grp = multiDropMap.get(tripId)!;
                 grp.orders.push(order);
             } else {
-                adhocOrders.push(order);
+                // Regular single DO delivery order (individual trip)
+                singleOrders.push(order);
             }
         });
 
         const result: DriverTripGroup[] = [];
 
-        // Process Trips
-        groupMap.forEach(grp => {
-            // Sort orders inside by stop_sequence
+        // 1. Process Multi-drop Trips
+        multiDropMap.forEach(grp => {
             grp.orders.sort((a: any, b: any) => {
                 const stopA = (a.stop_sequence !== undefined && a.stop_sequence !== null && a.stop_sequence !== 999) ? a.stop_sequence : 999;
                 const stopB = (b.stop_sequence !== undefined && b.stop_sequence !== null && b.stop_sequence !== 999) ? b.stop_sequence : 999;
@@ -1613,7 +1644,7 @@ const DriverDelivery: React.FC<DriverDeliveryProps> = ({ user }) => {
             grp.completedDrops = grp.orders.filter(o => o.status === 'Delivered' || isPendingApprovalDone(o)).length;
             grp.isAllDone = grp.completedDrops === grp.totalDrops && grp.totalDrops > 0;
 
-            // Extract Trip Remark if present in order notes
+            // Extract Trip Remark or sequence if present
             for (const ord of grp.orders) {
                 if (ord.notes && ord.notes.includes('[Trip:')) {
                     const m = ord.notes.match(/\[Trip:\s*([^\]]+)\]/);
@@ -1624,90 +1655,158 @@ const DriverDelivery: React.FC<DriverDeliveryProps> = ({ user }) => {
                 }
             }
 
+            // Check if trip sequence is specified
+            const v2Trip = tripsV2List.find(t => t.id === grp.tripId);
+            if ((v2Trip as any)?.trip_sequence) {
+                grp.sortSeq = Number((v2Trip as any).trip_sequence);
+                grp.tripIndexLabel = `Trip ${grp.sortSeq}`;
+            }
+
             // Fallback metadata
             if (!grp.zone) grp.zone = grp.orders.find(o => o.zone)?.zone;
             if (!grp.tripOrigin) grp.tripOrigin = grp.orders.find(o => (o as any).trip_origin)?.trip_origin;
-            if (!grp.deliveryDate) grp.deliveryDate = grp.orders.find(o => (o as any).deliveryDate)?.deliveryDate;
+            if (!grp.deliveryDate) grp.deliveryDate = grp.orders.find(o => (o as any).deliveryDate)?.deliveryDate || grp.orders.find(o => (o as any).deadline)?.deadline;
 
-            // Calculate per-trip cargo breakdown
-            const itemMap = new Map<string, { name: string; sku?: string; qty: number; warehouse?: string }>();
-            grp.orders.forEach(order => {
-                (order.items || []).forEach((it: any) => {
-                    const key = it.product || it.sku || 'Item';
-                    const qty = Number(it.quantity) || 0;
-                    const wh = it.sourceLocation || ((order as any).trip_origin ? String((order as any).trip_origin) : 'OPM Lama');
-                    if (itemMap.has(key)) {
-                        itemMap.get(key)!.qty += qty;
-                    } else {
-                        itemMap.set(key, {
-                            name: key,
-                            sku: it.sku,
-                            qty,
-                            warehouse: wh
-                        });
-                    }
-                });
-            });
-            grp.cargoBreakdown = Array.from(itemMap.values()).sort((a, b) => b.qty - a.qty);
-            grp.totalRolls = grp.cargoBreakdown.reduce((sum, i) => sum + i.qty, 0);
+            const { cargoBreakdown, totalRolls } = getCargoSummary(grp.orders);
+            grp.cargoBreakdown = cargoBreakdown;
+            grp.totalRolls = totalRolls;
 
             result.push(grp);
         });
 
-        // Chronological sort
-        result.sort((a, b) => {
-            const dateA = a.deliveryDate || '';
-            const dateB = b.deliveryDate || '';
-            if (dateA !== dateB) return dateB.localeCompare(dateA);
-            return a.tripNumber.localeCompare(b.tripNumber);
+        // 2. Process Single DO Deliveries (Each DO is an independent trip)
+        singleOrders.forEach(order => {
+            const { cargoBreakdown, totalRolls } = getCargoSummary([order]);
+            const orderTotalDrops = (order as any).trip_drop_count || 1;
+            const isDone = order.status === 'Delivered' || isPendingApprovalDone(order);
+            const rawPodStr = order.pod_photo_url ? order.pod_photo_url.trim() : '';
+            const rawPhotosList = rawPodStr ? rawPodStr.split(',').filter(Boolean) : [];
+            const photoDrops = Math.floor(rawPhotosList.length / 2);
+            const completedDrops = isDone ? orderTotalDrops : Math.min(orderTotalDrops, photoDrops);
+
+            let sortSeq = 999;
+            let tripLabel: string | undefined = undefined;
+            let tripNotes: string | undefined = undefined;
+
+            if (order.notes) {
+                // Trip bracket [Trip: ...]
+                const mBracket = order.notes.match(/\[Trip:\s*([^\]]+)\]/);
+                if (mBracket) {
+                    tripNotes = mBracket[1].trim();
+                }
+
+                // Explicit trip numbers like "trip 1", "TRIP 2", "1p", "2p"
+                const tripMatch = order.notes.match(/\btrip\s*(\d+)\b/i);
+                if (tripMatch) {
+                    sortSeq = parseInt(tripMatch[1], 10);
+                    tripLabel = `Trip ${sortSeq}`;
+                } else {
+                    const pMatch = order.notes.match(/\b(\d+)\s*p\b/i);
+                    if (pMatch) {
+                        sortSeq = parseInt(pMatch[1], 10);
+                        tripLabel = `Trip ${sortSeq}`;
+                    }
+                }
+
+                // Clean trip note text (strip proof timestamps and automated logs)
+                if (!tripNotes) {
+                    const cleanNote = order.notes
+                        .split('\n')
+                        .map(l => l.trim())
+                        .filter(l => l && !l.startsWith('[') && !l.includes('Proof uploaded') && !l.includes('Amended by'))
+                        .join(' ')
+                        .trim();
+                    if (cleanNote) {
+                        tripNotes = cleanNote;
+                    }
+                }
+            }
+
+            if ((order as any).tripSequence !== undefined && (order as any).tripSequence !== null) {
+                sortSeq = Number((order as any).tripSequence);
+                if (!tripLabel) tripLabel = `Trip ${sortSeq}`;
+            } else if ((order as any).trip_sequence !== undefined && (order as any).trip_sequence !== null) {
+                sortSeq = Number((order as any).trip_sequence);
+                if (!tripLabel) tripLabel = `Trip ${sortSeq}`;
+            }
+
+            result.push({
+                key: `trip_order_${order.id}`,
+                tripId: undefined,
+                tripNumber: order.orderNumber,
+                tripIndexLabel: tripLabel,
+                isAdHoc: false,
+                orders: [order],
+                totalDrops: orderTotalDrops,
+                completedDrops,
+                totalRolls,
+                cargoBreakdown,
+                zone: order.zone,
+                tripOrigin: (order as any).trip_origin,
+                deliveryDate: (order as any).deliveryDate || (order as any).deadline,
+                tripNotes,
+                isAllDone: isDone,
+                sortSeq
+            });
         });
 
-        // Assign Trip Index Label if there are multiple trips
-        if (result.length > 1) {
-            result.forEach((grp, idx) => {
-                const num = idx + 1;
-                const suffix = num === 1 ? 'st' : num === 2 ? 'nd' : num === 3 ? 'rd' : 'th';
-                grp.tripIndexLabel = `${num}${suffix} Trip`;
-            });
-        }
-
-        // Ad-hoc group if any
-        if (adhocOrders.length > 0) {
-            const itemMap = new Map<string, { name: string; sku?: string; qty: number; warehouse?: string }>();
-            adhocOrders.forEach(order => {
-                (order.items || []).forEach((it: any) => {
-                    const key = it.product || it.sku || 'Item';
-                    const qty = Number(it.quantity) || 0;
-                    const wh = it.sourceLocation || ((order as any).trip_origin ? String((order as any).trip_origin) : 'OPM Lama');
-                    if (itemMap.has(key)) {
-                        itemMap.get(key)!.qty += qty;
-                    } else {
-                        itemMap.set(key, {
-                            name: key,
-                            sku: it.sku,
-                            qty,
-                            warehouse: wh
-                        });
-                    }
-                });
-            });
-            const adhocCargo = Array.from(itemMap.values()).sort((a, b) => b.qty - a.qty);
-            const adhocRolls = adhocCargo.reduce((sum, i) => sum + i.qty, 0);
-            const adhocCompleted = adhocOrders.filter(o => o.status === 'Delivered' || isPendingApprovalDone(o)).length;
+        // 3. Process Ad-hoc / Extra Jobs
+        if (extraJobOrders.length > 0) {
+            const { cargoBreakdown, totalRolls } = getCargoSummary(extraJobOrders);
+            const extraCompleted = extraJobOrders.filter(o => o.status === 'Delivered' || isPendingApprovalDone(o)).length;
 
             result.push({
                 key: 'adhoc_extra_jobs',
                 tripNumber: 'Tugasan Luar & Pesanan Tambahan / Ad-hoc & Extra Jobs',
                 tripIndexLabel: 'Ad-hoc',
                 isAdHoc: true,
-                orders: adhocOrders,
-                totalDrops: adhocOrders.length,
-                completedDrops: adhocCompleted,
-                totalRolls: adhocRolls,
-                cargoBreakdown: adhocCargo,
-                isAllDone: adhocCompleted === adhocOrders.length && adhocOrders.length > 0
+                orders: extraJobOrders,
+                totalDrops: extraJobOrders.length,
+                completedDrops: extraCompleted,
+                totalRolls,
+                cargoBreakdown,
+                isAllDone: extraCompleted === extraJobOrders.length && extraJobOrders.length > 0,
+                sortSeq: 9999
             });
         }
+
+        // 4. Sort Trips: Delivery Date Ascending -> Regular before AdHoc -> Trip Seq Ascending -> Trip Number
+        result.sort((a, b) => {
+            const dateA = a.deliveryDate || '9999-99-99';
+            const dateB = b.deliveryDate || '9999-99-99';
+            if (dateA !== dateB) return dateA.localeCompare(dateB);
+
+            if (a.isAdHoc !== b.isAdHoc) return a.isAdHoc ? 1 : -1;
+
+            const seqA = a.sortSeq !== undefined ? a.sortSeq : 999;
+            const seqB = b.sortSeq !== undefined ? b.sortSeq : 999;
+            if (seqA !== seqB) return seqA - seqB;
+
+            return a.tripNumber.localeCompare(b.tripNumber);
+        });
+
+        // 5. Assign fallback Trip Index Label for trips sharing a date without explicit trip note
+        const dateMap = new Map<string, DriverTripGroup[]>();
+        result.forEach(grp => {
+            if (grp.isAdHoc) return;
+            const d = grp.deliveryDate || 'nodate';
+            if (!dateMap.has(d)) dateMap.set(d, []);
+            dateMap.get(d)!.push(grp);
+        });
+
+        dateMap.forEach(groupList => {
+            if (groupList.length > 1) {
+                groupList.forEach((grp, idx) => {
+                    if (!grp.tripIndexLabel) {
+                        const num = idx + 1;
+                        const suffix = num === 1 ? 'st' : num === 2 ? 'nd' : num === 3 ? 'rd' : 'th';
+                        grp.tripIndexLabel = `${num}${suffix} Trip`;
+                    }
+                });
+            } else if (groupList.length === 1 && !groupList[0].tripIndexLabel) {
+                groupList[0].tripIndexLabel = groupList[0].totalDrops > 1 ? `${groupList[0].totalDrops} Drops` : '1 Drop';
+            }
+        });
 
         return result;
     }, [tasks, tripsV2List, currentLorry]);
@@ -2346,7 +2445,7 @@ const DriverDelivery: React.FC<DriverDeliveryProps> = ({ user }) => {
                     </div>
                 ) : (
                     currentTripList.map((trip, tripIndex) => {
-                        const defaultOpen = activeTab === 'todo' && tripIndex === 0;
+                        const defaultOpen = activeTab === 'todo' && (tripIndex === 0 || currentTripList.length <= 2);
                         const isExpanded = expandedTripKeys[trip.key] !== undefined ? expandedTripKeys[trip.key] : defaultOpen;
 
                         return (
