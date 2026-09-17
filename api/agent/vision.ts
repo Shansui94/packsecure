@@ -77,17 +77,24 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
             return res.status(500).json({ error: 'Server AI Key not configured' });
         }
 
-        // Fetch product aliases from database
+        // Fetch product aliases from customer_sku_mappings database
         const supabaseUrl = process.env.VITE_SUPABASE_URL || '';
         const supabaseKey = process.env.SUPABASE_SERVICE_ROLE_KEY || process.env.VITE_SUPABASE_ANON_KEY || '';
         let aliasList: any[] = [];
         if (supabaseUrl && supabaseKey) {
             try {
                 const sbClient = createClient(supabaseUrl, supabaseKey);
-                const { data } = await sbClient.from('product_aliases_v2').select('customer, alias_name, sku');
-                if (data) aliasList = data;
+                const { data } = await sbClient.from('customer_sku_mappings').select('customer_name, raw_product_name, mapped_product_name, mapped_sku');
+                if (data) {
+                    aliasList = data.map((m: any) => ({
+                        customer: m.customer_name,
+                        alias_name: m.raw_product_name,
+                        sku: m.mapped_sku,
+                        product_name: m.mapped_product_name
+                    }));
+                }
             } catch (err) {
-                console.error("Failed to fetch product aliases:", err);
+                console.error("Failed to fetch customer_sku_mappings in vision:", err);
             }
         }
 

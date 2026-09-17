@@ -78,7 +78,12 @@ const getEventStyle = (type: string, qty: number) => {
 const LOW_STOCK_THRESHOLD = 50;
 
 // --- DETAIL PANEL ---
-const DetailPanel: React.FC<{ item: StockRow; locFilter: string; onClose: () => void }> = ({ item, locFilter, onClose }) => {
+const DetailPanel: React.FC<{
+    item: StockRow;
+    locFilter: string;
+    onClose: () => void;
+    onOpenShortage?: (item: StockRow) => void;
+}> = ({ item, locFilter, onClose, onOpenShortage }) => {
     const [ledger, setLedger] = useState<LedgerRow[]>([]);
     const [loading, setLoading] = useState(true);
     const [timeFilter, setTimeFilter] = useState<'Day' | 'All'>('Day');
@@ -341,9 +346,23 @@ const DetailPanel: React.FC<{ item: StockRow; locFilter: string; onClose: () => 
                     <div className="flex-1 min-w-0 pr-3">
                         <div className="text-slate-900 dark:text-white font-black text-2xl leading-tight truncate tracking-tight">{item.name}</div>
                         <div className="text-sm text-blue-600 dark:text-blue-400 font-mono mt-1 font-bold">{item.sku}</div>
-                        <div className="flex items-center gap-3 mt-3 overflow-x-auto pb-1 custom-scrollbar">
+                        <div className="flex items-center gap-3 mt-3 overflow-x-auto pb-1 custom-scrollbar flex-wrap">
                             {locFilter !== 'All' && (
                                 <div className="text-xs text-violet-700 dark:text-violet-400 font-black uppercase tracking-widest px-2 py-1 bg-violet-100 dark:bg-violet-500/10 shrink-0 inline-block rounded border border-violet-200 dark:border-violet-500/20">📍 {locFilter}</div>
+                            )}
+                            {((item.reserved_stock || 0) > 0 || (item.available_stock || 0) < 0) && onOpenShortage && (
+                                <button
+                                    onClick={() => onOpenShortage(item)}
+                                    className="px-2.5 py-1 rounded-lg text-xs font-bold bg-amber-500/10 text-amber-600 dark:text-amber-400 border border-amber-500/20 hover:bg-amber-500/20 flex items-center gap-1.5 transition-all cursor-pointer shrink-0 shadow-sm"
+                                    title="查看缺货排产与待发订单预留"
+                                >
+                                    <span>⚠️ 缺货排产与调拨提醒</span>
+                                    {(item.reserved_stock || 0) > 0 && (
+                                        <span className="text-[10px] px-1.5 py-0.5 rounded bg-amber-500/20 font-mono">
+                                            预留: {item.reserved_stock}
+                                        </span>
+                                    )}
+                                </button>
                             )}
                             <div className="flex items-center border border-slate-200 bg-white dark:bg-black/40 rounded-lg p-1 dark:border-white/5 shrink-0 shadow-sm">
                                 {timeFilter === 'Day' && (
@@ -984,13 +1003,15 @@ const LiveStock: React.FC<LiveStockProps> = ({ onNavigate }) => {
                         {(() => {
                             const renderMiniCard = (item: StockRow) => {
                                 const isShortage = (item.available_stock || 0) < 0;
+                                const hasReservation = (item.reserved_stock || 0) > 0;
+                                const shouldShowShortageModal = isShortage || hasReservation;
                                 const badge = getStockBadge(item.available_stock || 0, item.current_stock);
                                 const styleConfig = TYPE_STYLE[item.type] || DEFAULT_STYLE;
                                 return (
                                     <button
                                         key={item.sku}
                                         onClick={() => {
-                                            if (isShortage) {
+                                            if (shouldShowShortageModal) {
                                                 setShortageItem(item);
                                             } else {
                                                 setSelectedItem(item);
@@ -1100,12 +1121,14 @@ const LiveStock: React.FC<LiveStockProps> = ({ onNavigate }) => {
                     <div className="flex flex-col space-y-2 bg-slate-50 dark:bg-black/20 p-2 rounded-2xl border border-slate-200 dark:border-white/5">
                         {filtered.map((item, idx) => {
                             const isShortage = (item.available_stock || 0) < 0;
+                            const hasReservation = (item.reserved_stock || 0) > 0;
+                            const shouldShowShortageModal = isShortage || hasReservation;
                             const styleConfig = TYPE_STYLE[item.type] || DEFAULT_STYLE;
                             return (
                                 <button 
                                     key={item.sku}
                                     onClick={() => {
-                                        if (isShortage) {
+                                        if (shouldShowShortageModal) {
                                             setShortageItem(item);
                                         } else {
                                             setSelectedItem(item);
@@ -1154,18 +1177,22 @@ const LiveStock: React.FC<LiveStockProps> = ({ onNavigate }) => {
                     item={selectedItem}
                     locFilter={locationFilter}
                     onClose={() => setSelectedItem(null)}
+                    onOpenShortage={(target) => {
+                        setSelectedItem(null);
+                        setShortageItem(target);
+                    }}
                 />
             )}
 
             {/* Shortage Order Drill-down Modal */}
             {shortageItem && (
                 <div className="fixed inset-0 z-50 flex items-center justify-center p-3 sm:p-4 bg-slate-900/60 backdrop-blur-sm animate-fade-in">
-                    <div className="bg-white dark:bg-[#12121a] border border-red-200 dark:border-red-500/30 rounded-3xl max-w-2xl w-full max-h-[90vh] overflow-hidden flex flex-col shadow-2xl">
+                    <div className={`bg-white dark:bg-[#12121a] border ${(shortageItem.available_stock || 0) < 0 ? 'border-red-200 dark:border-red-500/30' : 'border-amber-200 dark:border-amber-500/30'} rounded-3xl max-w-2xl w-full max-h-[90vh] overflow-hidden flex flex-col shadow-2xl`}>
                         {/* Header */}
-                        <div className="p-5 sm:p-6 bg-gradient-to-r from-red-500/10 via-amber-500/5 to-transparent border-b border-red-200/50 dark:border-white/5 flex items-start justify-between shrink-0">
+                        <div className={`p-5 sm:p-6 bg-gradient-to-r ${(shortageItem.available_stock || 0) < 0 ? 'from-red-500/10 via-amber-500/5' : 'from-amber-500/10 via-blue-500/5'} to-transparent border-b ${(shortageItem.available_stock || 0) < 0 ? 'border-red-200/50' : 'border-amber-200/50'} dark:border-white/5 flex items-start justify-between shrink-0`}>
                             <div>
                                 <div className="flex items-center gap-2">
-                                    <span className="px-2.5 py-0.5 rounded-full text-[10px] font-black uppercase tracking-wider bg-red-600 text-white shadow-sm">
+                                    <span className={`px-2.5 py-0.5 rounded-full text-[10px] font-black uppercase tracking-wider text-white shadow-sm ${(shortageItem.available_stock || 0) < 0 ? 'bg-red-600' : 'bg-amber-600'}`}>
                                         ⚠️ 缺货排产与调拨提醒
                                     </span>
                                     {shortageItem.loc_id && (
@@ -1199,10 +1226,17 @@ const LiveStock: React.FC<LiveStockProps> = ({ onNavigate }) => {
                                 <div className="text-[10px] text-blue-500 font-bold uppercase">待发订单预留</div>
                                 <div className="text-lg font-black text-blue-600 dark:text-blue-400">{shortageItem.reserved_stock}</div>
                             </div>
-                            <div className="p-2.5 rounded-xl bg-red-50 dark:bg-red-500/10 border border-red-200 dark:border-red-500/20">
-                                <div className="text-[10px] text-red-600 dark:text-red-400 font-bold uppercase">当前可用缺口</div>
-                                <div className="text-lg font-black text-red-600 dark:text-red-400">{shortageItem.available_stock}</div>
-                            </div>
+                            {(shortageItem.available_stock || 0) < 0 ? (
+                                <div className="p-2.5 rounded-xl bg-red-50 dark:bg-red-500/10 border border-red-200 dark:border-red-500/20">
+                                    <div className="text-[10px] text-red-600 dark:text-red-400 font-bold uppercase">当前可用缺口</div>
+                                    <div className="text-lg font-black text-red-600 dark:text-red-400">{shortageItem.available_stock}</div>
+                                </div>
+                            ) : (
+                                <div className="p-2.5 rounded-xl bg-emerald-50 dark:bg-emerald-500/10 border border-emerald-200 dark:border-emerald-500/20">
+                                    <div className="text-[10px] text-emerald-600 dark:text-emerald-400 font-bold uppercase">当前可用库存</div>
+                                    <div className="text-lg font-black text-emerald-600 dark:text-emerald-400">+{shortageItem.available_stock}</div>
+                                </div>
+                            )}
                         </div>
 
                         {/* Scrollable Body */}

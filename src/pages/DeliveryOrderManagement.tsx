@@ -639,6 +639,7 @@ const DeliveryOrderManagement: React.FC<DeliveryOrderManagementProps> = ({ user 
 
     // -- Mode A: V2 Search --
     const [v2Items, setV2Items] = useState<V2Item[]>([]);
+    const [skuMappings, setSkuMappings] = useState<any[]>([]);
 
     // Fetch Data
     const fetchData = async () => {
@@ -664,7 +665,7 @@ const DeliveryOrderManagement: React.FC<DeliveryOrderManagementProps> = ({ user 
                 setLorryServices(filteredServices);
             }
 
-            const [usersRes, sysUsersRes, ordersRes, itemsRes, leavesRes, lorriesRes, servicesRes, ratesRes, customersRes] = await Promise.all([
+            const [usersRes, sysUsersRes, ordersRes, itemsRes, leavesRes, lorriesRes, servicesRes, ratesRes, customersRes, mappingsRes] = await Promise.all([
                 supabase.from('users_public').select('*'),
                 supabase.from('sys_users_v2').select('id, auth_user_id, role_modules'),
                 supabase.from('sales_orders').select('*').order('trip_sequence', { ascending: true }).order('created_at', { ascending: false }),
@@ -673,7 +674,8 @@ const DeliveryOrderManagement: React.FC<DeliveryOrderManagementProps> = ({ user 
                 supabase.from('lorries').select('*'),
                 supabase.from('lorry_service_requests').select('*').eq('status', 'Scheduled'),
                 supabase.from('delivery_rates').select('*').order('location_name'),
-                supabase.from('sys_customers').select('*').order('name')
+                supabase.from('sys_customers').select('*').order('name'),
+                supabase.from('customer_sku_mappings').select('*')
             ]);
 
             // ... (rest of existing logic)
@@ -693,6 +695,7 @@ const DeliveryOrderManagement: React.FC<DeliveryOrderManagementProps> = ({ user 
             if (servicesRes.data) setScheduledServices(servicesRes.data);
             if (itemsRes) setV2Items(itemsRes);
             if (customersRes?.data) setCustomerDB(customersRes.data);
+            if (mappingsRes?.data) setSkuMappings(mappingsRes.data);
             if (lorriesRes.data) {
                 const mappedLorries: Lorry[] = lorriesRes.data.map(l => ({
                     id: l.id,
@@ -1408,6 +1411,68 @@ const DeliveryOrderManagement: React.FC<DeliveryOrderManagementProps> = ({ user 
         return matchV2ItemByName(product) || matchV2ItemByName(sku) || matchV2ItemBySku(sku);
     };
 
+    const alignDOItemWithCatalog = (
+        customerName: string,
+        rawProduct: string,
+        aiSuggestedSku?: string,
+        currentMappings: any[] = skuMappings,
+        itemsCatalog: V2Item[] = v2Items
+    ): { sku: string; product: string; rawProductName: string; isMatched: boolean } => {
+        const custLower = (customerName || '').trim().toLowerCase();
+        const rawLower = (rawProduct || '').trim().toLowerCase();
+
+        // Tier 1: Customer-specific alias mapping from customer_sku_mappings
+        if (custLower && rawLower && currentMappings && currentMappings.length > 0) {
+            const aliasMatch = currentMappings.find(m => {
+                const mCust = (m.customer_name || '').trim().toLowerCase();
+                const mRaw = (m.raw_product_name || '').trim().toLowerCase();
+                const custMatched = mCust === custLower || custLower.includes(mCust) || mCust.includes(custLower);
+                const itemMatched = mRaw === rawLower || rawLower.includes(mRaw) || mRaw.includes(rawLower);
+                return custMatched && itemMatched;
+            });
+            if (aliasMatch && aliasMatch.mapped_sku) {
+                return {
+                    sku: aliasMatch.mapped_sku,
+                    product: aliasMatch.mapped_product_name || rawProduct,
+                    rawProductName: rawProduct,
+                    isMatched: true
+                };
+            }
+        }
+
+        // Tier 1.5: If AI provided a valid SKU in itemsCatalog
+        if (aiSuggestedSku) {
+            const exactSku = itemsCatalog.find(i => i.sku.toLowerCase() === aiSuggestedSku.trim().toLowerCase());
+            if (exactSku) {
+                return {
+                    sku: exactSku.sku,
+                    product: exactSku.name,
+                    rawProductName: rawProduct,
+                    isMatched: true
+                };
+            }
+        }
+
+        // Tier 2: Algorithmic catalog match using matchV2ItemFromScan
+        const fuzzyV2 = matchV2ItemFromScan(aiSuggestedSku, rawProduct);
+        if (fuzzyV2) {
+            return {
+                sku: fuzzyV2.sku,
+                product: fuzzyV2.name,
+                rawProductName: rawProduct,
+                isMatched: true
+            };
+        }
+
+        // Unmatched fallback
+        return {
+            sku: aiSuggestedSku || '',
+            product: rawProduct,
+            rawProductName: rawProduct,
+            isMatched: false
+        };
+    };
+
     // const mergeTripLineItems = (existing: SalesOrder['items'], incoming: SalesOrder['items']) => {
     //     const merged = [...existing];
     //     for (const item of incoming) {
@@ -1821,7 +1886,7 @@ const DeliveryOrderManagement: React.FC<DeliveryOrderManagementProps> = ({ user 
                 body: JSON.stringify({
                     action: 'parse-trip-pdf',
                     files: filePayloads,
-                    productsList: v2Items.slice(0, 100).map(i => ({ sku: i.sku, name: i.name })),
+                    productsList: v2Items.map(i => ({ sku: i.sku, name: i.name })),
                     driversList: drivers.map(d => ({ uid: d.uid, name: d.name || d.email || '' }))
                 })
             });
@@ -1836,13 +1901,42 @@ const DeliveryOrderManagement: React.FC<DeliveryOrderManagementProps> = ({ user 
                 throw new Error(t('No valid Delivery Orders detected in the uploaded PDFs. Try a clearer PDF.'));
             }
 
+            // Execute 2-tier mapping alignment (customer_sku_mappings + master_items_v2)
+            const processedOrders: ParsedDeliveryOrder[] = data.deliveryOrders.map(doOrder => {
+                const alignedItems: ParsedDOItem[] = (doOrder.items || []).map(it => {
+                    const matchRes = alignDOItemWithCatalog(
+                        doOrder.customer,
+                        it.product,
+                        it.sku,
+                        skuMappings,
+                        v2Items
+                    );
+                    return {
+                        ...it,
+                        rawProductName: it.rawProductName || it.product,
+                        product: matchRes.product,
+                        sku: matchRes.sku,
+                        isMatched: matchRes.isMatched
+                    };
+                });
+                return {
+                    ...doOrder,
+                    items: alignedItems
+                };
+            });
+
+            const alignedBatch: ParsedTripDOBatch = {
+                ...data,
+                deliveryOrders: processedOrders
+            };
+
             // Generate clean standard trip number
             const now = new Date();
             const dateCode = `${String(now.getFullYear()).slice(-2)}${String(now.getMonth() + 1).padStart(2, '0')}${String(now.getDate()).padStart(2, '0')}`;
             const randomSeq = String(Math.floor(Math.random() * 900) + 100);
             const genTripNo = `TRIP-${dateCode}-${randomSeq}`;
 
-            setParsedTripBatch(data);
+            setParsedTripBatch(alignedBatch);
             setParsedTripNumber(genTripNo);
             setParsedTripDate(data.suggestedTripDate || new Date().toISOString().split('T')[0]);
             setParsedDeliveryDate(data.suggestedTripDate || new Date().toISOString().split('T')[0]);
@@ -1923,6 +2017,30 @@ const DeliveryOrderManagement: React.FC<DeliveryOrderManagementProps> = ({ user 
         });
     };
 
+    const handleUpdateParsedItemSku = (doIndex: number, itemIndex: number, newSku: string) => {
+        setParsedTripBatch(prev => {
+            if (!prev) return null;
+            const orders = [...prev.deliveryOrders];
+            const order = { ...orders[doIndex] };
+            const items = [...(order.items || [])];
+            const currentItem = { ...items[itemIndex] };
+
+            const matchedProd = v2Items.find(x => x.sku === newSku);
+            currentItem.sku = newSku;
+            if (matchedProd) {
+                currentItem.product = matchedProd.name;
+                currentItem.isMatched = true;
+            } else if (!newSku) {
+                currentItem.isMatched = false;
+            }
+
+            items[itemIndex] = currentItem;
+            order.items = items;
+            orders[doIndex] = order;
+            return { ...prev, deliveryOrders: orders };
+        });
+    };
+
     const handleConfirmCreateTrip = async () => {
         if (!parsedTripBatch || parsedTripBatch.deliveryOrders.length === 0) return;
         setIsCreatingTrip(true);
@@ -1998,6 +2116,30 @@ const DeliveryOrderManagement: React.FC<DeliveryOrderManagementProps> = ({ user 
                     });
                 } catch {
                     // Non-blocking sync
+                }
+
+                // 4. Auto-Learning: Remember confirmed/adjusted item mappings for this customer in customer_sku_mappings
+                if (doItem.customer && Array.isArray(doItem.items)) {
+                    for (const it of doItem.items) {
+                        const rawName = (it.rawProductName || it.product || '').trim();
+                        const finalSku = (it.sku || '').trim();
+                        if (finalSku && rawName && finalSku !== 'GENERIC-ITEM') {
+                            const matchedProd = v2Items.find(x => x.sku === finalSku);
+                            try {
+                                await supabase.from('customer_sku_mappings').upsert({
+                                    customer_name: doItem.customer.trim(),
+                                    raw_product_name: rawName,
+                                    mapped_sku: finalSku,
+                                    mapped_product_name: matchedProd ? matchedProd.name : (it.product || rawName),
+                                    updated_at: new Date().toISOString()
+                                }, {
+                                    onConflict: 'customer_name,raw_product_name'
+                                });
+                            } catch (upsertErr) {
+                                console.warn("Failed to auto-learn mapping for DO:", upsertErr);
+                            }
+                        }
+                    }
                 }
             }
 
@@ -5486,24 +5628,63 @@ const DeliveryOrderManagement: React.FC<DeliveryOrderManagementProps> = ({ user 
                                                 />
                                             </div>
 
-                                            {/* Items Chips */}
+                                            {/* Items List with Standard SKU Selector */}
                                             {doItem.items && doItem.items.length > 0 && (
-                                                <div className="pt-2 border-t border-slate-800/50 flex flex-wrap items-center gap-2">
-                                                    <span className="text-[10px] font-bold text-slate-500 uppercase">{t('Items')}:</span>
-                                                    {doItem.items.map((it, itemIdx) => (
-                                                        <span
-                                                            key={itemIdx}
-                                                            className="inline-flex items-center gap-1.5 px-2 py-0.5 rounded-lg bg-slate-950 border border-slate-800 text-[11px] text-slate-300"
-                                                        >
-                                                            <span className="font-semibold text-white">{it.product}</span>
-                                                            <span className="text-amber-400 font-bold">x {it.quantity}</span>
-                                                            {it.sku && (
-                                                                <span className="text-[9px] px-1 rounded bg-blue-500/20 text-blue-300 font-mono">
-                                                                    {it.sku}
-                                                                </span>
-                                                            )}
+                                                <div className="pt-2 border-t border-slate-800/60 space-y-2">
+                                                    <div className="flex flex-wrap items-center justify-between gap-1 text-[10px]">
+                                                        <span className="font-bold text-slate-400 uppercase tracking-wider flex items-center gap-1.5">
+                                                            <span>{t('Items & SKU Mapping / 货物与料号对应')} ({doItem.items.length})</span>
                                                         </span>
-                                                    ))}
+                                                        <span className="text-slate-400 text-[10px]">
+                                                            💡 {t('确认车次后将自动沉淀为该客户专属映射，下次自动对齐')}
+                                                        </span>
+                                                    </div>
+                                                    <div className="grid grid-cols-1 gap-2">
+                                                        {doItem.items.map((it, itemIdx) => (
+                                                            <div
+                                                                key={itemIdx}
+                                                                className="flex flex-col sm:flex-row sm:items-center justify-between gap-2 p-2 rounded-lg bg-slate-950/80 border border-slate-800/80 text-xs"
+                                                            >
+                                                                <div className="flex items-center gap-2 min-w-0 flex-1">
+                                                                    <span className="px-2 py-0.5 rounded bg-amber-500/15 border border-amber-500/30 text-amber-300 font-black text-xs shrink-0">
+                                                                        x {it.quantity} {it.uom || t('Rolls')}
+                                                                    </span>
+                                                                    <div className="truncate">
+                                                                        <span className="font-semibold text-white block truncate" title={it.rawProductName || it.product}>
+                                                                            {it.rawProductName || it.product}
+                                                                        </span>
+                                                                        {it.rawProductName && it.rawProductName !== it.product && (
+                                                                            <span className="text-[10px] text-slate-400 block truncate">
+                                                                                {t('Standard Product')}: {it.product}
+                                                                            </span>
+                                                                        )}
+                                                                    </div>
+                                                                </div>
+
+                                                                <div className="flex items-center gap-1.5 shrink-0">
+                                                                    <label className="text-[10px] font-bold text-slate-400 uppercase">
+                                                                        SKU:
+                                                                    </label>
+                                                                    <select
+                                                                        className={`px-2.5 py-1 rounded-lg text-xs font-mono font-bold outline-none transition-all cursor-pointer max-w-[240px] sm:max-w-[280px] ${
+                                                                            it.sku
+                                                                                ? 'bg-emerald-950/40 border border-emerald-500/40 text-emerald-300 focus:border-emerald-400'
+                                                                                : 'bg-amber-950/40 border border-amber-500/50 text-amber-300 focus:border-amber-400 animate-pulse'
+                                                                        }`}
+                                                                        value={it.sku || ''}
+                                                                        onChange={e => handleUpdateParsedItemSku(idx, itemIdx, e.target.value)}
+                                                                    >
+                                                                        <option value="">{t('⚠️ -- 请选择标准料号 (Unmapped) --')}</option>
+                                                                        {v2Items.map(prod => (
+                                                                            <option key={prod.sku} value={prod.sku}>
+                                                                                {prod.sku} - {prod.name}
+                                                                            </option>
+                                                                        ))}
+                                                                    </select>
+                                                                </div>
+                                                            </div>
+                                                        ))}
+                                                    </div>
                                                 </div>
                                             )}
                                         </div>

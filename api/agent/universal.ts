@@ -1141,13 +1141,23 @@ export async function handleParseTripPdf(req: VercelRequest, res: VercelResponse
             return res.status(500).json({ error: 'Server Google Gemini AI Key not configured.' });
         }
 
-        // Fetch known product aliases from database
-        let aliasList: Array<{ customer: string; alias_name: string; sku: string }> = [];
+        // Fetch known product aliases from customer_sku_mappings table
+        let aliasList: Array<{ customer: string; alias_name: string; sku: string; product_name?: string }> = [];
         try {
-            const { data } = await supabase.from('product_aliases_v2').select('customer, alias_name, sku');
-            if (data) aliasList = data;
+            const { data } = await supabase
+                .from('customer_sku_mappings')
+                .select('customer_name, raw_product_name, mapped_product_name, mapped_sku')
+                .limit(250);
+            if (data) {
+                aliasList = data.map((m: any) => ({
+                    customer: m.customer_name,
+                    alias_name: m.raw_product_name,
+                    sku: m.mapped_sku,
+                    product_name: m.mapped_product_name
+                }));
+            }
         } catch (err) {
-            console.warn("Failed to fetch product aliases:", err);
+            console.warn("Failed to fetch customer_sku_mappings:", err);
         }
 
         const cleanBase64Payload = (rawStr: string = '') => {
@@ -1278,15 +1288,32 @@ EXACT JSON OUTPUT FORMAT REQUIRED:
 CRITICAL: Return strictly a valid JSON object. Do not wrap in markdown quotes.
 `;
 
-        if (productsList && Array.isArray(productsList) && productsList.length > 0) {
-            prompt += `\nReference Product List (SKU and Name):\n`;
-            prompt += productsList.slice(0, 100).map(p => `- SKU: ${p.sku} | Name: ${p.name}`).join('\n');
-            prompt += `\nMatch each DO item to the closest valid SKU above.\n`;
+        let activeProducts = productsList;
+        if (!activeProducts || !Array.isArray(activeProducts) || activeProducts.length === 0) {
+            try {
+                const { data: dbProds } = await supabase
+                    .from('master_items_v2')
+                    .select('sku, name')
+                    .eq('status', 'Active')
+                    .limit(300);
+                if (dbProds && dbProds.length > 0) {
+                    activeProducts = dbProds;
+                }
+            } catch (err) {
+                console.warn("Failed to fetch fallback master_items_v2:", err);
+            }
+        }
+
+        if (activeProducts && Array.isArray(activeProducts) && activeProducts.length > 0) {
+            prompt += `\nReference Product Catalog (Standard SKUs and Names):\n`;
+            prompt += activeProducts.slice(0, 300).map(p => `- SKU: ${p.sku} | Name: ${p.name}`).join('\n');
+            prompt += `\nFor every item in the DO, determine the best matching standard SKU from the list above and return it in "sku". If unsure, leave "sku" empty string.\n`;
         }
 
         if (aliasList && aliasList.length > 0) {
-            prompt += `\nKnown Customer Aliases:\n`;
-            prompt += aliasList.slice(0, 50).map(a => `- ${a.customer}: "${a.alias_name}" -> SKU: ${a.sku}`).join('\n');
+            prompt += `\nSystem Customer Alias Mappings (PRIORITY RULE):\n`;
+            prompt += aliasList.slice(0, 150).map(a => `- [Customer: "${a.customer}"] Raw DO Description: "${a.alias_name}" => Standard SKU: "${a.sku}"${a.product_name ? ` (${a.product_name})` : ''}`).join('\n');
+            prompt += `\nCRITICAL: If a DO belongs to the specified customer and the item description matches or resembles an alias above, ALWAYS use that exact mapped SKU.\n`;
         }
 
         // Prepare file parts

@@ -136,10 +136,12 @@ export interface SalesOrder {
 
 export interface ParsedDOItem {
     product: string;
+    rawProductName?: string;
     quantity: number;
     uom?: string;
     sku?: string;
     sourceLocation?: string;
+    isMatched?: boolean;
 }
 
 export interface ParsedDeliveryOrder {
