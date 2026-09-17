@@ -2,6 +2,8 @@ import { VercelRequest, VercelResponse } from '@vercel/node';
 import { GoogleGenerativeAI } from '@google/generative-ai';
 import { createClient } from '@supabase/supabase-js';
 
+export const config = { maxDuration: 60 };
+
 // Initialize Supabase Client
 const supabaseUrl = process.env.VITE_SUPABASE_URL || process.env.SUPABASE_URL || '';
 const supabaseKey =
@@ -1132,53 +1134,119 @@ export async function handleParseTripPdf(req: VercelRequest, res: VercelResponse
             console.warn("Failed to fetch product aliases:", err);
         }
 
+        // Pre-inspect PDF buffers for page count and embedded DO number patterns
+        let totalEstimatedPages = 0;
+        const allDetectedDoNumbers: string[] = [];
+
+        files.forEach(f => {
+            try {
+                const cleanB64 = (f.base64 || '').replace(/^data:[^;]+;base64,/, '').replace(/\s+/g, '');
+                const rawStr = Buffer.from(cleanB64, 'base64').toString('latin1');
+                const pageMatches = rawStr.match(/\/Type\s*\/Page\b/g);
+                const pages = pageMatches ? pageMatches.length : 1;
+                totalEstimatedPages += pages;
+
+                const dos = rawStr.match(/OPM[0-9]{4}-[0-9]{4}/gi) || [];
+                dos.forEach(d => {
+                    const upper = d.toUpperCase();
+                    if (!allDetectedDoNumbers.includes(upper)) {
+                        allDetectedDoNumbers.push(upper);
+                    }
+                });
+            } catch (e) {
+                totalEstimatedPages += 1;
+            }
+        });
+
         const genAI = new GoogleGenerativeAI(apiKey);
-        const candidates = ["gemini-3.6-flash", "gemini-flash-latest", "gemini-2.5-flash", "gemini-3.5-flash-lite"];
+        // gemini-2.5-flash is our primary production multimodal model; fallbacks are tried sequentially
+        const candidates = ["gemini-2.5-flash", "gemini-2.5-flash-lite", "gemini-1.5-flash"];
 
         // Build prompt
-        let prompt = `You are a logistics document intelligence AI for Packsecure OS (PackSecure / DIY Venture Sdn. Bhd.).
+        let prompt = `You are an expert Malaysian logistics document intelligence AI for Packsecure OS (PackSecure / DIY Venture Sdn. Bhd.).
 Analyze the attached Delivery Order (DO) PDF document(s).
-All the uploaded PDF documents belong to ONE single lorry delivery trip (一次出车派送任务).
-There may be 1 to 15 DOs across the PDF(s). Each DO represents one delivery drop to a customer.
+All uploaded PDF documents belong to ONE single lorry delivery trip (一次出车派送任务).
+
+============================================================
+🚨 CRITICAL MULTI-PAGE & MULTI-DO PARSING DIRECTIVE:
+1. The uploaded file(s) contain approximately ${totalEstimatedPages} page(s).
+${allDetectedDoNumbers.length > 0 ? `2. Detected potential DO numbers in document text streams: ${allDetectedDoNumbers.join(', ')}.\n` : ''}
+2. In Malaysian factory and warehouse operations, multiple distinct Delivery Orders (DOs) are frequently scanned, concatenated, or printed into ONE SINGLE multi-page PDF document!
+3. EACH PAGE (or continuation group) is a SEPARATE Delivery Order with its own DO number, recipient customer name, delivery address, and items.
+4. YOU MUST INSPECT EVERY SINGLE PAGE FROM FIRST PAGE TO LAST PAGE (Page 1, Page 2, Page 3, Page 4, Page 5, ...).
+5. DO NOT STOP AFTER THE FIRST PAGE!
+6. For EVERY distinct DO number (or distinct customer stop) across all pages, you MUST create a separate object in the "deliveryOrders" array.
+7. If the PDF has ${totalEstimatedPages > 1 ? totalEstimatedPages : 'multiple'} pages with separate DO numbers, "deliveryOrders" MUST contain all of them (e.g. ${totalEstimatedPages > 1 ? totalEstimatedPages : '5'} items), and "totalDrops" MUST match the count of DOs!
+8. If a single DO spans multiple pages (e.g. "Page 1 of 2" and "Page 2 of 2" with the EXACT SAME DO number), combine the items into that single DO. Otherwise, if the DO number or customer is different, it is a NEW DO.
+============================================================
 
 TASK:
-Extract structured data for each Delivery Order (DO) and synthesize the whole Trip summary.
+Extract structured data for each Delivery Order (DO) across ALL pages and synthesize the whole Trip summary.
 
 FOR EACH DELIVERY ORDER:
-- "doNumber": The official printed DO number (usually starts with "OPM", e.g., "OPM2609-0551", "OPM2609-0556").
+- "doNumber": Printed DO number (e.g., "OPM2609-0551", "OPM2609-0552").
 - "customer": Recipient customer or company name (e.g. "AURA SNR EMPIRE", "SITI SARAH", "XUN HOONG HARDWARE").
 - "deliveryAddress": Complete delivery address with street, unit, industrial park, postcode, town, and state.
-- "phone": Contact telephone or mobile number if present (labeled "TEL:", e.g. "011-56324303").
-- "zone": Primary Malaysian state/region for delivery (e.g., KELANTAN, PERAK, PENANG, KEDAH, SELANGOR, KL, NEGERI SEMBILAN, MELAKA, JOHOR, PAHANG, TERENGGANU).
-- "orderDate": DO issue date in YYYY-MM-DD format (e.g., "2026-09-14").
+- "phone": Contact phone/mobile if present (labeled "TEL:", e.g. "011-56324303").
+- "zone": Primary Malaysian state/region (e.g., KELANTAN, PERAK, PENANG, KEDAH, SELANGOR, KL, NEGERI SEMBILAN, MELAKA, JOHOR, PAHANG, TERENGGANU).
+- "orderDate": DO issue date in YYYY-MM-DD format (e.g., "2026-09-17").
 - "terms": Payment term if visible (e.g., "C.O.D.", "30 Days").
 - "items": Array of products on this DO:
   [
     {
       "product": "Product description as printed on DO (e.g. Bubble Wrap Single Layer Clear 1m x 100m (MERAH))",
       "quantity": 15, // Positive integer
-      "uom": "UNIT",
+      "uom": "ROLL" or "UNIT",
       "sku": "Matched SKU from the Reference Product List below, or empty string if no clear match"
     }
   ]
 - "doTotal": Sum of item quantities on this DO.
 
 FOR THE OVERALL TRIP:
-- "suggestedTripDate": Prevailing delivery/trip date in YYYY-MM-DD format (default to today 2026-09-16 if not clear).
+- "suggestedTripDate": Prevailing delivery date in YYYY-MM-DD format (default to today 2026-09-17 if not clear).
 - "primaryZone": Main region of the trip (e.g., KELANTAN).
-- "totalDrops": Total number of distinct customer delivery stops (count of DOs).
+- "totalDrops": Total count of distinct DO stops (count of objects in deliveryOrders).
 - "totalRolls": Sum of all item quantities across all DOs.
 - "destinationsSummary": Comma-separated list of towns/areas visited (e.g., "Kota Bharu, Pasir Puteh, Pasir Mas").
 
-CRITICAL RULES:
-1. MULTI-PAGE & MULTI-DO SPLITTING:
-   - A single PDF file CAN CONTAIN MULTIPLE PAGES, and each page (or group of pages) can be a SEPARATE Delivery Order (DO).
-   - Inspect every page carefully. Whenever a new DO number (e.g. "OPM...", "DO...") or a different customer name/address appears, DO NOT MERGE THEM.
-   - You MUST extract each distinct DO as a separate object in the "deliveryOrders" array (each represents one delivery drop stop).
-   - If one DO spans multiple pages (e.g. Page 1 of 2 and Page 2 of 2 with the SAME DO number), merge the items into that single DO.
-2. QUANTITY MUST BE ACCURATE: Extract the exact printed quantity in the "Qty" column.
-3. CLEAN TEXT: Strip unnecessary carriage returns from customer names or product titles.
-4. RAW JSON ONLY: Return strictly valid JSON object without markdown formatting, ticks, or backticks.
+EXACT JSON OUTPUT FORMAT REQUIRED:
+{
+  "suggestedTripDate": "2026-09-17",
+  "primaryZone": "KELANTAN",
+  "totalDrops": 2,
+  "totalRolls": 45,
+  "destinationsSummary": "Kota Bharu, Pasir Mas",
+  "deliveryOrders": [
+    {
+      "doNumber": "OPM2609-0551",
+      "customer": "CUSTOMER A",
+      "deliveryAddress": "123 Jalan Besar, Kota Bharu, Kelantan",
+      "phone": "012-3456789",
+      "zone": "KELANTAN",
+      "orderDate": "2026-09-17",
+      "terms": "C.O.D.",
+      "items": [
+        { "product": "Bubble Wrap Single Layer 1m x 100m (MERAH)", "quantity": 20, "uom": "ROLL", "sku": "B17-ROLL" }
+      ],
+      "doTotal": 20
+    },
+    {
+      "doNumber": "OPM2609-0552",
+      "customer": "CUSTOMER B",
+      "deliveryAddress": "45 Jalan Pasar, Pasir Mas, Kelantan",
+      "phone": "019-8765432",
+      "zone": "KELANTAN",
+      "orderDate": "2026-09-17",
+      "terms": "30 Days",
+      "items": [
+        { "product": "Stretch Film 500mm x 2.2kg", "quantity": 25, "uom": "ROLL", "sku": "SF-22" }
+      ],
+      "doTotal": 25
+    }
+  ]
+}
+
+CRITICAL: Return strictly a valid JSON object. Do not wrap in markdown quotes.
 `;
 
         if (productsList && Array.isArray(productsList) && productsList.length > 0) {
@@ -1209,15 +1277,23 @@ CRITICAL RULES:
 
         let responseText = "";
         let lastError: any = null;
+        let modelUsed = "";
 
         for (const modelId of candidates) {
             try {
-                console.log(`[DO PDF AI] Trying model ${modelId} for ${files.length} PDFs...`);
-                const model = genAI.getGenerativeModel({ model: modelId });
+                console.log(`[DO PDF AI] Trying model ${modelId} for ${files.length} PDFs (est. ${totalEstimatedPages} pages)...`);
+                const model = genAI.getGenerativeModel({
+                    model: modelId,
+                    generationConfig: {
+                        responseMimeType: "application/json",
+                        temperature: 0.1
+                    }
+                });
                 const result = await model.generateContent([prompt, ...fileParts]);
                 const text = (await result.response).text();
                 if (text) {
                     responseText = text;
+                    modelUsed = modelId;
                     break;
                 }
             } catch (modelErr: any) {
@@ -1234,27 +1310,43 @@ CRITICAL RULES:
                     .replace(/```json/gi, '')
                     .replace(/```/g, '')
                     .trim();
-                const jsonMatch = cleanedJson.match(/(\{[\s\S]*\})/);
+                const jsonMatch = cleanedJson.match(/(\{[\s\S]*\}|\[[\s\S]*\])/);
                 if (jsonMatch) {
                     cleanedJson = jsonMatch[1];
                 }
-                parsed = JSON.parse(cleanedJson);
+                const rawParsed = JSON.parse(cleanedJson);
+
+                if (Array.isArray(rawParsed)) {
+                    parsed = { deliveryOrders: rawParsed };
+                } else if (rawParsed && typeof rawParsed === 'object') {
+                    if (Array.isArray(rawParsed.deliveryOrders)) {
+                        parsed = rawParsed;
+                    } else if (Array.isArray(rawParsed.orders)) {
+                        parsed = { ...rawParsed, deliveryOrders: rawParsed.orders };
+                    } else if (Array.isArray(rawParsed.dos)) {
+                        parsed = { ...rawParsed, deliveryOrders: rawParsed.dos };
+                    } else if (Array.isArray(rawParsed.data)) {
+                        parsed = { ...rawParsed, deliveryOrders: rawParsed.data };
+                    } else if (rawParsed.doNumber || rawParsed.customer) {
+                        parsed = { ...rawParsed, deliveryOrders: [rawParsed] };
+                    }
+                }
             } catch (jsonErr) {
                 console.warn("[DO PDF AI] Failed to parse Gemini response as JSON:", responseText);
             }
         }
 
-        // Fallback: If AI models failed or response was unparseable, extract from file list so user is never blocked
+        // Fallback: If AI models failed or response was unparseable, extract from detected DOs or file list so user is never blocked
         if (!parsed || !Array.isArray(parsed.deliveryOrders) || parsed.deliveryOrders.length === 0) {
-            console.warn("[DO PDF AI] Falling back to file-heuristic parser. Reason:", lastError?.message || 'Empty AI result');
+            console.warn("[DO PDF AI] Falling back to heuristic parser. Reason:", lastError?.message || 'Empty AI result');
             const today = new Date().toISOString().split('T')[0];
-            const fallbackOrders = files.map((f, idx) => {
-                const nameWithoutExt = (f.name || '').replace(/\.pdf$/i, '');
-                const doMatch = nameWithoutExt.match(/(OPM[A-Za-z0-9-]+|[A-Za-z0-9_-]+)/i);
-                const doNumber = doMatch ? doMatch[1].toUpperCase() : `DO-${idx + 1}`;
-                return {
-                    doNumber,
-                    customer: nameWithoutExt || `Pelanggan / Customer ${idx + 1}`,
+            
+            let fallbackOrders: any[] = [];
+
+            if (allDetectedDoNumbers.length > 0) {
+                fallbackOrders = allDetectedDoNumbers.map((doNum, idx) => ({
+                    doNumber: doNum,
+                    customer: `Pelanggan / Customer ${idx + 1}`,
                     deliveryAddress: 'Sila lengkapkan alamat penghantaran / Please check delivery address',
                     phone: '',
                     zone: 'NORTH',
@@ -1267,8 +1359,50 @@ CRITICAL RULES:
                         sku: 'B17-ROLL'
                     }],
                     doTotal: 10
-                };
-            });
+                }));
+            } else if (totalEstimatedPages > 1 && files.length === 1) {
+                const baseName = (files[0].name || '').replace(/\.pdf$/i, '');
+                for (let i = 1; i <= totalEstimatedPages; i++) {
+                    fallbackOrders.push({
+                        doNumber: `${baseName}-P${i}`,
+                        customer: `${baseName} (Page ${i})`,
+                        deliveryAddress: 'Sila lengkapkan alamat penghantaran / Please check delivery address',
+                        phone: '',
+                        zone: 'NORTH',
+                        orderDate: today,
+                        terms: 'C.O.D.',
+                        items: [{
+                            product: 'Bubble Wrap Single Layer 1m x 100m (B17-ROLL)',
+                            quantity: 10,
+                            uom: 'ROLL',
+                            sku: 'B17-ROLL'
+                        }],
+                        doTotal: 10
+                    });
+                }
+            } else {
+                fallbackOrders = files.map((f, idx) => {
+                    const nameWithoutExt = (f.name || '').replace(/\.pdf$/i, '');
+                    const doMatch = nameWithoutExt.match(/(OPM[A-Za-z0-9-]+|[A-Za-z0-9_-]+)/i);
+                    const doNumber = doMatch ? doMatch[1].toUpperCase() : `DO-${idx + 1}`;
+                    return {
+                        doNumber,
+                        customer: nameWithoutExt || `Pelanggan / Customer ${idx + 1}`,
+                        deliveryAddress: 'Sila lengkapkan alamat penghantaran / Please check delivery address',
+                        phone: '',
+                        zone: 'NORTH',
+                        orderDate: today,
+                        terms: 'C.O.D.',
+                        items: [{
+                            product: 'Bubble Wrap Single Layer 1m x 100m (B17-ROLL)',
+                            quantity: 10,
+                            uom: 'ROLL',
+                            sku: 'B17-ROLL'
+                        }],
+                        doTotal: 10
+                    };
+                });
+            }
 
             parsed = {
                 suggestedTripDate: today,
@@ -1281,15 +1415,22 @@ CRITICAL RULES:
             };
         }
 
+        const calculatedDrops = Array.isArray(parsed.deliveryOrders) ? parsed.deliveryOrders.length : 1;
+        const calculatedRolls = Array.isArray(parsed.deliveryOrders)
+            ? parsed.deliveryOrders.reduce((sum: number, d: any) => sum + (Number(d.doTotal) || 0), 0)
+            : 0;
+
         return res.status(200).json({
             success: true,
             suggestedTripDate: parsed.suggestedTripDate || new Date().toISOString().split('T')[0],
             primaryZone: parsed.primaryZone || '',
-            totalDrops: typeof parsed.totalDrops === 'number' ? parsed.totalDrops : (parsed.deliveryOrders?.length || 1),
-            totalRolls: typeof parsed.totalRolls === 'number' ? parsed.totalRolls : 0,
+            totalDrops: typeof parsed.totalDrops === 'number' ? parsed.totalDrops : calculatedDrops,
+            totalRolls: typeof parsed.totalRolls === 'number' && parsed.totalRolls > 0 ? parsed.totalRolls : calculatedRolls,
             destinationsSummary: parsed.destinationsSummary || '',
             deliveryOrders: Array.isArray(parsed.deliveryOrders) ? parsed.deliveryOrders : [],
-            isFallback: !!parsed.isFallback
+            isFallback: !!parsed.isFallback,
+            modelUsed: modelUsed || (parsed.isFallback ? 'fallback' : 'none'),
+            debugError: lastError ? lastError.message : null
         });
 
     } catch (err: any) {

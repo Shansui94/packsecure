@@ -161,6 +161,9 @@ export interface ParsedTripDOBatch {
     totalRolls: number;
     destinationsSummary: string;
     deliveryOrders: ParsedDeliveryOrder[];
+    isFallback?: boolean;
+    modelUsed?: string;
+    debugError?: string;
 }
 
 export interface DeliveryRate {

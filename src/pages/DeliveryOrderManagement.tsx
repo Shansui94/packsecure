@@ -1850,10 +1850,20 @@ const DeliveryOrderManagement: React.FC<DeliveryOrderManagementProps> = ({ user 
             setParsedZone(data.primaryZone || '');
             setIsParsedTripModalOpen(true);
 
-            setToast({
-                type: 'success',
-                message: t('Parsed {{count}} DO(s) successfully. Please review and confirm.', { count: data.deliveryOrders.length })
-            });
+            if (data.isFallback) {
+                setToast({
+                    type: 'info',
+                    message: t('⚠️ DO PDF 使用备用草稿解析（提取到 {{count}} 张 DO），请核对各停靠点。', { count: data.deliveryOrders.length })
+                });
+            } else {
+                setToast({
+                    type: 'success',
+                    message: t('✅ AI 成功解析 {{count}} 张 DO (模型: {{model}})。请核对并确认车次。', {
+                        count: data.deliveryOrders.length,
+                        model: data.modelUsed || 'gemini-2.5-flash'
+                    })
+                });
+            }
         } catch (err: any) {
             console.error("Failed to parse DO PDF:", err);
             const errMsg = err.message || t('Failed to parse DO PDF');
@@ -5176,12 +5186,21 @@ const DeliveryOrderManagement: React.FC<DeliveryOrderManagementProps> = ({ user 
                         {/* Header */}
                         <div className="p-4 sm:p-5 border-b border-slate-800 flex justify-between items-start gap-3 bg-slate-900/60">
                             <div>
-                                <h3 className="text-lg sm:text-xl font-black text-white flex items-center gap-2">
+                                <h3 className="text-lg sm:text-xl font-black text-white flex items-center gap-2 flex-wrap">
                                     <FileText className="text-amber-400" size={22} />
                                     <span>{t('DO PDF Trip Dispatch Review (出车单据审核)')}</span>
                                     <span className="text-[10px] bg-amber-500/20 text-amber-300 px-2 py-0.5 rounded-full font-mono border border-amber-500/30">
                                         {parsedTripBatch.deliveryOrders.length} DOs · Max 15
                                     </span>
+                                    {parsedTripBatch.isFallback ? (
+                                        <span className="text-[10px] bg-amber-500/20 text-amber-300 px-2 py-0.5 rounded-full font-bold border border-amber-500/30">
+                                            ⚠️ 备用草稿 / Fallback Draft
+                                        </span>
+                                    ) : (
+                                        <span className="text-[10px] bg-emerald-500/20 text-emerald-300 px-2 py-0.5 rounded-full font-bold border border-emerald-500/30">
+                                            ✨ AI 识别 ({parsedTripBatch.modelUsed || 'gemini-2.5-flash'})
+                                        </span>
+                                    )}
                                 </h3>
                                 <p className="text-xs text-slate-400 mt-1">
                                     {t('One trip dispatch with {{drops}} drop point(s). Total {{rolls}} rolls detected.', {
