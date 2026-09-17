@@ -1159,8 +1159,32 @@ export async function handleParseTripPdf(req: VercelRequest, res: VercelResponse
         });
 
         const genAI = new GoogleGenerativeAI(apiKey);
-        // gemini-2.5-flash is our primary production multimodal model; fallbacks are tried sequentially
-        const candidates = ["gemini-2.5-flash", "gemini-2.5-flash-lite", "gemini-1.5-flash"];
+
+        // Dynamically query available models for this API key to guarantee 100% compatibility
+        let apiDiscoveredModels: string[] = [];
+        try {
+            const listRes = await fetch(`https://generativelanguage.googleapis.com/v1beta/models?key=${apiKey}`);
+            if (listRes.ok) {
+                const listData = await listRes.json();
+                if (Array.isArray(listData.models)) {
+                    apiDiscoveredModels = listData.models
+                        .filter((m: any) => m.supportedGenerationMethods?.includes('generateContent'))
+                        .map((m: any) => m.name.replace(/^models\//, ''));
+                }
+            }
+        } catch (e: any) {
+            console.warn("[DO PDF AI] Failed to query available models:", e.message);
+        }
+
+        const candidateSet = [
+            ...apiDiscoveredModels.filter(m => m.includes('flash')),
+            ...apiDiscoveredModels,
+            "gemini-2.5-flash",
+            "gemini-2.5-flash-lite",
+            "gemini-2.0-flash",
+            "gemini-1.5-flash"
+        ];
+        const candidates = [...new Set(candidateSet)].slice(0, 5);
 
         // Build prompt
         let prompt = `You are an expert Malaysian logistics document intelligence AI for Packsecure OS (PackSecure / DIY Venture Sdn. Bhd.).
@@ -1278,6 +1302,7 @@ CRITICAL: Return strictly a valid JSON object. Do not wrap in markdown quotes.
         let responseText = "";
         let lastError: any = null;
         let modelUsed = "";
+        const errorLogs: string[] = [];
 
         for (const modelId of candidates) {
             try {
@@ -1298,6 +1323,7 @@ CRITICAL: Return strictly a valid JSON object. Do not wrap in markdown quotes.
                 }
             } catch (modelErr: any) {
                 console.warn(`[DO PDF AI] Model ${modelId} failed:`, modelErr.message);
+                errorLogs.push(`[${modelId}]: ${modelErr.message}`);
                 lastError = modelErr;
             }
         }
@@ -1430,7 +1456,8 @@ CRITICAL: Return strictly a valid JSON object. Do not wrap in markdown quotes.
             deliveryOrders: Array.isArray(parsed.deliveryOrders) ? parsed.deliveryOrders : [],
             isFallback: !!parsed.isFallback,
             modelUsed: modelUsed || (parsed.isFallback ? 'fallback' : 'none'),
-            debugError: lastError ? lastError.message : null
+            debugError: errorLogs.length > 0 ? errorLogs.join(' || ') : (lastError ? lastError.message : null),
+            discoveredModels: apiDiscoveredModels
         });
 
     } catch (err: any) {
