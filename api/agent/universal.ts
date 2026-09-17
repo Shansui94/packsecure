@@ -1133,7 +1133,7 @@ export async function handleParseTripPdf(req: VercelRequest, res: VercelResponse
         }
 
         const genAI = new GoogleGenerativeAI(apiKey);
-        const model = genAI.getGenerativeModel({ model: 'gemini-2.0-flash' });
+        const candidates = ["gemini-2.5-flash", "gemini-1.5-flash", "gemini-2.0-flash-lite"];
 
         // Build prompt
         let prompt = `You are a logistics document intelligence AI for Packsecure OS (PackSecure / DIY Venture Sdn. Bhd.).
@@ -1201,8 +1201,28 @@ CRITICAL RULES:
             };
         });
 
-        const result = await model.generateContent([prompt, ...fileParts]);
-        const responseText = result.response.text();
+        let responseText = "";
+        let lastError: any = null;
+
+        for (const modelId of candidates) {
+            try {
+                console.log(`[DO PDF AI] Trying model ${modelId} for ${files.length} PDFs...`);
+                const model = genAI.getGenerativeModel({ model: modelId });
+                const result = await model.generateContent([prompt, ...fileParts]);
+                const text = (await result.response).text();
+                if (text) {
+                    responseText = text;
+                    break;
+                }
+            } catch (modelErr: any) {
+                console.warn(`[DO PDF AI] Model ${modelId} failed:`, modelErr.message);
+                lastError = modelErr;
+            }
+        }
+
+        if (!responseText) {
+            throw new Error(lastError?.message || 'All AI models failed to parse the uploaded DO PDFs.');
+        }
         
         // Clean JSON text
         const cleanedJson = responseText

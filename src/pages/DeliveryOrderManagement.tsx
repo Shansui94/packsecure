@@ -1782,6 +1782,12 @@ const DeliveryOrderManagement: React.FC<DeliveryOrderManagementProps> = ({ user 
             return;
         }
 
+        const totalSizeBytes = fileList.reduce((acc, f) => acc + f.size, 0);
+        if (totalSizeBytes > 4.5 * 1024 * 1024) {
+            alert(t('Saiz fail PDF melebihi had 4.5MB untuk satu muat naik. Sila kurangkan bilangan fail atau mampatkan PDF.\nTotal PDF size exceeds 4.5MB serverless limit. Please upload fewer or compressed PDF files.'));
+            return;
+        }
+
         setIsTripPdfParsing(true);
         setPdfParseProgress(t('Reading {{count}} PDF files...', { count: fileList.length }));
         setToast(null);
@@ -1813,8 +1819,9 @@ const DeliveryOrderManagement: React.FC<DeliveryOrderManagementProps> = ({ user 
                 method: 'POST',
                 headers: { 'Content-Type': 'application/json' },
                 body: JSON.stringify({
+                    action: 'parse-trip-pdf',
                     files: filePayloads,
-                    productsList: v2Items.map(i => ({ sku: i.sku, name: i.name })),
+                    productsList: v2Items.slice(0, 100).map(i => ({ sku: i.sku, name: i.name })),
                     driversList: drivers.map(d => ({ uid: d.uid, name: d.name || d.email || '' }))
                 })
             });
@@ -1849,10 +1856,12 @@ const DeliveryOrderManagement: React.FC<DeliveryOrderManagementProps> = ({ user 
             });
         } catch (err: any) {
             console.error("Failed to parse DO PDF:", err);
+            const errMsg = err.message || t('Failed to parse DO PDF');
             setToast({
                 type: 'error',
-                message: err.message || t('Failed to parse DO PDF')
+                message: errMsg
             });
+            alert(`DO PDF 识别失败 / Failed: ${errMsg}`);
         } finally {
             setIsTripPdfParsing(false);
             setPdfParseProgress('');
@@ -6248,6 +6257,48 @@ const DeliveryOrderManagement: React.FC<DeliveryOrderManagementProps> = ({ user 
                     </div>
                 );
             })()}
+
+            {/* Global Floating Toast */}
+            {toast && (
+                <div className="fixed top-20 right-6 z-[200] animate-in fade-in slide-in-from-top-4 duration-300 max-w-md">
+                    <div className={`px-4 py-3 rounded-2xl flex items-center gap-3 shadow-2xl border backdrop-blur-md ${
+                        toast.type === 'error'
+                            ? 'bg-rose-950/95 text-rose-100 border-rose-500/50 shadow-rose-950/60'
+                            : 'bg-emerald-950/95 text-emerald-100 border-emerald-500/50 shadow-emerald-950/60'
+                    }`}>
+                        {toast.type === 'error' ? <AlertTriangle size={20} className="shrink-0 text-rose-400" /> : <CheckCircle size={20} className="shrink-0 text-emerald-400" />}
+                        <div className="text-sm font-semibold flex-1 leading-snug">{toast.message}</div>
+                        <button type="button" onClick={() => setToast(null)} className="text-slate-400 hover:text-white p-1 rounded-lg">✕</button>
+                    </div>
+                </div>
+            )}
+
+            {/* DO PDF Parsing Full-Screen Loading Overlay */}
+            {isTripPdfParsing && (
+                <div className="fixed inset-0 z-[200] bg-slate-950/80 backdrop-blur-md flex items-center justify-center p-4 animate-in fade-in duration-200">
+                    <div className="bg-slate-900 border border-amber-500/40 rounded-3xl p-8 max-w-md w-full shadow-2xl shadow-amber-950/50 text-center flex flex-col items-center gap-5">
+                        <div className="w-20 h-20 rounded-3xl bg-amber-500/10 border border-amber-500/30 flex items-center justify-center relative">
+                            <FileText className="text-amber-400 animate-pulse" size={38} />
+                            <span className="absolute -top-1.5 -right-1.5 flex h-4 w-4">
+                                <span className="animate-ping absolute inline-flex h-full w-full rounded-full bg-amber-400 opacity-75"></span>
+                                <span className="relative inline-flex rounded-full h-4 w-4 bg-amber-500"></span>
+                            </span>
+                        </div>
+                        <div className="space-y-2">
+                            <h3 className="text-xl font-black text-white">AI 智能解析送货单 (DO PDF)</h3>
+                            <p className="text-sm font-bold text-amber-300 animate-pulse">
+                                {pdfParseProgress || t('Reading and analyzing PDF files...')}
+                            </p>
+                            <p className="text-xs text-slate-400 max-w-xs mx-auto leading-relaxed">
+                                正在深度识别客户名称、送达地址、联系电话、DO单号并自动匹配物料SKU，请稍候...
+                            </p>
+                        </div>
+                        <div className="w-full bg-slate-800 h-2 rounded-full overflow-hidden">
+                            <div className="bg-gradient-to-r from-amber-500 to-amber-300 h-full w-2/3 rounded-full animate-[pulse_1.5s_ease-in-out_infinite]"></div>
+                        </div>
+                    </div>
+                </div>
+            )}
 
         </div >
     );
