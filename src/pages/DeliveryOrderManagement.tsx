@@ -779,10 +779,12 @@ const DeliveryOrderManagement: React.FC<DeliveryOrderManagementProps> = ({ user 
 
             if (ordersRes.data) {
                 const mappedOrders: SalesOrder[] = ordersRes.data.map(o => ({
+                    ...o,
                     id: o.id,
                     orderNumber: o.order_number || o.id.substring(0, 8),
                     customer: o.customer,
                     driverId: o.driver_id,
+                    driver_id: o.driver_id,
                     items: o.items || [],
                     status: o.status,
                     orderDate: o.order_date,
@@ -797,7 +799,9 @@ const DeliveryOrderManagement: React.FC<DeliveryOrderManagementProps> = ({ user 
                     pod_photo_url: o.pod_photo_url,
                     pod_signature_url: o.pod_signature_url,
                     pod_signed_by: o.pod_signed_by,
-                    pod_timestamp: o.pod_timestamp
+                    pod_timestamp: o.pod_timestamp,
+                    trip_id: o.trip_id,
+                    stop_sequence: o.stop_sequence || o.trip_sequence || 0
                 }));
                 setOrders(mappedOrders);
             }
