@@ -3,13 +3,12 @@ import 'dotenv/config';
 import express from 'express';
 import cors from 'cors';
 import chatHandler from './api/agent/chat';
-import sopAssistantHandler from './api/agent/sop-assistant';
 import manageEmployeeHandler from './api/manage-employee';
 import visionHandler from './api/agent/vision';
 import geocodeHandler from './api/geocode';
 import aiPhotoHandler from './api/agent/ai-photo';
-import universalHandler, { handleIntake, handleQuery, handleParseText, handleParseTripPdf } from './api/agent/universal';
-import iotConfigHandler, { handleMachines } from './api/iot-config';
+import universalHandler, { handleIntake, handleQuery, handleParseText, handleParseTripPdf, handleSopAssistant } from './api/agent/universal';
+import iotConfigHandler, { handleMachines, handleAlarm } from './api/iot-config';
 import lorryLatestMileageHandler from './api/lorry-latest-mileage';
 import v2DocumentsHandler, {
     handleProcess as documentProcessHandler,
@@ -17,8 +16,8 @@ import v2DocumentsHandler, {
     handleEntities as documentEntitiesHandler,
     handleLogs as documentLogsHandler
 } from './api/v2-documents';
-import docsHandler from './api/docs';
-import devLogHandler from './api/dev-log';
+import docsHandler, { handleDevLog } from './api/docs';
+import whatsappHandler, { handleWhatsAppSend, handleWhatsAppWebhook } from './api/whatsapp';
 
 const app = express();
 const PORT = 8080;
@@ -49,15 +48,19 @@ mountVercelHandler('/api/agent/universal-query', handleQuery);
 mountVercelHandler('/api/agent/parse-text', handleParseText);
 mountVercelHandler('/api/iot-config', iotConfigHandler);
 mountVercelHandler('/api/machines', handleMachines);
+mountVercelHandler('/api/alarm', handleAlarm);
 mountVercelHandler('/api/lorry-latest-mileage', lorryLatestMileageHandler);
 mountVercelHandler('/api/v2-documents', v2DocumentsHandler);
 mountVercelHandler('/api/v2/documents/process', documentProcessHandler);
 mountVercelHandler('/api/v2/documents/dashboard-metrics', dashboardMetricsHandler);
 mountVercelHandler('/api/v2/documents/entities', documentEntitiesHandler);
 mountVercelHandler('/api/v2/documents/logs', documentLogsHandler);
-mountVercelHandler('/api/agent/sop-assistant', sopAssistantHandler);
+mountVercelHandler('/api/agent/sop-assistant', handleSopAssistant);
 mountVercelHandler('/api/docs', docsHandler);
-mountVercelHandler('/api/dev-log', devLogHandler);
+mountVercelHandler('/api/dev-log', handleDevLog);
+mountVercelHandler('/api/whatsapp', whatsappHandler);
+mountVercelHandler('/api/whatsapp/send', handleWhatsAppSend);
+mountVercelHandler('/api/whatsapp/webhook', handleWhatsAppWebhook);
 mountVercelHandler('/api/agent/parse-trip-pdf', handleParseTripPdf);
 mountVercelHandler('/api/agent/omni-command', async (req, res) => {
     req.query = req.query || {};

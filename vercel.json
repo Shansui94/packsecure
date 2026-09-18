@@ -38,6 +38,26 @@
             "destination": "/api/v2-documents"
         },
         {
+            "source": "/api/agent/sop-assistant",
+            "destination": "/api/agent/universal?action=sop-assistant"
+        },
+        {
+            "source": "/api/dev-log",
+            "destination": "/api/docs?action=dev-log"
+        },
+        {
+            "source": "/api/whatsapp/send",
+            "destination": "/api/whatsapp?action=send"
+        },
+        {
+            "source": "/api/whatsapp/webhook",
+            "destination": "/api/whatsapp"
+        },
+        {
+            "source": "/api/alarm",
+            "destination": "/api/iot-config?action=alarm"
+        },
+        {
             "source": "/api/(.*)",
             "destination": "/api/$1"
         },

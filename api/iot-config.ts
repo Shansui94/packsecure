@@ -36,6 +36,110 @@ export async function handleMachines(_req: VercelRequest, res: VercelResponse) {
     }
 }
 
+export async function handleAlarm(req: VercelRequest, res: VercelResponse) {
+    if (req.method !== 'POST') {
+        return res.status(405).json({ error: 'Method Not Allowed' });
+    }
+
+    try {
+        const { machine_id, alarm_count } = req.body || {};
+
+        if (!machine_id) {
+            return res.status(400).json({ error: 'machine_id is required' });
+        }
+
+        // Fetch machine rolls_per_alarm config
+        const { data: machineInfo } = await supabase
+            .from('sys_machines_v2')
+            .select('rolls_per_alarm')
+            .eq('machine_id', machine_id)
+            .single();
+
+        const rolls = machineInfo?.rolls_per_alarm || 1;
+        const lanes = rolls > 1 ? Array.from({ length: rolls }, (_, i) => `Lane${i + 1}`) : ['Single'];
+
+        console.log(`Alarm from ${machine_id} | alarm_count=${alarm_count} | rolls_per_alarm=${rolls} | lanes=${lanes.join(',')}`);
+
+        const { data: activeProducts } = await supabase
+            .from('machine_active_products')
+            .select('product_sku, lane_id, yield, operator_id')
+            .eq('machine_id', machine_id);
+
+        const activeLaneMap: Record<string, { sku: string | null; yield: number; operator_id: string | null }> = {};
+        (activeProducts || []).forEach((p: any) => {
+            activeLaneMap[p.lane_id] = {
+                sku: p.product_sku || null,
+                yield: p.yield || 1,
+                operator_id: p.operator_id || null,
+            };
+        });
+
+        // Resolve operator_id values to sys_users_v2.id (primary key)
+        const opIds = Array.from(
+            new Set(
+                (activeProducts || [])
+                    .map((p: any) => p.operator_id)
+                    .filter((id): id is string => !!id)
+            )
+        );
+
+        const opIdMap: Record<string, string> = {};
+        if (opIds.length > 0) {
+            const idList = opIds.map(id => `"${id}"`).join(',');
+            const { data: resolvedOps } = await supabase
+                .from('sys_users_v2')
+                .select('id, auth_user_id')
+                .or(`id.in.(${idList}),auth_user_id.in.(${idList})`);
+
+            if (resolvedOps) {
+                resolvedOps.forEach((op: any) => {
+                    if (op.id) {
+                        opIdMap[op.id] = op.id;
+                    }
+                    if (op.auth_user_id) {
+                        opIdMap[op.auth_user_id] = op.id;
+                    }
+                });
+            }
+        }
+
+        const isReboot = (alarm_count === 0);
+        
+        // --- 1. NATIVE V2 INSERTION ---
+        const insertRowsV2 = lanes.map((laneId: string) => {
+            const laneData = activeLaneMap[laneId] ?? activeLaneMap['Single'] ?? null;
+            const resolvedSku = (laneData?.sku && laneData.sku !== 'UNKNOWN') ? laneData.sku : 'UNKNOWN-BUBBLEWRAP';
+            
+            const rawOpId = laneData?.operator_id;
+            const resolvedOpId = rawOpId ? (opIdMap[rawOpId] || null) : null;
+
+            return {
+                machine_id,
+                output_qty: isReboot ? 0 : (laneData?.yield ?? 1),
+                sku: resolvedSku,
+                operator_id: resolvedOpId,
+            };
+        });
+
+        const { error: v2Error } = await supabase.from('production_logs_v2').insert(insertRowsV2);
+
+        if (v2Error) {
+            console.error('CRITICAL: V2 Insert Error:', v2Error);
+            throw v2Error;
+        }
+
+        return res.status(200).json({
+            status: 'ok',
+            message: `Logged to V2 Native`,
+            lanes: insertRowsV2,
+        });
+
+    } catch (e: any) {
+        console.error('Alarm Log Error:', e);
+        return res.status(500).json({ error: e.message || 'Failed to log alarm' });
+    }
+}
+
 export default async function handler(req: VercelRequest, res: VercelResponse) {
     // Enable CORS
     res.setHeader('Access-Control-Allow-Credentials', 'true');
@@ -51,6 +155,10 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
     }
 
     const { mac, action } = req.query;
+
+    if (action === 'alarm' || req.body?.action === 'alarm' || (req.method === 'POST' && req.body?.machine_id && !mac)) {
+        return handleAlarm(req, res);
+    }
 
     if (action === 'machines' || (!mac && req.method === 'GET')) {
         return handleMachines(req, res);

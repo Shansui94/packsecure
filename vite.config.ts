@@ -30,8 +30,8 @@ export default defineConfig({
                                 return shimRes;
                             };
 
-                            const { default: handler } = await import('./api/agent/sop-assistant');
-                            await handler(shimReq, shimRes);
+                            const { handleSopAssistant } = await import('./api/agent/universal');
+                            await handleSopAssistant(shimReq, shimRes);
                         } catch (err: any) {
                             console.error('[Vite SOP API Error]:', err);
                             res.statusCode = 500;
