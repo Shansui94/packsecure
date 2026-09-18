@@ -1938,7 +1938,7 @@ const DeliveryOrderManagement: React.FC<DeliveryOrderManagementProps> = ({ user 
         XLSX.writeFile(wb, 'Trip_Import_Template.xlsx');
     };
 
-    // --- DO PDF (MAX 15) UPLOAD & TRIP DISPATCH HANDLERS ---
+    // --- DO & PHOTOS (MAX 15) UPLOAD & TRIP DISPATCH HANDLERS ---
     const handleTripPdfUpload = async (e: React.ChangeEvent<HTMLInputElement>) => {
         const rawFiles = e.target.files;
         if (!rawFiles || rawFiles.length === 0) return;
@@ -1946,18 +1946,18 @@ const DeliveryOrderManagement: React.FC<DeliveryOrderManagementProps> = ({ user 
         e.target.value = '';
 
         if (fileList.length > 15) {
-            alert(t('Maksimum 15 fail PDF dibenarkan untuk satu Trip! Sila pilih semula.\nMaximum 15 DO PDF files allowed per trip! Please select again.'));
+            alert(t('Maksimum 15 fail (PDF/Foto) dibenarkan untuk satu Trip! Sila pilih semula.\nMaximum 15 files (PDF/Photos) allowed per trip! Please select again.'));
             return;
         }
 
         const totalSizeBytes = fileList.reduce((acc, f) => acc + f.size, 0);
         if (totalSizeBytes > 4.5 * 1024 * 1024) {
-            alert(t('Saiz fail PDF melebihi had 4.5MB untuk satu muat naik. Sila kurangkan bilangan fail atau mampatkan PDF.\nTotal PDF size exceeds 4.5MB serverless limit. Please upload fewer or compressed PDF files.'));
+            alert(t('Saiz fail melebihi had 4.5MB untuk satu muat naik. Sila kurangkan bilangan fail atau mampatkan dokumen.\nTotal file size exceeds 4.5MB serverless limit. Please upload fewer or compressed files.'));
             return;
         }
 
         setIsTripPdfParsing(true);
-        setPdfParseProgress(t('Reading {{count}} PDF files...', { count: fileList.length }));
+        setPdfParseProgress(t('Reading {{count}} files...', { count: fileList.length }));
         setToast(null);
 
         try {
@@ -1973,10 +1973,21 @@ const DeliveryOrderManagement: React.FC<DeliveryOrderManagementProps> = ({ user 
                         reader.onerror = reject;
                         reader.readAsDataURL(file);
                     });
+
+                    let mime = file.type;
+                    if (!mime || mime === 'application/octet-stream') {
+                        const nameLower = file.name.toLowerCase();
+                        if (nameLower.endsWith('.pdf')) mime = 'application/pdf';
+                        else if (nameLower.endsWith('.jpg') || nameLower.endsWith('.jpeg')) mime = 'image/jpeg';
+                        else if (nameLower.endsWith('.png')) mime = 'image/png';
+                        else if (nameLower.endsWith('.webp')) mime = 'image/webp';
+                        else mime = 'application/pdf';
+                    }
+
                     return {
                         name: file.name,
                         base64,
-                        mimeType: file.type || 'application/pdf'
+                        mimeType: mime
                     };
                 })
             );
@@ -2054,25 +2065,25 @@ const DeliveryOrderManagement: React.FC<DeliveryOrderManagementProps> = ({ user 
             if (data.isFallback) {
                 setToast({
                     type: 'info',
-                    message: t('⚠️ DO PDF 使用备用草稿解析（提取到 {{count}} 张 DO），请核对各停靠点。', { count: data.deliveryOrders.length })
+                    message: t('⚠️ 单据使用备用草稿解析（提取到 {{count}} 张 DO），请核对各停靠点。', { count: data.deliveryOrders.length })
                 });
             } else {
                 setToast({
                     type: 'success',
-                    message: t('✅ AI 成功解析 {{count}} 张 DO (模型: {{model}})。请核对并确认车次。', {
+                    message: t('✅ AI 成功解析 {{count}} 张单据 (模型: {{model}})。请核对并确认车次。', {
                         count: data.deliveryOrders.length,
                         model: data.modelUsed || 'gemini-2.5-flash'
                     })
                 });
             }
         } catch (err: any) {
-            console.error("Failed to parse DO PDF:", err);
-            const errMsg = err.message || t('Failed to parse DO PDF');
+            console.error("Failed to parse DO & Photos:", err);
+            const errMsg = err.message || t('Failed to parse DO & Photos');
             setToast({
                 type: 'error',
                 message: errMsg
             });
-            alert(`DO PDF 识别失败 / Failed: ${errMsg}`);
+            alert(`单据与照片识别失败 / Failed: ${errMsg}`);
         } finally {
             setIsTripPdfParsing(false);
             setPdfParseProgress('');
@@ -2248,8 +2259,18 @@ const DeliveryOrderManagement: React.FC<DeliveryOrderManagementProps> = ({ user 
                 const orderId = crypto.randomUUID();
 
                 const noteParts: string[] = [];
+                if (doItem.isExchange && doItem.exchangeReturnNotes) {
+                    noteParts.push(`[EXCHANGE / 换货: ${doItem.exchangeReturnNotes.trim()}]`);
+                } else if (doItem.isExchange) {
+                    noteParts.push(`[EXCHANGE / 换货]`);
+                }
+                if (doItem.isHandwritten) {
+                    noteParts.push(`[HANDWRITTEN / 手写便签]`);
+                }
                 if (doItem.remarks && doItem.remarks.trim()) {
-                    noteParts.push(doItem.remarks.trim());
+                    if (!noteParts.some(p => p.includes(doItem.remarks!.trim()))) {
+                        noteParts.push(doItem.remarks.trim());
+                    }
                 }
                 if (parsedTripRemark && parsedTripRemark.trim() && !noteParts.some(p => p.includes(parsedTripRemark.trim()))) {
                     noteParts.push(`[Trip: ${parsedTripRemark.trim()}]`);
@@ -3475,7 +3496,7 @@ const DeliveryOrderManagement: React.FC<DeliveryOrderManagementProps> = ({ user 
                     <input
                         ref={headerTripPdfInputRef}
                         type="file"
-                        accept="application/pdf,.pdf"
+                        accept="application/pdf,.pdf,image/jpeg,image/png,image/webp,.jpg,.jpeg,.png,.webp"
                         multiple
                         className="hidden"
                         onChange={handleTripPdfUpload}
@@ -3484,14 +3505,14 @@ const DeliveryOrderManagement: React.FC<DeliveryOrderManagementProps> = ({ user 
                         onClick={() => headerTripPdfInputRef.current?.click()}
                         disabled={isTripPdfParsing}
                         className="group relative bg-gradient-to-r from-amber-600 to-amber-500 hover:from-amber-500 hover:to-amber-400 text-white px-5 py-3 rounded-xl flex items-center gap-2.5 font-bold shadow-xl shadow-amber-950/20 transition-all active:scale-95 disabled:opacity-50"
-                        title="Upload up to 15 DO PDFs to create a Trip"
+                        title="Upload up to 15 DO PDFs or Photos to create a Trip"
                     >
                         {isTripPdfParsing ? (
                             <span className="w-4 h-4 border-2 border-white/40 border-t-white rounded-full animate-spin" />
                         ) : (
-                            <FileText size={18} className="text-amber-200" />
+                            <ImagePlus size={18} className="text-amber-200" />
                         )}
-                        <span>{isTripPdfParsing ? (pdfParseProgress || t('Parsing…')) : t('Upload DO PDF (Max 15)')}</span>
+                        <span>{isTripPdfParsing ? (pdfParseProgress || t('Parsing…')) : t('Upload DO & Photos (Max 15)')}</span>
                     </button>
 
                     <button
@@ -5129,7 +5150,7 @@ const DeliveryOrderManagement: React.FC<DeliveryOrderManagementProps> = ({ user 
                                     <input
                                         ref={tripPdfInputRef}
                                         type="file"
-                                        accept="application/pdf,.pdf"
+                                        accept="application/pdf,.pdf,image/jpeg,image/png,image/webp,.jpg,.jpeg,.png,.webp"
                                         multiple
                                         className="hidden"
                                         onChange={handleTripPdfUpload}
@@ -5139,15 +5160,15 @@ const DeliveryOrderManagement: React.FC<DeliveryOrderManagementProps> = ({ user 
                                         disabled={isTripPdfParsing}
                                         onClick={() => tripPdfInputRef.current?.click()}
                                         className="flex items-center gap-1.5 sm:gap-2 px-2.5 sm:px-4 py-2 rounded-xl bg-amber-500/20 border border-amber-500/40 text-amber-200 hover:bg-amber-500/30 disabled:opacity-50 text-xs font-bold uppercase tracking-wide transition-all shrink-0"
-                                        title="Upload up to 15 DO PDFs for this trip"
+                                        title="Upload up to 15 DO PDFs or Photos for this trip"
                                     >
                                         {isTripPdfParsing ? (
                                             <span className="w-4 h-4 border-2 border-amber-300/30 border-t-amber-200 rounded-full animate-spin" />
                                         ) : (
-                                            <FileText size={16} className="text-amber-400" />
+                                            <ImagePlus size={16} className="text-amber-400" />
                                         )}
-                                        <span className="hidden sm:inline">{isTripPdfParsing ? (pdfParseProgress || t('Parsing…')) : t('Upload DO PDF (Max 15)')}</span>
-                                        <span className="sm:hidden sr-only">{isTripPdfParsing ? 'Parsing' : 'PDF'}</span>
+                                        <span className="hidden sm:inline">{isTripPdfParsing ? (pdfParseProgress || t('Parsing…')) : t('Upload DO & Photos (Max 15)')}</span>
+                                        <span className="sm:hidden sr-only">{isTripPdfParsing ? 'Parsing' : 'Upload'}</span>
                                     </button>
 
                                     <input
@@ -6369,10 +6390,20 @@ const DeliveryOrderManagement: React.FC<DeliveryOrderManagementProps> = ({ user 
                                         >
                                             {/* Drop Row Header */}
                                             <div className="flex flex-wrap items-center justify-between gap-2 border-b border-slate-800/80 pb-2.5">
-                                                <div className="flex items-center gap-2">
+                                                <div className="flex flex-wrap items-center gap-2">
                                                     <span className="px-2.5 py-1 rounded-lg bg-gradient-to-r from-blue-600 to-indigo-600 text-white font-black text-xs uppercase tracking-wider">
                                                         Drop #{idx + 1}
                                                     </span>
+                                                    {doItem.isExchange && (
+                                                        <span className="px-2 py-0.5 rounded-md bg-purple-500/20 border border-purple-500/50 text-purple-300 font-bold text-[11px] flex items-center gap-1 shadow-sm">
+                                                            <span>🔄</span> {t('换货 (Exchange)')}
+                                                        </span>
+                                                    )}
+                                                    {doItem.isHandwritten && (
+                                                        <span className="px-2 py-0.5 rounded-md bg-amber-500/20 border border-amber-500/50 text-amber-300 font-bold text-[11px] flex items-center gap-1 shadow-sm">
+                                                            <span>📝</span> {t('手写便签 / 临时加单')}
+                                                        </span>
+                                                    )}
                                                     <div className="flex items-center gap-1.5">
                                                         <span className="text-xs font-bold text-slate-400">DO:</span>
                                                         <input
@@ -6419,6 +6450,24 @@ const DeliveryOrderManagement: React.FC<DeliveryOrderManagementProps> = ({ user 
                                                     </div>
                                                 </div>
                                             </div>
+
+                                            {/* Exchange Return Goods Alert Banner */}
+                                            {doItem.isExchange && (
+                                                <div className="p-2.5 rounded-lg bg-purple-950/40 border border-purple-500/40 text-purple-200 text-xs flex items-start gap-2.5">
+                                                    <span className="text-base leading-none mt-0.5">🔄</span>
+                                                    <div className="flex-1">
+                                                        <div className="font-bold flex flex-wrap items-center gap-1.5">
+                                                            <span className="text-purple-300">{t('司机取回旧货须知 / Return Goods Task')}:</span>
+                                                            <span className="font-mono bg-purple-900/60 px-1.5 py-0.5 rounded border border-purple-500/40 text-purple-100 font-bold">
+                                                                {doItem.exchangeReturnNotes || t('须取回对应货物并拍照')}
+                                                            </span>
+                                                        </div>
+                                                        <div className="text-[11px] text-purple-300/80 mt-1">
+                                                            {t('送达新货时，请司机务必向客户取回上述旧货，并在司机端上传取货照片。')}
+                                                        </div>
+                                                    </div>
+                                                </div>
+                                            )}
 
                                             {/* Customer & Address */}
                                             <div className="grid grid-cols-1 sm:grid-cols-3 gap-3">

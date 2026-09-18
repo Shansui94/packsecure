@@ -1211,89 +1211,139 @@ export async function handleParseTripPdf(req: VercelRequest, res: VercelResponse
 
         // Build prompt
         let prompt = `You are an expert Malaysian logistics document intelligence AI for Packsecure OS (PackSecure / DIY Venture Sdn. Bhd.).
-Analyze the attached Delivery Order (DO) PDF document(s).
-All uploaded PDF documents belong to ONE single lorry delivery trip (一次出车派送任务).
+Analyze the attached Delivery Order (DO) PDF document(s) and/or image photo(s).
+All uploaded documents belong to ONE single lorry delivery trip (一次出车派送任务).
 
 ============================================================
 🚨 CRITICAL MULTI-PAGE & MULTI-DO PARSING DIRECTIVE:
-1. The uploaded file(s) contain approximately ${totalEstimatedPages} page(s).
+1. The uploaded file(s) contain approximately ${totalEstimatedPages} page(s) / document(s).
 ${allDetectedDoNumbers.length > 0 ? `2. Detected potential DO numbers in document text streams: ${allDetectedDoNumbers.join(', ')}.\n` : ''}
-2. In Malaysian factory and warehouse operations, multiple distinct Delivery Orders (DOs) are frequently scanned, concatenated, or printed into ONE SINGLE multi-page PDF document!
-3. EACH PAGE (or continuation group) is a SEPARATE Delivery Order with its own DO number, recipient customer name, delivery address, and items.
-4. YOU MUST INSPECT EVERY SINGLE PAGE FROM FIRST PAGE TO LAST PAGE (Page 1, Page 2, Page 3, Page 4, Page 5, ...).
-5. DO NOT STOP AFTER THE FIRST PAGE!
-6. For EVERY distinct DO number (or distinct customer stop) across all pages, you MUST create a separate object in the "deliveryOrders" array.
-7. If the PDF has ${totalEstimatedPages > 1 ? totalEstimatedPages : 'multiple'} pages with separate DO numbers, "deliveryOrders" MUST contain all of them (e.g. ${totalEstimatedPages > 1 ? totalEstimatedPages : '5'} items), and "totalDrops" MUST match the count of DOs!
-8. If a single DO spans multiple pages (e.g. "Page 1 of 2" and "Page 2 of 2" with the EXACT SAME DO number), combine the items into that single DO. Otherwise, if the DO number or customer is different, it is a NEW DO.
+2. In Malaysian factory and warehouse operations, multiple distinct Delivery Orders (DOs) or handwritten order slips are frequently scanned, concatenated, or photographed together into ONE trip dispatch!
+3. EACH PAGE (or distinct customer order) is a SEPARATE Delivery Order with its own DO number, recipient customer name, delivery address, and items.
+4. YOU MUST INSPECT EVERY SINGLE PAGE AND DOCUMENT FROM FIRST TO LAST.
+5. For EVERY distinct DO number (or distinct customer stop), you MUST create a separate object in the "deliveryOrders" array.
+6. If a single DO spans multiple pages (e.g. "Page 1 of 2" and "Page 2 of 2" with the EXACT SAME DO number), combine the items into that single DO. Otherwise, if the DO number or customer is different, it is a NEW DO.
+
 ============================================================
+🚨 CRITICAL STRIKETHROUGH & CROSSED-OUT ITEMS DIRECTIVE (划线作废识别):
+- Carefully inspect all pages and documents visually for strike-through lines (水平横线划掉 / pen crosses / lines drawn through item descriptions or quantities).
+- If an item line, product description, or quantity has a line drawn through it, IT HAS BEEN CANCELLED/VOIDED ON SITE!
+- DO NOT output struck-through items in the "items" array! They are strictly VOID and must not be loaded onto the lorry!
+- If original printed items are struck through, look immediately below or nearby for handwritten or printed replacement/exchange instructions (e.g. "EXCHANGE :", "TUKAR :", "HANTAR ...").
+
+============================================================
+🚨 CRITICAL EXCHANGE & RETURN DIRECTIVE (换货与收旧货指令):
+- If the document contains "EXCHANGE :", "TUKAR :", or directives like:
+    "HANTAR SF BALCK X 1CTN"
+    "AMBIL BALIK SF BLACK X 1CTN"
+- Apply these strict business rules:
+  1. "HANTAR ..." means new goods to be delivered out by our lorry to the customer. This IS the active cargo item! Add this product and quantity to the "items" array.
+  2. "AMBIL BALIK ..." means old/defective goods the driver MUST collect from the customer and bring back to the factory.
+     - DO NOT add "AMBIL BALIK" goods as outbound cargo to "items" (it is not factory stock to load)!
+     - Instead, set "isExchange": true.
+     - Set "exchangeReturnNotes": exact return text (e.g. "AMBIL BALIK SF BLACK X 1CTN").
+     - Prepend "[EXCHANGE / 换货: AMBIL BALIK SF BLACK X 1CTN]" to "remarks".
+
+============================================================
+🚨 CRITICAL HANDWRITTEN SLIPS & INFORMAL NOTES DIRECTIVE (手写便签/临时单识别):
+- The uploaded document may be a photo, scan, or image of a HANDWRITTEN delivery note or informal paper slip (白纸手写便签/临时加单).
+- 1. Carefully extract:
+    - "customer": Recipient customer or company name (e.g. "CH INDUSTRY - HOLYN TRADING").
+    - "deliveryAddress": Full destination address (e.g. "6240A MK 14 KAMPUNG SIMPAH 12300 BUTTERWORTH PENANG").
+    - "phone": Contact number (labeled "TEL:" or similar, e.g. "012-505 9929").
+    - "items": Products and quantities listed (e.g. "Hitam Full 1m x 100m - 20 roll").
+- 2. If there is NO formal printed DO number (e.g., no printed "OPM2609-xxxx"), auto-generate a clean standardized temporary DO number formatted as:
+    "MANUAL-2609-XXX" (e.g. "MANUAL-2609-001" using current year/month 2609 and a 3-digit sequence).
+- 3. Set "isHandwritten": true for this DO.
+
+============================================================
+🚨 MALAYSIAN FACTORY JARGON & CONVERSION DIRECTIVE (车间行话与箱卷换算):
+- "Hitam Full" or "Hitam 1m" -> Bubble Wrap Black Full Roll (1m x 100m, uom: "ROLL").
+- "Hitam Half" or "Hitam 50cm" -> Bubble Wrap Black Half Roll (0.5m x 100m, uom: "ROLL").
+- "Clear Full" or "Putih Full" -> Bubble Wrap Clear Full Roll (1m x 100m, uom: "ROLL").
+- "Clear Half", "DL Half", or "SL Half" -> Bubble Wrap Clear Half Roll (0.5m x 100m, uom: "ROLL").
+- "SF" or "Stretch Film" in "CTN" or "Carton" (e.g. "SF BALCK X 1CTN", "Stretch Film 1 CTN"):
+    * 1 Carton of Stretch Film = 6 Rolls!
+    * Set "quantity": 6, "uom": "ROLL", and include "(1 CTN / 6 Rolls)" in the product description.
+- "Tape" / "Cukup Tape" in "CTN" or "Carton":
+    * Set "uom": "BOX".
 
 TASK:
 Extract structured data for each Delivery Order (DO) across ALL pages and synthesize the whole Trip summary.
 
 FOR EACH DELIVERY ORDER:
-- "doNumber": Printed DO number (e.g., "OPM2609-0551", "OPM2609-0552").
-- "customer": Recipient customer or company name (e.g. "AURA SNR EMPIRE", "SITI SARAH", "XUN HOONG HARDWARE").
+- "doNumber": Printed DO number (e.g., "OPM2609-0284") or generated "MANUAL-2609-001" for handwritten slips.
+- "customer": Recipient customer or company name (e.g. "PERNIAGAAN THUNG TATT", "CH INDUSTRY - HOLYN TRADING").
 - "deliveryAddress": Complete delivery address with street, unit, industrial park, postcode, town, and state.
-- "phone": Contact phone/mobile if present (labeled "TEL:", e.g. "011-56324303").
-- "zone": Primary Malaysian state/region (e.g., KELANTAN, PERAK, PENANG, KEDAH, SELANGOR, KL, NEGERI SEMBILAN, MELAKA, JOHOR, PAHANG, TERENGGANU).
-- "orderDate": DO issue date in YYYY-MM-DD format (e.g., "2026-09-17").
+- "phone": Contact phone/mobile if present (e.g. "017-4816678", "012-505 9929").
+- "zone": Primary Malaysian state/region (e.g., PENANG, KELANTAN, PERAK, KEDAH, SELANGOR, KL, NEGERI SEMBILAN, MELAKA, JOHOR, PAHANG, TERENGGANU).
+- "orderDate": DO issue date in YYYY-MM-DD format (e.g., "2026-09-08").
 - "terms": Payment term if visible (e.g., "C.O.D.", "30 Days").
-- "remarks": Any printed remarks, notes, special delivery instructions, payment/cheque notes, timing requests (e.g. "Tolong hantar pagi", "Collect cash RM1200", "Call sebelum sampai", or empty string if none).
-- "items": Array of products on this DO:
+- "remarks": Any printed or handwritten remarks, notes, special delivery instructions, exchange notes (e.g. "[EXCHANGE / 换货: AMBIL BALIK SF BLACK X 1CTN]").
+- "isExchange": true if this is an exchange order with goods to be collected back, false otherwise.
+- "exchangeReturnNotes": description of goods to collect back (e.g. "AMBIL BALIK SF BLACK X 1CTN"), or empty string.
+- "isHandwritten": true if this DO comes from a handwritten paper slip without formal printed header, false otherwise.
+- "items": Array of valid outbound products on this DO (EXCLUDING struck-through items):
   [
     {
-      "product": "Product description as printed on DO (e.g. Bubble Wrap Single Layer Clear 1m x 100m (MERAH))",
-      "quantity": 15, // Positive integer
-      "uom": "ROLL" or "UNIT",
+      "product": "Product description (e.g. Stretch Film 2.2kg 23Micron Black (1 CTN / 6 Rolls))",
+      "quantity": 6, // Positive integer (换算为卷数或箱数)
+      "uom": "ROLL" or "BOX" or "UNIT",
       "sku": "Matched SKU from the Reference Product List below, or empty string if no clear match"
     }
   ]
 - "doTotal": Sum of item quantities on this DO.
 
 FOR THE OVERALL TRIP:
-- "suggestedTripDate": Prevailing delivery date in YYYY-MM-DD format (default to today 2026-09-17 if not clear).
-- "primaryZone": Main region of the trip (e.g., KELANTAN).
+- "suggestedTripDate": Prevailing delivery date in YYYY-MM-DD format (default to today 2026-09-18 if not clear).
+- "primaryZone": Main region of the trip (e.g., PENANG, KELANTAN).
 - "totalDrops": Total count of distinct DO stops (count of objects in deliveryOrders).
 - "totalRolls": Sum of all item quantities across all DOs.
-- "destinationsSummary": Comma-separated list of towns/areas visited (e.g., "Kota Bharu, Pasir Puteh, Pasir Mas").
+- "destinationsSummary": Comma-separated list of towns/areas visited (e.g., "Bukit Mertajam, Butterworth").
 - "tripRemarks": Any overall trip-level remark or driver instruction, or empty string.
 
 EXACT JSON OUTPUT FORMAT REQUIRED:
 {
-  "suggestedTripDate": "2026-09-17",
-  "primaryZone": "KELANTAN",
+  "suggestedTripDate": "2026-09-18",
+  "primaryZone": "PENANG",
   "totalDrops": 2,
-  "totalRolls": 45,
-  "destinationsSummary": "Kota Bharu, Pasir Mas",
+  "totalRolls": 26,
+  "destinationsSummary": "Bukit Mertajam, Butterworth",
   "tripRemarks": "",
   "deliveryOrders": [
     {
-      "doNumber": "OPM2609-0551",
-      "customer": "CUSTOMER A",
-      "deliveryAddress": "123 Jalan Besar, Kota Bharu, Kelantan",
-      "phone": "012-3456789",
-      "zone": "KELANTAN",
-      "orderDate": "2026-09-17",
+      "doNumber": "OPM2609-0284",
+      "customer": "PERNIAGAAN THUNG TATT",
+      "deliveryAddress": "G-27 LEBUH KOTA PERMAI 1, TAMAN KOTA PERMAI, 14000 BUKIT MERTAJAM, PENANG",
+      "phone": "017-4816678",
+      "zone": "PENANG",
+      "orderDate": "2026-09-08",
       "terms": "C.O.D.",
-      "remarks": "Call before arrival",
+      "remarks": "[EXCHANGE / 换货: AMBIL BALIK SF BLACK X 1CTN]",
+      "isExchange": true,
+      "exchangeReturnNotes": "AMBIL BALIK SF BLACK X 1CTN",
+      "isHandwritten": false,
       "items": [
-        { "product": "Bubble Wrap Single Layer 1m x 100m (MERAH)", "quantity": 20, "uom": "ROLL", "sku": "B17-ROLL" }
+        { "product": "Stretch Film 2.2kg 23Micron Black (1 CTN / 6 Rolls)", "quantity": 6, "uom": "ROLL", "sku": "" }
       ],
-      "doTotal": 20
+      "doTotal": 6
     },
     {
-      "doNumber": "OPM2609-0552",
-      "customer": "CUSTOMER B",
-      "deliveryAddress": "45 Jalan Pasar, Pasir Mas, Kelantan",
-      "phone": "019-8765432",
-      "zone": "KELANTAN",
-      "orderDate": "2026-09-17",
-      "terms": "30 Days",
+      "doNumber": "MANUAL-2609-001",
+      "customer": "CH INDUSTRY - HOLYN TRADING",
+      "deliveryAddress": "6240A MK 14 KAMPUNG SIMPAH 12300 BUTTERWORTH PENANG",
+      "phone": "012-505 9929",
+      "zone": "PENANG",
+      "orderDate": "2026-09-18",
+      "terms": "C.O.D.",
       "remarks": "",
+      "isExchange": false,
+      "exchangeReturnNotes": "",
+      "isHandwritten": true,
       "items": [
-        { "product": "Stretch Film 500mm x 2.2kg", "quantity": 25, "uom": "ROLL", "sku": "SF-22" }
+        { "product": "Bubble Wrap Black 1m x 100m (Hitam Full)", "quantity": 20, "uom": "ROLL", "sku": "" }
       ],
-      "doTotal": 25
+      "doTotal": 20
     }
   ]
 }
@@ -1329,11 +1379,18 @@ CRITICAL: Return strictly a valid JSON object. Do not wrap in markdown quotes.
             prompt += `\nCRITICAL: If a DO belongs to the specified customer and the item description matches or resembles an alias above, ALWAYS use that exact mapped SKU.\n`;
         }
 
-        // Prepare file parts
+        // Prepare file parts with image format support
         const fileParts = files.map(f => {
             let mime = f.mimeType || 'application/pdf';
-            if (f.name && f.name.toLowerCase().endsWith('.pdf')) {
+            const nameLower = (f.name || '').toLowerCase();
+            if (nameLower.endsWith('.pdf')) {
                 mime = 'application/pdf';
+            } else if (nameLower.endsWith('.jpg') || nameLower.endsWith('.jpeg')) {
+                mime = 'image/jpeg';
+            } else if (nameLower.endsWith('.png')) {
+                mime = 'image/png';
+            } else if (nameLower.endsWith('.webp')) {
+                mime = 'image/webp';
             }
             const cleanBase64 = cleanBase64Payload(f.base64 || f.data || '');
             return {
@@ -1465,7 +1522,7 @@ CRITICAL: Return strictly a valid JSON object. Do not wrap in markdown quotes.
                 }
             } else {
                 fallbackOrders = files.map((f, idx) => {
-                    const nameWithoutExt = (f.name || '').replace(/\.pdf$/i, '');
+                    const nameWithoutExt = (f.name || '').replace(/\.(pdf|jpe?g|png|webp)$/i, '');
                     const doMatch = nameWithoutExt.match(/(OPM[A-Za-z0-9-]+|DO-[A-Za-z0-9_-]+|[A-Za-z0-9_-]+)/i);
                     const doNumber = doMatch ? doMatch[1].toUpperCase() : `DO-${idx + 1}`;
                     return {

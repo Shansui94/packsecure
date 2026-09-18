@@ -133,6 +133,7 @@ export interface SelfPickupItem {
     specialBadges: {
         hasCod: boolean;
         hasNightDelivery: boolean;
+        hasExchange?: boolean;
     };
 }
 
@@ -170,6 +171,7 @@ export interface TripGroup {
     hasCod: boolean;
     hasNightDelivery: boolean;
     hasSelfPickup: boolean;
+    hasExchange?: boolean;
     specialNotes: string[];
 }
 
@@ -492,6 +494,7 @@ const OrderSummary: React.FC<OrderSummaryProps> = ({ user }) => {
                     hasCod: false,
                     hasNightDelivery: false,
                     hasSelfPickup: false,
+                    hasExchange: false,
                     specialNotes: []
                 };
             }
@@ -504,12 +507,15 @@ const OrderSummary: React.FC<OrderSummaryProps> = ({ user }) => {
                 groups[tripKey].zones.push(order.zone);
             }
 
-            // Check Special Badges (COD, Night Delivery)
+            // Check Special Badges (COD, Night Delivery, Exchange)
             if (noteText.includes('c.o.d') || noteText.includes('cod') || noteText.includes('cash on delivery') || noteText.includes('bayar tunai')) {
                 groups[tripKey].hasCod = true;
             }
             if (noteText.includes('malam') || noteText.includes('night') || noteText.includes('petang')) {
                 groups[tripKey].hasNightDelivery = true;
+            }
+            if (noteText.includes('exchange') || noteText.includes('换货') || noteText.includes('ambil balik') || noteText.includes('tukar barang')) {
+                groups[tripKey].hasExchange = true;
             }
             if (order.notes && order.notes.trim() && !groups[tripKey].specialNotes.includes(order.notes.trim())) {
                 groups[tripKey].specialNotes.push(order.notes.trim());
@@ -1376,8 +1382,8 @@ const TripColumn: React.FC<TripColumnProps> = ({
                                             </button>
                                         </div>
 
-                                        {/* 🏷️ Special Flags & Indicators (COD, Malam, Pickup) */}
-                                        {(trip.hasCod || trip.hasNightDelivery || trip.hasSelfPickup) && (
+                                        {/* 🏷️ Special Flags & Indicators (COD, Malam, Pickup, Exchange) */}
+                                        {(trip.hasCod || trip.hasNightDelivery || trip.hasSelfPickup || trip.hasExchange) && (
                                             <div className="flex flex-wrap items-center gap-1.5 mb-2">
                                                 {trip.hasCod && (
                                                     <span className="px-2 py-0.5 rounded-full text-[9px] font-black uppercase tracking-wider bg-rose-500/20 text-rose-300 border border-rose-500/40 animate-pulse flex items-center gap-1">
@@ -1392,6 +1398,11 @@ const TripColumn: React.FC<TripColumnProps> = ({
                                                 {trip.hasSelfPickup && (
                                                     <span className="px-2 py-0.5 rounded-full text-[9px] font-black uppercase tracking-wider bg-cyan-500/20 text-cyan-300 border border-cyan-500/40 flex items-center gap-1">
                                                         📦 Self Pickup ({t('自提')})
+                                                    </span>
+                                                )}
+                                                {trip.hasExchange && (
+                                                    <span className="px-2 py-0.5 rounded-full text-[9px] font-black uppercase tracking-wider bg-purple-500/20 text-purple-300 border border-purple-500/40 flex items-center gap-1">
+                                                        🔄 Exchange ({t('换货')})
                                                     </span>
                                                 )}
                                             </div>

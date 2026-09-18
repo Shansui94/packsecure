@@ -1275,5 +1275,10 @@
   "Delivery Method": "ပို့ဆောင်ရေးနည်းလမ်း",
   "Lorry Delivery": "လော်ရီကားဖြင့်ပို့ဆောင်ခြင်း",
   "Customer Self-Pickup": "ဖောက်သည်ကိုယ်တိုင်လာယူခြင်း",
-  "Handover Success": "ကိုယ်တိုင်လာယူမှု အောင်မြင်စွာအတည်ပြုပြီးပါပြီ။"
+  "Handover Success": "ကိုယ်တိုင်လာယူမှု အောင်မြင်စွာအတည်ပြုပြီးပါပြီ။",
+  "Upload DO & Photos (Max 15)": "DO နှင့် ဓာတ်ပုံများ တင်ပါ (အများဆုံး ၁၅ ခု)",
+  "Handwritten Note / Temp Add-on": "လက်ရေးမှတ်စု / ယာယီထည့်သွင်းမှု",
+  "Exchange (Return Goods)": "ပစ္စည်းလဲလှယ်ခြင်း (ပြန်ယူရန်)",
+  "Driver Return Goods Task": "ယာဉ်မောင်း ပစ္စည်းပြန်ယူရန် ညွှန်ကြားချက်",
+  "Return task: Driver must collect old goods from customer and upload photo proof upon delivery.": "ပို့ဆောင်စဉ် ယာဉ်မောင်းသည် သုံးစွဲသူထံမှ ပစ္စည်းဟောင်း ပြန်ယူပြီး ဓာတ်ပုံမှတ်တမ်း တင်ရမည်။"
 }

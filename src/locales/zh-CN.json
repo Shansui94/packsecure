@@ -1326,5 +1326,10 @@
   "Delivery Method": "发货方式",
   "Lorry Delivery": "罗里派送",
   "Customer Self-Pickup": "客户自提",
-  "Handover Success": "自提提货核销成功！"
+  "Handover Success": "自提提货核销成功！",
+  "Upload DO & Photos (Max 15)": "上传单据与照片 (上限15张)",
+  "Handwritten Note / Temp Add-on": "手写便签 / 临时加单",
+  "Exchange (Return Goods)": "换货 (含取旧货)",
+  "Driver Return Goods Task": "司机取回旧货须知",
+  "Return task: Driver must collect old goods from customer and upload photo proof upon delivery.": "送达新货时，请司机务必向客户取回旧货，并在司机端拍照留证。"
 }

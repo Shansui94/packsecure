@@ -1326,5 +1326,10 @@
   "Delivery Method": "Delivery Method",
   "Lorry Delivery": "Lorry Delivery",
   "Customer Self-Pickup": "Customer Self-Pickup",
-  "Handover Success": "Self-pickup handover confirmed successfully!"
+  "Handover Success": "Self-pickup handover confirmed successfully!",
+  "Upload DO & Photos (Max 15)": "Upload DO & Photos (Max 15)",
+  "Handwritten Note / Temp Add-on": "Handwritten Note / Temp Add-on",
+  "Exchange (Return Goods)": "Exchange (Return Goods)",
+  "Driver Return Goods Task": "Driver Return Goods Task",
+  "Return task: Driver must collect old goods from customer and upload photo proof upon delivery.": "Return task: Driver must collect old goods from customer and upload photo proof upon delivery."
 }

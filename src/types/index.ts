@@ -155,6 +155,9 @@ export interface ParsedDeliveryOrder {
     remarks?: string;
     items: ParsedDOItem[];
     doTotal: number;
+    isExchange?: boolean;
+    exchangeReturnNotes?: string;
+    isHandwritten?: boolean;
 }
 
 export interface ParsedTripDOBatch {

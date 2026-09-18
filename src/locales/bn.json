@@ -1275,5 +1275,10 @@
   "Delivery Method": "বিতরণ পদ্ধতি",
   "Lorry Delivery": "লরি ডেলিভারি",
   "Customer Self-Pickup": "গ্রাহক নিজস্ব পিকআপ",
-  "Handover Success": "পিকআপ হস্তান্তর সফলভাবে সম্পন্ন হয়েছে!"
+  "Handover Success": "পিকআপ হস্তান্তর সফলভাবে সম্পন্ন হয়েছে!",
+  "Upload DO & Photos (Max 15)": "ডিও এবং ছবি আপলোড করুন (সর্বোচ্চ ১৫)",
+  "Handwritten Note / Temp Add-on": "হাতে লেখা চিরকুট / সাময়িক যোগ",
+  "Exchange (Return Goods)": "বিনিময় (পণ্য ফেরত)",
+  "Driver Return Goods Task": "ড্রাইভারের পণ্য ফেরত কাজ",
+  "Return task: Driver must collect old goods from customer and upload photo proof upon delivery.": "বিতরণের সময় ড্রাইভারকে অবশ্যই গ্রাহকের কাছ থেকে পুরানো পণ্য ফেরত নিতে হবে এবং ছবির প্রমাণ আপলোড করতে হবে।"
 }

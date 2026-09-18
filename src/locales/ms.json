@@ -1326,5 +1326,10 @@
   "Delivery Method": "Kaedah Penghantaran",
   "Lorry Delivery": "Penghantaran Lori",
   "Customer Self-Pickup": "Pelanggan Ambil Sendiri",
-  "Handover Success": "Penyerahan ambil sendiri berjaya disahkan!"
+  "Handover Success": "Penyerahan ambil sendiri berjaya disahkan!",
+  "Upload DO & Photos (Max 15)": "Muat Naik DO & Foto (Maks 15)",
+  "Handwritten Note / Temp Add-on": "Nota Tulisan Tangan / Tambahan",
+  "Exchange (Return Goods)": "Pertukaran (Ambil Balik)",
+  "Driver Return Goods Task": "Tugasan Ambil Balik Pemandu",
+  "Return task: Driver must collect old goods from customer and upload photo proof upon delivery.": "Semasa hantar, pemandu wajib ambil balik barang lama daripada pelanggan dan ambil foto bukti."
 }
