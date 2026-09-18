@@ -1754,7 +1754,29 @@ const PersonalMonthlyReport: React.FC<Props> = ({ user }) => {
                             const zoneRaw = t.zone || t.delivery_address || 'Unknown';
                             let calcZone = zoneRaw.toLowerCase();
                             const key = `${origin}-${calcZone}`;
-                            const rateInfo = rateMap[key];
+                            let rateInfo = rateMap[key];
+                            if (!rateInfo && t.delivery_address) {
+                                const addrLower = t.delivery_address.toLowerCase();
+                                for (const k of Object.keys(rateMap)) {
+                                    if (k.startsWith(`${origin}-`)) {
+                                        const r = rateMap[k];
+                                        const loc = (r.location_name || '').toLowerCase().trim();
+                                        if (loc && loc.length >= 3 && addrLower.includes(loc)) {
+                                            rateInfo = r;
+                                            break;
+                                        }
+                                    }
+                                }
+                            }
+                            if (!rateInfo) {
+                                const matchedKey = Object.keys(rateMap).find(k => {
+                                    if (!k.startsWith(`${origin}-`)) return false;
+                                    const locName = k.slice(origin.length + 1);
+                                    return locName.includes(calcZone) || (calcZone.length >= 3 && calcZone.includes(locName));
+                                });
+                                if (matchedKey) rateInfo = rateMap[matchedKey];
+                            }
+
                             const drops = Math.max(1, t.trip_drop_count || 1);
 
                             const approvedAmountMatch = t.notes?.match(/\[APPROVED_AMOUNT:\s*([\d.]+)\]/);
@@ -1763,10 +1785,14 @@ const PersonalMonthlyReport: React.FC<Props> = ({ user }) => {
                                 tEarnings = parseFloat(approvedAmountMatch[1]) || 0;
                             } else if (rateInfo) {
                                 const base = Number(rateInfo.base_rate) || 0;
-                                const maxPlaces = Number(rateInfo.max_places) || 0;
+                                const maxPlaces = (rateInfo.max_places !== undefined && rateInfo.max_places !== null) ? Number(rateInfo.max_places) : 1;
                                 const extraPlaces = Math.max(0, drops - maxPlaces);
-                                const extraRate = extraPlaces * (Number(rateInfo.extra_rate_per_place) || 0);
+                                const extraRate = extraPlaces * (Number(rateInfo.extra_rate_per_place ?? rateInfo.extra_drop_rate) || 0);
                                 tEarnings = base + extraRate;
+                            } else {
+                                const base = 40;
+                                const extraPlaces = Math.max(0, drops - 1);
+                                tEarnings = base + (extraPlaces * 10);
                             }
 
                             const isDelivered = t.status === 'Delivered';
@@ -2251,7 +2277,21 @@ const PersonalMonthlyReport: React.FC<Props> = ({ user }) => {
                 let displayZone = zoneRaw;
 
                 const key = `${origin}-${calcZone}`;
-                const rateInfo = rateMap[key];
+                let rateInfo = rateMap[key];
+                if (!rateInfo && t.delivery_address) {
+                    const addrLower = t.delivery_address.toLowerCase();
+                    for (const k of Object.keys(rateMap)) {
+                        if (k.startsWith(`${origin}-`)) {
+                            const r = rateMap[k];
+                            const loc = (r.location_name || '').toLowerCase().trim();
+                            if (loc && loc.length >= 3 && addrLower.includes(loc)) {
+                                rateInfo = r;
+                                break;
+                            }
+                        }
+                    }
+                }
+
                 const drops = Math.max(1, t.trip_drop_count || 1);
 
                 const isExtraJob = t.job_type === 'Extra Job' || t.order_number?.startsWith('TRIP-JOB');
@@ -2259,30 +2299,41 @@ const PersonalMonthlyReport: React.FC<Props> = ({ user }) => {
                 const approvedAmount = approvedAmountMatch ? parseFloat(approvedAmountMatch[1]) : null;
 
                 let baseRate = 0;
-                let extraRate = 0;
+                let extraRatePerPlace = 0;
+                let extraDrops = 0;
+                let extraDropTotal = 0;
                 let tEarnings = 0;
 
                 if (approvedAmount !== null) {
                     tEarnings = approvedAmount;
+                    baseRate = approvedAmount;
                 } else if (rateInfo) {
                     baseRate = Number(rateInfo.base_rate) || 0;
-                    extraRate = Number(rateInfo.extra_drop_rate) || 0;
-                    const maxPlaces = Number(rateInfo.max_places) || 1;
-                    const extraDrops = Math.max(0, drops - maxPlaces);
-                    tEarnings = baseRate + (extraDrops * extraRate);
+                    extraRatePerPlace = Number(rateInfo.extra_rate_per_place ?? rateInfo.extra_drop_rate) || 0;
+                    const maxPlaces = (rateInfo.max_places !== undefined && rateInfo.max_places !== null) ? Number(rateInfo.max_places) : 1;
+                    extraDrops = Math.max(0, drops - maxPlaces);
+                    extraDropTotal = extraDrops * extraRatePerPlace;
+                    tEarnings = baseRate + extraDropTotal;
                 } else {
-                    const matchedKey = Object.keys(rateMap).find(k => k.startsWith(origin) && k.includes(calcZone));
+                    const matchedKey = Object.keys(rateMap).find(k => {
+                        if (!k.startsWith(`${origin}-`)) return false;
+                        const locName = k.slice(origin.length + 1);
+                        return locName.includes(calcZone) || (calcZone.length >= 3 && calcZone.includes(locName));
+                    });
                     if (matchedKey) {
                         const fallbackInfo = rateMap[matchedKey];
                         baseRate = Number(fallbackInfo.base_rate) || 0;
-                        extraRate = Number(fallbackInfo.extra_drop_rate) || 0;
-                        const maxPlaces = Number(fallbackInfo.max_places) || 1;
-                        const extraDrops = Math.max(0, drops - maxPlaces);
-                        tEarnings = baseRate + (extraDrops * extraRate);
+                        extraRatePerPlace = Number(fallbackInfo.extra_rate_per_place ?? fallbackInfo.extra_drop_rate) || 0;
+                        const maxPlaces = (fallbackInfo.max_places !== undefined && fallbackInfo.max_places !== null) ? Number(fallbackInfo.max_places) : 1;
+                        extraDrops = Math.max(0, drops - maxPlaces);
+                        extraDropTotal = extraDrops * extraRatePerPlace;
+                        tEarnings = baseRate + extraDropTotal;
                     } else {
                         baseRate = 40;
-                        extraRate = 10;
-                        tEarnings = drops > 1 ? 40 + ((drops - 1) * 10) : 40;
+                        extraRatePerPlace = 10;
+                        extraDrops = Math.max(0, drops - 1);
+                        extraDropTotal = extraDrops * extraRatePerPlace;
+                        tEarnings = baseRate + extraDropTotal;
                     }
                 }
 
@@ -2325,7 +2376,9 @@ const PersonalMonthlyReport: React.FC<Props> = ({ user }) => {
                     pending_edit_payload: t.pending_edit_payload || null,
                     driver_confirmed: t.driver_confirmed || false,
                     baseRate,
-                    extraRate,
+                    extraRate: extraDropTotal,
+                    extraRatePerPlace,
+                    extraDrops,
                     earnings: tEarnings,
                     deadline: t.deadline || null,
                     pod_timestamp: t.pod_timestamp || null,
