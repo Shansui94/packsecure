@@ -2,7 +2,7 @@ import { supabase } from './supabase';
 import { MODULE_REGISTRY, ModuleDefinition } from '../config/modules';
 import { logActivity } from '../utils/logger';
 
-export type OmniResultType = 'page' | 'order' | 'customer' | 'machine' | 'item' | 'user' | 'action';
+export type OmniResultType = 'page' | 'order' | 'customer' | 'machine' | 'item' | 'user' | 'action' | 'doc';
 
 export interface OmniSearchResult {
     id: string;
@@ -50,6 +50,36 @@ export interface OmniInsightData {
     targetPageLabel?: string;
 }
 
+export interface OmniDocumentDraft {
+    id: string;
+    file?: File;
+    fileName: string;
+    fileUrl?: string;
+    previewUrl: string;
+    categoryKey: string;
+    categoryLabel: string;
+    confidenceScore: number;
+    vendorName?: string;
+    vehiclePlate?: string;
+    matchedVehiclePlate?: string;
+    isPlateMatched?: boolean;
+    docDate?: string;
+    dueDate?: string;
+    totalAmount?: number;
+    docNumber?: string;
+    periodYear?: number;
+    periodMonth?: number;
+    subject?: string;
+    notes?: string;
+    sideEffects: {
+        updateLorryInspection: boolean;
+        createTask: boolean;
+        createClaim: boolean;
+        updateEmployeeLicense: boolean;
+    };
+    rawAiResponse?: any;
+}
+
 export interface OmniInterpretationResult {
     type: 'action' | 'insight' | 'unknown';
     actionDraft?: OmniActionDraft;
@@ -60,6 +90,15 @@ export interface OmniInterpretationResult {
 // In-memory cache with 30s TTL
 const cache = new Map<string, { timestamp: number; data: OmniSearchResult[] }>();
 const CACHE_TTL_MS = 30000;
+
+export function fileToBase64(file: File): Promise<string> {
+    return new Promise((resolve, reject) => {
+        const reader = new FileReader();
+        reader.onload = () => resolve(reader.result as string);
+        reader.onerror = reject;
+        reader.readAsDataURL(file);
+    });
+}
 
 /**
  * Filter and search accessible pages from MODULE_REGISTRY
@@ -110,6 +149,7 @@ export async function searchEntities(
     machines: OmniSearchResult[];
     items: OmniSearchResult[];
     users: OmniSearchResult[];
+    docs: OmniSearchResult[];
 }> {
     const trimmed = rawQuery.trim();
     const limit = options.limitPerCategory || 5;
@@ -136,6 +176,9 @@ export async function searchEntities(
     } else if (query.startsWith('cust:') || query.startsWith('客户:')) {
         categoryFilter = 'customers';
         query = query.replace(/^cust:|^客户:/, '').trim();
+    } else if (query.startsWith('doc:') || query.startsWith('file:') || query.startsWith('凭证:') || query.startsWith('文档:')) {
+        categoryFilter = 'docs';
+        query = query.replace(/^doc:|^file:|^凭证:|^文档:/, '').trim();
     }
 
     // Always fetch matching pages client-side
@@ -150,7 +193,8 @@ export async function searchEntities(
             customers: [],
             machines: [],
             items: [],
-            users: []
+            users: [],
+            docs: []
         };
     }
 
@@ -164,7 +208,8 @@ export async function searchEntities(
             customers: cached.filter((r) => r.type === 'customer'),
             machines: cached.filter((r) => r.type === 'machine'),
             items: cached.filter((r) => r.type === 'item'),
-            users: cached.filter((r) => r.type === 'user')
+            users: cached.filter((r) => r.type === 'user'),
+            docs: cached.filter((r) => r.type === 'doc')
         };
     }
 
@@ -305,9 +350,36 @@ export async function searchEntities(
         promises.push(Promise.resolve([]));
     }
 
-    const [orders, customers, machines, items, users] = await Promise.all(promises);
+    // Documents (extracted_documents)
+    if (!categoryFilter || categoryFilter === 'docs') {
+        promises.push(
+            supabase
+                .from('extracted_documents')
+                .select('id, file_name, file_url, category_key, total_amount, doc_date, doc_number, vendor_name, vehicle_plate')
+                .or(`file_name.ilike.${pattern},vendor_name.ilike.${pattern},vehicle_plate.ilike.${pattern},category_key.ilike.${pattern}`)
+                .order('created_at', { ascending: false })
+                .limit(limit)
+                .then(({ data }) =>
+                    (data || []).map((d: any) => ({
+                        id: `doc-${d.id}`,
+                        type: 'doc' as OmniResultType,
+                        title: d.file_name,
+                        subtitle: `${d.vendor_name ? `${d.vendor_name} • ` : ''}${d.vehicle_plate ? `车牌: ${d.vehicle_plate} • ` : ''}RM ${d.total_amount || 0}`,
+                        badge: d.category_key || '凭证文档',
+                        badgeColor: 'bg-rose-500/20 text-rose-300 border-rose-500/30',
+                        targetPage: 'william-dashboard',
+                        metadata: d
+                    }))
+                )
+                .catch(() => [])
+        );
+    } else {
+        promises.push(Promise.resolve([]));
+    }
 
-    const allResults = [...matchedPages, ...orders, ...customers, ...machines, ...items, ...users];
+    const [orders, customers, machines, items, users, docs] = await Promise.all(promises);
+
+    const allResults = [...matchedPages, ...orders, ...customers, ...machines, ...items, ...users, ...docs];
     cache.set(cacheKey, { timestamp: Date.now(), data: allResults });
 
     return {
@@ -316,7 +388,8 @@ export async function searchEntities(
         customers,
         machines,
         items,
-        users
+        users,
+        docs
     };
 }
 
@@ -419,6 +492,209 @@ export function parseLocalActionIntent(rawText: string, currentUser?: any): Omni
 }
 
 /**
+ * Process document upload and run multi-modal AI extraction
+ */
+export async function processDocumentFile(
+    file: File,
+    currentUser: any
+): Promise<OmniDocumentDraft> {
+    const base64WithHeader = await fileToBase64(file);
+    const fileName = file.name;
+    const lowerName = fileName.toLowerCase();
+    let resolvedMime = file.type;
+    if (!resolvedMime) {
+        if (lowerName.endsWith('.pdf')) resolvedMime = 'application/pdf';
+        else if (lowerName.endsWith('.png')) resolvedMime = 'image/png';
+        else if (lowerName.endsWith('.webp')) resolvedMime = 'image/webp';
+        else resolvedMime = 'image/jpeg';
+    }
+
+    // Call API /api/v2/documents/process
+    const res = await fetch('/api/v2/documents/process', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+            fileName,
+            fileBase64: base64WithHeader,
+            mimeType: resolvedMime,
+            notes: `Uploaded via OmniCommandBar by ${currentUser?.name || 'User'}`
+        })
+    });
+
+    if (!res.ok) {
+        throw new Error(`Document processing failed with status ${res.status}`);
+    }
+
+    const json = await res.json();
+    const ext = json.extractedData || {};
+
+    // Check available lorries to verify plate match
+    const { data: lorryList } = await supabase.from('lorries').select('id, plate_number');
+    const rawPlate = (json.vehicle_plate || ext.vehicle_plate || '').toUpperCase().replace(/\s+/g, '');
+    let matchedPlate = '';
+    let isPlateMatched = false;
+
+    if (rawPlate && lorryList) {
+        const found = lorryList.find((l: any) => l.plate_number.toUpperCase().replace(/\s+/g, '') === rawPlate);
+        if (found) {
+            matchedPlate = found.plate_number;
+            isPlateMatched = true;
+        }
+    }
+
+    // Determine category key & label
+    const rawCat = (json.category_key || ext.category_key || '').toUpperCase();
+    let categoryKey = rawCat || 'UNASSIGNED';
+    let categoryLabel = json.category_name || '待分类单据';
+
+    // Smart Category Refinements based on content
+    const textAll = `${fileName} ${ext.vendor_name || ''} ${ext.notes || ''} ${ext.doc_type || ''}`.toUpperCase();
+    if (textAll.includes('PUSPAKOM') || textAll.includes('INSPECTION') || textAll.includes('LULUS')) {
+        categoryKey = 'PUSPAKOM_INSURANCE';
+        categoryLabel = 'PUSPAKOM 验车报告';
+    } else if (textAll.includes('MAJLIS') || textAll.includes('BOMBA') || textAll.includes('NOTICE') || textAll.includes('SURAT') || textAll.includes('LETTER')) {
+        categoryKey = 'GOVERNMENT_LETTER';
+        categoryLabel = '政府公函 / 官方信件';
+    } else if (textAll.includes('SSM') || textAll.includes('SURUHANJAYA') || textAll.includes('SYARIKAT')) {
+        categoryKey = 'SSM_REGISTRATION';
+        categoryLabel = 'SSM 商业注册证明';
+    } else if (textAll.includes('SOCSO') || textAll.includes('PERKESO') || textAll.includes('KWSP') || textAll.includes('EPF')) {
+        categoryKey = 'SOCSO_EPF';
+        categoryLabel = 'SOCSO / EPF 缴费凭据';
+    } else if (textAll.includes('LESEN') || textAll.includes('LICENSE') || textAll.includes('GDL')) {
+        categoryKey = 'LICENSE';
+        categoryLabel = '驾驶证 / 资质执照';
+    } else if (textAll.includes('PETRONAS') || textAll.includes('SHELL') || textAll.includes('CALTEX') || textAll.includes('BHP')) {
+        categoryKey = 'PETROL_FLEET';
+        categoryLabel = '车队燃油收据 (Petrol)';
+    }
+
+    // Determine default side-effects
+    const sideEffects = {
+        updateLorryInspection: categoryKey === 'PUSPAKOM_INSURANCE',
+        createTask: categoryKey === 'GOVERNMENT_LETTER' || !!ext.deadline,
+        createClaim: categoryKey === 'PETROL_FLEET' || categoryKey === 'LORRY_SERVICE',
+        updateEmployeeLicense: categoryKey === 'LICENSE'
+    };
+
+    return {
+        id: json.documentId || `doc-${Date.now()}`,
+        fileName,
+        fileUrl: json.file_url,
+        previewUrl: base64WithHeader,
+        categoryKey,
+        categoryLabel,
+        confidenceScore: ext.confidence_score || 0.9,
+        vendorName: json.vendor_name || ext.vendor_name || '',
+        vehiclePlate: matchedPlate || json.vehicle_plate || ext.vehicle_plate || '',
+        matchedVehiclePlate: matchedPlate,
+        isPlateMatched,
+        docDate: ext.doc_date || new Date().toISOString().split('T')[0],
+        dueDate: ext.deadline || ext.due_date || (categoryKey === 'PUSPAKOM_INSURANCE' ? new Date(Date.now() + 180 * 86400000).toISOString().split('T')[0] : ''),
+        totalAmount: json.total_amount || ext.total_amount || 0,
+        docNumber: ext.doc_number || '',
+        periodYear: json.period_year || ext.period_year || new Date().getFullYear(),
+        periodMonth: json.period_month || ext.period_month || new Date().getMonth() + 1,
+        subject: ext.entity_name || ext.notes || fileName,
+        notes: ext.notes || '',
+        sideEffects,
+        rawAiResponse: ext
+    };
+}
+
+/**
+ * Commit document draft and execute automated business side-effects
+ */
+export async function commitDocumentDraft(
+    draft: OmniDocumentDraft,
+    currentUser: any
+): Promise<{ success: boolean; message: string }> {
+    try {
+        const uid = currentUser?.uid || currentUser?.id;
+        const messages: string[] = [];
+
+        // 1. Update extracted_documents record with final validated metadata
+        if (draft.id) {
+            await supabase.from('extracted_documents').update({
+                category_key: draft.categoryKey,
+                vendor_name: draft.vendorName || null,
+                vehicle_plate: draft.vehiclePlate || null,
+                total_amount: Number(draft.totalAmount) || 0,
+                doc_date: draft.docDate || null,
+                doc_number: draft.docNumber || null,
+                notes: draft.notes || null,
+                status: 'Dashboard_Updated',
+                updated_at: new Date().toISOString()
+            }).eq('id', draft.id);
+        }
+
+        messages.push(`文档 [${draft.fileName}] 归档成功`);
+
+        // 2. Side-effect: Update Lorry Puspakom inspection
+        if (draft.sideEffects.updateLorryInspection && draft.vehiclePlate) {
+            const plateClean = draft.vehiclePlate.toUpperCase().replace(/\s+/g, '');
+            const { data: lorries } = await supabase.from('lorries').select('id, plate_number');
+            const targetLorry = (lorries || []).find((l: any) => l.plate_number.toUpperCase().replace(/\s+/g, '') === plateClean);
+            if (targetLorry) {
+                await supabase.from('lorry_mileage_logs').insert([{
+                    lorry_id: targetLorry.id,
+                    driver_id: uid,
+                    log_type: 'service',
+                    notes: `[PUSPAKOM 验车归档] 下次验车: ${draft.dueDate || '6个月后'} | 费用: RM ${draft.totalAmount}`,
+                    photo_url: draft.fileUrl || null
+                }]);
+                messages.push(`已自动更新车辆 [${targetLorry.plate_number}] 验车维保记录`);
+            }
+        }
+
+        // 3. Side-effect: Create Follow-up Task for Official Letters
+        if (draft.sideEffects.createTask) {
+            const due = draft.dueDate || new Date(Date.now() + 7 * 86400000).toISOString().split('T')[0];
+            await supabase.from('tasks').insert([{
+                title: `[公函跟进] ${draft.vendorName || '官方机构'}: ${draft.subject || draft.docNumber || '合规通告'}`,
+                description: `文件: ${draft.fileName}\n备注: ${draft.notes || '请在截止日期前完成回复与整改'}\n凭证链接: ${draft.fileUrl || ''}`,
+                priority: 'High',
+                assigned_to: uid,
+                created_by: uid,
+                status: 'Pending',
+                due_date: due
+            }]);
+            messages.push(`已在待办中心创建高优先级截止日跟进任务 (到期日: ${due})`);
+        }
+
+        // 4. Side-effect: Create Claim entry for Petrol/Service
+        if (draft.sideEffects.createClaim) {
+            await supabase.from('driver_extra_tasks').insert([{
+                driver_id: uid,
+                category: draft.categoryKey === 'PETROL_FLEET' ? 'SHOPEE' : 'LORRY SERVICE',
+                amount: Number(draft.totalAmount) || 0,
+                photo_url: draft.fileUrl || '',
+                notes: `[万能输入口报销] ${draft.vendorName || ''} | 车牌: ${draft.vehiclePlate || '未填'}`,
+                status: 'Pending'
+            }]);
+            messages.push(`已自动创建费用报销申请 (金额: RM ${draft.totalAmount})`);
+        }
+
+        await logActivity(currentUser, {
+            action: 'OMNI_COMMIT_DOCUMENT',
+            module: 'WilliamDocumentCenter',
+            target: draft.fileName,
+            resultSummary: messages.join('； '),
+            details: {
+                categoryKey: draft.categoryKey,
+                totalAmount: draft.totalAmount,
+                vehiclePlate: draft.vehiclePlate
+            }
+        });
+
+        return { success: true, message: messages.join('； ') };
+    } catch (err: any) {
+        console.error('commitDocumentDraft error:', err);
+        return { success: false, message: `归档失败: ${err.message || '网络异常'}` };
+    }
+}
+
+/**
  * Call backend Omni Command AI API to interpret complex queries or statistical questions
  */
 export async function queryOmniAI(
@@ -500,7 +776,6 @@ export async function executeOmniAction(
 
         if (draft.intent === 'report_machine_issue') {
             const { machineId, reason } = draft.payload;
-            // Record activity and update machine status if table allows
             await supabase
                 .from('sys_machines_v2')
                 .update({ status: 'MAINTENANCE' })

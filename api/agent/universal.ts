@@ -24,8 +24,10 @@ function isValidUUID(str: any): boolean {
 /**
  * 智能将输入的机台代码/名称转换为 sys_machines_v2 中合法的主键 machine_id
  */
-async function resolveValidMachineId(rawMachine: string | undefined): Promise<string> {
+async function resolveValidMachineId(rawMachine: string | undefined): Promise<string | null> {
     const input = (rawMachine || '').trim().toUpperCase();
+    if (!input) return null;
+
     try {
         const { data: machines } = await supabase
             .from('sys_machines_v2')
@@ -58,13 +60,13 @@ async function resolveValidMachineId(rawMachine: string | undefined): Promise<st
                 if (matchedByNum) return matchedByNum.machine_id;
             }
 
-            // 5. 兜底返回第一个机台
-            return machines[0].machine_id;
+            // 未找到有效匹配，不盲目乱取首个机台
+            return null;
         }
     } catch (e) {
         console.warn('resolveValidMachineId warning:', e);
     }
-    return 'T1-M03';
+    return null;
 }
 
 /**
@@ -325,7 +327,13 @@ export async function handleIntake(req: VercelRequest, res: VercelResponse) {
 
             // 1. Immutable record in work_photos for audit and visual trace
             try {
-                const resolvedMachine = await resolveValidMachineId(parsedData.machineId || context?.currentMachine);
+                // 如果是专项作业（OT/卸柜/搬运/散单/特单）或送货任务，且未明确在文字/输入中指定机台，则绝不附带机台
+                const isNonMachineIntent = parsedData.intent === 'operator_special_work' ||
+                    parsedData.intent === 'delivery_task' ||
+                    parsedData.intent === 'delivery_exception';
+
+                const targetMachineParam = isNonMachineIntent ? parsedData.machineId : (parsedData.machineId || context?.currentMachine);
+                const resolvedMachine = targetMachineParam ? await resolveValidMachineId(targetMachineParam) : null;
                 const { data: photoRecord, error: photoErr } = await supabase
                     .from('work_photos')
                     .insert({
@@ -357,7 +365,7 @@ export async function handleIntake(req: VercelRequest, res: VercelResponse) {
                 // 生产报工入库 (写入生产主表 production_logs_v2，并自动触发库存流水)
                 try {
                     const weightVal = Number(parsedData.weight) || 0;
-                    const validMachineId = await resolveValidMachineId(parsedData.machineId || context?.currentMachine);
+                    const validMachineId = (await resolveValidMachineId(parsedData.machineId || context?.currentMachine)) || 'T1-M03';
                     const validSku = await resolveValidSku(parsedData.sku, validMachineId);
 
                     const originalNote = [
@@ -398,7 +406,7 @@ export async function handleIntake(req: VercelRequest, res: VercelResponse) {
                 // 废料次品记录 (写入 production_logs_v2 的 reject_qty，便于大屏与生产报表统计)
                 try {
                     const scrapWeight = Number(parsedData.weight) || 0;
-                    const validMachineId = await resolveValidMachineId(parsedData.machineId || context?.currentMachine);
+                    const validMachineId = (await resolveValidMachineId(parsedData.machineId || context?.currentMachine)) || 'T1-M03';
                     const validSku = await resolveValidSku(parsedData.sku, validMachineId);
 
                     const scrapNote = `【次品废料报废】${scrapWeight}kg. 原因: ${parsedData.defectReason || '未注明'}${parsedData.summary ? ` (${parsedData.summary})` : ''}`;
@@ -433,7 +441,7 @@ export async function handleIntake(req: VercelRequest, res: VercelResponse) {
             } else if (parsedData.intent === 'machine_anomaly') {
                 // 设备点检异常与停机 (生成紧急待办/维保任务)
                 try {
-                    const validMachineId = await resolveValidMachineId(parsedData.machineId || context?.currentMachine);
+                    const validMachineId = (await resolveValidMachineId(parsedData.machineId || context?.currentMachine)) || 'T1-M03';
                     const anomalyTitle = `【设备异常维修】机台 ${validMachineId} - ${parsedData.defectReason || '紧急停机报警'}`;
                     const anomalyDesc = `操作员 ${empName} (${empId}) 报告机台 ${validMachineId} 发生异常：\n原因: ${parsedData.defectReason || parsedData.summary || '设备异常'}\n详情: ${speechText || parsedData.rawText || ''}\n时间: ${finalTimestamp}\n位置: ${finalGps || '现场'}`;
 
@@ -528,7 +536,7 @@ export async function handleIntake(req: VercelRequest, res: VercelResponse) {
                 }
             } else if (parsedData.intent === 'machine_login' || parsedData.machineLoginCode) {
                 // 操作员机台登录与绑定 / 登出考勤
-                const targetMachine = await resolveValidMachineId(parsedData.machineLoginCode || parsedData.machineId || 'T1-M03');
+                const targetMachine = (await resolveValidMachineId(parsedData.machineLoginCode || parsedData.machineId)) || 'T1-M03';
                 const isLogout = !!parsedData.isLogout ||
                     (parsedData.summary && (parsedData.summary.includes('登出') || parsedData.summary.includes('下机'))) ||
                     (speechText && (speechText.includes('登出') || speechText.includes('下机')));

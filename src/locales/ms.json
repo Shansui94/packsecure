@@ -1310,5 +1310,21 @@
   "Unnamed Customer": "Pelanggan Tanpa Nama",
   "Edit address": "Sunting alamat",
   "Pending Assign": "Menunggu Tugasan",
-  "📦 Unassigned / New": "📦 Belum Ditugaskan / Baru"
+  "📦 Unassigned / New": "📦 Belum Ditugaskan / Baru",
+  "Self-Pickup Bay": "Zon Ambil Sendiri (Self-Pickup)",
+  "Self-Pickup Orders": "Pesanan Ambil Sendiri Pelanggan",
+  "Staged in Bay": "Sedia di Zon Ambil",
+  "Mark Staged": "Tanda Sedia di Zon Ambil",
+  "Handover / Release": "Sahkan Ambil Barang (Handover)",
+  "Self-Pickup Handover": "Penyerahan & POD Ambil Sendiri",
+  "Vehicle Plate Number": "No. Plat Kenderaan Ambil Barang",
+  "Vehicle Plate Placeholder": "Cth: PGH 9559",
+  "Collector Name / Phone": "Nama / Tel Pengambil Barang",
+  "Collector Placeholder": "Pilihan (Cth: Pemandu Ah Seng 012-xxx)",
+  "Take Photo / Document": "Ambil Gambar (Muat Barang / DO Bertandatangan)",
+  "Confirm Handover & Complete": "Sahkan Penyerahan (Delivered)",
+  "Delivery Method": "Kaedah Penghantaran",
+  "Lorry Delivery": "Penghantaran Lori",
+  "Customer Self-Pickup": "Pelanggan Ambil Sendiri",
+  "Handover Success": "Penyerahan ambil sendiri berjaya disahkan!"
 }

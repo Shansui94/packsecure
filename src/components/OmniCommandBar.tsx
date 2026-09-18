@@ -15,16 +15,24 @@ import {
     ArrowUpRight,
     Loader2,
     SlidersHorizontal,
-    Bot
+    Bot,
+    Paperclip,
+    UploadCloud,
+    Truck,
+    ExternalLink,
+    Check
 } from 'lucide-react';
 import {
     searchEntities,
     parseLocalActionIntent,
     queryOmniAI,
     executeOmniAction,
+    processDocumentFile,
+    commitDocumentDraft,
     OmniSearchResult,
     OmniActionDraft,
     OmniInsightData,
+    OmniDocumentDraft,
     OmniResultType
 } from '../services/omniSearchService';
 import { User } from '../types';
@@ -36,7 +44,7 @@ interface OmniCommandBarProps {
     onNavigate: (pageId: string) => void;
 }
 
-type FilterCategory = 'all' | 'pages' | 'orders' | 'machines' | 'customers' | 'items' | 'users' | 'actions';
+type FilterCategory = 'all' | 'pages' | 'orders' | 'machines' | 'customers' | 'items' | 'users' | 'docs' | 'actions';
 
 const CATEGORY_TABS: { key: FilterCategory; labelKey: string; prefix?: string; icon: any }[] = [
     { key: 'all', labelKey: '全部', icon: SlidersHorizontal },
@@ -46,7 +54,19 @@ const CATEGORY_TABS: { key: FilterCategory; labelKey: string; prefix?: string; i
     { key: 'customers', labelKey: '客户', prefix: 'cust:', icon: Users },
     { key: 'items', labelKey: '物料SKU', prefix: 'sku:', icon: Package },
     { key: 'users', labelKey: '员工/司机', prefix: '@', icon: Users },
+    { key: 'docs', labelKey: '凭证文档', prefix: 'doc:', icon: FileText },
     { key: 'actions', labelKey: '业务指令', icon: Sparkles }
+];
+
+const DOCUMENT_CATEGORIES = [
+    { key: 'PUSPAKOM_INSURANCE', label: '🚛 PUSPAKOM 验车报告 / 车险', icon: '🚛' },
+    { key: 'GOVERNMENT_LETTER', label: '📩 政府公函 / 市议会/消拯局通告', icon: '📩' },
+    { key: 'PETROL_FLEET', label: '⛽ 司机燃油票据 (Petrol Claim)', icon: '⛽' },
+    { key: 'LORRY_SERVICE', label: '🔧 货车维保发票 (Lorry Service)', icon: '🔧' },
+    { key: 'SSM_REGISTRATION', label: '🏢 SSM 公司注册登记资质', icon: '🏢' },
+    { key: 'SOCSO_EPF', label: '🏛️ SOCSO / EPF 社保公积金单', icon: '🏛️' },
+    { key: 'LICENSE', label: '🪪 驾驶证 (GDL) / 特种作业执照', icon: '🪪' },
+    { key: 'UNASSIGNED', label: '📁 综合日常发票 / 其它单据', icon: '📁' }
 ];
 
 export const OmniCommandBar: React.FC<OmniCommandBarProps> = ({
@@ -62,6 +82,12 @@ export const OmniCommandBar: React.FC<OmniCommandBarProps> = ({
     const [isInterpretingAI, setIsInterpretingAI] = useState(false);
     const [isExecuting, setIsExecuting] = useState(false);
 
+    // Multi-modal upload state
+    const [isDragOver, setIsDragOver] = useState(false);
+    const [isProcessingDoc, setIsProcessingDoc] = useState(false);
+    const [activeDocumentDraft, setActiveDocumentDraft] = useState<OmniDocumentDraft | null>(null);
+    const fileInputRef = useRef<HTMLInputElement>(null);
+
     // Search results state
     const [results, setResults] = useState<{
         pages: OmniSearchResult[];
@@ -70,16 +96,18 @@ export const OmniCommandBar: React.FC<OmniCommandBarProps> = ({
         machines: OmniSearchResult[];
         items: OmniSearchResult[];
         users: OmniSearchResult[];
+        docs: OmniSearchResult[];
     }>({
         pages: [],
         orders: [],
         customers: [],
         machines: [],
         items: [],
-        users: []
+        users: [],
+        docs: []
     });
 
-    // Active Card Modes (Mode B: Action Preview, Mode C: Insight)
+    // Active Card Modes (Mode B: Action Preview, Mode C: Insight, Mode D: Document)
     const [activeActionDraft, setActiveActionDraft] = useState<OmniActionDraft | null>(null);
     const [activeInsight, setActiveInsight] = useState<OmniInsightData | null>(null);
     const [feedbackToast, setFeedbackToast] = useState<{ type: 'success' | 'error' | 'info'; text: string } | null>(null);
@@ -100,26 +128,25 @@ export const OmniCommandBar: React.FC<OmniCommandBarProps> = ({
         if (activeTab === 'all' || activeTab === 'customers') list.push(...results.customers);
         if (activeTab === 'all' || activeTab === 'items') list.push(...results.items);
         if (activeTab === 'all' || activeTab === 'users') list.push(...results.users);
+        if (activeTab === 'all' || activeTab === 'docs') list.push(...results.docs);
         return list;
     }, [results, activeTab]);
 
     // Local action suggestion detected from query
     const suggestedAction = useMemo(() => {
-        if (!query.trim() || activeActionDraft || activeInsight) return null;
+        if (!query.trim() || activeActionDraft || activeInsight || activeDocumentDraft) return null;
         return parseLocalActionIntent(query, currentUser);
-    }, [query, currentUser, activeActionDraft, activeInsight]);
+    }, [query, currentUser, activeActionDraft, activeInsight, activeDocumentDraft]);
 
     // Global shortcut listener (Cmd/Ctrl + K and /)
     useEffect(() => {
         const handleKeyDown = (e: KeyboardEvent) => {
-            // Cmd+K or Ctrl+K
             if ((e.metaKey || e.ctrlKey) && e.key.toLowerCase() === 'k') {
                 e.preventDefault();
                 setIsOpen((prev) => !prev);
                 return;
             }
 
-            // Pressing '/' to search if not currently inside an input
             const activeTag = (document.activeElement?.tagName || '').toLowerCase();
             const isEditing = activeTag === 'input' || activeTag === 'textarea' || (document.activeElement as HTMLElement)?.isContentEditable;
             if (e.key === '/' && !isEditing && !isOpen) {
@@ -128,11 +155,11 @@ export const OmniCommandBar: React.FC<OmniCommandBarProps> = ({
                 return;
             }
 
-            // Escape key handling
             if (e.key === 'Escape' && isOpen) {
-                if (activeActionDraft || activeInsight) {
+                if (activeActionDraft || activeInsight || activeDocumentDraft) {
                     setActiveActionDraft(null);
                     setActiveInsight(null);
+                    setActiveDocumentDraft(null);
                 } else {
                     setIsOpen(false);
                 }
@@ -156,7 +183,32 @@ export const OmniCommandBar: React.FC<OmniCommandBarProps> = ({
             window.removeEventListener('packsecure:open-omni-command', handleCustomOpen);
             window.removeEventListener('packsecure:lang-change', handleLangChange);
         };
-    }, [isOpen, activeActionDraft, activeInsight]);
+    }, [isOpen, activeActionDraft, activeInsight, activeDocumentDraft]);
+
+    // Clipboard Paste Listener (Ctrl+V for images/PDFs)
+    useEffect(() => {
+        if (!isOpen) return;
+
+        const handlePaste = (e: ClipboardEvent) => {
+            const items = e.clipboardData?.items;
+            if (!items) return;
+
+            for (let i = 0; i < items.length; i++) {
+                const item = items[i];
+                if (item.type.includes('image') || item.type.includes('pdf')) {
+                    const file = item.getAsFile();
+                    if (file) {
+                        e.preventDefault();
+                        handleProcessFile(file);
+                        return;
+                    }
+                }
+            }
+        };
+
+        window.addEventListener('paste', handlePaste);
+        return () => window.removeEventListener('paste', handlePaste);
+    }, [isOpen, currentUser]);
 
     // Auto focus input on open
     useEffect(() => {
@@ -165,16 +217,16 @@ export const OmniCommandBar: React.FC<OmniCommandBarProps> = ({
                 inputRef.current?.focus();
                 inputRef.current?.select();
             }, 50);
-            // Run initial empty search to populate default pages
             executeSearch('');
         } else {
-            // Reset states on close
             setQuery('');
             setActiveTab('all');
             setActiveActionDraft(null);
             setActiveInsight(null);
+            setActiveDocumentDraft(null);
             setFeedbackToast(null);
             setSelectedIndex(0);
+            setIsDragOver(false);
         }
     }, [isOpen]);
 
@@ -204,6 +256,7 @@ export const OmniCommandBar: React.FC<OmniCommandBarProps> = ({
         setQuery(val);
         setActiveActionDraft(null);
         setActiveInsight(null);
+        setActiveDocumentDraft(null);
 
         if (debounceTimerRef.current) {
             clearTimeout(debounceTimerRef.current);
@@ -222,7 +275,7 @@ export const OmniCommandBar: React.FC<OmniCommandBarProps> = ({
             setQuery(`${tabInfo.prefix} `);
             executeSearch(`${tabInfo.prefix} `);
         } else if (tab === 'all') {
-            const cleaned = query.replace(/^([>#@]|do:|cust:|sku:|page:|machine:|staff:)\s*/i, '');
+            const cleaned = query.replace(/^([>#@]|do:|cust:|sku:|doc:|file:|page:|machine:|staff:)\s*/i, '');
             setQuery(cleaned);
             executeSearch(cleaned);
         }
@@ -231,9 +284,88 @@ export const OmniCommandBar: React.FC<OmniCommandBarProps> = ({
 
     // Item selection handler
     const handleSelectResult = (result: OmniSearchResult) => {
+        if (result.type === 'doc' && result.metadata?.file_url) {
+            window.open(result.metadata.file_url, '_blank');
+            setIsOpen(false);
+            return;
+        }
+
         if (result.targetPage) {
             onNavigate(result.targetPage);
             setIsOpen(false);
+        }
+    };
+
+    // File Processing (Intake -> Gemini Multimodal OCR -> Structured Draft)
+    const handleProcessFile = async (file: File) => {
+        if (!file) return;
+        setIsProcessingDoc(true);
+        setFeedbackToast(null);
+        setActiveActionDraft(null);
+        setActiveInsight(null);
+
+        try {
+            const draft = await processDocumentFile(file, currentUser);
+            setActiveDocumentDraft(draft);
+            setFeedbackToast({
+                type: 'info',
+                text: `✨ AI 识别成功: 已提取【${draft.categoryLabel}】相关元数据，请核对并确认`
+            });
+        } catch (err: any) {
+            console.error('File intake failed:', err);
+            setFeedbackToast({
+                type: 'error',
+                text: `文件识别失败: ${err.message || '网络连接或模型响应异常'}`
+            });
+        } finally {
+            setIsProcessingDoc(false);
+        }
+    };
+
+    // Drag & Drop Handlers
+    const handleDragOver = (e: React.DragEvent) => {
+        e.preventDefault();
+        e.stopPropagation();
+        setIsDragOver(true);
+    };
+
+    const handleDragLeave = (e: React.DragEvent) => {
+        e.preventDefault();
+        e.stopPropagation();
+        setIsDragOver(false);
+    };
+
+    const handleDrop = (e: React.DragEvent) => {
+        e.preventDefault();
+        e.stopPropagation();
+        setIsDragOver(false);
+
+        if (e.dataTransfer.files && e.dataTransfer.files.length > 0) {
+            const file = e.dataTransfer.files[0];
+            handleProcessFile(file);
+        }
+    };
+
+    // Confirm Document Draft and Commit Side-Effects
+    const handleConfirmDocument = async () => {
+        if (!activeDocumentDraft) return;
+        setIsExecuting(true);
+
+        try {
+            const res = await commitDocumentDraft(activeDocumentDraft, currentUser);
+            if (res.success) {
+                setFeedbackToast({ type: 'success', text: res.message });
+                setTimeout(() => {
+                    setActiveDocumentDraft(null);
+                    setIsOpen(false);
+                }, 1500);
+            } else {
+                setFeedbackToast({ type: 'error', text: res.message });
+            }
+        } catch (err: any) {
+            setFeedbackToast({ type: 'error', text: `归档异常: ${err.message}` });
+        } finally {
+            setIsExecuting(false);
         }
     };
 
@@ -252,13 +384,15 @@ export const OmniCommandBar: React.FC<OmniCommandBarProps> = ({
             if (aiRes.type === 'action' && aiRes.actionDraft) {
                 setActiveActionDraft(aiRes.actionDraft);
                 setActiveInsight(null);
+                setActiveDocumentDraft(null);
             } else if (aiRes.type === 'insight' && aiRes.insightData) {
                 setActiveInsight(aiRes.insightData);
                 setActiveActionDraft(null);
+                setActiveDocumentDraft(null);
             } else {
                 setFeedbackToast({
                     type: 'info',
-                    text: aiRes.message || '未能精确识别该意图，建议尝试更具体的业务关键词或格式。'
+                    text: aiRes.message || '未能精确识别该意图，建议尝试更具体的业务关键词或指令。'
                 });
             }
         } catch (err: any) {
@@ -298,7 +432,14 @@ export const OmniCommandBar: React.FC<OmniCommandBarProps> = ({
 
     // Keyboard navigation (Arrow keys, Enter)
     const handleKeyDownInBox = (e: React.KeyboardEvent) => {
-        // If in Action Draft mode: Enter triggers confirm execution
+        if (activeDocumentDraft) {
+            if (e.key === 'Enter' && !isExecuting) {
+                e.preventDefault();
+                handleConfirmDocument();
+            }
+            return;
+        }
+
         if (activeActionDraft) {
             if (e.key === 'Enter' && !isExecuting) {
                 e.preventDefault();
@@ -307,7 +448,6 @@ export const OmniCommandBar: React.FC<OmniCommandBarProps> = ({
             return;
         }
 
-        // If in Insight mode: Enter navigates to target report page
         if (activeInsight) {
             if (e.key === 'Enter' && activeInsight.targetPage) {
                 e.preventDefault();
@@ -317,7 +457,6 @@ export const OmniCommandBar: React.FC<OmniCommandBarProps> = ({
             return;
         }
 
-        // Normal list navigation
         if (e.key === 'ArrowDown') {
             e.preventDefault();
             const max = flatResults.length + (suggestedAction ? 1 : 0);
@@ -341,13 +480,11 @@ export const OmniCommandBar: React.FC<OmniCommandBarProps> = ({
             if (flatResults[adjustedIdx]) {
                 handleSelectResult(flatResults[adjustedIdx]);
             } else if (query.trim()) {
-                // No item selected, fallback to AI interpretation
                 handleAskAI();
             }
         }
     };
 
-    // Helper for rendering category icons
     const getResultIcon = (type: OmniResultType) => {
         switch (type) {
             case 'page':
@@ -362,6 +499,8 @@ export const OmniCommandBar: React.FC<OmniCommandBarProps> = ({
                 return <Package className="w-4 h-4 text-cyan-400" />;
             case 'user':
                 return <Users className="w-4 h-4 text-blue-400" />;
+            case 'doc':
+                return <FileText className="w-4 h-4 text-rose-400" />;
             default:
                 return <ArrowUpRight className="w-4 h-4 text-zinc-400" />;
         }
@@ -371,16 +510,30 @@ export const OmniCommandBar: React.FC<OmniCommandBarProps> = ({
 
     return (
         <div
-            className="fixed inset-0 z-[100] bg-black/70 backdrop-blur-sm flex items-start justify-center pt-16 sm:pt-24 px-3 sm:px-4 animate-in fade-in duration-150"
+            className="fixed inset-0 z-[100] bg-black/75 backdrop-blur-sm flex items-start justify-center pt-14 sm:pt-20 px-3 sm:px-4 animate-in fade-in duration-150"
             onClick={(e) => {
                 if (e.target === e.currentTarget) setIsOpen(false);
             }}
+            onDragOver={handleDragOver}
+            onDragLeave={handleDragLeave}
+            onDrop={handleDrop}
         >
-            <div className="w-full max-w-2xl bg-zinc-950/95 border border-zinc-700/80 rounded-2xl shadow-2xl shadow-black overflow-hidden flex flex-col max-h-[82vh] transition-all">
+            <div className="w-full max-w-2xl bg-zinc-950/95 border border-zinc-700/80 rounded-2xl shadow-2xl shadow-black overflow-hidden flex flex-col max-h-[85vh] transition-all relative">
+                {/* Drag and drop full-window overlay */}
+                {isDragOver && (
+                    <div className="absolute inset-0 z-50 bg-indigo-950/90 border-2 border-dashed border-indigo-400 rounded-2xl flex flex-col items-center justify-center p-6 text-center animate-in fade-in zoom-in-95">
+                        <UploadCloud className="w-16 h-16 text-indigo-400 animate-bounce mb-3" />
+                        <h3 className="text-xl font-black text-white">松开文件立即智能归档</h3>
+                        <p className="text-sm text-indigo-200 mt-1">
+                            支持 SSM、政府公函、Claim 报销票据、PUSPAKOM 验车报告、SOCSO 缴费单及驾照
+                        </p>
+                    </div>
+                )}
+
                 {/* 1. Header Input Area */}
-                <div className="p-3.5 border-b border-zinc-800/80 flex items-center gap-3 bg-zinc-900/50">
-                    <div className="p-2 rounded-xl bg-zinc-800/80 text-zinc-300">
-                        {isSearching || isInterpretingAI ? (
+                <div className="p-3.5 border-b border-zinc-800/80 flex items-center gap-2.5 bg-zinc-900/50">
+                    <div className="p-2 rounded-xl bg-zinc-800/80 text-zinc-300 shrink-0">
+                        {isSearching || isInterpretingAI || isProcessingDoc ? (
                             <Loader2 className="w-5 h-5 text-indigo-400 animate-spin" />
                         ) : (
                             <Search className="w-5 h-5 text-zinc-400" />
@@ -393,9 +546,33 @@ export const OmniCommandBar: React.FC<OmniCommandBarProps> = ({
                         value={query}
                         onChange={handleInputChange}
                         onKeyDown={handleKeyDownInBox}
-                        placeholder={t('输入关键词搜索，或指令如「报修 T1-M03」、「Ali请假」... (⌘K)')}
-                        className="flex-1 bg-transparent text-white text-base sm:text-lg placeholder-zinc-500 font-medium focus:outline-none"
+                        placeholder={t('搜索单据/客户/机台，或粘贴发票截图 (Ctrl+V) / 拖入文件 (⌘K)')}
+                        className="flex-1 bg-transparent text-white text-base sm:text-lg placeholder-zinc-500 font-medium focus:outline-none min-w-0"
                     />
+
+                    {/* Hidden file input for attachment button */}
+                    <input
+                        ref={fileInputRef}
+                        type="file"
+                        accept="image/*,application/pdf"
+                        onChange={(e) => {
+                            if (e.target.files && e.target.files.length > 0) {
+                                handleProcessFile(e.target.files[0]);
+                            }
+                        }}
+                        className="hidden"
+                    />
+
+                    {/* Attachment Upload Button */}
+                    <button
+                        type="button"
+                        onClick={() => fileInputRef.current?.click()}
+                        disabled={isProcessingDoc}
+                        title={t('上传文件或发票单据 (支持 PDF/图片)')}
+                        className="p-1.5 text-zinc-400 hover:text-indigo-400 hover:bg-zinc-800/80 rounded-xl transition cursor-pointer shrink-0"
+                    >
+                        <Paperclip className="w-4 h-4" />
+                    </button>
 
                     {query && (
                         <button
@@ -404,15 +581,16 @@ export const OmniCommandBar: React.FC<OmniCommandBarProps> = ({
                                 executeSearch('');
                                 setActiveActionDraft(null);
                                 setActiveInsight(null);
+                                setActiveDocumentDraft(null);
                                 inputRef.current?.focus();
                             }}
-                            className="p-1 text-zinc-400 hover:text-white rounded-lg hover:bg-zinc-800 transition"
+                            className="p-1 text-zinc-400 hover:text-white rounded-lg hover:bg-zinc-800 transition shrink-0"
                         >
                             <X className="w-4 h-4" />
                         </button>
                     )}
 
-                    <div className="hidden sm:flex items-center gap-1.5 px-2 py-1 bg-zinc-800 border border-zinc-700 rounded-lg text-xs font-mono text-zinc-400">
+                    <div className="hidden sm:flex items-center gap-1.5 px-2 py-1 bg-zinc-800 border border-zinc-700 rounded-lg text-xs font-mono text-zinc-400 shrink-0">
                         <span>ESC</span>
                     </div>
                 </div>
@@ -464,8 +642,273 @@ export const OmniCommandBar: React.FC<OmniCommandBarProps> = ({
 
                 {/* 4. Main Body Area */}
                 <div ref={listRef} className="flex-1 overflow-y-auto p-2 sm:p-3 space-y-2 custom-scrollbar">
-                    {/* ── MODE B: ACTION PREVIEW CARD ── */}
-                    {activeActionDraft ? (
+                    {/* ── MODE D: DOCUMENT INTAKE & SMART ROUTE PREVIEW CARD ── */}
+                    {activeDocumentDraft ? (
+                        <div className="p-4 rounded-xl bg-zinc-900 border border-indigo-500/50 space-y-3.5 shadow-xl animate-in fade-in duration-200">
+                            <div className="flex items-start justify-between gap-3">
+                                <div className="flex items-center gap-3">
+                                    {activeDocumentDraft.previewUrl.startsWith('data:image') ? (
+                                        <img
+                                            src={activeDocumentDraft.previewUrl}
+                                            alt="Preview"
+                                            className="w-12 h-12 object-cover rounded-lg border border-zinc-700 bg-zinc-950 shrink-0"
+                                        />
+                                    ) : (
+                                        <div className="w-12 h-12 rounded-lg bg-indigo-950 border border-indigo-700 flex items-center justify-center text-indigo-300 shrink-0 font-bold text-xs">
+                                            PDF
+                                        </div>
+                                    )}
+                                    <div>
+                                        <div className="flex items-center gap-2 flex-wrap">
+                                            <span className="px-2 py-0.5 rounded text-[11px] font-bold bg-indigo-500/20 text-indigo-300 border border-indigo-500/30 flex items-center gap-1">
+                                                <Sparkles className="w-3 h-3 text-amber-300" />
+                                                智能凭证识别
+                                            </span>
+                                            <span className="text-xs font-bold text-white truncate max-w-[220px]">
+                                                {activeDocumentDraft.fileName}
+                                            </span>
+                                        </div>
+                                        <p className="text-xs text-zinc-400 mt-0.5">
+                                            AI 抽取置信度: {(activeDocumentDraft.confidenceScore * 100).toFixed(0)}% • 待用户复核确认
+                                        </p>
+                                    </div>
+                                </div>
+
+                                <button
+                                    onClick={() => setActiveDocumentDraft(null)}
+                                    className="text-zinc-500 hover:text-white p-1 rounded-lg hover:bg-zinc-800"
+                                >
+                                    <X className="w-4 h-4" />
+                                </button>
+                            </div>
+
+                            {/* Entity Disambiguation and Fields */}
+                            <div className="grid grid-cols-1 sm:grid-cols-2 gap-2.5 pt-1">
+                                {/* Category Dropdown Picker */}
+                                <div className="bg-zinc-950 p-2.5 rounded-lg border border-zinc-800 col-span-1 sm:col-span-2">
+                                    <label className="block text-[10px] font-bold uppercase text-zinc-400 mb-1">
+                                        识别分类 / 归档目标
+                                    </label>
+                                    <select
+                                        value={activeDocumentDraft.categoryKey}
+                                        onChange={(e) => {
+                                            const catKey = e.target.value;
+                                            const found = DOCUMENT_CATEGORIES.find((c) => c.key === catKey);
+                                            setActiveDocumentDraft({
+                                                ...activeDocumentDraft,
+                                                categoryKey: catKey,
+                                                categoryLabel: found?.label || catKey,
+                                                sideEffects: {
+                                                    updateLorryInspection: catKey === 'PUSPAKOM_INSURANCE',
+                                                    createTask: catKey === 'GOVERNMENT_LETTER',
+                                                    createClaim: catKey === 'PETROL_FLEET' || catKey === 'LORRY_SERVICE',
+                                                    updateEmployeeLicense: catKey === 'LICENSE'
+                                                }
+                                            });
+                                        }}
+                                        className="w-full bg-zinc-900 border border-zinc-700 rounded px-2.5 py-1.5 text-xs text-white focus:outline-none font-semibold"
+                                    >
+                                        {DOCUMENT_CATEGORIES.map((cat) => (
+                                            <option key={cat.key} value={cat.key}>
+                                                {cat.label}
+                                            </option>
+                                        ))}
+                                    </select>
+                                </div>
+
+                                {/* Vehicle Plate (with matching indicator) */}
+                                <div className="bg-zinc-950 p-2 rounded-lg border border-zinc-800">
+                                    <div className="flex items-center justify-between mb-1">
+                                        <label className="text-[10px] font-bold uppercase text-zinc-400">
+                                            关联车牌 (Vehicle Plate)
+                                        </label>
+                                        {activeDocumentDraft.isPlateMatched ? (
+                                            <span className="text-[10px] font-bold text-emerald-400 flex items-center gap-0.5">
+                                                <Check className="w-3 h-3" /> 已匹配
+                                            </span>
+                                        ) : activeDocumentDraft.vehiclePlate ? (
+                                            <span className="text-[10px] font-bold text-amber-400">未收录车牌</span>
+                                        ) : null}
+                                    </div>
+                                    <input
+                                        type="text"
+                                        value={activeDocumentDraft.vehiclePlate || ''}
+                                        placeholder="例: AKB 8821"
+                                        onChange={(e) =>
+                                            setActiveDocumentDraft({
+                                                ...activeDocumentDraft,
+                                                vehiclePlate: e.target.value.toUpperCase()
+                                            })
+                                        }
+                                        className="w-full bg-transparent text-xs text-white focus:outline-none font-mono font-bold"
+                                    />
+                                </div>
+
+                                {/* Total Amount */}
+                                <div className="bg-zinc-950 p-2 rounded-lg border border-zinc-800">
+                                    <label className="block text-[10px] font-bold uppercase text-zinc-400 mb-1">
+                                        单据金额 (Total RM)
+                                    </label>
+                                    <input
+                                        type="number"
+                                        value={activeDocumentDraft.totalAmount || ''}
+                                        placeholder="0.00"
+                                        onChange={(e) =>
+                                            setActiveDocumentDraft({
+                                                ...activeDocumentDraft,
+                                                totalAmount: parseFloat(e.target.value) || 0
+                                            })
+                                        }
+                                        className="w-full bg-transparent text-xs text-emerald-400 focus:outline-none font-mono font-bold"
+                                    />
+                                </div>
+
+                                {/* Vendor / Issuer */}
+                                <div className="bg-zinc-950 p-2 rounded-lg border border-zinc-800">
+                                    <label className="block text-[10px] font-bold uppercase text-zinc-400 mb-1">
+                                        机构/商户 (Vendor / Issuer)
+                                    </label>
+                                    <input
+                                        type="text"
+                                        value={activeDocumentDraft.vendorName || ''}
+                                        placeholder="例: PUSPAKOM Sdn Bhd / Majlis / Petronas"
+                                        onChange={(e) =>
+                                            setActiveDocumentDraft({
+                                                ...activeDocumentDraft,
+                                                vendorName: e.target.value
+                                            })
+                                        }
+                                        className="w-full bg-transparent text-xs text-white focus:outline-none"
+                                    />
+                                </div>
+
+                                {/* Deadline / Due Date */}
+                                <div className="bg-zinc-950 p-2 rounded-lg border border-zinc-800">
+                                    <label className="block text-[10px] font-bold uppercase text-zinc-400 mb-1">
+                                        截止日 / 到期日 (Deadline)
+                                    </label>
+                                    <input
+                                        type="date"
+                                        value={activeDocumentDraft.dueDate || ''}
+                                        onChange={(e) =>
+                                            setActiveDocumentDraft({
+                                                ...activeDocumentDraft,
+                                                dueDate: e.target.value
+                                            })
+                                        }
+                                        className="w-full bg-transparent text-xs text-white focus:outline-none"
+                                    />
+                                </div>
+                            </div>
+
+                            {/* Automated Side-Effects Checklist */}
+                            <div className="p-3 bg-zinc-950/80 rounded-xl border border-zinc-800 space-y-2">
+                                <span className="text-[11px] font-bold text-zinc-400 flex items-center gap-1.5">
+                                    <CheckCircle2 className="w-3.5 h-3.5 text-indigo-400" />
+                                    确认入库后自动联动执行：
+                                </span>
+                                <div className="space-y-1.5 text-xs text-zinc-300">
+                                    {activeDocumentDraft.categoryKey === 'PUSPAKOM_INSURANCE' && (
+                                        <label className="flex items-center gap-2 cursor-pointer">
+                                            <input
+                                                type="checkbox"
+                                                checked={activeDocumentDraft.sideEffects.updateLorryInspection}
+                                                onChange={(e) =>
+                                                    setActiveDocumentDraft({
+                                                        ...activeDocumentDraft,
+                                                        sideEffects: {
+                                                            ...activeDocumentDraft.sideEffects,
+                                                            updateLorryInspection: e.target.checked
+                                                        }
+                                                    })
+                                                }
+                                                className="rounded bg-zinc-900 border-zinc-700 text-indigo-600 focus:ring-0"
+                                            />
+                                            <span>
+                                                更新车辆 [{activeDocumentDraft.vehiclePlate || '对应罗里'}] 验车维保记录与到期日
+                                            </span>
+                                        </label>
+                                    )}
+
+                                    {activeDocumentDraft.categoryKey === 'GOVERNMENT_LETTER' && (
+                                        <label className="flex items-center gap-2 cursor-pointer">
+                                            <input
+                                                type="checkbox"
+                                                checked={activeDocumentDraft.sideEffects.createTask}
+                                                onChange={(e) =>
+                                                    setActiveDocumentDraft({
+                                                        ...activeDocumentDraft,
+                                                        sideEffects: {
+                                                            ...activeDocumentDraft.sideEffects,
+                                                            createTask: e.target.checked
+                                                        }
+                                                    })
+                                                }
+                                                className="rounded bg-zinc-900 border-zinc-700 text-indigo-600 focus:ring-0"
+                                            />
+                                            <span>
+                                                在协同待办中心创建公函整改跟进任务 (截止日: {activeDocumentDraft.dueDate || '无'})
+                                            </span>
+                                        </label>
+                                    )}
+
+                                    {(activeDocumentDraft.categoryKey === 'PETROL_FLEET' || activeDocumentDraft.categoryKey === 'LORRY_SERVICE') && (
+                                        <label className="flex items-center gap-2 cursor-pointer">
+                                            <input
+                                                type="checkbox"
+                                                checked={activeDocumentDraft.sideEffects.createClaim}
+                                                onChange={(e) =>
+                                                    setActiveDocumentDraft({
+                                                        ...activeDocumentDraft,
+                                                        sideEffects: {
+                                                            ...activeDocumentDraft.sideEffects,
+                                                            createClaim: e.target.checked
+                                                        }
+                                                    })
+                                                }
+                                                className="rounded bg-zinc-900 border-zinc-700 text-indigo-600 focus:ring-0"
+                                            />
+                                            <span>
+                                                为当前员工生成费用报销草稿单据 (金额: RM {activeDocumentDraft.totalAmount || 0})
+                                            </span>
+                                        </label>
+                                    )}
+
+                                    <div className="text-[11px] text-zinc-500 pt-0.5">
+                                        • 文件原件将永久归档至 William 经营中心文档库 ({activeDocumentDraft.periodYear}年)
+                                    </div>
+                                </div>
+                            </div>
+
+                            {/* Execution Button Bar */}
+                            <div className="flex items-center justify-end gap-2.5 pt-2 border-t border-zinc-800">
+                                <button
+                                    onClick={() => setActiveDocumentDraft(null)}
+                                    className="px-3 py-1.5 rounded-xl text-xs font-semibold text-zinc-400 hover:text-white hover:bg-zinc-800 transition cursor-pointer"
+                                >
+                                    取消 (Esc)
+                                </button>
+                                <button
+                                    onClick={handleConfirmDocument}
+                                    disabled={isExecuting}
+                                    className="px-4 py-2 rounded-xl text-xs font-bold bg-gradient-to-r from-indigo-600 to-purple-600 hover:brightness-110 text-white flex items-center gap-2 transition shadow-lg shadow-indigo-950/40 disabled:opacity-50 cursor-pointer"
+                                >
+                                    {isExecuting ? (
+                                        <>
+                                            <Loader2 className="w-3.5 h-3.5 animate-spin" />
+                                            <span>正在归档与写库...</span>
+                                        </>
+                                    ) : (
+                                        <>
+                                            <CornerDownLeft className="w-3.5 h-3.5" />
+                                            <span>一键确认归档与联动 (Enter ↵)</span>
+                                        </>
+                                    )}
+                                </button>
+                            </div>
+                        </div>
+                    ) : activeActionDraft ? (
+                        /* ── MODE B: ACTION PREVIEW CARD ── */
                         <div className="p-4 rounded-xl bg-zinc-900 border border-indigo-500/40 space-y-3.5 shadow-xl animate-in fade-in duration-200">
                             <div className="flex items-start justify-between gap-3">
                                 <div>
@@ -610,7 +1053,6 @@ export const OmniCommandBar: React.FC<OmniCommandBarProps> = ({
                                 </button>
                             </div>
 
-                            {/* Key Metrics Grid */}
                             <div className="grid grid-cols-2 sm:grid-cols-3 gap-2.5 pt-1">
                                 {activeInsight.keyMetrics.map((m, idx) => (
                                     <div key={idx} className="bg-zinc-950 p-2.5 rounded-xl border border-zinc-800">
@@ -623,7 +1065,6 @@ export const OmniCommandBar: React.FC<OmniCommandBarProps> = ({
                                 ))}
                             </div>
 
-                            {/* Deep Navigation Button */}
                             {activeInsight.targetPage && (
                                 <div className="flex items-center justify-end gap-2 pt-2 border-t border-zinc-800">
                                     <button
@@ -633,7 +1074,7 @@ export const OmniCommandBar: React.FC<OmniCommandBarProps> = ({
                                                 setIsOpen(false);
                                             }
                                         }}
-                                        className="px-4 py-2 rounded-xl text-xs font-bold bg-emerald-600 hover:bg-emerald-500 text-white flex items-center gap-1.5 transition shadow-lg shadow-emerald-950/40"
+                                        className="px-4 py-2 rounded-xl text-xs font-bold bg-emerald-600 hover:bg-emerald-500 text-white flex items-center gap-1.5 transition shadow-lg shadow-emerald-950/40 cursor-pointer"
                                     >
                                         <span>{activeInsight.targetPageLabel || '前往详情看板'}</span>
                                         <ArrowUpRight className="w-3.5 h-3.5" />
@@ -735,7 +1176,7 @@ export const OmniCommandBar: React.FC<OmniCommandBarProps> = ({
                                     <button
                                         onClick={handleAskAI}
                                         disabled={isInterpretingAI}
-                                        className="px-4 py-2 bg-gradient-to-r from-indigo-600 to-purple-600 text-white rounded-xl text-xs font-bold hover:brightness-110 shadow-lg flex items-center gap-2 mx-auto disabled:opacity-50"
+                                        className="px-4 py-2 bg-gradient-to-r from-indigo-600 to-purple-600 text-white rounded-xl text-xs font-bold hover:brightness-110 shadow-lg flex items-center gap-2 mx-auto disabled:opacity-50 cursor-pointer"
                                     >
                                         {isInterpretingAI ? (
                                             <>
@@ -751,10 +1192,19 @@ export const OmniCommandBar: React.FC<OmniCommandBarProps> = ({
                                     </button>
                                 </div>
                             ) : (
-                                <div className="py-6 px-4 text-center text-xs text-zinc-500 space-y-1">
-                                    <p>支持快速搜索单据、机台、客户、物料与员工</p>
+                                <div className="py-6 px-4 text-center text-xs text-zinc-500 space-y-1.5">
+                                    <div className="flex items-center justify-center gap-3 text-zinc-400 mb-2">
+                                        <span className="flex items-center gap-1">
+                                            <Paperclip className="w-3.5 h-3.5 text-indigo-400" /> 拖入文件
+                                        </span>
+                                        <span>•</span>
+                                        <span className="flex items-center gap-1 font-mono text-[11px]">
+                                            <kbd className="bg-zinc-800 px-1 py-0.5 rounded text-zinc-300">Ctrl+V</kbd> 粘贴发票截图
+                                        </span>
+                                    </div>
+                                    <p>支持快速搜索单据、机台、客户、物料、凭证与员工</p>
                                     <p className="font-mono text-[11px] text-zinc-600">
-                                        小技巧：可直接输入「报修 T1-M03」、「明天Ali请假」、「稼动率汇总」
+                                        小技巧：可输入「报修 T1-M03」、「明天Ali请假」、「Puspakom AKB」
                                     </p>
                                 </div>
                             )}
@@ -781,7 +1231,7 @@ export const OmniCommandBar: React.FC<OmniCommandBarProps> = ({
 
                     <div className="flex items-center gap-1.5 text-zinc-400">
                         <Command className="w-3 h-3 text-indigo-400" />
-                        <span className="font-semibold text-zinc-400">Packsecure Omni v1.0</span>
+                        <span className="font-semibold text-zinc-400">Packsecure Omni v2.0 (Multi-Modal)</span>
                     </div>
                 </div>
             </div>

@@ -513,117 +513,38 @@ function App() {
             return;
         }
 
-        // --- SUPABASE MIGRATION: REALTIME DATA SYNC ---
-
-        // 1. Inventory Sync (V2 MIGRATION)
-        const fetchInventory = async () => {
-            try {
-                // Fetch from V2 Inventory View (Single Source of Truth)
-                const { data, error } = await supabase.from('v2_inventory_view').select('*');
-
-                if (error) throw error;
-
-                if (data) {
-                    // Map V2 Data -> Legacy Dashboard Interface
-                    const mapped: InventoryItem[] = data.map((item: any) => ({
-                        Raw_Material_ID: item.sku,
-                        Material_Name: item.name,
-                        Stock_Kg: item.current_stock, // Now comes from Ledger Sum
-                        // Extra props for compatibility
-                        id: item.sku, // Use SKU as ID
-                        qty: item.current_stock,
-                        name: item.name,
-                        loc_id: item.loc_id,
-                        // Export Fields
-                        category: item.category,
-                        status: item.status,
-                        unit: item.unit
-                    }));
-                    setInventory(mapped);
-                }
-            } catch (e) {
-                console.error("V2 Sync Error:", e);
-            }
-        };
-        fetchInventory();
-
-        const invChannel = supabase.channel('inventory-changes-v2')
-            .on('postgres_changes', { event: '*', schema: 'public', table: 'stock_ledger_v2' }, fetchInventory)
-            .subscribe();
-
-        // 2. Logs Sync
-        // 2. Logs Sync (V2 MIGRATION)
-        const fetchLogs = async () => {
-            // Join with sys_users_v2 if FK exists, otherwise just fetch raw
-            // Try selecting operator name if possible, else just ID
-            const { data, error } = await supabase
-                .from('production_logs_v2')
-                .select('*')
-                .order('created_at', { ascending: false })
-                .limit(100);
-
-            if (error) {
-                console.error("Error fetching V2 logs:", error);
-                return;
-            }
-
-            if (data) {
-                const mapped: ProductionLogType[] = data.map((log: any) => ({
-                    Log_ID: log.log_id,
-                    Timestamp: log.created_at,
-                    Job_ID: log.job_id,
-                    // Resolve email/name from joined data or fallback
-                    Operator_Email: log.sys_users_v2?.name || log.sys_users_v2?.email || `Op:${log.operator_id?.slice(0, 5)}`,
-                    Output_Qty: Number(log.output_qty), // Ensure number
-                    GPS_Coordinates: undefined, // Not in V2 yet
-                    Note: log.note || undefined,
-                    AI_Verification: { Verified: true, Detected_Rolls: Number(log.output_qty), Confidence: 'Manual' }
-                }));
-                setLogs(mapped);
-            }
-        };
-        fetchLogs();
-
-        const logsChannel = supabase.channel('logs-changes-v2')
-            .on('postgres_changes', { event: '*', schema: 'public', table: 'production_logs_v2' }, fetchLogs)
-            .subscribe();
-
-        // 3. Jobs Sync
+        // --- SUPABASE MIGRATION: DATA SYNC ---
+        // 1. Jobs Sync (Initial load for ProductionControl)
         const fetchJobs = async () => {
-            const { data } = await supabase.from('job_orders').select('*').order('order_index', { ascending: true });
-            if (data) {
-                const mapped: JobOrder[] = data.map(job => ({
-                    Job_ID: job.job_id,
-                    id: job.job_id, // alias
-                    customer: job.customer,
-                    product: job.product,
-                    target: job.target_qty,
-                    produced: job.produced_qty,
-                    status: job.status as any,
-                    machine: job.machine,
-                    Priority: job.priority as any,
-                    deliveryZone: job.delivery_zone as any,
-                    deliveryStatus: job.delivery_status as any,
-                    deliveryAddress: job.delivery_address || undefined,
-                    driverId: job.driver_id || undefined,
-                    orderIndex: job.order_index
-                }));
-                setJobs(mapped);
+            try {
+                const { data } = await supabase.from('job_orders').select('*').order('order_index', { ascending: true });
+                if (data) {
+                    const mapped: JobOrder[] = data.map(job => ({
+                        Job_ID: job.job_id,
+                        id: job.job_id, // alias
+                        customer: job.customer,
+                        product: job.product,
+                        target: job.target_qty,
+                        produced: job.produced_qty,
+                        status: job.status as any,
+                        machine: job.machine,
+                        Priority: job.priority as any,
+                        deliveryZone: job.delivery_zone as any,
+                        deliveryStatus: job.delivery_status as any,
+                        deliveryAddress: job.delivery_address || undefined,
+                        driverId: job.driver_id || undefined,
+                        orderIndex: job.order_index
+                    }));
+                    setJobs(mapped);
+                }
+            } catch (err) {
+                console.error("Error fetching jobs:", err);
             }
         };
         fetchJobs();
 
-        const jobsChannel = supabase.channel('jobs-changes')
-            .on('postgres_changes', { event: '*', schema: 'public', table: 'job_orders' }, fetchJobs)
-            .subscribe();
-
-
-
         return () => {
-            supabase.removeChannel(invChannel);
-            supabase.removeChannel(logsChannel);
-            supabase.removeChannel(jobsChannel);
-
+            // Clean up if any channels are added in the future
         };
     }, [user]);
 

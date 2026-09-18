@@ -1259,5 +1259,21 @@
   "Total Output: ${opts.totalQty.toLocaleString()} units": "মোট আউটপুট: ${opts.totalQty.toLocaleString()} ইউনিট",
   "Active Machines: ${opts.activeMachines}  |  Log Entries: ${opts.logCount}": "সক্রিয় মেশিন: ${opts.activeMachines} |  লগ এন্ট্রি: ${opts.logCount}",
   "Top Products": "শীর্ষ পণ্য",
-  "• ${s.sku}: ${s.qty}": "• ${s.sku}: ${s.qty}"
+  "• ${s.sku}: ${s.qty}": "• ${s.sku}: ${s.qty}",
+  "Self-Pickup Bay": "গ্রাহক পিকআপ জোন (Self-Pickup)",
+  "Self-Pickup Orders": "গ্রাহক নিজস্ব পিকআপ অর্ডার",
+  "Staged in Bay": "পিকআপের জন্য প্রস্তুত",
+  "Mark Staged": "পিকআপ জোনে প্রস্তুত চিহ্নিত করুন",
+  "Handover / Release": "পণ্য হস্তান্তর করুন (Handover)",
+  "Self-Pickup Handover": "পিকআপ হস্তান্তর ও POD যাচাইকরণ",
+  "Vehicle Plate Number": "পিকআপ গাড়ির নম্বর",
+  "Vehicle Plate Placeholder": "যেমন: PGH 9559",
+  "Collector Name / Phone": "গ্রহণকারীর নাম / ফোন নম্বর",
+  "Collector Placeholder": "ঐচ্ছিক (যেমন: Ah Seng 012-xxx)",
+  "Take Photo / Document": "ছবি তুলুন (লোড বা স্বাক্ষরিত DO)",
+  "Confirm Handover & Complete": "হস্তান্তর নিশ্চিত করুন (Delivered)",
+  "Delivery Method": "বিতরণ পদ্ধতি",
+  "Lorry Delivery": "লরি ডেলিভারি",
+  "Customer Self-Pickup": "গ্রাহক নিজস্ব পিকআপ",
+  "Handover Success": "পিকআপ হস্তান্তর সফলভাবে সম্পন্ন হয়েছে!"
 }

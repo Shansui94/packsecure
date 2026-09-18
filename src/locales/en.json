@@ -1310,5 +1310,21 @@
   "Unnamed Customer": "Unnamed Customer",
   "Edit address": "Edit address",
   "Pending Assign": "Pending Assign",
-  "📦 Unassigned / New": "📦 Unassigned / New"
+  "📦 Unassigned / New": "📦 Unassigned / New",
+  "Self-Pickup Bay": "Self-Pickup Bay",
+  "Self-Pickup Orders": "Customer Self-Pickup Orders",
+  "Staged in Bay": "Staged in Bay",
+  "Mark Staged": "Mark Staged in Bay",
+  "Handover / Release": "Handover / Release",
+  "Self-Pickup Handover": "Self-Pickup Handover & POD",
+  "Vehicle Plate Number": "Customer Vehicle Plate",
+  "Vehicle Plate Placeholder": "e.g. PGH 9559",
+  "Collector Name / Phone": "Collector Name / Phone",
+  "Collector Placeholder": "Optional (e.g. Ah Seng 012-xxx)",
+  "Take Photo / Document": "Photo (Cargo Loaded or Signed DO)",
+  "Confirm Handover & Complete": "Confirm Handover (Delivered)",
+  "Delivery Method": "Delivery Method",
+  "Lorry Delivery": "Lorry Delivery",
+  "Customer Self-Pickup": "Customer Self-Pickup",
+  "Handover Success": "Self-pickup handover confirmed successfully!"
 }

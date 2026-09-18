@@ -1310,5 +1310,21 @@
   "Unnamed Customer": "未命名客户",
   "Edit address": "修改地址",
   "Pending Assign": "待分配订单",
-  "📦 Unassigned / New": "📦 未分配 / 新订单"
+  "📦 Unassigned / New": "📦 未分配 / 新订单",
+  "Self-Pickup Bay": "客户自提专区",
+  "Self-Pickup Orders": "客户到厂自提订单",
+  "Staged in Bay": "自提区已备齐",
+  "Mark Staged": "标记备好放自提区",
+  "Handover / Release": "确认提货 (Handover)",
+  "Self-Pickup Handover": "客户自提交接核销",
+  "Vehicle Plate Number": "提货车辆车牌号",
+  "Vehicle Plate Placeholder": "例如: PGH 9559",
+  "Collector Name / Phone": "提货人姓名/联系电话",
+  "Collector Placeholder": "选填 (例如: 司机 Ah Seng 012-xxx)",
+  "Take Photo / Document": "拍照 (装车或签收单)",
+  "Confirm Handover & Complete": "确认提货出库 (Delivered)",
+  "Delivery Method": "发货方式",
+  "Lorry Delivery": "罗里派送",
+  "Customer Self-Pickup": "客户自提",
+  "Handover Success": "自提提货核销成功！"
 }

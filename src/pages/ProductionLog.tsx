@@ -41,7 +41,7 @@ const ProductionLog: React.FC<ProductionLogProps> = ({ userRole }) => {
         (async () => {
             const [usersRes, skuRes] = await Promise.all([
                 supabase.from('sys_users_v2').select('id, name'),
-                supabase.from('v2_inventory_view').select('sku, name'),
+                supabase.from('master_items_v2').select('sku, name'),
             ]);
             if (usersRes.data) {
                 const m = new Map<string, string>();

@@ -60,7 +60,7 @@ const ProductionReports: React.FC<ProductionReportsProps> = () => {
     useEffect(() => {
         const fetchSkus = async () => {
             try {
-                const { data } = await supabase.from('v2_inventory_view').select('sku, name');
+                const { data } = await supabase.from('master_items_v2').select('sku, name');
                 if (data) {
                     const m = new Map<string, string>();
                     data.forEach(s => {

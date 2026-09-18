@@ -1259,5 +1259,21 @@
   "Total Output: ${opts.totalQty.toLocaleString()} units": "कुल आउटपुट: ${opts.totalQty.toLocaleString()} इकाइयाँ",
   "Active Machines: ${opts.activeMachines}  |  Log Entries: ${opts.logCount}": "सक्रिय मशीनें: ${opts.activeMachines} |  लॉग प्रविष्टियाँ: ${opts.logCount}",
   "Top Products": "शीर्ष उत्पाद",
-  "• ${s.sku}: ${s.qty}": "• ${s.sku}: ${s.qty}"
+  "• ${s.sku}: ${s.qty}": "• ${s.sku}: ${s.qty}",
+  "Self-Pickup Bay": "ग्राहक पिकअप ज़ोन (Self-Pickup)",
+  "Self-Pickup Orders": "ग्राहक स्वयं पिकअप ऑर्डर",
+  "Staged in Bay": "पिकअप के लिए तैयार",
+  "Mark Staged": "पिकअप ज़ोन में तैयार चिह्नित करें",
+  "Handover / Release": "सामान सुपुर्द करें (Handover)",
+  "Self-Pickup Handover": "पिकअप सुपुर्दगी एवं POD सत्यापन",
+  "Vehicle Plate Number": "पिकअप वाहन नंबर",
+  "Vehicle Plate Placeholder": "उदा. PGH 9559",
+  "Collector Name / Phone": "लेने वाले का नाम / फोन",
+  "Collector Placeholder": "वैकल्पिक (उदा. Ah Seng 012-xxx)",
+  "Take Photo / Document": "फोटो लें (लोडिंग या हस्ताक्षरित DO)",
+  "Confirm Handover & Complete": "सुपुर्दगी की पुष्टि करें (Delivered)",
+  "Delivery Method": "वितरण का तरीका",
+  "Lorry Delivery": "लॉरी डिलीवरी",
+  "Customer Self-Pickup": "ग्राहक स्वयं पिकअप",
+  "Handover Success": "पिकअप सुपुर्दगी सफलतापूर्वक पूरी हुई!"
 }

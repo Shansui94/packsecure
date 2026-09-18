@@ -619,6 +619,7 @@ const DeliveryOrderManagement: React.FC<DeliveryOrderManagementProps> = ({ user 
     const [parsedTripOrigin, setParsedTripOrigin] = useState('Taiping');
     const [parsedZone, setParsedZone] = useState('');
     const [parsedTripRemark, setParsedTripRemark] = useState('');
+    const [parsedDeliveryMethod, setParsedDeliveryMethod] = useState<'DELIVERY' | 'SELF_PICKUP'>('DELIVERY');
     const [isCreatingTrip, setIsCreatingTrip] = useState(false);
 
     // Editing State
@@ -626,8 +627,23 @@ const DeliveryOrderManagement: React.FC<DeliveryOrderManagementProps> = ({ user 
     const [editingOrderPhoto, setEditingOrderPhoto] = useState<string | null>(null);
 
     // New Order Form State
+    const [deliveryMethod, setDeliveryMethod] = useState<'DELIVERY' | 'SELF_PICKUP'>('DELIVERY');
     const [selectedDriverId, setSelectedDriverId] = useState('');
     const [selectedLorryId, setSelectedLorryId] = useState('');
+
+    const isSelfPickupOrderDOM = (order?: Partial<SalesOrder> | null) => {
+        if (!order) return false;
+        if ((order as any)?.delivery_method === 'SELF_PICKUP') return true;
+        const noteText = `${order.notes || ''} ${order.customer || ''} ${order.deliveryAddress || ''}`.toLowerCase();
+        return noteText.includes('pickup') || 
+            noteText.includes('pick up') || 
+            noteText.includes('self-pickup') || 
+            noteText.includes('self pickup') || 
+            noteText.includes('ambil') || 
+            noteText.includes('自提') || 
+            noteText.includes('walk in') || 
+            noteText.includes('walk-in');
+    };
     const [newOrderDate, setNewOrderDate] = useState(getTodayStr); // 默认今天
     const [newOrderDeliveryDate, setNewOrderDeliveryDate] = useState(getTomorrowStr); // 默认明天
     const [newOrderItems, setNewOrderItems] = useState<SalesOrder['items']>([]);
@@ -944,25 +960,32 @@ const DeliveryOrderManagement: React.FC<DeliveryOrderManagementProps> = ({ user 
     useEffect(() => {
         fetchData();
 
-        // 1. Subscribe to Orders (Logging Only - Disabled auto-fetch to protect Optimistic UI)
+        let debounceTimer: any = null;
+        const debouncedFetchData = () => {
+            if (debounceTimer) clearTimeout(debounceTimer);
+            debounceTimer = setTimeout(() => {
+                fetchData();
+            }, 1000);
+        };
+
+        // 1. Subscribe to Orders (Debounced)
         const orderInfo = supabase.channel('do-changes')
             .on('postgres_changes', { event: '*', schema: 'public', table: 'sales_orders' }, () => {
-                console.log("Realtime: Order changed. Fetching...");
-                fetchData();
+                debouncedFetchData();
             })
             .subscribe();
 
         // 2. Subscribe to Drivers (users_public)
         const userInfo = supabase.channel('driver-changes')
             .on('postgres_changes', { event: '*', schema: 'public', table: 'users_public' }, () => {
-                console.log("Realtime: Driver list changed, fetching...");
-                fetchData();
+                debouncedFetchData();
             })
-            .on('postgres_changes', { event: '*', schema: 'public', table: 'driver_leave' }, () => fetchData())
-            .on('postgres_changes', { event: '*', schema: 'public', table: 'lorry_service_requests' }, () => fetchData())
+            .on('postgres_changes', { event: '*', schema: 'public', table: 'driver_leave' }, () => debouncedFetchData())
+            .on('postgres_changes', { event: '*', schema: 'public', table: 'lorry_service_requests' }, () => debouncedFetchData())
             .subscribe();
 
         return () => {
+            if (debounceTimer) clearTimeout(debounceTimer);
             supabase.removeChannel(orderInfo);
             supabase.removeChannel(userInfo);
         };
@@ -2237,6 +2260,9 @@ const DeliveryOrderManagement: React.FC<DeliveryOrderManagementProps> = ({ user 
                 if (doItem.terms && !noteParts.some(p => p.includes(doItem.terms))) {
                     noteParts.push(`Terms: ${doItem.terms}`);
                 }
+                if (parsedDeliveryMethod === 'SELF_PICKUP' && !noteParts.some(p => p.toLowerCase().includes('pickup') || p.includes('自提'))) {
+                    noteParts.unshift('[Self Pickup]');
+                }
 
                 const orderPayload: any = {
                     id: orderId,
@@ -2244,8 +2270,8 @@ const DeliveryOrderManagement: React.FC<DeliveryOrderManagementProps> = ({ user 
                     order_number: doItem.doNumber || `DO-${parsedTripNumber}-${i + 1}`,
                     customer: doItem.customer || 'General Customer',
                     delivery_address: doItem.deliveryAddress || '',
-                    zone: doItem.zone || parsedZone || 'Central',
-                    driver_id: parsedDriverId || null,
+                    zone: doItem.zone || parsedZone || (parsedDeliveryMethod === 'SELF_PICKUP' ? 'SELF-PICKUP' : 'Central'),
+                    driver_id: parsedDeliveryMethod === 'SELF_PICKUP' ? null : (parsedDriverId || null),
                     status: 'Planned',
                     order_date: parsedTripDate,
                     deadline: parsedDeliveryDate,
@@ -3182,19 +3208,27 @@ const DeliveryOrderManagement: React.FC<DeliveryOrderManagementProps> = ({ user 
                 }
             }
 
+            let finalNotes = newOrderNotes;
+            if (deliveryMethod === 'SELF_PICKUP') {
+                const low = finalNotes.toLowerCase();
+                if (!low.includes('pickup') && !low.includes('pick up') && !low.includes('自提') && !low.includes('ambil')) {
+                    finalNotes = `[Self Pickup] ${finalNotes}`.trim();
+                }
+            }
+
             const payload: any = {
                 order_number: doNumber,
                 customer: finalCustomer,
                 delivery_address: newOrderAddress,
-                zone: tripCategory || '',
+                zone: deliveryMethod === 'SELF_PICKUP' ? (tripCategory || 'SELF-PICKUP') : (tripCategory || ''),
                 trip_origin: tripOrigin,
                 trip_drop_count: tripDropCount,
                 factory_id: finalFactoryId,
-                driver_id: selectedDriverId || null,
+                driver_id: deliveryMethod === 'SELF_PICKUP' ? null : (selectedDriverId || null),
                 items: finalizedItems,
                 order_date: newOrderDate || new Date().toISOString().split("T")[0],
                 deadline: newOrderDeliveryDate || null,
-                notes: newOrderNotes // Include Batch Notes
+                notes: finalNotes
             };
 
             // Only set status for NEW orders. Editing should not overwrite background status changes.
@@ -3331,6 +3365,7 @@ const DeliveryOrderManagement: React.FC<DeliveryOrderManagementProps> = ({ user 
     const handleCloseModal = () => {
         setIsCreateModalOpen(false);
         closeScanReview();
+        setDeliveryMethod('DELIVERY');
         setEditingOrderId(null); setNewOrderDate(getTodayStr());
         setSelectedDriverId('');
         setSelectedLorryId('');
@@ -4501,6 +4536,7 @@ const DeliveryOrderManagement: React.FC<DeliveryOrderManagementProps> = ({ user 
                                                                                         onClick={(e) => {
                                                                                             e.stopPropagation();
                                                                                             setEditingOrderId(doOrder.id);
+                                                                                            setDeliveryMethod(isSelfPickupOrderDOM(doOrder) ? 'SELF_PICKUP' : 'DELIVERY');
                                                                                             setNewOrderDate(doOrder.orderDate || '');
                                                                                             setSelectedDriverId(doOrder.driverId || '');
                                                                                             const initialLorry = lorries.find(l => l.driverUserId === doOrder.driverId);
@@ -4626,7 +4662,9 @@ const DeliveryOrderManagement: React.FC<DeliveryOrderManagementProps> = ({ user 
                                                                 ) : (
                                                                     /* STANDALONE SINGLE ORDER CARD */
                                                                     <div onClick={() => {
-                                                                        setEditingOrderId(order.id); setNewOrderDate(order.orderDate || '');
+                                                                        setEditingOrderId(order.id);
+                                                                        setDeliveryMethod(isSelfPickupOrderDOM(order) ? 'SELF_PICKUP' : 'DELIVERY');
+                                                                        setNewOrderDate(order.orderDate || '');
                                                                         setSelectedDriverId(order.driverId || '');
                                                                         const initialLorry = lorries.find(l => l.driverUserId === order.driverId);
                                                                         setSelectedLorryId(initialLorry ? initialLorry.id : '');
@@ -4921,7 +4959,9 @@ const DeliveryOrderManagement: React.FC<DeliveryOrderManagementProps> = ({ user 
                                         
                                         return (
                                             <tr key={order.id} className="hover:bg-slate-800/50 transition-colors group cursor-pointer" onClick={() => {
-                                                setEditingOrderId(order.id); setNewOrderDate(order.orderDate || '');
+                                                setEditingOrderId(order.id);
+                                                setDeliveryMethod(isSelfPickupOrderDOM(order) ? 'SELF_PICKUP' : 'DELIVERY');
+                                                setNewOrderDate(order.orderDate || '');
                                                 setSelectedDriverId(order.driverId || '');
                                                 const initialLorry = lorries.find(l => l.driverUserId === order.driverId);
                                                 setSelectedLorryId(initialLorry ? initialLorry.id : '');
@@ -5177,60 +5217,128 @@ const DeliveryOrderManagement: React.FC<DeliveryOrderManagementProps> = ({ user 
                                 <div className="space-y-6">
 
                                 {/* Section 1: Basic Info (Simpler) */}
-                                <div className="grid grid-cols-1 lg:grid-cols-2 gap-4">
-                                     <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
-                                         <div>
-                                             <label className="block text-xs font-bold text-slate-500 uppercase mb-2">{t('Assigned Lorry (license plate)')}</label>
-                                             <div className="relative">
-                                                 <Truck className="absolute left-3 top-3.5 text-slate-600 z-10" size={16} />
-                                                 <select
-                                                     className="w-full bg-slate-900 border border-slate-800 rounded-xl pl-10 pr-3 py-3 text-sm text-slate-200 focus:border-blue-500/50 outline-none appearance-none cursor-pointer"
-                                                     value={selectedLorryId}
-                                                     onChange={(e) => {
-                                                         const lorryId = e.target.value;
-                                                         setSelectedLorryId(lorryId);
-                                                         const l = lorries.find(x => x.id === lorryId);
-                                                         if (l && l.driverUserId && !selectedDriverId) {
-                                                             setSelectedDriverId(l.driverUserId);
-                                                         }
-                                                     }}
-                                                 >
-                                                     <option value="">-- Select Lorry --</option>
-                                                     {filteredLorriesForModal.map(l => (
-                                                         <option key={l.id} value={l.id}>
-                                                             {l.plateNumber} {l.driverName ? `(${l.driverName})` : ''}
-                                                         </option>
-                                                     ))}
-                                                 </select>
-                                             </div>
+                                <div className="space-y-4">
+                                     {/* Delivery Method Selector (🚚 罗里派送 vs 📦 客户自提) */}
+                                     <div className="bg-slate-900/60 p-3 rounded-2xl border border-slate-800/80 space-y-2">
+                                         <div className="flex items-center justify-between">
+                                             <label className="text-[10px] font-bold text-slate-400 uppercase tracking-wider flex items-center gap-1.5">
+                                                 <Truck size={13} className="text-blue-400" />
+                                                 <span>{t('Delivery Method')}</span>
+                                             </label>
+                                             {deliveryMethod === 'SELF_PICKUP' && (
+                                                 <span className="text-[10px] bg-amber-500/20 text-amber-300 font-bold px-2 py-0.5 rounded-full border border-amber-500/30 flex items-center gap-1">
+                                                     <Package size={11} /> {t('Customer Self-Pickup')}
+                                                 </span>
+                                             )}
                                          </div>
-                                         <div>
-                                             <label className="block text-xs font-bold text-slate-500 uppercase mb-2">{t('Assigned Driver')}</label>
-                                             <div className="relative">
-                                                 <UserIcon className="absolute left-3 top-3.5 text-slate-600 z-10" size={16} />
-                                                 <select
-                                                     className="w-full bg-slate-900 border border-slate-800 rounded-xl pl-10 pr-3 py-3 text-sm text-slate-200 focus:border-blue-500/50 outline-none appearance-none cursor-pointer"
-                                                     value={selectedDriverId}
-                                                     onChange={(e) => {
-                                                          const driverId = e.target.value;
-                                                          setSelectedDriverId(driverId);
-                                                          const l = lorries.find(x => x.driverUserId === driverId);
-                                                          if (l && !selectedLorryId) {
-                                                              setSelectedLorryId(l.id);
-                                                          }
-                                                          const d = drivers.find(x => x.uid === driverId);
-                                                          if (d && d.base_location && d.base_location.trim().toLowerCase() !== tripOrigin.toLowerCase()) {
-                                                              setTripOrigin(d.base_location.trim());
-                                                          }
-                                                      }}
-                                                 >
-                                                     <option value="">-- Select Driver --</option>
-                                                     {filteredDriversForModal.map(d => (
-                                                         <option key={d.uid} value={d.uid}>
-                                                             {d.name || d.email}
-                                                         </option>
-                                                     ))}
-                                                 </select>
+                                         <div className="grid grid-cols-2 gap-2">
+                                             <button
+                                                 type="button"
+                                                 onClick={() => setDeliveryMethod('DELIVERY')}
+                                                 className={`py-2 px-3 rounded-xl text-xs font-bold transition-all flex items-center justify-center gap-2 ${
+                                                     deliveryMethod === 'DELIVERY'
+                                                         ? 'bg-blue-600 text-white shadow-lg shadow-blue-900/40 border border-blue-400/30'
+                                                         : 'bg-slate-950 text-slate-400 border border-slate-800 hover:text-slate-200'
+                                                 }`}
+                                             >
+                                                 <Truck size={14} />
+                                                 <span>{t('Lorry Delivery')}</span>
+                                             </button>
+                                             <button
+                                                 type="button"
+                                                 onClick={() => {
+                                                     setDeliveryMethod('SELF_PICKUP');
+                                                     setSelectedDriverId('');
+                                                     setSelectedLorryId('');
+                                                     if (!newOrderNotes.toLowerCase().includes('pickup') && !newOrderNotes.toLowerCase().includes('自提')) {
+                                                         setNewOrderNotes(prev => prev ? `[Self Pickup] ${prev}` : '[Self Pickup]');
+                                                     }
+                                                 }}
+                                                 className={`py-2 px-3 rounded-xl text-xs font-bold transition-all flex items-center justify-center gap-2 ${
+                                                     deliveryMethod === 'SELF_PICKUP'
+                                                         ? 'bg-amber-600 text-white shadow-lg shadow-amber-900/40 border border-amber-400/30'
+                                                         : 'bg-slate-950 text-slate-400 border border-slate-800 hover:text-slate-200'
+                                                 }`}
+                                             >
+                                                 <Package size={14} />
+                                                 <span>{t('Customer Self-Pickup')}</span>
+                                             </button>
+                                         </div>
+                                     </div>
+
+                                     <div className="grid grid-cols-1 lg:grid-cols-2 gap-4">
+                                         <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
+                                             <div>
+                                                 <label className="block text-xs font-bold text-slate-500 uppercase mb-2">{t('Assigned Lorry (license plate)')}</label>
+                                                 <div className="relative">
+                                                     <Truck className="absolute left-3 top-3.5 text-slate-600 z-10" size={16} />
+                                                     {deliveryMethod === 'SELF_PICKUP' ? (
+                                                         <input
+                                                             type="text"
+                                                             disabled
+                                                             value="— 自提无需派车 (N/A) —"
+                                                             className="w-full bg-slate-950/60 border border-slate-800/80 rounded-xl pl-10 pr-3 py-3 text-xs text-amber-400/80 font-mono italic cursor-not-allowed"
+                                                         />
+                                                     ) : (
+                                                         <select
+                                                             className="w-full bg-slate-900 border border-slate-800 rounded-xl pl-10 pr-3 py-3 text-sm text-slate-200 focus:border-blue-500/50 outline-none appearance-none cursor-pointer"
+                                                             value={selectedLorryId}
+                                                             onChange={(e) => {
+                                                                 const lorryId = e.target.value;
+                                                                 setSelectedLorryId(lorryId);
+                                                                 const l = lorries.find(x => x.id === lorryId);
+                                                                 if (l && l.driverUserId && !selectedDriverId) {
+                                                                     setSelectedDriverId(l.driverUserId);
+                                                                 }
+                                                             }}
+                                                         >
+                                                             <option value="">-- Select Lorry --</option>
+                                                             {filteredLorriesForModal.map(l => (
+                                                                 <option key={l.id} value={l.id}>
+                                                                     {l.plateNumber} {l.driverName ? `(${l.driverName})` : ''}
+                                                                 </option>
+                                                             ))}
+                                                         </select>
+                                                     )}
+                                                 </div>
+                                             </div>
+                                             <div>
+                                                 <label className="block text-xs font-bold text-slate-500 uppercase mb-2">{t('Assigned Driver')}</label>
+                                                 <div className="relative">
+                                                     <UserIcon className="absolute left-3 top-3.5 text-slate-600 z-10" size={16} />
+                                                     {deliveryMethod === 'SELF_PICKUP' ? (
+                                                         <input
+                                                             type="text"
+                                                             disabled
+                                                             value="— 客户到厂自提 (Customer Self-Pickup) —"
+                                                             className="w-full bg-slate-950/60 border border-slate-800/80 rounded-xl pl-10 pr-3 py-3 text-xs text-amber-400/80 font-bold italic cursor-not-allowed"
+                                                         />
+                                                     ) : (
+                                                         <select
+                                                             className="w-full bg-slate-900 border border-slate-800 rounded-xl pl-10 pr-3 py-3 text-sm text-slate-200 focus:border-blue-500/50 outline-none appearance-none cursor-pointer"
+                                                             value={selectedDriverId}
+                                                             onChange={(e) => {
+                                                                 const driverId = e.target.value;
+                                                                 setSelectedDriverId(driverId);
+                                                                 const l = lorries.find(x => x.driverUserId === driverId);
+                                                                 if (l && !selectedLorryId) {
+                                                                     setSelectedLorryId(l.id);
+                                                                 }
+                                                                 const d = drivers.find(x => x.uid === driverId);
+                                                                 if (d && d.base_location && d.base_location.trim().toLowerCase() !== tripOrigin.toLowerCase()) {
+                                                                     setTripOrigin(d.base_location.trim());
+                                                                 }
+                                                             }}
+                                                         >
+                                                             <option value="">-- Select Driver --</option>
+                                                             {filteredDriversForModal.map(d => (
+                                                                 <option key={d.uid} value={d.uid}>
+                                                                     {d.name || d.email}
+                                                                 </option>
+                                                             ))}
+                                                         </select>
+                                                     )}
+                                                 </div>
                                              </div>
                                          </div>
                                      </div>
@@ -5415,8 +5523,17 @@ const DeliveryOrderManagement: React.FC<DeliveryOrderManagementProps> = ({ user 
                                             rows={editingOrderPhoto ? 4 : 2}
                                             placeholder="Enter notes for this trip..."
                                             className="w-full bg-slate-900 border border-slate-800 rounded-xl px-4 py-3 text-sm text-slate-300 focus:border-blue-500/50 outline-none placeholder:text-slate-600 resize-none"
-                                            value={newOrderNotes}
-                                            onChange={e => setNewOrderNotes(e.target.value)}
+                                             value={newOrderNotes}
+                                             onChange={e => {
+                                                 const val = e.target.value;
+                                                 setNewOrderNotes(val);
+                                                 const low = val.toLowerCase();
+                                                 if ((low.includes('pickup') || low.includes('pick up') || low.includes('self-pickup') || low.includes('ambil') || low.includes('自提') || low.includes('walk in')) && deliveryMethod !== 'SELF_PICKUP') {
+                                                     setDeliveryMethod('SELF_PICKUP');
+                                                     setSelectedDriverId('');
+                                                     setSelectedLorryId('');
+                                                 }
+                                             }}
                                         />
                                     </div>
                                     <div>
@@ -5998,54 +6115,101 @@ const DeliveryOrderManagement: React.FC<DeliveryOrderManagementProps> = ({ user 
                                     </div>
                                 </div>
 
+                                 {/* Delivery Method Toggle for Trip */}
+                                <div className="flex items-center justify-between pt-2 border-t border-slate-800/60">
+                                    <span className="text-[10px] font-bold text-slate-400 uppercase tracking-wider flex items-center gap-1">
+                                        <Truck size={12} className="text-blue-400" />
+                                        <span>{t('Delivery Method')}:</span>
+                                    </span>
+                                    <div className="inline-flex rounded-xl bg-slate-950 p-1 border border-slate-800">
+                                        <button
+                                            type="button"
+                                            onClick={() => setParsedDeliveryMethod('DELIVERY')}
+                                            className={`px-3 py-1.5 rounded-lg text-xs font-bold transition-all flex items-center gap-1.5 ${
+                                                parsedDeliveryMethod === 'DELIVERY'
+                                                    ? 'bg-blue-600 text-white shadow-sm'
+                                                    : 'text-slate-400 hover:text-slate-200'
+                                            }`}
+                                        >
+                                            <Truck size={13} />
+                                            <span>{t('Lorry Delivery')}</span>
+                                        </button>
+                                        <button
+                                            type="button"
+                                            onClick={() => {
+                                                setParsedDeliveryMethod('SELF_PICKUP');
+                                                setParsedDriverId('');
+                                                setParsedLorryId('');
+                                            }}
+                                            className={`px-3 py-1.5 rounded-lg text-xs font-bold transition-all flex items-center gap-1.5 ${
+                                                parsedDeliveryMethod === 'SELF_PICKUP'
+                                                    ? 'bg-amber-600 text-white shadow-sm'
+                                                    : 'text-slate-400 hover:text-slate-200'
+                                            }`}
+                                        >
+                                            <Package size={13} />
+                                            <span>{t('Customer Self-Pickup')}</span>
+                                        </button>
+                                    </div>
+                                </div>
+
                                 <div className="grid grid-cols-1 sm:grid-cols-3 gap-3 pt-1 border-t border-slate-800/60">
                                     <div>
                                         <label className="block text-[10px] font-bold text-slate-400 uppercase mb-1">
                                             {t('Assign Driver / 指派司机')}
                                         </label>
-                                        <input
-                                            type="text"
-                                            list="modal-driver-datalist"
-                                            className="w-full bg-slate-950 border border-slate-700/80 rounded-xl px-3 py-2 text-xs text-slate-200 outline-none focus:border-blue-500 placeholder:text-slate-600"
-                                            placeholder={t('-- 输入或选择司机姓名 --')}
-                                            value={drivers.find(d => d.uid === parsedDriverId)?.name || parsedDriverId || ''}
-                                            onChange={e => {
-                                                const val = e.target.value;
-                                                const matched = drivers.find(d => 
-                                                    d.name?.toLowerCase() === val.toLowerCase() || 
-                                                    d.uid === val ||
-                                                    `${d.name || d.email} (${d.base_location || 'Taiping'})`.toLowerCase() === val.toLowerCase()
-                                                );
-                                                if (matched) {
-                                                    setParsedDriverId(matched.uid);
-                                                    const matchedLorry = lorries.find(l => l.driverUserId === matched.uid);
-                                                    if (matchedLorry) setParsedLorryId(matchedLorry.id);
-                                                    if (matched.base_location && matched.base_location.trim().toLowerCase() !== parsedTripOrigin.toLowerCase()) {
-                                                        handleUpdateParsedTripOrigin(matched.base_location.trim());
-                                                        setToast({
-                                                            message: `🚚 已根据司机 ${matched.name || ''} 基地自动将出发厂区切换为 [${matched.base_location}] 并更新仓库分配！`,
-                                                            type: 'info'
-                                                        });
-                                                    }
-                                                } else if (!val) {
-                                                    setParsedDriverId('');
-                                                } else {
-                                                    const partial = drivers.find(d => d.name?.toLowerCase().includes(val.toLowerCase()));
-                                                    if (partial) {
-                                                        setParsedDriverId(partial.uid);
-                                                        if (partial.base_location && partial.base_location.trim().toLowerCase() !== parsedTripOrigin.toLowerCase()) {
-                                                            handleUpdateParsedTripOrigin(partial.base_location.trim());
+                                        {parsedDeliveryMethod === 'SELF_PICKUP' ? (
+                                            <input
+                                                type="text"
+                                                disabled
+                                                value="— 客户到厂自提 (Self-Pickup) —"
+                                                className="w-full bg-slate-950/60 border border-slate-800 rounded-xl px-3 py-2 text-xs text-amber-400/80 font-bold italic cursor-not-allowed"
+                                            />
+                                        ) : (
+                                            <input
+                                                type="text"
+                                                list="modal-driver-datalist"
+                                                className="w-full bg-slate-950 border border-slate-700/80 rounded-xl px-3 py-2 text-xs text-slate-200 outline-none focus:border-blue-500 placeholder:text-slate-600"
+                                                placeholder={t('-- 输入或选择司机姓名 --')}
+                                                value={drivers.find(d => d.uid === parsedDriverId)?.name || parsedDriverId || ''}
+                                                onChange={e => {
+                                                    const val = e.target.value;
+                                                    const matched = drivers.find(d => 
+                                                        d.name?.toLowerCase() === val.toLowerCase() || 
+                                                        d.uid === val ||
+                                                        `${d.name || d.email} (${d.base_location || 'Taiping'})`.toLowerCase() === val.toLowerCase()
+                                                    );
+                                                    if (matched) {
+                                                        setParsedDriverId(matched.uid);
+                                                        const matchedLorry = lorries.find(l => l.driverUserId === matched.uid);
+                                                        if (matchedLorry) setParsedLorryId(matchedLorry.id);
+                                                        if (matched.base_location && matched.base_location.trim().toLowerCase() !== parsedTripOrigin.toLowerCase()) {
+                                                            handleUpdateParsedTripOrigin(matched.base_location.trim());
                                                             setToast({
-                                                                message: `🚚 已根据司机 ${partial.name || ''} 基地自动将出发厂区切换为 [${partial.base_location}] 并更新仓库分配！`,
+                                                                message: `🚚 已根据司机 ${matched.name || ''} 基地自动将出发厂区切换为 [${matched.base_location}] 并更新仓库分配！`,
                                                                 type: 'info'
                                                             });
                                                         }
+                                                    } else if (!val) {
+                                                        setParsedDriverId('');
                                                     } else {
-                                                        setParsedDriverId(val);
+                                                        const partial = drivers.find(d => d.name?.toLowerCase().includes(val.toLowerCase()));
+                                                        if (partial) {
+                                                            setParsedDriverId(partial.uid);
+                                                            if (partial.base_location && partial.base_location.trim().toLowerCase() !== parsedTripOrigin.toLowerCase()) {
+                                                                handleUpdateParsedTripOrigin(partial.base_location.trim());
+                                                                setToast({
+                                                                    message: `🚚 已根据司机 ${partial.name || ''} 基地自动将出发厂区切换为 [${partial.base_location}] 并更新仓库分配！`,
+                                                                    type: 'info'
+                                                                });
+                                                            }
+                                                        } else {
+                                                            setParsedDriverId(val);
+                                                        }
                                                     }
-                                                }
-                                            }}
-                                        />
+                                                }}
+                                            />
+                                        )}
                                         <datalist id="modal-driver-datalist">
                                             {drivers.map(d => (
                                                 <option key={d.uid} value={d.name || d.email || ''}>
@@ -6059,29 +6223,38 @@ const DeliveryOrderManagement: React.FC<DeliveryOrderManagementProps> = ({ user 
                                         <label className="block text-[10px] font-bold text-slate-400 uppercase mb-1">
                                             {t('Assign Lorry / 绑定车辆')}
                                         </label>
-                                        <input
-                                            type="text"
-                                            list="modal-lorry-datalist"
-                                            className="w-full bg-slate-950 border border-slate-700/80 rounded-xl px-3 py-2 text-xs text-slate-200 outline-none focus:border-blue-500 placeholder:text-slate-600"
-                                            placeholder={t('-- 输入或选择车牌 --')}
-                                            value={lorries.find(l => l.id === parsedLorryId)?.plateNumber || parsedLorryId || ''}
-                                            onChange={e => {
-                                                const val = e.target.value;
-                                                const matched = lorries.find(l => 
-                                                    l.plateNumber?.toLowerCase() === val.toLowerCase() || 
-                                                    l.id === val ||
-                                                    `${l.plateNumber} ${(l as any).capacity ? `(${(l as any).capacity} rolls)` : ''}`.toLowerCase() === val.toLowerCase()
-                                                );
-                                                if (matched) {
-                                                    setParsedLorryId(matched.id);
-                                                } else if (!val) {
-                                                    setParsedLorryId('');
-                                                } else {
-                                                    const partial = lorries.find(l => l.plateNumber?.toLowerCase().includes(val.toLowerCase()));
-                                                    setParsedLorryId(partial ? partial.id : val);
-                                                }
-                                            }}
-                                        />
+                                        {parsedDeliveryMethod === 'SELF_PICKUP' ? (
+                                            <input
+                                                type="text"
+                                                disabled
+                                                value="— 自提无需派车 (N/A) —"
+                                                className="w-full bg-slate-950/60 border border-slate-800 rounded-xl px-3 py-2 text-xs text-amber-400/80 font-mono italic cursor-not-allowed"
+                                            />
+                                        ) : (
+                                            <input
+                                                type="text"
+                                                list="modal-lorry-datalist"
+                                                className="w-full bg-slate-950 border border-slate-700/80 rounded-xl px-3 py-2 text-xs text-slate-200 outline-none focus:border-blue-500 placeholder:text-slate-600"
+                                                placeholder={t('-- 输入或选择车牌 --')}
+                                                value={lorries.find(l => l.id === parsedLorryId)?.plateNumber || parsedLorryId || ''}
+                                                onChange={e => {
+                                                    const val = e.target.value;
+                                                    const matched = lorries.find(l => 
+                                                        l.plateNumber?.toLowerCase() === val.toLowerCase() || 
+                                                        l.id === val ||
+                                                        `${l.plateNumber} ${(l as any).capacity ? `(${(l as any).capacity} rolls)` : ''}`.toLowerCase() === val.toLowerCase()
+                                                    );
+                                                    if (matched) {
+                                                        setParsedLorryId(matched.id);
+                                                    } else if (!val) {
+                                                        setParsedLorryId('');
+                                                    } else {
+                                                        const partial = lorries.find(l => l.plateNumber?.toLowerCase().includes(val.toLowerCase()));
+                                                        setParsedLorryId(partial ? partial.id : val);
+                                                    }
+                                                }}
+                                            />
+                                        )}
                                         <datalist id="modal-lorry-datalist">
                                             {lorries.map(l => (
                                                 <option key={l.id} value={l.plateNumber}>

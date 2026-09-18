@@ -187,11 +187,32 @@ export const RecycleMachineControl: React.FC<RecycleMachineControlProps> = ({
             if (error) throw error;
 
             if (data) {
-                // Defensively exclude any blowing machine formula or inspection logs
-                const filteredData = data.filter(p => 
-                    p.category !== 'MACHINE_SCREW_FORMULA' && 
-                    p.category !== 'MACHINE_INSPECTION_LOG'
-                );
+                // Defensively exclude any non-recycle logs (inspections, formulas, special tasks, logins, deliveries)
+                const filteredData = data.filter(p => {
+                    const cat = (p.category || '').toLowerCase();
+                    if (
+                        p.category === 'MACHINE_SCREW_FORMULA' || 
+                        p.category === 'MACHINE_INSPECTION_LOG' ||
+                        cat === 'operator_special_work' ||
+                        cat === 'machine_login' ||
+                        cat === 'delivery_task' ||
+                        cat === 'delivery_exception' ||
+                        cat === 'task' ||
+                        cat === 'container'
+                    ) {
+                        return false;
+                    }
+                    const noteUpper = (p.user_note || '').toUpperCase();
+                    if (
+                        noteUpper.includes('【OT') || 
+                        noteUpper.includes('OVERTIME') || 
+                        noteUpper.includes('登出机台') || 
+                        noteUpper.includes('一键登出')
+                    ) {
+                        return false;
+                    }
+                    return true;
+                });
 
                 // Sort chronologically for accurate interval calculations
                 const chronoData = [...filteredData].reverse();
@@ -232,11 +253,18 @@ export const RecycleMachineControl: React.FC<RecycleMachineControlProps> = ({
 
                     // Match material
                     let matKey = 'SF.W';
-                    if (note.includes('SF.B') || note.includes('SF B')) matKey = 'SF.B';
-                    else if (note.includes('SF.W') || note.includes('SF W')) matKey = 'SF.W';
-                    else if (note.includes('BW.W') || note.includes('BW W')) matKey = 'BW.W';
-                    else if (note.includes('BW.B') || note.includes('BW B')) matKey = 'BW.B';
-                    else if (note.includes('MIX')) matKey = 'MIX';
+                    let foundMat = false;
+                    if (note.includes('SF.B') || note.includes('SF B')) { matKey = 'SF.B'; foundMat = true; }
+                    else if (note.includes('SF.W') || note.includes('SF W')) { matKey = 'SF.W'; foundMat = true; }
+                    else if (note.includes('BW.W') || note.includes('BW W')) { matKey = 'BW.W'; foundMat = true; }
+                    else if (note.includes('BW.B') || note.includes('BW B')) { matKey = 'BW.B'; foundMat = true; }
+                    else if (note.includes('MIX')) { matKey = 'MIX'; foundMat = true; }
+                    else if (rawJson && rawJson.materialKey) { matKey = rawJson.materialKey; foundMat = true; }
+
+                    // If neither weight nor recycle material was found, and it is not a QC category, skip this non-recycle entry
+                    if (weight <= 0 && !foundMat && p.category !== 'qc') {
+                        return;
+                    }
 
                     const matConfig = RECYCLE_MATERIALS.find(m => m.key === matKey) || RECYCLE_MATERIALS[0];
 

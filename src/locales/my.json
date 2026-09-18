@@ -1259,5 +1259,21 @@
   "Total Output: ${opts.totalQty.toLocaleString()} units": "စုစုပေါင်းထွက်ရှိမှု- ${opts.totalQty.toLocaleString()} ယူနစ်",
   "Active Machines: ${opts.activeMachines}  |  Log Entries: ${opts.logCount}": "အသုံးပြုနေသော စက်များ- ${opts.activeMachine} |  မှတ်တမ်းများ- ${opts.logCount}",
   "Top Products": "ထိပ်တန်းထုတ်ကုန်များ",
-  "• ${s.sku}: ${s.qty}": "• ${s.sku}- ${s.qty}"
+  "• ${s.sku}: ${s.qty}": "• ${s.sku}- ${s.qty}",
+  "Self-Pickup Bay": "ကိုယ်တိုင်လာယူဇုန် (Self-Pickup)",
+  "Self-Pickup Orders": "ဖောက်သည်ကိုယ်တိုင်လာယူသောအော်ဒါများ",
+  "Staged in Bay": "ပစ္စည်းအသင့်ရှိသည်",
+  "Mark Staged": "လာယူရန်အသင့်မှတ်သားမည်",
+  "Handover / Release": "ပစ္စည်းလွှဲပြောင်းပေးအပ်မည် (Handover)",
+  "Self-Pickup Handover": "ကိုယ်တိုင်လာယူမှု စစ်ဆေးအတည်ပြုခြင်း",
+  "Vehicle Plate Number": "လာယူသောကားနံပါတ်",
+  "Vehicle Plate Placeholder": "ဥပမာ- PGH 9559",
+  "Collector Name / Phone": "လာယူသူအမည် / ဖုန်းနံပါတ်",
+  "Collector Placeholder": "စိတ်ကြိုက် (ဥပမာ- Ah Seng 012-xxx)",
+  "Take Photo / Document": "ဓာတ်ပုံရိုက်မည် (ပစ္စည်းတင်/လက်မှတ်)",
+  "Confirm Handover & Complete": "လွှဲပြောင်းမှုအတည်ပြုမည် (Delivered)",
+  "Delivery Method": "ပို့ဆောင်ရေးနည်းလမ်း",
+  "Lorry Delivery": "လော်ရီကားဖြင့်ပို့ဆောင်ခြင်း",
+  "Customer Self-Pickup": "ဖောက်သည်ကိုယ်တိုင်လာယူခြင်း",
+  "Handover Success": "ကိုယ်တိုင်လာယူမှု အောင်မြင်စွာအတည်ပြုပြီးပါပြီ။"
 }

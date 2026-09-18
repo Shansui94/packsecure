@@ -1260,5 +1260,21 @@
   "Total Output: ${opts.totalQty.toLocaleString()} units": "總輸出：${opts.totalQty.toLocaleString()} 單位",
   "Active Machines: ${opts.activeMachines}  |  Log Entries: ${opts.logCount}": "活動機器：${opts.activeMachines} | 日誌條目：${opts.logCount}",
   "Top Products": "熱門商品",
-  "• ${s.sku}: ${s.qty}": "• ${s.sku}：${s.qty}"
+  "• ${s.sku}: ${s.qty}": "• ${s.sku}：${s.qty}",
+  "Self-Pickup Bay": "客戶自提專區",
+  "Self-Pickup Orders": "客戶到廠自提訂單",
+  "Staged in Bay": "自提區已備齊",
+  "Mark Staged": "標記備好放自提區",
+  "Handover / Release": "確認提貨 (Handover)",
+  "Self-Pickup Handover": "客戶自提交接核銷",
+  "Vehicle Plate Number": "提貨車輛車牌號",
+  "Vehicle Plate Placeholder": "例如: PGH 9559",
+  "Collector Name / Phone": "提貨人姓名/聯繫電話",
+  "Collector Placeholder": "選填 (例如: 司機 Ah Seng 012-xxx)",
+  "Take Photo / Document": "拍照 (裝車或簽收單)",
+  "Confirm Handover & Complete": "確認提貨出庫 (Delivered)",
+  "Delivery Method": "發貨方式",
+  "Lorry Delivery": "羅里派送",
+  "Customer Self-Pickup": "客戶自提",
+  "Handover Success": "自提提貨核銷成功！"
 }

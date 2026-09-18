@@ -3,7 +3,7 @@ import { DragDropContext, Droppable, Draggable, DropResult } from '@hello-pangea
 import { supabase } from '../services/supabase';
 import { getV2Items, getInventoryStatus } from '../services/apiV2';
 import { SalesOrder, SalesOrderItem, User } from '../types';
-import { Calendar, User as UserIcon, Truck, MapPin, Package, Camera, Trash2, X, ChevronDown, ChevronUp, CheckCircle, RefreshCw, Clock, AlertTriangle, Search, Phone, ExternalLink, Zap } from 'lucide-react';
+import { Calendar, User as UserIcon, Truck, MapPin, Package, Camera, Trash2, X, ChevronDown, ChevronUp, CheckCircle, RefreshCw, Clock, AlertTriangle, Search, Phone, ExternalLink, Zap, PackageCheck, Car, CheckCircle2 } from 'lucide-react';
 import { parsePrepPhotos, stringifyPrepPhotos, PrepPhoto } from '../utils/prepPhotos';
 import { compressImage, dataURLtoBlob } from '../utils/imageCompress';
 import { guessItemLocation } from './DeliveryOrderManagement';
@@ -123,6 +123,33 @@ const extractTripIdentifier = (notes?: string): { tripSeq?: number; tripTag?: st
     return {};
 };
 
+export interface SelfPickupItem {
+    order: SalesOrder;
+    isStaged: boolean;
+    isDelivered: boolean;
+    stagedPhotos: PrepPhoto[];
+    vehiclePlate?: string;
+    totalRolls: number;
+    specialBadges: {
+        hasCod: boolean;
+        hasNightDelivery: boolean;
+    };
+}
+
+export function isSelfPickupOrder(order: SalesOrder): boolean {
+    if ((order as any).delivery_method === 'SELF_PICKUP') return true;
+    if (order.zone && (order.zone.toUpperCase().includes('PICKUP') || order.zone.toUpperCase().includes('AMBIL'))) return true;
+    const noteText = `${order.notes || ''} ${order.customer || ''} ${(order as any).terms || ''}`.toLowerCase();
+    return (
+        noteText.includes('self pickup') || 
+        noteText.includes('self-pickup') || 
+        noteText.includes('walk in') || 
+        noteText.includes('walk-in') || 
+        noteText.includes('ambil sendiri') ||
+        noteText.includes('pickup')
+    );
+}
+
 export interface TripGroup {
     tripId: string;
     tripNumber: string;
@@ -180,6 +207,23 @@ const OrderSummary: React.FC<OrderSummaryProps> = ({ user }) => {
     const [uploadingTarget, setUploadingTarget] = useState<{ type: 'trip' | 'order'; id: string } | null>(null);
     const [previewImageUrl, setPreviewImageUrl] = useState<string | null>(null);
     const fileInputRef = useRef<HTMLInputElement>(null);
+
+    // Self-Pickup Handover States
+    const [handoverTarget, setHandoverTarget] = useState<SalesOrder | null>(null);
+
+    const handleToggleOrderStaged = async (order: SalesOrder) => {
+        try {
+            const nextStatus = (order.status === 'Ready-to-Ship' || order.status === 'Loaded') ? 'New' : 'Ready-to-Ship';
+            const { error } = await supabase.from('sales_orders').update({
+                status: nextStatus
+            }).eq('id', order.id);
+
+            if (error) throw error;
+            setOrders(prev => prev.map(o => o.id === order.id ? { ...o, status: nextStatus as any } : o));
+        } catch (e) {
+            console.error("Failed to toggle order staged:", e);
+        }
+    };
 
     // ─── DATE HELPERS ─────────────────────────────────────────────────────────
 
@@ -347,12 +391,41 @@ const OrderSummary: React.FC<OrderSummaryProps> = ({ user }) => {
         return name || item.product;
     };
 
-    // ─── AGGREGATE ORDERS INTO TRIPS (Smart Grouping) ─────────────────────────
+    // ─── AGGREGATE ORDERS INTO TRIPS (Smart Grouping) & SELF-PICKUP ORDERS ─────
 
-    const allTripGroups = useMemo(() => {
+    const { trips: allTripGroups, pickupOrders: allPickupOrders } = useMemo(() => {
         const groups: Record<string, TripGroup> = {};
+        const pickups: SelfPickupItem[] = [];
 
         orders.forEach(order => {
+            const rollsInOrder = (order.items || []).reduce((sum, it) => sum + (Number(it.quantity) || 0), 0);
+            const noteText = `${order.notes || ''} ${(order as any).terms || ''}`.toLowerCase();
+
+            // 1. Check if order is Self-Pickup
+            if (isSelfPickupOrder(order)) {
+                const plateMatch = (order.notes || '').match(/\b([A-Z]{1,3}\s*\d{1,4}\s*[A-Z]?)\b/i);
+                const vehiclePlate = plateMatch ? plateMatch[1].toUpperCase() : undefined;
+
+                const prepPhotos = parsePrepPhotos(order.preparation_photo_url);
+                const isStaged = prepPhotos.length > 0 || order.status === 'Ready-to-Ship' || order.status === 'Loaded';
+                const isDelivered = order.status === 'Delivered';
+
+                pickups.push({
+                    order,
+                    isStaged,
+                    isDelivered,
+                    stagedPhotos: prepPhotos,
+                    vehiclePlate,
+                    totalRolls: rollsInOrder,
+                    specialBadges: {
+                        hasCod: /cod|c\.o\.d|cash|tunai/i.test(noteText),
+                        hasNightDelivery: /malam|night|petang/i.test(noteText)
+                    }
+                });
+                return;
+            }
+
+            // 2. Regular delivery orders -> Grouped into trips
             const extracted = extractTripIdentifier(order.notes);
             const driverId = order.driverId || null;
             const dateKey = (order.deadline || order.orderDate || '').slice(0, 10);
@@ -368,8 +441,7 @@ const OrderSummary: React.FC<OrderSummaryProps> = ({ user }) => {
                 tripNum = tripV2?.trip_number || `TRIP-${order.trip_id.slice(0, 8).toUpperCase()}`;
                 isFromV2 = true;
             } else {
-                // Smart Grouping for manual / legacy orders without trip_id:
-                // Group orders for the same driver on the same delivery date with the same trip identifier/sequence
+                // Smart Grouping for manual / legacy orders without trip_id
                 const driverObj = drivers.find(d => d.uid === driverId);
                 const driverPrefix = driverObj?.name ? driverObj.name.split(' ')[0].toUpperCase() : 'UNASSIGNED';
                 const dateCode = dateKey ? dateKey.replace(/-/g, '').slice(2) : '260917';
@@ -419,9 +491,6 @@ const OrderSummary: React.FC<OrderSummaryProps> = ({ user }) => {
             }
 
             groups[tripKey].orders.push(order);
-
-            // Tally rolls
-            const rollsInOrder = (order.items || []).reduce((sum, it) => sum + (Number(it.quantity) || 0), 0);
             groups[tripKey].totalRolls += rollsInOrder;
 
             // Collect zones
@@ -429,16 +498,12 @@ const OrderSummary: React.FC<OrderSummaryProps> = ({ user }) => {
                 groups[tripKey].zones.push(order.zone);
             }
 
-            // Check Special Badges (COD, Night Delivery, Self Pickup)
-            const noteText = `${order.notes || ''} ${(order as any).terms || ''}`.toLowerCase();
+            // Check Special Badges (COD, Night Delivery)
             if (noteText.includes('c.o.d') || noteText.includes('cod') || noteText.includes('cash on delivery') || noteText.includes('bayar tunai')) {
                 groups[tripKey].hasCod = true;
             }
             if (noteText.includes('malam') || noteText.includes('night') || noteText.includes('petang')) {
                 groups[tripKey].hasNightDelivery = true;
-            }
-            if (noteText.includes('pickup') || noteText.includes('ambil sendiri') || noteText.includes('walk in')) {
-                groups[tripKey].hasSelfPickup = true;
             }
             if (order.notes && order.notes.trim() && !groups[tripKey].specialNotes.includes(order.notes.trim())) {
                 groups[tripKey].specialNotes.push(order.notes.trim());
@@ -459,11 +524,10 @@ const OrderSummary: React.FC<OrderSummaryProps> = ({ user }) => {
             if (g.photos.length > 0 || tripsMap[g.tripId]?.status === 'Prepared') {
                 g.isPrepared = true;
             }
-            // Sort orders inside trip by stop sequence
             g.orders.sort((a, b) => (a.tripSequence || 0) - (b.tripSequence || 0));
         });
 
-        return Object.values(groups);
+        return { trips: Object.values(groups), pickupOrders: pickups };
     }, [orders, tripsMap, drivers, lorries]);
 
     // ─── FILTER TRIPS BY FACTORY & WAREHOUSE ───────────────────────────────────
@@ -502,11 +566,39 @@ const OrderSummary: React.FC<OrderSummaryProps> = ({ user }) => {
         });
     }, [allTripGroups, activeFactory, activeTaipingWarehouse, searchTerm]);
 
+    // ─── FILTER PICKUP ORDERS BY FACTORY & WAREHOUSE ───────────────────────────
+
+    const filteredPickupOrders = useMemo(() => {
+        return allPickupOrders.filter(item => {
+            const factory = getOrderFactory(item.order);
+            if (factory !== activeFactory) return false;
+
+            if (activeFactory === 'Taiping' && activeTaipingWarehouse !== 'All') {
+                const hasItemInWarehouse = (item.order.items || []).some(it =>
+                    getItemWarehouse(it, item.order, activeFactory) === activeTaipingWarehouse
+                );
+                if (!hasItemInWarehouse) return false;
+            }
+
+            if (searchTerm.trim()) {
+                const term = searchTerm.toLowerCase();
+                const matchCustomer = item.order.customer.toLowerCase().includes(term);
+                const matchOrder = item.order.orderNumber.toLowerCase().includes(term);
+                const matchNote = (item.order.notes || '').toLowerCase().includes(term);
+                const matchPlate = (item.vehiclePlate || '').toLowerCase().includes(term);
+                return matchCustomer || matchOrder || matchNote || matchPlate;
+            }
+
+            return true;
+        });
+    }, [allPickupOrders, activeFactory, activeTaipingWarehouse, searchTerm]);
+
     // ─── PRODUCTION REQUIREMENTS SUMMARY ──────────────────────────────────────
 
     const productionRequirements = useMemo(() => {
         const summary: Record<string, { qty: number; sku?: string; category: string; uom: string }> = {};
 
+        // 1. Tally from regular delivery trips
         filteredTrips.forEach(trip => {
             trip.orders.forEach(order => {
                 if (order.status === 'Loaded' || order.status === 'Delivered' || order.status === 'Pending Approval') return;
@@ -514,7 +606,6 @@ const OrderSummary: React.FC<OrderSummaryProps> = ({ user }) => {
                 (order.items || []).forEach(item => {
                     const itemLoc = getItemWarehouse(item, order, activeFactory);
 
-                    // If Taiping and sub-warehouse is selected, only count items from that sub-warehouse
                     if (activeFactory === 'Taiping' && activeTaipingWarehouse !== 'All' && itemLoc !== activeTaipingWarehouse) {
                         return;
                     }
@@ -531,6 +622,29 @@ const OrderSummary: React.FC<OrderSummaryProps> = ({ user }) => {
             });
         });
 
+        // 2. Tally from customer self-pickup orders
+        filteredPickupOrders.forEach(pItem => {
+            const order = pItem.order;
+            if (order.status === 'Delivered' || order.status === 'Cancelled' || order.status === 'Pending Approval') return;
+
+            (order.items || []).forEach(item => {
+                const itemLoc = getItemWarehouse(item, order, activeFactory);
+
+                if (activeFactory === 'Taiping' && activeTaipingWarehouse !== 'All' && itemLoc !== activeTaipingWarehouse) {
+                    return;
+                }
+
+                const name = resolveItemName(item);
+                const uom = getItemUom(name, item.sku);
+
+                if (!summary[name]) {
+                    summary[name] = { qty: 0, sku: item.sku, category: categorizeProduct(name, item.sku), uom };
+                }
+                summary[name].qty += Number(item.quantity) || 0;
+                if (item.sku && !summary[name].sku) summary[name].sku = item.sku;
+            });
+        });
+
         // Group by category
         const grouped: Record<string, { product: string; qty: number; sku?: string; uom: string }[]> = {};
         Object.entries(summary).forEach(([product, data]) => {
@@ -541,7 +655,14 @@ const OrderSummary: React.FC<OrderSummaryProps> = ({ user }) => {
         return grouped;
     }, [filteredTrips, activeFactory, activeTaipingWarehouse]);
 
-    // ─── CATEGORIZE PRODUCTS ──────────────────────────────────────────────────
+    function getItemUom(name: string, sku?: string): string {
+        const s = (sku || '').toLowerCase();
+        const lower = name.toLowerCase();
+        if (s.startsWith('bw') || lower.includes('bubble') || lower.includes('layer') || lower.includes('single') || lower.includes('double')) return 'Rolls / 卷';
+        if (s.startsWith('sf') || lower.includes('stretch film') || lower.includes('strecth') || lower.includes('hand roll')) return 'Rolls / 卷';
+        if (lower.includes('tape') || lower.includes('box') || lower.includes('carton') || lower.includes('cukupp')) return 'Boxes / 箱';
+        return 'Units / 件';
+    }
 
     function categorizeProduct(name: string, sku?: string): string {
         const s = (sku || '').toLowerCase();
@@ -1003,16 +1124,28 @@ const OrderSummary: React.FC<OrderSummaryProps> = ({ user }) => {
                 </div>
 
                 {/* ── Kanban Columns ────────────────────────────────────────── */}
-                {loading && filteredTrips.length === 0 ? (
+                {loading && filteredTrips.length === 0 && filteredPickupOrders.length === 0 ? (
                     <div className="text-center py-20 text-slate-500 animate-pulse font-mono text-sm">
                         Loading daily preparation trips...
                     </div>
-                ) : filteredTrips.length === 0 ? (
+                ) : filteredTrips.length === 0 && filteredPickupOrders.length === 0 ? (
                     <div className="text-center py-16 text-slate-600 italic border border-dashed border-slate-800 rounded-2xl">
                         {t('No trips found for {{var0}} on this date.', { var0: activeFactory })}
                     </div>
                 ) : (
                     <div className="grid grid-cols-1 md:grid-cols-2 xl:grid-cols-3 gap-5">
+                        {/* 📦 Customer Self-Pickup Bay Column (Dedicated, not grouped into truck trips) */}
+                        {filteredPickupOrders.length > 0 && (
+                            <SelfPickupColumn
+                                pickupOrders={filteredPickupOrders}
+                                onUploadPhoto={(orderId) => triggerUpload('order', orderId)}
+                                onToggleStaged={handleToggleOrderStaged}
+                                onOpenHandover={(order) => setHandoverTarget(order)}
+                                onPhotoClick={setPreviewImageUrl}
+                                resolveItemName={resolveItemName}
+                            />
+                        )}
+
                         {/* Unassigned Trips Column */}
                         {(() => {
                             const unassignedTrips = filteredTrips.filter(t => !t.driverId);
@@ -1068,6 +1201,19 @@ const OrderSummary: React.FC<OrderSummaryProps> = ({ user }) => {
                     className="hidden"
                     onChange={handlePhotoSelect}
                 />
+
+                {/* Self-Pickup Handover Modal */}
+                {handoverTarget && (
+                    <SelfPickupHandoverModal
+                        order={handoverTarget}
+                        onClose={() => setHandoverTarget(null)}
+                        onSuccess={(orderId, updatePayload) => {
+                            setOrders(prev => prev.map(o => o.id === orderId ? { ...o, ...updatePayload } : o));
+                            setHandoverTarget(null);
+                        }}
+                        resolveItemName={resolveItemName}
+                    />
+                )}
 
                 {/* Image Preview Modal */}
                 {previewImageUrl && (
@@ -1421,6 +1567,463 @@ const TripColumn: React.FC<TripColumnProps> = ({
                     </div>
                 )}
             </Droppable>
+        </div>
+    );
+};
+
+// ─── SELF-PICKUP COLUMN COMPONENT ──────────────────────────────────────────
+
+interface SelfPickupColumnProps {
+    pickupOrders: SelfPickupItem[];
+    onUploadPhoto: (orderId: string) => void;
+    onToggleStaged: (order: SalesOrder) => void;
+    onOpenHandover: (order: SalesOrder) => void;
+    onPhotoClick: (url: string) => void;
+    resolveItemName: (item: { product: string; sku?: string }) => string;
+}
+
+const SelfPickupColumn: React.FC<SelfPickupColumnProps> = ({
+    pickupOrders,
+    onUploadPhoto,
+    onToggleStaged,
+    onOpenHandover,
+    onPhotoClick,
+    resolveItemName
+}) => {
+    const { t } = useTranslation();
+    const totalRolls = pickupOrders.reduce((sum, p) => sum + p.totalRolls, 0);
+    const stagedCount = pickupOrders.filter(p => p.isStaged || p.isDelivered).length;
+
+    const getItemUomShort = (name: string, sku?: string) => {
+        const s = (sku || '').toLowerCase();
+        const lower = name.toLowerCase();
+        if (s.startsWith('bw') || lower.includes('bubble') || lower.includes('layer')) return 'Rolls';
+        if (s.startsWith('sf') || lower.includes('stretch film')) return 'Rolls';
+        if (lower.includes('tape') || lower.includes('box') || lower.includes('carton') || lower.includes('cukupp')) return 'Boxes';
+        return 'Units';
+    };
+
+    return (
+        <div className="bg-slate-900/60 border-2 border-amber-500/30 rounded-2xl p-3 sm:p-4 flex flex-col h-fit shadow-xl">
+            {/* Column Header */}
+            <div className="flex items-center justify-between pb-3 mb-3 border-b border-amber-500/20">
+                <div className="flex items-center gap-2">
+                    <div className="w-8 h-8 rounded-xl bg-amber-500/20 border border-amber-500/30 flex items-center justify-center text-amber-400">
+                        <PackageCheck size={18} />
+                    </div>
+                    <div>
+                        <h2 className="text-sm font-black text-white flex items-center gap-2">
+                            <span>{t('Self-Pickup Bay')}</span>
+                            <span className="text-[10px] px-2 py-0.5 rounded-full bg-amber-500/20 text-amber-300 font-mono font-bold border border-amber-500/40">
+                                {pickupOrders.length} {t('Orders')}
+                            </span>
+                        </h2>
+                        <p className="text-[10px] text-amber-300/70 font-medium">
+                            {t('到厂自提 · 独立核销')} · {stagedCount}/{pickupOrders.length} {t('Staged')}
+                        </p>
+                    </div>
+                </div>
+
+                <div className="text-right">
+                    <span className="text-[9px] font-bold text-slate-400 uppercase tracking-widest block">{t('Total Rolls')}</span>
+                    <span className="text-base font-black text-amber-400 font-mono leading-tight">{totalRolls}</span>
+                </div>
+            </div>
+
+            {/* Orders List */}
+            <div className="space-y-3">
+                {pickupOrders.map(({ order, isStaged, isDelivered, stagedPhotos, vehiclePlate, specialBadges }) => {
+                    return (
+                        <div
+                            key={order.id}
+                            className={`bg-slate-950/80 border rounded-xl p-3.5 transition-all shadow-md ${
+                                isDelivered
+                                    ? 'border-emerald-500/30 opacity-75'
+                                    : isStaged
+                                    ? 'border-emerald-500/60 shadow-[0_0_12px_rgba(16,185,129,0.1)]'
+                                    : 'border-slate-800 hover:border-slate-700'
+                            }`}
+                        >
+                            {/* Card Top: Order Number & Status Badge */}
+                            <div className="flex items-center justify-between gap-2 mb-2">
+                                <div className="flex items-center gap-1.5 min-w-0">
+                                    <span className="font-mono text-xs font-bold text-slate-300 truncate">
+                                        {order.orderNumber}
+                                    </span>
+                                    {vehiclePlate && (
+                                        <span className="text-[9px] px-1.5 py-0.5 rounded bg-blue-500/20 text-blue-300 font-mono font-bold border border-blue-500/30 flex items-center gap-1 shrink-0">
+                                            <Car size={10} />
+                                            {vehiclePlate}
+                                        </span>
+                                    )}
+                                </div>
+
+                                {/* Status Pill */}
+                                {isDelivered ? (
+                                    <span className="px-2 py-0.5 rounded-full text-[10px] font-bold bg-emerald-500/20 text-emerald-400 border border-emerald-500/40 flex items-center gap-1 shrink-0">
+                                        <CheckCircle2 size={11} />
+                                        {t('Delivered')}
+                                    </span>
+                                ) : isStaged ? (
+                                    <button
+                                        type="button"
+                                        onClick={() => onToggleStaged(order)}
+                                        title="Click to revert to pending"
+                                        className="px-2 py-0.5 rounded-full text-[10px] font-bold bg-emerald-500/20 text-emerald-300 border border-emerald-500/40 hover:bg-emerald-500/30 flex items-center gap-1 shrink-0 transition-colors cursor-pointer"
+                                    >
+                                        <CheckCircle2 size={11} className="text-emerald-400" />
+                                        {t('Staged in Bay')}
+                                    </button>
+                                ) : (
+                                    <button
+                                        type="button"
+                                        onClick={() => onToggleStaged(order)}
+                                        title="Click to mark as staged"
+                                        className="px-2 py-0.5 rounded-full text-[10px] font-bold bg-amber-500/10 text-amber-400 border border-amber-500/30 hover:bg-amber-500/20 flex items-center gap-1 shrink-0 transition-colors cursor-pointer"
+                                    >
+                                        <Clock size={11} />
+                                        {t('Pending Prep')}
+                                    </button>
+                                )}
+                            </div>
+
+                            {/* Customer Name */}
+                            <div className="font-black text-sm text-white mb-1.5 flex items-center gap-1.5">
+                                <span className="text-amber-400">👤</span>
+                                <span className="truncate">{order.customer}</span>
+                            </div>
+
+                            {/* Items List */}
+                            <div className="space-y-1 bg-slate-900/50 rounded-lg p-2 mb-2 text-xs border border-white/5">
+                                {(order.items || []).map((it, idx) => (
+                                    <div key={idx} className="flex justify-between items-center text-slate-300">
+                                        <span className="truncate pr-2 font-medium">{resolveItemName(it)}</span>
+                                        <span className="font-mono font-bold text-amber-300 shrink-0">
+                                            {it.quantity} {getItemUomShort(it.product, it.sku)}
+                                        </span>
+                                    </div>
+                                ))}
+                            </div>
+
+                            {/* Notes & Badges */}
+                            <div className="flex flex-wrap items-center gap-1.5 mb-3">
+                                {specialBadges.hasCod && (
+                                    <span className="text-[9px] font-bold px-1.5 py-0.5 rounded bg-amber-500/20 text-amber-300 border border-amber-500/40">
+                                        💵 C.O.D.
+                                    </span>
+                                )}
+                                {specialBadges.hasNightDelivery && (
+                                    <span className="text-[9px] font-bold px-1.5 py-0.5 rounded bg-purple-500/20 text-purple-300 border border-purple-500/40">
+                                        🌙 Malam
+                                    </span>
+                                )}
+                                {order.notes && (
+                                    <span className="text-[10px] text-slate-400 italic line-clamp-1 w-full" title={order.notes}>
+                                        📝 {order.notes}
+                                    </span>
+                                )}
+                            </div>
+
+                            {/* Photos List if any */}
+                            {stagedPhotos.length > 0 && (
+                                <div className="flex items-center gap-1.5 mb-3 overflow-x-auto py-1">
+                                    {stagedPhotos.map((p, pIdx) => (
+                                        <img
+                                            key={pIdx}
+                                            src={p.url}
+                                            alt="Staged cargo"
+                                            onClick={() => onPhotoClick(p.url)}
+                                            className="w-10 h-10 object-cover rounded-lg border border-emerald-500/40 shrink-0 cursor-pointer hover:scale-105 transition-transform"
+                                        />
+                                    ))}
+                                </div>
+                            )}
+
+                            {/* Action Buttons: Two-Stage Workflow */}
+                            <div className="grid grid-cols-2 gap-2 pt-2 border-t border-slate-800/80">
+                                <button
+                                    type="button"
+                                    onClick={() => onUploadPhoto(order.id)}
+                                    className="py-1.5 px-2.5 bg-slate-800 hover:bg-slate-700 active:scale-95 border border-slate-700 rounded-xl text-[10px] font-bold text-slate-300 flex items-center justify-center gap-1.5 transition-all cursor-pointer"
+                                >
+                                    <Camera size={12} className="text-amber-400" />
+                                    <span>{t('Prep Photo')}</span>
+                                </button>
+
+                                {isDelivered ? (
+                                    <button
+                                        type="button"
+                                        disabled
+                                        className="py-1.5 px-2.5 bg-emerald-950/40 border border-emerald-500/30 rounded-xl text-[10px] font-bold text-emerald-400 flex items-center justify-center gap-1"
+                                    >
+                                        <CheckCircle2 size={12} />
+                                        <span>{t('已提货')}</span>
+                                    </button>
+                                ) : (
+                                    <button
+                                        type="button"
+                                        onClick={() => onOpenHandover(order)}
+                                        className="py-1.5 px-2.5 bg-gradient-to-r from-emerald-600 to-teal-600 hover:from-emerald-500 hover:to-teal-500 active:scale-95 text-white font-bold rounded-xl text-[10px] shadow-md flex items-center justify-center gap-1.5 transition-all cursor-pointer"
+                                    >
+                                        <CheckCircle2 size={12} />
+                                        <span>{t('Handover / Release')}</span>
+                                    </button>
+                                )}
+                            </div>
+                        </div>
+                    );
+                })}
+            </div>
+        </div>
+    );
+};
+
+// ─── SELF-PICKUP HANDOVER MODAL COMPONENT ─────────────────────────────────
+
+interface SelfPickupHandoverModalProps {
+    order: SalesOrder;
+    onClose: () => void;
+    onSuccess: (orderId: string, updatedOrder: any) => void;
+    resolveItemName: (item: { product: string; sku?: string }) => string;
+}
+
+const SelfPickupHandoverModal: React.FC<SelfPickupHandoverModalProps> = ({
+    order,
+    onClose,
+    onSuccess,
+    resolveItemName
+}) => {
+    const { t } = useTranslation();
+
+    // Extract default plate from notes (e.g. PGH 9559)
+    const plateMatch = (order.notes || '').match(/\b([A-Z]{1,3}\s*\d{1,4}\s*[A-Z]?)\b/i);
+    const [plate, setPlate] = useState(plateMatch ? plateMatch[1].toUpperCase() : '');
+    const [collector, setCollector] = useState('');
+    const [selectedPhoto, setSelectedPhoto] = useState<File | null>(null);
+    const [photoPreview, setPhotoPreview] = useState<string | null>(null);
+    const [isSubmitting, setIsSubmitting] = useState(false);
+    const fileInputRef = useRef<HTMLInputElement>(null);
+
+    const getItemUomShort = (name: string, sku?: string) => {
+        const s = (sku || '').toLowerCase();
+        const lower = name.toLowerCase();
+        if (s.startsWith('bw') || lower.includes('bubble') || lower.includes('layer')) return 'Rolls';
+        if (s.startsWith('sf') || lower.includes('stretch film')) return 'Rolls';
+        if (lower.includes('tape') || lower.includes('box') || lower.includes('carton') || lower.includes('cukupp')) return 'Boxes';
+        return 'Units';
+    };
+
+    const handlePhotoChange = (e: React.ChangeEvent<HTMLInputElement>) => {
+        const file = e.target.files?.[0];
+        if (file) {
+            setSelectedPhoto(file);
+            const reader = new FileReader();
+            reader.onload = () => setPhotoPreview(reader.result as string);
+            reader.readAsDataURL(file);
+        }
+    };
+
+    const handleConfirmHandover = async () => {
+        setIsSubmitting(true);
+        try {
+            let photoUrl = order.pod_photo_url || null;
+
+            if (selectedPhoto) {
+                const compressed = await compressImage(selectedPhoto);
+                const blob = dataURLtoBlob(compressed);
+                const filename = `handover_${order.id}_${Date.now()}.jpg`;
+
+                const { error: uploadError } = await supabase.storage
+                    .from('work-photos')
+                    .upload(filename, blob, { contentType: 'image/jpeg' });
+
+                if (!uploadError) {
+                    const { data: urlData } = supabase.storage.from('work-photos').getPublicUrl(filename);
+                    photoUrl = urlData.publicUrl;
+                }
+            }
+
+            const now = new Date();
+            const timeStr = now.toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' });
+            const dateStr = now.toISOString().slice(0, 10);
+            const handoverNote = `[Self-Pickup: Plate ${plate.trim() || 'N/A'}, Collector: ${collector.trim() || 'Customer'}, Handed over ${dateStr} ${timeStr}]`;
+            const updatedNotes = order.notes ? `${order.notes}\n${handoverNote}` : handoverNote;
+
+            const updatePayload: any = {
+                status: 'Delivered',
+                pod_photo_url: photoUrl,
+                pod_signed_by: collector.trim() || 'Customer Self-Pickup',
+                pod_timestamp: now.toISOString(),
+                notes: updatedNotes
+            };
+
+            const { error: dbError } = await supabase
+                .from('sales_orders')
+                .update(updatePayload)
+                .eq('id', order.id);
+
+            if (dbError) throw dbError;
+
+            onSuccess(order.id, updatePayload);
+        } catch (err: any) {
+            console.error("Handover error:", err);
+            alert(`Handover failed: ${err.message || 'Unknown error'}`);
+        } finally {
+            setIsSubmitting(false);
+        }
+    };
+
+    return (
+        <div className="fixed inset-0 z-[9999] bg-black/80 backdrop-blur-sm flex items-center justify-center p-4">
+            <div className="bg-slate-900 border border-slate-700 rounded-2xl w-full max-w-lg overflow-hidden shadow-2xl animate-in zoom-in-95 duration-200 flex flex-col max-h-[90vh]">
+                {/* Header */}
+                <div className="p-4 bg-slate-950 border-b border-slate-800 flex items-center justify-between">
+                    <div className="flex items-center gap-2.5">
+                        <div className="w-9 h-9 rounded-xl bg-emerald-500/20 border border-emerald-500/30 flex items-center justify-center text-emerald-400">
+                            <PackageCheck size={20} />
+                        </div>
+                        <div>
+                            <h2 className="text-base font-black text-white">{t('Self-Pickup Handover')}</h2>
+                            <p className="text-xs text-slate-400">
+                                {order.orderNumber} · {order.customer}
+                            </p>
+                        </div>
+                    </div>
+                    <button
+                        type="button"
+                        onClick={onClose}
+                        className="p-1.5 text-slate-400 hover:text-white rounded-lg hover:bg-slate-800 transition cursor-pointer"
+                    >
+                        <X size={18} />
+                    </button>
+                </div>
+
+                {/* Body */}
+                <div className="p-4 sm:p-5 overflow-y-auto space-y-4 text-xs">
+                    {/* Items Recap */}
+                    <div className="bg-slate-950/60 rounded-xl p-3 border border-slate-800">
+                        <span className="text-[10px] font-bold text-slate-400 uppercase tracking-widest block mb-1.5">
+                            {t('Order Items / 提货货物清单')}
+                        </span>
+                        <div className="space-y-1">
+                            {(order.items || []).map((it, idx) => (
+                                <div key={idx} className="flex justify-between items-center text-slate-200">
+                                    <span className="truncate pr-2">{resolveItemName(it)}</span>
+                                    <span className="font-mono font-bold text-amber-300 shrink-0">
+                                        {it.quantity} {getItemUomShort(it.product, it.sku)}
+                                    </span>
+                                </div>
+                            ))}
+                        </div>
+                    </div>
+
+                    {/* Vehicle Plate Input */}
+                    <div>
+                        <label className="block text-[11px] font-bold text-slate-300 uppercase mb-1 flex items-center gap-1.5">
+                            <Car size={13} className="text-blue-400" />
+                            <span>{t('Vehicle Plate Number')}</span>
+                        </label>
+                        <input
+                            type="text"
+                            value={plate}
+                            onChange={(e) => setPlate(e.target.value.toUpperCase())}
+                            placeholder={t('Vehicle Plate Placeholder')}
+                            className="w-full bg-slate-950 border border-slate-700 rounded-xl px-3 py-2.5 text-sm text-white font-mono font-bold uppercase placeholder:text-slate-600 outline-none focus:border-emerald-500 transition"
+                        />
+                        {plateMatch && (
+                            <p className="text-[10px] text-blue-400 mt-1 flex items-center gap-1">
+                                <span>💡</span> 从备注自动识别到车牌: <strong className="font-mono">{plateMatch[1]}</strong>
+                            </p>
+                        )}
+                    </div>
+
+                    {/* Collector Name / Phone */}
+                    <div>
+                        <label className="block text-[11px] font-bold text-slate-300 uppercase mb-1">
+                            {t('Collector Name / Phone')}
+                        </label>
+                        <input
+                            type="text"
+                            value={collector}
+                            onChange={(e) => setCollector(e.target.value)}
+                            placeholder={t('Collector Placeholder')}
+                            className="w-full bg-slate-950 border border-slate-700 rounded-xl px-3 py-2.5 text-xs text-white placeholder:text-slate-600 outline-none focus:border-emerald-500 transition"
+                        />
+                    </div>
+
+                    {/* Photo Proof */}
+                    <div>
+                        <label className="block text-[11px] font-bold text-slate-300 uppercase mb-1 flex items-center gap-1.5">
+                            <Camera size={13} className="text-amber-400" />
+                            <span>{t('Take Photo / Document')}</span>
+                        </label>
+
+                        {photoPreview ? (
+                            <div className="relative rounded-xl overflow-hidden border border-emerald-500/40">
+                                <img src={photoPreview} alt="Handover Preview" className="w-full h-44 object-cover" />
+                                <button
+                                    type="button"
+                                    onClick={() => {
+                                        setSelectedPhoto(null);
+                                        setPhotoPreview(null);
+                                    }}
+                                    className="absolute top-2 right-2 p-1.5 bg-black/70 hover:bg-black text-white rounded-full transition cursor-pointer"
+                                >
+                                    <X size={14} />
+                                </button>
+                            </div>
+                        ) : (
+                            <button
+                                type="button"
+                                onClick={() => fileInputRef.current?.click()}
+                                className="w-full py-4 px-3 border border-dashed border-slate-700 hover:border-emerald-500/60 rounded-xl bg-slate-950/40 hover:bg-slate-950 flex flex-col items-center justify-center gap-1.5 text-slate-400 hover:text-white transition group cursor-pointer"
+                            >
+                                <Camera size={20} className="text-slate-500 group-hover:text-emerald-400 transition" />
+                                <span className="font-bold text-xs">点击拍照或上传装车/签收凭证</span>
+                                <span className="text-[10px] text-slate-500">支持手机相机拍照或相册选择</span>
+                            </button>
+                        )}
+                        <input
+                            ref={fileInputRef}
+                            type="file"
+                            accept="image/*"
+                            capture="environment"
+                            className="hidden"
+                            onChange={handlePhotoChange}
+                        />
+                    </div>
+                </div>
+
+                {/* Footer Buttons */}
+                <div className="p-4 bg-slate-950 border-t border-slate-800 flex items-center justify-end gap-2.5">
+                    <button
+                        type="button"
+                        onClick={onClose}
+                        disabled={isSubmitting}
+                        className="px-4 py-2 bg-slate-800 hover:bg-slate-700 text-slate-300 rounded-xl font-bold text-xs transition cursor-pointer"
+                    >
+                        {t('Cancel/Cancel')}
+                    </button>
+                    <button
+                        type="button"
+                        onClick={handleConfirmHandover}
+                        disabled={isSubmitting}
+                        className="px-5 py-2 bg-gradient-to-r from-emerald-600 to-teal-600 hover:from-emerald-500 hover:to-teal-500 active:scale-95 text-white font-bold text-xs rounded-xl shadow-lg shadow-emerald-950/50 flex items-center gap-1.5 transition disabled:opacity-50 cursor-pointer"
+                    >
+                        {isSubmitting ? (
+                            <>
+                                <RefreshCw size={13} className="animate-spin" />
+                                <span>提交中...</span>
+                            </>
+                        ) : (
+                            <>
+                                <CheckCircle2 size={13} />
+                                <span>{t('Confirm Handover & Complete')}</span>
+                            </>
+                        )}
+                    </button>
+                </div>
+            </div>
         </div>
     );
 };
