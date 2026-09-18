@@ -2144,9 +2144,99 @@ const DeliveryOrderManagement: React.FC<DeliveryOrderManagementProps> = ({ user 
             const items = [...(order.items || [])];
             items[itemIndex] = { ...items[itemIndex], quantity: Math.max(0, newQty) };
             order.items = items;
+            order.doTotal = items.reduce((s, it) => s + (Number(it.quantity) || 0), 0);
             orders[doIndex] = order;
 
             // Recalculate totalRolls for entire trip
+            const newTotalRolls = orders.reduce((sum, o) => {
+                return sum + (o.items || []).reduce((iSum, it) => iSum + (Number(it.quantity) || 0), 0);
+            }, 0);
+
+            return { ...prev, deliveryOrders: orders, totalRolls: newTotalRolls };
+        });
+    };
+
+    const handleUpdateParsedItemName = (doIndex: number, itemIndex: number, newName: string) => {
+        setParsedTripBatch(prev => {
+            if (!prev) return null;
+            const orders = [...prev.deliveryOrders];
+            const order = { ...orders[doIndex] };
+            const items = [...(order.items || [])];
+            items[itemIndex] = { ...items[itemIndex], product: newName, rawProductName: newName };
+            order.items = items;
+            orders[doIndex] = order;
+            return { ...prev, deliveryOrders: orders };
+        });
+    };
+
+    const handleUpdateParsedItemUom = (doIndex: number, itemIndex: number, newUom: string) => {
+        setParsedTripBatch(prev => {
+            if (!prev) return null;
+            const orders = [...prev.deliveryOrders];
+            const order = { ...orders[doIndex] };
+            const items = [...(order.items || [])];
+            items[itemIndex] = { ...items[itemIndex], uom: newUom };
+            order.items = items;
+            orders[doIndex] = order;
+            return { ...prev, deliveryOrders: orders };
+        });
+    };
+
+    const handleDeleteParsedItem = (doIndex: number, itemIndex: number) => {
+        setParsedTripBatch(prev => {
+            if (!prev) return null;
+            const orders = [...prev.deliveryOrders];
+            const order = { ...orders[doIndex] };
+            const items = (order.items || []).filter((_, idx) => idx !== itemIndex);
+            order.items = items;
+            order.doTotal = items.reduce((s, it) => s + (Number(it.quantity) || 0), 0);
+            orders[doIndex] = order;
+
+            const newTotalRolls = orders.reduce((sum, o) => {
+                return sum + (o.items || []).reduce((iSum, it) => iSum + (Number(it.quantity) || 0), 0);
+            }, 0);
+
+            return { ...prev, deliveryOrders: orders, totalRolls: newTotalRolls };
+        });
+    };
+
+    const handleAddNewParsedItem = (doIndex: number) => {
+        setParsedTripBatch(prev => {
+            if (!prev) return null;
+            const orders = [...prev.deliveryOrders];
+            const order = { ...orders[doIndex] };
+            const defaultLoc = getDefaultLocForOrigin(parsedTripOrigin);
+            const newItem: ParsedDOItem = {
+                product: '',
+                rawProductName: '',
+                quantity: 1,
+                uom: 'Rolls',
+                sku: '',
+                sourceLocation: defaultLoc,
+                isMatched: false
+            };
+            const items = [...(order.items || []), newItem];
+            order.items = items;
+            order.doTotal = items.reduce((s, it) => s + (Number(it.quantity) || 0), 0);
+            orders[doIndex] = order;
+
+            const newTotalRolls = orders.reduce((sum, o) => {
+                return sum + (o.items || []).reduce((iSum, it) => iSum + (Number(it.quantity) || 0), 0);
+            }, 0);
+
+            return { ...prev, deliveryOrders: orders, totalRolls: newTotalRolls };
+        });
+    };
+
+    const handleClearParsedItems = (doIndex: number) => {
+        setParsedTripBatch(prev => {
+            if (!prev) return null;
+            const orders = [...prev.deliveryOrders];
+            const order = { ...orders[doIndex] };
+            order.items = [];
+            order.doTotal = 0;
+            orders[doIndex] = order;
+
             const newTotalRolls = orders.reduce((sum, o) => {
                 return sum + (o.items || []).reduce((iSum, it) => iSum + (Number(it.quantity) || 0), 0);
             }, 0);
@@ -2309,7 +2399,7 @@ const DeliveryOrderManagement: React.FC<DeliveryOrderManagementProps> = ({ user 
                             product: it.product,
                             quantity: Number(it.quantity) || 1,
                             sku: it.sku || '',
-                            packaging: 'Unit',
+                            packaging: it.uom || 'Unit',
                             sourceLocation: loc
                         };
                     }),
@@ -3468,14 +3558,28 @@ const DeliveryOrderManagement: React.FC<DeliveryOrderManagementProps> = ({ user 
         o.status === 'Pending Approval'
     );
 
-    const filteredDriversForModal = drivers.filter(d => 
-        (d.base_location || 'Taiping').toUpperCase() === tripOrigin.toUpperCase()
-    );
+    // Driver & Lorry options for modals (include all hubs, prioritize matching hub at top, never hide)
+    const allDriversForModal = [...drivers].sort((a, b) => {
+        const aMatch = (a.base_location || 'Taiping').toUpperCase() === tripOrigin.toUpperCase() ? 0 : 1;
+        const bMatch = (b.base_location || 'Taiping').toUpperCase() === tripOrigin.toUpperCase() ? 0 : 1;
+        if (aMatch !== bMatch) return aMatch - bMatch;
+        return (a.name || '').localeCompare(b.name || '');
+    });
 
-    const filteredLorriesForModal = lorries.filter(l => {
-        if (!l.driverUserId) return true;
-        const d = drivers.find(x => x.uid === l.driverUserId);
-        return d ? (d.base_location || 'Taiping').toUpperCase() === tripOrigin.toUpperCase() : true;
+    const allLorriesForModal = [...lorries].sort((a, b) => {
+        const aDriver = drivers.find(x => x.uid === a.driverUserId);
+        const bDriver = drivers.find(x => x.uid === b.driverUserId);
+        const aMatch = (aDriver?.base_location || 'Taiping').toUpperCase() === tripOrigin.toUpperCase() ? 0 : 1;
+        const bMatch = (bDriver?.base_location || 'Taiping').toUpperCase() === tripOrigin.toUpperCase() ? 0 : 1;
+        if (aMatch !== bMatch) return aMatch - bMatch;
+        return (a.plateNumber || '').localeCompare(b.plateNumber || '');
+    });
+
+    const allDriversForParsedModal = [...drivers].sort((a, b) => {
+        const aMatch = (a.base_location || 'Taiping').toUpperCase() === parsedTripOrigin.toUpperCase() ? 0 : 1;
+        const bMatch = (b.base_location || 'Taiping').toUpperCase() === parsedTripOrigin.toUpperCase() ? 0 : 1;
+        if (aMatch !== bMatch) return aMatch - bMatch;
+        return (a.name || '').localeCompare(b.name || '');
     });
 
     const modalLorry = lorries.find(l => l.id === selectedLorryId);
@@ -5314,7 +5418,7 @@ const DeliveryOrderManagement: React.FC<DeliveryOrderManagementProps> = ({ user 
                                                              }}
                                                          >
                                                              <option value="">-- Select Lorry --</option>
-                                                             {filteredLorriesForModal.map(l => (
+                                                             {allLorriesForModal.map(l => (
                                                                  <option key={l.id} value={l.id}>
                                                                      {l.plateNumber} {l.driverName ? `(${l.driverName})` : ''}
                                                                  </option>
@@ -5352,9 +5456,9 @@ const DeliveryOrderManagement: React.FC<DeliveryOrderManagementProps> = ({ user 
                                                              }}
                                                          >
                                                              <option value="">-- Select Driver --</option>
-                                                             {filteredDriversForModal.map(d => (
+                                                             {allDriversForModal.map(d => (
                                                                  <option key={d.uid} value={d.uid}>
-                                                                     {d.name || d.email}
+                                                                     {d.name || d.email} ({d.base_location || 'Taiping'})
                                                                  </option>
                                                              ))}
                                                          </select>
@@ -6187,57 +6291,34 @@ const DeliveryOrderManagement: React.FC<DeliveryOrderManagementProps> = ({ user 
                                                 className="w-full bg-slate-950/60 border border-slate-800 rounded-xl px-3 py-2 text-xs text-amber-400/80 font-bold italic cursor-not-allowed"
                                             />
                                         ) : (
-                                            <input
-                                                type="text"
-                                                list="modal-driver-datalist"
-                                                className="w-full bg-slate-950 border border-slate-700/80 rounded-xl px-3 py-2 text-xs text-slate-200 outline-none focus:border-blue-500 placeholder:text-slate-600"
-                                                placeholder={t('-- 输入或选择司机姓名 --')}
-                                                value={drivers.find(d => d.uid === parsedDriverId)?.name || parsedDriverId || ''}
+                                            <select
+                                                className="w-full bg-slate-950 border border-slate-700/80 rounded-xl px-3 py-2 text-xs text-slate-200 outline-none focus:border-blue-500 cursor-pointer"
+                                                value={parsedDriverId}
                                                 onChange={e => {
-                                                    const val = e.target.value;
-                                                    const matched = drivers.find(d => 
-                                                        d.name?.toLowerCase() === val.toLowerCase() || 
-                                                        d.uid === val ||
-                                                        `${d.name || d.email} (${d.base_location || 'Taiping'})`.toLowerCase() === val.toLowerCase()
-                                                    );
-                                                    if (matched) {
-                                                        setParsedDriverId(matched.uid);
-                                                        const matchedLorry = lorries.find(l => l.driverUserId === matched.uid);
+                                                    const driverId = e.target.value;
+                                                    setParsedDriverId(driverId);
+                                                    if (driverId) {
+                                                        const matchedLorry = lorries.find(l => l.driverUserId === driverId);
                                                         if (matchedLorry) setParsedLorryId(matchedLorry.id);
-                                                        if (matched.base_location && matched.base_location.trim().toLowerCase() !== parsedTripOrigin.toLowerCase()) {
-                                                            handleUpdateParsedTripOrigin(matched.base_location.trim());
+                                                        const d = drivers.find(x => x.uid === driverId);
+                                                        if (d?.base_location && d.base_location.trim().toLowerCase() !== parsedTripOrigin.toLowerCase()) {
+                                                            handleUpdateParsedTripOrigin(d.base_location.trim());
                                                             setToast({
-                                                                message: `🚚 已根据司机 ${matched.name || ''} 基地自动将出发厂区切换为 [${matched.base_location}] 并更新仓库分配！`,
+                                                                message: `🚚 已根据司机 ${d.name || ''} 基地自动将出发厂区切换为 [${d.base_location}] 并更新仓库分配！`,
                                                                 type: 'info'
                                                             });
                                                         }
-                                                    } else if (!val) {
-                                                        setParsedDriverId('');
-                                                    } else {
-                                                        const partial = drivers.find(d => d.name?.toLowerCase().includes(val.toLowerCase()));
-                                                        if (partial) {
-                                                            setParsedDriverId(partial.uid);
-                                                            if (partial.base_location && partial.base_location.trim().toLowerCase() !== parsedTripOrigin.toLowerCase()) {
-                                                                handleUpdateParsedTripOrigin(partial.base_location.trim());
-                                                                setToast({
-                                                                    message: `🚚 已根据司机 ${partial.name || ''} 基地自动将出发厂区切换为 [${partial.base_location}] 并更新仓库分配！`,
-                                                                    type: 'info'
-                                                                });
-                                                            }
-                                                        } else {
-                                                            setParsedDriverId(val);
-                                                        }
                                                     }
                                                 }}
-                                            />
+                                            >
+                                                <option value="">{t('-- 选择司机 (可选) --')}</option>
+                                                {allDriversForParsedModal.map(d => (
+                                                    <option key={d.uid} value={d.uid}>
+                                                        {d.name || d.email} ({d.base_location || 'Taiping'})
+                                                    </option>
+                                                ))}
+                                            </select>
                                         )}
-                                        <datalist id="modal-driver-datalist">
-                                            {drivers.map(d => (
-                                                <option key={d.uid} value={d.name || d.email || ''}>
-                                                    {d.name || d.email} ({d.base_location || 'Taiping'})
-                                                </option>
-                                            ))}
-                                        </datalist>
                                     </div>
 
                                     <div>
@@ -6252,37 +6333,19 @@ const DeliveryOrderManagement: React.FC<DeliveryOrderManagementProps> = ({ user 
                                                 className="w-full bg-slate-950/60 border border-slate-800 rounded-xl px-3 py-2 text-xs text-amber-400/80 font-mono italic cursor-not-allowed"
                                             />
                                         ) : (
-                                            <input
-                                                type="text"
-                                                list="modal-lorry-datalist"
-                                                className="w-full bg-slate-950 border border-slate-700/80 rounded-xl px-3 py-2 text-xs text-slate-200 outline-none focus:border-blue-500 placeholder:text-slate-600"
-                                                placeholder={t('-- 输入或选择车牌 --')}
-                                                value={lorries.find(l => l.id === parsedLorryId)?.plateNumber || parsedLorryId || ''}
-                                                onChange={e => {
-                                                    const val = e.target.value;
-                                                    const matched = lorries.find(l => 
-                                                        l.plateNumber?.toLowerCase() === val.toLowerCase() || 
-                                                        l.id === val ||
-                                                        `${l.plateNumber} ${(l as any).capacity ? `(${(l as any).capacity} rolls)` : ''}`.toLowerCase() === val.toLowerCase()
-                                                    );
-                                                    if (matched) {
-                                                        setParsedLorryId(matched.id);
-                                                    } else if (!val) {
-                                                        setParsedLorryId('');
-                                                    } else {
-                                                        const partial = lorries.find(l => l.plateNumber?.toLowerCase().includes(val.toLowerCase()));
-                                                        setParsedLorryId(partial ? partial.id : val);
-                                                    }
-                                                }}
-                                            />
+                                            <select
+                                                className="w-full bg-slate-950 border border-slate-700/80 rounded-xl px-3 py-2 text-xs text-slate-200 outline-none focus:border-blue-500 cursor-pointer"
+                                                value={parsedLorryId}
+                                                onChange={e => setParsedLorryId(e.target.value)}
+                                            >
+                                                <option value="">{t('-- 选择车牌 (可选) --')}</option>
+                                                {allLorriesForModal.map(l => (
+                                                    <option key={l.id} value={l.id}>
+                                                        {l.plateNumber} {l.driverName ? `(${l.driverName})` : ''} {(l as any).capacity ? `· ${(l as any).capacity} rolls` : ''}
+                                                    </option>
+                                                ))}
+                                            </select>
                                         )}
-                                        <datalist id="modal-lorry-datalist">
-                                            {lorries.map(l => (
-                                                <option key={l.id} value={l.plateNumber}>
-                                                    {l.plateNumber} {(l as any).capacity ? `(${(l as any).capacity} rolls)` : ''}
-                                                </option>
-                                            ))}
-                                        </datalist>
                                     </div>
 
                                     <div>
@@ -6530,85 +6593,136 @@ const DeliveryOrderManagement: React.FC<DeliveryOrderManagementProps> = ({ user 
                                                 />
                                             </div>
 
-                                            {/* Items List with Standard SKU Selector */}
-                                            {doItem.items && doItem.items.length > 0 && (
-                                                <div className="pt-2 border-t border-slate-800/60 space-y-2">
-                                                    <div className="flex flex-wrap items-center justify-between gap-1 text-[10px]">
-                                                        <span className="font-bold text-slate-400 uppercase tracking-wider flex items-center gap-1.5">
-                                                            <span>{t('Items & SKU Mapping / 货物与料号对应')} ({doItem.items.length})</span>
-                                                        </span>
-                                                        <span className="text-slate-400 text-[10px]">
-                                                            💡 {t('确认车次后将自动沉淀为该客户专属映射，下次自动对齐')}
-                                                        </span>
+                                            {/* Items List with Standard SKU Selector & Flexible Edit */}
+                                            <div className="pt-2 border-t border-slate-800/60 space-y-2">
+                                                <div className="flex flex-wrap items-center justify-between gap-1 text-[10px]">
+                                                    <span className="font-bold text-slate-400 uppercase tracking-wider flex items-center gap-1.5">
+                                                        <span>{t('Items & SKU Mapping / 货物与料号对应')} ({doItem.items?.length || 0})</span>
+                                                    </span>
+                                                    <span className="text-slate-400 text-[10px]">
+                                                        💡 {t('可自由增删商品或修改品名/数量/料号，确认车次后将自动沉淀映射')}
+                                                    </span>
+                                                </div>
+
+                                                {(!doItem.items || doItem.items.length === 0) ? (
+                                                    <div className="p-3 rounded-xl bg-amber-950/20 border border-dashed border-amber-500/30 text-amber-300 text-xs flex items-center justify-between">
+                                                        <span>⚠️ {t('此停靠点暂无货品，请点击下方“+ 添加货品”手动录入。')}</span>
                                                     </div>
+                                                ) : (
                                                     <div className="grid grid-cols-1 gap-2">
                                                         {doItem.items.map((it, itemIdx) => (
                                                             <div
                                                                 key={itemIdx}
-                                                                className="flex flex-col sm:flex-row sm:items-center justify-between gap-2 p-2 rounded-lg bg-slate-950/80 border border-slate-800/80 text-xs"
+                                                                className="flex flex-col lg:flex-row lg:items-center justify-between gap-2.5 p-2.5 rounded-xl bg-slate-950/80 border border-slate-800/80 hover:border-slate-700/80 text-xs transition-all"
                                                             >
-                                                                <div className="flex items-center gap-2 min-w-0 flex-1">
-                                                                    <div className="flex items-center gap-1 shrink-0 bg-slate-900 border border-amber-500/40 rounded-lg px-2 py-0.5">
+                                                                {/* Qty, UOM, and Product Name (Editable) */}
+                                                                <div className="flex flex-wrap items-center gap-2 min-w-0 flex-1">
+                                                                    <div className="flex items-center gap-1 shrink-0 bg-slate-900 border border-amber-500/40 rounded-lg px-2 py-1">
                                                                         <span className="text-[10px] font-black text-amber-400">Qty:</span>
                                                                         <input
                                                                             type="number"
-                                                                            min="1"
-                                                                            className="w-14 bg-transparent text-xs font-mono font-black text-amber-300 outline-none text-center"
+                                                                            min="0"
+                                                                            className="w-12 bg-transparent text-xs font-mono font-black text-amber-300 outline-none text-center"
                                                                             value={it.quantity}
                                                                             onChange={e => handleUpdateParsedItemQty(idx, itemIdx, Number(e.target.value) || 0)}
                                                                         />
-                                                                        <span className="text-[10px] text-slate-400 font-bold">{it.uom || t('Rolls')}</span>
                                                                     </div>
-                                                                    <div className="truncate min-w-0 flex-1">
-                                                                        <span className="font-semibold text-white block truncate" title={it.rawProductName || it.product}>
-                                                                            {it.rawProductName || it.product}
-                                                                        </span>
-                                                                        {it.rawProductName && it.rawProductName !== it.product && (
-                                                                            <span className="text-[10px] text-slate-400 block truncate">
-                                                                                {t('Standard Product')}: {it.product}
-                                                                            </span>
-                                                                        )}
+
+                                                                    <select
+                                                                        className="bg-slate-900 border border-slate-700 rounded-lg px-2 py-1 text-xs font-bold text-slate-300 outline-none cursor-pointer shrink-0"
+                                                                        value={it.uom || 'Rolls'}
+                                                                        onChange={e => handleUpdateParsedItemUom(idx, itemIdx, e.target.value)}
+                                                                    >
+                                                                        <option value="Rolls">{t('Rolls / 卷')}</option>
+                                                                        <option value="Box">{t('Box / 箱')}</option>
+                                                                        <option value="Units">{t('Units / 件')}</option>
+                                                                    </select>
+
+                                                                    <div className="min-w-0 flex-1">
+                                                                        <input
+                                                                            type="text"
+                                                                            className="w-full bg-slate-900 border border-slate-700 focus:border-blue-500 rounded-lg px-2.5 py-1 text-xs font-medium text-white outline-none placeholder:text-slate-600"
+                                                                            placeholder={t('Product description / 货品名称描述')}
+                                                                            value={it.product || it.rawProductName || ''}
+                                                                            onChange={e => handleUpdateParsedItemName(idx, itemIdx, e.target.value)}
+                                                                            title={it.rawProductName || it.product}
+                                                                        />
                                                                     </div>
                                                                 </div>
 
+                                                                {/* SKU, Warehouse & Delete action */}
                                                                 <div className="flex flex-wrap items-center gap-2 shrink-0">
-                                                                    <div className="flex items-center gap-1.5 shrink-0">
+                                                                    <div className="flex items-center gap-1 shrink-0">
                                                                         <label className="text-[10px] font-bold text-slate-400 uppercase">
                                                                             SKU:
                                                                         </label>
                                                                         <input
                                                                             type="text"
                                                                             list="global-v2items-datalist"
-                                                                            className={`px-2.5 py-1 rounded-lg text-xs font-mono font-bold outline-none transition-all w-44 sm:w-56 ${
+                                                                            className={`px-2 py-1 rounded-lg text-xs font-mono font-bold outline-none transition-all w-36 sm:w-44 ${
                                                                                 it.sku
                                                                                     ? 'bg-emerald-950/40 border border-emerald-500/40 text-emerald-300 focus:border-emerald-400'
-                                                                                    : 'bg-amber-950/40 border border-amber-500/50 text-amber-300 focus:border-amber-400 animate-pulse'
+                                                                                    : 'bg-amber-950/40 border border-amber-500/50 text-amber-300 focus:border-amber-400'
                                                                             }`}
-                                                                            placeholder={t('-- 输入或选择标准料号 --')}
+                                                                            placeholder={t('-- 标准料号 --')}
                                                                             value={it.sku ? `${it.sku} - ${it.product || ''}` : ''}
                                                                             onChange={e => handleUpdateParsedItemSku(idx, itemIdx, e.target.value)}
                                                                         />
                                                                     </div>
 
-                                                                    <div className="flex items-center gap-1.5 shrink-0">
+                                                                    <div className="flex items-center gap-1 shrink-0">
                                                                         <label className="text-[10px] font-bold text-slate-400 uppercase">
-                                                                            {t('Warehouse')}:
+                                                                            {t('Whs')}:
                                                                         </label>
                                                                         <input
                                                                             type="text"
                                                                             list="modal-warehouse-datalist"
-                                                                            className="px-2 py-1 rounded-lg text-xs font-bold bg-slate-900 border border-slate-700 text-blue-400 outline-none focus:border-blue-500 w-28 sm:w-32"
+                                                                            className="px-2 py-1 rounded-lg text-xs font-bold bg-slate-900 border border-slate-700 text-blue-400 outline-none focus:border-blue-500 w-24 sm:w-28"
                                                                             value={it.sourceLocation || guessItemLocation(it, parsedTripOrigin)}
                                                                             onChange={e => handleUpdateParsedItemLocation(idx, itemIdx, e.target.value)}
                                                                             placeholder="Warehouse"
                                                                         />
                                                                     </div>
+
+                                                                    <button
+                                                                        type="button"
+                                                                        onClick={() => handleDeleteParsedItem(idx, itemIdx)}
+                                                                        className="p-1.5 rounded-lg bg-red-500/10 hover:bg-red-500/20 text-red-400 hover:text-red-300 transition-colors shrink-0"
+                                                                        title={t('Delete item / 删除货品')}
+                                                                    >
+                                                                        <Trash2 size={13} />
+                                                                    </button>
                                                                 </div>
                                                             </div>
                                                         ))}
                                                     </div>
+                                                )}
+
+                                                {/* Bottom Action Toolbar for each DO */}
+                                                <div className="flex flex-wrap items-center justify-between gap-2 pt-1 border-t border-slate-800/40">
+                                                    <button
+                                                        type="button"
+                                                        onClick={() => handleAddNewParsedItem(idx)}
+                                                        className="px-3 py-1.5 rounded-lg bg-blue-600/20 hover:bg-blue-600/30 border border-blue-500/40 text-blue-300 font-bold text-xs flex items-center gap-1.5 transition-all active:scale-95"
+                                                    >
+                                                        <Plus size={13} />
+                                                        <span>{t('+ 添加货品 (+ Add Product)')}</span>
+                                                    </button>
+                                                    {doItem.items && doItem.items.length > 0 && (
+                                                        <button
+                                                            type="button"
+                                                            onClick={() => {
+                                                                if (confirm(t('确定清空此停靠点的全部货品吗？\nAre you sure you want to clear all items for this drop?'))) {
+                                                                    handleClearParsedItems(idx);
+                                                                }
+                                                            }}
+                                                            className="px-2.5 py-1 rounded-lg hover:bg-red-500/10 text-slate-500 hover:text-red-400 text-xs font-medium transition-colors"
+                                                        >
+                                                            {t('清空货品 (Clear All)')}
+                                                        </button>
+                                                    )}
                                                 </div>
-                                            )}
+                                            </div>
                                         </div>
                                     ))}
                                 </div>

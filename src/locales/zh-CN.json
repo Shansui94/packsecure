@@ -1330,6 +1330,14 @@
   "Upload DO & Photos (Max 15)": "上传单据与照片 (上限15张)",
   "Handwritten Note / Temp Add-on": "手写便签 / 临时加单",
   "Exchange (Return Goods)": "换货 (含取旧货)",
-  "Driver Return Goods Task": "司机取回旧货须知",
-  "Return task: Driver must collect old goods from customer and upload photo proof upon delivery.": "送达新货时，请司机务必向客户取回旧货，并在司机端拍照留证。"
+  "Return task: Driver must collect old goods from customer and upload photo proof upon delivery.": "送达新货时，请司机务必向客户取回旧货，并在司机端拍照留证。",
+  "+ 添加货品 (+ Add Product)": "+ 添加货品",
+  "清空货品 (Clear All)": "清空全部货品",
+  "Product description / 货品名称描述": "商品品名 / 规格描述",
+  "-- 选择司机 (可选) --": "-- 选择司机 (可选) --",
+  "-- 选择车牌 (可选) --": "-- 选择车牌 (可选) --",
+  "Delete item / 删除货品": "删除此货品",
+  "Rolls / 卷": "卷 (Rolls)",
+  "Box / 箱": "箱 (Box)",
+  "Units / 件": "件 (Units)"
 }

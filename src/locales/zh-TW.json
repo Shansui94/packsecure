@@ -1281,5 +1281,14 @@
   "Handwritten Note / Temp Add-on": "手寫便簽 / 臨時加單",
   "Exchange (Return Goods)": "換貨 (含取舊貨)",
   "Driver Return Goods Task": "司機取回舊貨須知",
-  "Return task: Driver must collect old goods from customer and upload photo proof upon delivery.": "送達新貨時，請司機務必向客戶取回舊貨，並在司機端拍照留證。"
+  "Return task: Driver must collect old goods from customer and upload photo proof upon delivery.": "送達新貨時，請司機務必向客戶取回舊貨，並在司機端拍照留證。",
+  "+ 添加货品 (+ Add Product)": "+ 添加貨品",
+  "清空货品 (Clear All)": "清空全部貨品",
+  "Product description / 货品名称描述": "商品品名 / 規格描述",
+  "-- 选择司机 (可选) --": "-- 選擇司機 (可選) --",
+  "-- 选择车牌 (可选) --": "-- 選擇車牌 (可選) --",
+  "Delete item / 删除货品": "刪除此貨品",
+  "Rolls / 卷": "卷 (Rolls)",
+  "Box / 箱": "箱 (Box)",
+  "Units / 件": "件 (Units)"
 }

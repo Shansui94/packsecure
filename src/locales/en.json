@@ -1331,5 +1331,14 @@
   "Handwritten Note / Temp Add-on": "Handwritten Note / Temp Add-on",
   "Exchange (Return Goods)": "Exchange (Return Goods)",
   "Driver Return Goods Task": "Driver Return Goods Task",
-  "Return task: Driver must collect old goods from customer and upload photo proof upon delivery.": "Return task: Driver must collect old goods from customer and upload photo proof upon delivery."
+  "Return task: Driver must collect old goods from customer and upload photo proof upon delivery.": "Return task: Driver must collect old goods from customer and upload photo proof upon delivery.",
+  "+ 添加货品 (+ Add Product)": "+ Add Product",
+  "清空货品 (Clear All)": "Clear All Items",
+  "Product description / 货品名称描述": "Product description / item name",
+  "-- 选择司机 (可选) --": "-- Select Driver (Optional) --",
+  "-- 选择车牌 (可选) --": "-- Select Lorry (Optional) --",
+  "Delete item / 删除货品": "Delete item",
+  "Rolls / 卷": "Rolls",
+  "Box / 箱": "Box",
+  "Units / 件": "Units"
 }

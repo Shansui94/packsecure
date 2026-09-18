@@ -1280,5 +1280,14 @@
   "Handwritten Note / Temp Add-on": "လက်ရေးမှတ်စု / ယာယီထည့်သွင်းမှု",
   "Exchange (Return Goods)": "ပစ္စည်းလဲလှယ်ခြင်း (ပြန်ယူရန်)",
   "Driver Return Goods Task": "ယာဉ်မောင်း ပစ္စည်းပြန်ယူရန် ညွှန်ကြားချက်",
-  "Return task: Driver must collect old goods from customer and upload photo proof upon delivery.": "ပို့ဆောင်စဉ် ယာဉ်မောင်းသည် သုံးစွဲသူထံမှ ပစ္စည်းဟောင်း ပြန်ယူပြီး ဓာတ်ပုံမှတ်တမ်း တင်ရမည်။"
+  "Return task: Driver must collect old goods from customer and upload photo proof upon delivery.": "ပို့ဆောင်စဉ် ယာဉ်မောင်းသည် သုံးစွဲသူထံမှ ပစ္စည်းဟောင်း ပြန်ယူပြီး ဓာတ်ပုံမှတ်တမ်း တင်ရမည်။",
+  "+ 添加货品 (+ Add Product)": "+ ထုတ်ကုန်အသစ်ထည့်ရန်",
+  "清空货品 (Clear All)": "အားလုံးရှင်းလင်းမည်",
+  "Product description / 货品名称描述": "ထုတ်ကုန်ဖော်ပြချက် / အမည်",
+  "-- 选择司机 (可选) --": "-- ယာဉ်မောင်းရွေးချယ်ပါ (စိတ်ကြိုက်) --",
+  "-- 选择车牌 (可选) --": "-- လော်ရီကားရွေးချယ်ပါ (စိတ်ကြိုက်) --",
+  "Delete item / 删除货品": "ဤပစ္စည်းကိုဖျက်မည်",
+  "Rolls / 卷": "လိပ် (Rolls)",
+  "Box / 箱": "သေတ္တာ (Box)",
+  "Units / 件": "ခု (Units)"
 }

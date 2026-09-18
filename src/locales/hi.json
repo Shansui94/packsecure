@@ -1280,5 +1280,14 @@
   "Handwritten Note / Temp Add-on": "हस्तलिखित नोट / अस्थायी जोड़",
   "Exchange (Return Goods)": "विनिमय (सामान वापसी)",
   "Driver Return Goods Task": "ड्राइवर वापसी कार्य",
-  "Return task: Driver must collect old goods from customer and upload photo proof upon delivery.": "डिलीवरी पर, ड्राइवर को ग्राहक से पुराना सामान वापस लेना होगा और फोटो प्रमाण अपलोड करना होगा।"
+  "Return task: Driver must collect old goods from customer and upload photo proof upon delivery.": "डिलीवरी पर, ड्राइवर को ग्राहक से पुराना सामान वापस लेना होगा और फोटो प्रमाण अपलोड करना होगा।",
+  "+ 添加货品 (+ Add Product)": "+ उत्पाद जोड़ें",
+  "清空货品 (Clear All)": "सभी आइटम साफ़ करें",
+  "Product description / 货品名称描述": "उत्पाद विवरण / नाम",
+  "-- 选择司机 (可选) --": "-- ड्राइवर चुनें (वैकल्पिक) --",
+  "-- 选择车牌 (可选) --": "-- लॉरी चुनें (वैकल्पिक) --",
+  "Delete item / 删除货品": "यह आइटम हटाएं",
+  "Rolls / 卷": "रोल (Rolls)",
+  "Box / 箱": "बॉक्स (Box)",
+  "Units / 件": "इकाई (Units)"
 }

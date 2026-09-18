@@ -126,6 +126,37 @@ export const countCompletedDrops = (podPhotoUrl?: string | null): number => {
     return count;
 };
 
+// Helper to extract trip number or tag from order notes
+export const extractTripIdentifier = (notes?: string | null): { tripSeq?: number; tripTag?: string } => {
+    if (!notes) return {};
+    const lower = notes.toLowerCase();
+
+    // 1. Check bracket format: [Trip: trip 2 malam hantar]
+    const mBracket = notes.match(/\[Trip:\s*([^\]]+)\]/i);
+    if (mBracket) {
+        const content = mBracket[1].trim();
+        const numMatch = content.match(/\b(\d+)\b/);
+        if (numMatch) {
+            return { tripSeq: parseInt(numMatch[1], 10), tripTag: `Trip ${numMatch[1]}` };
+        }
+        return { tripTag: content };
+    }
+
+    // 2. Check "trip 1", "trip 2", "trip 3"
+    const mTrip = lower.match(/\btrip\s*(\d+)\b/);
+    if (mTrip) {
+        return { tripSeq: parseInt(mTrip[1], 10), tripTag: `Trip ${mTrip[1]}` };
+    }
+
+    // 3. Check "1p", "2p", "3p" (Malaysian pusingan / trip shorthand)
+    const mP = lower.match(/\b(\d+)\s*p\b/);
+    if (mP) {
+        return { tripSeq: parseInt(mP[1], 10), tripTag: `Trip ${mP[1]}` };
+    }
+
+    return {};
+};
+
 const DriverDelivery: React.FC<DriverDeliveryProps> = ({ user }) => {
     // State
     const [tasks, setTasks] = useState<SalesOrder[]>([]);
@@ -1610,7 +1641,6 @@ const DriverDelivery: React.FC<DriverDeliveryProps> = ({ user }) => {
 
     const tripGroups = React.useMemo<DriverTripGroup[]>(() => {
         const multiDropMap = new Map<string, DriverTripGroup>();
-        const singleOrders: SalesOrder[] = [];
         const extraJobOrders: SalesOrder[] = [];
 
         // Helper to compute items breakdown
@@ -1638,22 +1668,53 @@ const DriverDelivery: React.FC<DriverDeliveryProps> = ({ user }) => {
             return { cargoBreakdown, totalRolls };
         };
 
-        // Classify orders
+        // Classify and Smart-Group orders into Trips
         tasks.forEach(order => {
             const isExtraJob = (order as any).job_type === 'Extra Job' || (order as any).job_type === 'Pick Up' || order.orderNumber?.startsWith('TRIP-JOB') || order.orderNumber?.startsWith('TRIP-PU');
             const tripId = (order as any).trip_id;
 
             if (isExtraJob) {
                 extraJobOrders.push(order);
-            } else if (tripId) {
-                if (!multiDropMap.has(tripId)) {
+            } else {
+                let groupKey = '';
+                let tripNum = '';
+                let tripIndexLabel: string | undefined = undefined;
+                let sortSeq = 999;
+                const tripOrigin = (order as any).trip_origin;
+                const deliveryDate = (order as any).deliveryDate || (order as any).deadline || (order as any).orderDate;
+
+                if (tripId) {
+                    groupKey = `trip_${tripId}`;
                     const v2Trip = tripsV2List.find(t => t.id === tripId);
-                    const tripNum = v2Trip?.trip_number || (order as any).trip_number || (order.orderNumber ? `TRIP-${order.orderNumber}` : `TRIP-${tripId.slice(0, 8)}`);
+                    tripNum = v2Trip?.trip_number || (order as any).trip_number || (order.orderNumber ? `TRIP-${order.orderNumber}` : `TRIP-${tripId.slice(0, 8)}`);
+                    if ((v2Trip as any)?.trip_sequence && Number((v2Trip as any).trip_sequence) !== 999) {
+                        sortSeq = Number((v2Trip as any).trip_sequence);
+                        tripIndexLabel = `Trip ${sortSeq}`;
+                    }
+                } else {
+                    // Smart grouping for orders without trip_id (matches OrderSummary logic)
+                    const dateKey = (deliveryDate || '').slice(0, 10);
+                    const extracted = extractTripIdentifier(order.notes);
+                    const isExplicitSeq = (order as any).tripSequence && (order as any).tripSequence !== 999 
+                        ? (order as any).tripSequence 
+                        : ((order as any).trip_sequence && (order as any).trip_sequence !== 999 ? (order as any).trip_sequence : null);
+                    const tripTag = extracted.tripTag || (isExplicitSeq ? `Trip ${isExplicitSeq}` : 'Trip 1');
+                    const seq = extracted.tripSeq || (isExplicitSeq ? Number(isExplicitSeq) : 1);
                     
-                    multiDropMap.set(tripId, {
-                        key: `trip_${tripId}`,
-                        tripId,
+                    groupKey = `smart_trip_${dateKey || 'nodate'}_${tripTag.replace(/\s+/g, '_')}`;
+                    const driverPrefix = user?.name ? user.name.split(' ')[0].toUpperCase() : 'DRIVER';
+                    const dateCode = dateKey ? dateKey.replace(/-/g, '').slice(2) : '';
+                    tripNum = `TRIP-${driverPrefix}${dateCode ? `-${dateCode}` : ''}-${tripTag}`;
+                    tripIndexLabel = tripTag;
+                    sortSeq = seq;
+                }
+
+                if (!multiDropMap.has(groupKey)) {
+                    multiDropMap.set(groupKey, {
+                        key: groupKey,
+                        tripId: tripId || undefined,
                         tripNumber: tripNum,
+                        tripIndexLabel,
                         isAdHoc: false,
                         orders: [],
                         totalDrops: 0,
@@ -1661,24 +1722,24 @@ const DriverDelivery: React.FC<DriverDeliveryProps> = ({ user }) => {
                         totalRolls: 0,
                         cargoBreakdown: [],
                         zone: order.zone,
-                        tripOrigin: (order as any).trip_origin,
-                        deliveryDate: (order as any).deliveryDate || (order as any).deadline,
+                        tripOrigin,
+                        deliveryDate,
                         tripNotes: undefined,
                         isAllDone: false,
-                        sortSeq: 999
+                        sortSeq
                     });
                 }
-                const grp = multiDropMap.get(tripId)!;
+                const grp = multiDropMap.get(groupKey)!;
                 grp.orders.push(order);
-            } else {
-                // Regular single DO delivery order (individual trip)
-                singleOrders.push(order);
+                if (!grp.zone && order.zone) grp.zone = order.zone;
+                if (!grp.tripOrigin && tripOrigin) grp.tripOrigin = tripOrigin;
+                if (!grp.deliveryDate && deliveryDate) grp.deliveryDate = deliveryDate;
             }
         });
 
         const result: DriverTripGroup[] = [];
 
-        // 1. Process Multi-drop Trips
+        // 1. Process Trips
         multiDropMap.forEach(grp => {
             grp.orders.sort((a: any, b: any) => {
                 const stopA = (a.stop_sequence !== undefined && a.stop_sequence !== null && a.stop_sequence !== 999) ? a.stop_sequence : 999;
@@ -1703,10 +1764,12 @@ const DriverDelivery: React.FC<DriverDeliveryProps> = ({ user }) => {
             }
 
             // Check if trip sequence is specified (ignoring 999 unsequenced flag)
-            const v2Trip = tripsV2List.find(t => t.id === grp.tripId);
-            if ((v2Trip as any)?.trip_sequence && Number((v2Trip as any).trip_sequence) !== 999) {
-                grp.sortSeq = Number((v2Trip as any).trip_sequence);
-                grp.tripIndexLabel = `Trip ${grp.sortSeq}`;
+            if (grp.tripId) {
+                const v2Trip = tripsV2List.find(t => t.id === grp.tripId);
+                if ((v2Trip as any)?.trip_sequence && Number((v2Trip as any).trip_sequence) !== 999) {
+                    grp.sortSeq = Number((v2Trip as any).trip_sequence);
+                    grp.tripIndexLabel = `Trip ${grp.sortSeq}`;
+                }
             }
 
             // Fallback metadata
@@ -1719,92 +1782,6 @@ const DriverDelivery: React.FC<DriverDeliveryProps> = ({ user }) => {
             grp.totalRolls = totalRolls;
 
             result.push(grp);
-        });
-
-        // 2. Process Single DO Deliveries (Each DO is an independent trip)
-        singleOrders.forEach(order => {
-            const { cargoBreakdown, totalRolls } = getCargoSummary([order]);
-            const orderTotalDrops = (order as any).trip_drop_count || 1;
-            const isDone = isOrderFullyDelivered(order);
-            const photoDrops = countCompletedDrops(order.pod_photo_url);
-            const completedDrops = isDone ? orderTotalDrops : Math.min(orderTotalDrops, photoDrops);
-
-            let sortSeq = 999;
-            let tripLabel: string | undefined = undefined;
-            let tripNotes: string | undefined = undefined;
-
-            if (order.notes) {
-                // Trip bracket [Trip: ...]
-                const mBracket = order.notes.match(/\[Trip:\s*([^\]]+)\]/);
-                if (mBracket) {
-                    tripNotes = mBracket[1].trim();
-                }
-
-                // Explicit trip numbers like "trip 1", "TRIP 2", "1p", "2p" (ignoring 999)
-                const tripMatch = order.notes.match(/\btrip\s*(\d+)\b/i);
-                if (tripMatch) {
-                    const parsed = parseInt(tripMatch[1], 10);
-                    if (parsed !== 999) {
-                        sortSeq = parsed;
-                        tripLabel = `Trip ${sortSeq}`;
-                    }
-                } else {
-                    const pMatch = order.notes.match(/\b(\d+)\s*p\b/i);
-                    if (pMatch) {
-                        const parsed = parseInt(pMatch[1], 10);
-                        if (parsed !== 999) {
-                            sortSeq = parsed;
-                            tripLabel = `Trip ${sortSeq}`;
-                        }
-                    }
-                }
-
-                // Clean trip note text (strip proof timestamps and automated logs)
-                if (!tripNotes) {
-                    const cleanNote = order.notes
-                        .split('\n')
-                        .map(l => l.trim())
-                        .filter(l => l && !l.startsWith('[') && !l.includes('Proof uploaded') && !l.includes('Amended by'))
-                        .join(' ')
-                        .trim();
-                    if (cleanNote) {
-                        tripNotes = cleanNote;
-                    }
-                }
-            }
-
-            if ((order as any).tripSequence !== undefined && (order as any).tripSequence !== null) {
-                const seq = Number((order as any).tripSequence);
-                if (seq !== 999) {
-                    sortSeq = seq;
-                    if (!tripLabel) tripLabel = `Trip ${sortSeq}`;
-                }
-            } else if ((order as any).trip_sequence !== undefined && (order as any).trip_sequence !== null) {
-                const seq = Number((order as any).trip_sequence);
-                if (seq !== 999) {
-                    sortSeq = seq;
-                    if (!tripLabel) tripLabel = `Trip ${sortSeq}`;
-                }
-            }
-
-            result.push({
-                key: `trip_order_${order.id}`,
-                tripId: undefined,
-                tripNumber: order.orderNumber,
-                tripIndexLabel: tripLabel,
-                isAdHoc: false,
-                orders: [order],
-                totalDrops: orderTotalDrops,
-                completedDrops,
-                totalRolls,
-                cargoBreakdown,
-                zone: order.zone,
-                tripOrigin: (order as any).trip_origin,
-                deliveryDate: (order as any).deliveryDate || (order as any).deadline,
-                tripNotes,
-                isAllDone: isDone,
-                sortSeq
-            });
         });
 
         // 3. Process Ad-hoc / Extra Jobs
@@ -2308,20 +2285,25 @@ const DriverDelivery: React.FC<DriverDeliveryProps> = ({ user }) => {
                                 <ChevronRight size={16} className="opacity-50" />
                             </button>
                         ) : (
-                            <button
-                                onClick={() => {
-                                    const parentTrip = tripGroups.find(t => t.orders.some(o => o.id === order.id));
-                                    if (parentTrip) {
-                                        handleOpenTripLoadModal(parentTrip);
-                                    } else {
-                                        handleOpenLoadModal(order);
-                                    }
-                                }}
-                                className="w-full py-4 bg-blue-600 hover:bg-blue-500 text-white rounded-xl font-bold uppercase text-sm tracking-widest flex items-center justify-center gap-3 shadow-lg shadow-blue-900/30 active:scale-95 transition-all"
-                            >
-                                <Truck size={18} /> Naik Barang
-                                <ChevronRight size={16} className="opacity-50" />
-                            </button>
+                            <div className="w-full py-3.5 px-4 bg-slate-900/80 border border-slate-800 rounded-xl flex items-center justify-between text-xs">
+                                <div className="flex items-center gap-2">
+                                    <span className="w-2 h-2 rounded-full bg-amber-400 animate-pulse" />
+                                    <span className="text-amber-300 font-bold">Menunggu Muatan Trip / Awaiting Trip Load</span>
+                                </div>
+                                <button
+                                    onClick={() => {
+                                        const parentTrip = tripGroups.find(t => t.orders.some(o => o.id === order.id));
+                                        if (parentTrip) {
+                                            handleOpenTripLoadModal(parentTrip);
+                                        } else {
+                                            handleOpenLoadModal(order);
+                                        }
+                                    }}
+                                    className="text-[11px] font-bold text-blue-400 hover:text-blue-300 underline underline-offset-2 flex items-center gap-1 cursor-pointer"
+                                >
+                                    <span>Muat Trip ↑</span>
+                                </button>
+                            </div>
                         )
                     )}
                 </div>
@@ -2504,6 +2486,29 @@ const DriverDelivery: React.FC<DriverDeliveryProps> = ({ user }) => {
                                                     📍 {trip.zone}
                                                 </span>
                                             )}
+
+                                            {(() => {
+                                                const isTripFullyLoaded = trip.orders.every(o => o.status === 'Loaded' || o.status === 'Delivered' || o.status === 'Pending Approval');
+                                                if (trip.isAllDone) {
+                                                    return (
+                                                        <span className="text-[10px] font-black uppercase bg-emerald-500/20 text-emerald-300 px-2 py-0.5 rounded border border-emerald-500/30">
+                                                            ✅ Selesai / Done
+                                                        </span>
+                                                    );
+                                                }
+                                                if (isTripFullyLoaded) {
+                                                    return (
+                                                        <span className="text-[10px] font-black uppercase bg-blue-500/20 text-blue-300 px-2 py-0.5 rounded border border-blue-500/30">
+                                                            🚚 Dimuat / Loaded
+                                                        </span>
+                                                    );
+                                                }
+                                                return (
+                                                    <span className="text-[10px] font-black uppercase bg-amber-500/20 text-amber-300 px-2 py-0.5 rounded border border-amber-500/30 flex items-center gap-1">
+                                                        <span className="w-1.5 h-1.5 rounded-full bg-amber-400 animate-pulse" /> Belum Muat
+                                                    </span>
+                                                );
+                                            })()}
                                         </div>
 
                                         <div className="flex items-center gap-2 text-xs font-bold">
@@ -2603,10 +2608,14 @@ const DriverDelivery: React.FC<DriverDeliveryProps> = ({ user }) => {
                                             return (
                                                 <button
                                                     onClick={() => handleOpenTripLoadModal(trip)}
-                                                    className="w-full py-3.5 bg-gradient-to-r from-blue-600 via-indigo-600 to-blue-700 hover:from-blue-500 hover:to-indigo-500 text-white rounded-xl font-black text-sm uppercase tracking-wider flex items-center justify-center gap-2.5 shadow-lg shadow-blue-950/50 active:scale-98 transition-all"
+                                                    className="w-full py-3.5 bg-gradient-to-r from-blue-600 via-indigo-600 to-blue-700 hover:from-blue-500 hover:to-indigo-500 text-white rounded-xl font-black text-sm uppercase tracking-wider flex items-center justify-center gap-2.5 shadow-lg shadow-blue-950/50 active:scale-98 transition-all cursor-pointer"
                                                 >
                                                     <Truck size={18} />
-                                                    <span>🚚 NAIK BARANG TRIP INI / LOAD THIS TRIP ({trip.orders.length} DOs)</span>
+                                                    <span>
+                                                        {trip.orders.length === 1 
+                                                            ? '🚚 NAIK BARANG TRIP INI / LOAD THIS TRIP' 
+                                                            : `🚚 NAIK BARANG TRIP INI / LOAD THIS TRIP (${trip.orders.length} DOs)`}
+                                                    </span>
                                                 </button>
                                             );
                                         })()}

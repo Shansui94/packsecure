@@ -1331,5 +1331,14 @@
   "Handwritten Note / Temp Add-on": "Nota Tulisan Tangan / Tambahan",
   "Exchange (Return Goods)": "Pertukaran (Ambil Balik)",
   "Driver Return Goods Task": "Tugasan Ambil Balik Pemandu",
-  "Return task: Driver must collect old goods from customer and upload photo proof upon delivery.": "Semasa hantar, pemandu wajib ambil balik barang lama daripada pelanggan dan ambil foto bukti."
+  "Return task: Driver must collect old goods from customer and upload photo proof upon delivery.": "Semasa hantar, pemandu wajib ambil balik barang lama daripada pelanggan dan ambil foto bukti.",
+  "+ 添加货品 (+ Add Product)": "+ Tambah Produk",
+  "清空货品 (Clear All)": "Kosongkan Semua",
+  "Product description / 货品名称描述": "Penerangan produk / nama barang",
+  "-- 选择司机 (可选) --": "-- Pilih Pemandu (Pilihan) --",
+  "-- 选择车牌 (可选) --": "-- Pilih Lori (Pilihan) --",
+  "Delete item / 删除货品": "Padam barang ini",
+  "Rolls / 卷": "Gulung (Rolls)",
+  "Box / 箱": "Kotak (Box)",
+  "Units / 件": "Unit"
 }
