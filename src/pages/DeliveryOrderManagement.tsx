@@ -16,7 +16,7 @@ import {
     BalancedTripDraft
 } from '../utils/driverBalanceDispatch';
 import {
-    Plus, Search, Calendar, FileText, X, Truck,
+    Plus, Search, Calendar, FileText, X, Truck, Package,
     User as UserIcon, Box, Zap, Trash2, Scissors, AlertTriangle, MapPin, Wrench, LayoutGrid, List, ArrowUp, ArrowDown,
     CheckCircle, XCircle, Camera, Sparkles, ImagePlus, Download,
     RotateCcw, RefreshCw, Settings, ShieldCheck, Clock, Award, TrendingUp, Info,
