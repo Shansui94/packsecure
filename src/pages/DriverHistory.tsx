@@ -7,9 +7,10 @@ import { logActivity } from '../utils/logger';
 
 interface DriverHistoryProps {
     user: any;
+    onNavigate?: (page: string) => void;
 }
 
-const DriverHistory: React.FC<DriverHistoryProps> = ({ user }) => {
+const DriverHistory: React.FC<DriverHistoryProps> = ({ user, onNavigate }) => {
     const [tasks, setTasks] = useState<SalesOrder[]>([]);
     const [loading, setLoading] = useState(true);
     const [selectedDate, setSelectedDate] = useState<string>(''); // YYYY-MM-DD
@@ -382,6 +383,15 @@ const DriverHistory: React.FC<DriverHistoryProps> = ({ user }) => {
                         {user?.name || 'Pemandu'} • {tasks.length} Penghantaran Selesai
                     </p>
                 </div>
+                {onNavigate && (
+                    <button
+                        type="button"
+                        onClick={() => onNavigate('delivery-driver')}
+                        className="px-3.5 py-2 bg-blue-600/30 hover:bg-blue-600/50 border border-blue-500/40 text-blue-300 rounded-xl text-xs font-bold uppercase tracking-wider transition-all flex items-center gap-2 active:scale-95 cursor-pointer shadow-sm"
+                    >
+                        <span>🚚 Tugasan Semasa</span>
+                    </button>
+                )}
             </div>
 
             {/* FILTERS */}

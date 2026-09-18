@@ -2,7 +2,8 @@
 import React, { useState, useEffect } from 'react';
 import { supabase } from '../services/supabase';
 import { Task, User } from '../types';
-import { Plus, Trash2, CheckCircle2, Circle, Clock } from 'lucide-react';
+import { Plus, Trash2, CheckCircle2, Circle, Clock, FileText } from 'lucide-react';
+import { DevLogModal } from '../components/DevLogModal';
 
 interface TasksProps {
     user: User | null;
@@ -13,6 +14,7 @@ const Tasks: React.FC<TasksProps> = ({ user }) => {
     const [isLoading, setIsLoading] = useState(true);
     const [filter, setFilter] = useState<'All' | 'My Tasks' | 'Assigned by Me'>('All');
     const [showCreateModal, setShowCreateModal] = useState(false);
+    const [showReportModal, setShowReportModal] = useState(false);
 
     // Form State
     const [title, setTitle] = useState('');
@@ -147,12 +149,24 @@ const Tasks: React.FC<TasksProps> = ({ user }) => {
                     </h1>
                     <p className="text-gray-500 text-sm mt-1">Manage assignments and track progress across the team.</p>
                 </div>
-                <button
-                    onClick={() => setShowCreateModal(true)}
-                    className="bg-blue-600 hover:bg-blue-500 text-white px-6 py-3 rounded-xl font-bold flex items-center gap-2 shadow-lg shadow-blue-500/20 transition-all hover:-translate-y-0.5 active:scale-95"
-                >
-                    <Plus size={20} /> Create Task
-                </button>
+                <div className="flex items-center gap-3">
+                    <button
+                        type="button"
+                        onClick={() => setShowReportModal(true)}
+                        className="bg-white/5 hover:bg-white/10 border border-white/10 text-white px-4 py-3 rounded-xl font-bold flex items-center gap-2 transition-all hover:-translate-y-0.5 active:scale-95 cursor-pointer text-sm"
+                        title="将今日任务一键汇总为工作汇报"
+                    >
+                        <FileText size={18} className="text-blue-400" />
+                        <span>生成今日工作汇报</span>
+                    </button>
+                    <button
+                        type="button"
+                        onClick={() => setShowCreateModal(true)}
+                        className="bg-blue-600 hover:bg-blue-500 text-white px-6 py-3 rounded-xl font-bold flex items-center gap-2 shadow-lg shadow-blue-500/20 transition-all hover:-translate-y-0.5 active:scale-95 cursor-pointer text-sm"
+                    >
+                        <Plus size={20} /> Create Task
+                    </button>
+                </div>
             </div>
 
             {/* Filters */}
@@ -309,6 +323,14 @@ const Tasks: React.FC<TasksProps> = ({ user }) => {
                     </div>
                 </div>
             )}
+
+            {/* Daily Task & Upgrade Report Modal */}
+            <DevLogModal
+                isOpen={showReportModal}
+                onClose={() => setShowReportModal(false)}
+                onSaved={() => setShowReportModal(false)}
+                initialTasks={tasks}
+            />
         </div>
     );
 };

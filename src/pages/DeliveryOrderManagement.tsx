@@ -2568,25 +2568,26 @@ const DeliveryOrderManagement: React.FC<DeliveryOrderManagementProps> = ({ user 
                 if (doItem.terms && !noteParts.some(p => p.includes(doItem.terms))) {
                     noteParts.push(`Terms: ${doItem.terms}`);
                 }
-                if (parsedDeliveryMethod === 'SELF_PICKUP' && !noteParts.some(p => p.toLowerCase().includes('pickup') || p.includes('自提'))) {
-                    noteParts.unshift('[Self Pickup]');
-                }
+                const isSelfPickup = parsedDeliveryMethod === 'SELF_PICKUP' || 
+                    noteParts.some(p => /pickup|pick up|自提|ambil/i.test(p));
 
                 const orderPayload: any = {
                     id: orderId,
-                    trip_id: tripId,
+                    trip_id: isSelfPickup ? null : tripId,
                     order_number: doItem.doNumber || `DO-${parsedTripNumber}-${i + 1}`,
                     customer: doItem.customer || 'General Customer',
                     delivery_address: doItem.deliveryAddress || '',
-                    zone: doItem.zone || parsedZone || (parsedDeliveryMethod === 'SELF_PICKUP' ? 'SELF-PICKUP' : 'Central'),
-                    driver_id: parsedDeliveryMethod === 'SELF_PICKUP' ? null : (parsedDriverId || null),
+                    zone: doItem.zone || parsedZone || (isSelfPickup ? 'SELF-PICKUP' : 'Central'),
+                    driver_id: isSelfPickup ? null : (parsedDriverId || null),
                     status: 'Planned',
                     order_date: parsedTripDate,
                     deadline: parsedDeliveryDate,
                     trip_origin: parsedTripOrigin.toUpperCase(),
-                    trip_drop_count: totalDrops,
-                    stop_sequence: i + 1,
-                    trip_sequence: i + 1,
+                    trip_drop_count: isSelfPickup ? 1 : totalDrops,
+                    stop_sequence: isSelfPickup ? 999 : i + 1,
+                    trip_sequence: isSelfPickup ? 999 : i + 1,
+                    delivery_method: isSelfPickup ? 'SELF_PICKUP' : 'Company Delivery',
+                    job_type: isSelfPickup ? 'Pickup' : 'Delivery',
                     items: (doItem.items || []).map(it => {
                         let loc = it.sourceLocation;
                         if (!loc || !validWarehouses.includes(loc)) {
@@ -2785,20 +2786,25 @@ const DeliveryOrderManagement: React.FC<DeliveryOrderManagementProps> = ({ user 
             }
         }
 
+        const isSelfPickup = draft.tripCategory === 'SELF-PICKUP' || 
+            (draft.notes && /pickup|pick up|自提|ambil/i.test(draft.notes));
+
         const payload: Record<string, unknown> = {
             order_number: doNumber,
             customer: finalCustomer,
             delivery_address: draft.destinations,
-            zone: draft.tripCategory,
+            zone: isSelfPickup ? (draft.tripCategory || 'SELF-PICKUP') : draft.tripCategory,
             trip_origin: tripOrigin,
-            trip_drop_count: draft.tripDropCount,
+            trip_drop_count: isSelfPickup ? 1 : draft.tripDropCount,
             factory_id: finalFactoryId,
-            driver_id: draft.driverId || null,
+            driver_id: isSelfPickup ? null : (draft.driverId || null),
             items: draft.items,
             order_date: draft.orderDate,
             deadline: draft.deliveryDate || null,
             notes: draft.notes,
             status: 'New',
+            delivery_method: isSelfPickup ? 'SELF_PICKUP' : 'Company Delivery',
+            job_type: isSelfPickup ? 'Pickup' : 'Delivery',
         };
 
         const effectiveDate = draft.deliveryDate || draft.orderDate;
@@ -3524,19 +3530,23 @@ const DeliveryOrderManagement: React.FC<DeliveryOrderManagementProps> = ({ user 
                 }
             }
 
+            const isSelfPickup = deliveryMethod === 'SELF_PICKUP' || /pickup|pick up|自提|ambil/i.test(finalNotes);
+
             const payload: any = {
                 order_number: doNumber,
                 customer: finalCustomer,
                 delivery_address: newOrderAddress,
-                zone: deliveryMethod === 'SELF_PICKUP' ? (tripCategory || 'SELF-PICKUP') : (tripCategory || ''),
+                zone: isSelfPickup ? (tripCategory || 'SELF-PICKUP') : (tripCategory || ''),
                 trip_origin: tripOrigin,
-                trip_drop_count: tripDropCount,
+                trip_drop_count: isSelfPickup ? 1 : tripDropCount,
                 factory_id: finalFactoryId,
-                driver_id: deliveryMethod === 'SELF_PICKUP' ? null : (selectedDriverId || null),
+                driver_id: isSelfPickup ? null : (selectedDriverId || null),
                 items: finalizedItems,
                 order_date: newOrderDate || new Date().toISOString().split("T")[0],
                 deadline: newOrderDeliveryDate || null,
-                notes: finalNotes
+                notes: finalNotes,
+                delivery_method: isSelfPickup ? 'SELF_PICKUP' : 'Company Delivery',
+                job_type: isSelfPickup ? 'Pickup' : 'Delivery',
             };
 
             // Only set status for NEW orders. Editing should not overwrite background status changes.

@@ -697,9 +697,9 @@ function App() {
             case 'order-summary':
                 return <OrderSummary user={user} />;
             case 'delivery-driver':
-                return <DriverDelivery user={user} />;
+                return <DriverDelivery user={user} onNavigate={setActivePage} />;
             case 'delivery-history':
-                return <DriverHistory user={user} />;
+                return <DriverHistory user={user} onNavigate={setActivePage} />;
             case 'lorry-service':
                 return <LorryService user={user} />;
             case 'maintenance':
@@ -746,7 +746,7 @@ function App() {
             case 'operators':
                 return <HRPortal user={user} initialTab="personnel" initialRoleFilter="Operator" onNavigate={setActivePage} />;
             case 'dev-log':
-                return <DevLog />;
+                return <DevLog user={user} onNavigate={setActivePage} />;
             case 'system-docs':
                 return <SystemDocsEditor user={user} />;
             case 'notes':
@@ -765,7 +765,7 @@ function App() {
             case 'personal-report':
                 return <PersonalMonthlyReport user={user} />;
             case 'machine-schedule':
-                return <MachineSchedule user={user} />;
+                return <MachineSchedule user={user} onNavigate={setActivePage} />;
             case 'machine-labels':
                 return <MachineLabels />;
             case 'activity-logs':

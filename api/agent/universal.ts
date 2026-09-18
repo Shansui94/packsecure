@@ -1620,7 +1620,30 @@ async function handleOmniCommand(req: VercelRequest, res: VercelResponse) {
     }
 
     try {
-        // 2. Statistical / Business Query Detection
+        // 2. Greeting & General Assistance Recognition
+        const isGreetingOrHelp = /^(?:你好|您好|hi|hello|嗨|早|早安|晚安|哈喽|在吗|帮助|help|指南|功能|你是谁|你是谁啊|你是做什么的|怎么用|能做什么|\?|？)/i.test(rawQuery);
+        if (isGreetingOrHelp) {
+            const userName = context.userName || '同事';
+            return res.status(200).json({
+                type: 'answer',
+                answerData: {
+                    title: `您好，${userName}！我是 Packsecure 智能协同助理 👋`,
+                    text: `我是工厂与仓储运营的 AI 助理（当前身份：${userRole}）。您可以在万能输入口随时进行：\n\n• **极速搜索**：输入 DO 单号、客户名、物料 SKU、机台或员工\n• **业务指令**：直接输入 “报修 T1-M03 切刀故障”、“待办 盘点原料仓”、“请假 明天年假1天”\n• **运营看板**：输入 “全厂设备稼动率”、“今日送货单概况” 秒出数据卡片\n• **凭证归档**：直接拖入或粘贴 (Ctrl+V) PUSPAKOM 验车单、官方公函、油票报销单`,
+                    quickActions: [
+                        { label: '🛠️ 报修机台 (T1-M03)', query: '报修 T1-M03 切刀钝化' },
+                        { label: '📋 新建协同待办', query: '待办 盘点原料仓库存' },
+                        { label: '🏖️ 申请年假', query: '请假 明天年假1天' },
+                        { label: '📊 查询设备稼动率', query: '全厂设备稼动率' },
+                        { label: '🚚 查询吉兰丹订单', query: '吉兰丹' },
+                        { label: '📎 历史凭证检索', query: 'doc: ' }
+                    ],
+                    targetPage: 'factory-live-os',
+                    targetPageLabel: '进入全厂实时大屏 (Factory Live OS)'
+                }
+            });
+        }
+
+        // 3. Statistical / Business Query Detection
         const isStatQuery = /(?:产量|产能|效率|稼动率|出库|入库|送货|单量|多少|统计|概况|汇总|状态|排行|summary|total|count|status)/i.test(rawQuery);
 
         if (isStatQuery) {
@@ -1670,22 +1693,23 @@ async function handleOmniCommand(req: VercelRequest, res: VercelResponse) {
             });
         }
 
-        // 3. Fallback to Gemini if AI key exists
+        // 4. Gemini AI Intent Analysis & Question Answering
         const geminiKey = process.env.GOOGLE_API_KEY || '';
         if (geminiKey) {
             const genAI = new GoogleGenerativeAI(geminiKey);
             const model = genAI.getGenerativeModel({ model: 'gemini-2.0-flash' });
-            const prompt = `你是一个工业制造系统(Packsecure OS)的指令解析核心。
-用户角色: ${userRole}, 用户输入: "${rawQuery}".
+            const prompt = `你是一个工业制造与仓储运营系统(Packsecure OS)的指令解析与问答助理。
+用户角色: ${userRole}, 用户姓名: ${context.userName || '用户'}, 用户输入: "${rawQuery}".
 
-请判断该输入属于哪一类：
+请分析用户输入，并判断属于哪一类：
 1. "action": 用户想要执行业务操作（如报修、创建待办、请假、登记报废）。
-2. "insight": 用户想要查看业务统计或数据分析。
-3. "unknown": 无法识别或仅仅是模糊搜索。
+2. "insight": 用户想要查看业务统计或数据分析指标。
+3. "answer": 用户在打招呼、提问工厂流程/SOP、询问操作方法或寻求系统帮助。
+4. "unknown": 极度模糊无意义的内容。
 
-请严格输出 JSON 格式（不要输出 markdown 标记）：
+请严格输出 JSON 格式（不要输出任何 markdown 格式代码块或额外文字）：
 {
-  "type": "action" | "insight" | "unknown",
+  "type": "action" | "insight" | "answer" | "unknown",
   "actionDraft": {
     "intent": "report_machine_issue" | "create_task" | "submit_leave" | "quick_scrap" | "general_action",
     "title": "卡片简短标题",
@@ -1697,6 +1721,22 @@ async function handleOmniCommand(req: VercelRequest, res: VercelResponse) {
     ],
     "payload": { }
   },
+  "insightData": {
+    "title": "指标标题",
+    "summary": "数据总结",
+    "keyMetrics": [{ "label": "指标名", "value": "数值", "subtext": "补充说明" }],
+    "targetPage": "关联页面路由",
+    "targetPageLabel": "按钮文案"
+  },
+  "answerData": {
+    "title": "回答标题",
+    "text": "清晰准确的中文回答内容(可使用条理化的列表和加粗)",
+    "quickActions": [
+      { "label": "推荐操作按钮", "query": "填入该操作的标准指令" }
+    ],
+    "targetPage": "推荐前往的页面路由",
+    "targetPageLabel": "前往查看按钮"
+  },
   "message": "若是unknown或需解释时的反馈文案"
 }`;
 
@@ -1705,13 +1745,35 @@ async function handleOmniCommand(req: VercelRequest, res: VercelResponse) {
             try {
                 const cleanedJson = text.replace(/```json/g, '').replace(/```/g, '').trim();
                 const parsed = JSON.parse(cleanedJson);
-                return res.status(200).json(parsed);
+                if (parsed.type) {
+                    return res.status(200).json(parsed);
+                }
             } catch {
-                // fallback
+                // fallback to heuristic
             }
         }
 
-        // 4. Default Heuristic Match
+        // 5. Question Heuristic Fallback (if AI fails or key not present)
+        const isQuestion = /(?:怎么|如何|什么|哪|为什么|规则|流程|步骤|可以|能不能|how|what|why)/i.test(rawQuery);
+        if (isQuestion) {
+            return res.status(200).json({
+                type: 'answer',
+                answerData: {
+                    title: `业务操作与知识指引`,
+                    text: `关于您的提问 “**${rawQuery}**”：\n\n您可以直接在万能输入口使用标准格式分发业务：\n• **报修设备**：输入「报修 T1-M03 切刀故障」\n• **创建待办**：输入「待办 盘点成品仓」\n• **申请请假**：输入「请假 明天年假1天」\n• **查询单据**：输入 DO 单号或客户名\n• **凭证归档**：拖入或粘贴 PUSPAKOM、油票、公函等\n\n若需详细设备 SOP 或深入问答，请点击下方按钮查阅知识库或开启语音助理。`,
+                    quickActions: [
+                        { label: '🛠️ 报修机台', query: '报修 ' },
+                        { label: '📋 新建待办', query: '待办 ' },
+                        { label: '🏖️ 申请请假', query: '请假 ' },
+                        { label: '📖 查看 SOP 知识库', query: 'SOP' }
+                    ],
+                    targetPage: 'sop-management',
+                    targetPageLabel: '前往 SOP 知识库'
+                }
+            });
+        }
+
+        // 6. Default Fallback
         return res.status(200).json({
             type: 'unknown',
             message: '未能精确识别该动作，您可输入关键词直接检索单据/客户，或使用如：“报修 T1-M03 切刀故障”、“待办 盘点成品仓” 等明确指令。'

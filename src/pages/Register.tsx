@@ -1324,7 +1324,7 @@ const Register: React.FC<RegisterProps> = ({ onNavigate }) => {
 
             {/* Footer */}
             <div className="mt-4 text-center z-10 text-slate-500 text-[10px] tracking-widest uppercase">
-                System v6.7 • Packsecure OS Official Recruitment Portal (JTK Malaysia)
+                System v7.0 • Packsecure OS Official Recruitment Portal (JTK Malaysia)
             </div>
         </div>
     );

@@ -10,6 +10,7 @@ import { logActivity } from '../utils/logger';
 
 interface DriverDeliveryProps {
     user: any;
+    onNavigate?: (page: string) => void;
 }
 
 const compressImage = (file: File, maxWidth = 1200, quality = 0.7): Promise<string> => {
@@ -157,7 +158,7 @@ export const extractTripIdentifier = (notes?: string | null): { tripSeq?: number
     return {};
 };
 
-const DriverDelivery: React.FC<DriverDeliveryProps> = ({ user }) => {
+const DriverDelivery: React.FC<DriverDeliveryProps> = ({ user, onNavigate }) => {
     // State
     const [tasks, setTasks] = useState<SalesOrder[]>([]);
     const [tripsV2List, setTripsV2List] = useState<any[]>([]);
@@ -2347,7 +2348,16 @@ const DriverDelivery: React.FC<DriverDeliveryProps> = ({ user }) => {
                         <span className="inline sm:hidden"> EXTRA JOB</span>
                     </button>
 
-
+                    {onNavigate && (
+                        <button
+                            onClick={() => onNavigate('delivery-history')}
+                            className="px-2.5 py-1.5 bg-slate-800 hover:bg-slate-700 border border-slate-700 text-slate-300 rounded-lg text-[10px] font-bold uppercase tracking-wider flex items-center gap-1 transition-all active:scale-95 cursor-pointer"
+                            title="Sejarah Penghantaran / Delivery History"
+                        >
+                            <span>📜</span>
+                            <span className="hidden sm:inline">SEJARAH</span>
+                        </button>
+                    )}
 
                     <button
                         onClick={() => fetchTasks()}

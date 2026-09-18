@@ -79,15 +79,6 @@ export const MODULE_GROUPS: ModuleGroupDefinition[] = [
 export const MODULE_REGISTRY: ModuleDefinition[] = [
     // ── EXECUTIVE SUITE ──
     {
-        id: 'boss-copilot',
-        label: 'Boss 决策大脑',
-        labelEn: 'Boss Co-Pilot',
-        group: 'executive',
-        icon: Bot,
-        defaultRoles: ['SuperAdmin', 'Admin', 'Manager'],
-        description: '高管 AI 决策助理与宏观分析'
-    },
-    {
         id: 'factory-live-os',
         label: '全厂实时大屏',
         labelEn: 'Factory Live OS',
@@ -106,25 +97,27 @@ export const MODULE_REGISTRY: ModuleDefinition[] = [
         description: '运营分析与特定经营看板'
     },
     {
+        id: 'boss-copilot',
+        label: 'Boss 决策大脑',
+        labelEn: 'Boss Co-Pilot',
+        group: 'executive',
+        icon: Bot,
+        defaultRoles: ['SuperAdmin', 'Admin', 'Manager'],
+        description: '高管 AI 决策助理与宏观分析',
+        hiddenFromNav: true // 已常驻于侧边栏底部 AI Assistant 快捷按钮
+    },
+    {
         id: 'data-v2',
         label: '主数据底座',
         labelEn: 'Data Command',
         group: 'executive',
         icon: Database,
         defaultRoles: ['SuperAdmin', 'Admin', 'Manager'],
-        description: '底层主数据与基础库维护'
+        description: '底层主数据与基础库维护',
+        hiddenFromNav: true // 系统底层配置，可通过 ⌘K 访问
     },
 
     // ── OPERATIONS ──
-    {
-        id: 'staff-status',
-        label: '员工状态与交班核准',
-        labelEn: 'Staff Status & Sign-off',
-        group: 'operations',
-        icon: ClipboardCheck,
-        defaultRoles: ['SuperAdmin', 'Admin', 'Manager'],
-        description: '全员工作状态监控、工时核验与交班审核打钩'
-    },
     {
         id: 'scanner',
         label: '车间生产工作区',
@@ -133,6 +126,15 @@ export const MODULE_REGISTRY: ModuleDefinition[] = [
         icon: Scan,
         defaultRoles: ['SuperAdmin', 'Admin', 'Manager', 'Operator'],
         description: '车间机台生产扫码与实时记件'
+    },
+    {
+        id: 'staff-status',
+        label: '员工状态与交班核准',
+        labelEn: 'Staff Status & Sign-off',
+        group: 'operations',
+        icon: ClipboardCheck,
+        defaultRoles: ['SuperAdmin', 'Admin', 'Manager'],
+        description: '全员工作状态监控、工时核验与交班审核打钩'
     },
     {
         id: 'raw_material_mobile',
@@ -145,13 +147,22 @@ export const MODULE_REGISTRY: ModuleDefinition[] = [
         description: '多螺杆与原辅材料混料配比'
     },
     {
-        id: 'livestock',
-        label: '成品实时库存',
-        labelEn: 'Live Stock',
+        id: 'machine-schedule',
+        label: '机台排产日历',
+        labelEn: 'Machine Schedule',
         group: 'operations',
-        icon: BarChart3,
+        icon: Calendar,
+        defaultRoles: ['SuperAdmin', 'Admin', 'Manager'],
+        description: '机台排产计划与工单日历'
+    },
+    {
+        id: 'maintenance',
+        label: '设备维保管理',
+        labelEn: 'Maintenance Control',
+        group: 'operations',
+        icon: Wrench,
         defaultRoles: ['SuperAdmin', 'Admin', 'Manager', 'LogisticsCoordinator'],
-        description: '成品实时入库与现货仓位看板'
+        description: '设备维保、保养巡检与报修'
     },
     {
         id: 'recipes',
@@ -163,22 +174,14 @@ export const MODULE_REGISTRY: ModuleDefinition[] = [
         description: '工艺配方良率与 AI 调优'
     },
     {
-        id: 'machine-schedule',
-        label: '机台排产日历',
-        labelEn: 'Machine Schedule',
-        group: 'operations',
-        icon: Calendar,
-        defaultRoles: ['SuperAdmin', 'Admin', 'Manager'],
-        description: '机台排产计划与工单日历'
-    },
-    {
         id: 'machine-labels',
         label: '机台二维码标签',
         labelEn: 'Machine QR Labels',
         group: 'operations',
         icon: Printer,
         defaultRoles: ['SuperAdmin', 'Admin', 'Manager'],
-        description: '机台专属二维码与物料标签打印'
+        description: '机台专属二维码与物料标签打印',
+        hiddenFromNav: true // 低频工具，已在机台排产中提供打印按钮
     },
     {
         id: 'floor-plan',
@@ -187,10 +190,29 @@ export const MODULE_REGISTRY: ModuleDefinition[] = [
         group: 'operations',
         icon: LayoutDashboard,
         defaultRoles: ['SuperAdmin', 'Admin', 'Manager'],
-        description: '车间物理平面布局与动线图'
+        description: '车间物理平面布局与动线图',
+        hiddenFromNav: true // 可在全厂大屏中切换查看
     },
 
     // ── INVENTORY & BOM ──
+    {
+        id: 'inventory',
+        label: '全局库存总览',
+        labelEn: 'Global Inventory',
+        group: 'inventory',
+        icon: Boxes,
+        defaultRoles: ['SuperAdmin', 'Admin', 'Manager'],
+        description: '原料库、半成品与全局库存总览'
+    },
+    {
+        id: 'livestock',
+        label: '成品实时库存',
+        labelEn: 'Live Stock',
+        group: 'inventory',
+        icon: BarChart3,
+        defaultRoles: ['SuperAdmin', 'Admin', 'Manager', 'LogisticsCoordinator'],
+        description: '成品实时入库与现货仓位看板'
+    },
     {
         id: 'stock-movement',
         label: '物料出入流水',
@@ -202,21 +224,22 @@ export const MODULE_REGISTRY: ModuleDefinition[] = [
     },
     {
         id: 'stock-audit',
-        label: '实物盘点核对',
-        labelEn: 'Stock Audit',
+        label: '库存盘点与审计',
+        labelEn: 'Stock Audit & Reports',
         group: 'inventory',
         icon: ClipboardCheck,
         defaultRoles: ['SuperAdmin', 'Admin', 'Manager'],
-        description: '车间实物盘点核对与扫码盲盘'
+        description: '车间实物盲盘核对与盘点损益审计报告'
     },
     {
-        id: 'inventory',
-        label: '全局库存总览',
-        labelEn: 'Global Inventory',
+        id: 'audit-report',
+        label: '盘点审计报告',
+        labelEn: 'Audit Report',
         group: 'inventory',
-        icon: Boxes,
+        icon: FileBarChart,
         defaultRoles: ['SuperAdmin', 'Admin', 'Manager'],
-        description: '原料库、半成品与全局库存总览'
+        description: '库存盘点损益与审计历史',
+        hiddenFromNav: true // 已内嵌为 Stock Audit 内的子 Tab
     },
     {
         id: 'products',
@@ -226,15 +249,6 @@ export const MODULE_REGISTRY: ModuleDefinition[] = [
         icon: Package,
         defaultRoles: ['SuperAdmin', 'Admin', 'Manager', 'LogisticsCoordinator'],
         description: '标准物料与成品产品库'
-    },
-    {
-        id: 'audit-report',
-        label: '盘点审计报告',
-        labelEn: 'Audit Report',
-        group: 'inventory',
-        icon: FileBarChart,
-        defaultRoles: ['SuperAdmin', 'Admin', 'Manager'],
-        description: '库存盘点损益与审计历史'
     },
 
     // ── LOGISTICS ──
@@ -246,6 +260,24 @@ export const MODULE_REGISTRY: ModuleDefinition[] = [
         icon: Truck,
         defaultRoles: ['SuperAdmin', 'Admin', 'Manager', 'LogisticsCoordinator'],
         description: '发货出车、线路规划与司机派单'
+    },
+    {
+        id: 'order-summary',
+        label: '每日发货备货',
+        labelEn: 'Daily Prep',
+        group: 'logistics',
+        icon: FileBarChart,
+        defaultRoles: ['SuperAdmin', 'Admin', 'Manager', 'LogisticsCoordinator', 'Operator'],
+        description: '每日发货备货准备与配货清单'
+    },
+    {
+        id: 'lorry-management',
+        label: '货车车队档案',
+        labelEn: 'Lorry Fleet',
+        group: 'logistics',
+        icon: Truck,
+        defaultRoles: ['SuperAdmin', 'Admin', 'Manager'],
+        description: '货车车队档案、路税与保险'
     },
     {
         id: 'delivery-driver',
@@ -263,34 +295,28 @@ export const MODULE_REGISTRY: ModuleDefinition[] = [
         group: 'logistics',
         icon: ClipboardList,
         defaultRoles: ['Driver'],
-        description: '司机历史趟数与出车津贴明细'
+        description: '司机历史趟数与出车津贴明细',
+        hiddenFromNav: true // 司机端顶部/底部直接切换，非司机角色免受干扰
     },
     {
-        id: 'order-summary',
-        label: '每日发货备货',
-        labelEn: 'Daily Prep',
-        group: 'logistics',
-        icon: FileBarChart,
-        defaultRoles: ['SuperAdmin', 'Admin', 'Manager', 'LogisticsCoordinator', 'Operator'],
-        description: '每日发货备货准备与配货清单'
-    },
-    {
-        id: 'maintenance',
-        label: '设备维保管理',
-        labelEn: 'Maintenance Control',
-        group: 'logistics',
-        icon: Wrench,
-        defaultRoles: ['SuperAdmin', 'Admin', 'Manager', 'LogisticsCoordinator'],
-        description: '设备维保、保养巡检与报修'
-    },
-    {
-        id: 'lorry-management',
-        label: '货车车队档案',
-        labelEn: 'Lorry Fleet',
-        group: 'logistics',
-        icon: Truck,
+        id: 'report-history',
+        label: '机台历史生产报告',
+        labelEn: 'Machine Report History',
+        group: 'operations',
+        icon: FileText,
         defaultRoles: ['SuperAdmin', 'Admin', 'Manager'],
-        description: '货车车队档案、路税与保险'
+        description: '机台每日生产总结与停机历史',
+        hiddenFromNav: true // 已整合至生产报表，可通过 ⌘K 访问
+    },
+    {
+        id: 'production',
+        label: '生产班次日志',
+        labelEn: 'Production Logs',
+        group: 'operations',
+        icon: Database,
+        defaultRoles: ['SuperAdmin', 'Admin', 'Manager'],
+        description: '生产班次原始日志追踪',
+        hiddenFromNav: true // 可通过生产工作区或 ⌘K 访问
     },
     {
         id: 'lorry-service',
@@ -299,7 +325,8 @@ export const MODULE_REGISTRY: ModuleDefinition[] = [
         group: 'logistics',
         icon: Truck,
         defaultRoles: ['Driver'],
-        description: '司机车辆维保报修登记'
+        description: '司机车辆维保报修登记',
+        hiddenFromNav: true // 整合于司机端及车队管理，避免单独占用一级菜单
     },
     {
         id: 'driver-management',
@@ -308,25 +335,8 @@ export const MODULE_REGISTRY: ModuleDefinition[] = [
         group: 'logistics',
         icon: Users,
         defaultRoles: ['LogisticsCoordinator', 'SuperAdmin', 'Admin', 'Manager'],
-        description: '司机运力档案与出车状态追踪'
-    },
-    {
-        id: 'production',
-        label: '生产班次日志',
-        labelEn: 'Production Logs',
-        group: 'logistics',
-        icon: Database,
-        defaultRoles: ['SuperAdmin', 'Admin', 'Manager'],
-        description: '生产班次原始日志追踪'
-    },
-    {
-        id: 'report-history',
-        label: '历史发货报告',
-        labelEn: 'Report History',
-        group: 'logistics',
-        icon: FileText,
-        defaultRoles: ['SuperAdmin', 'Admin', 'Manager'],
-        description: '历史发货与交付报告归档'
+        description: '司机运力档案与出车状态追踪',
+        hiddenFromNav: true // 已整合在人事中心及车队管理中
     },
 
     // ── ORGANIZATION ──
@@ -338,16 +348,6 @@ export const MODULE_REGISTRY: ModuleDefinition[] = [
         icon: Calendar,
         defaultRoles: ['SuperAdmin', 'Admin', 'Manager', 'HR', 'Driver', 'Operator'],
         description: '员工综合服务台、请假日历与排班'
-    },
-    {
-        id: 'driver-leave',
-        label: '员工请假申请',
-        labelEn: 'Apply Leave',
-        group: 'organization',
-        icon: Calendar,
-        defaultRoles: ['Driver', 'HR'],
-        description: '快捷员工请假申请单 (指向 Staff Hub 请假中心)',
-        hiddenFromNav: true
     },
     {
         id: 'hr',
@@ -368,40 +368,14 @@ export const MODULE_REGISTRY: ModuleDefinition[] = [
         description: '管理层经营综合报表与导出'
     },
     {
-        id: 'iot',
-        label: '物联网硬件设置',
-        labelEn: 'IOT SETTINGS',
+        id: 'driver-leave',
+        label: '员工请假申请',
+        labelEn: 'Apply Leave',
         group: 'organization',
-        icon: Cpu,
-        defaultRoles: ['SuperAdmin', 'Admin', 'Manager'],
-        description: '车间传感器与物联硬件接口'
-    },
-    {
-        id: 'dev-log',
-        label: '系统开发日志',
-        labelEn: 'Dev Log',
-        group: 'organization',
-        icon: Activity,
-        defaultRoles: ['SuperAdmin', 'Admin'],
-        description: '系统版本迭代与开发日志'
-    },
-    {
-        id: 'system-docs',
-        label: '系统文档中心',
-        labelEn: 'System Docs',
-        group: 'organization',
-        icon: FileCode,
-        defaultRoles: ['SuperAdmin', 'Admin'],
-        description: '在线查看与编辑系统 Markdown 文档 (README, 业务真理库)'
-    },
-    {
-        id: 'activity-logs',
-        label: '系统操作日志',
-        labelEn: 'Activity Logs',
-        group: 'organization',
-        icon: Activity,
-        defaultRoles: ['SuperAdmin', 'Admin', 'Manager', 'HR', 'Driver', 'Operator'],
-        description: '系统关键业务操作审计追溯'
+        icon: Calendar,
+        defaultRoles: ['Driver', 'HR'],
+        description: '快捷员工请假申请单 (指向 Staff Hub 请假中心)',
+        hiddenFromNav: true
     },
     {
         id: 'personal-report',
@@ -410,10 +384,61 @@ export const MODULE_REGISTRY: ModuleDefinition[] = [
         group: 'organization',
         icon: FileText,
         defaultRoles: ['SuperAdmin', 'Admin', 'Manager', 'HR', 'Driver', 'Operator'],
-        description: '员工个人月度出勤、工时与趟数月报'
+        description: '员工个人月度出勤、工时与趟数月报',
+        hiddenFromNav: true // 点击左下角头像个人主页随时直达，不占用一级导航
+    },
+    {
+        id: 'iot',
+        label: '物联网硬件设置',
+        labelEn: 'IOT SETTINGS',
+        group: 'organization',
+        icon: Cpu,
+        defaultRoles: ['SuperAdmin', 'Admin', 'Manager'],
+        description: '车间传感器与物联硬件接口',
+        hiddenFromNav: true // 后台硬件接口，可通过 ⌘K 直达
+    },
+    {
+        id: 'dev-log',
+        label: '系统升级与工作日志',
+        labelEn: 'Dev & Task Log',
+        group: 'organization',
+        icon: Activity,
+        defaultRoles: ['SuperAdmin', 'Admin'],
+        description: '系统版本升级迭代与每日工作Task汇报中心',
+        hiddenFromNav: true // 研发日志中心，可通过 ⌘K 访问
+    },
+    {
+        id: 'system-docs',
+        label: '系统文档中心',
+        labelEn: 'System Docs',
+        group: 'organization',
+        icon: FileCode,
+        defaultRoles: ['SuperAdmin', 'Admin'],
+        description: '在线查看与编辑系统 Markdown 文档 (README, 业务真理库)',
+        hiddenFromNav: true // 系统文档，可通过 ⌘K 访问
+    },
+    {
+        id: 'activity-logs',
+        label: '系统操作日志',
+        labelEn: 'Activity Logs',
+        group: 'organization',
+        icon: Activity,
+        defaultRoles: ['SuperAdmin', 'Admin', 'Manager', 'HR', 'Driver', 'Operator'],
+        description: '系统关键业务操作审计追溯',
+        hiddenFromNav: true // 审计日志，可通过 ⌘K 访问
     },
 
     // ── PRODUCTIVITY ──
+    {
+        id: 'tasks',
+        label: '协同任务看板',
+        labelEn: 'Tasks',
+        group: 'productivity',
+        icon: ClipboardList,
+        defaultRoles: ['SuperAdmin', 'Admin', 'Manager', 'HR', 'Driver', 'Operator'],
+        badgeKey: 'tasks',
+        description: '协同任务指派与跟踪'
+    },
     {
         id: 'sop-center',
         label: 'SOP 标准指引',
@@ -430,7 +455,8 @@ export const MODULE_REGISTRY: ModuleDefinition[] = [
         group: 'productivity',
         icon: Camera,
         defaultRoles: ['SuperAdmin', 'Admin', 'Manager', 'HR', 'Driver', 'Operator'],
-        description: '📸 车间机台与现场作业拍照存档'
+        description: '📸 车间机台与现场作业拍照存档',
+        hiddenFromNav: true // 业务端内置拍照，可通过 ⌘K 直达
     },
     {
         id: 'notes',
@@ -439,17 +465,8 @@ export const MODULE_REGISTRY: ModuleDefinition[] = [
         group: 'productivity',
         icon: FileText,
         defaultRoles: ['SuperAdmin', 'Admin', 'Manager', 'HR', 'Driver', 'Operator'],
-        description: '日常工作速记便签'
-    },
-    {
-        id: 'tasks',
-        label: '协同任务看板',
-        labelEn: 'Tasks',
-        group: 'productivity',
-        icon: ClipboardList,
-        defaultRoles: ['SuperAdmin', 'Admin', 'Manager', 'HR', 'Driver', 'Operator'],
-        badgeKey: 'tasks',
-        description: '协同任务指派与跟踪'
+        description: '日常工作速记便签',
+        hiddenFromNav: true // 可通过 ⌘K 直达
     }
 ];
 

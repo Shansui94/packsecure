@@ -103,7 +103,7 @@
 在 [`src/components/Layout.tsx`](../src/components/Layout.tsx) 与 [`src/utils/i18n.ts`](../src/utils/i18n.ts) 中，固定维护两套框架级防线：
 
 1. **`ROLE_LABELS`**：覆盖系统全部 11 种用户角色（`SuperAdmin`、`LogisticsCoordinator`、`Driver`、`HR`、`Operator` 等）的标准名称。
-2. **`FRAME_LABELS`**：覆盖系统全局控制项（`Quit` 退出登录、`Dark/Light` 深浅色模式、`PIN: ` 工号、`System v6.7 • Data Center Active` 系统状态、`Expand/Collapse sidebar` 侧栏折叠、`🤖 AI Assistant`、`💡 Page Logic Guide`）。
+2. **`FRAME_LABELS`**：覆盖系统全局控制项（`Quit` 退出登录、`Dark/Light` 深浅色模式、`PIN: ` 工号、`System v7.0 • Data Center Active` 系统状态、`Expand/Collapse sidebar` 侧栏折叠、`🤖 AI Assistant`、`💡 Page Logic Guide`）。
 3. **`CORE_TERMS`**：在 `i18n.ts` 中维护的跨 7 国语言高频词典，支持双向索引，自动向各语言资源包注入。
 
 ---

@@ -80,10 +80,19 @@ export interface OmniDocumentDraft {
     rawAiResponse?: any;
 }
 
+export interface OmniAnswerData {
+    title: string;
+    text: string;
+    quickActions?: Array<{ label: string; query: string; icon?: string }>;
+    targetPage?: string;
+    targetPageLabel?: string;
+}
+
 export interface OmniInterpretationResult {
-    type: 'action' | 'insight' | 'unknown';
+    type: 'action' | 'insight' | 'answer' | 'unknown';
     actionDraft?: OmniActionDraft;
     insightData?: OmniInsightData;
+    answerData?: OmniAnswerData;
     message?: string;
 }
 
@@ -110,7 +119,8 @@ export function searchPages(
 ): OmniSearchResult[] {
     const q = query.trim().toLowerCase();
     const modules = MODULE_REGISTRY.filter((mod: ModuleDefinition) => {
-        if (mod.hiddenFromNav) return false;
+        // Allow hidden pages to be found if the user explicitly searches for them
+        if (mod.hiddenFromNav && !q) return false;
         if (allowedPageIds && !allowedPageIds.has('*') && !allowedPageIds.has(mod.id)) return false;
         if (!q) return true;
         const matchLabel = mod.label?.toLowerCase().includes(q);
@@ -492,6 +502,37 @@ export function parseLocalActionIntent(rawText: string, currentUser?: any): Omni
 }
 
 /**
+ * Instant client-side greeting and operational helper recognizer
+ */
+export function checkLocalGreetingOrHelp(rawText: string, currentUser?: any): OmniAnswerData | null {
+    const text = rawText.trim();
+    if (!text) return null;
+
+    const isGreeting = /^(?:你好|您好|hi|hello|嗨|早|早安|晚安|哈喽|在吗|hey|yo)/i.test(text);
+    const isHelp = /^(?:帮助|help|指南|功能|你是谁|怎么用|能做什么|\?|？)/i.test(text);
+
+    if (!isGreeting && !isHelp) return null;
+
+    const userName = currentUser?.name || '同事';
+    const userRole = currentUser?.role || '成员';
+
+    return {
+        title: `您好，${userName}！我是 Packsecure 智能协同助理 👋`,
+        text: `我是工厂与仓储运营的 AI 助理（当前身份：${userRole}）。您可以在这个万能输入口随时进行：\n\n• **极速搜索**：输入 DO 单号、客户名、物料 SKU、机台或员工\n• **业务指令**：直接输入 “报修 T1-M03 切刀故障”、“待办 盘点原料仓”、“请假 明天年假1天”\n• **运营看板**：输入 “全厂设备稼动率”、“今日送货单概况” 秒出数据卡片\n• **凭证归档**：直接拖入或粘贴 (Ctrl+V) PUSPAKOM 验车单、官方公函、油票报销单`,
+        quickActions: [
+            { label: '🛠️ 报修机台 (T1-M03)', query: '报修 T1-M03 切刀钝化' },
+            { label: '📋 新建协同待办', query: '待办 盘点原料仓库存' },
+            { label: '🏖️ 申请年假', query: '请假 明天年假1天' },
+            { label: '📊 查询设备稼动率', query: '全厂设备稼动率' },
+            { label: '🚚 查询吉兰丹订单', query: '吉兰丹' },
+            { label: '📎 凭证文档中心', query: 'doc: ' }
+        ],
+        targetPage: 'factory-live-os',
+        targetPageLabel: '进入全厂实时看板 (Factory Live OS)'
+    };
+}
+
+/**
  * Process document upload and run multi-modal AI extraction
  */
 export async function processDocumentFile(
@@ -726,14 +767,38 @@ export async function queryOmniAI(
         return data;
     } catch (err: any) {
         console.warn('Omni Command remote AI fallback:', err);
-        // Fallback: If local heuristic matched, return action
+        // Fallback 1: If local greeting matched, return greeting answer
+        const localGreeting = checkLocalGreetingOrHelp(query, context.user);
+        if (localGreeting) {
+            return { type: 'answer', answerData: localGreeting };
+        }
+        // Fallback 2: If local heuristic matched, return action
         const localAction = parseLocalActionIntent(query, context.user);
         if (localAction) {
             return { type: 'action', actionDraft: localAction };
         }
+        // Fallback 3: Question assistance
+        const isQuestion = /(?:怎么|如何|什么|哪|为什么|规则|流程|步骤|可以|能不能|how|what|why)/i.test(query);
+        if (isQuestion) {
+            return {
+                type: 'answer',
+                answerData: {
+                    title: '业务与操作指引',
+                    text: `针对您的提问 “**${query}**”：\n\n您可以使用万能指令分发业务：\n• **设备报修**：输入「报修 T1-M03 切刀故障」\n• **工作待办**：输入「待办 盘点原料仓」\n• **员工请假**：输入「请假 明天年假1天」\n• **单据搜索**：输入 DO 单号或客户名\n• **凭证归档**：拖入或粘贴 PUSPAKOM、油票、公函等\n\n点击下方按钮可前往 SOP 知识库或开启语音助理。`,
+                    quickActions: [
+                        { label: '🛠️ 报修机台', query: '报修 ' },
+                        { label: '📋 新建待办', query: '待办 ' },
+                        { label: '🏖️ 申请请假', query: '请假 ' },
+                        { label: '📖 查看 SOP 知识库', query: 'SOP' }
+                    ],
+                    targetPage: 'sop-management',
+                    targetPageLabel: '前往 SOP 知识库'
+                }
+            };
+        }
         return {
             type: 'unknown',
-            message: '暂时无法联网识别复杂语义，请尝试使用关键词搜索或标准指令（如：报修 T1-M03 切刀故障、待办 盘点原料仓）'
+            message: '未能精确识别该指令，您可输入关键词直接检索单据/客户，或使用如：“报修 T1-M03 切刀故障”、“待办 盘点成品仓” 等明确指令。'
         };
     }
 }

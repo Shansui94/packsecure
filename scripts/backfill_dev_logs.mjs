@@ -166,15 +166,17 @@ ${diffStat}
 }
 
 async function run() {
-    let d = new Date('2026-05-14T00:00:00+08:00'); // This evaluates to 2026-05-13 UTC
-    const end = new Date('2026-05-14T23:59:59+08:00');
-    
-    while (d <= end) {
-        const dateStr = d.toISOString().split('T')[0];
+    const rawDates = execSync('git log --since="2026-05-15" --until="2026-09-16" --format="%ad" --date=short', { encoding: 'utf8' })
+        .trim().split('\n').filter(Boolean);
+    const targetDates = [...new Set(rawDates)].sort();
+    console.log(`Found ${targetDates.length} unique dates with commits to process:`, targetDates);
+
+    for (let i = 0; i < targetDates.length; i++) {
+        const dateStr = targetDates[i];
+        console.log(`\n[${i + 1}/${targetDates.length}]`);
         await processDate(dateStr);
-        d.setDate(d.getDate() + 1);
     }
-    console.log("Backfill complete.");
+    console.log("\n🎉 All missing dates backfill complete!");
 }
 
 run();

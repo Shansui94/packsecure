@@ -33,7 +33,12 @@ import {
     FlaskConical,
     Bot,
     Lightbulb,
-    Search
+    Search,
+    Archive,
+    Pin,
+    PinOff,
+    Layers,
+    ChevronDown
 } from 'lucide-react';
 import { supabase } from '../services/supabase';
 import { canAccessPage, computeEffectivePermissions } from '../utils/pageAccess';
@@ -43,6 +48,7 @@ import PageLogicDrawer from './PageLogicDrawer';
 import { changeLanguage, LANGUAGES, t } from '../utils/i18n';
 import SmartIntakeModal from './SmartIntakeModal';
 import OmniCommandBar from './OmniCommandBar';
+import AppHubModal from './AppHubModal';
 
 interface LayoutProps {
     children: React.ReactNode;
@@ -63,6 +69,45 @@ const Layout: React.FC<LayoutProps> = ({ children, activePage, setActivePage, us
     // DB-driven page permissions: Set<page_id> of allowed pages for this role
     const [dbAllowedPages, setDbAllowedPages] = useState<Set<string> | null>(null);
     const [showLangModal, setShowLangModal] = useState(false);
+    const [showAppHubModal, setShowAppHubModal] = useState(false);
+    const [isMoreCollapsed, setIsMoreCollapsed] = useState<boolean>(true);
+    const [showAllModules, setShowAllModules] = useState<boolean>(
+        () => localStorage.getItem('packsecure_show_all_modules') === 'true'
+    );
+    const [customOverrides, setCustomOverrides] = useState<Record<string, boolean>>(() => {
+        try {
+            return JSON.parse(localStorage.getItem('packsecure_nav_overrides') || '{}');
+        } catch {
+            return {};
+        }
+    });
+
+    const handleToggleOverride = (moduleId: string, visible: boolean) => {
+        setCustomOverrides(prev => {
+            const next = { ...prev, [moduleId]: visible };
+            localStorage.setItem('packsecure_nav_overrides', JSON.stringify(next));
+            return next;
+        });
+    };
+
+    const handleResetOverrides = () => {
+        setCustomOverrides({});
+        localStorage.removeItem('packsecure_nav_overrides');
+    };
+
+    const handleToggleShowAll = (showAll: boolean) => {
+        setShowAllModules(showAll);
+        localStorage.setItem('packsecure_show_all_modules', String(showAll));
+    };
+
+    const isModuleVisible = useCallback((mod: any) => {
+        if (customOverrides[mod.id] !== undefined) {
+            return customOverrides[mod.id];
+        }
+        if (showAllModules) return true;
+        return !mod.hiddenFromNav;
+    }, [customOverrides, showAllModules]);
+
     const isSuperAdmin = userRole === 'SuperAdmin';
 
     const languages = LANGUAGES;
@@ -104,7 +149,7 @@ const Layout: React.FC<LayoutProps> = ({ children, activePage, setActivePage, us
         'Expand sidebar': { zh: '展开侧栏', en: 'Expand sidebar' },
         'Collapse sidebar': { zh: '折叠侧栏', en: 'Collapse sidebar' },
         'PIN: ': { zh: '工号: ', en: 'PIN: ' },
-        'System v6.7 • Data Center Active': { zh: '系统 v6.7 • 数据中心运行中', en: 'System v6.7 • Data Center Active' },
+        'System v7.0 • Data Center Active': { zh: '系统 v7.0 • 数据中心运行中', en: 'System v7.0 • Data Center Active' },
         'System Language / 系统语言': { zh: '系统语言', en: 'Language' },
         'View My Profile / 个人主页': { zh: '个人主页', en: 'Profile' }
     };
@@ -433,7 +478,7 @@ const Layout: React.FC<LayoutProps> = ({ children, activePage, setActivePage, us
                                 <div>
                                     <div className="flex items-center gap-1.5 mt-1">
                                         <span className="w-1.5 h-1.5 rounded-full bg-green-500 animate-pulse shadow-[0_0_8px_rgba(34,197,94,0.6)]"></span>
-                                        <p className="text-[10px] font-bold text-gray-400 uppercase tracking-widest">{translateUI('System v6.7 • Data Center Active')}</p>
+                                        <p className="text-[10px] font-bold text-gray-400 uppercase tracking-widest">{translateUI('System v7.0 • Data Center Active')}</p>
                                     </div>
                                 </div>
                             )}
@@ -445,7 +490,7 @@ const Layout: React.FC<LayoutProps> = ({ children, activePage, setActivePage, us
                         {/* DYNAMIC RBAC NAVIGATION DRIVEN BY MODULE_GROUPS & MODULE_REGISTRY */}
                         {MODULE_GROUPS.map(group => {
                             const groupModules = MODULE_REGISTRY.filter(
-                                m => m.group === group.id && !m.hiddenFromNav && hasAccess(m.id)
+                                m => m.group === group.id && isModuleVisible(m) && hasAccess(m.id)
                             );
 
                             if (groupModules.length === 0) return null;
@@ -470,6 +515,99 @@ const Layout: React.FC<LayoutProps> = ({ children, activePage, setActivePage, us
                                 </NavGroup>
                             );
                         })}
+
+                        {/* 📦 更多已收起功能 (Collapsed Modules Section) */}
+                        {(() => {
+                            const collapsedModules = MODULE_REGISTRY.filter(
+                                m => !isModuleVisible(m) && hasAccess(m.id)
+                            );
+                            if (collapsedModules.length === 0) return null;
+
+                            return (
+                                <div className="pt-2 border-t border-white/5 mt-3 mb-2">
+                                    <div className="flex items-center justify-between">
+                                        <button
+                                            type="button"
+                                            onClick={() => {
+                                                if (useCollapsedNavLayout) {
+                                                    setShowAppHubModal(true);
+                                                } else {
+                                                    setIsMoreCollapsed(!isMoreCollapsed);
+                                                }
+                                            }}
+                                            className={`flex items-center gap-2 rounded-xl text-xs font-bold transition cursor-pointer text-left ${
+                                                useCollapsedNavLayout 
+                                                    ? 'w-full justify-center py-2.5 text-amber-400 hover:bg-white/5' 
+                                                    : 'flex-1 py-2 px-3 text-gray-400 hover:text-white hover:bg-white/5'
+                                            }`}
+                                            title={useCollapsedNavLayout ? `更多已收起功能 (${collapsedModules.length})` : undefined}
+                                        >
+                                            <Archive size={15} className="text-amber-400 shrink-0" />
+                                            {showNavLabels && (
+                                                <div className="flex items-center justify-between flex-1 min-w-0 pr-1">
+                                                    <span className="truncate">更多已收起功能</span>
+                                                    <span className="bg-amber-500/20 text-amber-300 px-1.5 py-0.5 text-[10px] rounded font-mono ml-1">
+                                                        {collapsedModules.length}
+                                                    </span>
+                                                </div>
+                                            )}
+                                            {showNavLabels && (
+                                                <ChevronDown size={14} className={`text-gray-500 shrink-0 transform transition-transform duration-200 ${isMoreCollapsed ? '' : 'rotate-180'}`} />
+                                            )}
+                                        </button>
+
+                                        {showNavLabels && (
+                                            <button
+                                                type="button"
+                                                onClick={() => setShowAppHubModal(true)}
+                                                title="打开全功能中心与菜单管理"
+                                                className="p-2 text-gray-500 hover:text-amber-300 hover:bg-white/5 rounded-xl transition cursor-pointer shrink-0 ml-1"
+                                            >
+                                                <Layers size={14} />
+                                            </button>
+                                        )}
+                                    </div>
+
+                                    {/* Expanded items list */}
+                                    {!isMoreCollapsed && showNavLabels && (
+                                        <div className="mt-1 space-y-0.5 pl-3 pr-1 border-l-2 border-amber-500/30 ml-4 animate-in fade-in duration-150">
+                                            {collapsedModules.map(mod => {
+                                                const isCurrentActive = activePage === mod.id;
+                                                const modLabel = getLocalizedLabel(mod);
+                                                return (
+                                                    <div key={mod.id} className="flex items-center group/item rounded-lg hover:bg-white/5 pr-1 transition">
+                                                        <button
+                                                            type="button"
+                                                            onClick={() => {
+                                                                setActivePage(mod.id);
+                                                                setIsMobileMenuOpen(false);
+                                                            }}
+                                                            className={`flex-1 flex items-center gap-2.5 px-2 py-1.5 text-xs text-left truncate transition cursor-pointer ${
+                                                                isCurrentActive ? 'text-amber-300 font-bold' : 'text-gray-400 hover:text-gray-200'
+                                                            }`}
+                                                        >
+                                                            <mod.icon size={14} className={isCurrentActive ? 'text-amber-400' : 'text-gray-500 group-hover/item:text-gray-300'} />
+                                                            <span className="truncate">{modLabel}</span>
+                                                        </button>
+                                                        <button
+                                                            type="button"
+                                                            onClick={(e) => {
+                                                                e.stopPropagation();
+                                                                handleToggleOverride(mod.id, true);
+                                                            }}
+                                                            title="固定至侧栏常驻"
+                                                            className="p-1 text-gray-600 hover:text-amber-400 opacity-0 group-hover/item:opacity-100 transition cursor-pointer"
+                                                        >
+                                                            <Pin size={11} />
+                                                        </button>
+                                                    </div>
+                                                );
+                                            })}
+                                        </div>
+                                    )}
+                                </div>
+                            );
+                        })()}
                         {/* 🤖 AI 助理与 💡 本页逻辑说明 专用按钮 (移至左侧菜单) */}
                         <div className="px-3 pt-3 pb-2 border-t border-white/5 space-y-2 shrink-0">
                             <button
@@ -652,6 +790,22 @@ const Layout: React.FC<LayoutProps> = ({ children, activePage, setActivePage, us
                         currentUser={user} 
                         allowedPageIds={dbAllowedPages} 
                         onNavigate={(pageId) => setActivePage(pageId)} 
+                    />
+
+                    <AppHubModal
+                        isOpen={showAppHubModal}
+                        onClose={() => setShowAppHubModal(false)}
+                        onNavigate={(pageId) => {
+                            setActivePage(pageId);
+                            setIsMobileMenuOpen(false);
+                        }}
+                        customOverrides={customOverrides}
+                        onToggleOverride={handleToggleOverride}
+                        onResetOverrides={handleResetOverrides}
+                        showAllModules={showAllModules}
+                        onToggleShowAll={handleToggleShowAll}
+                        hasAccess={hasAccess}
+                        activePage={activePage}
                     />
                 </main>
             </div>

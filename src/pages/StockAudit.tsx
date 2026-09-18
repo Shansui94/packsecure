@@ -3,7 +3,8 @@ import { supabase } from '../services/supabase';
 import { getV2Items } from '../services/apiV2';
 import { V2Item } from '../types/v2';
 import { User } from '../types';
-import { ClipboardCheck, Search, Filter, Warehouse, CheckCircle2, ChevronRight, Calculator, Check, AlertCircle, Calendar } from 'lucide-react';
+import { ClipboardCheck, Search, Filter, Warehouse, CheckCircle2, ChevronRight, Calculator, Check, AlertCircle, Calendar, FileBarChart } from 'lucide-react';
+import AuditReport from './AuditReport';
 
 import { WAREHOUSES } from '../data/factoryData';
 
@@ -38,6 +39,7 @@ const StockAudit: React.FC<StockAuditProps> = ({ user }) => {
     const [customTime, setCustomTime] = useState('');
 
     // UI State
+    const [activeTab, setActiveTab] = useState<'audit' | 'report'>('audit');
     const [loading, setLoading] = useState(true);
     const [processing, setProcessing] = useState(false);
     const [toast, setToast] = useState<{ msg: string; type: 'ok' | 'err' } | null>(null);
@@ -249,14 +251,46 @@ const StockAudit: React.FC<StockAuditProps> = ({ user }) => {
                 )}
 
                 {/* Header */}
-                <div className="mb-8">
+                <div className="mb-6">
                     <div className="flex items-center gap-3 text-cyan-500 mb-2">
                         <ClipboardCheck size={28} className="drop-shadow-[0_0_10px_rgba(6,182,212,0.5)]" />
-                        <h1 className="text-3xl font-black tracking-tighter text-white">Stock Audit</h1>
+                        <h1 className="text-3xl font-black tracking-tighter text-white">Stock Audit & Reports</h1>
                     </div>
-                    <p className="text-gray-500 text-sm">Align system ledger with physical warehouse counts seamlessly.</p>
+                    <p className="text-gray-500 text-sm">Align system ledger with physical warehouse counts seamlessly and inspect audit variance logs.</p>
                 </div>
 
+                {/* Main Tabs */}
+                <div className="flex items-center gap-2 mb-8 border-b border-white/10 pb-3">
+                    <button
+                        type="button"
+                        onClick={() => setActiveTab('audit')}
+                        className={`flex items-center gap-2 px-5 py-2.5 rounded-xl font-bold text-sm transition-all cursor-pointer ${
+                            activeTab === 'audit'
+                                ? 'bg-cyan-500/20 text-cyan-300 border border-cyan-500/40 shadow-lg shadow-cyan-500/10'
+                                : 'text-gray-400 hover:text-white hover:bg-white/5 border border-transparent'
+                        }`}
+                    >
+                        <ClipboardCheck size={18} />
+                        <span>实物盘点作业 (Stock Audit)</span>
+                    </button>
+                    <button
+                        type="button"
+                        onClick={() => setActiveTab('report')}
+                        className={`flex items-center gap-2 px-5 py-2.5 rounded-xl font-bold text-sm transition-all cursor-pointer ${
+                            activeTab === 'report'
+                                ? 'bg-cyan-500/20 text-cyan-300 border border-cyan-500/40 shadow-lg shadow-cyan-500/10'
+                                : 'text-gray-400 hover:text-white hover:bg-white/5 border border-transparent'
+                        }`}
+                    >
+                        <FileBarChart size={18} />
+                        <span>盘点损益报告 (Audit Report)</span>
+                    </button>
+                </div>
+
+                {activeTab === 'report' ? (
+                    <AuditReport user={user} />
+                ) : (
+                    <>
                 {/* ── STEP 1: AUDIT CONFIGURATION ── */}
                 {step === 1 && (
                     <div className="bg-[#0f0f13] border border-white/5 rounded-3xl p-8 shadow-2xl max-w-2xl mx-auto mt-12 relative overflow-hidden group">
@@ -493,6 +527,8 @@ const StockAudit: React.FC<StockAuditProps> = ({ user }) => {
                             </div>
                         </div>
                     </div>
+                )}
+                </>
                 )}
             </div>
         </div>

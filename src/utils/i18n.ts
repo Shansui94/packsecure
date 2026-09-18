@@ -243,7 +243,7 @@ export const CORE_TERMS: {
     { en: 'Expand sidebar', 'zh-CN': '展开侧栏', 'zh-TW': '展開側欄', ms: 'Kembangkan bar sisi', my: 'ဘေးဘားဖွင့်ပါ', hi: 'साइडबार विस्तृत करें', bn: 'সাইডবার প্রসারিত করুন' },
     { en: 'Collapse sidebar', 'zh-CN': '折叠侧栏', 'zh-TW': '摺疊側欄', ms: 'Runtuhkan bar sisi', my: 'ဘေးဘားခေါက်ပါ', hi: 'साइडबार संक्षिप्त करें', bn: 'সাইডবার সঙ্কুচিত করুন' },
     { en: 'PIN: ', 'zh-CN': '工号: ', 'zh-TW': '工號: ', ms: 'PIN: ', my: 'PIN: ', hi: 'पिन: ', bn: 'পিন: ' },
-    { en: 'System v6.7 • Data Center Active', 'zh-CN': '系统 v6.7 • 数据中心运行中', 'zh-TW': '系統 v6.7 • 數據中心運行中', ms: 'Sistem v6.7 • Pusat Data Aktif', my: 'စနစ် v6.7 • ဒေတာစင်တာ အလုပ်လုပ်နေသည်', hi: 'सिस्टम v6.7 • डेटा सेंटर सक्रिय', bn: 'সিস্টেম v6.7 • ডেটা সেন্টার সক্রিয়' },
+    { en: 'System v7.0 • Data Center Active', 'zh-CN': '系统 v7.0 • 数据中心运行中', 'zh-TW': '系統 v7.0 • 數據中心運行中', ms: 'Sistem v7.0 • Pusat Data Aktif', my: 'စနစ် v7.0 • ဒေတာစင်တာ အလုပ်လုပ်နေသည်', hi: 'सिस्टम v7.0 • डेटा सेंटर सक्रिय', bn: 'সিস্টেম v7.0 • ডেটা সেন্টার সক্রিয়' },
     { en: 'System Language / 系统语言', 'zh-CN': '系统语言', 'zh-TW': '系統語言', ms: 'Bahasa Sistem', my: 'စနစ်ဘာသာစကား', hi: 'सिस्टम भाषा', bn: 'সিস্টেম ভাষা' },
     { en: 'View My Profile / 个人主页', 'zh-CN': '查看个人主页', 'zh-TW': '查看個人主頁', ms: 'Lihat Profil', my: 'ပရိုဖိုင်ကြည့်ရှုပါ', hi: 'प्रोफाइल देखें', bn: 'প্রোফাইল দেখুন' },
     { en: '🤖 AI Assistant', 'zh-CN': '🤖 AI 智能助理', 'zh-TW': '🤖 AI 智能助理', ms: '🤖 Pembantu AI', my: '🤖 AI လက်ထောက်', hi: '🤖 एआई सहायक', bn: '🤖 এআই সহকারী' },

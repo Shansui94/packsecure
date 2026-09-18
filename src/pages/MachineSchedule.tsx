@@ -1,6 +1,6 @@
 import React, { useState, useEffect, useMemo } from 'react';
 import { supabase } from '../services/supabase';
-import { Clock, Package, BarChart3, ShieldCheck, User, CalendarDays, Settings2, Calendar as CalendarIcon, Download } from 'lucide-react';
+import { Clock, Package, BarChart3, ShieldCheck, User, CalendarDays, Settings2, Calendar as CalendarIcon, Download, Printer } from 'lucide-react';
 import { MACHINES } from '../data/factoryData';
 import { mytTodayYmd } from '../utils/mytDate';
 
@@ -19,7 +19,7 @@ interface UserData {
     role: string;
 }
 
-const MachineSchedule: React.FC<{ user?: any }> = () => {
+const MachineSchedule: React.FC<{ user?: any; onNavigate?: (page: string) => void }> = ({ user, onNavigate }) => {
     const [viewMode, setViewMode] = useState<'daily' | 'monthly'>('daily');
     const [selectedDate, setSelectedDate] = useState<string>(mytTodayYmd());
     const [selectedMonth, setSelectedMonth] = useState<string>(mytTodayYmd().slice(0, 7)); // YYYY-MM
@@ -447,6 +447,12 @@ const MachineSchedule: React.FC<{ user?: any }> = () => {
                         <button onClick={() => setShowRates(!showRates)} className={`flex items-center gap-2 px-4 py-2 rounded-xl font-bold text-sm transition-all duration-300 border ${showRates ? 'bg-purple-600/20 text-purple-400 border-purple-500/30' : 'bg-white/5 text-gray-400 border-white/10 hover:text-white'}`}>
                             <Settings2 size={16} /> Machine Rates
                         </button>
+
+                        {onNavigate && (
+                            <button onClick={() => onNavigate('machine-labels')} className="flex items-center gap-2 px-4 py-2 rounded-xl font-bold text-sm transition-all duration-300 bg-white/5 text-gray-400 border border-white/10 hover:text-white hover:bg-white/10 cursor-pointer" title="打印机台二维码标签">
+                                <Printer size={16} /> QR Labels
+                            </button>
+                        )}
 
                         <button onClick={handleExportCSV} className="flex items-center gap-2 px-4 py-2 rounded-xl font-bold text-sm transition-all duration-300 bg-blue-600 text-white hover:bg-blue-700">
                             <Download size={16} /> Export CSV

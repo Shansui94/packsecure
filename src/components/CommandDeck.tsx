@@ -47,7 +47,7 @@ export const CommandDeck: React.FC<{ totalItems: number; activeTab: string; data
                 <h1 className="text-4xl font-black text-transparent bg-clip-text bg-gradient-to-r from-indigo-400 to-cyan-400 mb-2">
                     COMMAND DECK
                 </h1>
-                <p className="text-gray-500 font-mono">System v6.7 • AI Core Online</p>
+                <p className="text-gray-500 font-mono">System v7.0 • AI Core Online</p>
             </div>
 
             {/* Grid */}

@@ -369,7 +369,7 @@ const Login: React.FC<LoginProps> = ({ onLogin, onNavigate }) => {
             </div>
 
             <div className="absolute bottom-4 text-center w-full z-10 text-slate-700 text-[10px] tracking-widest uppercase">
-                System v6.7 • Data Center Active
+                System v7.0 • Data Center Active
             </div>
         </div>
     );

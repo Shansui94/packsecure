@@ -16,6 +16,7 @@ import {
     Loader2,
     SlidersHorizontal,
     Bot,
+    MessageSquare,
     Paperclip,
     UploadCloud,
     Truck,
@@ -25,6 +26,7 @@ import {
 import {
     searchEntities,
     parseLocalActionIntent,
+    checkLocalGreetingOrHelp,
     queryOmniAI,
     executeOmniAction,
     processDocumentFile,
@@ -33,6 +35,7 @@ import {
     OmniActionDraft,
     OmniInsightData,
     OmniDocumentDraft,
+    OmniAnswerData,
     OmniResultType
 } from '../services/omniSearchService';
 import { User } from '../types';
@@ -107,9 +110,10 @@ export const OmniCommandBar: React.FC<OmniCommandBarProps> = ({
         docs: []
     });
 
-    // Active Card Modes (Mode B: Action Preview, Mode C: Insight, Mode D: Document)
+    // Active Card Modes (Mode B: Action Preview, Mode C: Insight, Mode D: Document, Mode E: Answer)
     const [activeActionDraft, setActiveActionDraft] = useState<OmniActionDraft | null>(null);
     const [activeInsight, setActiveInsight] = useState<OmniInsightData | null>(null);
+    const [activeAnswer, setActiveAnswer] = useState<OmniAnswerData | null>(null);
     const [feedbackToast, setFeedbackToast] = useState<{ type: 'success' | 'error' | 'info'; text: string } | null>(null);
 
     // Keyboard navigation index across flat list
@@ -134,9 +138,15 @@ export const OmniCommandBar: React.FC<OmniCommandBarProps> = ({
 
     // Local action suggestion detected from query
     const suggestedAction = useMemo(() => {
-        if (!query.trim() || activeActionDraft || activeInsight || activeDocumentDraft) return null;
+        if (!query.trim() || activeActionDraft || activeInsight || activeDocumentDraft || activeAnswer) return null;
         return parseLocalActionIntent(query, currentUser);
-    }, [query, currentUser, activeActionDraft, activeInsight, activeDocumentDraft]);
+    }, [query, currentUser, activeActionDraft, activeInsight, activeDocumentDraft, activeAnswer]);
+
+    // Instant local greeting & operational guidance detected from query (e.g. "你好", "hello", "帮助")
+    const localGreeting = useMemo(() => {
+        if (!query.trim() || activeActionDraft || activeInsight || activeDocumentDraft || activeAnswer) return null;
+        return checkLocalGreetingOrHelp(query, currentUser);
+    }, [query, currentUser, activeActionDraft, activeInsight, activeDocumentDraft, activeAnswer]);
 
     // Global shortcut listener (Cmd/Ctrl + K and /)
     useEffect(() => {
@@ -156,10 +166,11 @@ export const OmniCommandBar: React.FC<OmniCommandBarProps> = ({
             }
 
             if (e.key === 'Escape' && isOpen) {
-                if (activeActionDraft || activeInsight || activeDocumentDraft) {
+                if (activeActionDraft || activeInsight || activeDocumentDraft || activeAnswer) {
                     setActiveActionDraft(null);
                     setActiveInsight(null);
                     setActiveDocumentDraft(null);
+                    setActiveAnswer(null);
                 } else {
                     setIsOpen(false);
                 }
@@ -224,6 +235,7 @@ export const OmniCommandBar: React.FC<OmniCommandBarProps> = ({
             setActiveActionDraft(null);
             setActiveInsight(null);
             setActiveDocumentDraft(null);
+            setActiveAnswer(null);
             setFeedbackToast(null);
             setSelectedIndex(0);
             setIsDragOver(false);
@@ -257,6 +269,7 @@ export const OmniCommandBar: React.FC<OmniCommandBarProps> = ({
         setActiveActionDraft(null);
         setActiveInsight(null);
         setActiveDocumentDraft(null);
+        setActiveAnswer(null);
 
         if (debounceTimerRef.current) {
             clearTimeout(debounceTimerRef.current);
@@ -296,6 +309,19 @@ export const OmniCommandBar: React.FC<OmniCommandBarProps> = ({
         }
     };
 
+    // Apply quick action template from AI guidance
+    const handleApplyQuickAction = (actionQuery: string) => {
+        setQuery(actionQuery);
+        setActiveAnswer(null);
+        setActiveActionDraft(null);
+        setActiveInsight(null);
+        setActiveDocumentDraft(null);
+        executeSearch(actionQuery);
+        setTimeout(() => {
+            inputRef.current?.focus();
+        }, 50);
+    };
+
     // File Processing (Intake -> Gemini Multimodal OCR -> Structured Draft)
     const handleProcessFile = async (file: File) => {
         if (!file) return;
@@ -303,6 +329,7 @@ export const OmniCommandBar: React.FC<OmniCommandBarProps> = ({
         setFeedbackToast(null);
         setActiveActionDraft(null);
         setActiveInsight(null);
+        setActiveAnswer(null);
 
         try {
             const draft = await processDocumentFile(file, currentUser);
@@ -385,9 +412,16 @@ export const OmniCommandBar: React.FC<OmniCommandBarProps> = ({
                 setActiveActionDraft(aiRes.actionDraft);
                 setActiveInsight(null);
                 setActiveDocumentDraft(null);
+                setActiveAnswer(null);
             } else if (aiRes.type === 'insight' && aiRes.insightData) {
                 setActiveInsight(aiRes.insightData);
                 setActiveActionDraft(null);
+                setActiveDocumentDraft(null);
+                setActiveAnswer(null);
+            } else if (aiRes.type === 'answer' && aiRes.answerData) {
+                setActiveAnswer(aiRes.answerData);
+                setActiveActionDraft(null);
+                setActiveInsight(null);
                 setActiveDocumentDraft(null);
             } else {
                 setFeedbackToast({
@@ -453,6 +487,20 @@ export const OmniCommandBar: React.FC<OmniCommandBarProps> = ({
                 e.preventDefault();
                 onNavigate(activeInsight.targetPage);
                 setIsOpen(false);
+            }
+            return;
+        }
+
+        if (activeAnswer || localGreeting) {
+            const currentAns = activeAnswer || localGreeting;
+            if (e.key === 'Enter') {
+                e.preventDefault();
+                if (currentAns?.targetPage) {
+                    onNavigate(currentAns.targetPage);
+                    setIsOpen(false);
+                } else if (currentAns?.quickActions && currentAns.quickActions.length > 0) {
+                    handleApplyQuickAction(currentAns.quickActions[0].query);
+                }
             }
             return;
         }
@@ -1082,6 +1130,102 @@ export const OmniCommandBar: React.FC<OmniCommandBarProps> = ({
                                 </div>
                             )}
                         </div>
+                    ) : (activeAnswer || localGreeting) ? (
+                        /* ── MODE E: AI ANSWER / GREETING & GUIDANCE CARD ── */
+                        (() => {
+                            const displayAnswer = activeAnswer || localGreeting;
+                            if (!displayAnswer) return null;
+                            return (
+                                <div className="p-4 rounded-xl bg-zinc-900 border border-indigo-500/40 space-y-4 shadow-xl animate-in fade-in duration-200">
+                                    <div className="flex items-start justify-between gap-3 border-b border-zinc-800 pb-3">
+                                        <div className="flex items-center gap-2.5">
+                                            <div className="p-2 rounded-xl bg-gradient-to-br from-indigo-500 to-purple-600 text-white shadow-lg shadow-indigo-950/50">
+                                                <Bot className="w-5 h-5" />
+                                            </div>
+                                            <div>
+                                                <div className="flex items-center gap-2">
+                                                    <span className="px-2 py-0.5 rounded text-[11px] font-bold bg-indigo-500/20 text-indigo-300 border border-indigo-500/30 flex items-center gap-1">
+                                                        <Sparkles className="w-3 h-3 text-amber-300" />
+                                                        AI 智能协同中枢
+                                                    </span>
+                                                    <h3 className="text-sm sm:text-base font-bold text-white">
+                                                        {displayAnswer.title}
+                                                    </h3>
+                                                </div>
+                                                <p className="text-xs text-zinc-400 mt-0.5">
+                                                    实时为您解析意图、指引操作并推荐快捷动作
+                                                </p>
+                                            </div>
+                                        </div>
+                                        <button
+                                            onClick={() => {
+                                                setActiveAnswer(null);
+                                                setQuery('');
+                                            }}
+                                            className="text-zinc-500 hover:text-white p-1 rounded-lg hover:bg-zinc-800 transition cursor-pointer"
+                                        >
+                                            <X className="w-4 h-4" />
+                                        </button>
+                                    </div>
+
+                                    {/* Formatted Answer Body */}
+                                    <div className="text-xs sm:text-sm text-zinc-200 leading-relaxed whitespace-pre-line space-y-2 bg-zinc-950/60 p-3.5 rounded-xl border border-zinc-800/80">
+                                        {displayAnswer.text}
+                                    </div>
+
+                                    {/* Quick Action Chips (Click to auto-fill query and execute) */}
+                                    {displayAnswer.quickActions && displayAnswer.quickActions.length > 0 && (
+                                        <div className="space-y-2 pt-1">
+                                            <div className="text-[11px] font-bold uppercase tracking-wider text-zinc-400 flex items-center gap-1.5">
+                                                <Sparkles className="w-3.5 h-3.5 text-amber-400" />
+                                                <span>推荐快捷指令（点击立即填入）</span>
+                                            </div>
+                                            <div className="flex flex-wrap gap-2 pt-0.5">
+                                                {displayAnswer.quickActions.map((qa, idx) => (
+                                                    <button
+                                                        key={idx}
+                                                        onClick={() => handleApplyQuickAction(qa.query)}
+                                                        className="px-2.5 py-1.5 rounded-lg text-xs font-semibold bg-zinc-800/90 hover:bg-indigo-600 hover:text-white text-zinc-300 border border-zinc-700/80 hover:border-indigo-500 transition shadow-sm flex items-center gap-1.5 cursor-pointer group"
+                                                    >
+                                                        <span>{qa.label}</span>
+                                                        <CornerDownLeft className="w-3 h-3 text-zinc-500 group-hover:text-white transition" />
+                                                    </button>
+                                                ))}
+                                            </div>
+                                        </div>
+                                    )}
+
+                                    {/* Footer Navigation / Trigger Voice AI */}
+                                    <div className="flex items-center justify-between gap-3 pt-3 border-t border-zinc-800">
+                                        <button
+                                            onClick={() => {
+                                                setIsOpen(false);
+                                                window.dispatchEvent(new CustomEvent('packsecure:open-ai-chat'));
+                                            }}
+                                            className="px-3.5 py-2 rounded-xl text-xs font-bold text-indigo-300 hover:text-white bg-indigo-950/60 hover:bg-indigo-900 border border-indigo-800/60 transition flex items-center gap-1.5 cursor-pointer"
+                                        >
+                                            <MessageSquare className="w-3.5 h-3.5 text-indigo-400" />
+                                            <span>开启完整语音 AI 助手 (Titan)</span>
+                                        </button>
+
+                                        {displayAnswer.targetPage && (
+                                            <button
+                                                onClick={() => {
+                                                    if (displayAnswer.targetPage) {
+                                                        onNavigate(displayAnswer.targetPage);
+                                                        setIsOpen(false);
+                                                    }
+                                                }}
+                                                className="px-4 py-2 rounded-xl text-xs font-bold bg-gradient-to-r from-indigo-600 to-purple-600 hover:brightness-110 text-white flex items-center gap-1.5 transition shadow-lg shadow-indigo-950/40 cursor-pointer"
+                                            >
+                                                <span>{displayAnswer.targetPageLabel || '前往详情'}</span>
+                                                <ArrowUpRight className="w-3.5 h-3.5" />
+                                            </button>
+                                        )}
+                                    </div>
+                                </div>
+                            );
+                        })()
                     ) : (
                         /* ── MODE A: INSTANT SEARCH RESULTS ── */
                         <div className="space-y-1">
