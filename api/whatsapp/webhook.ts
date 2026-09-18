@@ -3,9 +3,11 @@ import { createClient } from '@supabase/supabase-js';
 import { GoogleGenerativeAI } from '@google/generative-ai';
 import { sendWhatsAppText, downloadWhatsAppMediaAsBase64, normalizePhoneNumber } from '../../lib/whatsapp.js';
 
-const supabaseUrl = process.env.SUPABASE_URL || process.env.VITE_SUPABASE_URL || '';
-const supabaseKey = process.env.SUPABASE_SERVICE_ROLE_KEY || process.env.VITE_SUPABASE_ANON_KEY || '';
-const supabase = createClient(supabaseUrl, supabaseKey);
+function getSupabase() {
+  const supabaseUrl = process.env.SUPABASE_URL || process.env.VITE_SUPABASE_URL || '';
+  const supabaseKey = process.env.SUPABASE_SERVICE_ROLE_KEY || process.env.VITE_SUPABASE_ANON_KEY || '';
+  return createClient(supabaseUrl, supabaseKey);
+}
 
 const apiKey = process.env.GOOGLE_API_KEY || process.env.GEMINI_API_KEY || '';
 
@@ -29,6 +31,7 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
   // 2. Incoming Event / Messages (POST)
   if (req.method === 'POST') {
     try {
+      const supabase = getSupabase();
       const body = req.body;
       const entry = body?.entry?.[0];
       const changes = entry?.changes?.[0];

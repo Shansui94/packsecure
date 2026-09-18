@@ -3,9 +3,11 @@ import { createClient } from '@supabase/supabase-js';
 import { applyAdminCors } from '../../lib/cors.js';
 import { sendWhatsAppText, sendWhatsAppTemplate } from '../../lib/whatsapp.js';
 
-const supabaseUrl = process.env.SUPABASE_URL || process.env.VITE_SUPABASE_URL || '';
-const supabaseKey = process.env.SUPABASE_SERVICE_ROLE_KEY || process.env.VITE_SUPABASE_ANON_KEY || '';
-const supabase = createClient(supabaseUrl, supabaseKey);
+function getSupabase() {
+  const supabaseUrl = process.env.SUPABASE_URL || process.env.VITE_SUPABASE_URL || '';
+  const supabaseKey = process.env.SUPABASE_SERVICE_ROLE_KEY || process.env.VITE_SUPABASE_ANON_KEY || '';
+  return createClient(supabaseUrl, supabaseKey);
+}
 
 export default async function handler(req: VercelRequest, res: VercelResponse) {
   applyAdminCors(req, res);
@@ -14,6 +16,7 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
   if (req.method !== 'POST') return res.status(405).json({ error: 'Method Not Allowed' });
 
   try {
+    const supabase = getSupabase();
     const { to, employeeId, userId, text, template, language, components } = req.body || {};
 
     let targetPhone = to;

@@ -419,7 +419,7 @@ const DriverDelivery: React.FC<DriverDeliveryProps> = ({ user, onNavigate }) => 
                     // 3. Fallback to order number descending if created_at is also empty
                     const numA = a.orderNumber || a.order_number || '';
                     const numB = b.orderNumber || b.order_number || '';
-                    return numB.localeCompare(numA);
+                    return String(numB || '').localeCompare(String(numA || ''));
                 });
                 setTasks(sorted);
             }
@@ -1000,7 +1000,7 @@ const DriverDelivery: React.FC<DriverDeliveryProps> = ({ user, onNavigate }) => 
                     const localUpdated: any = { 
                         ...t, 
                         status: nextStatus, 
-                        trip_drop_count: updatedTripDropCount,
+                        trip_drop_count: (selectedOrder as any).trip_drop_count || 1,
                         pod_photo_url: podPhotoUrl, 
                         pod_timestamp: new Date().toISOString(), 
                         notes: updatedNotes 
@@ -1746,7 +1746,7 @@ const DriverDelivery: React.FC<DriverDeliveryProps> = ({ user, onNavigate }) => 
                 const stopA = (a.stop_sequence !== undefined && a.stop_sequence !== null && a.stop_sequence !== 999) ? a.stop_sequence : 999;
                 const stopB = (b.stop_sequence !== undefined && b.stop_sequence !== null && b.stop_sequence !== 999) ? b.stop_sequence : 999;
                 if (stopA !== stopB) return stopA - stopB;
-                return (a.orderNumber || '').localeCompare(b.orderNumber || '');
+                return String(a.orderNumber || a.order_number || '').localeCompare(String(b.orderNumber || b.order_number || ''));
             });
 
             grp.totalDrops = grp.orders.length;
@@ -1817,7 +1817,7 @@ const DriverDelivery: React.FC<DriverDeliveryProps> = ({ user, onNavigate }) => 
             const seqB = b.sortSeq !== undefined ? b.sortSeq : 999;
             if (seqA !== seqB) return seqA - seqB;
 
-            return a.tripNumber.localeCompare(b.tripNumber);
+            return String(a.tripNumber || '').localeCompare(String(b.tripNumber || ''));
         });
 
         // 5. Assign fallback Trip Index Label for trips sharing a date without explicit trip note
@@ -1901,16 +1901,19 @@ const DriverDelivery: React.FC<DriverDeliveryProps> = ({ user, onNavigate }) => 
                                 <h2 className="text-base font-black text-white leading-tight">
                                     {order.deliveryAddress || 'Tugasan Luar / Ad-hoc Task'}
                                 </h2>
-                                {order.deliveryDate && (
-                                    <div className="flex items-center gap-2 mt-1 text-xs font-bold uppercase tracking-wider">
-                                        <span className="text-orange-400">
-                                            {['Ahad', 'Isnin', 'Selasa', 'Rabu', 'Khamis', 'Jumaat', 'Sabtu'][new Date(order.deliveryDate).getDay()]}
-                                        </span>
-                                        <span className="text-slate-400">
-                                            {new Date(order.deliveryDate).toLocaleDateString('en-GB', { day: '2-digit', month: 'short', year: 'numeric' })}
-                                        </span>
-                                    </div>
-                                )}
+                                {order.deliveryDate && (() => {
+                                    const d = new Date(order.deliveryDate);
+                                    const isValid = !isNaN(d.getTime());
+                                    const days = ['Ahad', 'Isnin', 'Selasa', 'Rabu', 'Khamis', 'Jumaat', 'Sabtu'];
+                                    return (
+                                        <div className="flex items-center gap-2 mt-1 text-xs font-bold uppercase tracking-wider">
+                                            {isValid && <span className="text-orange-400">{days[d.getDay()]}</span>}
+                                            <span className="text-slate-400">
+                                                {isValid ? d.toLocaleDateString('en-GB', { day: '2-digit', month: 'short', year: 'numeric' }) : order.deliveryDate}
+                                            </span>
+                                        </div>
+                                    );
+                                })()}
                             </div>
                         </div>
 
@@ -2001,7 +2004,7 @@ const DriverDelivery: React.FC<DriverDeliveryProps> = ({ user, onNavigate }) => 
                             )}
                             {(order as any).terms && (
                                 <span className={`text-[10px] font-black uppercase px-2 py-0.5 rounded-md border ${
-                                    (order as any).terms.toUpperCase().includes('C.O.D') 
+                                    String((order as any).terms || '').toUpperCase().includes('C.O.D') 
                                         ? 'bg-rose-500/20 text-rose-300 border-rose-500/40' 
                                         : 'bg-slate-700/50 text-slate-300 border-slate-600'
                                 }`}>
@@ -2075,16 +2078,19 @@ const DriverDelivery: React.FC<DriverDeliveryProps> = ({ user, onNavigate }) => 
                         )}
 
                         {/* Delivery Date */}
-                        {(order as any).deliveryDate && (
-                            <div className="flex items-center gap-2 mt-2 text-xs font-bold uppercase tracking-wider">
-                                <span className="text-orange-400">
-                                    {['Ahad', 'Isnin', 'Selasa', 'Rabu', 'Khamis', 'Jumaat', 'Sabtu'][new Date((order as any).deliveryDate).getDay()]}
-                                </span>
-                                <span className="text-slate-400">
-                                    {new Date((order as any).deliveryDate).toLocaleDateString('en-GB', { day: '2-digit', month: 'short', year: 'numeric' })}
-                                </span>
-                            </div>
-                        )}
+                        {(order as any).deliveryDate && (() => {
+                            const d = new Date((order as any).deliveryDate);
+                            const isValid = !isNaN(d.getTime());
+                            const days = ['Ahad', 'Isnin', 'Selasa', 'Rabu', 'Khamis', 'Jumaat', 'Sabtu'];
+                            return (
+                                <div className="flex items-center gap-2 mt-2 text-xs font-bold uppercase tracking-wider">
+                                    {isValid && <span className="text-orange-400">{days[d.getDay()]}</span>}
+                                    <span className="text-slate-400">
+                                        {isValid ? d.toLocaleDateString('en-GB', { day: '2-digit', month: 'short', year: 'numeric' }) : String((order as any).deliveryDate)}
+                                    </span>
+                                </div>
+                            );
+                        })()}
                     </div>
 
                     {/* Order Notes */}

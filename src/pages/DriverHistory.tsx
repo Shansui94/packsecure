@@ -434,11 +434,13 @@ const DriverHistory: React.FC<DriverHistoryProps> = ({ user, onNavigate }) => {
                     </div>
                 ) : (
                     tasks.map((order) => {
-                        const orderTotalDrops = 1;
+                        const orderTotalDrops = (order as any).trip_drop_count || 1;
                         const rawPodStr = order.pod_photo_url ? order.pod_photo_url.trim() : '';
                         const rawPhotosList = rawPodStr ? rawPodStr.split(',') : [];
                         const completedDropsCount = Math.floor(rawPhotosList.filter(Boolean).length / 2);
-                        const isDropMismatch = false;
+                        const validDoPhotosCount = rawPhotosList.filter((_, idx) => idx % 2 === 0 && Boolean(_ && _.trim())).length;
+                        const hasMissingDoSlot = completedDropsCount > validDoPhotosCount;
+                        const isDropMismatch = completedDropsCount !== orderTotalDrops || hasMissingDoSlot;
                         const extraJobPhoto = (order as any).proof_of_load_url || (order as any).proofOfLoadUrl;
 
                         return (
