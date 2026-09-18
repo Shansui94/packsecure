@@ -269,6 +269,9 @@ const OrderSummary: React.FC<OrderSummaryProps> = ({ user }) => {
                             finalStockMap[loc] = {};
                             items.forEach(item => {
                                 finalStockMap[loc][item.name] = locSkuStock[loc][item.sku] || 0;
+                                if (item.sku) {
+                                    finalStockMap[loc][item.sku] = locSkuStock[loc][item.sku] || 0;
+                                }
                             });
                         });
                         setStockMapByLoc(finalStockMap);
@@ -321,7 +324,7 @@ const OrderSummary: React.FC<OrderSummaryProps> = ({ user }) => {
 
             if (dateMode === 'pending_prep') {
                 // Fetch all orders that still need prep / loading
-                query = query.in('status', ['New', 'Planned', 'Assigned', 'Ready-to-Ship', 'Loading']);
+                query = query.in('status', ['New', 'Planned', 'Assigned', 'In-Production', 'Ready-to-Ship', 'Loading']);
             } else if (dateMode === 'all_active') {
                 // All active open orders
             } else {
@@ -445,7 +448,8 @@ const OrderSummary: React.FC<OrderSummaryProps> = ({ user }) => {
                 const driverObj = drivers.find(d => d.uid === driverId);
                 const driverPrefix = driverObj?.name ? driverObj.name.split(' ')[0].toUpperCase() : 'UNASSIGNED';
                 const dateCode = dateKey ? dateKey.replace(/-/g, '').slice(2) : '260917';
-                const tripTag = extracted.tripTag || (order.tripSequence ? `Trip ${order.tripSequence}` : 'Trip 1');
+                const isExplicitSeq = order.tripSequence && order.tripSequence !== 999;
+                const tripTag = extracted.tripTag || (isExplicitSeq ? `Trip ${order.tripSequence}` : 'Trip 1');
 
                 tripKey = `grouped_${driverId || 'unassigned'}_${dateKey}_${tripTag.replace(/\s+/g, '_')}`;
                 tripNum = `TRIP-${driverPrefix}-${dateCode}-${tripTag}`;
@@ -467,6 +471,8 @@ const OrderSummary: React.FC<OrderSummaryProps> = ({ user }) => {
                     lorryPlate = l?.plate_number || '';
                 }
 
+                const finalSeq = (order.tripSequence && order.tripSequence !== 999) ? order.tripSequence : (extracted.tripSeq || 1);
+
                 groups[tripKey] = {
                     tripId: tripKey,
                     tripNumber: tripNum,
@@ -481,7 +487,7 @@ const OrderSummary: React.FC<OrderSummaryProps> = ({ user }) => {
                     zones: [],
                     photos: [],
                     isPrepared: tripV2?.status === 'Prepared' || tripV2?.status === 'Loading',
-                    tripSequence: order.tripSequence || extracted.tripSeq || 1,
+                    tripSequence: finalSeq,
                     createdDate: dateKey,
                     hasCod: false,
                     hasNightDelivery: false,
@@ -1062,7 +1068,9 @@ const OrderSummary: React.FC<OrderSummaryProps> = ({ user }) => {
                                             if (!stockMapByLoc[lookupLoc] && STOCK_FALLBACK[lookupLoc]) {
                                                 lookupLoc = STOCK_FALLBACK[lookupLoc];
                                             }
-                                            const stock = stockMapByLoc[lookupLoc]?.[product] || 0;
+                                            const stock = (sku && stockMapByLoc[lookupLoc]?.[sku] !== undefined)
+                                                ? stockMapByLoc[lookupLoc][sku]
+                                                : (stockMapByLoc[lookupLoc]?.[product] || 0);
                                             const deficit = qty - stock;
                                             const hasDeficit = deficit > 0;
                                             const uomShort = uom.split('/')[0].trim();
