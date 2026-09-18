@@ -114,6 +114,18 @@ const fetchAddressFromCoords = async (lat: number, lng: number): Promise<string>
     }
 };
 
+export const countCompletedDrops = (podPhotoUrl?: string | null): number => {
+    if (!podPhotoUrl || !podPhotoUrl.trim()) return 0;
+    const rawPhotos = podPhotoUrl.split(',');
+    let count = 0;
+    for (let i = 0; i < rawPhotos.length; i += 2) {
+        if ((rawPhotos[i] && rawPhotos[i].trim()) || (rawPhotos[i + 1] && rawPhotos[i + 1].trim())) {
+            count++;
+        }
+    }
+    return count;
+};
+
 const DriverDelivery: React.FC<DriverDeliveryProps> = ({ user }) => {
     // State
     const [tasks, setTasks] = useState<SalesOrder[]>([]);
@@ -248,8 +260,30 @@ const DriverDelivery: React.FC<DriverDeliveryProps> = ({ user }) => {
     const [laterUploading, setLaterUploading] = useState(false);
     const laterFileInputRef = useRef<HTMLInputElement>(null);
 
+    // Helpers to check order delivery status (multi-drop aware & lorry-agnostic)
+    const isPendingApprovalDone = (t: SalesOrder) => {
+        if (t.status !== 'Pending Approval') return false;
+        // If it's an Extra Job or Pick Up, it has already been submitted with photo proof and is only awaiting Admin approval.
+        const isExtra = (t as any).job_type === 'Extra Job' || (t as any).job_type === 'Pick Up' || t.orderNumber?.startsWith('TRIP-JOB') || t.orderNumber?.startsWith('TRIP-PU') || (!t.items || t.items.length === 0);
+        if (isExtra) return true;
 
+        const completedDrops = countCompletedDrops(t.pod_photo_url);
+        const totalDrops = t.trip_drop_count || 1;
+        return completedDrops >= totalDrops && completedDrops > 0;
+    };
 
+    const isOrderFullyDelivered = (order: SalesOrder) => {
+        if (order.status === 'Delivered') return true;
+        if (isPendingApprovalDone(order)) return true;
+        if (order.status === 'Loaded') {
+            const completedDrops = countCompletedDrops(order.pod_photo_url);
+            const totalDrops = (order as any).trip_drop_count || 1;
+            if (completedDrops >= totalDrops && completedDrops > 0) {
+                return true;
+            }
+        }
+        return false;
+    };
 
     // 1. Fetch Data
     const fetchTasks = async () => {
@@ -808,7 +842,7 @@ const DriverDelivery: React.FC<DriverDeliveryProps> = ({ user }) => {
 
             // Calculate totalDrops and completed drops from newPhotos
             const totalDrops = selectedOrder.trip_drop_count || 1;
-            const completedDrops = Math.floor(newPhotos.filter(Boolean).length / 2);
+            const completedDrops = countCompletedDrops(podPhotoUrl);
             let updatedTripDropCount = totalDrops;
             if (completedDrops > totalDrops) {
                 updatedTripDropCount = completedDrops;
@@ -816,15 +850,15 @@ const DriverDelivery: React.FC<DriverDeliveryProps> = ({ user }) => {
 
             // Status decision logic:
             // 1. If order was already Delivered, keep Delivered (never revert back to Loaded!)
-            // 2. If order was Pending Approval, keep Pending Approval
-            // 3. Otherwise, if isFinalDrop OR if driver has no lorry bound and all drops completed, set to Delivered
+            // 2. If order was Pending Approval, keep Pending Approval (requires Admin review)
+            // 3. Otherwise, if isFinalDrop OR all drops completed, set to Delivered immediately!
             let nextStatus = selectedOrder.status;
             if (selectedOrder.status === 'Delivered') {
                 nextStatus = 'Delivered';
             } else if (selectedOrder.status === 'Pending Approval') {
                 nextStatus = 'Pending Approval';
             } else {
-                if (isFinalDrop || (!currentLorry && completedDrops >= totalDrops)) {
+                if (isFinalDrop || completedDrops >= totalDrops) {
                     nextStatus = 'Delivered';
                 } else {
                     nextStatus = 'Loaded';
@@ -879,7 +913,14 @@ const DriverDelivery: React.FC<DriverDeliveryProps> = ({ user }) => {
                         })
                         .eq('sales_order_id', selectedOrder.id);
 
-                    if (isFinalDrop) {
+                    // Check if all sibling stops of this trip are completed/delivered
+                    const { data: siblingStops } = await supabase
+                        .from('trip_stops_v2')
+                        .select('id, status')
+                        .eq('trip_id', (selectedOrder as any).trip_id);
+
+                    const allStopsDone = siblingStops && siblingStops.length > 0 && siblingStops.every(s => s.status === 'Delivered' || s.status === 'Completed');
+                    if (isFinalDrop || allStopsDone) {
                         await supabase
                             .from('trips_v2')
                             .update({
@@ -916,12 +957,12 @@ const DriverDelivery: React.FC<DriverDeliveryProps> = ({ user }) => {
 
             // Extract structured photos, GPS and items
             const proofPhotos = [doUrl, prodUrl].filter(Boolean);
-            const orderItems = (selectedOrder.items || []).map(i => ({
+            const orderItems = (selectedOrder.items || []).map((i: any) => ({
                 sku: i.sku || 'N/A',
                 name: i.product || i.name || '商品',
                 quantity: i.quantity,
-                confirmedQty: (i as any).confirmedQty ?? i.quantity,
-                unit: (i as any).uom || '件'
+                confirmedQty: i.confirmedQty ?? i.quantity,
+                unit: i.uom || '件'
             }));
             const totalQty = orderItems.reduce((acc, curr) => acc + (Number(curr.quantity) || 0), 0);
 
@@ -934,12 +975,12 @@ const DriverDelivery: React.FC<DriverDeliveryProps> = ({ user }) => {
                 resultSummary: isFinalDrop 
                     ? `司机完成并结束整个送货行程 (#${selectedOrder.orderNumber || ''})` 
                     : `司机成功提交送货点签收 (#${selectedOrder.orderNumber || ''} - 客户: ${selectedOrder.customer || '客户'}, 共 ${orderItems.length} 项 / ${totalQty} 件)`,
-                location: selectedOrder.destination || selectedOrder.customer,
+                location: (selectedOrder as any).destination || selectedOrder.customer,
                 details: {
                     orderId: selectedOrder.id,
                     orderNumber: selectedOrder.orderNumber,
                     customer: selectedOrder.customer,
-                    destination: selectedOrder.destination,
+                    destination: (selectedOrder as any).destination,
                     isFinalDrop,
                     photos: proofPhotos,
                     photoUrl: prodUrl || doUrl || null,
@@ -1049,8 +1090,8 @@ const DriverDelivery: React.FC<DriverDeliveryProps> = ({ user }) => {
             const updatedPodUrl = currentPhotos.join(',');
 
             const totalDrops = freshOrder.trip_drop_count || 1;
-            const filledDoCount = currentPhotos.filter((url, idx) => idx % 2 === 0 && Boolean(url.trim())).length;
-            const completedDrops = Math.floor(currentPhotos.filter(Boolean).length / 2);
+            const filledDoCount = currentPhotos.filter((url: string, idx: number) => idx % 2 === 0 && Boolean(url && url.trim())).length;
+            const completedDrops = countCompletedDrops(updatedPodUrl);
 
             // Construct notes update (fallback)
             let updatedNotes = freshOrder.notes || '';
@@ -1071,8 +1112,8 @@ const DriverDelivery: React.FC<DriverDeliveryProps> = ({ user }) => {
                 notes: updatedNotes
             };
 
-            // If order was in Loaded due to incomplete drops and driver has no lorry bound, auto-promote to Delivered
-            if (!currentLorry && freshOrder.status === 'Loaded' && (completedDrops >= totalDrops || filledDoCount >= totalDrops)) {
+            // If order was in Loaded due to incomplete drops/DOs, auto-promote to Delivered once all drops/DOs are completed
+            if (freshOrder.status === 'Loaded' && (completedDrops >= totalDrops || filledDoCount >= totalDrops)) {
                 updatePayload.status = 'Delivered';
             }
 
@@ -1419,13 +1460,10 @@ const DriverDelivery: React.FC<DriverDeliveryProps> = ({ user }) => {
                                     now.toLocaleTimeString('en-GB', { hour: '2-digit', minute: '2-digit' });
 
                     for (const ord of driverLoadedOrders) {
-                        const podStr = ord.pod_photo_url ? ord.pod_photo_url.trim() : '';
-                        const photos = podStr ? podStr.split(',').filter(Boolean) : [];
-                        // 每 2 张照片为一个 Drop 点（DO + Cargo）
-                        const completedDrops = Math.floor(photos.length / 2);
+                        const completedDrops = countCompletedDrops(ord.pod_photo_url);
                         const totalDrops = ord.trip_drop_count || 1;
 
-                        if (completedDrops >= totalDrops && totalDrops > 0 && photos.length > 0) {
+                        if (completedDrops >= totalDrops && totalDrops > 0) {
                             fullyDeliveredIds.push(ord.id);
                             fullyCompletedCount++;
                         } else if (completedDrops > 0) {
@@ -1514,32 +1552,13 @@ const DriverDelivery: React.FC<DriverDeliveryProps> = ({ user }) => {
     }, [user]);
 
     // View Logic
-    // For 'Pending Approval' orders: they remain in the Todo list (todoList) until all drops are delivered
-    const isPendingApprovalDone = (t: SalesOrder) => {
-        if (t.status !== 'Pending Approval') return false;
-        // If it's an Extra Job or Pick Up, it has already been submitted with photo proof and is only awaiting Admin approval.
-        const isExtra = (t as any).job_type === 'Extra Job' || (t as any).job_type === 'Pick Up' || t.orderNumber?.startsWith('TRIP-JOB') || t.orderNumber?.startsWith('TRIP-PU') || (!t.items || t.items.length === 0);
-        if (isExtra) return true;
-
-        // If driver currently has a lorry bound, do not auto-complete/hide Pending Approval orders 
-        // to prevent premature completion before the driver ends their shift.
-        if (currentLorry) return false;
-
-        if (!t.pod_photo_url || t.pod_photo_url.trim() === '') return false;
-        const photoCount = t.pod_photo_url.split(',').length;
-        const completedDrops = Math.floor(photoCount / 2);
-        const totalDrops = t.trip_drop_count || 1;
-        return completedDrops >= totalDrops;
-    };
-
     const todoList = tasks.filter(t => 
-        t.status !== 'Delivered' && 
         t.status !== 'Cancelled' && 
-        !isPendingApprovalDone(t)
+        !isOrderFullyDelivered(t)
     );
     const doneList = tasks.filter(t => 
-        t.status === 'Delivered' || 
-        isPendingApprovalDone(t)
+        t.status !== 'Cancelled' && 
+        isOrderFullyDelivered(t)
     );
 
     interface DriverTripGroup {
@@ -1641,7 +1660,7 @@ const DriverDelivery: React.FC<DriverDeliveryProps> = ({ user }) => {
             });
 
             grp.totalDrops = grp.orders.length;
-            grp.completedDrops = grp.orders.filter(o => o.status === 'Delivered' || isPendingApprovalDone(o)).length;
+            grp.completedDrops = grp.orders.filter(o => isOrderFullyDelivered(o)).length;
             grp.isAllDone = grp.completedDrops === grp.totalDrops && grp.totalDrops > 0;
 
             // Extract Trip Remark or sequence if present
@@ -1655,9 +1674,9 @@ const DriverDelivery: React.FC<DriverDeliveryProps> = ({ user }) => {
                 }
             }
 
-            // Check if trip sequence is specified
+            // Check if trip sequence is specified (ignoring 999 unsequenced flag)
             const v2Trip = tripsV2List.find(t => t.id === grp.tripId);
-            if ((v2Trip as any)?.trip_sequence) {
+            if ((v2Trip as any)?.trip_sequence && Number((v2Trip as any).trip_sequence) !== 999) {
                 grp.sortSeq = Number((v2Trip as any).trip_sequence);
                 grp.tripIndexLabel = `Trip ${grp.sortSeq}`;
             }
@@ -1678,10 +1697,8 @@ const DriverDelivery: React.FC<DriverDeliveryProps> = ({ user }) => {
         singleOrders.forEach(order => {
             const { cargoBreakdown, totalRolls } = getCargoSummary([order]);
             const orderTotalDrops = (order as any).trip_drop_count || 1;
-            const isDone = order.status === 'Delivered' || isPendingApprovalDone(order);
-            const rawPodStr = order.pod_photo_url ? order.pod_photo_url.trim() : '';
-            const rawPhotosList = rawPodStr ? rawPodStr.split(',').filter(Boolean) : [];
-            const photoDrops = Math.floor(rawPhotosList.length / 2);
+            const isDone = isOrderFullyDelivered(order);
+            const photoDrops = countCompletedDrops(order.pod_photo_url);
             const completedDrops = isDone ? orderTotalDrops : Math.min(orderTotalDrops, photoDrops);
 
             let sortSeq = 999;
@@ -1695,16 +1712,22 @@ const DriverDelivery: React.FC<DriverDeliveryProps> = ({ user }) => {
                     tripNotes = mBracket[1].trim();
                 }
 
-                // Explicit trip numbers like "trip 1", "TRIP 2", "1p", "2p"
+                // Explicit trip numbers like "trip 1", "TRIP 2", "1p", "2p" (ignoring 999)
                 const tripMatch = order.notes.match(/\btrip\s*(\d+)\b/i);
                 if (tripMatch) {
-                    sortSeq = parseInt(tripMatch[1], 10);
-                    tripLabel = `Trip ${sortSeq}`;
+                    const parsed = parseInt(tripMatch[1], 10);
+                    if (parsed !== 999) {
+                        sortSeq = parsed;
+                        tripLabel = `Trip ${sortSeq}`;
+                    }
                 } else {
                     const pMatch = order.notes.match(/\b(\d+)\s*p\b/i);
                     if (pMatch) {
-                        sortSeq = parseInt(pMatch[1], 10);
-                        tripLabel = `Trip ${sortSeq}`;
+                        const parsed = parseInt(pMatch[1], 10);
+                        if (parsed !== 999) {
+                            sortSeq = parsed;
+                            tripLabel = `Trip ${sortSeq}`;
+                        }
                     }
                 }
 
@@ -1723,11 +1746,17 @@ const DriverDelivery: React.FC<DriverDeliveryProps> = ({ user }) => {
             }
 
             if ((order as any).tripSequence !== undefined && (order as any).tripSequence !== null) {
-                sortSeq = Number((order as any).tripSequence);
-                if (!tripLabel) tripLabel = `Trip ${sortSeq}`;
+                const seq = Number((order as any).tripSequence);
+                if (seq !== 999) {
+                    sortSeq = seq;
+                    if (!tripLabel) tripLabel = `Trip ${sortSeq}`;
+                }
             } else if ((order as any).trip_sequence !== undefined && (order as any).trip_sequence !== null) {
-                sortSeq = Number((order as any).trip_sequence);
-                if (!tripLabel) tripLabel = `Trip ${sortSeq}`;
+                const seq = Number((order as any).trip_sequence);
+                if (seq !== 999) {
+                    sortSeq = seq;
+                    if (!tripLabel) tripLabel = `Trip ${sortSeq}`;
+                }
             }
 
             result.push({
@@ -1753,7 +1782,7 @@ const DriverDelivery: React.FC<DriverDeliveryProps> = ({ user }) => {
         // 3. Process Ad-hoc / Extra Jobs
         if (extraJobOrders.length > 0) {
             const { cargoBreakdown, totalRolls } = getCargoSummary(extraJobOrders);
-            const extraCompleted = extraJobOrders.filter(o => o.status === 'Delivered' || isPendingApprovalDone(o)).length;
+            const extraCompleted = extraJobOrders.filter(o => isOrderFullyDelivered(o)).length;
 
             result.push({
                 key: 'adhoc_extra_jobs',
@@ -1937,7 +1966,7 @@ const DriverDelivery: React.FC<DriverDeliveryProps> = ({ user }) => {
             );
         }
 
-        const isDeliveredOrDone = order.status === 'Delivered' || isPendingApprovalDone(order);
+        const isDeliveredOrDone = isOrderFullyDelivered(order);
 
         return (
             <div key={order.id} className="bg-slate-900 border border-slate-800 rounded-2xl overflow-hidden shadow-lg relative">
@@ -2132,10 +2161,12 @@ const DriverDelivery: React.FC<DriverDeliveryProps> = ({ user }) => {
                         const orderTotalDrops = (order as any).trip_drop_count || 1;
                         const rawPodStr = order.pod_photo_url ? order.pod_photo_url.trim() : '';
                         const rawPhotosList = rawPodStr ? rawPodStr.split(',') : [];
-                        const completedDropsCount = Math.floor(rawPhotosList.filter(Boolean).length / 2);
-                        const validDoPhotosCount = rawPhotosList.filter((url, idx) => idx % 2 === 0 && Boolean(url.trim())).length;
+                        const completedDropsCount = countCompletedDrops(order.pod_photo_url);
+                        const validDoPhotosCount = rawPhotosList.filter((url, idx) => idx % 2 === 0 && Boolean(url && url.trim())).length;
                         const hasMissingDoSlot = rawPhotosList.some((url, idx) => idx % 2 === 0 && !url.trim());
-                        const isDropMismatch = (completedDropsCount !== orderTotalDrops) || (validDoPhotosCount !== orderTotalDrops) || hasMissingDoSlot;
+                        const isDropMismatch = rawPhotosList.length > 0 && (
+                            (completedDropsCount !== orderTotalDrops) || (validDoPhotosCount !== orderTotalDrops) || hasMissingDoSlot
+                        );
 
                         return (
                             <>
@@ -2758,7 +2789,8 @@ const DriverDelivery: React.FC<DriverDeliveryProps> = ({ user }) => {
                                 <span>SAHKAN HANTARAN / CONFIRM DELIVERY</span>
                                 {(() => {
                                     const total = selectedOrder.trip_drop_count || 1;
-                                    const currentDropNum = Math.floor((selectedOrder.pod_photo_url ? selectedOrder.pod_photo_url.split(',').length : 0) / 2) + 1;
+                                    const rawPod = selectedOrder.pod_photo_url ? selectedOrder.pod_photo_url.trim() : '';
+                                    const currentDropNum = countCompletedDrops(rawPod) + 1;
                                     const isExtra = currentDropNum > total;
                                     return (
                                         <span className={`text-xs font-bold px-2 py-0.5 rounded border font-mono ${isExtra ? 'bg-amber-500/20 text-amber-300 border-amber-500/30' : 'bg-emerald-500/10 text-emerald-400 border border-emerald-500/20'}`}>
@@ -2935,7 +2967,7 @@ const DriverDelivery: React.FC<DriverDeliveryProps> = ({ user }) => {
                                     GAMBAR HANTARAN TERDAHULU / PREVIOUSLY UPLOADED PHOTOS
                                 </label>
                                 <div className="grid grid-cols-4 gap-2 bg-slate-900/40 p-3 rounded-xl border border-slate-800/80">
-                                    {selectedOrder.pod_photo_url.split(',').map((url, idx) => (
+                                    {selectedOrder.pod_photo_url.split(',').filter(Boolean).map((url, idx) => (
                                         <div key={idx} className="relative rounded-lg overflow-hidden border border-white/5 bg-black/40 aspect-square">
                                             <img 
                                                 src={url} 
