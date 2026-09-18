@@ -1312,7 +1312,7 @@ const TripColumn: React.FC<TripColumnProps> = ({
                             <Truck size={11} className="text-slate-500" />
                             <span>{trips.length} {t('Trips')}</span>
                             <span>·</span>
-                            <span className="text-amber-400 font-bold">{totalColumnRolls} {t('Rolls')}</span>
+                            <span className="text-amber-400 font-bold">{trips.reduce((acc, t) => acc + t.orders.length, 0)} {t('DOs')}</span>
                         </div>
                     </div>
                 </div>
@@ -1408,18 +1408,53 @@ const TripColumn: React.FC<TripColumnProps> = ({
                                             </div>
                                         )}
 
-                                        {/* Total Rolls & Drops Counter Banner */}
-                                        <div className="bg-slate-950/70 border border-slate-800/80 rounded-xl p-2 mb-3 flex items-center justify-between text-xs">
-                                            <div className="flex items-center gap-1.5">
-                                                <span className="text-[10px] font-black text-slate-500 uppercase">{t('Total')}:</span>
-                                                <span className="font-mono font-black text-sm text-amber-300">
-                                                    {trip.totalRolls} {t('Rolls')}
-                                                </span>
-                                            </div>
-                                            <div className="text-[11px] font-mono text-slate-400">
-                                                {trip.totalDrops} {t('DOs')} {trip.zones.length > 0 ? `· ${trip.zones.join(', ')}` : ''}
-                                            </div>
-                                        </div>
+                                        {/* Trip Cargo Breakdown (Replaces unpractical Total Rolls) */}
+                                        {(() => {
+                                            const prodMap = new Map<string, { name: string; qty: number; uom?: string }>();
+                                            trip.orders.forEach(o => {
+                                                (o.items || []).forEach((it: any) => {
+                                                    const name = resolveItemName(it) || it.product || it.sku || 'Item';
+                                                    const qty = Number(it.quantity) || 0;
+                                                    const uom = getItemUom(name, it.sku);
+                                                    const existing = prodMap.get(name);
+                                                    if (existing) {
+                                                        existing.qty += qty;
+                                                    } else {
+                                                        prodMap.set(name, { name, qty, uom });
+                                                    }
+                                                });
+                                            });
+                                            const tripProducts = Array.from(prodMap.values());
+
+                                            return (
+                                                <div className="bg-slate-950/80 border border-slate-800/80 rounded-xl p-2.5 mb-3 space-y-1.5">
+                                                    <div className="flex items-center justify-between text-xs border-b border-slate-800/60 pb-1 text-slate-400 font-bold">
+                                                        <span className="text-[10px] uppercase tracking-wider flex items-center gap-1 text-amber-400 font-black">
+                                                            📦 {t('Khas Muatan Trip')} ({tripProducts.length} {t('Jenis')})
+                                                        </span>
+                                                        <span className="font-mono text-[11px] text-slate-400">
+                                                            {trip.totalDrops} {t('DOs')} {trip.zones.length > 0 ? `· ${trip.zones.join(', ')}` : ''}
+                                                        </span>
+                                                    </div>
+                                                    <div className="space-y-1 pt-0.5 max-h-48 overflow-y-auto pr-1">
+                                                        {tripProducts.length === 0 ? (
+                                                            <div className="text-[10px] text-slate-500 italic py-1 text-center">{t('Tiada barang')}</div>
+                                                        ) : (
+                                                            tripProducts.map((p, pIdx) => (
+                                                                <div key={pIdx} className="flex items-center justify-between text-xs gap-2 py-0.5 border-b border-slate-900/60 last:border-0">
+                                                                    <span className="text-slate-200 font-bold text-[11px] truncate" title={p.name}>
+                                                                        {p.name}
+                                                                    </span>
+                                                                    <span className="font-mono font-black text-amber-300 shrink-0 bg-amber-500/10 px-2 py-0.5 rounded border border-amber-500/20 text-xs">
+                                                                        {p.qty} <span className="text-[9px] font-normal text-amber-400/80">{p.uom || ''}</span>
+                                                                    </span>
+                                                                </div>
+                                                            ))
+                                                        )}
+                                                    </div>
+                                                </div>
+                                            );
+                                        })()}
 
                                         {/* Trip Action Buttons */}
                                         <div className="flex items-center gap-2 mb-2">

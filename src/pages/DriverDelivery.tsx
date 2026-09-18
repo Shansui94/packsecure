@@ -227,6 +227,7 @@ const DriverDelivery: React.FC<DriverDeliveryProps> = ({ user }) => {
 
     // NAIK BARANG (Load Items) State
     const [selectedOrder, setSelectedOrder] = useState<SalesOrder | null>(null);
+    const [selectedTripForLoad, setSelectedTripForLoad] = useState<any | null>(null);
     const [isLoadModalOpen, setIsLoadModalOpen] = useState(false);
     const [loadItems, setLoadItems] = useState<any[]>([]); // Items to verify
     const [submitting, setSubmitting] = useState(false);
@@ -260,7 +261,7 @@ const DriverDelivery: React.FC<DriverDeliveryProps> = ({ user }) => {
     const [laterUploading, setLaterUploading] = useState(false);
     const laterFileInputRef = useRef<HTMLInputElement>(null);
 
-    // Helpers to check order delivery status (multi-drop aware & lorry-agnostic)
+    // Helpers to check order delivery status (multi-drop aware: 1 DO = 1 drop)
     const isPendingApprovalDone = (t: SalesOrder) => {
         if (t.status !== 'Pending Approval') return false;
         // If it's an Extra Job or Pick Up, it has already been submitted with photo proof and is only awaiting Admin approval.
@@ -268,8 +269,7 @@ const DriverDelivery: React.FC<DriverDeliveryProps> = ({ user }) => {
         if (isExtra) return true;
 
         const completedDrops = countCompletedDrops(t.pod_photo_url);
-        const totalDrops = t.trip_drop_count || 1;
-        return completedDrops >= totalDrops && completedDrops > 0;
+        return completedDrops >= 1;
     };
 
     const isOrderFullyDelivered = (order: SalesOrder) => {
@@ -277,8 +277,7 @@ const DriverDelivery: React.FC<DriverDeliveryProps> = ({ user }) => {
         if (isPendingApprovalDone(order)) return true;
         if (order.status === 'Loaded') {
             const completedDrops = countCompletedDrops(order.pod_photo_url);
-            const totalDrops = (order as any).trip_drop_count || 1;
-            if (completedDrops >= totalDrops && completedDrops > 0) {
+            if (completedDrops >= 1) {
                 return true;
             }
         }
@@ -407,17 +406,44 @@ const DriverDelivery: React.FC<DriverDeliveryProps> = ({ user }) => {
     }, [user]);
 
 
-    // 2. Open Load Modal
+    // 2. Open Load Modal (Single DO fallback)
     const handleOpenLoadModal = (order: SalesOrder) => {
+        setSelectedTripForLoad(null);
         setSelectedOrder(order);
         // Deep copy items to allow editing quantity if needed (default same qty)
-        setLoadItems(order.items?.map(i => ({ ...i, confirmedQty: i.quantity })) || []);
+        setLoadItems(order.items?.map(i => ({ 
+            ...i, 
+            orderId: order.id,
+            orderNumber: order.orderNumber,
+            customer: order.customer,
+            confirmedQty: i.quantity 
+        })) || []);
         setIsLoadModalOpen(true);
     };
 
-    // 3. Submit Loading (Deduct Stock)
+    // 2b. Open Trip Load Modal (Batch load all orders in trip with 1 Naik Barang)
+    const handleOpenTripLoadModal = (trip: any) => {
+        setSelectedTripForLoad(trip);
+        setSelectedOrder(trip.orders?.[0] || null);
+        const allItems: any[] = [];
+        (trip.orders || []).forEach((ord: any) => {
+            (ord.items || []).forEach((it: any) => {
+                allItems.push({
+                    ...it,
+                    orderId: ord.id,
+                    orderNumber: ord.orderNumber,
+                    customer: ord.customer,
+                    confirmedQty: it.quantity
+                });
+            });
+        });
+        setLoadItems(allItems);
+        setIsLoadModalOpen(true);
+    };
+
+    // 3. Submit Loading (Deduct Stock / Confirm Naik Barang for Trip or DO)
     const handleConfirmLoad = async (photoBase64Str?: string) => {
-        if (!selectedOrder) return;
+        if (!selectedOrder && !selectedTripForLoad) return;
         const finalPhoto = photoBase64Str || loadPhotoBase64;
         if (!finalPhoto) {
             alert("⚠️ Sila ambil gambar barangan yang dimuatkan dahulu! / Please take a photo of the loaded goods first!");
@@ -429,8 +455,12 @@ const DriverDelivery: React.FC<DriverDeliveryProps> = ({ user }) => {
 
         try {
             // Upload Photo First
+            const targetName = selectedTripForLoad 
+                ? `trip_${selectedTripForLoad.tripNumber || 'batch'}` 
+                : (selectedOrder?.orderNumber || 'order');
+
             try {
-                const fileName = `load_${selectedOrder.orderNumber}_${Date.now()}.jpg`;
+                const fileName = `load_${targetName}_${Date.now()}.jpg`;
                 const blob = dataURLtoBlob(`data:image/jpeg;base64,${finalPhoto}`);
 
                 const { error: uploadError } = await supabase.storage
@@ -445,67 +475,98 @@ const DriverDelivery: React.FC<DriverDeliveryProps> = ({ user }) => {
                 console.error("Photo Upload Error:", err);
                 throw new Error("Gagal memuat naik gambar. Sila cuba lagi. / Failed to upload photo. Please try again.");
             }
-            // Check for Amendments
-            const hasAmendments = loadItems.some(item => item.confirmedQty !== undefined && item.confirmedQty !== item.quantity);
 
-            if (hasAmendments) {
-                // 1. UPDATE ORDER with new quantities & Pending Approval Status
-                // Map items to update quantities permanently
-                const updatedItems = selectedOrder.items?.map(original => {
-                    const match = loadItems.find(li => li.sku === original.sku && li.remark === original.remark);
-                    return {
-                        ...original,
-                        quantity: match?.confirmedQty ?? original.quantity,
-                        original_quantity: original.quantity // Keep track of original
-                    };
-                });
+            const ordersToUpdate: SalesOrder[] = selectedTripForLoad 
+                ? (selectedTripForLoad.orders || []) 
+                : (selectedOrder ? [selectedOrder] : []);
 
-                await supabase.from('sales_orders').update({
-                    status: 'Pending Approval',
-                    items: updatedItems,
-                    notes: (selectedOrder.notes || '') + ` | Amended by Driver: ${user?.name}`,
-                    proof_of_load_url: photoUrl
-                }).eq('id', selectedOrder.id);
+            let anyOrderAmended = false;
 
-                alert("⚠️ Kuantiti pesanan berubah & Menunggu kelulusan logistik. / Order quantity changed & Pending logistics approval.");
+            for (const order of ordersToUpdate) {
+                // Check for Amendments in this order's items
+                const orderLoadItems = loadItems.filter(li => !li.orderId || li.orderId === order.id);
+                const hasAmendments = orderLoadItems.some(item => item.confirmedQty !== undefined && item.confirmedQty !== item.quantity);
 
-                // Optimistic Update: Move to Pending Approval locally so button changes to Confirm Delivery immediately
-                setTasks(prev => prev.map(t => {
-                    if (t.id === selectedOrder.id) {
-                        return { 
-                            ...t, 
-                            status: 'Pending Approval', 
-                            items: updatedItems, 
-                            proof_of_load_url: photoUrl 
+                if (hasAmendments) {
+                    anyOrderAmended = true;
+                    const updatedItems = order.items?.map(original => {
+                        const match = orderLoadItems.find(li => li.sku === original.sku && li.remark === original.remark);
+                        return {
+                            ...original,
+                            quantity: match?.confirmedQty ?? original.quantity,
+                            original_quantity: original.quantity
+                        };
+                    });
+
+                    await supabase.from('sales_orders').update({
+                        status: 'Pending Approval',
+                        items: updatedItems,
+                        notes: (order.notes || '') + ` | Amended by Driver: ${user?.name}`,
+                        proof_of_load_url: photoUrl
+                    }).eq('id', order.id);
+                } else {
+                    const { error: updateError } = await supabase.from('sales_orders').update({
+                        status: 'Loaded',
+                        proof_of_load_url: photoUrl
+                    }).eq('id', order.id);
+
+                    if (updateError) console.error("Error loading order:", order.id, updateError);
+                }
+            }
+
+            // Sync trips_v2 status if applicable
+            if (selectedTripForLoad?.tripId) {
+                try {
+                    await supabase.from('trips_v2').update({
+                        status: 'In Transit',
+                        started_at: new Date().toISOString()
+                    }).eq('id', selectedTripForLoad.tripId);
+                } catch (tripErr) {
+                    console.warn("trips_v2 sync warning:", tripErr);
+                }
+            }
+
+            // Optimistic Update: Move orders to Loaded (or Pending Approval) locally
+            const orderIdsSet = new Set(ordersToUpdate.map(o => o.id));
+            setTasks(prev => prev.map(t => {
+                if (orderIdsSet.has(t.id)) {
+                    const orderLoadItems = loadItems.filter(li => !li.orderId || li.orderId === t.id);
+                    const hasAmendments = orderLoadItems.some(item => item.confirmedQty !== undefined && item.confirmedQty !== item.quantity);
+                    if (hasAmendments) {
+                        const updatedItems = t.items?.map(original => {
+                            const match = orderLoadItems.find(li => li.sku === original.sku && li.remark === original.remark);
+                            return {
+                                ...original,
+                                quantity: match?.confirmedQty ?? original.quantity,
+                                original_quantity: original.quantity
+                            };
+                        });
+                        return {
+                            ...t,
+                            status: 'Pending Approval',
+                            items: updatedItems,
+                            proof_of_load_url: photoUrl
+                        };
+                    } else {
+                        return {
+                            ...t,
+                            status: 'Loaded',
+                            proof_of_load_url: photoUrl
                         };
                     }
-                    return t;
-                }));
-
-            } else {
-                // 2. NO AMENDMENTS - Deduct stock immediately upon loading (Naik Barang)
-                const { data: updatedData, error: updateError } = await supabase.from('sales_orders').update({
-                    status: 'Loaded',
-                    proof_of_load_url: photoUrl
-                }).eq('id', selectedOrder.id).select();
-
-                if (updateError) throw updateError;
-                if (!updatedData || updatedData.length === 0) {
-                    throw new Error("Update failed: Permission denied or Order not found. (RLS Check Failed)");
                 }
+                return t;
+            }));
 
-                // Optimistic Update: Move to Loaded locally
-                setTasks(prev => prev.map(t => {
-                    if (t.id === selectedOrder.id) {
-                        return { ...t, status: 'Loaded' };
-                    }
-                    return t;
-                }));
+            if (anyOrderAmended) {
+                alert("⚠️ Kuantiti pesanan berubah & Menunggu kelulusan logistik. / Order quantity changed & Pending logistics approval.");
+            } else {
+                alert("✅ Muatan berjaya disahkan! / Cargo loading confirmed successfully!");
             }
 
             setIsLoadModalOpen(false);
-            setLoadPhotoBase64(null); // Reset Photo
-            // fetchTasks(); // Removed to prevent race condition. Optimistic update handles UI.
+            setLoadPhotoBase64(null);
+            setSelectedTripForLoad(null);
 
         } catch (e: any) {
             alert("Error: " + e.message);
@@ -840,30 +901,9 @@ const DriverDelivery: React.FC<DriverDeliveryProps> = ({ user }) => {
                 finalNote = newNoteSegment;
             }
 
-            // Calculate totalDrops and completed drops from newPhotos
-            const totalDrops = selectedOrder.trip_drop_count || 1;
-            const completedDrops = countCompletedDrops(podPhotoUrl);
-            let updatedTripDropCount = totalDrops;
-            if (completedDrops > totalDrops) {
-                updatedTripDropCount = completedDrops;
-            }
-
-            // Status decision logic:
-            // 1. If order was already Delivered, keep Delivered (never revert back to Loaded!)
-            // 2. If order was Pending Approval, keep Pending Approval (requires Admin review)
-            // 3. Otherwise, if isFinalDrop OR all drops completed, set to Delivered immediately!
-            let nextStatus = selectedOrder.status;
-            if (selectedOrder.status === 'Delivered') {
-                nextStatus = 'Delivered';
-            } else if (selectedOrder.status === 'Pending Approval') {
-                nextStatus = 'Pending Approval';
-            } else {
-                if (isFinalDrop || completedDrops >= totalDrops) {
-                    nextStatus = 'Delivered';
-                } else {
-                    nextStatus = 'Loaded';
-                }
-            }
+            // 1 DO = 1 Drop Point!
+            // When photo is submitted for this DO, it is delivered immediately (unless pending approval).
+            let nextStatus = selectedOrder.status === 'Pending Approval' ? 'Pending Approval' : 'Delivered';
 
             let updatedNotes = finalNote;
             if (extractedDoNumber) {
@@ -873,24 +913,12 @@ const DriverDelivery: React.FC<DriverDeliveryProps> = ({ user }) => {
                     : `[AI DO: ${extractedDoNumber}]`;
             }
 
-            // Clear or update Hantaran Separa note if all drops are completed
-            if (completedDrops >= totalDrops && updatedNotes.includes('Hantaran Separa')) {
-                updatedNotes += `\n[${timeStr}] ✅ Drop tambahan dimuat naik (${completedDrops}/${totalDrops} drops lengkap).`;
-            }
-            if (completedDrops > totalDrops) {
-                updatedNotes += `\n[${timeStr}] ℹ️ Jumlah Drop dikemaskini dari ${totalDrops} ke ${completedDrops}.`;
-            }
-
             const updatePayload: any = {
                 status: nextStatus,
                 pod_timestamp: new Date().toISOString(),
                 pod_photo_url: podPhotoUrl,
                 notes: updatedNotes
             };
-
-            if (completedDrops > totalDrops) {
-                updatePayload.trip_drop_count = completedDrops;
-            }
 
             // Update order status, set pod_photo_url, pod_timestamp, notes, etc.
             const { data: updatedData, error: updateError } = await supabase.from('sales_orders').update(updatePayload).eq('id', selectedOrder.id).select();
@@ -2156,54 +2184,25 @@ const DriverDelivery: React.FC<DriverDeliveryProps> = ({ user }) => {
                         })()}
                     </div>
 
-                    {/* POD Photos, Drop/DO Mismatch Check and Actions */}
+                    {/* POD Photos and Notes (1 DO = 1 Drop Point) */}
                     {(() => {
-                        const orderTotalDrops = (order as any).trip_drop_count || 1;
                         const rawPodStr = order.pod_photo_url ? order.pod_photo_url.trim() : '';
                         const rawPhotosList = rawPodStr ? rawPodStr.split(',') : [];
                         const completedDropsCount = countCompletedDrops(order.pod_photo_url);
-                        const validDoPhotosCount = rawPhotosList.filter((url, idx) => idx % 2 === 0 && Boolean(url && url.trim())).length;
-                        const hasMissingDoSlot = rawPhotosList.some((url, idx) => idx % 2 === 0 && !url.trim());
-                        const isDropMismatch = rawPhotosList.length > 0 && (
-                            (completedDropsCount !== orderTotalDrops) || (validDoPhotosCount !== orderTotalDrops) || hasMissingDoSlot
-                        );
 
                         return (
                             <>
-                                {/* Drop / DO Mismatch Warning Alert */}
-                                {isDropMismatch && (
-                                    <div className="mb-4 bg-amber-950/40 border border-amber-500/40 rounded-xl p-3 flex items-start gap-2.5 text-xs">
-                                        <div className="text-amber-400 font-black text-sm shrink-0 mt-0.5">⚠️</div>
-                                        <div className="flex-1">
-                                            <div className="font-black text-amber-400 uppercase tracking-wide flex items-center justify-between flex-wrap gap-1">
-                                                <span>Drop & DO Tidak Padan / Mismatch</span>
-                                                <span className="font-mono bg-amber-500/20 text-amber-300 px-1.5 py-0.5 rounded border border-amber-500/30 text-[10px]">
-                                                    {completedDropsCount}/{orderTotalDrops} Drops ({validDoPhotosCount} DO)
-                                                </span>
-                                            </div>
-                                            <p className="text-[11px] text-amber-200/80 mt-1 leading-snug">
-                                                {completedDropsCount < orderTotalDrops 
-                                                    ? `Perlu ${orderTotalDrops - completedDropsCount} lagi Drop untuk disahkan.` 
-                                                    : hasMissingDoSlot 
-                                                        ? 'Terdapat Drop yang belum mempunyai gambar DO bertandatangan.' 
-                                                        : `Dihantar ${completedDropsCount} Drops melebihi rekod asal (${orderTotalDrops} Drops).`}
-                                            </p>
-                                        </div>
-                                    </div>
-                                )}
-
-                                {/* POD Photos and Notes */}
-                                {(order.pod_photo_url || isDropMismatch) && (
+                                {order.pod_photo_url && (
                                     <div className="mb-4 bg-slate-950/40 p-3 rounded-xl border border-slate-800/80">
                                         <div className="flex justify-between items-center mb-2">
                                             <p className="text-[10px] text-emerald-400 uppercase font-black flex items-center gap-1">
                                                 📸 Bukti Penghantaran / Proof of Delivery (POD)
                                             </p>
                                             <span className="text-[10px] font-mono font-bold text-slate-400">
-                                                {completedDropsCount} / {orderTotalDrops} Drops
+                                                {completedDropsCount >= 1 ? '✅ Selesai / Completed' : 'Menunggu / Pending'}
                                             </span>
                                         </div>
-                                        <div className="grid grid-cols-4 gap-2">
+                                        <div className="grid grid-cols-2 sm:grid-cols-4 gap-2">
                                             {rawPhotosList.map((url, idx) => {
                                                 const isDo = idx % 2 === 0;
                                                 if (!url || url.trim() === '') {
@@ -2255,29 +2254,6 @@ const DriverDelivery: React.FC<DriverDeliveryProps> = ({ user }) => {
                                                     </div>
                                                 );
                                             })}
-
-                                            {/* Missing Drops Placeholders */}
-                                            {Array.from({ length: Math.max(0, orderTotalDrops - Math.ceil(rawPhotosList.length / 2)) }).map((_, missingIdx) => {
-                                                const dropNum = Math.ceil(rawPhotosList.length / 2) + missingIdx + 1;
-                                                return (
-                                                    <div 
-                                                        key={`missing-drop-${dropNum}`} 
-                                                        onClick={() => handleOpenUnloadModal(order)}
-                                                        className="col-span-2 relative rounded-lg border border-dashed border-amber-500/50 bg-amber-950/20 hover:bg-amber-900/30 transition-all p-2 flex items-center justify-between gap-2 cursor-pointer group"
-                                                    >
-                                                        <div className="flex items-center gap-2">
-                                                            <div className="w-6 h-6 rounded-full bg-amber-500/20 text-amber-400 flex items-center justify-center font-black text-[10px]">
-                                                                {dropNum}
-                                                            </div>
-                                                            <div>
-                                                                <span className="text-[9px] font-black text-amber-300 uppercase block">Drop #{dropNum} Belum Selesai</span>
-                                                                <span className="text-[8px] text-slate-400">Ketik untuk muat naik DO & Barang</span>
-                                                            </div>
-                                                        </div>
-                                                        <Camera size={14} className="text-amber-400 group-hover:scale-110 transition-transform shrink-0" />
-                                                    </div>
-                                                );
-                                            })}
                                         </div>
                                         {order.pod_timestamp && (
                                             <p className="text-[9px] text-slate-500 mt-2 font-mono uppercase">
@@ -2316,7 +2292,7 @@ const DriverDelivery: React.FC<DriverDeliveryProps> = ({ user }) => {
                                 className="w-full py-2.5 bg-slate-800 hover:bg-slate-750 text-slate-300 hover:text-white border border-slate-700 hover:border-emerald-500/50 rounded-xl font-bold uppercase text-xs tracking-wider flex items-center justify-center gap-2 transition-all active:scale-98 shadow-sm"
                             >
                                 <Camera size={14} className="text-emerald-400" />
-                                <span>+ Tambah Drop / DO & Foto (Kemaskini POD)</span>
+                                <span>+ Kemaskini Foto POD / Update POD</span>
                             </button>
                         </div>
                     ) : (
@@ -2333,7 +2309,14 @@ const DriverDelivery: React.FC<DriverDeliveryProps> = ({ user }) => {
                             </button>
                         ) : (
                             <button
-                                onClick={() => handleOpenLoadModal(order)}
+                                onClick={() => {
+                                    const parentTrip = tripGroups.find(t => t.orders.some(o => o.id === order.id));
+                                    if (parentTrip) {
+                                        handleOpenTripLoadModal(parentTrip);
+                                    } else {
+                                        handleOpenLoadModal(order);
+                                    }
+                                }}
                                 className="w-full py-4 bg-blue-600 hover:bg-blue-500 text-white rounded-xl font-bold uppercase text-sm tracking-widest flex items-center justify-center gap-3 shadow-lg shadow-blue-900/30 active:scale-95 transition-all"
                             >
                                 <Truck size={18} /> Naik Barang
@@ -2613,6 +2596,21 @@ const DriverDelivery: React.FC<DriverDeliveryProps> = ({ user }) => {
                                             </div>
                                         )}
 
+                                        {/* Trip-Level Naik Barang Button */}
+                                        {(() => {
+                                            const isTripFullyLoaded = trip.orders.every(o => o.status === 'Loaded' || o.status === 'Delivered' || o.status === 'Pending Approval');
+                                            if (isTripFullyLoaded) return null;
+                                            return (
+                                                <button
+                                                    onClick={() => handleOpenTripLoadModal(trip)}
+                                                    className="w-full py-3.5 bg-gradient-to-r from-blue-600 via-indigo-600 to-blue-700 hover:from-blue-500 hover:to-indigo-500 text-white rounded-xl font-black text-sm uppercase tracking-wider flex items-center justify-center gap-2.5 shadow-lg shadow-blue-950/50 active:scale-98 transition-all"
+                                                >
+                                                    <Truck size={18} />
+                                                    <span>🚚 NAIK BARANG TRIP INI / LOAD THIS TRIP ({trip.orders.length} DOs)</span>
+                                                </button>
+                                            );
+                                        })()}
+
                                         {/* Drops List */}
                                         <div className="space-y-3">
                                             {trip.orders.map((order) => renderOrderCard(order))}
@@ -2632,23 +2630,34 @@ const DriverDelivery: React.FC<DriverDeliveryProps> = ({ user }) => {
                         {/* Header */}
                         <div className="p-4 border-b border-slate-800 flex justify-between items-center bg-slate-900 safe-top-padding">
                             <div>
-                                <h2 className="font-black text-white text-lg">SAHKAN STOK / VERIFY STOCK</h2>
-                                <p className="text-[10px] text-slate-500 uppercase font-bold">{selectedOrder.orderNumber}</p>
+                                <h2 className="font-black text-white text-lg">
+                                    {selectedTripForLoad ? 'SAHKAN MUATAN TRIP / VERIFY TRIP' : 'SAHKAN STOK / VERIFY STOCK'}
+                                </h2>
+                                <p className="text-[11px] text-blue-400 font-mono font-bold">
+                                    {selectedTripForLoad 
+                                        ? `${selectedTripForLoad.tripNumber} • ${selectedTripForLoad.orders.length} DOs` 
+                                        : selectedOrder?.orderNumber}
+                                </p>
                             </div>
-                            <button onClick={() => setIsLoadModalOpen(false)} className="p-2 bg-slate-800 rounded-full text-white"><X size={20} /></button>
+                            <button onClick={() => { setIsLoadModalOpen(false); setSelectedTripForLoad(null); }} className="p-2 bg-slate-800 rounded-full text-white"><X size={20} /></button>
                         </div>
 
                         {/* ITEMS LIST (GROUPED BY LOCATION) */}
                         <div className="flex-1 overflow-y-auto p-4 space-y-6 bg-black">
                             {/* Cargo Preparation Photo */}
                             {(() => {
-                                const photos = parsePrepPhotos((selectedOrder as any).preparation_photo_url);
+                                const allPrepPhotos = selectedTripForLoad 
+                                    ? selectedTripForLoad.orders.flatMap((o: any) => parsePrepPhotos(o.preparation_photo_url))
+                                    : parsePrepPhotos((selectedOrder as any)?.preparation_photo_url);
+                                const photos = Array.from(new Map(allPrepPhotos.map((p: any) => [p.url, p])).values());
                                 if (photos.length === 0) return null;
                                 return (
                                     <div className="bg-slate-900 border border-slate-800 p-4 rounded-xl space-y-2 mb-4">
-                                        <p className="text-[10px] text-amber-500 uppercase font-black flex items-center gap-1">📦 Rujukan Gambar Bersedia / Cargo Prep Photo</p>
+                                        <p className="text-[10px] text-amber-500 uppercase font-black flex items-center gap-1">
+                                            📦 Rujukan Gambar Bersedia / Cargo Prep Photo ({photos.length})
+                                        </p>
                                         <div className={`grid gap-2 max-w-sm w-full mx-auto ${photos.length > 1 ? 'grid-cols-2' : 'grid-cols-1'}`}>
-                                            {photos.map((p, idx) => (
+                                            {photos.map((p: any, idx: number) => (
                                                 <div key={idx} className="relative rounded-lg overflow-hidden border border-white/5 bg-black/40 aspect-video">
                                                     <img 
                                                         src={p.url} 
@@ -2716,7 +2725,12 @@ const DriverDelivery: React.FC<DriverDeliveryProps> = ({ user }) => {
                                                         </div>
                                                         <div className="flex-1">
                                                             <div className="text-white font-bold text-sm">{(item as any).product || (item as any).name || (item as any).sku || 'Barang Tidak Diketahui / Unknown Item'}</div>
-                                                            <div className="text-[10px] text-slate-500 font-mono">Kuantiti / Qty: {item.quantity} {(item as any).packaging || (item as any).uom || ''}</div>
+                                                            <div className="text-[10px] text-slate-500 font-mono">
+                                                                Kuantiti / Qty: {item.quantity} {(item as any).packaging || (item as any).uom || ''}
+                                                                {item.orderNumber && (
+                                                                    <span className="ml-2 text-blue-400 font-semibold">• DO: {item.orderNumber}</span>
+                                                                )}
+                                                            </div>
                                                         </div>
 
                                                         {/* Quantity Editor */}
@@ -2785,21 +2799,17 @@ const DriverDelivery: React.FC<DriverDeliveryProps> = ({ user }) => {
                     {/* Header */}
                     <div className="p-4 border-b border-slate-800 flex justify-between items-center bg-slate-900 safe-top-padding">
                         <div>
-                            <h2 className="font-black text-white text-lg flex items-center gap-1.5">
+                            <h2 className="font-black text-white text-lg flex items-center gap-2">
                                 <span>SAHKAN HANTARAN / CONFIRM DELIVERY</span>
-                                {(() => {
-                                    const total = selectedOrder.trip_drop_count || 1;
-                                    const rawPod = selectedOrder.pod_photo_url ? selectedOrder.pod_photo_url.trim() : '';
-                                    const currentDropNum = countCompletedDrops(rawPod) + 1;
-                                    const isExtra = currentDropNum > total;
-                                    return (
-                                        <span className={`text-xs font-bold px-2 py-0.5 rounded border font-mono ${isExtra ? 'bg-amber-500/20 text-amber-300 border-amber-500/30' : 'bg-emerald-500/10 text-emerald-400 border border-emerald-500/20'}`}>
-                                            ({currentDropNum}/{total}{isExtra ? ' • Extra Drop' : ''})
-                                        </span>
-                                    );
-                                })()}
+                                {(selectedOrder as any).stop_sequence && (
+                                    <span className="text-xs font-bold px-2 py-0.5 rounded border font-mono bg-blue-500/10 text-blue-400 border-blue-500/20">
+                                        Hentian #{(selectedOrder as any).stop_sequence}
+                                    </span>
+                                )}
                             </h2>
-                            <p className="text-[10px] text-slate-500 uppercase font-bold">{selectedOrder.orderNumber}</p>
+                            <p className="text-[11px] text-slate-400 uppercase font-mono font-bold">
+                                DO: {selectedOrder.orderNumber} • {selectedOrder.customer}
+                            </p>
                         </div>
                         <button onClick={() => setIsUnloadModalOpen(false)} className="p-2 bg-slate-800 rounded-full text-white"><X size={20} /></button>
                     </div>
@@ -3005,23 +3015,18 @@ const DriverDelivery: React.FC<DriverDeliveryProps> = ({ user }) => {
                     <div className="p-4 border-t border-slate-800 bg-slate-900 space-y-3 safe-bottom-padding">
                         <button
                             onClick={handleConfirmUnload}
-                            disabled={submitting || uploadingTarget !== null || (!isFinalDrop && !unloadProductPhotoBase64)}
+                            disabled={submitting || uploadingTarget !== null || !unloadProductPhotoBase64}
                             className="w-full py-4 bg-emerald-600 hover:bg-emerald-500 disabled:bg-slate-800 text-white disabled:text-slate-500 rounded-xl font-black text-lg uppercase tracking-widest shadow-lg shadow-emerald-950/40 disabled:shadow-none transition-all active:scale-95 flex items-center justify-center gap-2"
                         >
                             {submitting ? (
                                 <>
                                     <div className="w-5 h-5 border-2 border-white/20 border-t-white rounded-full animate-spin"></div>
-                                    <span>PENGHANTARAN SEDANG DIHANTAR... / CONFIRMING...</span>
+                                    <span>PENGHANTARAN SEDANG DISAHKAN... / CONFIRMING...</span>
                                 </>
                             ) : (
                                 <>
                                     <CheckCircle size={20} />
-                                    <span>
-                                        {isFinalDrop 
-                                            ? "HANTAR & TAMAT TRIP / SUBMIT & END TRIP" 
-                                            : "HANTAR DROP POINT INI / SUBMIT THIS DROP POINT"
-                                        }
-                                    </span>
+                                    <span>SAHKAN HANTARAN / CONFIRM DELIVERY</span>
                                 </>
                             )}
                         </button>

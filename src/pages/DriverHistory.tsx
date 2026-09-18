@@ -424,13 +424,11 @@ const DriverHistory: React.FC<DriverHistoryProps> = ({ user }) => {
                     </div>
                 ) : (
                     tasks.map((order) => {
-                        const orderTotalDrops = (order as any).trip_drop_count || 1;
+                        const orderTotalDrops = 1;
                         const rawPodStr = order.pod_photo_url ? order.pod_photo_url.trim() : '';
                         const rawPhotosList = rawPodStr ? rawPodStr.split(',') : [];
                         const completedDropsCount = Math.floor(rawPhotosList.filter(Boolean).length / 2);
-                        const validDoPhotosCount = rawPhotosList.filter((url, idx) => idx % 2 === 0 && Boolean(url.trim())).length;
-                        const hasMissingDoSlot = rawPhotosList.some((url, idx) => idx % 2 === 0 && !url.trim());
-                        const isDropMismatch = (completedDropsCount !== orderTotalDrops) || (validDoPhotosCount !== orderTotalDrops) || hasMissingDoSlot;
+                        const isDropMismatch = false;
                         const extraJobPhoto = (order as any).proof_of_load_url || (order as any).proofOfLoadUrl;
 
                         return (
@@ -580,35 +578,7 @@ const DriverHistory: React.FC<DriverHistoryProps> = ({ user }) => {
                                                 );
                                             })}
 
-                                            {/* Missing Drops Placeholders in History */}
-                                            {Array.from({ length: Math.max(0, orderTotalDrops - Math.ceil(rawPhotosList.length / 2)) }).map((_, missingIdx) => {
-                                                const dropNum = Math.ceil(rawPhotosList.length / 2) + missingIdx + 1;
-                                                return (
-                                                    <div 
-                                                        key={`missing-drop-hist-${dropNum}`} 
-                                                        onClick={() => {
-                                                            setSelectedOrderForDrop(order);
-                                                            setAddDoPhotoBase64(null);
-                                                            setAddProductPhotoBase64(null);
-                                                            setAddDeliveryNote('');
-                                                            triggerGpsFetch();
-                                                            setIsAddDropModalOpen(true);
-                                                        }}
-                                                        className="col-span-2 relative rounded-lg border border-dashed border-amber-500/50 bg-amber-950/20 hover:bg-amber-900/30 transition-all p-2 flex items-center justify-between gap-2 cursor-pointer group"
-                                                    >
-                                                        <div className="flex items-center gap-2">
-                                                            <div className="w-5 h-5 rounded-full bg-amber-500/20 text-amber-400 flex items-center justify-center font-black text-[9px]">
-                                                                {dropNum}
-                                                            </div>
-                                                            <div>
-                                                                <span className="text-[8px] font-black text-amber-300 uppercase block">Drop #{dropNum} Belum Lengkap</span>
-                                                                <span className="text-[7px] text-slate-400">Ketik untuk muat naik</span>
-                                                            </div>
-                                                        </div>
-                                                        <Camera size={13} className="text-amber-400 group-hover:scale-110 transition-transform shrink-0" />
-                                                    </div>
-                                                );
-                                            })}
+
                                         </div>
 
                                         {/* Button to add extra drop or supplement photos */}
