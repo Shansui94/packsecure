@@ -1340,5 +1340,15 @@
   "Delete item / 删除货品": "Padam barang ini",
   "Rolls / 卷": "Gulung (Rolls)",
   "Box / 箱": "Kotak (Box)",
-  "Units / 件": "Unit"
+  "Units / 件": "Unit",
+  "+ 追加上传 (PDF/照片)": "+ Tambah Fail (PDF/Foto)",
+  "+ 手工添加停靠点": "+ Tambah Hentian Kosong",
+  "正在追加解析...": "Sedang memproses tambahan...",
+  "还有遗漏的单据或紧急加单？": "Ada DO tercicir atau pesanan kecemasan?",
+  "支持继续追加上传单据/照片，或直接手动新建空白停靠点。当前 {{count}}/15 个停靠点": "Boleh muat naik lagi PDF/foto DO, atau tambah hentian kosong secara manual. Semasa: {{count}}/15 hentian",
+  "追加上传 DO PDF 或送货照片": "Muat naik tambahan DO PDF atau foto penghantaran",
+  "手动新增一个空白停靠点": "Tambah hentian kosong manual",
+  "正在追加解析单据与照片，请稍候...": "Sedang menganalisis DO dan foto tambahan, sila tunggu...",
+  "已添加 1 个空白停靠点，请填写客户与货品信息。": "1 hentian kosong ditambah. Sila masukkan maklumat pelanggan dan barang.",
+  "✅ 成功追加 {{count}} 张单据至当前车次！": "✅ Berjaya menambah {{count}} DO ke trip ini!"
 }

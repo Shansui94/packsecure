@@ -609,6 +609,9 @@ const DeliveryOrderManagement: React.FC<DeliveryOrderManagementProps> = ({ user 
     const [pdfParseProgress, setPdfParseProgress] = useState('');
     const tripPdfInputRef = useRef<HTMLInputElement>(null);
     const headerTripPdfInputRef = useRef<HTMLInputElement>(null);
+    const appendTripPdfInputRef = useRef<HTMLInputElement>(null);
+    const [isAppendingPdf, setIsAppendingPdf] = useState(false);
+    const [appendProgress, setAppendProgress] = useState('');
     const [parsedTripBatch, setParsedTripBatch] = useState<ParsedTripDOBatch | null>(null);
     const [isParsedTripModalOpen, setIsParsedTripModalOpen] = useState(false);
     const [parsedTripNumber, setParsedTripNumber] = useState('');
@@ -2090,10 +2093,204 @@ const DeliveryOrderManagement: React.FC<DeliveryOrderManagementProps> = ({ user 
         }
     };
 
+    const handleAddNewParsedDO = () => {
+        setParsedTripBatch(prev => {
+            if (!prev) return null;
+            if (prev.deliveryOrders.length >= 15) {
+                alert(t('Maksimum 15 DO untuk satu trip. Sila cipta trip berasingan untuk DO selebihnya.\nMaximum 15 DOs per trip. Please create a separate trip for additional orders.'));
+                return prev;
+            }
+            const now = new Date();
+            const dateCode = `${String(now.getFullYear()).slice(-2)}${String(now.getMonth() + 1).padStart(2, '0')}`;
+            const seq = String(prev.deliveryOrders.length + 1).padStart(3, '0');
+            const defaultLoc = getDefaultLocForOrigin(parsedTripOrigin);
+
+            const newDO: ParsedDeliveryOrder = {
+                doNumber: `MANUAL-${dateCode}-${seq}`,
+                customer: '',
+                deliveryAddress: '',
+                phone: '',
+                remarks: '',
+                items: [
+                    {
+                        product: '',
+                        rawProductName: '',
+                        quantity: 1,
+                        uom: 'Rolls',
+                        sku: '',
+                        sourceLocation: defaultLoc,
+                        isMatched: false
+                    }
+                ],
+                doTotal: 1
+            };
+
+            const updated = [...prev.deliveryOrders, newDO];
+            const newTotalRolls = updated.reduce((sum, o) => {
+                return sum + (o.items || []).reduce((iSum, it) => iSum + (Number(it.quantity) || 0), 0);
+            }, 0);
+
+            return {
+                ...prev,
+                deliveryOrders: updated,
+                totalDrops: updated.length,
+                totalRolls: newTotalRolls
+            };
+        });
+        setToast({
+            type: 'info',
+            message: t('已添加 1 个空白停靠点，请填写客户与货品信息。')
+        });
+    };
+
+    const handleAppendTripPdfUpload = async (e: React.ChangeEvent<HTMLInputElement>) => {
+        const files = e.target.files;
+        if (!files || files.length === 0 || !parsedTripBatch) return;
+
+        const fileList = Array.from(files);
+        e.target.value = '';
+
+        const currentCount = parsedTripBatch.deliveryOrders.length;
+        if (currentCount + fileList.length > 15) {
+            alert(t('Maksimum 15 DO untuk satu trip. Anda kini mempunyai {{current}} DO dan cuba menambah {{new}} lagi.\nMaximum 15 DOs per trip limit. Current has {{current}} DOs, cannot append {{new}} more.', {
+                current: currentCount,
+                new: fileList.length
+            }));
+            return;
+        }
+
+        const totalSizeBytes = fileList.reduce((acc, f) => acc + f.size, 0);
+        if (totalSizeBytes > 4.5 * 1024 * 1024) {
+            alert(t('Saiz fail melebihi had 4.5MB untuk satu muat naik. Sila kurangkan bilangan fail atau mampatkan dokumen.\nTotal file size exceeds 4.5MB serverless limit. Please upload fewer or compressed files.'));
+            return;
+        }
+
+        setIsAppendingPdf(true);
+        setAppendProgress(t('Reading {{count}} files...', { count: fileList.length }));
+        setToast(null);
+
+        try {
+            const filePayloads = await Promise.all(
+                fileList.map(async (file) => {
+                    const base64 = await new Promise<string>((resolve, reject) => {
+                        const reader = new FileReader();
+                        reader.onload = () => {
+                            const res = reader.result as string;
+                            const data = res.includes(',') ? res.split(',')[1] : res;
+                            resolve(data);
+                        };
+                        reader.onerror = reject;
+                        reader.readAsDataURL(file);
+                    });
+
+                    let mime = file.type;
+                    if (!mime || mime === 'application/octet-stream') {
+                        const nameLower = file.name.toLowerCase();
+                        if (nameLower.endsWith('.pdf')) mime = 'application/pdf';
+                        else if (nameLower.endsWith('.jpg') || nameLower.endsWith('.jpeg')) mime = 'image/jpeg';
+                        else if (nameLower.endsWith('.png')) mime = 'image/png';
+                        else if (nameLower.endsWith('.webp')) mime = 'image/webp';
+                        else mime = 'application/pdf';
+                    }
+
+                    return {
+                        name: file.name,
+                        base64,
+                        mimeType: mime
+                    };
+                })
+            );
+
+            setAppendProgress(t('AI analyzing DO details and mapping SKUs...'));
+
+            const response = await fetch('/api/agent/parse-trip-pdf', {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({
+                    action: 'parse-trip-pdf',
+                    files: filePayloads,
+                    productsList: v2Items.map(i => ({ sku: i.sku, name: i.name })),
+                    driversList: drivers.map(d => ({ uid: d.uid, name: d.name || d.email || '' }))
+                })
+            });
+
+            if (!response.ok) {
+                const errData = await response.json().catch(() => ({}));
+                throw new Error(errData.error || `HTTP ${response.status}`);
+            }
+
+            const data: ParsedTripDOBatch = await response.json();
+            if (!data.deliveryOrders || data.deliveryOrders.length === 0) {
+                throw new Error(t('No valid Delivery Orders detected in the uploaded files.'));
+            }
+
+            const currentOrigin = parsedTripOrigin || activeLocation || 'Taiping';
+
+            // Execute 2-tier mapping alignment (customer_sku_mappings + master_items_v2)
+            const newProcessedOrders: ParsedDeliveryOrder[] = data.deliveryOrders.map(doOrder => {
+                const alignedItems: ParsedDOItem[] = (doOrder.items || []).map(it => {
+                    const matchRes = alignDOItemWithCatalog(
+                        doOrder.customer,
+                        it.product,
+                        it.sku,
+                        skuMappings,
+                        v2Items
+                    );
+                    return {
+                        ...it,
+                        rawProductName: it.rawProductName || it.product,
+                        product: matchRes.product,
+                        sku: matchRes.sku,
+                        sourceLocation: it.sourceLocation || matchRes.sourceLocation || guessItemLocation({ sku: matchRes.sku, product: matchRes.product, rawProductName: it.product }, currentOrigin),
+                        isMatched: matchRes.isMatched
+                    };
+                });
+                return {
+                    ...doOrder,
+                    items: alignedItems,
+                    doTotal: alignedItems.reduce((sum, item) => sum + (Number(item.quantity) || 0), 0)
+                };
+            });
+
+            // Append to existing batch without overwriting trip metadata or existing orders
+            setParsedTripBatch(prev => {
+                if (!prev) return null;
+                const mergedOrders = [...prev.deliveryOrders, ...newProcessedOrders];
+                const totalRolls = mergedOrders.reduce((sum, o) => {
+                    return sum + (o.items || []).reduce((iSum, it) => iSum + (Number(it.quantity) || 0), 0);
+                }, 0);
+                return {
+                    ...prev,
+                    deliveryOrders: mergedOrders,
+                    totalDrops: mergedOrders.length,
+                    totalRolls
+                };
+            });
+
+            setToast({
+                type: 'success',
+                message: t('✅ 成功追加 {{count}} 张单据至当前车次！', { count: newProcessedOrders.length })
+            });
+        } catch (err: any) {
+            console.error("Failed to append DO & Photos:", err);
+            const errMsg = err.message || t('Failed to parse DO & Photos');
+            setToast({
+                type: 'error',
+                message: errMsg
+            });
+            alert(`追加单据识别失败 / Failed: ${errMsg}`);
+        } finally {
+            setIsAppendingPdf(false);
+            setAppendProgress('');
+        }
+    };
+
     const handleCloseParsedTripModal = () => {
         setIsParsedTripModalOpen(false);
         setParsedTripBatch(null);
         setParsedTripRemark('');
+        setIsAppendingPdf(false);
+        setAppendProgress('');
     };
 
     const handleRemoveParsedDO = (index: number) => {
@@ -6111,6 +6308,16 @@ const DeliveryOrderManagement: React.FC<DeliveryOrderManagementProps> = ({ user 
             {isParsedTripModalOpen && parsedTripBatch && (
                 <div className="fixed inset-0 z-[120] flex items-center justify-center p-2 sm:p-4 bg-black/80 backdrop-blur-md animate-in fade-in duration-200">
                     <div className="bg-slate-950 border border-slate-800 rounded-2xl w-full max-w-4xl max-h-[min(94vh,860px)] overflow-hidden flex flex-col shadow-2xl shadow-black/80">
+                        {/* Hidden input for appending DO PDFs / photos */}
+                        <input
+                            ref={appendTripPdfInputRef}
+                            type="file"
+                            accept="application/pdf,.pdf,image/jpeg,image/png,image/webp,.jpg,.jpeg,.png,.webp"
+                            multiple
+                            className="hidden"
+                            onChange={handleAppendTripPdfUpload}
+                        />
+
                         {/* Header */}
                         <div className="p-4 sm:p-5 border-b border-slate-800 flex justify-between items-start gap-3 bg-slate-900/60">
                             <div>
@@ -6435,14 +6642,53 @@ const DeliveryOrderManagement: React.FC<DeliveryOrderManagementProps> = ({ user 
 
                             {/* Drops Sequence List */}
                             <div className="space-y-3">
-                                <div className="flex items-center justify-between">
-                                    <h4 className="text-xs font-black text-slate-300 uppercase tracking-wider flex items-center gap-2">
-                                        <MapPin size={16} className="text-emerald-400" />
-                                        <span>{t('Drops & Delivery Orders / 经停卸货点清单')} ({parsedTripBatch.deliveryOrders.length})</span>
-                                    </h4>
-                                    <span className="text-[11px] text-slate-400">
-                                        {t('Use arrow buttons to adjust delivery sequence (Drop 1 ➔ Drop 2)')}
-                                    </span>
+                                {isAppendingPdf && (
+                                    <div className="bg-blue-500/10 border border-blue-500/30 rounded-2xl p-3.5 flex items-center gap-3 text-blue-300 text-xs animate-pulse">
+                                        <div className="w-4 h-4 border-2 border-blue-400 border-t-transparent rounded-full animate-spin shrink-0" />
+                                        <div className="font-bold">
+                                            {appendProgress || t('正在追加解析单据与照片，请稍候...')}
+                                        </div>
+                                    </div>
+                                )}
+
+                                <div className="flex flex-wrap items-center justify-between gap-2">
+                                    <div>
+                                        <h4 className="text-xs font-black text-slate-300 uppercase tracking-wider flex items-center gap-2">
+                                            <MapPin size={16} className="text-emerald-400" />
+                                            <span>{t('Drops & Delivery Orders / 经停卸货点清单')} ({parsedTripBatch.deliveryOrders.length})</span>
+                                        </h4>
+                                        <p className="text-[11px] text-slate-400 mt-0.5">
+                                            {t('Use arrow buttons to adjust delivery sequence (Drop 1 ➔ Drop 2)')}
+                                        </p>
+                                    </div>
+
+                                    <div className="flex items-center gap-2">
+                                        <button
+                                            type="button"
+                                            disabled={isAppendingPdf || parsedTripBatch.deliveryOrders.length >= 15}
+                                            onClick={() => appendTripPdfInputRef.current?.click()}
+                                            className="px-3 py-1.5 rounded-xl bg-gradient-to-r from-blue-600 to-indigo-600 hover:from-blue-500 hover:to-indigo-500 disabled:opacity-50 text-white font-bold text-xs flex items-center gap-1.5 shadow-md shadow-blue-950/40 transition-all active:scale-95"
+                                            title={t('追加上传 DO PDF 或送货照片')}
+                                        >
+                                            {isAppendingPdf ? (
+                                                <span className="w-3.5 h-3.5 border-2 border-white/30 border-t-white rounded-full animate-spin" />
+                                            ) : (
+                                                <ImagePlus size={14} />
+                                            )}
+                                            <span>{isAppendingPdf ? (appendProgress || t('正在追加解析...')) : t('+ 追加上传 (PDF/照片)')}</span>
+                                        </button>
+
+                                        <button
+                                            type="button"
+                                            disabled={parsedTripBatch.deliveryOrders.length >= 15}
+                                            onClick={handleAddNewParsedDO}
+                                            className="px-3 py-1.5 rounded-xl bg-slate-800 hover:bg-slate-700 border border-slate-700 hover:border-slate-600 disabled:opacity-50 text-emerald-400 hover:text-emerald-300 font-bold text-xs flex items-center gap-1.5 transition-all active:scale-95"
+                                            title={t('手动新增一个空白停靠点')}
+                                        >
+                                            <Plus size={14} />
+                                            <span>{t('+ 手工添加停靠点')}</span>
+                                        </button>
+                                    </div>
                                 </div>
 
                                 <div className="space-y-3">
@@ -6725,6 +6971,44 @@ const DeliveryOrderManagement: React.FC<DeliveryOrderManagementProps> = ({ user 
                                             </div>
                                         </div>
                                     ))}
+
+                                    {/* Bottom Append & Add Drop Card */}
+                                    <div className="p-4 rounded-2xl border-2 border-dashed border-slate-800 hover:border-slate-700 bg-slate-900/30 flex flex-col sm:flex-row items-center justify-between gap-3 text-center sm:text-left transition-colors">
+                                        <div className="space-y-0.5">
+                                            <div className="text-xs font-bold text-slate-300 flex items-center justify-center sm:justify-start gap-1.5">
+                                                <Sparkles size={14} className="text-amber-400" />
+                                                <span>{t('还有遗漏的单据或紧急加单？')}</span>
+                                            </div>
+                                            <div className="text-[11px] text-slate-500">
+                                                {t('支持继续追加上传单据/照片，或直接手动新建空白停靠点。当前 {{count}}/15 个停靠点', { count: parsedTripBatch.deliveryOrders.length })}
+                                            </div>
+                                        </div>
+                                        <div className="flex items-center gap-2 shrink-0">
+                                            <button
+                                                type="button"
+                                                disabled={isAppendingPdf || parsedTripBatch.deliveryOrders.length >= 15}
+                                                onClick={() => appendTripPdfInputRef.current?.click()}
+                                                className="px-3.5 py-2 rounded-xl bg-gradient-to-r from-blue-600 to-indigo-600 hover:from-blue-500 hover:to-indigo-500 disabled:opacity-50 text-white font-bold text-xs flex items-center gap-1.5 shadow-md shadow-blue-950/40 transition-all active:scale-95"
+                                            >
+                                                {isAppendingPdf ? (
+                                                    <span className="w-3.5 h-3.5 border-2 border-white/30 border-t-white rounded-full animate-spin" />
+                                                ) : (
+                                                    <ImagePlus size={14} />
+                                                )}
+                                                <span>{isAppendingPdf ? (appendProgress || t('正在追加解析...')) : t('+ 追加上传 (PDF/照片)')}</span>
+                                            </button>
+
+                                            <button
+                                                type="button"
+                                                disabled={parsedTripBatch.deliveryOrders.length >= 15}
+                                                onClick={handleAddNewParsedDO}
+                                                className="px-3.5 py-2 rounded-xl bg-slate-800 hover:bg-slate-700 border border-slate-700 text-emerald-400 hover:text-emerald-300 font-bold text-xs flex items-center gap-1.5 transition-all active:scale-95"
+                                            >
+                                                <Plus size={14} />
+                                                <span>{t('+ 手工添加停靠点')}</span>
+                                            </button>
+                                        </div>
+                                    </div>
                                 </div>
                             </div>
                         </div>

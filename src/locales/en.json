@@ -1340,5 +1340,15 @@
   "Delete item / 删除货品": "Delete item",
   "Rolls / 卷": "Rolls",
   "Box / 箱": "Box",
-  "Units / 件": "Units"
+  "Units / 件": "Units",
+  "+ 追加上传 (PDF/照片)": "+ Append Files (PDF/Photo)",
+  "+ 手工添加停靠点": "+ Add Blank Drop",
+  "正在追加解析...": "Appending & parsing...",
+  "还有遗漏的单据或紧急加单？": "Missed any DOs or urgent add-ons?",
+  "支持继续追加上传单据/照片，或直接手动新建空白停靠点。当前 {{count}}/15 个停靠点": "Append more DO PDFs/photos or manually add a blank drop. Current: {{count}}/15 drops",
+  "追加上传 DO PDF 或送货照片": "Append DO PDF or delivery photo",
+  "手动新增一个空白停靠点": "Manually add a blank drop point",
+  "正在追加解析单据与照片，请稍候...": "Appending and analyzing DO details, please wait...",
+  "已添加 1 个空白停靠点，请填写客户与货品信息。": "Added 1 blank drop point. Please enter customer and product details.",
+  "✅ 成功追加 {{count}} 张单据至当前车次！": "✅ Successfully appended {{count}} DO(s) to this trip!"
 }
