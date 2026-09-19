@@ -5,6 +5,7 @@ import { V2Item } from '../types/v2';
 import { User } from '../types';
 import { ClipboardCheck, Search, Filter, Warehouse, CheckCircle2, ChevronRight, Calculator, Check, AlertCircle, Calendar, FileBarChart } from 'lucide-react';
 import AuditReport from './AuditReport';
+import { t } from '../utils/i18n';
 
 import { WAREHOUSES } from '../data/factoryData';
 
@@ -254,7 +255,7 @@ const StockAudit: React.FC<StockAuditProps> = ({ user }) => {
                 <div className="mb-6">
                     <div className="flex items-center gap-3 text-cyan-500 mb-2">
                         <ClipboardCheck size={28} className="drop-shadow-[0_0_10px_rgba(6,182,212,0.5)]" />
-                        <h1 className="text-3xl font-black tracking-tighter text-white">Stock Audit & Reports</h1>
+                        <h1 className="text-3xl font-black tracking-tighter text-white">{t('Stock Audit & Reports')}</h1>
                     </div>
                     <p className="text-gray-500 text-sm">Align system ledger with physical warehouse counts seamlessly and inspect audit variance logs.</p>
                 </div>
@@ -271,7 +272,7 @@ const StockAudit: React.FC<StockAuditProps> = ({ user }) => {
                         }`}
                     >
                         <ClipboardCheck size={18} />
-                        <span>实物盘点作业 (Stock Audit)</span>
+                        <span>{t('Stock Audit (Physical Count)')}</span>
                     </button>
                     <button
                         type="button"
@@ -283,7 +284,7 @@ const StockAudit: React.FC<StockAuditProps> = ({ user }) => {
                         }`}
                     >
                         <FileBarChart size={18} />
-                        <span>盘点损益报告 (Audit Report)</span>
+                        <span>{t('Audit Variance Report')}</span>
                     </button>
                 </div>
 

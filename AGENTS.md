@@ -102,6 +102,15 @@ npm run lint           # ESLint
 - 核心业务真理库：[BUSINESS_RULES.md](docs/BUSINESS_RULES.md)（厂区、机台、工时费率、车队容量、额外补贴等）
 - 数据结构字典：[DATA_DICTIONARY.md](docs/DATA_DICTIONARY.md)（表结构、枚举值、状态机）
 - 系统语言与国际化规范：[I18N_GUIDELINES.md](docs/I18N_GUIDELINES.md)（管理层与司机需三语、外籍工人需六语、车间移动端大图标红绿黄高对比度设计、防语言混杂红线）
+- WhatsApp 现场排障手册与词典：[WHATSAPP_ISSUE_TRIAGE.md](docs/WHATSAPP_ISSUE_TRIAGE.md)（现场俚语缩写、司机/操作员常见故障矩阵）
+
+## WhatsApp 现场问题与用户排障响应规范
+
+当开发者在对话中提供 WhatsApp 消息、现场报障文字或截图时，Agent 必须遵循【双轨排查输出】：
+1. **意图与实体提取**：自动解析马来语/Manglish 缩写（如 `xleh`, `rosak`, `naik barang`），补全车牌（如 `9821` 对应 `VPC 9821` 65卷或 `APH 9821` 92卷）、单号与机台。
+2. **规则核验 (SOP Check)**：对照业务真理库核实是用户误解/未依 SOP 还是系统异常。
+3. **技术诊断 (For Developer)**：提供对应数据库表名、可直接执行的核查 SQL、关联代码页面及安全处置方案。
+4. **回发草稿 (Draft for User)**：生成符合该提报人角色（司机用接地气马来语、管理层用专业中英、操作员用极简步骤）且**不含任何代码/DB黑话**的直接可复制文本。
 
 ## 关键安全防线 (Safety Guardrails)
 

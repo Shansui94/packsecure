@@ -10,6 +10,8 @@ import { supabase } from '../services/supabase';
 import { getV2Items } from '../services/apiV2';
 import * as XLSX from 'xlsx';
 import DriverTutorialModal from '../components/DriverTutorialModal';
+import { getPublicHoliday, getMonthPublicHolidays, PublicHoliday, getHolidayLocalizedName } from '../utils/malaysiaHolidays';
+
 
 const normalizeWarehouseName = (loc: string): string => {
     if (!loc) return 'SPD';
@@ -35,6 +37,17 @@ const getAvailableWarehousesForOrigin = (origin: string): string[] => {
     if (u === 'JOHOR') return ['Johor'];
     return ['SPD', 'OPM Lama', 'OPM Corner', 'OPM Ali'];
 };
+
+const normalizeLeaveType = (raw?: string | null): string => {
+    if (!raw) return 'Leave';
+    const lower = raw.toLowerCase().trim();
+    if (lower.includes('annual') || lower.includes('tahunan')) return 'Annual';
+    if (lower.includes('mc') || lower.includes('medical') || lower.includes('sakit') || lower.includes('hospital')) return 'Medical';
+    if (lower.includes('unpaid') || lower.includes('tanpa gaji')) return 'Unpaid';
+    if (lower.includes('emergency') || lower.includes('kecemasan')) return 'Emergency';
+    return raw;
+};
+
 
 const getPercentColor = (percent: number): string => {
     if (percent < 70) return 'text-red-400 font-bold';
@@ -259,16 +272,25 @@ interface DailyMetrics {
         deadline?: string | null;
         order_date?: string | null;
         pod_timestamp?: string | null;
+        lorry_id?: string | null;
+        lorry_plate?: string | null;
     }[];
     photoCount: number;
     photos: any[];
+    isPublicHoliday?: boolean;
+    publicHoliday?: PublicHoliday | null;
+    isWorkedOnPublicHoliday?: boolean;
+    isRestOnPublicHoliday?: boolean;
     leaveStatus: string | null;
     leaveType: string | null;
+    rawLeaveType?: string | null;
     leaveReason: string | null;
     shiftStart: string | null;
     shiftEnd: string | null;
     notes: string | null;
     isDerivedDriverAttendance?: boolean;
+    lorryPlate?: string;
+
     machinesOperated: string[];
     jobDetails: { jobId: string; sku?: string; output: number; reject: number }[];
     approvedClaims: number;
@@ -476,7 +498,13 @@ const PersonalMonthlyReport: React.FC<Props> = ({ user }) => {
             const hasPendingPayload = selectedTrip.pending_edit_payload;
             const source = hasPendingPayload ? selectedTrip.pending_edit_payload : selectedTrip;
 
-            setSelectedLorryId(source.lorry_id || selectedTrip.lorry_id || '');
+            let initialLorryId = source.lorry_id || selectedTrip.lorry_id || '';
+            if (!initialLorryId && (selectedTrip.lorry_plate || driverLorryPlate) && (selectedTrip.lorry_plate || driverLorryPlate) !== 'N/A') {
+                const targetPlate = selectedTrip.lorry_plate || driverLorryPlate;
+                const matched = (lorries || []).find(l => (l.plate_number || l.plateNumber || l.plate) === targetPlate);
+                if (matched?.id) initialLorryId = matched.id;
+            }
+            setSelectedLorryId(initialLorryId);
             setSelectedDriverId(source.driver_id || selectedTrip.driver_id || selectedEmployeeId || '');
             setNewOrderDate(source.order_date || selectedTrip.order_date || selectedTrip.date || '');
             setNewOrderDeliveryDate(source.deadline || selectedTrip.deadline || '');
@@ -489,7 +517,7 @@ const PersonalMonthlyReport: React.FC<Props> = ({ user }) => {
             setNewOrderItems(source.items ? [...source.items] : (selectedTrip.items ? [...selectedTrip.items] : []));
             setIsEditingTrip(true);
         }
-    }, [selectedTrip, selectedEmployeeId]);
+    }, [selectedTrip, selectedEmployeeId, lorries, driverLorryPlate]);
 
     const handleAddItem = () => {
         if (!selectedV2Item || !currentItemQty) return;
@@ -847,6 +875,7 @@ const PersonalMonthlyReport: React.FC<Props> = ({ user }) => {
 
             // Odometer Logs (driver_id in lorry_mileage_logs and lorry_mileage_alerts is strictly UUID)
             const driverUuidsToQuery = allCandidateIds.filter(id => typeof id === 'string' && uuidRegex.test(id));
+            let odoDataFetched: any[] = [];
 
             if (driverUuidsToQuery.length > 0) {
                 try {
@@ -858,6 +887,7 @@ const PersonalMonthlyReport: React.FC<Props> = ({ user }) => {
                         .lte('created_at', endDateTs)
                         .order('created_at', { ascending: false });
                     if (!odoErr && odoData) {
+                        odoDataFetched = odoData;
                         setOdometerLogs(odoData);
                     } else {
                         if (odoErr) console.warn("Lorry mileage logs query error:", odoErr);
@@ -891,15 +921,22 @@ const PersonalMonthlyReport: React.FC<Props> = ({ user }) => {
                 setOdometerAlerts([]);
             }
 
-            // E. Leaves
-            const { data: leaveData } = await supabase
-                .from('employee_leave')
-                .select('start_date, end_date, status, reason, leave_type, type')
-                .eq('employee_id', selectedEmployeeId)
-                .eq('status', 'Approved')
-                .lte('start_date', lastDayStr) 
-                .gte('end_date', firstDay);   
-            setLeaves(leaveData || []);
+            // E. Leaves (Matches UUID, employee_id, and fetches both Approved & Pending)
+            const targetLeaveUids = allCandidateIds.length > 0 ? allCandidateIds : [selectedEmployeeId].filter(Boolean);
+            if (targetLeaveUids.length > 0) {
+                const { data: leaveData, error: leaveErr } = await supabase
+                    .from('employee_leave')
+                    .select('id, employee_id, start_date, end_date, count_days, status, reason, leave_type, type')
+                    .in('employee_id', targetLeaveUids)
+                    .in('status', ['Approved', 'Pending'])
+                    .lte('start_date', lastDayStr) 
+                    .gte('end_date', firstDay);
+                if (leaveErr) console.warn("Fetch employee_leave error:", leaveErr);
+                setLeaves(leaveData || []);
+            } else {
+                setLeaves([]);
+            }
+
 
             // F. Payroll & Confirmation Status
             if (activeEmpId) {
@@ -996,16 +1033,84 @@ const PersonalMonthlyReport: React.FC<Props> = ({ user }) => {
                 setIsMonthlyConfirmed(false);
             }
 
-            // Fetch tied lorry for driver / Dapatkan lorry yang terikat untuk pemandu
+            // Fetch tied lorry for driver / Dapatkan lorry yang terikat untuk pemandu (Multi-tier resolution)
+            const { data: allLorriesData } = await supabase.from('lorries').select('*');
+            const currentLorries: any[] = allLorriesData || [];
+            if (currentLorries.length > 0) setLorries(currentLorries);
+
             let lorryPlate = 'N/A';
-            if (driverUids.length > 0) {
-                const { data: lorryData } = await supabase
-                    .from('lorries')
-                    .select('plate_number')
-                    .in('driver_id', driverUids)
-                    .maybeSingle();
-                if (lorryData?.plate_number) lorryPlate = lorryData.plate_number;
+            const candidateDriverUids = Array.from(new Set([
+                ...driverUids,
+                ...driverUuidsToQuery,
+                selectedEmployeeId,
+                profileData?.auth_user_id,
+                profileData?.id
+            ].filter(Boolean))).filter(id => typeof id === 'string' && uuidRegex.test(id));
+
+            // Tier 1: Check actively bound lorry in lorries table (driver_id matching driver UIDs)
+            if (candidateDriverUids.length > 0) {
+                const boundLorry = currentLorries.find(l => l.driver_id && candidateDriverUids.includes(l.driver_id));
+                if (boundLorry?.plate_number || boundLorry?.plate || boundLorry?.lorry_no) {
+                    lorryPlate = boundLorry.plate_number || boundLorry.plate || boundLorry.lorry_no;
+                }
             }
+
+            // Tier 2: Check recent odometer logs for the current month
+            if (lorryPlate === 'N/A' && odoDataFetched.length > 0) {
+                const logWithLorry = odoDataFetched.find((o: any) => o.lorry_id);
+                if (logWithLorry) {
+                    const found = currentLorries.find(l => l.id === logWithLorry.lorry_id);
+                    if (found?.plate_number || found?.plate || found?.lorry_no) {
+                        lorryPlate = found.plate_number || found.plate || found.lorry_no;
+                    }
+                }
+            }
+
+            // Tier 3: Check monthly deliveries having lorry_id
+            if (lorryPlate === 'N/A' && monthlyDeliveries.length > 0) {
+                const delivWithLorry = monthlyDeliveries.find((d: any) => d.lorry_id);
+                if (delivWithLorry) {
+                    const found = currentLorries.find(l => l.id === delivWithLorry.lorry_id);
+                    if (found?.plate_number || found?.plate || found?.lorry_no) {
+                        lorryPlate = found.plate_number || found.plate || found.lorry_no;
+                    }
+                }
+            }
+
+            // Tier 4: Match driver name against lorries.driver_name (e.g. Dean, Yan, Zulhesham)
+            const driverName = viewedProfile?.name || profileData?.name || user?.name;
+            if (lorryPlate === 'N/A' && driverName && typeof driverName === 'string') {
+                const dLower = driverName.toLowerCase().trim();
+                const matchedByName = currentLorries.find(l => {
+                    const lName = (l.driver_name || l.driverName || '').toLowerCase().trim();
+                    if (!lName) return false;
+                    return lName === dLower || lName.includes(dLower) || dLower.includes(lName);
+                });
+                if (matchedByName?.plate_number || matchedByName?.plate || matchedByName?.lorry_no) {
+                    lorryPlate = matchedByName.plate_number || matchedByName.plate || matchedByName.lorry_no;
+                }
+            }
+
+            // Tier 5: Fallback to ANY past lorry_mileage_logs for this driver in DB (even outside current month)
+            if (lorryPlate === 'N/A' && candidateDriverUids.length > 0) {
+                try {
+                    const { data: pastOdo } = await supabase
+                        .from('lorry_mileage_logs')
+                        .select('lorry_id')
+                        .in('driver_id', candidateDriverUids)
+                        .order('created_at', { ascending: false })
+                        .limit(1);
+                    if (pastOdo && pastOdo.length > 0 && pastOdo[0].lorry_id) {
+                        const found = currentLorries.find(l => l.id === pastOdo[0].lorry_id);
+                        if (found?.plate_number || found?.plate || found?.lorry_no) {
+                            lorryPlate = found.plate_number || found.plate || found.lorry_no;
+                        }
+                    }
+                } catch (pastErr) {
+                    console.warn("Past odo query fallback warning:", pastErr);
+                }
+            }
+
             setDriverLorryPlate(lorryPlate);
 
         } catch (error) {
@@ -1364,23 +1469,30 @@ const PersonalMonthlyReport: React.FC<Props> = ({ user }) => {
             dailyMetrics.forEach(day => {
                 const weekday = new Date(day.dateStr.replace(/-/g, '/')).toLocaleDateString('ms-MY', { weekday: 'long' });
                 let attendanceText = '⚠️ 没有时间 / 未打卡 (No Clock In)';
-                if (day.leaveStatus) {
-                    attendanceText = `Cuti / Leave (${day.leaveType || 'Leave'})`;
+                if (day.isPublicHoliday) {
+                    attendanceText = day.hasAttendance 
+                        ? `${day.shiftStart || '-'} → ${day.shiftEnd || 'Aktif'} (${day.hoursWorked.toFixed(1)} hrs - Kerja Cuti Umum)`
+                        : `🇲🇾 Cuti Umum / Public Holiday (${day.publicHoliday?.nameMs || ''})`;
+                } else if (day.leaveStatus) {
+                    attendanceText = `Cuti / Leave (${day.leaveType || 'Leave'}) [${day.leaveStatus}]`;
                 } else if (day.hasAttendance) {
                     attendanceText = `${day.shiftStart || '-'} → ${day.shiftEnd || 'Aktif'} (${day.hoursWorked.toFixed(1)} hrs)`;
                 }
 
                 if (day.tripDetails && day.tripDetails.length > 0) {
                     day.tripDetails.forEach((trip: any, tIdx: number) => {
-                        const statusLabel = trip.status === 'Delivered'
+                        let statusLabel = trip.status === 'Delivered'
                             ? '✅ Selesai / Delivered'
                             : (trip.status === 'Cancelled' ? '❌ Batal / Cancelled' : '🚚 Belum Imbas / Pending Scan');
+                        if (day.isPublicHoliday) {
+                            statusLabel += ' [Kerja Cuti Umum]';
+                        }
 
                         excelRows.push({
                             'Tarikh / Date': day.dateStr,
                             'Hari / Day': weekday,
                             'Masa Kerja / Working Time': tIdx === 0 ? attendanceText : `↳ (Trip #${tIdx + 1})`,
-                            'No. Pendaftaran Lorry / Lorry Plate': driverLorryPlate || '-',
+                            'No. Pendaftaran Lorry / Lorry Plate': (trip.lorry_plate && trip.lorry_plate !== 'N/A' ? trip.lorry_plate : (day.lorryPlate && day.lorryPlate !== 'N/A' ? day.lorryPlate : (driverLorryPlate !== 'N/A' ? driverLorryPlate : '-'))),
                             'No. DO / Order': trip.order_number || '-',
                             'Pelanggan / Customer': trip.customer || '-',
                             'Tempat Asal / Origin': trip.trip_origin || 'TAIPING',
@@ -1391,20 +1503,35 @@ const PersonalMonthlyReport: React.FC<Props> = ({ user }) => {
                             'Status': statusLabel
                         });
                     });
+                } else if (day.isPublicHoliday) {
+                    excelRows.push({
+                        'Tarikh / Date': day.dateStr,
+                        'Hari / Day': weekday,
+                        'Masa Kerja / Working Time': `🇲🇾 Cuti Umum / Public Holiday (${day.publicHoliday?.nameMs || ''})`,
+                        'No. Pendaftaran Lorry / Lorry Plate': '-',
+                        'No. DO / Order': '-',
+                        'Pelanggan / Customer': day.publicHoliday?.nameZh ? `${day.publicHoliday.nameMs} (${day.publicHoliday.nameZh})` : (day.publicHoliday?.nameMs || 'Cuti Umum'),
+                        'Tempat Asal / Origin': '-',
+                        'Destinasi / Destinations': '-',
+                        'Kategori Trip / Trip Category': `Cuti Umum / ${day.publicHoliday?.nameMs || 'PH'}`,
+                        'Jumlah Drops / Total Drops': 0,
+                        'Harga / Allowance (RM)': 0,
+                        'Status': `🇲🇾 Cuti Umum / Public Holiday (${day.publicHoliday?.nameMs || ''})`
+                    });
                 } else if (day.leaveStatus) {
                     excelRows.push({
                         'Tarikh / Date': day.dateStr,
                         'Hari / Day': weekday,
-                        'Masa Kerja / Working Time': `Cuti / Leave (${day.leaveType || 'Leave'})`,
+                        'Masa Kerja / Working Time': `Cuti / Leave (${day.leaveType || 'Leave'}) [${day.leaveStatus}]`,
                         'No. Pendaftaran Lorry / Lorry Plate': '-',
                         'No. DO / Order': '-',
-                        'Pelanggan / Customer': day.leaveReason ? `Cuti: ${day.leaveReason}` : 'Cuti Diluluskan / Approved Leave',
+                        'Pelanggan / Customer': day.leaveReason ? `Cuti: ${day.leaveReason}` : `Cuti Diluluskan / Leave (${day.leaveStatus})`,
                         'Tempat Asal / Origin': '-',
                         'Destinasi / Destinations': '-',
                         'Kategori Trip / Trip Category': `Cuti / ${day.leaveType || 'Leave'}`,
                         'Jumlah Drops / Total Drops': 0,
                         'Harga / Allowance (RM)': 0,
-                        'Status': `🏖️ Cuti / Leave (${day.leaveType || 'Leave'})`
+                        'Status': `🏖️ Cuti / Leave (${day.leaveType || 'Leave'}) [${day.leaveStatus}]`
                     });
                 } else {
                     const restLabel = day.isSunday 
@@ -1439,7 +1566,7 @@ const PersonalMonthlyReport: React.FC<Props> = ({ user }) => {
             // Set column widths for better layout
             ws['!cols'] = [
                 { wch: 14 }, // Date
-                { wch: 12 }, // Day
+                { wch: 14 }, // Day
                 { wch: 28 }, // Working Time
                 { wch: 18 }, // Lorry Plate Number
                 { wch: 16 }, // DO / Order
@@ -1449,7 +1576,7 @@ const PersonalMonthlyReport: React.FC<Props> = ({ user }) => {
                 { wch: 18 }, // Trip Category
                 { wch: 12 }, // Total Drops
                 { wch: 16 }, // Price (RM)
-                { wch: 25 }  // Status
+                { wch: 28 }  // Status
             ];
 
             const driverName = viewedProfile?.name || user?.name || 'Driver';
@@ -1460,7 +1587,9 @@ const PersonalMonthlyReport: React.FC<Props> = ({ user }) => {
             const excelRows = dailyMetrics.map(day => ({
                 'Tarikh / Date': day.dateStr,
                 'Hari / Day': new Date(day.dateStr.replace(/-/g, '/')).toLocaleDateString('ms-MY', { weekday: 'long' }),
-                'Status Kehadiran / Attendance': day.leaveStatus ? `Cuti / Leave (${day.leaveType || ''})` : (day.hasAttendance ? 'Hadir / Present' : 'Tiada Log / No Log'),
+                'Status Kehadiran / Attendance': day.isPublicHoliday
+                    ? (day.hasAttendance ? `🇲🇾 Hadir (Kerja Cuti Umum: ${day.publicHoliday?.nameMs || ''})` : `🇲🇾 Cuti Umum / Public Holiday (${day.publicHoliday?.nameMs || ''})`)
+                    : (day.leaveStatus ? `Cuti / Leave (${day.leaveType || ''}) [${day.leaveStatus}]` : (day.hasAttendance ? 'Hadir / Present' : (day.isWeekend ? 'Weekend' : 'Tiada Log / No Log'))),
                 'Masa Masuk / Clock In': day.shiftStart || '-',
                 'Masa Keluar / Clock Out': day.shiftEnd || '-',
                 'Jam Kerja / Hours Worked': day.hoursWorked.toFixed(1),
@@ -1517,6 +1646,7 @@ const PersonalMonthlyReport: React.FC<Props> = ({ user }) => {
                     rows.push({
                         date: dateDisplay,
                         workingTime: tIdx === 0 ? workingTimeText : '↳ (Trip tambahan)',
+                        lorryPlate: (trip.lorry_plate && trip.lorry_plate !== 'N/A' ? trip.lorry_plate : (day.lorryPlate && day.lorryPlate !== 'N/A' ? day.lorryPlate : (driverLorryPlate !== 'N/A' ? driverLorryPlate : '-'))),
                         orderNumber: trip.order_number || '-',
                         customer: trip.customer || '-',
                         origin: trip.trip_origin || 'TAIPING',
@@ -1631,10 +1761,11 @@ const PersonalMonthlyReport: React.FC<Props> = ({ user }) => {
             const rateMap: Record<string, any> = {};
             rates.forEach(r => { rateMap[`${r.origin}-${r.location_name}`.toLowerCase()] = r; });
 
-            const { data: lorryData } = await supabase.from('lorries').select('driver_id, plate_number');
+            const { data: lorryData } = await supabase.from('lorries').select('*');
+            const allLorriesList: any[] = lorryData || [];
             const lorryMap: Record<string, string> = {};
-            (lorryData || []).forEach(l => {
-                if (l.driver_id) lorryMap[l.driver_id] = l.plate_number;
+            allLorriesList.forEach(l => {
+                if (l.driver_id) lorryMap[l.driver_id] = l.plate_number || l.plate;
             });
 
             const uuidRegex = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
@@ -1706,7 +1837,27 @@ const PersonalMonthlyReport: React.FC<Props> = ({ user }) => {
             const batchReports = driversList.map(driver => {
                 const driverUid = driver.uid || driver.auth_user_id || driver.id;
                 const driverDeliveries = allDeliveries.filter(d => d.driver_id === driverUid);
-                const plate = lorryMap[driverUid] || 'N/A';
+                let plate = lorryMap[driverUid];
+                if (!plate || plate === 'N/A') {
+                    // Check deliveries for lorry_id
+                    const delivWithLorry = driverDeliveries.find(d => d.lorry_id);
+                    if (delivWithLorry) {
+                        const found = allLorriesList.find(l => l.id === delivWithLorry.lorry_id);
+                        if (found?.plate_number || found?.plate) plate = found.plate_number || found.plate;
+                    }
+                }
+                if (!plate || plate === 'N/A') {
+                    // Check driver name
+                    const dName = (driver.name || '').toLowerCase().trim();
+                    if (dName) {
+                        const found = allLorriesList.find(l => {
+                            const lName = (l.driver_name || l.driverName || '').toLowerCase().trim();
+                            return lName && (lName === dName || lName.includes(dName) || dName.includes(lName));
+                        });
+                        if (found?.plate_number || found?.plate) plate = found.plate_number || found.plate;
+                    }
+                }
+                if (!plate) plate = 'N/A';
 
                 let totalEarnings = 0;
                 let completedCount = 0;
@@ -1728,14 +1879,20 @@ const PersonalMonthlyReport: React.FC<Props> = ({ user }) => {
                     });
 
                     const shift = batchAttendance.find(a => a.operator_id === driver.employee_id && a.date === dateStr);
+                    const pubHoliday = getPublicHoliday(dateStr, driver.plant || driver.branch || 'ALL');
+
                     let workingTimeText = '⚠️ 没有时间 / 未打卡';
                     if (shift) {
                         const sIn = shift.clock_in ? new Date(shift.clock_in).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' }) : '-';
                         const sOut = shift.clock_out ? new Date(shift.clock_out).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' }) : 'Aktif';
                         const hWorked = shift.hours_worked ? Number(shift.hours_worked) : 0;
-                        workingTimeText = `${sIn} → ${sOut} (${hWorked.toFixed(1)}h)`;
+                        workingTimeText = `${sIn} → ${sOut} (${hWorked.toFixed(1)}h)${pubHoliday ? ' (Kerja Cuti Umum)' : ''}`;
                     } else if (dayTrips.length > 0) {
-                        workingTimeText = `🚚 出车在岗 (${dayTrips.length} Trips)`;
+                        workingTimeText = pubHoliday
+                            ? `🚚 Kerja Cuti Umum (${dayTrips.length} Trips)`
+                            : `🚚 出车在岗 (${dayTrips.length} Trips)`;
+                    } else if (pubHoliday) {
+                        workingTimeText = `🇲🇾 Cuti Umum / ${pubHoliday.nameMs}`;
                     } else if (isWeekend) {
                         workingTimeText = '🛋️ Weekend';
                     } else {
@@ -1747,6 +1904,7 @@ const PersonalMonthlyReport: React.FC<Props> = ({ user }) => {
                         const lType = leave.leave_type || leave.type || 'Leave';
                         workingTimeText = `Cuti / Leave (${lType})`;
                     }
+
 
                     if (dayTrips.length > 0) {
                         dayTrips.forEach((t, tIdx) => {
@@ -1807,9 +1965,11 @@ const PersonalMonthlyReport: React.FC<Props> = ({ user }) => {
                                 pendingScanCount++;
                             }
 
+                            const tripPlate = (t.lorry_id && allLorriesList.find((l: any) => l.id === t.lorry_id)?.plate_number) || plate;
                             tripRows.push({
                                 date: dateDisplay,
                                 workingTime: tIdx === 0 ? workingTimeText : '↳ (Trip tambahan)',
+                                lorryPlate: tripPlate,
                                 orderNumber: t.order_number || '-',
                                 customer: t.customer || '-',
                                 origin: originRaw,
@@ -1841,6 +2001,23 @@ const PersonalMonthlyReport: React.FC<Props> = ({ user }) => {
                             isLeave: true,
                             isRest: false
                         });
+                    } else if (pubHoliday) {
+                        tripRows.push({
+                            date: dateDisplay,
+                            workingTime: `🇲🇾 Cuti Umum / Public Holiday (${pubHoliday.nameMs})`,
+                            orderNumber: '-',
+                            customer: pubHoliday.nameZh ? `${pubHoliday.nameMs} (${pubHoliday.nameZh})` : pubHoliday.nameMs,
+                            origin: '-',
+                            destination: `Cuti Umum / ${pubHoliday.nameMs}`,
+                            drops: 0,
+                            status: `🇲🇾 Cuti Umum (${pubHoliday.nameMs})`,
+                            earnings: 0,
+                            potentialEarnings: 0,
+                            isDelivered: false,
+                            isUnscanned: false,
+                            isLeave: false,
+                            isRest: true
+                        });
                     } else {
                         const restTitle = isSunday ? 'Rehat (Ahad)' : (isWeekend ? 'Hujung Minggu' : 'Tiada Trip');
                         tripRows.push({
@@ -1860,6 +2037,7 @@ const PersonalMonthlyReport: React.FC<Props> = ({ user }) => {
                             isRest: true
                         });
                     }
+
                 }
 
                 return {
@@ -1982,6 +2160,18 @@ const PersonalMonthlyReport: React.FC<Props> = ({ user }) => {
             const lorryMap = new Map((lorries || []).map(l => [l.id, l.plate_number || l.plate || l.lorry_no]));
             const dayOdoLogs = odometerLogs.filter(o => matchDate(o.created_at, dateStr));
             const dayOdoAlerts = odometerAlerts.filter(a => matchDate(a.created_at, dateStr));
+
+            // Resolve Lorry for this specific day
+            let dayLorryPlate = driverLorryPlate;
+            const todayOdoWithLorry = dayOdoLogs.find((o: any) => o.lorry_id && lorryMap.has(o.lorry_id));
+            if (todayOdoWithLorry) {
+                dayLorryPlate = lorryMap.get(todayOdoWithLorry.lorry_id) || dayLorryPlate;
+            } else {
+                const todayDelivWithLorry = dayDeliveries.find((d: any) => d.lorry_id && lorryMap.has(d.lorry_id));
+                if (todayDelivWithLorry) {
+                    dayLorryPlate = lorryMap.get(todayDelivWithLorry.lorry_id) || dayLorryPlate;
+                }
+            }
 
             // 2. Photos Collection
             const dayPhotos: any[] = [...photoLogs.filter(p => matchDate(p.created_at, dateStr)).map(p => ({
@@ -2298,10 +2488,17 @@ const PersonalMonthlyReport: React.FC<Props> = ({ user }) => {
                 })
             ].filter(Boolean)));
 
-            // Leave
+            // Leave & Public Holiday
+            const employeePlant = viewedProfile?.plant || viewedProfile?.factory || viewedProfile?.location || 'ALL';
+            const dayPublicHoliday = getPublicHoliday(dateStr, employeePlant);
+            const isPublicHoliday = Boolean(dayPublicHoliday);
+
             const dayLeave = leaves.find(l => dateStr >= l.start_date && dateStr <= l.end_date);
-            const leaveType = dayLeave ? (dayLeave.leave_type || dayLeave.type || 'Leave') : null;
+            const rawLeaveType = dayLeave ? (dayLeave.leave_type || dayLeave.type || 'Leave') : null;
+            const leaveType = dayLeave ? normalizeLeaveType(rawLeaveType) : null;
             const leaveReason = dayLeave ? dayLeave.reason : null;
+            const leaveStatus = dayLeave ? dayLeave.status : null; // 'Approved' | 'Pending' | null
+
 
             // Claims
             const dayClaims = claims.filter(c => {
@@ -2431,6 +2628,8 @@ const PersonalMonthlyReport: React.FC<Props> = ({ user }) => {
                     pod_signature_url: t.pod_signature_url || null,
                     proof_of_load_url: t.proof_of_load_url || null,
                     driver_id: t.driver_id || null,
+                    lorry_id: t.lorry_id || null,
+                    lorry_plate: (t.lorry_id && lorryMap.get(t.lorry_id)) || dayLorryPlate || driverLorryPlate,
                     trip_origin: t.trip_origin || null,
                     zone: t.zone || null,
                     trip_drop_count: t.trip_drop_count || 1,
@@ -2452,17 +2651,25 @@ const PersonalMonthlyReport: React.FC<Props> = ({ user }) => {
                 });
             });
 
+            const isWorkedOnPublicHoliday = Boolean(isPublicHoliday && (hasAttendance || tripCount > 0));
+            const isRestOnPublicHoliday = Boolean(isPublicHoliday && !hasAttendance && tripCount === 0);
+
             matrix.push({
                 dateStr,
                 dayNum: i,
                 isWeekend,
                 isSunday,
+                isPublicHoliday,
+                publicHoliday: dayPublicHoliday,
+                isWorkedOnPublicHoliday,
+                isRestOnPublicHoliday,
                 hasAttendance,
                 hoursWorked,
                 shiftStart,
                 shiftEnd,
                 notes: shiftNotes,
                 isDerivedDriverAttendance,
+                lorryPlate: dayLorryPlate,
                 outputQty,
                 rejectQty,
                 alarmCount,
@@ -2471,8 +2678,9 @@ const PersonalMonthlyReport: React.FC<Props> = ({ user }) => {
                 tripDetails,
                 photoCount: dayPhotos.length,
                 photos: dayPhotos,
-                leaveStatus: dayLeave ? dayLeave.status : null,
+                leaveStatus,
                 leaveType,
+                rawLeaveType,
                 leaveReason,
                 machinesOperated,
                 jobDetails,
@@ -2480,7 +2688,8 @@ const PersonalMonthlyReport: React.FC<Props> = ({ user }) => {
             });
         }
         return matrix;
-    }, [productionLogs, attendanceShifts, photoLogs, leaves, plannedMachines, claims, deliveries, deliveryRates, daysInMonth, selectedYear, selectedMonth, isDriver, odometerLogs, odometerAlerts, lorries]);
+    }, [productionLogs, attendanceShifts, photoLogs, leaves, plannedMachines, claims, deliveries, deliveryRates, daysInMonth, selectedYear, selectedMonth, isDriver, odometerLogs, odometerAlerts, lorries, viewedProfile, driverLorryPlate]);
+
 
     // Flat list of all photos for the entire month (for All-Photos Gallery)
     const allMonthPhotos = useMemo(() => {
@@ -2500,7 +2709,17 @@ const PersonalMonthlyReport: React.FC<Props> = ({ user }) => {
     const completedTrips = dailyMetrics.reduce((sum, d) => sum + d.tripDetails.filter((t: any) => t.status === 'Delivered').length, 0);
     const pendingScanTrips = dailyMetrics.reduce((sum, d) => sum + d.tripDetails.filter((t: any) => t.status !== 'Delivered' && t.status !== 'Cancelled').length, 0);
     const presentDays = dailyMetrics.filter(d => d.hasAttendance).length;
-    const leaveDays = dailyMetrics.filter(d => d.leaveStatus).length;
+    const leaveDays = dailyMetrics.filter(d => d.leaveStatus === 'Approved').length;
+    const pendingLeaveDays = dailyMetrics.filter(d => d.leaveStatus === 'Pending').length;
+    const publicHolidayDays = dailyMetrics.filter(d => d.isPublicHoliday).length;
+    const publicHolidayWorkedDays = dailyMetrics.filter(d => d.isWorkedOnPublicHoliday).length;
+    const publicHolidayRestDays = dailyMetrics.filter(d => d.isRestOnPublicHoliday).length;
+    const annualLeaveDays = dailyMetrics.filter(d => d.leaveStatus === 'Approved' && d.leaveType === 'Annual').length;
+    const mcLeaveDays = dailyMetrics.filter(d => d.leaveStatus === 'Approved' && d.leaveType === 'Medical').length;
+    const unpaidLeaveDays = dailyMetrics.filter(d => d.leaveStatus === 'Approved' && d.leaveType === 'Unpaid').length;
+    const emergencyLeaveDays = dailyMetrics.filter(d => d.leaveStatus === 'Approved' && d.leaveType === 'Emergency').length;
+    const otherLeaveDays = Math.max(0, leaveDays - annualLeaveDays - mcLeaveDays - unpaidLeaveDays - emergencyLeaveDays);
+
     const totalPhotos = dailyMetrics.reduce((sum, d) => sum + d.photoCount, 0);
     const totalHoursWorked = dailyMetrics.reduce((sum, d) => sum + d.hoursWorked, 0);
     const otHours = dailyMetrics.reduce((sum, d) => sum + (d.hasAttendance ? Math.max(0, d.hoursWorked - 8) : 0), 0);
@@ -2554,6 +2773,15 @@ const PersonalMonthlyReport: React.FC<Props> = ({ user }) => {
                             <span className="text-sm font-bold text-gray-300 bg-white/5 px-3 py-1 rounded-lg border border-white/10">
                                 {viewedProfile?.name || user?.name} ({viewedProfile?.role === 'Driver' ? 'Pemandu / Driver' : (viewedProfile?.role || user?.role)})
                             </span>
+                        )}
+                        {isDriver && (
+                            <div className="flex items-center gap-1.5 px-3 py-1.5 bg-gradient-to-r from-amber-500/15 to-orange-500/10 border border-amber-500/30 rounded-lg text-xs font-bold text-amber-300 shadow-sm" title="No. Plat Lori untuk Pemandu ini / Lorry Plate">
+                                <Truck size={14} className="text-amber-400 shrink-0" />
+                                <span className="text-gray-400">Lori:</span>
+                                <span className="font-mono text-amber-200 font-black tracking-wider bg-amber-950/60 px-2 py-0.5 rounded border border-amber-500/30">
+                                    {driverLorryPlate !== 'N/A' ? driverLorryPlate : 'Tiada Lori / N/A'}
+                                </span>
+                            </div>
                         )}
                     </div>
                 </div>
@@ -2722,7 +2950,7 @@ const PersonalMonthlyReport: React.FC<Props> = ({ user }) => {
                     )}
 
                     {/* Top Row: Metrics Overview / Ringkasan Metrik */}
-                    <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-5 gap-4">
+                    <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 xl:grid-cols-6 gap-4">
                         {/* Attendance Card */}
                         <div className="bg-gradient-to-br from-[#0d0d12] to-black border border-white/5 rounded-3xl p-5 shadow-2xl relative overflow-hidden group hover:border-emerald-500/30 transition-all duration-300">
                             <div className="absolute -right-4 -top-4 w-24 h-24 bg-emerald-500/10 rounded-full blur-2xl group-hover:bg-emerald-500/20 transition-all"></div>
@@ -2731,13 +2959,48 @@ const PersonalMonthlyReport: React.FC<Props> = ({ user }) => {
                                     <p className="text-[10px] text-emerald-400 uppercase tracking-widest font-black mb-1">Kehadiran / Attendance</p>
                                     <h3 className="text-3xl font-black text-white">{presentDays} <span className="text-xs font-normal text-gray-500">hari / days</span></h3>
                                     <p className="text-[10px] text-emerald-400/90 font-mono mt-1.5 font-bold">{totalHoursWorked.toFixed(1)} hrs total ({otHours.toFixed(1)}h OT)</p>
-                                    <p className="text-[10px] text-gray-400 mt-1">{leaveDays} Cuti diluluskan / Approved leaves</p>
+                                    <p className="text-[10px] text-gray-400 mt-1">{leaveDays} Cuti diluluskan / Approved</p>
                                 </div>
                                 <div className="p-3 bg-emerald-500/10 rounded-2xl text-emerald-400 border border-emerald-500/20">
                                     <CalendarDays size={20} />
                                 </div>
                             </div>
                         </div>
+
+                        {/* Cuti & Cuti Umum (Holidays & Leaves) Card */}
+                        <div className="bg-gradient-to-br from-[#0d0d12] to-black border border-white/5 rounded-3xl p-5 shadow-2xl relative overflow-hidden group hover:border-indigo-500/30 transition-all duration-300">
+                            <div className="absolute -right-4 -top-4 w-24 h-24 bg-indigo-500/10 rounded-full blur-2xl group-hover:bg-indigo-500/20 transition-all"></div>
+                            <div className="flex items-start justify-between">
+                                <div>
+                                    <p className="text-[10px] text-indigo-400 uppercase tracking-widest font-black mb-1">Cuti & Cuti Umum / Holidays</p>
+                                    <h3 className="text-3xl font-black text-white">
+                                        {leaveDays + publicHolidayDays} <span className="text-xs font-normal text-gray-500">hari / days</span>
+                                    </h3>
+                                    <p className="text-[10px] text-indigo-300/90 font-mono mt-1.5 font-bold">
+                                        🇲🇾 {publicHolidayDays} Cuti Umum {publicHolidayWorkedDays > 0 ? `(${publicHolidayWorkedDays} Bekerja)` : ''}
+                                    </p>
+                                    <div className="flex flex-wrap gap-1 mt-1.5 text-[9px]">
+                                        {annualLeaveDays > 0 && <span className="bg-amber-500/15 text-amber-300 px-1.5 py-0.5 rounded border border-amber-500/30 font-medium">AL: {annualLeaveDays}d</span>}
+                                        {mcLeaveDays > 0 && <span className="bg-blue-500/15 text-blue-300 px-1.5 py-0.5 rounded border border-blue-500/30 font-medium">MC: {mcLeaveDays}d</span>}
+                                        {unpaidLeaveDays > 0 && <span className="bg-rose-500/15 text-rose-300 px-1.5 py-0.5 rounded border border-rose-500/30 font-medium">UPL: {unpaidLeaveDays}d</span>}
+                                        {emergencyLeaveDays > 0 && <span className="bg-orange-500/15 text-orange-300 px-1.5 py-0.5 rounded border border-orange-500/30 font-medium">EL: {emergencyLeaveDays}d</span>}
+                                        {otherLeaveDays > 0 && <span className="bg-gray-500/15 text-gray-300 px-1.5 py-0.5 rounded border border-gray-500/30 font-medium">Cuti: {otherLeaveDays}d</span>}
+                                        {pendingLeaveDays > 0 && (
+                                            <span className="bg-amber-500/20 text-amber-300 px-1.5 py-0.5 rounded border border-amber-500/40 animate-pulse font-bold">
+                                                ⏳ {pendingLeaveDays} Pending
+                                            </span>
+                                        )}
+                                        {leaveDays === 0 && pendingLeaveDays === 0 && (
+                                            <span className="text-gray-500 text-[10px]">Tiada Cuti / 0 Leaves</span>
+                                        )}
+                                    </div>
+                                </div>
+                                <div className="p-3 bg-indigo-500/10 rounded-2xl text-indigo-400 border border-indigo-500/20">
+                                    <Calendar size={20} />
+                                </div>
+                            </div>
+                        </div>
+
 
                         {/* Production / Deliveries Card */}
                         <div className={`bg-gradient-to-br from-[#0d0d12] to-black border border-white/5 rounded-3xl p-5 shadow-2xl relative overflow-hidden group transition-all duration-300 ${isDriver ? 'hover:border-amber-500/30' : 'hover:border-blue-500/30'}`}>
@@ -2753,6 +3016,13 @@ const PersonalMonthlyReport: React.FC<Props> = ({ user }) => {
                                             ? `${completedTrips} Selesai / Completed ${pendingScanTrips > 0 ? `(${pendingScanTrips} 未扫码 / Pending Scan)` : ''}`
                                             : `Unit Dihasilkan / Produced`}
                                     </p>
+                                    {isDriver && (
+                                        <div className="mt-2.5 flex items-center gap-1.5 text-[11px] text-amber-300 font-bold bg-amber-500/10 px-2.5 py-1 rounded-xl border border-amber-500/20 w-fit">
+                                            <Truck size={13} className="text-amber-400 shrink-0" />
+                                            <span className="text-gray-400 text-[10px]">No. Lori:</span>
+                                            <span className="font-mono font-black text-amber-200">{driverLorryPlate}</span>
+                                        </div>
+                                    )}
                                     {!isDriver && (
                                         <p className="text-[10px] text-blue-400 font-mono mt-1 font-bold">Yield: {yieldRate}% ({totalRejects} Reject)</p>
                                     )}
@@ -2984,8 +3254,16 @@ const PersonalMonthlyReport: React.FC<Props> = ({ user }) => {
                                 {dailyMetrics.map((day) => {
                                     let colorClass = "bg-white/[0.02] border-white/5 text-gray-500";
                                     
-                                    if (day.leaveStatus) {
-                                        colorClass = "bg-amber-500/10 border-amber-500/35 text-amber-400 shadow-sm shadow-amber-950/20";
+                                    if (day.leaveStatus === 'Approved') {
+                                        colorClass = "bg-amber-500/15 border-amber-500/40 text-amber-300 shadow-sm shadow-amber-950/20";
+                                    } else if (day.leaveStatus === 'Pending') {
+                                        colorClass = "bg-amber-500/5 border-amber-500/30 border-dashed text-amber-300 shadow-sm animate-pulse";
+                                    } else if (day.isPublicHoliday) {
+                                        if (day.hasAttendance || day.tripCount > 0) {
+                                            colorClass = "bg-indigo-500/20 border-indigo-500/50 text-indigo-300 shadow-sm shadow-indigo-950/30 ring-1 ring-emerald-500/40";
+                                        } else {
+                                            colorClass = "bg-indigo-500/15 border-indigo-500/35 text-indigo-300 shadow-sm shadow-indigo-950/20";
+                                        }
                                     } else if (day.hasAttendance) {
                                         if (day.notes === 'System Auto-Logout') {
                                             colorClass = "bg-rose-500/10 border-rose-500/35 text-rose-400 shadow-sm shadow-rose-950/20 border-dashed";
@@ -3001,7 +3279,10 @@ const PersonalMonthlyReport: React.FC<Props> = ({ user }) => {
                                             key={day.dateStr} 
                                             className={`aspect-square rounded-lg border flex flex-col items-center justify-center relative group cursor-pointer transition-all hover:scale-110 hover:z-10 ${colorClass}`}
                                         >
-                                            <span className="text-[10px] font-black">{day.dayNum}</span>
+                                            <span className="text-[10px] font-black flex items-center justify-center gap-0.5">
+                                                {day.dayNum}
+                                                {day.isPublicHoliday && <span className="text-[7px] leading-none select-none">🇲🇾</span>}
+                                            </span>
                                             
                                             {/* Floating Tooltip */}
                                             <div className="absolute bottom-full left-1/2 -translate-x-1/2 mb-2 w-56 bg-[#09090b] border border-slate-800 p-3 rounded-xl text-[10px] text-gray-400 opacity-0 group-hover:opacity-100 pointer-events-none transition-opacity shadow-2xl z-30 leading-relaxed font-sans">
@@ -3011,18 +3292,37 @@ const PersonalMonthlyReport: React.FC<Props> = ({ user }) => {
                                                 </div>
                                                 
                                                 <div className="space-y-1 mt-2">
+                                                    {day.isPublicHoliday && (
+                                                        <div className="bg-indigo-500/15 border border-indigo-500/30 rounded px-1.5 py-0.5 text-indigo-200 text-[9px] font-bold flex items-center justify-between">
+                                                            <span>🇲🇾 {day.publicHoliday?.nameMs}</span>
+                                                            <span className="text-[8px] text-indigo-300">Cuti Umum</span>
+                                                        </div>
+                                                    )}
+                                                    {day.leaveStatus && (
+                                                        <div className={`px-1.5 py-0.5 rounded border text-[9px] font-bold flex items-center justify-between ${
+                                                            day.leaveStatus === 'Approved' ? 'bg-amber-500/15 border-amber-500/30 text-amber-300' : 'bg-amber-500/10 border-amber-500/20 border-dashed text-amber-200'
+                                                        }`}>
+                                                            <span>🏖️ {day.leaveType || 'Cuti'}</span>
+                                                            <span className="text-[8px] uppercase">{day.leaveStatus}</span>
+                                                        </div>
+                                                    )}
                                                     <div className="flex justify-between">
                                                         <span className="text-gray-500 font-bold uppercase text-[9px] tracking-wider">Status:</span>
                                                         <span className={`font-bold uppercase text-[9px] ${
-                                                            day.leaveStatus ? 'text-amber-400' :
+                                                            day.isPublicHoliday ? 'text-indigo-400' :
+                                                            day.leaveStatus === 'Approved' ? 'text-amber-400' :
+                                                            day.leaveStatus === 'Pending' ? 'text-amber-300' :
                                                             day.hasAttendance ? 'text-emerald-400' :
                                                             day.isWeekend ? 'text-slate-500' : 'text-gray-500'
                                                         }`}>
-                                                            {day.leaveStatus ? `Cuti / Leave` :
+                                                            {day.isPublicHoliday ? (day.hasAttendance || day.tripCount > 0 ? 'Kerja Cuti Umum' : 'Cuti Umum / PH') :
+                                                             day.leaveStatus === 'Approved' ? `Cuti (${day.leaveType || 'AL'})` :
+                                                             day.leaveStatus === 'Pending' ? 'Cuti Menunggu' :
                                                              day.hasAttendance ? 'Hadir / Present' :
                                                              day.isWeekend ? 'Weekend' : 'Rest'}
                                                         </span>
                                                     </div>
+
 
                                                     {day.hasAttendance && (
                                                         <>
@@ -3189,10 +3489,32 @@ const PersonalMonthlyReport: React.FC<Props> = ({ user }) => {
                                                         待审核 / Pending
                                                     </span>
                                                 )}
-                                                {day.leaveStatus ? (
+                                                {day.isPublicHoliday ? (
+                                                    (day.hasAttendance || (isDriver && day.tripCount > 0)) ? (
+                                                        <div className="flex flex-col items-start gap-0.5">
+                                                            <span className="inline-flex items-center gap-1 px-2 py-0.5 rounded bg-indigo-500/20 border border-indigo-500/40 text-indigo-300 text-[10px] font-black uppercase tracking-wider">
+                                                                <span>🇲🇾</span>
+                                                                Kerja Cuti Umum / PH Worked
+                                                            </span>
+                                                            <span className="text-[9px] text-indigo-400 font-bold">
+                                                                {day.publicHoliday?.nameMs}
+                                                            </span>
+                                                        </div>
+                                                    ) : (
+                                                        <div className="flex flex-col items-start gap-0.5">
+                                                            <span className="inline-flex items-center gap-1 px-2 py-0.5 rounded bg-indigo-500/10 border border-indigo-500/30 text-indigo-300 text-[10px] font-black uppercase tracking-wider">
+                                                                <span>🇲🇾</span>
+                                                                Cuti Umum / Public Holiday
+                                                            </span>
+                                                            <span className="text-[9px] text-indigo-400 font-medium">
+                                                                {day.publicHoliday?.nameMs} {day.publicHoliday?.nameZh ? `(${day.publicHoliday.nameZh})` : ''}
+                                                            </span>
+                                                        </div>
+                                                    )
+                                                ) : day.leaveStatus === 'Approved' ? (
                                                     <div className="flex flex-col items-start gap-0.5">
                                                         <span className="inline-flex items-center px-2 py-0.5 rounded bg-amber-500/10 border border-amber-500/20 text-amber-400 text-[10px] font-black uppercase tracking-wider">
-                                                            Cuti / {day.leaveType || 'Leave'}
+                                                            🏖️ Cuti / {day.leaveType || 'Leave'}
                                                         </span>
                                                         {day.leaveReason && (
                                                             <span className="text-[9px] text-gray-400 max-w-[140px] truncate" title={day.leaveReason}>
@@ -3200,21 +3522,55 @@ const PersonalMonthlyReport: React.FC<Props> = ({ user }) => {
                                                             </span>
                                                         )}
                                                     </div>
+                                                ) : day.leaveStatus === 'Pending' ? (
+                                                    <div className="flex flex-col items-start gap-0.5">
+                                                        <span className="inline-flex items-center gap-1 px-2 py-0.5 rounded bg-amber-500/15 border border-amber-500/35 border-dashed text-amber-300 text-[10px] font-black uppercase tracking-wider animate-pulse">
+                                                            <Clock size={10} className="animate-spin" />
+                                                            ⏳ Permohonan Cuti / Pending
+                                                        </span>
+                                                        <span className="text-[9px] text-amber-400 font-medium">
+                                                            {day.leaveType || 'Leave'} {day.leaveReason ? `(${day.leaveReason})` : ''}
+                                                        </span>
+                                                    </div>
                                                 ) : day.hasAttendance ? (
-                                                    <span className="inline-flex items-center px-2 py-1 rounded bg-emerald-500/10 border border-emerald-500/20 text-emerald-400 text-[10px] font-black uppercase tracking-wider">
-                                                        {isDriver && day.tripDetails && day.tripDetails.length > 0
-                                                            ? `🚚 Hadir / On Trip (${day.tripDetails.length} Trip${day.tripDetails.length > 1 ? 's' : ''})`
-                                                            : 'Hadir / Present'}
-                                                    </span>
+                                                    <div className="flex flex-col items-start gap-0.5">
+                                                        <span className="inline-flex items-center px-2 py-1 rounded bg-emerald-500/10 border border-emerald-500/20 text-emerald-400 text-[10px] font-black uppercase tracking-wider">
+                                                            {isDriver && day.tripDetails && day.tripDetails.length > 0
+                                                                ? `🚚 Hadir / On Trip (${day.tripDetails.length} Trip${day.tripDetails.length > 1 ? 's' : ''})`
+                                                                : 'Hadir / Present'}
+                                                        </span>
+                                                        {isDriver && (day.lorryPlate || driverLorryPlate) && (day.lorryPlate || driverLorryPlate) !== 'N/A' && (
+                                                            <span className="text-[9px] font-mono text-amber-300 font-bold flex items-center gap-1 bg-amber-500/10 px-1.5 py-0.5 rounded border border-amber-500/20">
+                                                                <Truck size={10} className="text-amber-400 shrink-0" />
+                                                                <span>{day.lorryPlate || driverLorryPlate}</span>
+                                                            </span>
+                                                        )}
+                                                    </div>
                                                 ) : isDriver && day.tripCount > 0 ? (
                                                     day.dateStr > todayStr ? (
-                                                        <span className="inline-flex items-center px-2 py-1 rounded bg-blue-500/10 border border-blue-500/20 text-blue-400 text-[10px] font-black uppercase tracking-wider">
-                                                            📅 Dijadualkan / Scheduled ({day.tripCount} Trip{day.tripCount > 1 ? 's' : ''})
-                                                        </span>
+                                                        <div className="flex flex-col items-start gap-0.5">
+                                                            <span className="inline-flex items-center px-2 py-1 rounded bg-blue-500/10 border border-blue-500/20 text-blue-400 text-[10px] font-black uppercase tracking-wider">
+                                                                📅 Dijadualkan / Scheduled ({day.tripCount} Trip{day.tripCount > 1 ? 's' : ''})
+                                                            </span>
+                                                            {(day.lorryPlate || driverLorryPlate) && (day.lorryPlate || driverLorryPlate) !== 'N/A' && (
+                                                                <span className="text-[9px] font-mono text-blue-300 font-bold flex items-center gap-1 bg-blue-500/10 px-1.5 py-0.5 rounded border border-blue-500/20">
+                                                                    <Truck size={10} className="text-blue-400 shrink-0" />
+                                                                    <span>{day.lorryPlate || driverLorryPlate}</span>
+                                                                </span>
+                                                            )}
+                                                        </div>
                                                     ) : (
-                                                        <span className="inline-flex items-center px-2 py-1 rounded bg-amber-500/10 border border-amber-500/30 text-amber-300 text-[10px] font-black uppercase tracking-wider">
-                                                            ⏳ Menunggu Imbasan / Pending Scan ({day.tripCount} Trip{day.tripCount > 1 ? 's' : ''})
-                                                        </span>
+                                                        <div className="flex flex-col items-start gap-0.5">
+                                                            <span className="inline-flex items-center px-2 py-1 rounded bg-amber-500/10 border border-amber-500/30 text-amber-300 text-[10px] font-black uppercase tracking-wider">
+                                                                ⏳ Menunggu Imbasan / Pending Scan ({day.tripCount} Trip{day.tripCount > 1 ? 's' : ''})
+                                                            </span>
+                                                            {(day.lorryPlate || driverLorryPlate) && (day.lorryPlate || driverLorryPlate) !== 'N/A' && (
+                                                                <span className="text-[9px] font-mono text-amber-300 font-bold flex items-center gap-1 bg-amber-500/10 px-1.5 py-0.5 rounded border border-amber-500/20">
+                                                                    <Truck size={10} className="text-amber-400 shrink-0" />
+                                                                    <span>{day.lorryPlate || driverLorryPlate}</span>
+                                                                </span>
+                                                            )}
+                                                        </div>
                                                     )
                                                 ) : day.isWeekend ? (
                                                     <span className="inline-flex items-center px-2 py-1 rounded bg-white/5 border border-white/5 text-gray-500 text-[10px] font-black uppercase tracking-wider">
@@ -3238,6 +3594,11 @@ const PersonalMonthlyReport: React.FC<Props> = ({ user }) => {
                                                             <span className="text-[10px] text-emerald-400 font-mono font-bold bg-emerald-500/10 px-1.5 py-0.5 rounded border border-emerald-500/20">
                                                                 {day.hoursWorked.toFixed(1)} hrs
                                                             </span>
+                                                            {day.isPublicHoliday && (
+                                                                <span className="text-[9px] font-bold text-indigo-300 bg-indigo-500/15 px-1.5 py-0.5 rounded border border-indigo-500/30">
+                                                                    🇲🇾 Cuti Umum / PH
+                                                                </span>
+                                                            )}
                                                             {day.isDerivedDriverAttendance && (
                                                                 <span className="text-[9px] font-bold text-cyan-400 bg-cyan-500/10 px-1.5 py-0.5 rounded border border-cyan-500/20" title="基于送货记录派生考勤工时">
                                                                     物流自动计算
@@ -3251,8 +3612,18 @@ const PersonalMonthlyReport: React.FC<Props> = ({ user }) => {
                                                         </div>
                                                     </div>
                                                 ) : (
-                                                    day.leaveStatus ? (
-                                                        <span className="text-amber-400/80 text-xs font-medium">🏖️ Cuti / Leave</span>
+                                                    day.isPublicHoliday ? (
+                                                        <div className="inline-flex items-center gap-1.5 px-2.5 py-1 rounded-lg text-xs text-indigo-300 bg-indigo-500/10 border border-indigo-500/20">
+                                                            <span>🇲🇾</span>
+                                                            <span>Cuti Umum / {day.publicHoliday?.nameMs || 'Public Holiday'}</span>
+                                                        </div>
+                                                    ) : day.leaveStatus === 'Approved' ? (
+                                                        <span className="text-amber-400/80 text-xs font-medium">🏖️ Cuti / {day.leaveType || 'Leave'}</span>
+                                                    ) : day.leaveStatus === 'Pending' ? (
+                                                        <span className="text-amber-300/80 text-xs font-medium flex items-center gap-1">
+                                                            <Clock size={12} className="animate-spin text-amber-400" />
+                                                            <span>Cuti Menunggu / Pending</span>
+                                                        </span>
                                                     ) : isDriver && day.tripCount > 0 ? (
                                                         day.dateStr > todayStr ? (
                                                             <span className="text-gray-500 text-xs font-mono">📅 Belum Mula / Scheduled</span>
@@ -3383,6 +3754,12 @@ const PersonalMonthlyReport: React.FC<Props> = ({ user }) => {
                                                                             {isPending && !isUnscanned && !td.notes?.includes('[HR_APPROVED]') && <Clock size={10} className="text-amber-400 shrink-0" />}
                                                                             {isTripConfirmed && !isUnscanned && !td.notes?.includes('[HR_APPROVED]') && <CheckCircle2 size={11} className="text-emerald-400 shrink-0" />}
                                                                             <span>{isUnscanned ? `[未扫码] ${td.displayString}` : (isPending ? `⏳ [待审核] ${td.displayString}` : td.displayString)}</span>
+                                                                            {(td.lorry_plate || day.lorryPlate) && (td.lorry_plate || day.lorryPlate) !== 'N/A' && (
+                                                                                <span className="inline-flex items-center gap-1 px-1.5 py-0.5 rounded bg-black/60 border border-amber-500/30 text-[9px] font-mono font-bold text-amber-300 tracking-wider" title="No. Plat Lori untuk Trip ini / Lorry Plate">
+                                                                                    <Truck size={10} className="text-amber-400 shrink-0" />
+                                                                                    <span>{td.lorry_plate || day.lorryPlate}</span>
+                                                                                </span>
+                                                                            )}
                                                                             <span className={`ml-1 px-1.5 py-0.5 rounded font-black border text-[9.5px] ${
                                                                                 td.notes?.includes('[HR_APPROVED]') 
                                                                                     ? 'bg-indigo-500/20 text-indigo-300 border-indigo-500/30' 

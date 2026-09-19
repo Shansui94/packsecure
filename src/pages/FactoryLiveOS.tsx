@@ -493,7 +493,7 @@ const FactoryLiveOS: React.FC<FactoryLiveOSProps> = ({ onNavigate }) => {
             // Manager: Today's orders
             supabase.from('sales_orders').select('id, status, driver_id, items, deadline, order_date')
                 .neq('status', 'Cancelled')
-                .or(`deadline.eq.${todayStr},order_date.eq.${todayStr}`),
+                .or(`deadline.eq.${todayStr},and(deadline.is.null,order_date.eq.${todayStr})`),
             // Manager: Stock levels
             supabase.rpc('get_live_stock_viewer'),
             // Manager: Driver names

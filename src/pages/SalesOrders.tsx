@@ -76,7 +76,7 @@ const SalesOrders: React.FC = () => {
             // 1. Date limits
             if (dateRange === 'today') {
                 const today = new Date().toISOString().split('T')[0];
-                query = query.or(`order_date.eq.${today},deadline.eq.${today}`);
+                query = query.or(`deadline.eq.${today},and(deadline.is.null,order_date.eq.${today})`);
             } else if (dateRange === '30days') {
                 const thirtyDaysAgo = new Date();
                 thirtyDaysAgo.setDate(thirtyDaysAgo.getDate() - 30);

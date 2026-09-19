@@ -602,7 +602,19 @@ const DeliveryOrderManagement: React.FC<DeliveryOrderManagementProps> = ({ user 
     const [isBatchCreating, setIsBatchCreating] = useState(false);
 
     const getTodayStr = () => new Date().toLocaleDateString('en-CA'); // YYYY-MM-DD 本地时间
-    const getTomorrowStr = () => { const d = new Date(); d.setDate(d.getDate() + 1); return d.toLocaleDateString('en-CA'); };
+    // 智能默认送货日：周六排单默认顺延至周一（跳过周日休息日），平时顺延至次日
+    const getTomorrowStr = () => {
+        const d = new Date();
+        const dayOfWeek = d.getDay(); // 0 = 周日, 6 = 周六
+        if (dayOfWeek === 6) {
+            d.setDate(d.getDate() + 2); // 周六 -> 下周一
+        } else if (dayOfWeek === 0) {
+            d.setDate(d.getDate() + 1); // 周日 -> 周一
+        } else {
+            d.setDate(d.getDate() + 1); // 平常工作日 -> 次日
+        }
+        return d.toLocaleDateString('en-CA');
+    };
 
     // DO PDF Upload & Trip Review State (Max 15 PDFs)
     const [isTripPdfParsing, setIsTripPdfParsing] = useState(false);
@@ -726,6 +738,20 @@ const DeliveryOrderManagement: React.FC<DeliveryOrderManagementProps> = ({ user 
         return Array.from(prodMap.values()).sort((a, b) => b.qty - a.qty);
     }, [parsedTripBatch, parsedTripOrigin]);
 
+    // 🚨 计算当前车次审核批次中未匹配标准料号的货品数量 (用于防呆拦截)
+    const parsedUnmappedItemsCount = React.useMemo(() => {
+        if (!parsedTripBatch) return 0;
+        let count = 0;
+        parsedTripBatch.deliveryOrders.forEach(o => {
+            (o.items || []).forEach(it => {
+                const cleanSku = (it.sku || '').trim().toLowerCase();
+                const isRealSku = v2Items.some(v => v.sku.toLowerCase() === cleanSku);
+                if (!isRealSku) count++;
+            });
+        });
+        return count;
+    }, [parsedTripBatch, v2Items]);
+
     // Fetch Data
     const fetchData = async () => {
 
@@ -750,10 +776,11 @@ const DeliveryOrderManagement: React.FC<DeliveryOrderManagementProps> = ({ user 
                 setLorryServices(filteredServices);
             }
 
-            const [usersRes, sysUsersRes, ordersRes, itemsRes, leavesRes, lorriesRes, servicesRes, ratesRes, customersRes, mappingsRes, tripsRes] = await Promise.all([
+            const [usersRes, sysUsersRes, activeOrdersRes, recentCompletedOrdersRes, itemsRes, leavesRes, lorriesRes, servicesRes, ratesRes, customersRes, mappingsRes, tripsRes] = await Promise.all([
                 supabase.from('users_public').select('*'),
                 supabase.from('sys_users_v2').select('id, auth_user_id, role_modules'),
-                supabase.from('sales_orders').select('*').order('trip_sequence', { ascending: true }).order('created_at', { ascending: false }),
+                supabase.from('sales_orders').select('*').not('status', 'in', '("Delivered","Cancelled")').order('created_at', { ascending: false }),
+                supabase.from('sales_orders').select('*').in('status', ['Delivered', 'Cancelled']).order('created_at', { ascending: false }).limit(1000),
                 getV2Items(),
                 supabase.from('employee_leave').select('*'),
                 supabase.from('lorries').select('*'),
@@ -826,8 +853,14 @@ const DeliveryOrderManagement: React.FC<DeliveryOrderManagementProps> = ({ user 
                 setDrivers(mappedDrivers);
             }
 
-            if (ordersRes.data) {
-                const mappedOrders: SalesOrder[] = ordersRes.data.map(o => ({
+            // Combine active orders (100% complete) and recent completed orders (up to 1000)
+            const combinedOrderMap = new Map<string, any>();
+            (activeOrdersRes.data || []).forEach((o: any) => combinedOrderMap.set(o.id, o));
+            (recentCompletedOrdersRes.data || []).forEach((o: any) => combinedOrderMap.set(o.id, o));
+            const rawOrdersList = Array.from(combinedOrderMap.values());
+
+            if (rawOrdersList.length > 0 || (activeOrdersRes.data && recentCompletedOrdersRes.data)) {
+                const mappedOrders: SalesOrder[] = rawOrdersList.map(o => ({
                     ...o,
                     id: o.id,
                     orderNumber: o.order_number || o.id.substring(0, 8),
@@ -995,20 +1028,140 @@ const DeliveryOrderManagement: React.FC<DeliveryOrderManagementProps> = ({ user 
     }, []);
 
     // Filter Logic
+    const isSearching = Boolean(searchTerm.trim());
     const filteredOrders = orders.filter(o => {
-        const matchesStatus = statusFilter === 'All' ? !['Delivered', 'Cancelled'].includes(o.status) : o.status === statusFilter;
+        // When actively searching, if status filter is "All" (Active), allow finding Delivered & Cancelled orders too
+        const matchesStatus = isSearching && statusFilter === 'All'
+            ? true
+            : (statusFilter === 'All' ? !['Delivered', 'Cancelled'].includes(o.status) : o.status === statusFilter);
+
         const matchesSearch = tripMatchesSearch(o, searchTerm, getDriverName(o.driverId));
-        const matchesDeliveryDate = orderMatchesDeliveryDateFilter(
-            o,
-            deliveryDateFilter,
-            deliveryMonthPick || undefined
-        );
+        const matchesDeliveryDate = isSearching && deliveryDateFilter === 'all' && !deliveryMonthPick
+            ? true
+            : orderMatchesDeliveryDateFilter(
+                o,
+                deliveryDateFilter,
+                deliveryMonthPick || undefined
+            );
 
         const originLoc = o.trip_origin || 'TAIPING';
         const matchesLocation = normalizeLocationCode(originLoc) === normalizeLocationCode(activeLocation);
 
         return matchesStatus && matchesSearch && matchesDeliveryDate && matchesLocation;
     });
+
+    // Cross-location search detector: when user searches, see if matching orders exist in other factory locations
+    const crossLocationMatches = React.useMemo(() => {
+        if (!isSearching) return [];
+        return orders.filter(o => {
+            const matchesStatus = statusFilter === 'All' ? true : o.status === statusFilter;
+            const matchesSearch = tripMatchesSearch(o, searchTerm, getDriverName(o.driverId));
+            const originLoc = o.trip_origin || 'TAIPING';
+            const isDifferentLocation = normalizeLocationCode(originLoc) !== normalizeLocationCode(activeLocation);
+            return matchesStatus && matchesSearch && isDifferentLocation;
+        });
+    }, [orders, isSearching, searchTerm, statusFilter, activeLocation, drivers]);
+
+    // Real-time active order counts across all 4 factory locations
+    const locationCounts = React.useMemo(() => {
+        const counts: Record<string, number> = { Taiping: 0, Nilai: 0, Kelantan: 0, Johor: 0 };
+        orders.forEach(o => {
+            const loc = normalizeLocationCode(o.trip_origin || 'TAIPING');
+            if (counts[loc] !== undefined) {
+                if (!['Delivered', 'Cancelled'].includes(o.status)) {
+                    counts[loc]++;
+                }
+            }
+        });
+        return counts;
+    }, [orders]);
+
+    // Status counts for current active location
+    const statusCounts = React.useMemo(() => {
+        const locOrders = orders.filter(o => 
+            normalizeLocationCode(o.trip_origin || 'TAIPING') === normalizeLocationCode(activeLocation)
+        );
+        return {
+            All: locOrders.filter(o => !['Delivered', 'Cancelled'].includes(o.status)).length,
+            Loaded: locOrders.filter(o => o.status === 'Loaded').length,
+            'Pending Approval': locOrders.filter(o => o.status === 'Pending Approval').length,
+            Delivered: locOrders.filter(o => o.status === 'Delivered').length,
+            Cancelled: locOrders.filter(o => o.status === 'Cancelled').length,
+        };
+    }, [orders, activeLocation]);
+
+    // Date filter counts for current active location and current status filter
+    const dateFilterCounts = React.useMemo(() => {
+        const baseOrders = orders.filter(o => {
+            const matchesLocation = normalizeLocationCode(o.trip_origin || 'TAIPING') === normalizeLocationCode(activeLocation);
+            const matchesStatus = statusFilter === 'All' 
+                ? !['Delivered', 'Cancelled'].includes(o.status) 
+                : o.status === statusFilter;
+            return matchesLocation && matchesStatus;
+        });
+
+        return {
+            all: baseOrders.length,
+            today: baseOrders.filter(o => orderMatchesDeliveryDateFilter(o, 'today')).length,
+            tomorrow: baseOrders.filter(o => orderMatchesDeliveryDateFilter(o, 'tomorrow')).length,
+            week: baseOrders.filter(o => orderMatchesDeliveryDateFilter(o, 'week')).length,
+            month: baseOrders.filter(o => orderMatchesDeliveryDateFilter(o, 'month')).length,
+            no_date: baseOrders.filter(o => orderMatchesDeliveryDateFilter(o, 'no_date')).length,
+        };
+    }, [orders, activeLocation, statusFilter]);
+
+    // Deep search fallback: if searching a query not yet loaded in state, query DB directly
+    useEffect(() => {
+        const term = searchTerm.trim();
+        if (term.length < 3) return;
+
+        const timer = setTimeout(async () => {
+            try {
+                const { data: dbFound } = await supabase
+                    .from('sales_orders')
+                    .select('*')
+                    .or(`order_number.ilike.%${term}%,customer.ilike.%${term}%,delivery_address.ilike.%${term}%`)
+                    .limit(30);
+
+                if (dbFound && dbFound.length > 0) {
+                    setOrders(prev => {
+                        const existingIds = new Set(prev.map(o => o.id));
+                        const newItems = dbFound.filter(o => !existingIds.has(o.id)).map(o => ({
+                            ...o,
+                            id: o.id,
+                            orderNumber: o.order_number || o.id.substring(0, 8),
+                            customer: o.customer,
+                            driverId: o.driver_id,
+                            driver_id: o.driver_id,
+                            items: o.items || [],
+                            status: o.status,
+                            orderDate: o.order_date,
+                            deadline: o.deadline,
+                            notes: o.notes,
+                            zone: o.zone,
+                            deliveryAddress: o.delivery_address,
+                            tripSequence: o.trip_sequence || 0,
+                            trip_origin: o.trip_origin,
+                            trip_drop_count: o.trip_drop_count,
+                            proof_of_load_url: o.proof_of_load_url,
+                            pod_photo_url: o.pod_photo_url,
+                            pod_signature_url: o.pod_signature_url,
+                            pod_signed_by: o.pod_signed_by,
+                            pod_timestamp: o.pod_timestamp,
+                            trip_id: o.trip_id,
+                            stop_sequence: o.stop_sequence || o.trip_sequence || 0
+                        } as SalesOrder));
+                        if (newItems.length === 0) return prev;
+                        return [...prev, ...newItems];
+                    });
+                }
+            } catch (searchErr) {
+                console.warn("Deep search fallback warning:", searchErr);
+            }
+        }, 400);
+
+        return () => clearTimeout(timer);
+    }, [searchTerm]);
 
     const activeDriversForLanes = React.useMemo(() => {
         // 1. Base drivers for the current active location
@@ -1160,8 +1313,19 @@ const DeliveryOrderManagement: React.FC<DeliveryOrderManagementProps> = ({ user 
         if (movedOrders.length === 0) return;
         const movedOrderIds = movedOrders.map(o => o.id);
 
-        // Smart Reminder
+        // Smart Reminder & Cross-Location Guard
         if (newDriverId && newDriverId !== oldDriverId) {
+            const targetDriver = drivers.find(d => d.uid === newDriverId);
+            const orderOrigin = normalizeLocationCode(movedOrders[0]?.trip_origin || activeLocation);
+            if (targetDriver && targetDriver.base_location) {
+                const driverLoc = normalizeLocationCode(targetDriver.base_location);
+                if (driverLoc !== orderOrigin) {
+                    const confirmed = window.confirm(
+                        `⚠️ 跨厂区派单确认：\n\n该车次/单据属于【${orderOrigin}】，但司机 ${targetDriver.name} 的基地属地为【${driverLoc}】。\n\n是否确认将此任务跨厂区指派给该司机？`
+                    );
+                    if (!confirmed) return;
+                }
+            }
             const anyDeadline = movedOrders.find(o => o.deadline)?.deadline;
             if (!checkDriverAvailability(newDriverId, anyDeadline)) return;
         }
@@ -2466,9 +2630,17 @@ const DeliveryOrderManagement: React.FC<DeliveryOrderManagementProps> = ({ user 
                 currentItem.isMatched = true;
                 currentItem.sourceLocation = guessItemLocation({ sku: matchedProd.sku, product: matchedProd.name, rawProductName: currentItem.rawProductName }, parsedTripOrigin);
             } else if (trimmed) {
-                currentItem.sku = trimmed;
-                currentItem.isMatched = true;
-                currentItem.sourceLocation = guessItemLocation({ sku: trimmed, rawProductName: currentItem.rawProductName }, parsedTripOrigin);
+                const exactCatalogMatch = v2Items.find(x => x.sku.toLowerCase() === trimmed.toLowerCase());
+                if (exactCatalogMatch) {
+                    currentItem.sku = exactCatalogMatch.sku;
+                    currentItem.product = exactCatalogMatch.name;
+                    currentItem.isMatched = true;
+                    currentItem.sourceLocation = guessItemLocation({ sku: exactCatalogMatch.sku, product: exactCatalogMatch.name, rawProductName: currentItem.rawProductName }, parsedTripOrigin);
+                } else {
+                    currentItem.sku = trimmed;
+                    currentItem.isMatched = false;
+                    currentItem.sourceLocation = guessItemLocation({ sku: trimmed, rawProductName: currentItem.rawProductName }, parsedTripOrigin);
+                }
             } else {
                 currentItem.sku = '';
                 currentItem.isMatched = false;
@@ -2496,6 +2668,13 @@ const DeliveryOrderManagement: React.FC<DeliveryOrderManagementProps> = ({ user 
 
     const handleUpdateParsedTripOrigin = (newOrigin: string) => {
         setParsedTripOrigin(newOrigin);
+        if (parsedDriverId) {
+            const curDriver = drivers.find(d => d.uid === parsedDriverId);
+            if (curDriver && normalizeLocationCode(curDriver.base_location) !== normalizeLocationCode(newOrigin)) {
+                setParsedDriverId('');
+                setParsedLorryId('');
+            }
+        }
         if (!parsedTripBatch) return;
         const validWarehouses = getAvailableWarehousesForOrigin(newOrigin);
         const defaultLoc = getDefaultLocForOrigin(newOrigin);
@@ -2517,6 +2696,40 @@ const DeliveryOrderManagement: React.FC<DeliveryOrderManagementProps> = ({ user 
 
     const handleConfirmCreateTrip = async () => {
         if (!parsedTripBatch || parsedTripBatch.deliveryOrders.length === 0) return;
+
+        // 🚨 严密硬防呆校验：车次内所有物料必须严格属于系统标准品库 (v2Items)
+        const invalidItems: { dropIndex: number; customer: string; product: string; sku: string }[] = [];
+        parsedTripBatch.deliveryOrders.forEach((order, oIdx) => {
+            (order.items || []).forEach(it => {
+                const cleanSku = (it.sku || '').trim().toLowerCase();
+                const isRealSku = v2Items.some(v => v.sku.toLowerCase() === cleanSku);
+                if (!isRealSku) {
+                    invalidItems.push({
+                        dropIndex: oIdx + 1,
+                        customer: order.customer || `Drop #${oIdx + 1}`,
+                        product: it.product || it.rawProductName || '未知物料',
+                        sku: it.sku || '未填料号'
+                    });
+                }
+            });
+        });
+
+        if (invalidItems.length > 0) {
+            const first = invalidItems[0];
+            alert(
+                `🚨 出车拦截：发现 ${invalidItems.length} 个非标/未识别料号的货品！\n\n` +
+                `停靠点 #${first.dropIndex} (${first.customer}):\n` +
+                `品名: "${first.product}"\n` +
+                `当前料号: "${first.sku}" (非系统标准料号)\n\n` +
+                `⚠️ 系统严禁使用非标物料（如单个字母 M/O）出车！请在标红的 SKU 输入框中从标准料号下拉列表中选择有效物料后再提交。`
+            );
+            setToast({
+                type: 'error',
+                message: `存在 ${invalidItems.length} 个非标物料，请修正标红品项后再出车！`
+            });
+            return;
+        }
+
         setIsCreatingTrip(true);
         setToast(null);
 
@@ -2653,12 +2866,18 @@ const DeliveryOrderManagement: React.FC<DeliveryOrderManagementProps> = ({ user 
 
             handleCloseParsedTripModal();
             handleCloseModal();
+            const targetOrigin = normalizeLocationCode(parsedTripOrigin);
+            if (targetOrigin && targetOrigin !== normalizeLocationCode(activeLocation)) {
+                setActiveLocation(targetOrigin);
+                localStorage.setItem('tripActiveLocation', targetOrigin);
+            }
             await fetchData();
             setToast({
                 type: 'success',
-                message: t('Trip {{trip}} with {{count}} DOs created successfully!', {
+                message: t('Trip {{trip}} with {{count}} DOs created successfully (Factory: {{factory}})!', {
                     trip: parsedTripNumber,
-                    count: totalDrops
+                    count: totalDrops,
+                    factory: targetOrigin
                 })
             });
         } catch (err: any) {
@@ -2852,10 +3071,15 @@ const DeliveryOrderManagement: React.FC<DeliveryOrderManagementProps> = ({ user 
             }
             closeScanReview();
             handleCloseModal();
+            const targetOrigin = normalizeLocationCode(tripOrigin);
+            if (targetOrigin && targetOrigin !== normalizeLocationCode(activeLocation)) {
+                setActiveLocation(targetOrigin);
+                localStorage.setItem('tripActiveLocation', targetOrigin);
+            }
             await fetchData();
             setToast({
                 type: 'success',
-                message: `Created ${created} trip(s) from photo.`,
+                message: `Created ${created} trip(s) from photo (Factory: ${targetOrigin}).`,
             });
         } catch (err: unknown) {
             const msg = err instanceof Error ? err.message : 'Batch create failed';
@@ -2870,7 +3094,19 @@ const DeliveryOrderManagement: React.FC<DeliveryOrderManagementProps> = ({ user 
         if (selectedOrderIds.length === 0) return;
         if (!driverId) return;
 
-        // Check availability
+        // Check availability & cross-location guard
+        const targetDriver = drivers.find(d => d.uid === driverId);
+        if (targetDriver && targetDriver.base_location) {
+            const driverLoc = normalizeLocationCode(targetDriver.base_location);
+            const currentLoc = normalizeLocationCode(activeLocation);
+            if (driverLoc !== currentLoc) {
+                const confirmed = window.confirm(
+                    `⚠️ 跨厂区批量派单确认：\n\n当前调度批次属于【${currentLoc}】，但司机 ${targetDriver.name} 基地属地为【${driverLoc}】。\n\n是否确认将这 ${selectedOrderIds.length} 笔单据跨厂区指派给该司机？`
+                );
+                if (!confirmed) return;
+            }
+        }
+
         for (const orderId of selectedOrderIds) {
             const order = orders.find(o => o.id === orderId);
             if (order && !checkDriverAvailability(driverId, order.deadline)) {
@@ -3639,6 +3875,12 @@ const DeliveryOrderManagement: React.FC<DeliveryOrderManagementProps> = ({ user 
             // Close Modal
             handleCloseModal();
 
+            const targetOrigin = normalizeLocationCode(tripOrigin);
+            if (targetOrigin && targetOrigin !== normalizeLocationCode(activeLocation)) {
+                setActiveLocation(targetOrigin);
+                localStorage.setItem('tripActiveLocation', targetOrigin);
+            }
+
             // Log 5W1H Activity
             const totalQty = finalizedItems.reduce((acc, curr) => acc + (Number(curr.quantity) || 0), 0);
             const selectedDriverName = drivers.find(d => d.uid === selectedDriverId)?.name || '未指派';
@@ -3767,29 +4009,22 @@ const DeliveryOrderManagement: React.FC<DeliveryOrderManagementProps> = ({ user 
         o.status === 'Pending Approval'
     );
 
-    // Driver & Lorry options for modals (include all hubs, prioritize matching hub at top, never hide)
-    const allDriversForModal = [...drivers].sort((a, b) => {
-        const aMatch = (a.base_location || 'Taiping').toUpperCase() === tripOrigin.toUpperCase() ? 0 : 1;
-        const bMatch = (b.base_location || 'Taiping').toUpperCase() === tripOrigin.toUpperCase() ? 0 : 1;
-        if (aMatch !== bMatch) return aMatch - bMatch;
-        return (a.name || '').localeCompare(b.name || '');
-    });
+    // Driver & Lorry options for modals: STRICTLY filter to only show drivers matching the selected location
+    const allDriversForModal = drivers
+        .filter(d => normalizeLocationCode(d.base_location) === normalizeLocationCode(tripOrigin))
+        .sort((a, b) => (a.name || '').localeCompare(b.name || ''));
 
-    const allLorriesForModal = [...lorries].sort((a, b) => {
-        const aDriver = drivers.find(x => x.uid === a.driverUserId);
-        const bDriver = drivers.find(x => x.uid === b.driverUserId);
-        const aMatch = (aDriver?.base_location || 'Taiping').toUpperCase() === tripOrigin.toUpperCase() ? 0 : 1;
-        const bMatch = (bDriver?.base_location || 'Taiping').toUpperCase() === tripOrigin.toUpperCase() ? 0 : 1;
-        if (aMatch !== bMatch) return aMatch - bMatch;
-        return (a.plateNumber || '').localeCompare(b.plateNumber || '');
-    });
+    const allLorriesForModal = lorries
+        .filter(l => {
+            const driver = drivers.find(x => x.uid === l.driverUserId);
+            if (driver) return normalizeLocationCode(driver.base_location) === normalizeLocationCode(tripOrigin);
+            return true;
+        })
+        .sort((a, b) => (a.plateNumber || '').localeCompare(b.plateNumber || ''));
 
-    const allDriversForParsedModal = [...drivers].sort((a, b) => {
-        const aMatch = (a.base_location || 'Taiping').toUpperCase() === parsedTripOrigin.toUpperCase() ? 0 : 1;
-        const bMatch = (b.base_location || 'Taiping').toUpperCase() === parsedTripOrigin.toUpperCase() ? 0 : 1;
-        if (aMatch !== bMatch) return aMatch - bMatch;
-        return (a.name || '').localeCompare(b.name || '');
-    });
+    const allDriversForParsedModal = drivers
+        .filter(d => normalizeLocationCode(d.base_location) === normalizeLocationCode(parsedTripOrigin))
+        .sort((a, b) => (a.name || '').localeCompare(b.name || ''));
 
     const modalLorry = lorries.find(l => l.id === selectedLorryId);
     const modalLoad = calculateLoad(newOrderItems || [], modalLorry);
@@ -4054,19 +4289,35 @@ const DeliveryOrderManagement: React.FC<DeliveryOrderManagementProps> = ({ user 
                 <div className="flex flex-col md:flex-row items-stretch md:items-center justify-between gap-4">
                     {/* Location Split Toggle (Taiping, Nilai, Kelantan, Johor) - ALWAYS FLEX-NOWRAP */}
                     <div className="flex bg-slate-900/90 p-1.5 rounded-2xl border border-slate-800 self-start md:self-center shrink-0 flex-nowrap overflow-x-auto custom-scrollbar gap-1 shadow-lg shadow-black/40">
-                        {['Taiping', 'Nilai', 'Kelantan', 'Johor'].map(loc => (
-                            <button
-                                key={loc}
-                                onClick={() => setActiveLocation(loc)}
-                                className={`px-4 py-2 rounded-xl text-xs font-black uppercase tracking-wider transition-all flex items-center gap-1.5 shrink-0 ${
-                                    activeLocation === loc
-                                        ? 'bg-emerald-600 text-white shadow-lg shadow-emerald-950/50 scale-[1.02]'
-                                        : 'text-slate-400 hover:bg-slate-800 hover:text-white'
-                                }`}
-                            >
-                                <MapPin size={14} className={activeLocation === loc ? 'text-emerald-200' : 'text-slate-500'} /> {loc}
-                            </button>
-                        ))}
+                        {['Taiping', 'Nilai', 'Kelantan', 'Johor'].map(loc => {
+                            const count = locationCounts[loc] || 0;
+                            const isSelected = activeLocation === loc;
+                            return (
+                                <button
+                                    key={loc}
+                                    onClick={() => setActiveLocation(loc)}
+                                    className={`px-3.5 py-2 rounded-xl text-xs font-black uppercase tracking-wider transition-all flex items-center gap-2 shrink-0 ${
+                                        isSelected
+                                            ? 'bg-emerald-600 text-white shadow-lg shadow-emerald-950/50 scale-[1.02]'
+                                            : 'text-slate-400 hover:bg-slate-800 hover:text-white'
+                                    }`}
+                                >
+                                    <MapPin size={14} className={isSelected ? 'text-emerald-200' : 'text-slate-500'} />
+                                    <span>{loc}</span>
+                                    <span
+                                        className={`text-[10px] px-1.5 py-0.5 rounded-full font-mono font-bold transition-all ${
+                                            isSelected
+                                                ? 'bg-white/20 text-white'
+                                                : count > 0
+                                                    ? 'bg-emerald-950/80 text-emerald-400 border border-emerald-800/60'
+                                                    : 'bg-slate-800/80 text-slate-500'
+                                        }`}
+                                    >
+                                        {count}
+                                    </span>
+                                </button>
+                            );
+                        })}
                     </div>
 
                     {/* View Mode & Global Auto-Dispatch */}
@@ -4129,31 +4380,73 @@ const DeliveryOrderManagement: React.FC<DeliveryOrderManagementProps> = ({ user 
                     </div>
 
                     {/* Filter Tabs */}
-                    <div className="flex bg-slate-900 p-1 rounded-xl border border-slate-800 shrink-0 self-start lg:self-center overflow-x-auto max-w-full">
-                        {['All', 'Loaded', 'Pending Approval', 'Delivered', 'Cancelled'].map(status => (
-                            <button
-                                key={status}
-                                onClick={() => setStatusFilter(status)}
-                                className={`px-4 py-2 rounded-lg text-xs font-bold uppercase tracking-wider transition-all whitespace-nowrap ${
-                                    statusFilter === status
-                                        ? 'bg-blue-600 text-white shadow-lg shadow-blue-900/50'
-                                        : 'bg-slate-800 text-slate-400 hover:bg-slate-700'
-                                }`}
-                            >
-                                {status === 'Delivered' ? 'Delivered' : (status === 'Loaded' ? 'Loaded' : (status === 'Pending Approval' ? (
-                                    <span className="flex items-center gap-2">
-                                        Pending
-                                        {orders.filter(o => o.status === 'Pending Approval').length > 0 && (
-                                            <span className="bg-red-500 text-white text-[10px] px-1.5 rounded-full animate-pulse">
-                                                {orders.filter(o => o.status === 'Pending Approval').length}
-                                            </span>
-                                        )}
+                    <div className="flex bg-slate-900 p-1 rounded-xl border border-slate-800 shrink-0 self-start lg:self-center overflow-x-auto max-w-full gap-1">
+                        {([
+                            { key: 'All', label: 'Active' },
+                            { key: 'Loaded', label: 'Loaded' },
+                            { key: 'Pending Approval', label: 'Pending' },
+                            { key: 'Delivered', label: 'Delivered' },
+                            { key: 'Cancelled', label: 'Cancelled' },
+                        ] as const).map(({ key, label }) => {
+                            const count = statusCounts[key] || 0;
+                            const isSelected = statusFilter === key;
+                            return (
+                                <button
+                                    key={key}
+                                    onClick={() => setStatusFilter(key)}
+                                    className={`px-3 sm:px-4 py-2 rounded-lg text-xs font-bold uppercase tracking-wider transition-all whitespace-nowrap flex items-center gap-1.5 ${
+                                        isSelected
+                                            ? 'bg-blue-600 text-white shadow-lg shadow-blue-900/50'
+                                            : 'bg-slate-800 text-slate-400 hover:bg-slate-700'
+                                    }`}
+                                >
+                                    <span>{label}</span>
+                                    <span
+                                        className={`text-[10px] px-1.5 py-0.5 rounded-full font-mono font-bold transition-all ${
+                                            isSelected
+                                                ? 'bg-white/20 text-white'
+                                                : key === 'Pending Approval' && count > 0
+                                                    ? 'bg-red-500 text-white animate-pulse'
+                                                    : count > 0
+                                                        ? 'bg-slate-700 text-slate-300'
+                                                        : 'bg-slate-900 text-slate-600'
+                                        }`}
+                                    >
+                                        {count}
                                     </span>
-                                ) : status === 'All' ? 'Active' : status))}
-                            </button>
-                        ))}
+                                </button>
+                            );
+                        })}
                     </div>
                 </div>
+
+                {/* Cross-location search alert banner */}
+                {crossLocationMatches.length > 0 && (
+                    <div className="bg-amber-500/10 border border-amber-500/30 rounded-xl px-4 py-2.5 flex items-center justify-between gap-3 text-xs text-amber-300 animate-in fade-in">
+                        <div className="flex items-center gap-2 flex-wrap">
+                            <span className="text-base shrink-0">💡</span>
+                            <span className="font-semibold">
+                                {t('在当前厂区 ({{current}}) 之外找到 {{count}} 条匹配单据：', { current: activeLocation, count: crossLocationMatches.length })}
+                            </span>
+                            <div className="flex items-center gap-1.5 flex-wrap">
+                                {Array.from(new Set(crossLocationMatches.map(o => normalizeLocationCode(o.trip_origin)))).map(locName => {
+                                    const countInLoc = crossLocationMatches.filter(o => normalizeLocationCode(o.trip_origin) === locName).length;
+                                    return (
+                                        <button
+                                            key={locName}
+                                            onClick={() => setActiveLocation(locName)}
+                                            className="px-2.5 py-1 rounded-lg bg-amber-500/20 hover:bg-amber-500/30 border border-amber-500/40 text-amber-200 font-bold transition-all cursor-pointer flex items-center gap-1 text-xs"
+                                        >
+                                            <span>{locName}</span>
+                                            <span className="bg-amber-500/40 text-amber-100 text-[10px] px-1.5 py-0.2 rounded-full font-mono">{countInLoc}</span>
+                                            <span>↗</span>
+                                        </button>
+                                    );
+                                })}
+                            </div>
+                        </div>
+                    </div>
+                )}
             </div>
 
             <div className="flex flex-wrap items-center gap-2 mb-6">
@@ -4170,20 +4463,35 @@ const DeliveryOrderManagement: React.FC<DeliveryOrderManagementProps> = ({ user 
                         { id: 'month' as const, label: 'This month' },
                         { id: 'no_date' as const, label: 'No date' },
                     ] as const
-                ).map(({ id, label }) => (
-                    <button
-                        key={id}
-                        type="button"
-                        onClick={() => selectDeliveryDateChip(id)}
-                        className={`px-3 py-1.5 rounded-lg text-[10px] font-black uppercase tracking-wider border transition-all
-                            ${!deliveryMonthPick && deliveryDateFilter === id
-                                ? 'bg-blue-600/30 border-blue-500/50 text-blue-200'
-                                : 'bg-slate-900/80 border-slate-800 text-slate-500 hover:text-slate-300 hover:border-slate-600'
-                            }`}
-                    >
-                        {label}
-                    </button>
-                ))}
+                ).map(({ id, label }) => {
+                    const isSelected = !deliveryMonthPick && deliveryDateFilter === id;
+                    const count = dateFilterCounts[id] || 0;
+                    return (
+                        <button
+                            key={id}
+                            type="button"
+                            onClick={() => selectDeliveryDateChip(id)}
+                            className={`px-2.5 py-1.5 rounded-lg text-[10px] font-black uppercase tracking-wider border transition-all flex items-center gap-1.5
+                                ${isSelected
+                                    ? 'bg-blue-600/30 border-blue-500/50 text-blue-200 shadow-sm'
+                                    : 'bg-slate-900/80 border-slate-800 text-slate-500 hover:text-slate-300 hover:border-slate-600'
+                                }`}
+                        >
+                            <span>{label}</span>
+                            <span
+                                className={`text-[9px] px-1 py-0.2 rounded font-mono font-bold ${
+                                    isSelected
+                                        ? 'bg-blue-500/40 text-blue-100'
+                                        : count > 0
+                                            ? 'bg-slate-800 text-slate-400'
+                                            : 'text-slate-600'
+                                }`}
+                            >
+                                {count}
+                            </span>
+                        </button>
+                    );
+                })}
                 <label className="flex items-center gap-2 ml-1 sm:ml-2">
                     <span className="text-[10px] font-black text-slate-500 uppercase tracking-widest">Month</span>
                     <input
@@ -4207,6 +4515,29 @@ const DeliveryOrderManagement: React.FC<DeliveryOrderManagementProps> = ({ user 
                     )}
                 </label>
             </div>
+
+            {/* Schedule Notice: When a date filter is hiding other active orders in this factory */}
+            {deliveryDateFilter !== 'all' && !deliveryMonthPick && dateFilterCounts.all > (dateFilterCounts[deliveryDateFilter] || 0) && (
+                <div className="w-full bg-slate-900/90 border border-slate-800 rounded-xl px-3.5 py-2 flex items-center justify-between gap-3 text-xs text-slate-400 mb-6 animate-in fade-in">
+                    <div className="flex items-center gap-2 flex-wrap">
+                        <span className="text-sm shrink-0">📅</span>
+                        <span>
+                            {t('当前按【{{filter}}】筛选仅显示 {{shown}} 笔单据。当前厂区另有 {{hidden}} 笔单据排期在其他日期。', {
+                                filter: deliveryDateFilter === 'today' ? t('Today') : deliveryDateFilter === 'tomorrow' ? t('Tomorrow') : deliveryDateFilter === 'week' ? t('This week') : deliveryDateFilter === 'month' ? t('This month') : deliveryDateFilter,
+                                shown: dateFilterCounts[deliveryDateFilter] || 0,
+                                hidden: dateFilterCounts.all - (dateFilterCounts[deliveryDateFilter] || 0)
+                            })}
+                        </span>
+                    </div>
+                    <button
+                        type="button"
+                        onClick={() => selectDeliveryDateChip('all')}
+                        className="px-2.5 py-1 rounded-lg bg-blue-600/20 hover:bg-blue-600/40 border border-blue-500/30 text-blue-300 text-[11px] font-bold shrink-0 transition-all cursor-pointer"
+                    >
+                        {t('查看全部 ({{total}})', { total: dateFilterCounts.all })}
+                    </button>
+                </div>
+            )}
 
             {/* --- MAIN GRID / TABLE --- */}
             {viewMode === 'dispatch' ? (
@@ -4262,7 +4593,7 @@ const DeliveryOrderManagement: React.FC<DeliveryOrderManagementProps> = ({ user 
                                 >
                                     <option value="">{t('-- Assign drivers in batches --')}</option>
                                     {drivers
-                                        .filter(d => (d.base_location || 'Taiping').toLowerCase() === activeLocation.toLowerCase())
+                                        .filter(d => normalizeLocationCode(d.base_location) === normalizeLocationCode(activeLocation))
                                         .map(d => (
                                             <option key={d.uid} value={d.uid}>
                                                 {d.name || d.email}
@@ -4341,7 +4672,7 @@ const DeliveryOrderManagement: React.FC<DeliveryOrderManagementProps> = ({ user 
                                                     >
                                                         <option value="">{t('Assign a driver...')}</option>
                                                         {drivers
-                                                            .filter(d => (d.base_location || 'Taiping').toLowerCase() === activeLocation.toLowerCase())
+                                                            .filter(d => normalizeLocationCode(d.base_location) === normalizeLocationCode(activeLocation))
                                                             .map(d => (
                                                                 <option key={d.uid} value={d.uid}>
                                                                     {d.name}
@@ -4551,7 +4882,7 @@ const DeliveryOrderManagement: React.FC<DeliveryOrderManagementProps> = ({ user 
                         const driverOrders = filteredOrders
                             .filter(o => {
                                 if (driver.uid === 'unassigned') {
-                                    return !o.driverId && (o.trip_origin || 'TAIPING').toUpperCase() === activeLocation.toUpperCase();
+                                    return !o.driverId;
                                 }
                                 return o.driverId === driver.uid;
                             })
@@ -4910,6 +5241,16 @@ const DeliveryOrderManagement: React.FC<DeliveryOrderManagementProps> = ({ user 
                                                                                                 {doOrder.deliveryAddress && (
                                                                                                     <span className={`text-[9px] font-bold px-1 rounded uppercase shrink-0 ${getStateColor(determineState(doOrder.deliveryAddress))}`}>
                                                                                                         {determineState(doOrder.deliveryAddress)}
+                                                                                                    </span>
+                                                                                                )}
+                                                                                                {doOrder.status === 'Delivered' && (
+                                                                                                    <span className="text-[9px] font-bold px-1.5 py-0.5 rounded bg-emerald-500/20 text-emerald-400 border border-emerald-500/30 shrink-0">
+                                                                                                        ✓ Delivered
+                                                                                                    </span>
+                                                                                                )}
+                                                                                                {doOrder.status === 'Cancelled' && (
+                                                                                                    <span className="text-[9px] font-bold px-1.5 py-0.5 rounded bg-red-500/20 text-red-400 border border-red-500/30 shrink-0">
+                                                                                                        ✕ Cancelled
                                                                                                     </span>
                                                                                                 )}
                                                                                             </div>
@@ -5658,10 +5999,6 @@ const DeliveryOrderManagement: React.FC<DeliveryOrderManagementProps> = ({ user 
                                                                  if (l && !selectedLorryId) {
                                                                      setSelectedLorryId(l.id);
                                                                  }
-                                                                 const d = drivers.find(x => x.uid === driverId);
-                                                                 if (d && d.base_location && d.base_location.trim().toLowerCase() !== tripOrigin.toLowerCase()) {
-                                                                     setTripOrigin(d.base_location.trim());
-                                                                 }
                                                              }}
                                                          >
                                                              <option value="">-- Select Driver --</option>
@@ -6263,7 +6600,7 @@ const DeliveryOrderManagement: React.FC<DeliveryOrderManagementProps> = ({ user 
                                                     }}
                                                 >
                                                     <option value="">-- Fallback to sheet driver --</option>
-                                                    {drivers.filter(d => (d.base_location || 'Taiping').toUpperCase() === tripOrigin).map(d => (
+                                                    {drivers.filter(d => normalizeLocationCode(d.base_location) === normalizeLocationCode(tripOrigin)).map(d => (
                                                         <option key={d.uid} value={d.uid}>{d.name || d.email}</option>
                                                     ))}
                                                 </select>
@@ -6519,14 +6856,6 @@ const DeliveryOrderManagement: React.FC<DeliveryOrderManagementProps> = ({ user 
                                                     if (driverId) {
                                                         const matchedLorry = lorries.find(l => l.driverUserId === driverId);
                                                         if (matchedLorry) setParsedLorryId(matchedLorry.id);
-                                                        const d = drivers.find(x => x.uid === driverId);
-                                                        if (d?.base_location && d.base_location.trim().toLowerCase() !== parsedTripOrigin.toLowerCase()) {
-                                                            handleUpdateParsedTripOrigin(d.base_location.trim());
-                                                            setToast({
-                                                                message: `🚚 已根据司机 ${d.name || ''} 基地自动将出发厂区切换为 [${d.base_location}] 并更新仓库分配！`,
-                                                                type: 'info'
-                                                            });
-                                                        }
                                                     }
                                                 }}
                                             >
@@ -6602,6 +6931,28 @@ const DeliveryOrderManagement: React.FC<DeliveryOrderManagementProps> = ({ user 
                                     />
                                 </div>
                             </div>
+
+                            {/* 🚨 UNMAPPED ITEMS CRITICAL ALERT BANNER */}
+                            {parsedUnmappedItemsCount > 0 && (
+                                <div className="bg-gradient-to-r from-red-950/80 via-red-900/40 to-slate-900/80 border-2 border-red-500/80 rounded-2xl p-4 flex flex-col sm:flex-row items-start sm:items-center justify-between gap-3 text-red-200 text-xs shadow-xl shadow-red-950/50 animate-pulse">
+                                    <div className="flex items-center gap-3">
+                                        <div className="p-2 rounded-xl bg-red-600/30 border border-red-500/50 text-red-400 shrink-0">
+                                            <AlertTriangle size={22} className="text-red-400" />
+                                        </div>
+                                        <div>
+                                            <div className="font-black text-sm text-red-100 flex items-center gap-2">
+                                                <span>{t('🚨 严密防呆拦截：发现 {{count}} 个非标/未知料号物料！', { count: parsedUnmappedItemsCount })}</span>
+                                            </div>
+                                            <div className="text-[11px] text-red-300/90 mt-1 leading-relaxed">
+                                                {t('系统禁止使用非标物料（如单个字母 M/O、手写代号或未录入料号）创建车次！请在下方标红的品项中从标准 SKU 下拉列表中选择有效物料后再提交。')}
+                                            </div>
+                                        </div>
+                                    </div>
+                                    <span className="px-3.5 py-1.5 rounded-xl bg-red-600 text-white font-black text-xs uppercase tracking-wider shrink-0 shadow-md shadow-red-600/30">
+                                        {t('必须逐一修正')}
+                                    </span>
+                                </div>
+                            )}
 
                             {/* 📦 Trip Cargo Breakdown Summary (车次装车总数清单) */}
                             {parsedCargoSummary.length > 0 && (
@@ -6868,10 +7219,17 @@ const DeliveryOrderManagement: React.FC<DeliveryOrderManagementProps> = ({ user 
                                                     </div>
                                                 ) : (
                                                     <div className="grid grid-cols-1 gap-2">
-                                                        {doItem.items.map((it, itemIdx) => (
+                                                        {doItem.items.map((it, itemIdx) => {
+                                                            const cleanSku = (it.sku || '').trim().toLowerCase();
+                                                            const isRealSku = Boolean(cleanSku && v2Items.some(x => x.sku.toLowerCase() === cleanSku));
+                                                            return (
                                                             <div
                                                                 key={itemIdx}
-                                                                className="flex flex-col lg:flex-row lg:items-center justify-between gap-2.5 p-2.5 rounded-xl bg-slate-950/80 border border-slate-800/80 hover:border-slate-700/80 text-xs transition-all"
+                                                                className={`flex flex-col lg:flex-row lg:items-center justify-between gap-2.5 p-2.5 rounded-xl text-xs transition-all ${
+                                                                    !isRealSku
+                                                                        ? 'bg-red-950/25 border-2 border-red-500/80 shadow-[0_0_12px_rgba(239,68,68,0.2)]'
+                                                                        : 'bg-slate-950/80 border border-slate-800/80 hover:border-slate-700/80'
+                                                                }`}
                                                             >
                                                                 {/* Qty, UOM, and Product Name (Editable) */}
                                                                 <div className="flex flex-wrap items-center gap-2 min-w-0 flex-1">
@@ -6910,22 +7268,30 @@ const DeliveryOrderManagement: React.FC<DeliveryOrderManagementProps> = ({ user 
 
                                                                 {/* SKU, Warehouse & Delete action */}
                                                                 <div className="flex flex-wrap items-center gap-2 shrink-0">
-                                                                    <div className="flex items-center gap-1 shrink-0">
+                                                                    <div className="flex items-center gap-1.5 shrink-0">
                                                                         <label className="text-[10px] font-bold text-slate-400 uppercase">
                                                                             SKU:
                                                                         </label>
-                                                                        <input
-                                                                            type="text"
-                                                                            list="global-v2items-datalist"
-                                                                            className={`px-2 py-1 rounded-lg text-xs font-mono font-bold outline-none transition-all w-36 sm:w-44 ${
-                                                                                it.sku
-                                                                                    ? 'bg-emerald-950/40 border border-emerald-500/40 text-emerald-300 focus:border-emerald-400'
-                                                                                    : 'bg-amber-950/40 border border-amber-500/50 text-amber-300 focus:border-amber-400'
-                                                                            }`}
-                                                                            placeholder={t('-- 标准料号 --')}
-                                                                            value={it.sku ? `${it.sku} - ${it.product || ''}` : ''}
-                                                                            onChange={e => handleUpdateParsedItemSku(idx, itemIdx, e.target.value)}
-                                                                        />
+                                                                        <div className="flex flex-col gap-1">
+                                                                            <input
+                                                                                type="text"
+                                                                                list="global-v2items-datalist"
+                                                                                className={`px-2.5 py-1.5 rounded-lg text-xs font-mono font-bold outline-none transition-all w-44 sm:w-56 ${
+                                                                                    isRealSku
+                                                                                        ? 'bg-emerald-950/40 border border-emerald-500/50 text-emerald-300 focus:border-emerald-400'
+                                                                                        : 'bg-red-950/70 border-2 border-red-500 text-red-100 placeholder:text-red-400 focus:border-red-400 animate-pulse'
+                                                                                }`}
+                                                                                placeholder={t('-- 请选择标准料号 --')}
+                                                                                value={it.sku ? `${it.sku} - ${it.product || ''}` : ''}
+                                                                                onChange={e => handleUpdateParsedItemSku(idx, itemIdx, e.target.value)}
+                                                                            />
+                                                                            {!isRealSku && (
+                                                                                <span className="text-[9px] font-black uppercase text-red-300 bg-red-600/30 border border-red-500/60 px-1.5 py-0.5 rounded flex items-center gap-1 w-fit">
+                                                                                    <AlertTriangle size={10} className="text-red-400 shrink-0" />
+                                                                                    <span>{t('非标/必须选标准SKU')}</span>
+                                                                                </span>
+                                                                            )}
+                                                                        </div>
                                                                     </div>
 
                                                                     <div className="flex items-center gap-1 shrink-0">
@@ -6952,7 +7318,8 @@ const DeliveryOrderManagement: React.FC<DeliveryOrderManagementProps> = ({ user 
                                                                     </button>
                                                                 </div>
                                                             </div>
-                                                        ))}
+                                                            );
+                                                        })}
                                                     </div>
                                                 )}
 
@@ -7061,17 +7428,30 @@ const DeliveryOrderManagement: React.FC<DeliveryOrderManagementProps> = ({ user 
                                 </button>
                                 <button
                                     type="button"
-                                    disabled={isCreatingTrip || parsedTripBatch.deliveryOrders.length === 0}
+                                    disabled={isCreatingTrip || parsedTripBatch.deliveryOrders.length === 0 || parsedUnmappedItemsCount > 0}
                                     onClick={handleConfirmCreateTrip}
-                                    className="flex-1 sm:flex-none px-6 py-2.5 rounded-xl bg-gradient-to-r from-emerald-600 to-teal-600 hover:from-emerald-500 hover:to-teal-500 disabled:opacity-50 text-white text-xs font-bold uppercase tracking-wider flex items-center justify-center gap-2 shadow-lg shadow-emerald-950/40 transition-all active:scale-95"
+                                    className={`flex-1 sm:flex-none px-6 py-2.5 rounded-xl text-xs font-bold uppercase tracking-wider flex items-center justify-center gap-2 shadow-lg transition-all active:scale-95 ${
+                                        parsedUnmappedItemsCount > 0
+                                            ? 'bg-slate-800 text-red-300 border-2 border-red-500/60 cursor-not-allowed opacity-90'
+                                            : isCreatingTrip || parsedTripBatch.deliveryOrders.length === 0
+                                            ? 'bg-slate-800 text-slate-500 opacity-50 cursor-not-allowed'
+                                            : 'bg-gradient-to-r from-emerald-600 to-teal-600 hover:from-emerald-500 hover:to-teal-500 text-white shadow-emerald-950/40'
+                                    }`}
+                                    title={parsedUnmappedItemsCount > 0 ? `尚有 ${parsedUnmappedItemsCount} 个物料未匹配标准料号，禁止出车！` : ''}
                                 >
                                     {isCreatingTrip ? (
                                         <span className="w-4 h-4 border-2 border-white/30 border-t-white rounded-full animate-spin" />
+                                    ) : parsedUnmappedItemsCount > 0 ? (
+                                        <AlertTriangle size={16} className="text-red-400" />
                                     ) : (
                                         <Truck size={16} />
                                     )}
                                     <span>
-                                        {isCreatingTrip ? t('Creating Trip…') : t('Confirm & Dispatch Trip (确认创建车次)')}
+                                        {isCreatingTrip
+                                            ? t('Creating Trip…')
+                                            : parsedUnmappedItemsCount > 0
+                                            ? t('存在非标物料 (禁止出车 · 需修正 {{count}} 项)', { count: parsedUnmappedItemsCount })
+                                            : t('Confirm & Dispatch Trip (确认创建车次)')}
                                     </span>
                                 </button>
                             </div>
@@ -7153,7 +7533,9 @@ const DeliveryOrderManagement: React.FC<DeliveryOrderManagementProps> = ({ user 
                                         onChange={e => setSplitTargetDriverId(e.target.value)}
                                     >
                                         <option value="">Unassigned</option>
-                                        {drivers.map(d => <option key={d.uid} value={d.uid}>{d.name || d.email}</option>)}
+                                        {drivers
+                                            .filter(d => normalizeLocationCode(d.base_location) === normalizeLocationCode(activeLocation))
+                                            .map(d => <option key={d.uid} value={d.uid}>{d.name || d.email}</option>)}
                                     </select>
                                 </div>
                                 <div>
@@ -7535,7 +7917,7 @@ const DeliveryOrderManagement: React.FC<DeliveryOrderManagementProps> = ({ user 
                                                     >
                                                         <option value="">{t('-- Unassigned --')}</option>
                                                         {drivers
-                                                            .filter(d => (d.base_location || 'Taiping').toLowerCase() === activeLocation.toLowerCase())
+                                                            .filter(d => normalizeLocationCode(d.base_location) === normalizeLocationCode(activeLocation))
                                                             .map(d => {
                                                                 const stat = dispatchDriverStats[d.uid || d.id];
                                                                 const mtd = stat ? Math.round(stat.currentMtdEarnings) : 0;

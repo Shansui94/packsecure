@@ -31,10 +31,38 @@ export const AppHubModal: React.FC<AppHubModalProps> = ({
     hasAccess,
     activePage
 }) => {
-    const { t } = useTranslation();
+    const { t, i18n } = useTranslation();
     const [searchQuery, setSearchQuery] = useState('');
     const [selectedGroup, setSelectedGroup] = useState<string>('all');
     const [filterStatus, setFilterStatus] = useState<'all' | 'pinned' | 'collapsed'>('all');
+
+    const currentLang = i18n.language || (typeof window !== 'undefined' ? localStorage.getItem('packsecure_lang') : null) || 'zh-CN';
+
+    const getLocalizedTitle = (group: { title: string; titleEn?: string }) => {
+        if (currentLang === 'zh-CN') return group.title;
+        if (currentLang === 'en') return group.titleEn || group.title;
+        const translated = t(group.title);
+        if (translated && translated !== group.title) return translated;
+        if (group.titleEn) {
+            const translatedEn = t(group.titleEn);
+            if (translatedEn && translatedEn !== group.titleEn) return translatedEn;
+            return group.titleEn;
+        }
+        return group.title;
+    };
+
+    const getLocalizedLabel = (mod: { label: string; labelEn?: string }) => {
+        if (currentLang === 'zh-CN') return mod.label;
+        if (currentLang === 'en') return mod.labelEn || mod.label;
+        const translated = t(mod.label);
+        if (translated && translated !== mod.label) return translated;
+        if (mod.labelEn) {
+            const translatedEn = t(mod.labelEn);
+            if (translatedEn && translatedEn !== mod.labelEn) return translatedEn;
+            return mod.labelEn;
+        }
+        return mod.label;
+    };
 
     if (!isOpen) return null;
 
@@ -98,13 +126,13 @@ export const AppHubModal: React.FC<AppHubModalProps> = ({
                         </div>
                         <div>
                             <h2 className="text-xl font-black text-white tracking-tight flex items-center gap-2">
-                                <span>全功能中心与菜单治理</span>
+                                <span>{t('App Hub & Menu Manager')}</span>
                                 <span className="text-xs px-2 py-0.5 rounded-full bg-white/5 border border-white/10 text-gray-400 font-normal">
-                                    共 {accessibleModules.length} 项功能
+                                    {t('Total')} {accessibleModules.length} {t('Total features')}
                                 </span>
                             </h2>
                             <p className="text-xs text-gray-400 mt-0.5">
-                                了解所有常驻与收起模块，随心定制您的侧边栏，支持一键直达处理任意业务。
+                                {t('Explore and customize your sidebar, navigate directly to any module.')}
                             </p>
                         </div>
                     </div>
@@ -119,10 +147,10 @@ export const AppHubModal: React.FC<AppHubModalProps> = ({
                                     ? 'bg-amber-500/20 text-amber-300 border-amber-500/40 shadow-sm'
                                     : 'bg-white/5 text-gray-400 border-white/10 hover:text-white'
                             }`}
-                            title="一键在侧栏平铺展示所有功能"
+                            title={t('Tile all functions in sidebar')}
                         >
                             {showAllModules ? <Eye size={14} /> : <EyeOff size={14} />}
-                            <span>{showAllModules ? '全部平铺模式：开' : '智能负熵收拢：开'}</span>
+                            <span>{showAllModules ? t('Show All Mode: ON') : t('Smart Collapse: ON')}</span>
                         </button>
 
                         <button
@@ -144,7 +172,7 @@ export const AppHubModal: React.FC<AppHubModalProps> = ({
                                 type="text"
                                 value={searchQuery}
                                 onChange={(e) => setSearchQuery(e.target.value)}
-                                placeholder="搜索功能名称、拼音、英文或业务描述..."
+                                placeholder={t('Search features, pinyin, English or business description...')}
                                 className="w-full bg-white/5 border border-white/10 rounded-xl py-2 pl-10 pr-4 text-xs text-white placeholder-gray-500 focus:outline-none focus:border-amber-500 transition-colors"
                             />
                             {searchQuery && (
@@ -167,7 +195,7 @@ export const AppHubModal: React.FC<AppHubModalProps> = ({
                                 filterStatus === 'all' ? 'bg-white/10 text-white shadow' : 'text-gray-400 hover:text-gray-200'
                             }`}
                         >
-                            全部 ({accessibleModules.length})
+                            {t('All')} ({accessibleModules.length})
                         </button>
                         <button
                             type="button"
@@ -177,7 +205,7 @@ export const AppHubModal: React.FC<AppHubModalProps> = ({
                             }`}
                         >
                             <Pin size={12} />
-                            <span>常驻侧栏 ({totalPinned})</span>
+                            <span>{t('Pinned in Sidebar')} ({totalPinned})</span>
                         </button>
                         <button
                             type="button"
@@ -187,7 +215,7 @@ export const AppHubModal: React.FC<AppHubModalProps> = ({
                             }`}
                         >
                             <EyeOff size={12} />
-                            <span>已收起/二级 ({totalCollapsed})</span>
+                            <span>{t('Collapsed / Secondary')} ({totalCollapsed})</span>
                         </button>
                     </div>
 
@@ -197,10 +225,10 @@ export const AppHubModal: React.FC<AppHubModalProps> = ({
                             type="button"
                             onClick={onResetOverrides}
                             className="flex items-center gap-1.5 px-3 py-1.5 text-xs text-gray-400 hover:text-amber-300 bg-white/5 hover:bg-white/10 rounded-xl transition border border-white/5 cursor-pointer"
-                            title="恢复系统推荐的默认收起/常驻设置"
+                            title={t('Restore recommended layout')}
                         >
                             <RotateCcw size={12} />
-                            <span>恢复推荐</span>
+                            <span>{t('Reset to Default')}</span>
                         </button>
                     )}
                 </div>
@@ -216,7 +244,7 @@ export const AppHubModal: React.FC<AppHubModalProps> = ({
                                 : 'bg-white/5 text-gray-400 hover:text-white'
                         }`}
                     >
-                        全部组别
+                        {t('All Groups')}
                     </button>
                     {MODULE_GROUPS.map(g => (
                         <button
@@ -229,7 +257,7 @@ export const AppHubModal: React.FC<AppHubModalProps> = ({
                                     : 'bg-white/5 text-gray-400 hover:text-white'
                             }`}
                         >
-                            {g.title}
+                            {getLocalizedTitle(g)}
                         </button>
                     ))}
                 </div>
@@ -239,8 +267,8 @@ export const AppHubModal: React.FC<AppHubModalProps> = ({
                     {filteredModules.length === 0 ? (
                         <div className="h-64 flex flex-col items-center justify-center text-gray-500">
                             <Layers size={40} className="text-gray-600 mb-3" />
-                            <p className="font-bold text-sm">未找到匹配的功能模块</p>
-                            <p className="text-xs mt-1">请尝试清除筛选条件或更换搜索词</p>
+                            <p className="font-bold text-sm">{t('No matching features found')}</p>
+                            <p className="text-xs mt-1">{t('Try clearing filters or changing search keywords')}</p>
                         </div>
                     ) : (
                         <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
@@ -249,6 +277,8 @@ export const AppHubModal: React.FC<AppHubModalProps> = ({
                                 const isPinned = isEffectivePinned(mod);
                                 const isCurrentActive = activePage === mod.id;
                                 const groupDef = MODULE_GROUPS.find(g => g.id === mod.group);
+                                const localizedLabel = getLocalizedLabel(mod);
+                                const subLabel = currentLang === 'zh-CN' ? (mod.labelEn || mod.id) : mod.label;
 
                                 return (
                                     <div
@@ -275,14 +305,14 @@ export const AppHubModal: React.FC<AppHubModalProps> = ({
                                                     <div>
                                                         <div className="flex items-center gap-1.5">
                                                             <h3 className="font-black text-sm text-white tracking-tight">
-                                                                {mod.label}
+                                                                {localizedLabel}
                                                             </h3>
                                                             {isCurrentActive && (
-                                                                <span className="w-2 h-2 rounded-full bg-green-500 animate-pulse" title="当前所在页面" />
+                                                                <span className="w-2 h-2 rounded-full bg-green-500 animate-pulse" title={t('Current page')} />
                                                             )}
                                                         </div>
                                                         <p className="text-[11px] text-gray-500 font-medium">
-                                                            {mod.labelEn || mod.id}
+                                                            {subLabel}
                                                         </p>
                                                     </div>
                                                 </div>
@@ -291,7 +321,7 @@ export const AppHubModal: React.FC<AppHubModalProps> = ({
                                                 <button
                                                     type="button"
                                                     onClick={() => onToggleOverride(mod.id, !isPinned)}
-                                                    title={isPinned ? '点击收起：移入“更多收起功能”' : '点击固定：常驻显示在侧边栏'}
+                                                    title={isPinned ? t('Click to collapse: move to "More Collapsed Features"') : t('Click to pin: keep visible in sidebar')}
                                                     className={`p-1.5 rounded-lg border transition cursor-pointer ${
                                                         isPinned
                                                             ? 'bg-blue-500/10 border-blue-500/30 text-blue-400 hover:bg-red-500/20 hover:text-red-300 hover:border-red-500/30'
@@ -304,7 +334,7 @@ export const AppHubModal: React.FC<AppHubModalProps> = ({
 
                                             {/* Description */}
                                             <p className="text-xs text-gray-400 line-clamp-2 mb-3 min-h-[32px] leading-relaxed">
-                                                {mod.description || '暂无业务描述'}
+                                                {mod.description ? t(mod.description) : t('No description available')}
                                             </p>
                                         </div>
 
@@ -312,14 +342,14 @@ export const AppHubModal: React.FC<AppHubModalProps> = ({
                                         <div className="pt-3 border-t border-white/5 flex items-center justify-between gap-2 mt-2">
                                             <div className="flex items-center gap-1.5">
                                                 <span className={`text-[10px] font-bold px-2 py-0.5 rounded-md border ${getGroupBadgeColor(mod.group)}`}>
-                                                    {groupDef?.title || mod.group}
+                                                    {groupDef ? getLocalizedTitle(groupDef) : mod.group}
                                                 </span>
                                                 <span className={`text-[10px] font-bold px-1.5 py-0.5 rounded-md ${
                                                     isPinned 
                                                         ? 'bg-blue-500/10 text-blue-400' 
                                                         : 'bg-amber-500/10 text-amber-400'
                                                 }`}>
-                                                    {isPinned ? '常驻侧栏' : '已收起'}
+                                                    {isPinned ? t('Pinned in Sidebar') : t('Collapsed')}
                                                 </span>
                                             </div>
 
@@ -331,7 +361,7 @@ export const AppHubModal: React.FC<AppHubModalProps> = ({
                                                 }}
                                                 className="flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-xs font-bold text-white bg-white/10 hover:bg-amber-500 hover:text-black transition active:scale-95 cursor-pointer"
                                             >
-                                                <span>立即进入</span>
+                                                <span>{t('Launch')}</span>
                                                 <ExternalLink size={12} />
                                             </button>
                                         </div>
@@ -346,10 +376,10 @@ export const AppHubModal: React.FC<AppHubModalProps> = ({
                 <div className="p-4 border-t border-white/10 bg-[#09090c] flex items-center justify-between text-xs text-gray-500 shrink-0">
                     <div className="flex items-center gap-2">
                         <HelpCircle size={14} className="text-amber-400" />
-                        <span>提示：被收起的模块在侧栏底部「更多收起功能」中可随时展开，或在此弹窗中一键固定。快捷键 <kbd className="px-1.5 py-0.5 rounded bg-white/10 text-gray-300 font-mono">⌘K</kbd> 随时可全局搜索直达。</span>
+                        <span>{t('Tip: Collapsed modules can be expanded anytime from "More Collapsed Features" at sidebar bottom, or pinned here. Press ⌘K to search & jump anytime.')}</span>
                     </div>
                     <div className="font-mono text-[11px]">
-                        当前显示：{filteredModules.length} / {accessibleModules.length}
+                        {t('Currently showing: ')}{filteredModules.length} / {accessibleModules.length}
                     </div>
                 </div>
 

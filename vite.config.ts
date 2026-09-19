@@ -52,5 +52,52 @@ export default defineConfig({
                 changeOrigin: true
             }
         }
+    },
+    build: {
+        chunkSizeWarningLimit: 1200,
+        rollupOptions: {
+            output: {
+                manualChunks(id) {
+                    if (id.includes('node_modules')) {
+                        if (id.includes('jspdf') || id.includes('html2canvas')) {
+                            return 'vendor-pdf';
+                        }
+                        if (id.includes('leaflet')) {
+                            return 'vendor-maps';
+                        }
+                        if (id.includes('recharts') || id.includes('d3-')) {
+                            return 'vendor-charts';
+                        }
+                        if (id.includes('konva')) {
+                            return 'vendor-canvas';
+                        }
+                        if (id.includes('@google/genai') || id.includes('@google/generative-ai')) {
+                            return 'vendor-ai';
+                        }
+                        if (id.includes('@yudiel/react-qr-scanner') || id.includes('react-qr-code') || id.includes('react-webcam')) {
+                            return 'vendor-scanner';
+                        }
+                        if (id.includes('@dnd-kit') || id.includes('@hello-pangea/dnd')) {
+                            return 'vendor-dnd';
+                        }
+                        if (id.includes('@supabase/supabase-js')) {
+                            return 'vendor-supabase';
+                        }
+                        if (id.includes('lucide-react')) {
+                            return 'vendor-icons';
+                        }
+                        if (id.includes('xlsx')) {
+                            return 'vendor-excel';
+                        }
+                        if (id.includes('react') || id.includes('react-dom') || id.includes('i18next')) {
+                            return 'vendor-framework';
+                        }
+                    }
+                }
+
+
+            }
+        }
     }
 })
+

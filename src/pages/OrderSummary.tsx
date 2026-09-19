@@ -49,6 +49,16 @@ const getLocalDateString = (d: Date = new Date()): string => {
     return `${year}-${month}-${day}`;
 };
 
+const getDayOfWeekBadge = (dateStr: string): string => {
+    if (!dateStr) return '';
+    const [y, m, d] = dateStr.split('-').map(Number);
+    if (!y || !m || !d) return '';
+    const date = new Date(y, m - 1, d);
+    const daysEn = ['Sun', 'Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat'];
+    const daysZh = ['周日', '周一', '周二', '周三', '周四', '周五', '周六'];
+    return `${daysEn[date.getDay()]} · ${daysZh[date.getDay()]}`;
+};
+
 // Determine the factory hub of an order
 const getOrderFactory = (order: any): FactoryHub => {
     const orig = (order.trip_origin || '').toUpperCase().trim();
@@ -57,10 +67,24 @@ const getOrderFactory = (order: any): FactoryHub => {
     if (orig.includes('JOHOR') || orig === 'J1') return 'Johor';
     if (orig.includes('TAIPING') || orig === 'T1' || orig.includes('OPM') || orig.includes('SPD')) return 'Taiping';
 
-    const text = `${order.zone || ''} ${order.delivery_address || ''}`.toLowerCase();
-    if (text.includes('nilai') || text.includes('seremban') || text.includes('kl') || text.includes('selangor') || text.includes('kuala lumpur')) return 'Nilai';
-    if (text.includes('kelantan') || text.includes('kota bharu') || text.includes('terengganu')) return 'Kelantan';
-    if (text.includes('johor') || text.includes('skudai') || text.includes('senai') || text.includes('jb')) return 'Johor';
+    const text = `${order.zone || ''} ${order.delivery_address || ''} ${order.notes || ''}`.toLowerCase();
+    
+    // 1. Check Johor keywords, towns & postcodes (80000 - 86999)
+    if (
+        text.includes('johor') || text.includes('skudai') || text.includes('senai') || text.includes('jb') ||
+        text.includes('batu pahat') || text.includes('muar') || text.includes('kluang') || text.includes('kulai') ||
+        text.includes('segamat') || text.includes('pontian') || text.includes('pasir gudang') || text.includes('tangkak') ||
+        text.includes('kota tinggi') || text.includes('mersing') || text.includes('yong peng') || text.includes('kempas') ||
+        text.includes('tampoi') || text.includes('ulu tiram') || text.includes('masai') || text.includes('plentong') ||
+        /\b8[0-6]\d{3}\b/.test(text)
+    ) return 'Johor';
+
+    // 2. Check Nilai (Central Hub) keywords
+    if (text.includes('nilai') || text.includes('seremban') || text.includes('kl') || text.includes('selangor') || text.includes('kuala lumpur') || text.includes('melaka') || text.includes('malacca') || text.includes('putrajaya')) return 'Nilai';
+
+    // 3. Check Kelantan keywords
+    if (text.includes('kelantan') || text.includes('kota bharu') || text.includes('terengganu') || text.includes('tumpat') || text.includes('pasir mas') || text.includes('bachok') || text.includes('pasir puteh')) return 'Kelantan';
+
     return 'Taiping';
 };
 
@@ -209,6 +233,7 @@ const OrderSummary: React.FC<OrderSummaryProps> = ({ user }) => {
     const [uploadingTarget, setUploadingTarget] = useState<{ type: 'trip' | 'order'; id: string } | null>(null);
     const [previewImageUrl, setPreviewImageUrl] = useState<string | null>(null);
     const fileInputRef = useRef<HTMLInputElement>(null);
+    const fetchIdRef = useRef(0);
 
     // Self-Pickup Handover States
     const [handoverTarget, setHandoverTarget] = useState<SalesOrder | null>(null);
@@ -316,6 +341,7 @@ const OrderSummary: React.FC<OrderSummaryProps> = ({ user }) => {
     // ─── FETCH ORDERS & TRIPS ─────────────────────────────────────────────────
 
     const fetchOrdersAndTrips = useCallback(async () => {
+        const fetchId = ++fetchIdRef.current;
         setLoading(true);
         try {
             let query = supabase
@@ -330,12 +356,14 @@ const OrderSummary: React.FC<OrderSummaryProps> = ({ user }) => {
             } else if (dateMode === 'all_active') {
                 // All active open orders
             } else {
-                // today / tomorrow / custom
-                query = query.or(`order_date.eq.${selectedDate},deadline.eq.${selectedDate}`);
+                // today / tomorrow / custom:
+                // Delivery date is strictly deadline; only fall back to order_date if deadline is null
+                query = query.or(`deadline.eq.${selectedDate},and(deadline.is.null,order_date.eq.${selectedDate})`);
             }
 
             const { data: ordersData, error: ordersErr } = await query;
             if (ordersErr) throw ordersErr;
+            if (fetchId !== fetchIdRef.current) return;
 
             const mappedOrders: SalesOrder[] = (ordersData || []).map(o => ({
                 id: o.id,
@@ -357,28 +385,31 @@ const OrderSummary: React.FC<OrderSummaryProps> = ({ user }) => {
                 preparation_photo_url: o.preparation_photo_url,
             }));
 
-            setOrders(mappedOrders);
-
             // Fetch associated trips_v2
             const tripIds = Array.from(new Set(mappedOrders.map(o => o.trip_id).filter(Boolean))) as string[];
+            let tMap: Record<string, any> = {};
             if (tripIds.length > 0) {
                 const { data: tripsData } = await supabase
                     .from('trips_v2')
                     .select('*')
                     .in('id', tripIds);
 
-                const tMap: Record<string, any> = {};
+                if (fetchId !== fetchIdRef.current) return;
+
                 (tripsData || []).forEach(t => {
                     tMap[t.id] = t;
                 });
-                setTripsMap(tMap);
-            } else {
-                setTripsMap({});
             }
+
+            if (fetchId !== fetchIdRef.current) return;
+            setOrders(mappedOrders);
+            setTripsMap(tMap);
         } catch (err) {
             console.error("Failed to fetch orders/trips:", err);
         } finally {
-            setLoading(false);
+            if (fetchId === fetchIdRef.current) {
+                setLoading(false);
+            }
         }
     }, [selectedDate, dateMode]);
 
@@ -403,6 +434,16 @@ const OrderSummary: React.FC<OrderSummaryProps> = ({ user }) => {
         const pickups: SelfPickupItem[] = [];
 
         orders.forEach(order => {
+            // Client-side date filter safeguard:
+            // When in a specific date mode (today, tomorrow, custom), strictly only include orders
+            // whose effective delivery date (deadline or order_date if null) matches selectedDate.
+            const effectiveDate = (order.deadline || order.orderDate || '').slice(0, 10);
+            if (dateMode !== 'pending_prep' && dateMode !== 'all_active') {
+                if (effectiveDate !== selectedDate) {
+                    return; // Skip orders belonging to other delivery dates
+                }
+            }
+
             const rollsInOrder = (order.items || []).reduce((sum, it) => sum + (Number(it.quantity) || 0), 0);
             const noteText = `${order.notes || ''} ${(order as any).terms || ''}`.toLowerCase();
 
@@ -453,8 +494,8 @@ const OrderSummary: React.FC<OrderSummaryProps> = ({ user }) => {
                 const isExplicitSeq = order.tripSequence && order.tripSequence !== 999;
                 const tripTag = extracted.tripTag || (isExplicitSeq ? `Trip ${order.tripSequence}` : 'Trip 1');
 
-                tripKey = `grouped_${driverId || 'unassigned'}_${dateKey}_${tripTag.replace(/\s+/g, '_')}`;
-                tripNum = `TRIP-${driverPrefix}-${dateCode}-${tripTag}`;
+                tripKey = `grouped_${factory}_${driverId || 'unassigned'}_${dateKey}_${tripTag.replace(/\s+/g, '_')}`;
+                tripNum = `TRIP-${factory.toUpperCase()}-${driverPrefix}-${dateCode}-${tripTag}`;
             }
 
             if (!groups[tripKey]) {
@@ -540,7 +581,7 @@ const OrderSummary: React.FC<OrderSummaryProps> = ({ user }) => {
         });
 
         return { trips: Object.values(groups), pickupOrders: pickups };
-    }, [orders, tripsMap, drivers, lorries]);
+    }, [orders, tripsMap, drivers, lorries, selectedDate, dateMode]);
 
     // ─── FILTER TRIPS BY FACTORY & WAREHOUSE ───────────────────────────────────
 
@@ -969,6 +1010,11 @@ const OrderSummary: React.FC<OrderSummaryProps> = ({ user }) => {
                                 }}
                                 className="bg-transparent border-none text-white font-mono text-xs focus:ring-0 outline-none [color-scheme:dark]"
                             />
+                            {selectedDate && (
+                                <span className="text-[10px] font-bold font-mono px-1.5 py-0.5 rounded bg-slate-800 text-slate-300 border border-slate-700/60 shrink-0">
+                                    {getDayOfWeekBadge(selectedDate)}
+                                </span>
+                            )}
                         </div>
 
                         <button
@@ -1351,6 +1397,11 @@ const TripColumn: React.FC<TripColumnProps> = ({
                                                     <span className="font-mono text-[10px] font-bold text-slate-300 bg-slate-800 px-1.5 py-0.5 rounded border border-slate-700 flex items-center gap-1">
                                                         <Truck size={10} className="text-slate-400" />
                                                         {trip.lorryPlate}
+                                                    </span>
+                                                )}
+                                                {trip.createdDate && (
+                                                    <span className="font-mono text-[10px] text-slate-400 bg-slate-950/70 px-1.5 py-0.5 rounded border border-slate-800">
+                                                        📅 {trip.createdDate}
                                                     </span>
                                                 )}
                                             </div>

@@ -280,11 +280,11 @@ export async function searchEntities(
         promises.push(Promise.resolve([]));
     }
 
-    // Machines (sys_machines_v2)
+    // Machines (sys_machines)
     if (!categoryFilter || categoryFilter === 'machines') {
         promises.push(
             supabase
-                .from('sys_machines_v2')
+                .from('sys_machines')
                 .select('machine_id, name, status, current_sku, model')
                 .or(`machine_id.ilike.${pattern},name.ilike.${pattern}`)
                 .limit(limit)
@@ -308,11 +308,11 @@ export async function searchEntities(
         promises.push(Promise.resolve([]));
     }
 
-    // Items (master_items_v2)
+    // Items (master_items)
     if (!categoryFilter || categoryFilter === 'items') {
         promises.push(
             supabase
-                .from('master_items_v2')
+                .from('master_items')
                 .select('sku, name, category, uom')
                 .or(`sku.ilike.${pattern},name.ilike.${pattern}`)
                 .limit(limit)
@@ -842,7 +842,7 @@ export async function executeOmniAction(
         if (draft.intent === 'report_machine_issue') {
             const { machineId, reason } = draft.payload;
             await supabase
-                .from('sys_machines_v2')
+                .from('sys_machines')
                 .update({ status: 'MAINTENANCE' })
                 .eq('machine_id', machineId);
 

@@ -50,36 +50,90 @@ export type DeliveryZone = string;
 export type DeliveryStatus = 'Pending' | 'In-Transit' | 'Delivered';
 
 export interface JobOrder {
-    Job_ID: string; // Document ID and display ID
-    id?: string; // Additional ID field often used in loops
-    salesOrderId?: string; // NEW: Link to Sales Order
+    // Canonical standard fields (camelCase)
+    jobId: string;
+    id: string; // convenient alias
+    Job_ID?: string; // @deprecated legacy alias
+    salesOrderId?: string;
     customer: string;
     product: string;
-    Product_SKU?: string; // Alias or specific field
-    target: number; // Target Quantity
-    Target_Qty?: number; // Alias often found in older code
-    produced: number;
+    productSku?: string;
+    Product_SKU?: string; // @deprecated legacy alias
+    targetQty: number;
+    target: number; // alias
+    Target_Qty?: number; // @deprecated legacy alias
+    producedQty: number;
+    produced: number; // alias
     status: 'Pending' | 'Backlog' | 'Scheduled' | 'Production' | 'Completed' | 'Paused';
-    Status?: string; // Support capitalized legacy field
-    machine: string;
-    Machine_ID?: string; // Alias
-    Priority: 'High' | 'Normal' | 'Low';
-    Start_Date?: string;
+    Status?: string; // @deprecated legacy alias
+    machineId: string;
+    machine: string; // alias
+    Machine_ID?: string; // @deprecated legacy alias
+    priority: 'High' | 'Normal' | 'Low';
+    Priority?: 'High' | 'Normal' | 'Low'; // @deprecated legacy alias
+    startDate?: string;
+    Start_Date?: string; // @deprecated legacy alias
     notes?: string;
-    factoryId?: string; // NEW: Multi-factory support
-    recipeId?: string; // NEW: Link to specific Recipe (BOM)
+    factoryId?: string;
+    recipeId?: string;
 
     // Logistics Fields
     deliveryAddress?: string;
     deliveryZone?: string;
     deliveryStatus?: DeliveryStatus;
-    driverId?: string; // ID of the assigned Lorry/Driver
-    orderIndex?: number; // For Kanban ordering
+    driverId?: string;
+    orderIndex?: number;
 
     // Feed / Chat Fields
-    type?: 'Production' | 'Maintenance' | 'System' | 'Note'; // Default 'Production'
-    originalText?: string; // The raw text entered by user
-    created_at?: string; // Timestamp
+    type?: 'Production' | 'Maintenance' | 'System' | 'Note';
+    originalText?: string;
+    created_at?: string;
+}
+
+// Canonical Master Data Entities
+export interface MasterItem {
+    sku: string;
+    name: string;
+    type: 'Raw' | 'FG' | 'WiP' | string;
+    category: 'Resin' | 'BubbleWrap' | 'Packaging' | string;
+    uom: string;
+    status: 'Active' | 'Inactive' | string;
+    minStockLevel?: number;
+    photoUrl?: string;
+    createdAt?: string;
+}
+
+export interface SysMachine {
+    machineId: string; // machine_id
+    id?: string;
+    name: string;
+    type?: string;
+    status: 'Running' | 'Idle' | 'Maintenance' | string;
+    currentSku?: string;
+    hourlyRate?: number;
+    factoryId?: string;
+}
+
+export interface StockLedgerEntry {
+    id: string;
+    sku: string;
+    locId?: string;
+    changeQty: number;
+    eventType: string;
+    refDoc?: string;
+    notes?: string;
+    timestamp: string;
+}
+
+export interface InventoryViewItem {
+    sku: string;
+    name: string;
+    type?: string;
+    category?: string;
+    uom: string;
+    locId?: string;
+    currentStock: number;
+    lastUpdated?: string;
 }
 
 // 13. Sales Order (NEW)
@@ -232,37 +286,52 @@ export interface Lorry {
     maxWeightKg?: number;
 }
 
-// 4. Inventory Item (Raw Material)
+// 4. Inventory Item
 export interface InventoryItem {
-    Raw_Material_ID: string;
-    Material_Name: string;
-    Stock_Kg: number;
+    // Canonical fields
+    sku?: string;
+    name?: string;
+    currentStock?: number;
+    uom?: string;
+    category?: string;
+    status?: string;
+    locId?: string;
+
+    // Legacy fields for backwards compatibility
+    Raw_Material_ID?: string;
+    Material_Name?: string;
+    Stock_Kg?: number;
     Unit_Price?: number;
     Supplier?: string;
     Last_Updated?: string;
-    factoryId?: string; // NEW: Multi-factory support
-
-    // Legacy / Alternative Fields for backwards compatibility
+    factoryId?: string;
     Product_Name?: string;
-    name?: string;
     qty?: number;
     id?: string;
     SKU_ID?: string;
-
-    // V2 Export Fields
-    category?: string;
-    status?: string;
     unit?: string;
     loc_id?: string;
 }
 
 // 5. Production Log (Audit Trail)
 export interface ProductionLog {
-    Log_ID: string;
-    Timestamp: string;
-    Job_ID: string;
-    Operator_Email: string | null;
-    Output_Qty: number;
+    // Canonical fields
+    logId?: string;
+    jobId?: string;
+    machineId?: string;
+    operatorId?: string;
+    operatorName?: string;
+    operatorEmail?: string | null;
+    outputQty?: number;
+    note?: string;
+    createdAt?: string;
+
+    // Legacy fields for backwards compatibility
+    Log_ID?: string;
+    Timestamp?: string;
+    Job_ID?: string;
+    Operator_Email?: string | null;
+    Output_Qty?: number;
     GPS_Coordinates?: string;
     AI_Verification?: {
         Verified: boolean;

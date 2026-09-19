@@ -1648,7 +1648,7 @@ async function handleOmniCommand(req: VercelRequest, res: VercelResponse) {
 
         if (isStatQuery) {
             const [machinesRes, ordersRes] = await Promise.all([
-                supabase.from('sys_machines_v2').select('machine_id, status'),
+                supabase.from('sys_machines').select('machine_id, status'),
                 supabase.from('sales_orders').select('id, status, zone').limit(100)
             ]);
 

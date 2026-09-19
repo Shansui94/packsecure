@@ -1,64 +1,61 @@
-import { useState, useEffect } from 'react';
+import { useState, useEffect, lazy, Suspense } from 'react';
 import Layout from './components/Layout';
 import ErrorBoundary from './components/ErrorBoundary';
-// import Dashboard from './pages/Dashboard';
-import ProductionLog from './pages/ProductionLog';
-import Inventory from './pages/Inventory';
-import Login from './pages/Login';
-import Register from './pages/Register';
+import PageLoader from './components/PageLoader';
 
-import ProductionControl from './pages/ProductionControl';
-// import ProductionPlanning from './pages/ProductionPlanning';
-import LiveStock from './pages/LiveStock';
-import LiveFleet from './pages/LiveFleet';
-import StockMovement from './pages/StockMovement';
-import StockAudit from './pages/StockAudit';
-import AuditReport from './pages/AuditReport';
-import ProductLibrary from './pages/ProductLibrary';
-import DeliveryOrderManagement from './pages/DeliveryOrderManagement';
-import DriverDelivery from './pages/DriverDelivery';
-import DriverHistory from './pages/DriverHistory';
-import LorryService from './pages/LorryService';
-import MaintenanceManagement from './pages/MaintenanceManagement';
-import LorryManagement from './pages/LorryManagement';
-// import Dispatch from './pages/Dispatch';
-// import LoadingDock from './pages/LoadingDock';
-import MachineLabels from './pages/MachineLabels';
-import ExecutiveReports from './pages/ExecutiveReports';
-import DataManagement from './pages/DataManagement';
-import ReportHistory from './pages/ReportHistory';
-import ProductionReports from './pages/ProductionReports';
-import UnderConstruction from './pages/UnderConstruction';
+// --- Dynamic Route-based Code Splitting (React.lazy) ---
+const ProductionLog = lazy(() => import('./pages/ProductionLog'));
+const Inventory = lazy(() => import('./pages/Inventory'));
+const Login = lazy(() => import('./pages/Login'));
+const Register = lazy(() => import('./pages/Register'));
+const ProductionControl = lazy(() => import('./pages/ProductionControl'));
+const LiveStock = lazy(() => import('./pages/LiveStock'));
+const LiveFleet = lazy(() => import('./pages/LiveFleet'));
+const StockMovement = lazy(() => import('./pages/StockMovement'));
+const StockAudit = lazy(() => import('./pages/StockAudit'));
+const AuditReport = lazy(() => import('./pages/AuditReport'));
+const ProductLibrary = lazy(() => import('./pages/ProductLibrary'));
+const DeliveryOrderManagement = lazy(() => import('./pages/DeliveryOrderManagement'));
+const DriverDelivery = lazy(() => import('./pages/DriverDelivery'));
+const DriverHistory = lazy(() => import('./pages/DriverHistory'));
+const LorryService = lazy(() => import('./pages/LorryService'));
+const MaintenanceManagement = lazy(() => import('./pages/MaintenanceManagement'));
+const LorryManagement = lazy(() => import('./pages/LorryManagement'));
+const MachineLabels = lazy(() => import('./pages/MachineLabels'));
+const ExecutiveReports = lazy(() => import('./pages/ExecutiveReports'));
+const DataManagement = lazy(() => import('./pages/DataManagement'));
+const ReportHistory = lazy(() => import('./pages/ReportHistory'));
+const ProductionReports = lazy(() => import('./pages/ProductionReports'));
+const UnderConstruction = lazy(() => import('./pages/UnderConstruction'));
+const UpdatePassword = lazy(() => import('./pages/UpdatePassword'));
+const Profile = lazy(() => import('./pages/Profile'));
+const OrderSummary = lazy(() => import('./pages/OrderSummary'));
+const HRPortal = lazy(() => import('./pages/HRPortal'));
+const IoTManagement = lazy(() => import('./pages/IoTManagement'));
+const Notes = lazy(() => import('./pages/Notes'));
+const Tasks = lazy(() => import('./pages/Tasks'));
+const FactoryLiveOS = lazy(() => import('./pages/FactoryLiveOS'));
+const DevLog = lazy(() => import('./pages/DevLog'));
+const LeaveCalendar = lazy(() => import('./pages/LeaveCalendar'));
+const SOPCenter = lazy(() => import('./pages/SOPCenter'));
+const WorkPhotoLog = lazy(() => import('./pages/WorkPhotoLog'));
+const RawMaterialMobilePortal = lazy(() => import('./pages/RawMaterialMobilePortal'));
+const YieldControl = lazy(() => import('./pages/YieldControl'));
+const PersonalMonthlyReport = lazy(() => import('./pages/PersonalMonthlyReport'));
+const MachineSchedule = lazy(() => import('./pages/MachineSchedule'));
+const ActivityLogs = lazy(() => import('./pages/ActivityLogs'));
+const FloorPlan = lazy(() => import('./pages/FloorPlan'));
+const WilliamDocumentCenter = lazy(() => import('./pages/WilliamDocumentCenter'));
+const BossCoPilot = lazy(() => import('./pages/BossCoPilot'));
+const SystemDocsEditor = lazy(() => import('./pages/SystemDocsEditor'));
+const StaffStatusSignOff = lazy(() => import('./pages/StaffStatusSignOff'));
 
-import UpdatePassword from './pages/UpdatePassword';
-import Profile from './pages/Profile';
-import OrderSummary from './pages/OrderSummary'; // New Page
-// import CustomerImport from './pages/CustomerImport'; // Added Import Page
-// import UniversalIntake from './pages/UniversalIntake';
-// import SimpleStock from './pages/SimpleStock';
-import HRPortal from './pages/HRPortal';
-import IoTManagement from './pages/IoTManagement';
-import Notes from './pages/Notes';
-import Tasks from './pages/Tasks';
-import FactoryLiveOS from './pages/FactoryLiveOS';
-import DevLog from './pages/DevLog';
-import LeaveCalendar from './pages/LeaveCalendar';
-import SOPCenter from './pages/SOPCenter';
-import WorkPhotoLog from './pages/WorkPhotoLog';
-import RawMaterialMobilePortal from './pages/RawMaterialMobilePortal';
-import YieldControl from './pages/YieldControl';
-import PersonalMonthlyReport from './pages/PersonalMonthlyReport';
-import MachineSchedule from './pages/MachineSchedule';
-import ActivityLogs from './pages/ActivityLogs';
-import FloorPlan from './pages/FloorPlan';
-import WilliamDocumentCenter from './pages/WilliamDocumentCenter';
-import BossCoPilot from './pages/BossCoPilot';
-import SystemDocsEditor from './pages/SystemDocsEditor';
-import StaffStatusSignOff from './pages/StaffStatusSignOff';
 
 import { User, UserRole, InventoryItem, ProductionLog as ProductionLogType, JobOrder } from './types';
 import { mergeAllowedPages, computeEffectivePermissions } from './utils/pageAccess';
-import AIAgentWidget from './components/AIAgentWidget';
+
+const AIAgentWidget = lazy(() => import('./components/AIAgentWidget'));
+
 
 import { supabase } from './services/supabase';
 import { Session } from '@supabase/supabase-js';
@@ -520,15 +517,20 @@ function App() {
                 const { data } = await supabase.from('job_orders').select('*').order('order_index', { ascending: true });
                 if (data) {
                     const mapped: JobOrder[] = data.map(job => ({
+                        jobId: job.job_id,
                         Job_ID: job.job_id,
-                        id: job.job_id, // alias
+                        id: job.job_id,
                         customer: job.customer,
                         product: job.product,
-                        target: job.target_qty,
-                        produced: job.produced_qty,
+                        targetQty: Number(job.target_qty || 0),
+                        target: Number(job.target_qty || 0),
+                        producedQty: Number(job.produced_qty || 0),
+                        produced: Number(job.produced_qty || 0),
                         status: job.status as any,
+                        machineId: job.machine,
                         machine: job.machine,
-                        Priority: job.priority as any,
+                        priority: (job.priority as any) || 'Normal',
+                        Priority: (job.priority as any) || 'Normal',
                         deliveryZone: job.delivery_zone as any,
                         deliveryStatus: job.delivery_status as any,
                         deliveryAddress: job.delivery_address || undefined,
@@ -627,7 +629,11 @@ function App() {
     const isLabelMode = window.location.search.includes('mode=labels');
 
     if (isLabelMode) {
-        return <MachineLabels />;
+        return (
+            <Suspense fallback={<PageLoader message="正在加载标签打印模块..." />}>
+                <MachineLabels />
+            </Suspense>
+        );
     }
 
     if (!isLoggedIn) {
@@ -635,26 +641,33 @@ function App() {
         if (isIoTMode) {
             return (
                 <ErrorBoundary>
-                    <ProductionControl user={null} jobs={[]} />
+                    <Suspense fallback={<PageLoader message="正在载入产线控制系统..." />}>
+                        <ProductionControl user={null} jobs={[]} />
+                    </Suspense>
                 </ErrorBoundary>
             );
         }
         if (activePage === 'register') {
             return (
                 <ErrorBoundary>
-                    <Register onNavigate={setActivePage} />
+                    <Suspense fallback={<PageLoader message="正在加载注册页面..." />}>
+                        <Register onNavigate={setActivePage} />
+                    </Suspense>
                 </ErrorBoundary>
             );
         }
         return (
             <ErrorBoundary>
-                <Login
-                    onLogin={handleLogin}
-                    onNavigate={setActivePage}
-                />
+                <Suspense fallback={<PageLoader message="正在加载登录系统..." />}>
+                    <Login
+                        onLogin={handleLogin}
+                        onNavigate={setActivePage}
+                    />
+                </Suspense>
             </ErrorBoundary>
         );
     }
+
 
     // Machine Check-In (DISABLED per user request "delete shift")
     // if (user?.role === 'Operator' && !loadingAttendance && !currentShift) {
@@ -824,7 +837,9 @@ function App() {
                     </div>
                     {/* Main Content Area */}
                     <div className="flex-1 overflow-y-auto relative custom-scrollbar bg-[#09090b]">
-                        {renderContent()}
+                        <Suspense fallback={<PageLoader />}>
+                            {renderContent()}
+                        </Suspense>
                     </div>
                 </div>
             </ErrorBoundary>
@@ -834,12 +849,17 @@ function App() {
     return (
         <ErrorBoundary>
             <Layout activePage={activePage} setActivePage={setActivePage} userRole={user?.role} user={user} onLogout={handleLogout}>
-                {renderContent()}
-                <AIAgentWidget user={user} onNavigate={setActivePage} />
+                <Suspense fallback={<PageLoader />}>
+                    {renderContent()}
+                </Suspense>
+                <Suspense fallback={null}>
+                    <AIAgentWidget user={user} onNavigate={setActivePage} />
+                </Suspense>
 
             </Layout >
         </ErrorBoundary>
     );
+
 }
 
 export default App;

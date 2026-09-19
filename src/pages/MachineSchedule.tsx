@@ -3,6 +3,7 @@ import { supabase } from '../services/supabase';
 import { Clock, Package, BarChart3, ShieldCheck, User, CalendarDays, Settings2, Calendar as CalendarIcon, Download, Printer } from 'lucide-react';
 import { MACHINES } from '../data/factoryData';
 import { mytTodayYmd } from '../utils/mytDate';
+import { t } from '../utils/i18n';
 
 interface MachineRate {
     id: string;
@@ -449,8 +450,8 @@ const MachineSchedule: React.FC<{ user?: any; onNavigate?: (page: string) => voi
                         </button>
 
                         {onNavigate && (
-                            <button onClick={() => onNavigate('machine-labels')} className="flex items-center gap-2 px-4 py-2 rounded-xl font-bold text-sm transition-all duration-300 bg-white/5 text-gray-400 border border-white/10 hover:text-white hover:bg-white/10 cursor-pointer" title="打印机台二维码标签">
-                                <Printer size={16} /> QR Labels
+                            <button onClick={() => onNavigate('machine-labels')} className="flex items-center gap-2 px-4 py-2 rounded-xl font-bold text-sm transition-all duration-300 bg-white/5 text-gray-400 border border-white/10 hover:text-white hover:bg-white/10 cursor-pointer" title={t('Print machine QR code labels')}>
+                                <Printer size={16} /> {t('QR Labels')}
                             </button>
                         )}
 

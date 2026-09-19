@@ -44,11 +44,13 @@ import { supabase } from '../services/supabase';
 import { canAccessPage, computeEffectivePermissions } from '../utils/pageAccess';
 import { MODULE_GROUPS, MODULE_REGISTRY } from '../config/modules';
 import { useTranslation } from 'react-i18next';
-import PageLogicDrawer from './PageLogicDrawer';
 import { changeLanguage, LANGUAGES, t } from '../utils/i18n';
-import SmartIntakeModal from './SmartIntakeModal';
-import OmniCommandBar from './OmniCommandBar';
-import AppHubModal from './AppHubModal';
+
+const PageLogicDrawer = React.lazy(() => import('./PageLogicDrawer'));
+const SmartIntakeModal = React.lazy(() => import('./SmartIntakeModal'));
+const OmniCommandBar = React.lazy(() => import('./OmniCommandBar'));
+const AppHubModal = React.lazy(() => import('./AppHubModal'));
+
 
 interface LayoutProps {
     children: React.ReactNode;
@@ -151,7 +153,10 @@ const Layout: React.FC<LayoutProps> = ({ children, activePage, setActivePage, us
         'PIN: ': { zh: '工号: ', en: 'PIN: ' },
         'System v7.0 • Data Center Active': { zh: '系统 v7.0 • 数据中心运行中', en: 'System v7.0 • Data Center Active' },
         'System Language / 系统语言': { zh: '系统语言', en: 'Language' },
-        'View My Profile / 个人主页': { zh: '个人主页', en: 'Profile' }
+        'View My Profile / 个人主页': { zh: '个人主页', en: 'Profile' },
+        'More Collapsed Features': { zh: '更多已收起功能', en: 'More Collapsed Features' },
+        'Open App Hub & Menu Manager': { zh: '打开全功能中心与菜单管理', en: 'Open App Hub & Menu Manager' },
+        'Pin to Sidebar': { zh: '固定至侧栏常驻', en: 'Pin to Sidebar' }
     };
 
     const translateUI = (text: string) => {
@@ -540,12 +545,12 @@ const Layout: React.FC<LayoutProps> = ({ children, activePage, setActivePage, us
                                                     ? 'w-full justify-center py-2.5 text-amber-400 hover:bg-white/5' 
                                                     : 'flex-1 py-2 px-3 text-gray-400 hover:text-white hover:bg-white/5'
                                             }`}
-                                            title={useCollapsedNavLayout ? `更多已收起功能 (${collapsedModules.length})` : undefined}
+                                            title={useCollapsedNavLayout ? `${translateUI('More Collapsed Features')} (${collapsedModules.length})` : undefined}
                                         >
                                             <Archive size={15} className="text-amber-400 shrink-0" />
                                             {showNavLabels && (
                                                 <div className="flex items-center justify-between flex-1 min-w-0 pr-1">
-                                                    <span className="truncate">更多已收起功能</span>
+                                                    <span className="truncate">{translateUI('More Collapsed Features')}</span>
                                                     <span className="bg-amber-500/20 text-amber-300 px-1.5 py-0.5 text-[10px] rounded font-mono ml-1">
                                                         {collapsedModules.length}
                                                     </span>
@@ -560,7 +565,7 @@ const Layout: React.FC<LayoutProps> = ({ children, activePage, setActivePage, us
                                             <button
                                                 type="button"
                                                 onClick={() => setShowAppHubModal(true)}
-                                                title="打开全功能中心与菜单管理"
+                                                title={translateUI('Open App Hub & Menu Manager')}
                                                 className="p-2 text-gray-500 hover:text-amber-300 hover:bg-white/5 rounded-xl transition cursor-pointer shrink-0 ml-1"
                                             >
                                                 <Layers size={14} />
@@ -595,7 +600,7 @@ const Layout: React.FC<LayoutProps> = ({ children, activePage, setActivePage, us
                                                                 e.stopPropagation();
                                                                 handleToggleOverride(mod.id, true);
                                                             }}
-                                                            title="固定至侧栏常驻"
+                                                            title={translateUI('Pin to Sidebar')}
                                                             className="p-1 text-gray-600 hover:text-amber-400 opacity-0 group-hover/item:opacity-100 transition cursor-pointer"
                                                         >
                                                             <Pin size={11} />
@@ -774,39 +779,42 @@ const Layout: React.FC<LayoutProps> = ({ children, activePage, setActivePage, us
                         {children}
                     </div>
 
-                    <PageLogicDrawer 
-                        activePage={activePage} 
-                        userRole={userRole} 
-                        user={user} 
-                        setActivePage={setActivePage} 
-                    />
+                    <React.Suspense fallback={null}>
+                        <PageLogicDrawer 
+                            activePage={activePage} 
+                            userRole={userRole} 
+                            user={user} 
+                            setActivePage={setActivePage} 
+                        />
 
-                    <SmartIntakeModal 
-                        currentUser={user} 
-                        pageContext={{ activePage, userRole }} 
-                    />
+                        <SmartIntakeModal 
+                            currentUser={user} 
+                            pageContext={{ activePage, userRole }} 
+                        />
 
-                    <OmniCommandBar 
-                        currentUser={user} 
-                        allowedPageIds={dbAllowedPages} 
-                        onNavigate={(pageId) => setActivePage(pageId)} 
-                    />
+                        <OmniCommandBar 
+                            currentUser={user} 
+                            allowedPageIds={dbAllowedPages} 
+                            onNavigate={(pageId) => setActivePage(pageId)} 
+                        />
 
-                    <AppHubModal
-                        isOpen={showAppHubModal}
-                        onClose={() => setShowAppHubModal(false)}
-                        onNavigate={(pageId) => {
-                            setActivePage(pageId);
-                            setIsMobileMenuOpen(false);
-                        }}
-                        customOverrides={customOverrides}
-                        onToggleOverride={handleToggleOverride}
-                        onResetOverrides={handleResetOverrides}
-                        showAllModules={showAllModules}
-                        onToggleShowAll={handleToggleShowAll}
-                        hasAccess={hasAccess}
-                        activePage={activePage}
-                    />
+                        <AppHubModal
+                            isOpen={showAppHubModal}
+                            onClose={() => setShowAppHubModal(false)}
+                            onNavigate={(pageId) => {
+                                setActivePage(pageId);
+                                setIsMobileMenuOpen(false);
+                            }}
+                            customOverrides={customOverrides}
+                            onToggleOverride={handleToggleOverride}
+                            onResetOverrides={handleResetOverrides}
+                            showAllModules={showAllModules}
+                            onToggleShowAll={handleToggleShowAll}
+                            hasAccess={hasAccess}
+                            activePage={activePage}
+                        />
+                    </React.Suspense>
+
                 </main>
             </div>
 
