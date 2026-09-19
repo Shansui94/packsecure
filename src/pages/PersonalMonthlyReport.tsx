@@ -2148,14 +2148,28 @@ const PersonalMonthlyReport: React.FC<Props> = ({ user }) => {
             } else if (isDriver && !isFuture) {
                 // Driver on past dates or today
                 const deliveredTrips = dayDeliveries.filter(d => d.status === 'Delivered');
-                const activeTrips = dayDeliveries.filter(d => d.status === 'In-Transit' || d.status === 'Arrived');
+                const activeTrips = dayDeliveries.filter(d => d.status === 'In-Transit' || d.status === 'Arrived' || d.status === 'Loaded');
 
                 const sortedStarts = dayOdoLogs.filter(o => o.log_type === 'start').sort((a, b) => new Date(a.created_at).getTime() - new Date(b.created_at).getTime());
                 const sortedEnds = dayOdoLogs.filter(o => o.log_type === 'end').sort((a, b) => new Date(b.created_at).getTime() - new Date(a.created_at).getTime());
                 const startOdo = sortedStarts[0];
                 const endOdo = sortedEnds[0];
 
-                const hasDriverStarted = Boolean(startOdo || activeTrips.length > 0 || deliveredTrips.length > 0 || (isPast && dayOdoLogs.length > 0));
+                const nextDayDate = new Date(selectedYear, selectedMonth - 1, i + 1);
+                const nextDayStr = `${nextDayDate.getFullYear()}-${String(nextDayDate.getMonth() + 1).padStart(2, '0')}-${String(nextDayDate.getDate()).padStart(2, '0')}`;
+
+                // Check if day's only odo log is an early morning end-odo from yesterday's night trip
+                const isOvernightEndFromYesterday = dayOdoLogs.length > 0 &&
+                    sortedStarts.length === 0 &&
+                    dayDeliveries.length === 0 &&
+                    dayOdoLogs.every(o => o.log_type === 'end' && new Date(o.created_at).getHours() < 9);
+
+                const hasDriverStarted = !isOvernightEndFromYesterday && Boolean(
+                    startOdo || 
+                    activeTrips.length > 0 || 
+                    deliveredTrips.length > 0 || 
+                    (dayOdoLogs.some(o => o.log_type === 'start' || (o.log_type === 'end' && new Date(o.created_at).getHours() >= 9)))
+                );
 
                 if (hasDriverStarted) {
                     hasAttendance = true;
@@ -2173,11 +2187,8 @@ const PersonalMonthlyReport: React.FC<Props> = ({ user }) => {
                     }
                     shiftStart = inDate.toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' });
 
-                    // End time: strictly bounded to dateStr
+                    // End time: check same day endOdo first
                     let outDate: Date | null = null;
-                    const podTimes = deliveredTrips.map(d => d.pod_timestamp).filter(ts => matchDate(ts, dateStr)).sort();
-                    const latestPodIso = podTimes.length > 0 ? podTimes[podTimes.length - 1] : null;
-
                     if (endOdo?.created_at && matchDate(endOdo.created_at, dateStr)) {
                         const candidateEnd = new Date(endOdo.created_at);
                         if (candidateEnd.getTime() > inDate.getTime()) {
@@ -2185,8 +2196,29 @@ const PersonalMonthlyReport: React.FC<Props> = ({ user }) => {
                         }
                     }
 
-                    if (!outDate && latestPodIso) {
-                        outDate = new Date(latestPodIso);
+                    // If no valid same-day endOdo, check if trip was overnight and ended next morning (within 16 hours)
+                    let matchedNextDayEnd: any = null;
+                    if (!outDate) {
+                        matchedNextDayEnd = (odometerLogs || []).find(o => 
+                            o.log_type === 'end' && 
+                            matchDate(o.created_at, nextDayStr) && 
+                            new Date(o.created_at).getTime() > inDate.getTime() && 
+                            (new Date(o.created_at).getTime() - inDate.getTime()) <= 16 * 3600000
+                        );
+                        if (matchedNextDayEnd) {
+                            outDate = new Date(matchedNextDayEnd.created_at);
+                        }
+                    }
+
+                    // Next check latest POD timestamp
+                    if (!outDate) {
+                        const podTimes = deliveredTrips.map(d => d.pod_timestamp).filter(Boolean).filter(ts => {
+                            const podT = new Date(ts).getTime();
+                            return podT > inDate.getTime() && (podT - inDate.getTime()) <= 16 * 3600000;
+                        }).sort();
+                        if (podTimes.length > 0) {
+                            outDate = new Date(podTimes[podTimes.length - 1]);
+                        }
                     }
 
                     if (outDate) {
@@ -2199,16 +2231,45 @@ const PersonalMonthlyReport: React.FC<Props> = ({ user }) => {
                         }
                     } else {
                         if (isPast) {
-                            // Completed past day without explicit clock-out: default to 05:00 PM
-                            outDate = new Date(`${dateStr}T17:00:00+08:00`);
-                            shiftEnd = outDate.toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' });
-                            const diffMs = outDate.getTime() - inDate.getTime();
-                            hoursWorked = Math.min(14, Math.max(2, Math.round((diffMs / 3600000) * 10) / 10));
+                            const defaultOut = new Date(`${dateStr}T17:00:00+08:00`);
+                            if (defaultOut.getTime() > inDate.getTime()) {
+                                outDate = defaultOut;
+                                shiftEnd = outDate.toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' });
+                                const diffMs = outDate.getTime() - inDate.getTime();
+                                hoursWorked = Math.min(14, Math.max(2, Math.round((diffMs / 3600000) * 10) / 10));
+                            } else {
+                                // Evening start fallback without explicit end odo: estimate based on trips
+                                const estimatedHours = Math.min(6, Math.max(3, dayDeliveries.length * 3));
+                                outDate = new Date(inDate.getTime() + estimatedHours * 3600000);
+                                shiftEnd = outDate.toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' });
+                                hoursWorked = estimatedHours;
+                            }
                         } else {
                             // Today & still in progress
                             shiftEnd = 'Aktif / Active';
                             const elapsed = (Date.now() - inDate.getTime()) / 3600000;
                             hoursWorked = Math.min(14, Math.max(0.5, Math.round(elapsed * 10) / 10));
+                        }
+                    }
+
+                    // If matchedNextDayEnd was used, ensure that photo is also included in dayPhotos for today
+                    if (matchedNextDayEnd && matchedNextDayEnd.photo_url) {
+                        const plate = lorryMap.get(matchedNextDayEnd.lorry_id) || 'Lori / Truck';
+                        const mileageFmt = matchedNextDayEnd.mileage != null ? `${Number(matchedNextDayEnd.mileage).toLocaleString()} km` : 'N/A';
+                        const catTitle = `🏁 Odometer Tamat / Shift End (${plate} - ${mileageFmt} [Subuh/Keesokan])`;
+                        if (!dayPhotos.some(p => p.id === matchedNextDayEnd.id)) {
+                            dayPhotos.push({
+                                id: matchedNextDayEnd.id,
+                                created_at: matchedNextDayEnd.created_at,
+                                category: catTitle,
+                                photo_url: matchedNextDayEnd.photo_url,
+                                risk_flag: false,
+                                type: 'odometer',
+                                log_type: 'end',
+                                mileage: matchedNextDayEnd.mileage,
+                                plate,
+                                badge_color: 'blue'
+                            });
                         }
                     }
                 } else {
@@ -3676,8 +3737,10 @@ const PersonalMonthlyReport: React.FC<Props> = ({ user }) => {
                                                 <button
                                                     type="button"
                                                     onClick={async () => {
-                                                        if (!window.confirm(`批准 ${selectedTrip.order_number} 的修改？\nApprove changes and mark as Loaded?`)) return;
-                                                        const { error } = await supabase.from('sales_orders').update({ status: 'Loaded' }).eq('id', selectedTrip.id);
+                                                        const isAlreadyDelivered = Boolean(selectedTrip.pod_photo_url || selectedTrip.pod_timestamp);
+                                                        const targetStatus = isAlreadyDelivered ? 'Delivered' : 'Loaded';
+                                                        if (!window.confirm(`批准 ${selectedTrip.order_number} 的修改？\nApprove changes and mark as ${targetStatus}?`)) return;
+                                                        const { error } = await supabase.from('sales_orders').update({ status: targetStatus }).eq('id', selectedTrip.id);
                                                         if (error) {
                                                             alert("Approval failed: " + error.message);
                                                         } else {

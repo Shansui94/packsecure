@@ -1359,14 +1359,16 @@ const DeliveryOrderManagement: React.FC<DeliveryOrderManagementProps> = ({ user 
             return;
         }
 
-        if (!window.confirm(`Approve changes for Order ${order.orderNumber}? \nThis will adjust stock for amendments and mark as Loaded.`)) return;
+        const isAlreadyDelivered = Boolean(order.pod_photo_url || (order as any).pod_timestamp);
+        const targetStatus = isAlreadyDelivered ? 'Delivered' : 'Loaded';
+        if (!window.confirm(`Approve changes for Order ${order.orderNumber}? \nThis will adjust stock for amendments and mark as ${targetStatus}.`)) return;
 
         try {
             // 1. Let V6 DB Trigger handle the stock deduction/adjustment automatically.
 
             // 2. Update Status
             const { error } = await supabase.from('sales_orders').update({
-                status: 'Loaded'
+                status: targetStatus
             }).eq('id', order.id);
 
             if (error) throw error;
@@ -1376,7 +1378,7 @@ const DeliveryOrderManagement: React.FC<DeliveryOrderManagementProps> = ({ user 
             // Optimistic Update
             setOrders(prev => prev.map(o => {
                 if (o.id === order.id) {
-                    return { ...o, status: 'Loaded' };
+                    return { ...o, status: targetStatus };
                 }
                 return o;
             }));
