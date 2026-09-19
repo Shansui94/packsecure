@@ -2096,11 +2096,16 @@ const DeliveryOrderManagement: React.FC<DeliveryOrderManagementProps> = ({ user 
     };
 
     // --- DO & PHOTOS (MAX 15) UPLOAD & TRIP DISPATCH HANDLERS ---
-    const handleTripPdfUpload = async (e: React.ChangeEvent<HTMLInputElement>) => {
-        const rawFiles = e.target.files;
-        if (!rawFiles || rawFiles.length === 0) return;
-        const fileList = Array.from(rawFiles);
-        e.target.value = '';
+    const handleTripPdfUpload = async (e: React.ChangeEvent<HTMLInputElement> | File[]) => {
+        let fileList: File[] = [];
+        if (Array.isArray(e)) {
+            fileList = e;
+        } else {
+            const rawFiles = e.target.files;
+            if (!rawFiles || rawFiles.length === 0) return;
+            fileList = Array.from(rawFiles);
+            e.target.value = '';
+        }
 
         if (fileList.length > 15) {
             alert(t('Maksimum 15 fail (PDF/Foto) dibenarkan untuk satu Trip! Sila pilih semula.\nMaximum 15 files (PDF/Photos) allowed per trip! Please select again.'));
@@ -2172,7 +2177,7 @@ const DeliveryOrderManagement: React.FC<DeliveryOrderManagementProps> = ({ user 
                 throw new Error(t('No valid Delivery Orders detected in the uploaded PDFs. Try a clearer PDF.'));
             }
 
-            const initialOrigin = activeLocation || parsedTripOrigin || 'Taiping';
+            const initialOrigin = normalizeLocationCode(activeLocation || parsedTripOrigin || 'Taiping');
 
             // Execute 2-tier mapping alignment (customer_sku_mappings + master_items_v2)
             const processedOrders: ParsedDeliveryOrder[] = data.deliveryOrders.map(doOrder => {
@@ -2244,6 +2249,73 @@ const DeliveryOrderManagement: React.FC<DeliveryOrderManagementProps> = ({ user 
         } finally {
             setIsTripPdfParsing(false);
             setPdfParseProgress('');
+        }
+    };
+
+    const handleOpenNewTripModal = () => {
+        const now = new Date();
+        const dateCode = `${String(now.getFullYear()).slice(-2)}${String(now.getMonth() + 1).padStart(2, '0')}${String(now.getDate()).padStart(2, '0')}`;
+        const randomSeq = String(Math.floor(Math.random() * 900) + 100);
+        const genTripNo = `TRIP-${dateCode}-${randomSeq}`;
+        const initialOrigin = normalizeLocationCode(activeLocation || 'TAIPING');
+        const defaultLoc = getDefaultLocForOrigin(initialOrigin);
+
+        const initialBatch: ParsedTripDOBatch = {
+            deliveryOrders: [
+                {
+                    doNumber: `DO-${dateCode}-01`,
+                    customer: '',
+                    deliveryAddress: '',
+                    phone: '',
+                    remarks: '',
+                    items: [
+                        {
+                            product: '',
+                            rawProductName: '',
+                            quantity: 1,
+                            uom: 'Rolls',
+                            sku: '',
+                            sourceLocation: defaultLoc,
+                            isMatched: false
+                        }
+                    ],
+                    doTotal: 1
+                }
+            ],
+            totalDrops: 1,
+            totalRolls: 1,
+            primaryZone: '',
+            tripRemarks: ''
+        };
+
+        setParsedTripBatch(initialBatch);
+        setParsedTripNumber(genTripNo);
+        setParsedTripDate(getTodayStr());
+        setParsedDeliveryDate(getTomorrowStr());
+        setParsedTripOrigin(initialOrigin);
+        setParsedZone('');
+        setParsedTripRemark('');
+        setParsedDriverId('');
+        setParsedLorryId('');
+        setParsedDeliveryMethod('DELIVERY');
+        setIsParsedTripModalOpen(true);
+    };
+
+    const handleUpdateParsedCustomer = (idx: number, customerName: string) => {
+        handleUpdateParsedDO(idx, 'customer', customerName);
+        const matched = customerDB.find(
+            c => (c.name || '').toLowerCase().trim() === customerName.toLowerCase().trim()
+        );
+        if (matched) {
+            if (matched.address) {
+                handleUpdateParsedDO(idx, 'deliveryAddress', matched.address);
+            }
+            if (matched.zone) {
+                handleUpdateParsedDO(idx, 'zone', matched.zone);
+            }
+            if (matched.phone) {
+                handleUpdateParsedDO(idx, 'phone', matched.phone);
+            }
         }
     };
 
@@ -2735,6 +2807,7 @@ const DeliveryOrderManagement: React.FC<DeliveryOrderManagementProps> = ({ user 
                     trip_number: parsedTripNumber,
                     driver_id: parsedDriverId || null,
                     lorry_id: parsedLorryId || null,
+                    trip_origin: normalizeLocationCode(parsedTripOrigin) || 'TAIPING',
                     status: 'Planning',
                     created_at: new Date().toISOString()
                 });
@@ -4038,25 +4111,15 @@ const DeliveryOrderManagement: React.FC<DeliveryOrderManagementProps> = ({ user 
                         onChange={handleTripPdfUpload}
                     />
                     <button
-                        onClick={() => headerTripPdfInputRef.current?.click()}
-                        disabled={isTripPdfParsing}
-                        className="group relative bg-gradient-to-r from-amber-600 to-amber-500 hover:from-amber-500 hover:to-amber-400 text-white px-5 py-3 rounded-xl flex items-center gap-2.5 font-bold shadow-xl shadow-amber-950/20 transition-all active:scale-95 disabled:opacity-50"
-                        title="Upload up to 15 DO PDFs or Photos to create a Trip"
+                        onClick={handleOpenNewTripModal}
+                        className="group relative bg-gradient-to-r from-blue-600 via-indigo-600 to-blue-500 hover:from-blue-500 hover:to-indigo-500 text-white px-6 py-3 rounded-xl flex items-center gap-3 font-bold shadow-xl shadow-blue-900/25 transition-all active:scale-95 cursor-pointer"
+                        title={t('Create a new trip (Upload DOs, Scan, or Manual Entry)')}
                     >
-                        {isTripPdfParsing ? (
-                            <span className="w-4 h-4 border-2 border-white/40 border-t-white rounded-full animate-spin" />
-                        ) : (
-                            <ImagePlus size={18} className="text-amber-200" />
-                        )}
-                        <span>{isTripPdfParsing ? (pdfParseProgress || t('Parsing…')) : t('Upload DO & Photos (Max 15)')}</span>
-                    </button>
-
-                    <button
-                        onClick={() => setIsCreateModalOpen(true)}
-                        className="group relative bg-gradient-to-r from-blue-600 to-blue-500 hover:from-blue-500 hover:to-blue-400 text-white px-6 py-3 rounded-xl flex items-center gap-3 font-bold shadow-xl shadow-blue-900/20 transition-all active:scale-95"
-                    >
-                        <Plus size={20} />
-                        {t('New Trip')}
+                        <Plus size={20} className="transition-transform group-hover:rotate-90 duration-300 shrink-0" />
+                        <div className="flex flex-col items-start leading-tight">
+                            <span className="text-sm font-black tracking-wide">{t('New Trip')}</span>
+                            <span className="text-[10px] text-blue-200/90 font-medium">{t('AI单据解析 · 手工填单 · Excel')}</span>
+                        </div>
                     </button>
                 </div>
             </div>
@@ -5778,8 +5841,13 @@ const DeliveryOrderManagement: React.FC<DeliveryOrderManagementProps> = ({ user 
                             <div className="py-3 px-4 sm:px-6 border-b border-slate-800 flex justify-between items-center gap-3 bg-slate-900/50">
                                 <div className="min-w-0 flex-1 flex items-center gap-3">
                                     <h2 className="text-base sm:text-lg font-bold text-slate-100 flex items-center gap-2">
-                                        {editingOrderId ? <FileText className="text-blue-400" size={18} /> : <Plus className="text-blue-400" size={18} />}
-                                        {editingOrderId ? 'Edit Trip' : 'Create New Trip'}
+                                        <FileText className="text-blue-400" size={18} />
+                                        <span>{t('Edit Delivery Order / 查看与编辑送货单')}</span>
+                                        {editingOrderId && (
+                                            <span className="text-xs font-mono font-bold text-amber-300 bg-amber-500/10 px-2 py-0.5 rounded border border-amber-500/20">
+                                                #{orders.find(o => o.id === editingOrderId)?.orderNumber || editingOrderId.slice(0, 8)}
+                                            </span>
+                                        )}
                                     </h2>
                                     {toast && (
                                         <div className={`px-2.5 py-1 rounded-lg flex items-center gap-1.5 text-[10px] font-bold border ${toast.type === 'error' ? 'bg-red-900/40 text-red-200 border-red-500/30' : 'bg-emerald-900/40 text-emerald-200 border-emerald-500/30'}`}>
@@ -5789,86 +5857,7 @@ const DeliveryOrderManagement: React.FC<DeliveryOrderManagementProps> = ({ user 
                                     )}
                                 </div>
                                 <div className="flex items-center gap-2">
-                                    <input
-                                        ref={tripPdfInputRef}
-                                        type="file"
-                                        accept="application/pdf,.pdf,image/jpeg,image/png,image/webp,.jpg,.jpeg,.png,.webp"
-                                        multiple
-                                        className="hidden"
-                                        onChange={handleTripPdfUpload}
-                                    />
-                                    <button
-                                        type="button"
-                                        disabled={isTripPdfParsing}
-                                        onClick={() => tripPdfInputRef.current?.click()}
-                                        className="flex items-center gap-1.5 sm:gap-2 px-2.5 sm:px-4 py-2 rounded-xl bg-amber-500/20 border border-amber-500/40 text-amber-200 hover:bg-amber-500/30 disabled:opacity-50 text-xs font-bold uppercase tracking-wide transition-all shrink-0"
-                                        title="Upload up to 15 DO PDFs or Photos for this trip"
-                                    >
-                                        {isTripPdfParsing ? (
-                                            <span className="w-4 h-4 border-2 border-amber-300/30 border-t-amber-200 rounded-full animate-spin" />
-                                        ) : (
-                                            <ImagePlus size={16} className="text-amber-400" />
-                                        )}
-                                        <span className="hidden sm:inline">{isTripPdfParsing ? (pdfParseProgress || t('Parsing…')) : t('Upload DO & Photos (Max 15)')}</span>
-                                        <span className="sm:hidden sr-only">{isTripPdfParsing ? 'Parsing' : 'Upload'}</span>
-                                    </button>
-
-                                    <input
-                                        ref={tripPhotoInputRef}
-                                        type="file"
-                                        accept="image/*"
-                                        capture="environment"
-                                        className="hidden"
-                                        onChange={handleTripPhotoScan}
-                                    />
-                                    <button
-                                        type="button"
-                                        disabled={isTripPhotoScanning}
-                                        onClick={() => tripPhotoInputRef.current?.click()}
-                                        className="flex items-center gap-1.5 sm:gap-2 px-2.5 sm:px-4 py-2 rounded-xl bg-violet-600/20 border border-violet-500/40 text-violet-200 hover:bg-violet-600/30 disabled:opacity-50 text-xs font-bold uppercase tracking-wide transition-all shrink-0"
-                                    >
-                                        {isTripPhotoScanning ? (
-                                            <span className="w-4 h-4 border-2 border-violet-300/30 border-t-violet-200 rounded-full animate-spin" />
-                                        ) : (
-                                            <Sparkles size={16} />
-                                        )}
-                                        <span className="hidden sm:inline">{isTripPhotoScanning ? 'Scanning…' : 'Scan Photo'}</span>
-                                        <span className="sm:hidden sr-only">{isTripPhotoScanning ? 'Scanning' : 'Scan photo'}</span>
-                                    </button>
-
-                                    <input
-                                        ref={tripExcelInputRef}
-                                        type="file"
-                                        accept=".xlsx,.xls,.csv"
-                                        className="hidden"
-                                        onChange={handleTripExcelImport}
-                                    />
-                                    <button
-                                        type="button"
-                                        disabled={isTripExcelImporting}
-                                        onClick={() => tripExcelInputRef.current?.click()}
-                                        className="flex items-center gap-1.5 sm:gap-2 px-2.5 sm:px-4 py-2 rounded-xl bg-emerald-600/20 border border-emerald-500/40 text-emerald-200 hover:bg-emerald-600/30 disabled:opacity-50 text-xs font-bold uppercase tracking-wide transition-all shrink-0"
-                                    >
-                                        {isTripExcelImporting ? (
-                                            <span className="w-4 h-4 border-2 border-emerald-300/30 border-t-emerald-200 rounded-full animate-spin" />
-                                        ) : (
-                                            <FileText size={16} />
-                                        )}
-                                        <span className="hidden sm:inline">{isTripExcelImporting ? 'Importing…' : 'Import Excel'}</span>
-                                        <span className="sm:hidden sr-only">{isTripExcelImporting ? 'Importing' : 'Import Excel'}</span>
-                                    </button>
-
-                                    <button
-                                        type="button"
-                                        onClick={handleDownloadTemplate}
-                                        className="flex items-center gap-1.5 sm:gap-2 px-2.5 sm:px-4 py-2 rounded-xl bg-blue-600/20 border border-blue-500/40 text-blue-200 hover:bg-blue-600/30 text-xs font-bold uppercase tracking-wide transition-all shrink-0"
-                                        title="Download Excel Import Template"
-                                    >
-                                        <Download size={16} />
-                                        <span className="hidden sm:inline">Template</span>
-                                    </button>
-
-                                    <button onClick={handleCloseModal} className="p-2 hover:bg-slate-800 rounded-lg text-slate-500 hover:text-white transition-all">
+                                    <button onClick={handleCloseModal} className="p-2 hover:bg-slate-800 rounded-lg text-slate-500 hover:text-white transition-all cursor-pointer" title="Close">
                                         <X size={20} />
                                     </button>
                                 </div>
@@ -6643,7 +6632,17 @@ const DeliveryOrderManagement: React.FC<DeliveryOrderManagementProps> = ({ user 
 
             {/* --- DO PDF TRIP DISPATCH REVIEW (Max 15 DOs -> 1 Trip) --- */}
             {isParsedTripModalOpen && parsedTripBatch && (
-                <div className="fixed inset-0 z-[120] flex items-center justify-center p-2 sm:p-4 bg-black/80 backdrop-blur-md animate-in fade-in duration-200">
+                <div
+                    className="fixed inset-0 z-[120] flex items-center justify-center p-2 sm:p-4 bg-black/80 backdrop-blur-md animate-in fade-in duration-200"
+                    onDragOver={(e) => { e.preventDefault(); e.stopPropagation(); }}
+                    onDrop={(e) => {
+                        e.preventDefault();
+                        e.stopPropagation();
+                        if (e.dataTransfer.files && e.dataTransfer.files.length > 0) {
+                            handleTripPdfUpload(Array.from(e.dataTransfer.files));
+                        }
+                    }}
+                >
                     <div className="bg-slate-950 border border-slate-800 rounded-2xl w-full max-w-4xl max-h-[min(94vh,860px)] overflow-hidden flex flex-col shadow-2xl shadow-black/80">
                         {/* Hidden input for appending DO PDFs / photos */}
                         <input
@@ -6655,22 +6654,51 @@ const DeliveryOrderManagement: React.FC<DeliveryOrderManagementProps> = ({ user 
                             onChange={handleAppendTripPdfUpload}
                         />
 
+                        {/* Hidden input for main trip PDF / photo upload inside modal */}
+                        <input
+                            ref={tripPdfInputRef}
+                            type="file"
+                            accept="application/pdf,.pdf,image/jpeg,image/png,image/webp,.jpg,.jpeg,.png,.webp"
+                            multiple
+                            className="hidden"
+                            onChange={handleTripPdfUpload}
+                        />
+                        <input
+                            ref={tripPhotoInputRef}
+                            type="file"
+                            accept="image/*"
+                            capture="environment"
+                            className="hidden"
+                            onChange={handleTripPdfUpload}
+                        />
+                        <input
+                            ref={tripExcelInputRef}
+                            type="file"
+                            accept=".xlsx,.xls,.csv"
+                            className="hidden"
+                            onChange={handleTripExcelImport}
+                        />
+
                         {/* Header */}
                         <div className="p-4 sm:p-5 border-b border-slate-800 flex justify-between items-start gap-3 bg-slate-900/60">
                             <div>
                                 <h3 className="text-lg sm:text-xl font-black text-white flex items-center gap-2 flex-wrap">
-                                    <FileText className="text-amber-400" size={22} />
-                                    <span>{t('DO PDF Trip Dispatch Review (出车单据审核)')}</span>
-                                    <span className="text-[10px] bg-amber-500/20 text-amber-300 px-2 py-0.5 rounded-full font-mono border border-amber-500/30">
-                                        {parsedTripBatch.deliveryOrders.length} DOs · Max 15
+                                    <Truck className="text-blue-400" size={22} />
+                                    <span>{t('Create New Trip (新建出车调度工作台)')}</span>
+                                    <span className="text-[10px] bg-blue-500/20 text-blue-300 px-2.5 py-0.5 rounded-full font-mono border border-blue-500/30 font-bold">
+                                        {parsedTripBatch.deliveryOrders.length} Drops · Max 15
                                     </span>
                                     {parsedTripBatch.isFallback ? (
                                         <span className="text-[10px] bg-amber-500/20 text-amber-300 px-2 py-0.5 rounded-full font-bold border border-amber-500/30">
                                             ⚠️ 备用草稿 / Fallback Draft
                                         </span>
-                                    ) : (
+                                    ) : parsedTripBatch.modelUsed ? (
                                         <span className="text-[10px] bg-emerald-500/20 text-emerald-300 px-2 py-0.5 rounded-full font-bold border border-emerald-500/30">
-                                            ✨ AI 识别 ({parsedTripBatch.modelUsed || 'gemini-2.5-flash'})
+                                            ✨ AI 识别 ({parsedTripBatch.modelUsed})
+                                        </span>
+                                    ) : (
+                                        <span className="text-[10px] bg-indigo-500/20 text-indigo-300 px-2 py-0.5 rounded-full font-bold border border-indigo-500/30">
+                                            ✍️ 手工编制模式
                                         </span>
                                     )}
                                 </h3>
@@ -6684,14 +6712,88 @@ const DeliveryOrderManagement: React.FC<DeliveryOrderManagementProps> = ({ user 
                             <button
                                 type="button"
                                 onClick={handleCloseParsedTripModal}
-                                className="p-2 hover:bg-slate-800 rounded-lg text-slate-500 hover:text-white transition-colors"
+                                className="p-2 hover:bg-slate-800 rounded-lg text-slate-500 hover:text-white transition-colors cursor-pointer"
+                                title="Close"
                             >
                                 <X size={20} />
                             </button>
                         </div>
 
                         {/* Scrollable Body */}
-                        <div className="flex-1 overflow-y-auto p-4 sm:p-6 space-y-6 custom-scrollbar bg-slate-950">
+                        <div className="flex-1 overflow-y-auto p-4 sm:p-6 space-y-5 custom-scrollbar bg-slate-950">
+                            {/* Quick Intake Toolbar */}
+                            <div className="bg-gradient-to-r from-slate-900 via-slate-900/90 to-blue-950/20 border border-slate-800/90 rounded-2xl p-3.5 sm:p-4 flex flex-col md:flex-row items-center justify-between gap-3 shadow-lg">
+                                <div className="flex items-center gap-3 w-full md:w-auto">
+                                    <div className="w-9 h-9 rounded-xl bg-amber-500/10 border border-amber-500/30 flex items-center justify-center text-amber-400 shrink-0">
+                                        <Sparkles size={18} />
+                                    </div>
+                                    <div>
+                                        <div className="text-xs font-black text-slate-200 flex items-center gap-2">
+                                            <span>{t('智能识别与批量导入 (Intake & Import)')}</span>
+                                            <span className="text-[10px] bg-amber-500/20 text-amber-300 font-mono px-2 py-0.5 rounded-full font-bold border border-amber-500/30">
+                                                AI OCR · Excel
+                                            </span>
+                                        </div>
+                                        <p className="text-[11px] text-slate-400 mt-0.5">
+                                            {t('拖拽或上传 1~15 张 DO (PDF/照片) 由 AI 自动填单，或直接在下方手工填单')}
+                                        </p>
+                                    </div>
+                                </div>
+
+                                <div className="flex flex-wrap items-center gap-2 w-full md:w-auto justify-end shrink-0">
+                                    <button
+                                        type="button"
+                                        disabled={isTripPdfParsing}
+                                        onClick={() => tripPdfInputRef.current?.click()}
+                                        className="px-3.5 py-2 rounded-xl bg-gradient-to-r from-amber-600 to-amber-500 hover:from-amber-500 hover:to-amber-400 text-white text-xs font-bold flex items-center gap-2 shadow-md shadow-amber-950/40 transition-all active:scale-95 disabled:opacity-50 cursor-pointer"
+                                        title={t('上传 1~15 张 DO PDF 或送货照片，AI 自动提取')}
+                                    >
+                                        {isTripPdfParsing ? (
+                                            <span className="w-3.5 h-3.5 border-2 border-white/40 border-t-white rounded-full animate-spin" />
+                                        ) : (
+                                            <ImagePlus size={15} />
+                                        )}
+                                        <span>{isTripPdfParsing ? (pdfParseProgress || t('Parsing…')) : t('📄 上传单据/照片 (AI解析)')}</span>
+                                    </button>
+
+                                    <button
+                                        type="button"
+                                        disabled={isTripPdfParsing}
+                                        onClick={() => tripPhotoInputRef.current?.click()}
+                                        className="px-3 py-2 rounded-xl bg-violet-600/20 hover:bg-violet-600/30 border border-violet-500/40 text-violet-200 text-xs font-bold flex items-center gap-1.5 transition-all active:scale-95 disabled:opacity-50 cursor-pointer"
+                                        title={t('现场调用相机拍照')}
+                                    >
+                                        <Camera size={15} />
+                                        <span>{t('📷 拍照')}</span>
+                                    </button>
+
+                                    <button
+                                        type="button"
+                                        disabled={isTripExcelImporting}
+                                        onClick={() => tripExcelInputRef.current?.click()}
+                                        className="px-3 py-2 rounded-xl bg-emerald-600/20 hover:bg-emerald-600/30 border border-emerald-500/40 text-emerald-200 text-xs font-bold flex items-center gap-1.5 transition-all active:scale-95 disabled:opacity-50 cursor-pointer"
+                                        title={t('导入 Excel 批量排单')}
+                                    >
+                                        {isTripExcelImporting ? (
+                                            <span className="w-3.5 h-3.5 border-2 border-emerald-300/30 border-t-emerald-200 rounded-full animate-spin" />
+                                        ) : (
+                                            <FileText size={15} />
+                                        )}
+                                        <span>{isTripExcelImporting ? t('Importing…') : t('📊 Excel 导入')}</span>
+                                    </button>
+
+                                    <button
+                                        type="button"
+                                        onClick={handleDownloadTemplate}
+                                        className="px-2.5 py-2 rounded-xl bg-slate-800 hover:bg-slate-700 border border-slate-700 text-slate-300 hover:text-white text-xs font-bold flex items-center gap-1 transition-all cursor-pointer"
+                                        title={t('下载 Excel 导入标准模板')}
+                                    >
+                                        <Download size={14} />
+                                        <span className="hidden sm:inline">{t('模板')}</span>
+                                    </button>
+                                </div>
+                            </div>
+
                             {/* Fallback Mode Notice if AI was restricted */}
                             {parsedTripBatch.isFallback && (
                                 <div className="bg-amber-500/10 border border-amber-500/30 rounded-2xl p-4 flex items-start gap-3 text-amber-300 text-xs">
@@ -7135,10 +7237,11 @@ const DeliveryOrderManagement: React.FC<DeliveryOrderManagementProps> = ({ user 
                                                     <label className="block text-[9px] font-bold text-slate-500 uppercase mb-0.5">{t('Customer Name')}</label>
                                                     <input
                                                         type="text"
+                                                        list="customers-list"
                                                         className="w-full bg-slate-950 border border-slate-800 rounded-lg px-2.5 py-1.5 text-xs font-bold text-white outline-none focus:border-blue-500"
                                                         value={doItem.customer}
-                                                        onChange={e => handleUpdateParsedDO(idx, 'customer', e.target.value)}
-                                                        placeholder="Customer"
+                                                        onChange={e => handleUpdateParsedCustomer(idx, e.target.value)}
+                                                        placeholder={t('Customer name (Auto-fills address)')}
                                                     />
                                                 </div>
                                                 <div>
@@ -7381,6 +7484,12 @@ const DeliveryOrderManagement: React.FC<DeliveryOrderManagementProps> = ({ user 
                         </div>
 
                         {/* Shared Datalists for Combobox Selection */}
+                        <datalist id="customers-list">
+                            {customerDB.map((c, i) => (
+                                <option key={c.id || i} value={c.name} />
+                            ))}
+                        </datalist>
+
                         <datalist id="global-v2items-datalist">
                             {v2Items.map(prod => (
                                 <option key={prod.sku} value={`${prod.sku} - ${prod.name}`}>
