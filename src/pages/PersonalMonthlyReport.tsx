@@ -9,6 +9,7 @@ import {
 import { supabase } from '../services/supabase';
 import { getV2Items } from '../services/apiV2';
 import * as XLSX from 'xlsx';
+import DriverTutorialModal from '../components/DriverTutorialModal';
 
 const normalizeWarehouseName = (loc: string): string => {
     if (!loc) return 'SPD';
@@ -391,6 +392,7 @@ const PersonalMonthlyReport: React.FC<Props> = ({ user }) => {
     const [selectedAttendanceDay, setSelectedAttendanceDay] = useState<any | null>(null);
     const [showPayrollModal, setShowPayrollModal] = useState<boolean>(false);
     const [currentUserRole, setCurrentUserRole] = useState<string>('');
+    const [isTutorialModalOpen, setIsTutorialModalOpen] = useState<boolean>(false);
 
     const isDriver = viewedProfile?.role === 'Driver' || (!viewedProfile && user?.role === 'Driver') || deliveries.length > 0;
     const isAdminOrHR = ['SuperAdmin', 'Admin', 'HR'].includes(currentUserRole);
@@ -2528,6 +2530,15 @@ const PersonalMonthlyReport: React.FC<Props> = ({ user }) => {
                             <span>{isPreparingBatchPrint ? 'Menyedia...' : 'Cetak Semua Driver (Batch)'}</span>
                         </button>
                     )}
+
+                    <button
+                        onClick={() => setIsTutorialModalOpen(true)}
+                        className="flex items-center gap-2 bg-gradient-to-r from-amber-500/80 to-orange-600/80 hover:from-amber-500 hover:to-orange-600 text-white border border-amber-500/30 px-4 py-2.5 rounded-2xl font-black uppercase text-xs tracking-widest transition-all shadow-lg shadow-amber-950/20 active:scale-95 cursor-pointer"
+                        title="Video Tutorial Pemandu / Driver Video Tutorial"
+                    >
+                        <span>🎥</span>
+                        <span>Video Tutorial</span>
+                    </button>
 
                     <div className="flex items-center gap-3 bg-[#0d0d12]/80 border border-white/10 rounded-2xl px-5 py-3 shadow-lg backdrop-blur-md">
                         <button onClick={() => changeMonth(-1)} className="p-2 rounded-xl hover:bg-white/10 text-gray-400 hover:text-white transition-all active:scale-95">
@@ -5196,6 +5207,13 @@ const PersonalMonthlyReport: React.FC<Props> = ({ user }) => {
                 </div>,
                 document.body
             )}
+
+            {/* Video Tutorial Modal */}
+            <DriverTutorialModal
+                isOpen={isTutorialModalOpen}
+                onClose={() => setIsTutorialModalOpen(false)}
+                initialTab="monthly"
+            />
         </div>
     );
 };

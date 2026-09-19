@@ -1,0 +1,411 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
+    <title>上传司机教学视频 / Upload Tutorial Video</title>
+    <style>
+        * {
+            box-sizing: border-box;
+            -webkit-tap-highlight-color: transparent;
+        }
+        body {
+            font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, Helvetica, Arial, sans-serif;
+            background: #090d16;
+            color: #f1f5f9;
+            margin: 0;
+            padding: 16px;
+            display: flex;
+            justify-content: center;
+            align-items: center;
+            min-height: 100vh;
+        }
+        .container {
+            background: #131a2b;
+            border: 1px solid #1e293b;
+            border-radius: 28px;
+            padding: 24px;
+            max-width: 480px;
+            width: 100%;
+            box-shadow: 0 25px 50px -12px rgba(0, 0, 0, 0.7);
+        }
+        .header {
+            text-align: center;
+            margin-bottom: 20px;
+        }
+        .badge {
+            display: inline-flex;
+            align-items: center;
+            gap: 6px;
+            background: rgba(59, 130, 246, 0.15);
+            border: 1px solid rgba(59, 130, 246, 0.3);
+            color: #60a5fa;
+            font-size: 11px;
+            font-weight: 800;
+            padding: 4px 12px;
+            border-radius: 9999px;
+            text-transform: uppercase;
+            letter-spacing: 0.05em;
+            margin-bottom: 8px;
+        }
+        h1 {
+            font-size: 20px;
+            font-weight: 900;
+            margin: 0 0 6px 0;
+            color: #fff;
+        }
+        p.subtitle {
+            font-size: 12px;
+            color: #94a3b8;
+            margin: 0;
+        }
+        .section-title {
+            font-size: 12px;
+            font-weight: 800;
+            color: #cbd5e1;
+            margin-bottom: 8px;
+            text-transform: uppercase;
+            letter-spacing: 0.05em;
+        }
+        .type-selector {
+            display: grid;
+            grid-template-columns: 1fr 1fr;
+            gap: 10px;
+            margin-bottom: 20px;
+        }
+        .type-btn {
+            background: #1e293b;
+            border: 2px solid #334155;
+            border-radius: 16px;
+            padding: 12px 10px;
+            color: #94a3b8;
+            font-size: 12px;
+            font-weight: 800;
+            cursor: pointer;
+            text-align: center;
+            transition: all 0.2s ease;
+            display: flex;
+            flex-direction: column;
+            align-items: center;
+            gap: 4px;
+        }
+        .type-btn.active {
+            border-color: #3b82f6;
+            background: rgba(59, 130, 246, 0.12);
+            color: #60a5fa;
+        }
+        .type-btn .emoji {
+            font-size: 22px;
+        }
+        .dropzone {
+            border: 2px dashed #334155;
+            border-radius: 20px;
+            padding: 24px 16px;
+            text-align: center;
+            background: rgba(15, 23, 42, 0.6);
+            cursor: pointer;
+            transition: all 0.2s;
+            margin-bottom: 16px;
+            position: relative;
+        }
+        .dropzone:hover, .dropzone.dragover {
+            border-color: #3b82f6;
+            background: rgba(59, 130, 246, 0.05);
+        }
+        .dropzone input[type="file"] {
+            position: absolute;
+            inset: 0;
+            opacity: 0;
+            cursor: pointer;
+            width: 100%;
+            height: 100%;
+        }
+        .dropzone-icon {
+            font-size: 36px;
+            margin-bottom: 8px;
+        }
+        .dropzone-text {
+            font-size: 13px;
+            font-weight: 800;
+            color: #e2e8f0;
+            margin-bottom: 4px;
+        }
+        .dropzone-hint {
+            font-size: 11px;
+            color: #64748b;
+        }
+        .preview-box {
+            display: none;
+            margin-bottom: 16px;
+            background: #000;
+            border-radius: 16px;
+            overflow: hidden;
+            border: 1px solid #334155;
+            max-height: 240px;
+            text-align: center;
+        }
+        .preview-box video {
+            max-height: 240px;
+            max-width: 100%;
+        }
+        .file-info {
+            display: none;
+            background: #1e293b;
+            border-radius: 12px;
+            padding: 10px 14px;
+            font-size: 12px;
+            color: #cbd5e1;
+            margin-bottom: 16px;
+            align-items: center;
+            justify-content: space-between;
+        }
+        .file-name {
+            font-weight: 700;
+            overflow: hidden;
+            text-overflow: ellipsis;
+            white-space: nowrap;
+            max-width: 260px;
+        }
+        .file-size {
+            font-size: 11px;
+            color: #94a3b8;
+        }
+        .progress-container {
+            display: none;
+            margin-bottom: 16px;
+        }
+        .progress-bar-bg {
+            background: #1e293b;
+            border-radius: 9999px;
+            height: 8px;
+            overflow: hidden;
+        }
+        .progress-bar-fill {
+            background: linear-gradient(90deg, #3b82f6, #10b981);
+            height: 100%;
+            width: 0%;
+            transition: width 0.2s;
+        }
+        .progress-text {
+            display: flex;
+            justify-content: space-between;
+            font-size: 11px;
+            font-weight: 700;
+            color: #94a3b8;
+            margin-top: 6px;
+        }
+        .btn-upload {
+            width: 100%;
+            padding: 14px;
+            background: linear-gradient(135deg, #2563eb, #1d4ed8);
+            color: #fff;
+            border: none;
+            border-radius: 16px;
+            font-size: 14px;
+            font-weight: 900;
+            cursor: pointer;
+            box-shadow: 0 10px 20px -5px rgba(37, 99, 235, 0.4);
+            transition: all 0.2s;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            gap: 8px;
+        }
+        .btn-upload:disabled {
+            background: #334155;
+            color: #64748b;
+            box-shadow: none;
+            cursor: not-allowed;
+        }
+        .btn-upload:not(:disabled):active {
+            transform: scale(0.98);
+        }
+        .status-msg {
+            display: none;
+            margin-top: 14px;
+            padding: 12px;
+            border-radius: 12px;
+            font-size: 12px;
+            line-height: 1.5;
+            text-align: center;
+            font-weight: 700;
+        }
+        .status-msg.success {
+            background: rgba(16, 185, 129, 0.15);
+            border: 1px solid rgba(16, 185, 129, 0.3);
+            color: #34d399;
+        }
+        .status-msg.error {
+            background: rgba(239, 68, 68, 0.15);
+            border: 1px solid rgba(239, 68, 68, 0.3);
+            color: #f87171;
+        }
+        .alternative-box {
+            margin-top: 20px;
+            padding-top: 16px;
+            border-top: 1px solid #1e293b;
+            font-size: 11px;
+            color: #64748b;
+            line-height: 1.6;
+        }
+        .alternative-box code {
+            color: #38bdf8;
+            font-family: ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, monospace;
+            background: rgba(15, 23, 42, 0.8);
+            padding: 2px 5px;
+            border-radius: 4px;
+            word-break: break-all;
+        }
+    </style>
+</head>
+<body>
+    <div class="container">
+        <div class="header">
+            <div class="badge">🎥 Packsecure OS • 录屏上传</div>
+            <h1>上传司机实机教学视频</h1>
+            <p class="subtitle">手机或电脑直接选择录屏视频，一键覆盖同步至系统</p>
+        </div>
+
+        <div class="section-title">1. 选择要替换的视频目标：</div>
+        <div class="type-selector">
+            <button type="button" class="type-btn active" id="btn-delivery" onclick="selectType('delivery')">
+                <span class="emoji">🚚</span>
+                <span>视频 1: 送货与签收</span>
+                <span style="font-size: 10px; color: #64748b;">(Hantar & POD)</span>
+            </button>
+            <button type="button" class="type-btn" id="btn-monthly" onclick="selectType('monthly')">
+                <span class="emoji">📊</span>
+                <span>视频 2: 每日核对打勾</span>
+                <span style="font-size: 10px; color: #64748b;">(Semak Trip ✓)</span>
+            </button>
+        </div>
+
+        <div class="section-title">2. 选择您录制好的视频文件：</div>
+        <div class="dropzone" id="dropzone">
+            <input type="file" id="fileInput" accept="video/mp4,video/webm,video/quicktime,video/*" onchange="handleFileSelected(event)">
+            <div class="dropzone-icon">📱</div>
+            <div class="dropzone-text">点击选择手机录屏 / 拖拽视频到此处</div>
+            <div class="dropzone-hint">支持 MP4, MOV, WEBM 等格式 (最大 500MB)</div>
+        </div>
+
+        <!-- File Info -->
+        <div class="file-info" id="fileInfo">
+            <span class="file-name" id="fileName">未选择文件</span>
+            <span class="file-size" id="fileSize">0 MB</span>
+        </div>
+
+        <!-- Preview -->
+        <div class="preview-box" id="previewBox">
+            <video id="videoPreview" controls playsinline></video>
+        </div>
+
+        <!-- Progress -->
+        <div class="progress-container" id="progressContainer">
+            <div class="progress-bar-bg">
+                <div class="progress-bar-fill" id="progressBar"></div>
+            </div>
+            <div class="progress-text">
+                <span id="progressStatus">正在上传中...</span>
+                <span id="progressPercent">0%</span>
+            </div>
+        </div>
+
+        <button type="button" class="btn-upload" id="uploadBtn" disabled onclick="uploadVideo()">
+            <span>🚀 确认上传并立即生效</span>
+        </button>
+
+        <div class="status-msg" id="statusMsg"></div>
+
+        <div class="alternative-box">
+            📁 <strong>其他上传方式（电脑本地用户）：</strong><br>
+            您也可以在电脑直接将录好的 MP4 复制到：<br>
+            <code>public/videos/driver_delivery_tutorial.mp4</code><br>
+            或直接拖进与我的对话框，我会自动为您处理！
+        </div>
+    </div>
+
+    <script>
+        let currentType = 'delivery';
+        let selectedFile = null;
+
+        function selectType(type) {
+            currentType = type;
+            document.getElementById('btn-delivery').classList.toggle('active', type === 'delivery');
+            document.getElementById('btn-monthly').classList.toggle('active', type === 'monthly');
+        }
+
+        function handleFileSelected(e) {
+            const file = e.target.files[0];
+            if (!file) return;
+
+            selectedFile = file;
+            document.getElementById('fileName').innerText = file.name;
+            document.getElementById('fileSize').innerText = (file.size / 1024 / 1024).toFixed(2) + ' MB';
+            document.getElementById('fileInfo').style.display = 'flex';
+            document.getElementById('uploadBtn').disabled = false;
+
+            // Video preview
+            const previewBox = document.getElementById('previewBox');
+            const videoPreview = document.getElementById('videoPreview');
+            const url = URL.createObjectURL(file);
+            videoPreview.src = url;
+            previewBox.style.display = 'block';
+
+            document.getElementById('statusMsg').style.display = 'none';
+        }
+
+        function uploadVideo() {
+            if (!selectedFile) return;
+
+            const uploadBtn = document.getElementById('uploadBtn');
+            const progressContainer = document.getElementById('progressContainer');
+            const progressBar = document.getElementById('progressBar');
+            const progressPercent = document.getElementById('progressPercent');
+            const statusMsg = document.getElementById('statusMsg');
+
+            uploadBtn.disabled = true;
+            progressContainer.style.display = 'block';
+            statusMsg.style.display = 'none';
+
+            const formData = new FormData();
+            formData.append('video', selectedFile);
+            formData.append('videoType', currentType);
+
+            const xhr = new XMLHttpRequest();
+            // Connect to /api/upload-tutorial-video (proxied to port 8080)
+            xhr.open('POST', '/api/upload-tutorial-video', true);
+
+            xhr.upload.onprogress = function(e) {
+                if (e.lengthComputable) {
+                    const percent = Math.round((e.loaded / e.total) * 100);
+                    progressBar.style.width = percent + '%';
+                    progressPercent.innerText = percent + '%';
+                }
+            };
+
+            xhr.onload = function() {
+                uploadBtn.disabled = false;
+                if (xhr.status >= 200 && xhr.status < 300) {
+                    const res = JSON.parse(xhr.responseText);
+                    statusMsg.className = 'status-msg success';
+                    statusMsg.innerHTML = `🎉 <strong>上传成功！</strong><br>已保存为: <code>${res.filename}</code><br>系统 App 内的播放弹窗已立即同步生效！`;
+                    statusMsg.style.display = 'block';
+                } else {
+                    statusMsg.className = 'status-msg error';
+                    statusMsg.innerHTML = `❌ 上传失败: ${xhr.statusText || '服务器内部错误'}`;
+                    statusMsg.style.display = 'block';
+                }
+            };
+
+            xhr.onerror = function() {
+                uploadBtn.disabled = false;
+                statusMsg.className = 'status-msg error';
+                statusMsg.innerHTML = '❌ 网络连接错误，请确保开发服务正常运行。';
+                statusMsg.style.display = 'block';
+            };
+
+            xhr.send(formData);
+        }
+    </script>
+</body>
+</html>

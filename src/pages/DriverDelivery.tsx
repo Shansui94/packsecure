@@ -7,6 +7,7 @@ import { parsePrepPhotos } from '../utils/prepPhotos';
 import { dataURLtoBlob } from '../utils/imageCompress';
 import { deductStockForOrder } from '../services/stockService';
 import { logActivity } from '../utils/logger';
+import DriverTutorialModal from '../components/DriverTutorialModal';
 
 interface DriverDeliveryProps {
     user: any;
@@ -246,6 +247,7 @@ const DriverDelivery: React.FC<DriverDeliveryProps> = ({ user, onNavigate }) => 
     const [isScannerOpen, setIsScannerOpen] = useState(false);
     const [scannerMode, setScannerMode] = useState<'bind' | 'unbind'>('bind');
     const hasScannedRef = useRef(false);
+    const [isTutorialModalOpen, setIsTutorialModalOpen] = useState(false);
 
     // Lorry Mileage & Odometer State
     const [scannedLorryData, setScannedLorryData] = useState<any>(null);
@@ -1611,6 +1613,39 @@ const DriverDelivery: React.FC<DriverDeliveryProps> = ({ user, onNavigate }) => 
         };
     }, [user]);
 
+    // Test & Tutorial Automation Hooks
+    useEffect(() => {
+        if (typeof window !== 'undefined') {
+            (window as any).__driverDeliveryHooks = {
+                scanLorry: (text: string) => handleScanComplete(text),
+                setOdometer: (km: string, base64: string) => {
+                    setOdometerPhotoBase64(base64);
+                    setDetectedMileage(Number(km));
+                    setConfirmedMileage(km);
+                },
+                confirmOdometer: () => handleConfirmOdometer(),
+                setUnloadPhotos: (doBase64: string, prodBase64: string, note?: string) => {
+                    if (doBase64) setUnloadDoPhotoBase64(doBase64);
+                    if (prodBase64) setUnloadProductPhotoBase64(prodBase64);
+                    if (note) setDeliveryNote(note);
+                },
+                confirmUnload: () => handleConfirmUnload(),
+                openUnloadModal: (orderId: string) => {
+                    const ord = tasks.find(t => t.id === orderId);
+                    if (ord) {
+                        setSelectedOrder(ord);
+                        setIsUnloadModalOpen(true);
+                    }
+                }
+            };
+        }
+        return () => {
+            if (typeof window !== 'undefined') {
+                delete (window as any).__driverDeliveryHooks;
+            }
+        };
+    }, [tasks, currentLorry, scannedLorryData, confirmedMileage, odometerPhotoBase64, unloadProductPhotoBase64, unloadDoPhotoBase64, deliveryNote, selectedOrder]);
+
     // View Logic
     const todoList = tasks.filter(t => 
         t.status !== 'Cancelled' && 
@@ -2352,6 +2387,16 @@ const DriverDelivery: React.FC<DriverDeliveryProps> = ({ user, onNavigate }) => 
                         <span>📸</span>
                         <span className="hidden sm:inline"> TUGASAN TAMBAHAN / EXTRA JOB</span>
                         <span className="inline sm:hidden"> EXTRA JOB</span>
+                    </button>
+
+                    <button
+                        onClick={() => setIsTutorialModalOpen(true)}
+                        className="px-2.5 py-1.5 bg-gradient-to-r from-amber-500/20 to-orange-500/20 hover:from-amber-500/30 hover:to-orange-500/30 border border-amber-500/40 text-amber-300 rounded-lg text-[10px] font-bold uppercase tracking-wider flex items-center gap-1 transition-all shadow-sm active:scale-95 cursor-pointer"
+                        title="Video Tutorial / 教学视频"
+                    >
+                        <span>🎥</span>
+                        <span className="hidden sm:inline">TUTORIAL</span>
+                        <span className="inline sm:hidden">VIDEO</span>
                     </button>
 
                     {onNavigate && (
@@ -3272,6 +3317,21 @@ const DriverDelivery: React.FC<DriverDeliveryProps> = ({ user, onNavigate }) => 
                                 : "Halakan kamera anda ke kod QR lori anda semula untuk mengesahkan pemulangan lori & tamatkan trip. / Point your camera at your lorry QR code again to confirm return & end trip."
                             }
                         </p>
+
+                        {/* Demo / Manual Bind Shortcut for recording & testing */}
+                        <button
+                            type="button"
+                            onClick={() => {
+                                const payload = scannerMode === 'bind'
+                                    ? JSON.stringify({ type: 'LorryBind', lorryId: '23572333-dba1-421a-b6fd-83d937cfe954', plate: 'APD 9821' })
+                                    : JSON.stringify({ type: 'LorryBind', lorryId: currentLorry?.id || '23572333-dba1-421a-b6fd-83d937cfe954', plate: currentLorry?.plate_number || 'APD 9821' });
+                                handleScanComplete(payload);
+                            }}
+                            className="mt-4 px-4 py-2 bg-amber-500/20 hover:bg-amber-500/30 active:scale-95 border border-amber-500/40 text-amber-400 text-xs font-black rounded-2xl flex items-center gap-2 cursor-pointer shadow-lg transition-all"
+                        >
+                            <Truck size={14} />
+                            <span>⚡ {scannerMode === 'bind' ? 'Pilih Lori Ujian (APD 9821)' : 'Sahkan Pulang Lori (APD 9821)'}</span>
+                        </button>
                     </div>
                 </div>
             )}
@@ -3491,6 +3551,13 @@ const DriverDelivery: React.FC<DriverDeliveryProps> = ({ user, onNavigate }) => 
                     </div>
                 </div>
             )}
+
+            {/* Video Tutorial Modal */}
+            <DriverTutorialModal
+                isOpen={isTutorialModalOpen}
+                onClose={() => setIsTutorialModalOpen(false)}
+                initialTab="delivery"
+            />
 
         </div >
     );

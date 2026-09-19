@@ -18,6 +18,9 @@ import v2DocumentsHandler, {
 } from './api/v2-documents';
 import docsHandler, { handleDevLog } from './api/docs';
 import whatsappHandler, { handleWhatsAppSend, handleWhatsAppWebhook } from './api/whatsapp';
+import multer from 'multer';
+import fs from 'fs';
+import path from 'path';
 
 const app = express();
 const PORT = 8080;
@@ -66,6 +69,30 @@ mountVercelHandler('/api/agent/omni-command', async (req, res) => {
     req.query = req.query || {};
     req.query.action = 'omni-command';
     return universalHandler(req, res);
+});
+
+// Tutorial Video Upload Endpoint (Local dev)
+const tutorialVideoStorage = multer.diskStorage({
+    destination: (_req, _file, cb) => {
+        const dir = path.join(process.cwd(), 'public', 'videos');
+        if (!fs.existsSync(dir)) fs.mkdirSync(dir, { recursive: true });
+        cb(null, dir);
+    },
+    filename: (req, file, cb) => {
+        const type = req.body?.videoType || req.query?.type || 'delivery';
+        const ext = path.extname(file.originalname).toLowerCase() || '.mp4';
+        const baseName = type === 'monthly' ? 'driver_monthly_check_tutorial' : 'driver_delivery_tutorial';
+        cb(null, `${baseName}${ext}`);
+    }
+});
+const tutorialVideoUpload = multer({ storage: tutorialVideoStorage, limits: { fileSize: 500 * 1024 * 1024 } });
+
+app.post('/api/upload-tutorial-video', tutorialVideoUpload.single('video'), (req, res) => {
+    if (!req.file) {
+        return res.status(400).json({ error: 'No video file provided' });
+    }
+    console.log(`[API] Uploaded tutorial video: ${req.file.filename} (${(req.file.size / 1024 / 1024).toFixed(2)} MB)`);
+    res.json({ success: true, filename: req.file.filename, size: req.file.size });
 });
 
 // Mimic Vercel Request/Response for the handler
