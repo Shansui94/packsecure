@@ -602,19 +602,7 @@ const DeliveryOrderManagement: React.FC<DeliveryOrderManagementProps> = ({ user 
     const [isBatchCreating, setIsBatchCreating] = useState(false);
 
     const getTodayStr = () => new Date().toLocaleDateString('en-CA'); // YYYY-MM-DD 本地时间
-    // 智能默认送货日：周六排单默认顺延至周一（跳过周日休息日），平时顺延至次日
-    const getTomorrowStr = () => {
-        const d = new Date();
-        const dayOfWeek = d.getDay(); // 0 = 周日, 6 = 周六
-        if (dayOfWeek === 6) {
-            d.setDate(d.getDate() + 2); // 周六 -> 下周一
-        } else if (dayOfWeek === 0) {
-            d.setDate(d.getDate() + 1); // 周日 -> 周一
-        } else {
-            d.setDate(d.getDate() + 1); // 平常工作日 -> 次日
-        }
-        return d.toLocaleDateString('en-CA');
-    };
+    const getTomorrowStr = () => { const d = new Date(); d.setDate(d.getDate() + 1); return d.toLocaleDateString('en-CA'); };
 
     // DO PDF Upload & Trip Review State (Max 15 PDFs)
     const [isTripPdfParsing, setIsTripPdfParsing] = useState(false);
