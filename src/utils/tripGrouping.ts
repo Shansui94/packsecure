@@ -148,7 +148,8 @@ export function groupOrdersIntoTrips(
             const tripTag = extracted.tripTag || (isExplicitSeq ? `Trip ${isExplicitSeq}` : null);
 
             if (tripTag) {
-                const key = `manual_${tripTag.toLowerCase().replace(/\s+/g, '_')}`;
+                const dateKey = (o.deadline || o.deliveryDate || o.order_date || o.created_at || '').slice(0, 10);
+                const key = `manual_${dateKey ? `${dateKey}_` : ''}${tripTag.toLowerCase().replace(/\s+/g, '_')}`;
                 if (!groupsMap.has(key)) groupsMap.set(key, []);
                 groupsMap.get(key)!.push(o);
             } else {
