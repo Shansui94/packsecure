@@ -11,7 +11,7 @@ import { getV2Items } from '../services/apiV2';
 import * as XLSX from 'xlsx';
 import DriverTutorialModal from '../components/DriverTutorialModal';
 import { getPublicHoliday, getMonthPublicHolidays, PublicHoliday, getHolidayLocalizedName } from '../utils/malaysiaHolidays';
-
+import { groupOrdersIntoTrips, GroupedTrip } from '../utils/tripGrouping';
 
 const normalizeWarehouseName = (loc: string): string => {
     if (!loc) return 'SPD';
@@ -1210,18 +1210,26 @@ const PersonalMonthlyReport: React.FC<Props> = ({ user }) => {
 
     const handleToggleTripConfirmation = async (tripOrId: any, checked: boolean) => {
         const tripId = typeof tripOrId === 'string' ? tripOrId : tripOrId.id;
+        const targetIds: string[] = (typeof tripOrId === 'object' && tripOrId.order_ids && tripOrId.order_ids.length > 0)
+            ? tripOrId.order_ids
+            : [tripId];
         const oldNotes = (typeof tripOrId === 'object' ? tripOrId.notes : '') || '';
+
         setConfirmedTripIds(prev => {
             const updated = new Set(prev);
-            if (checked) {
-                updated.add(tripId);
-            } else {
-                updated.delete(tripId);
-            }
+            targetIds.forEach(id => {
+                if (checked) {
+                    updated.add(id);
+                } else {
+                    updated.delete(id);
+                }
+            });
             return updated;
         });
 
-        sessionStorage.setItem(`pmr_confirmed_trip_${tripId}`, String(checked));
+        targetIds.forEach(id => {
+            sessionStorage.setItem(`pmr_confirmed_trip_${id}`, String(checked));
+        });
 
         let newNotes = oldNotes;
         if (checked) {
@@ -1233,19 +1241,20 @@ const PersonalMonthlyReport: React.FC<Props> = ({ user }) => {
         }
 
         // Optimistic UI update: instant transition with ZERO screen flash/reload
-        setDeliveries(prev => prev.map(d => d.id === tripId ? { ...d, notes: newNotes, driver_confirmed: checked } : d));
+        setDeliveries(prev => prev.map(d => targetIds.includes(d.id) ? { ...d, notes: newNotes, driver_confirmed: checked } : d));
 
         try {
             await supabase
                 .from('sales_orders')
                 .update({ notes: newNotes })
-                .eq('id', tripId);
+                .in('id', targetIds);
         } catch (err) {
             console.error("Error saving trip confirmation:", err);
         }
     };
 
     const handleToggleHRApproveTrip = async (trip: any, checked: boolean) => {
+        const targetIds: string[] = (trip.order_ids && trip.order_ids.length > 0) ? trip.order_ids : [trip.id];
         const oldNotes = trip.notes || '';
         let newNotes = oldNotes;
         if (checked) {
@@ -1257,17 +1266,17 @@ const PersonalMonthlyReport: React.FC<Props> = ({ user }) => {
         }
 
         // Optimistic UI update: instant transition with ZERO screen flash/reload
-        setDeliveries(prev => prev.map(d => d.id === trip.id ? { ...d, notes: newNotes } : d));
+        setDeliveries(prev => prev.map(d => targetIds.includes(d.id) ? { ...d, notes: newNotes } : d));
 
         try {
             await supabase
                 .from('sales_orders')
                 .update({ notes: newNotes })
-                .eq('id', trip.id);
+                .in('id', targetIds);
         } catch (err) {
             console.error("Error saving HR approval:", err);
             // Revert state if error
-            setDeliveries(prev => prev.map(d => d.id === trip.id ? { ...d, notes: oldNotes } : d));
+            setDeliveries(prev => prev.map(d => targetIds.includes(d.id) ? { ...d, notes: oldNotes } : d));
         }
     };
 
@@ -1331,6 +1340,10 @@ const PersonalMonthlyReport: React.FC<Props> = ({ user }) => {
     const handleAdminApproveTrip = async (approve: boolean) => {
         if (!selectedTrip) return;
 
+        const targetIds: string[] = (selectedTrip.order_ids && selectedTrip.order_ids.length > 0)
+            ? selectedTrip.order_ids
+            : [selectedTrip.id];
+
         try {
             const payloadMatch = selectedTrip.notes?.match(/\[PENDING_EDIT_PAYLOAD\]:\s*(\{.*\})/is);
             let fallbackPayload: any = {};
@@ -1339,7 +1352,7 @@ const PersonalMonthlyReport: React.FC<Props> = ({ user }) => {
             }
             
             const cleanNotes = (selectedTrip.notes || '')
-                .replace(/(?:\n\n)?\[PENDING_EDIT_PAYLOAD\]:[\s\S]*$/is, '')
+                .replace(/(?:\n\n)?\[PENDING_EDIT_PAYLOAD\]:[\s\S]*$/is)
                 .replace(/\[PENDING EDIT.*?\]:?[\s\S]*/gi, '')
                 .trim();
 
@@ -1357,7 +1370,7 @@ const PersonalMonthlyReport: React.FC<Props> = ({ user }) => {
                 const { error } = await supabase
                     .from('sales_orders')
                     .update(payload)
-                    .eq('id', selectedTrip.id);
+                    .in('id', targetIds);
 
                 if (error) throw error;
                 alert("✅ Admin 已批准预修改并套用更改！ / Edit approved and applied!");
@@ -1365,7 +1378,7 @@ const PersonalMonthlyReport: React.FC<Props> = ({ user }) => {
                 const { error } = await supabase
                     .from('sales_orders')
                     .update({ notes: cleanNotes })
-                    .eq('id', selectedTrip.id);
+                    .in('id', targetIds);
 
                 if (error) throw error;
                 alert("❌ Admin 已拒绝预修改申请，已清除待审核状态。 / Pending edit request rejected.");
@@ -1383,6 +1396,9 @@ const PersonalMonthlyReport: React.FC<Props> = ({ user }) => {
         if (!selectedTrip) return;
 
         const isUserAdmin = ['SuperAdmin', 'Admin'].includes(currentUserRole);
+        const targetIds: string[] = (selectedTrip.order_ids && selectedTrip.order_ids.length > 0)
+            ? selectedTrip.order_ids
+            : [selectedTrip.id];
 
         const cleanOriginalNotes = (selectedTrip.notes || '')
             .replace(/(?:\n\n)?\[PENDING_EDIT_PAYLOAD\]:[\s\S]*$/is, '')
@@ -1427,7 +1443,7 @@ const PersonalMonthlyReport: React.FC<Props> = ({ user }) => {
                 const { error } = await supabase
                     .from('sales_orders')
                     .update(updatedTripPayload)
-                    .eq('id', selectedTrip.id);
+                    .in('id', targetIds);
 
                 if (error) throw error;
                 alert("✅ Admin 已成功保存 Trip 更改！ / Trip record updated by Admin!");
@@ -1447,7 +1463,7 @@ const PersonalMonthlyReport: React.FC<Props> = ({ user }) => {
                 const { error } = await supabase
                     .from('sales_orders')
                     .update({ notes: appendedNotes })
-                    .eq('id', selectedTrip.id);
+                    .in('id', targetIds);
 
                 if (error) throw error;
                 alert("⏳ 预修改已提交！已转入 Pending 状态，须待 Admin 确认后才正式生效。 / Pre-change submitted! Set to Pending status awaiting Admin approval.");
@@ -1780,7 +1796,7 @@ const PersonalMonthlyReport: React.FC<Props> = ({ user }) => {
             while (hasMore) {
                 const { data, error } = await supabase
                     .from('sales_orders')
-                    .select('id, order_number, customer, items, notes, order_date, pod_timestamp, deadline, zone, delivery_address, created_at, trip_origin, trip_drop_count, driver_id, job_type, status')
+                    .select('id, order_number, customer, items, notes, order_date, pod_timestamp, deadline, zone, delivery_address, created_at, trip_origin, trip_drop_count, driver_id, job_type, status, trip_id, lorry_id, pod_photo_url, pod_signature_url, proof_of_load_url, edit_status, pending_edit_payload, driver_confirmed')
                     .in('driver_id', driverIds)
                     .neq('status', 'Cancelled')
                     .or(`deadline.gte.${firstDay},created_at.gte.${startDateTs},pod_timestamp.gte.${startDateTs},order_date.gte.${firstDay}`)
@@ -1873,10 +1889,12 @@ const PersonalMonthlyReport: React.FC<Props> = ({ user }) => {
                     const weekdayShort = dateObj.toLocaleDateString('ms-MY', { weekday: 'short' });
                     const dateDisplay = `${dateStr} (${weekdayShort})`;
 
-                    const dayTrips = driverDeliveries.filter(d => {
+                    const dayDeliveries = driverDeliveries.filter(d => {
                         const targetDay = d.deadline?.split('T')[0] || (d.pod_timestamp ? d.pod_timestamp.split('T')[0] : (d.order_date ? d.order_date.split('T')[0] : (d.created_at ? d.created_at.split('T')[0] : null)));
                         return targetDay === dateStr;
                     });
+
+                    const groupedTrips = groupOrdersIntoTrips(dayDeliveries, rateMap, plate, plate, allLorriesList);
 
                     const shift = batchAttendance.find(a => a.operator_id === driver.employee_id && a.date === dateStr);
                     const pubHoliday = getPublicHoliday(dateStr, driver.plant || driver.branch || 'ALL');
@@ -1887,10 +1905,10 @@ const PersonalMonthlyReport: React.FC<Props> = ({ user }) => {
                         const sOut = shift.clock_out ? new Date(shift.clock_out).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' }) : 'Aktif';
                         const hWorked = shift.hours_worked ? Number(shift.hours_worked) : 0;
                         workingTimeText = `${sIn} → ${sOut} (${hWorked.toFixed(1)}h)${pubHoliday ? ' (Kerja Cuti Umum)' : ''}`;
-                    } else if (dayTrips.length > 0) {
+                    } else if (groupedTrips.length > 0) {
                         workingTimeText = pubHoliday
-                            ? `🚚 Kerja Cuti Umum (${dayTrips.length} Trips)`
-                            : `🚚 出车在岗 (${dayTrips.length} Trips)`;
+                            ? `🚚 Kerja Cuti Umum (${groupedTrips.length} Trips)`
+                            : `🚚 出车在岗 (${groupedTrips.length} Trips)`;
                     } else if (pubHoliday) {
                         workingTimeText = `🇲🇾 Cuti Umum / ${pubHoliday.nameMs}`;
                     } else if (isWeekend) {
@@ -1905,79 +1923,32 @@ const PersonalMonthlyReport: React.FC<Props> = ({ user }) => {
                         workingTimeText = `Cuti / Leave (${lType})`;
                     }
 
-
-                    if (dayTrips.length > 0) {
-                        dayTrips.forEach((t, tIdx) => {
+                    if (groupedTrips.length > 0) {
+                        groupedTrips.forEach((t, tIdx) => {
                             actualTripsCount++;
-                            const originRaw = t.trip_origin || 'TAIPING';
-                            const origin = originRaw.toLowerCase();
-                            const zoneRaw = t.zone || t.delivery_address || 'Unknown';
-                            let calcZone = zoneRaw.toLowerCase();
-                            const key = `${origin}-${calcZone}`;
-                            let rateInfo = rateMap[key];
-                            if (!rateInfo && t.delivery_address) {
-                                const addrLower = t.delivery_address.toLowerCase();
-                                for (const k of Object.keys(rateMap)) {
-                                    if (k.startsWith(`${origin}-`)) {
-                                        const r = rateMap[k];
-                                        const loc = (r.location_name || '').toLowerCase().trim();
-                                        if (loc && loc.length >= 3 && addrLower.includes(loc)) {
-                                            rateInfo = r;
-                                            break;
-                                        }
-                                    }
-                                }
-                            }
-                            if (!rateInfo) {
-                                const matchedKey = Object.keys(rateMap).find(k => {
-                                    if (!k.startsWith(`${origin}-`)) return false;
-                                    const locName = k.slice(origin.length + 1);
-                                    return locName.includes(calcZone) || (calcZone.length >= 3 && calcZone.includes(locName));
-                                });
-                                if (matchedKey) rateInfo = rateMap[matchedKey];
-                            }
-
-                            const drops = Math.max(1, t.trip_drop_count || 1);
-
-                            const approvedAmountMatch = t.notes?.match(/\[APPROVED_AMOUNT:\s*([\d.]+)\]/);
-                            let tEarnings = 0;
-                            if (approvedAmountMatch) {
-                                tEarnings = parseFloat(approvedAmountMatch[1]) || 0;
-                            } else if (rateInfo) {
-                                const base = Number(rateInfo.base_rate) || 0;
-                                const maxPlaces = (rateInfo.max_places !== undefined && rateInfo.max_places !== null) ? Number(rateInfo.max_places) : 1;
-                                const extraPlaces = Math.max(0, drops - maxPlaces);
-                                const extraRate = extraPlaces * (Number(rateInfo.extra_rate_per_place ?? rateInfo.extra_drop_rate) || 0);
-                                tEarnings = base + extraRate;
-                            } else {
-                                const base = 40;
-                                const extraPlaces = Math.max(0, drops - 1);
-                                tEarnings = base + (extraPlaces * 10);
-                            }
-
-                            const isDelivered = t.status === 'Delivered';
-                            const isUnscanned = t.status !== 'Delivered' && t.status !== 'Cancelled';
+                            const isDelivered = t.isDelivered;
+                            const isUnscanned = t.isUnscanned;
                             if (isDelivered) {
-                                totalEarnings += tEarnings;
+                                totalEarnings += t.earnings;
                                 completedCount++;
                             }
                             if (isUnscanned) {
                                 pendingScanCount++;
                             }
 
-                            const tripPlate = (t.lorry_id && allLorriesList.find((l: any) => l.id === t.lorry_id)?.plate_number) || plate;
+                            const tripPlate = t.lorry_plate || plate;
                             tripRows.push({
                                 date: dateDisplay,
                                 workingTime: tIdx === 0 ? workingTimeText : '↳ (Trip tambahan)',
                                 lorryPlate: tripPlate,
                                 orderNumber: t.order_number || '-',
                                 customer: t.customer || '-',
-                                origin: originRaw,
-                                destination: zoneRaw,
-                                drops,
+                                origin: t.trip_origin || 'TAIPING',
+                                destination: t.zone || '-',
+                                drops: t.trip_drop_count,
                                 status: isDelivered ? '✅ Selesai' : (t.status === 'Cancelled' ? '❌ Batal' : '🚚 Belum Imbas'),
-                                earnings: isDelivered ? tEarnings : 0,
-                                potentialEarnings: tEarnings,
+                                earnings: isDelivered ? t.earnings : 0,
+                                potentialEarnings: t.earnings,
                                 isDelivered,
                                 isUnscanned,
                                 isLeave: false,
@@ -2522,133 +2493,19 @@ const PersonalMonthlyReport: React.FC<Props> = ({ user }) => {
                 }
             });
 
-            const tripCount = dayDeliveries.length;
-            const tripDetails: any[] = [];
-
-            let tripEarnings = 0;
             const rateMap: Record<string, any> = {};
             deliveryRates.forEach(r => { rateMap[`${r.origin}-${r.location_name}`.toLowerCase()] = r; });
 
-            dayDeliveries.forEach(t => {
-                const originRaw = t.trip_origin || 'TAIPING';
-                const origin = originRaw.toLowerCase();
-                const zoneRaw = t.zone || t.delivery_address || 'Unknown';
-                let calcZone = zoneRaw.toLowerCase();
-                let displayZone = zoneRaw;
+            const groupedTrips = groupOrdersIntoTrips(dayDeliveries, rateMap, dayLorryPlate, driverLorryPlate, lorries);
+            const tripCount = groupedTrips.length;
+            const tripDetails: any[] = [];
+            let tripEarnings = 0;
 
-                const key = `${origin}-${calcZone}`;
-                let rateInfo = rateMap[key];
-                if (!rateInfo && t.delivery_address) {
-                    const addrLower = t.delivery_address.toLowerCase();
-                    for (const k of Object.keys(rateMap)) {
-                        if (k.startsWith(`${origin}-`)) {
-                            const r = rateMap[k];
-                            const loc = (r.location_name || '').toLowerCase().trim();
-                            if (loc && loc.length >= 3 && addrLower.includes(loc)) {
-                                rateInfo = r;
-                                break;
-                            }
-                        }
-                    }
+            groupedTrips.forEach(t => {
+                if (t.isDelivered) {
+                    tripEarnings += t.earnings;
                 }
-
-                const drops = Math.max(1, t.trip_drop_count || 1);
-
-                const isExtraJob = t.job_type === 'Extra Job' || t.order_number?.startsWith('TRIP-JOB');
-                const approvedAmountMatch = t.notes?.match(/\[APPROVED_AMOUNT:\s*([\d.]+)\]/);
-                const approvedAmount = approvedAmountMatch ? parseFloat(approvedAmountMatch[1]) : null;
-
-                let baseRate = 0;
-                let extraRatePerPlace = 0;
-                let extraDrops = 0;
-                let extraDropTotal = 0;
-                let tEarnings = 0;
-
-                if (approvedAmount !== null) {
-                    tEarnings = approvedAmount;
-                    baseRate = approvedAmount;
-                } else if (rateInfo) {
-                    baseRate = Number(rateInfo.base_rate) || 0;
-                    extraRatePerPlace = Number(rateInfo.extra_rate_per_place ?? rateInfo.extra_drop_rate) || 0;
-                    const maxPlaces = (rateInfo.max_places !== undefined && rateInfo.max_places !== null) ? Number(rateInfo.max_places) : 1;
-                    extraDrops = Math.max(0, drops - maxPlaces);
-                    extraDropTotal = extraDrops * extraRatePerPlace;
-                    tEarnings = baseRate + extraDropTotal;
-                } else {
-                    const matchedKey = Object.keys(rateMap).find(k => {
-                        if (!k.startsWith(`${origin}-`)) return false;
-                        const locName = k.slice(origin.length + 1);
-                        return locName.includes(calcZone) || (calcZone.length >= 3 && calcZone.includes(locName));
-                    });
-                    if (matchedKey) {
-                        const fallbackInfo = rateMap[matchedKey];
-                        baseRate = Number(fallbackInfo.base_rate) || 0;
-                        extraRatePerPlace = Number(fallbackInfo.extra_rate_per_place ?? fallbackInfo.extra_drop_rate) || 0;
-                        const maxPlaces = (fallbackInfo.max_places !== undefined && fallbackInfo.max_places !== null) ? Number(fallbackInfo.max_places) : 1;
-                        extraDrops = Math.max(0, drops - maxPlaces);
-                        extraDropTotal = extraDrops * extraRatePerPlace;
-                        tEarnings = baseRate + extraDropTotal;
-                    } else {
-                        baseRate = 40;
-                        extraRatePerPlace = 10;
-                        extraDrops = Math.max(0, drops - 1);
-                        extraDropTotal = extraDrops * extraRatePerPlace;
-                        tEarnings = baseRate + extraDropTotal;
-                    }
-                }
-
-                // If Delivered, add to trip earnings (for both standard trips and extra jobs)
-                if (t.status === 'Delivered') {
-                    tripEarnings += tEarnings;
-                }
-
-                let displayString = `${originRaw} ➞ ${displayZone} (${drops} Drop${drops > 1 ? 's' : ''})`;
-                if (isExtraJob) {
-                    const iconMap: Record<string, string> = {
-                        'AMBIK PALLET': '🪵',
-                        'LORRY SERVICE': '🔧',
-                        'SHOPEE': '🛍️',
-                        'RETURN': '↩️',
-                        'OTHER': '🛠️'
-                    };
-                    const icon = iconMap[t.zone?.toUpperCase()] || '📸';
-                    displayString = `${icon} ${t.zone || 'Extra Job'}`;
-                }
-
-                // Push formatting
-                tripDetails.push({
-                    id: t.id,
-                    order_number: t.order_number,
-                    customer: t.customer,
-                    items: t.items,
-                    notes: t.notes,
-                    status: t.status,
-                    job_type: t.job_type || (isExtraJob ? 'Extra Job' : undefined),
-                    pod_photo_url: t.pod_photo_url || null,
-                    pod_signature_url: t.pod_signature_url || null,
-                    proof_of_load_url: t.proof_of_load_url || null,
-                    driver_id: t.driver_id || null,
-                    lorry_id: t.lorry_id || null,
-                    lorry_plate: (t.lorry_id && lorryMap.get(t.lorry_id)) || dayLorryPlate || driverLorryPlate,
-                    trip_origin: t.trip_origin || null,
-                    zone: t.zone || null,
-                    trip_drop_count: t.trip_drop_count || 1,
-                    delivery_address: t.delivery_address || null,
-                    edit_status: t.edit_status || null,
-                    pending_edit_payload: t.pending_edit_payload || null,
-                    driver_confirmed: t.driver_confirmed || false,
-                    baseRate,
-                    extraRate: extraDropTotal,
-                    extraRatePerPlace,
-                    extraDrops,
-                    earnings: tEarnings,
-                    deadline: t.deadline || null,
-                    pod_timestamp: t.pod_timestamp || null,
-                    pod_signed_by: t.pod_signed_by || null,
-                    isDelivered: t.status === 'Delivered',
-                    isUnscanned: t.status !== 'Delivered' && t.status !== 'Cancelled',
-                    displayString
-                });
+                tripDetails.push(t);
             });
 
             const isWorkedOnPublicHoliday = Boolean(isPublicHoliday && (hasAttendance || tripCount > 0));
@@ -3973,7 +3830,7 @@ const PersonalMonthlyReport: React.FC<Props> = ({ user }) => {
                             <div className="min-w-0 flex-1 flex items-center gap-3">
                                 <h2 className="text-base sm:text-lg font-bold text-slate-100 flex items-center gap-2">
                                     <FileText className="text-blue-400" size={18} />
-                                    Edit Trip: {selectedTrip.order_number || 'DO'}
+                                    Edit Trip: {selectedTrip.order_number || 'DO'}{selectedTrip.orders && selectedTrip.orders.length > 1 ? ` (${selectedTrip.orders.length} DOs)` : ''}
                                 </h2>
                             </div>
                             <div className="flex items-center gap-2">
@@ -4017,6 +3874,44 @@ const PersonalMonthlyReport: React.FC<Props> = ({ user }) => {
                                 </div>
                             </div>
 
+                            {/* Multi-DO Breakdown List */}
+                            {selectedTrip.orders && selectedTrip.orders.length > 1 && (
+                                <div className="mb-6 p-4 bg-slate-900/80 border border-slate-800 rounded-2xl">
+                                    <div className="text-xs font-bold text-slate-300 mb-2.5 flex items-center justify-between">
+                                        <span className="flex items-center gap-2">
+                                            <Layers size={15} className="text-blue-400" />
+                                            包含送货单清单 / Delivery Orders in this Trip ({selectedTrip.orders.length} DOs):
+                                        </span>
+                                        <span className="text-[11px] text-slate-500 font-mono">
+                                            Total Drops: {selectedTrip.trip_drop_count || selectedTrip.orders.length}
+                                        </span>
+                                    </div>
+                                    <div className="grid grid-cols-1 sm:grid-cols-2 gap-2">
+                                        {selectedTrip.orders.map((o: any, idx: number) => (
+                                            <div key={idx} className="flex items-center justify-between text-xs bg-black/40 px-3 py-2 rounded-xl border border-slate-800/80">
+                                                <div className="min-w-0 flex-1 pr-2">
+                                                    <div className="font-mono font-bold text-blue-300 flex items-center gap-1.5">
+                                                        <span>#{idx + 1}</span>
+                                                        <span>{o.order_number || o.orderNumber}</span>
+                                                    </div>
+                                                    <div className="text-slate-400 text-[11px] truncate mt-0.5">{o.customer || '-'}</div>
+                                                </div>
+                                                <div className="text-right shrink-0">
+                                                    <div className="text-slate-400 text-[10px] font-mono">{o.zone || '-'}</div>
+                                                    <span className={`inline-block mt-0.5 text-[9px] px-1.5 py-0.5 rounded font-semibold ${
+                                                        o.status === 'Delivered' 
+                                                            ? 'text-emerald-400 bg-emerald-500/10 border border-emerald-500/20' 
+                                                            : 'text-amber-400 bg-amber-500/10 border border-amber-500/20'
+                                                    }`}>
+                                                        {o.status === 'Delivered' ? '✅ Selesai' : '🚚 Belum Imbas'}
+                                                    </span>
+                                                </div>
+                                            </div>
+                                        ))}
+                                    </div>
+                                </div>
+                            )}
+
                             {/* Extra Job Pending Approval Banner */}
                             {(selectedTrip.job_type === 'Extra Job' || selectedTrip.order_number?.startsWith('TRIP-JOB') || selectedTrip.order_number?.startsWith('TRIP-PU') || (selectedTrip.notes && selectedTrip.notes.startsWith('[') && (!selectedTrip.items || selectedTrip.items.length === 0))) && selectedTrip.status !== 'Delivered' && selectedTrip.status !== 'Cancelled' && (
                                 <div className="mb-6 p-4 bg-amber-500/10 border border-amber-500/30 rounded-2xl flex flex-col gap-3 shadow-lg">
@@ -4046,10 +3941,11 @@ const PersonalMonthlyReport: React.FC<Props> = ({ user }) => {
                                                             updatedNotes = `${updatedNotes}\n[APPROVED_AMOUNT: ${val.toFixed(2)}]`.trim();
                                                         }
 
+                                                        const targetIds = (selectedTrip.order_ids && selectedTrip.order_ids.length > 0) ? selectedTrip.order_ids : [selectedTrip.id];
                                                         const { error } = await supabase.from('sales_orders').update({
                                                             status: 'Delivered',
                                                             notes: updatedNotes
-                                                        }).eq('id', selectedTrip.id);
+                                                        }).in('id', targetIds);
 
                                                         if (error) {
                                                             alert("Approval failed: " + error.message);
@@ -4069,10 +3965,11 @@ const PersonalMonthlyReport: React.FC<Props> = ({ user }) => {
                                                         const reason = window.prompt("驳回原因 / Rejection reason:", "Gambar tidak jelas / 不符合要求");
                                                         if (reason === null) return;
                                                         const updatedNotes = `${selectedTrip.notes || ''}\n[REJECTED: ${reason}]`.trim();
+                                                        const targetIds = (selectedTrip.order_ids && selectedTrip.order_ids.length > 0) ? selectedTrip.order_ids : [selectedTrip.id];
                                                         const { error } = await supabase.from('sales_orders').update({
                                                             status: 'Cancelled',
                                                             notes: updatedNotes
-                                                        }).eq('id', selectedTrip.id);
+                                                        }).in('id', targetIds);
 
                                                         if (error) {
                                                             alert("Reject failed: " + error.message);
@@ -4117,7 +4014,8 @@ const PersonalMonthlyReport: React.FC<Props> = ({ user }) => {
                                                         const isAlreadyDelivered = Boolean(selectedTrip.pod_photo_url || selectedTrip.pod_timestamp);
                                                         const targetStatus = isAlreadyDelivered ? 'Delivered' : 'Loaded';
                                                         if (!window.confirm(`批准 ${selectedTrip.order_number} 的修改？\nApprove changes and mark as ${targetStatus}?`)) return;
-                                                        const { error } = await supabase.from('sales_orders').update({ status: targetStatus }).eq('id', selectedTrip.id);
+                                                        const targetIds = (selectedTrip.order_ids && selectedTrip.order_ids.length > 0) ? selectedTrip.order_ids : [selectedTrip.id];
+                                                        const { error } = await supabase.from('sales_orders').update({ status: targetStatus }).in('id', targetIds);
                                                         if (error) {
                                                             alert("Approval failed: " + error.message);
                                                         } else {

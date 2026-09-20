@@ -6,7 +6,8 @@ import {
   sendWhatsAppText,
   sendWhatsAppTemplate,
   downloadWhatsAppMediaAsBase64,
-  normalizePhoneNumber
+  normalizePhoneNumber,
+  markWhatsAppMessageAsRead
 } from '../lib/whatsapp.js';
 
 function getSupabase() {
@@ -97,6 +98,11 @@ export async function handleWhatsAppWebhook(req: VercelRequest, res: VercelRespo
     const msgType = msg.type;
 
     console.log(`[WhatsApp Inbound] From: ${fromNumber}, Type: ${msgType}`);
+
+    // Mark incoming message as read immediately so sender sees blue ticks
+    if (msg.id) {
+      markWhatsAppMessageAsRead(msg.id).catch(() => {});
+    }
 
     // Match sender against users_public
     const localPhone = fromNumber.startsWith('60') ? '0' + fromNumber.substring(2) : fromNumber;

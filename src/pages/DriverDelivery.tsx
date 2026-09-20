@@ -292,6 +292,7 @@ const DriverDelivery: React.FC<DriverDeliveryProps> = ({ user, onNavigate }) => 
 
     // Later DO Upload State
     const [laterUploadTarget, setLaterUploadTarget] = useState<{ orderId: string, photoIndex: number } | null>(null);
+    const laterUploadTargetRef = useRef<{ orderId: string, photoIndex: number } | null>(null);
     const [laterUploading, setLaterUploading] = useState(false);
     const laterFileInputRef = useRef<HTMLInputElement>(null);
 
@@ -302,18 +303,25 @@ const DriverDelivery: React.FC<DriverDeliveryProps> = ({ user, onNavigate }) => 
         const isExtra = (t as any).job_type === 'Extra Job' || (t as any).job_type === 'Pick Up' || t.orderNumber?.startsWith('TRIP-JOB') || t.orderNumber?.startsWith('TRIP-PU') || (!t.items || t.items.length === 0);
         if (isExtra) return true;
 
+        const totalDrops = Math.max(1, Number((t as any).trip_drop_count) || 1);
         const completedDrops = countCompletedDrops(t.pod_photo_url);
-        return completedDrops >= 1;
+        return completedDrops >= totalDrops;
     };
 
     const isOrderFullyDelivered = (order: SalesOrder) => {
+        const totalDrops = Math.max(1, Number((order as any).trip_drop_count) || 1);
+        const completedDrops = countCompletedDrops(order.pod_photo_url);
+
+        if (order.status === 'Pending Approval') return isPendingApprovalDone(order);
+
+        // If multi-drop order, it is only fully delivered if all drops are submitted
+        if (totalDrops > 1) {
+            return completedDrops >= totalDrops;
+        }
+
         if (order.status === 'Delivered') return true;
-        if (isPendingApprovalDone(order)) return true;
         if (order.status === 'Loaded') {
-            const completedDrops = countCompletedDrops(order.pod_photo_url);
-            if (completedDrops >= 1) {
-                return true;
-            }
+            return completedDrops >= totalDrops;
         }
         return false;
     };
@@ -829,18 +837,22 @@ const DriverDelivery: React.FC<DriverDeliveryProps> = ({ user, onNavigate }) => 
 
     const extractDoNumberFromAi = async (base64Str: string): Promise<string> => {
         try {
+            const controller = new AbortController();
+            const timeoutId = setTimeout(() => controller.abort(), 6000);
             const response = await fetch('/api/agent/ai-photo', {
                 method: 'POST',
                 headers: {
                     'Content-Type': 'application/json'
                 },
-                body: JSON.stringify({ imageBase64: base64Str, mode: 'do' })
+                body: JSON.stringify({ imageBase64: base64Str, mode: 'do' }),
+                signal: controller.signal
             });
+            clearTimeout(timeoutId);
             if (!response.ok) throw new Error(`HTTP ${response.status}`);
             const data = await response.json();
             return data.do_number || '';
         } catch (err) {
-            console.error("AI DO extraction failed:", err);
+            console.warn("AI DO extraction timed out or failed (non-fatal):", err);
             return '';
         }
     };
@@ -935,9 +947,29 @@ const DriverDelivery: React.FC<DriverDeliveryProps> = ({ user, onNavigate }) => 
                 finalNote = newNoteSegment;
             }
 
-            // 1 DO = 1 Drop Point!
-            // When photo is submitted for this DO, it is delivered immediately (unless pending approval).
-            let nextStatus = selectedOrder.status === 'Pending Approval' ? 'Pending Approval' : 'Delivered';
+            // Multi-drop aware: Always fetch freshest trip_drop_count from DB to prevent stale client state
+            let freshTripDropCount = (selectedOrder as any).trip_drop_count;
+            try {
+                const { data: freshOrder } = await supabase
+                    .from('sales_orders')
+                    .select('trip_drop_count')
+                    .eq('id', selectedOrder.id)
+                    .single();
+                if (freshOrder?.trip_drop_count) {
+                    freshTripDropCount = freshOrder.trip_drop_count;
+                }
+            } catch (fetchErr) {
+                console.warn('[handleConfirmUnload] Fresh trip_drop_count check notice:', fetchErr);
+            }
+
+            // If the order has multiple drops (trip_drop_count > 1), keep status 'Loaded' until all drops are submitted
+            const totalDrops = Math.max(1, Number(freshTripDropCount) || 1);
+            const completedDrops = countCompletedDrops(podPhotoUrl);
+            const isAllDropsCompleted = isFinalDrop || completedDrops >= totalDrops;
+
+            let nextStatus = selectedOrder.status === 'Pending Approval' 
+                ? 'Pending Approval' 
+                : (isAllDropsCompleted ? 'Delivered' : 'Loaded');
 
             let updatedNotes = finalNote;
             if (extractedDoNumber) {
@@ -1002,7 +1034,7 @@ const DriverDelivery: React.FC<DriverDeliveryProps> = ({ user, onNavigate }) => 
                     const localUpdated: any = { 
                         ...t, 
                         status: nextStatus, 
-                        trip_drop_count: (selectedOrder as any).trip_drop_count || 1,
+                        trip_drop_count: totalDrops,
                         pod_photo_url: podPhotoUrl, 
                         pod_timestamp: new Date().toISOString(), 
                         notes: updatedNotes 
@@ -1011,6 +1043,9 @@ const DriverDelivery: React.FC<DriverDeliveryProps> = ({ user, onNavigate }) => 
                 }
                 return t;
             }));
+
+            // Fetch fresh tasks in background to ensure all properties and related trips are aligned
+            fetchTasks();
 
             setIsUnloadModalOpen(false);
             setUnloadDoPhotoBase64(null);
@@ -1057,10 +1092,10 @@ const DriverDelivery: React.FC<DriverDeliveryProps> = ({ user, onNavigate }) => 
                 }
             });
 
-            if (isFinalDrop) {
-                alert("✅ Trip selesai sepenuhnya! / Trip completed fully!");
+            if (isAllDropsCompleted) {
+                alert(`✅ Trip selesai sepenuhnya (${completedDrops}/${totalDrops} Drops)! / Trip completed fully!`);
             } else {
-                alert("✅ Gambar & Catatan disimpan! Sila teruskan ke drop point seterusnya. / Photos & Note saved! Please proceed to the next drop point.");
+                alert(`✅ Drop ${completedDrops}/${totalDrops} disimpan! Sila teruskan ke drop point seterusnya.\n\nDrop ${completedDrops}/${totalDrops} saved! Please proceed to the next stop.`);
             }
         } catch (err: any) {
             logActivity(user, {
@@ -1081,13 +1116,15 @@ const DriverDelivery: React.FC<DriverDeliveryProps> = ({ user, onNavigate }) => 
     };
 
     const handleTriggerLaterUpload = (orderId: string, idx: number) => {
+        laterUploadTargetRef.current = { orderId, photoIndex: idx };
         setLaterUploadTarget({ orderId, photoIndex: idx });
         laterFileInputRef.current?.click();
     };
 
     const handleLaterFileSelect = async (e: React.ChangeEvent<HTMLInputElement>) => {
         const file = e.target.files?.[0];
-        if (!file || !laterUploadTarget) return;
+        const target = laterUploadTargetRef.current || laterUploadTarget;
+        if (!file || !target) return;
 
         setLaterUploading(true);
         try {
@@ -1096,7 +1133,7 @@ const DriverDelivery: React.FC<DriverDeliveryProps> = ({ user, onNavigate }) => 
             const base64Only = compressedBase64.split(',')[1];
 
             // Load order details to get orderNumber (needed for fileName)
-            const targetOrder = tasks.find(t => t.id === laterUploadTarget.orderId);
+            const targetOrder = tasks.find(t => t.id === target.orderId);
             if (!targetOrder) throw new Error("Order not found");
 
             // Format Watermark Text Lines
@@ -1137,7 +1174,7 @@ const DriverDelivery: React.FC<DriverDeliveryProps> = ({ user, onNavigate }) => 
             const { data: freshOrder, error: fetchErr } = await supabase
                 .from('sales_orders')
                 .select('status, trip_drop_count, pod_photo_url, notes')
-                .eq('id', laterUploadTarget.orderId)
+                .eq('id', target.orderId)
                 .single();
 
             if (fetchErr) throw fetchErr;
@@ -1145,10 +1182,10 @@ const DriverDelivery: React.FC<DriverDeliveryProps> = ({ user, onNavigate }) => 
             const currentPhotos = freshOrder.pod_photo_url ? freshOrder.pod_photo_url.split(',') : [];
             
             // Expand or replace at photoIndex
-            while (currentPhotos.length <= laterUploadTarget.photoIndex) {
+            while (currentPhotos.length <= target.photoIndex) {
                 currentPhotos.push('');
             }
-            currentPhotos[laterUploadTarget.photoIndex] = publicUrl;
+            currentPhotos[target.photoIndex] = publicUrl;
             const updatedPodUrl = currentPhotos.join(',');
 
             const totalDrops = freshOrder.trip_drop_count || 1;
@@ -1183,7 +1220,7 @@ const DriverDelivery: React.FC<DriverDeliveryProps> = ({ user, onNavigate }) => 
             const { error: updateErr } = await supabase
                 .from('sales_orders')
                 .update(updatePayload)
-                .eq('id', laterUploadTarget.orderId);
+                .eq('id', target.orderId);
 
             if (updateErr) throw updateErr;
 
@@ -1196,6 +1233,7 @@ const DriverDelivery: React.FC<DriverDeliveryProps> = ({ user, onNavigate }) => 
         } finally {
             setLaterUploading(false);
             setLaterUploadTarget(null);
+            laterUploadTargetRef.current = null;
             if (e.target) e.target.value = '';
         }
     };
@@ -1784,9 +1822,21 @@ const DriverDelivery: React.FC<DriverDeliveryProps> = ({ user, onNavigate }) => 
                 return String(a.orderNumber || a.order_number || '').localeCompare(String(b.orderNumber || b.order_number || ''));
             });
 
-            grp.totalDrops = grp.orders.length;
-            grp.completedDrops = grp.orders.filter(o => isOrderFullyDelivered(o)).length;
-            grp.isAllDone = grp.completedDrops === grp.totalDrops && grp.totalDrops > 0;
+            // Calculate true total drops for this trip group:
+            // - If single order with multiple drops, total is that order's trip_drop_count
+            // - If multiple orders where each order records the batch drop count (e.g. trip_drop_count == orders.length), total is orders.length
+            // - Otherwise, max of order count and the maximum recorded drop count
+            const maxOrderDrop = Math.max(...grp.orders.map(o => Number((o as any).trip_drop_count) || 1));
+            const calculatedTotalDrops = Math.max(grp.orders.length, maxOrderDrop);
+            grp.totalDrops = calculatedTotalDrops;
+
+            grp.completedDrops = grp.orders.reduce((sum, o) => {
+                const ordDone = countCompletedDrops(o.pod_photo_url);
+                const effectiveDone = o.status === 'Delivered' ? Math.max(1, ordDone) : ordDone;
+                return sum + effectiveDone;
+            }, 0);
+            grp.completedDrops = Math.min(grp.completedDrops, grp.totalDrops);
+            grp.isAllDone = grp.completedDrops >= grp.totalDrops && grp.totalDrops > 0;
 
             // Extract Trip Remark or sequence if present
             for (const ord of grp.orders) {
@@ -2217,9 +2267,28 @@ const DriverDelivery: React.FC<DriverDeliveryProps> = ({ user, onNavigate }) => 
                                             <p className="text-[10px] text-emerald-400 uppercase font-black flex items-center gap-1">
                                                 📸 Bukti Penghantaran / Proof of Delivery (POD)
                                             </p>
-                                            <span className="text-[10px] font-mono font-bold text-slate-400">
-                                                {completedDropsCount >= 1 ? '✅ Selesai / Completed' : 'Menunggu / Pending'}
-                                            </span>
+                                            {(() => {
+                                                const totalDrops = Math.max(1, Number((order as any).trip_drop_count) || 1);
+                                                if (completedDropsCount >= totalDrops && totalDrops > 0) {
+                                                    return (
+                                                        <span className="text-[10px] font-mono font-bold text-emerald-400">
+                                                            ✅ Selesai / Completed ({completedDropsCount}/{totalDrops})
+                                                        </span>
+                                                    );
+                                                }
+                                                if (completedDropsCount > 0) {
+                                                    return (
+                                                        <span className="text-[10px] font-mono font-bold text-blue-400">
+                                                            🚚 Dalam Perjalanan ({completedDropsCount}/{totalDrops} Drops)
+                                                        </span>
+                                                    );
+                                                }
+                                                return (
+                                                    <span className="text-[10px] font-mono font-bold text-slate-400">
+                                                        Menunggu / Pending
+                                                    </span>
+                                                );
+                                            })()}
                                         </div>
                                         <div className="grid grid-cols-2 sm:grid-cols-4 gap-2">
                                             {rawPhotosList.map((url, idx) => {
@@ -2315,18 +2384,26 @@ const DriverDelivery: React.FC<DriverDeliveryProps> = ({ user, onNavigate }) => 
                             </button>
                         </div>
                     ) : (
-                        (order.status === 'Loaded' || order.status === 'Pending Approval') ? (
-                            <button
-                                onClick={() => handleOpenUnloadModal(order)}
-                                data-action="OPEN_UNLOAD_MODAL"
-                                data-action-name="打开送货签收窗口"
-                                data-target={`工单 #${order.orderNumber || order.id}`}
-                                className="w-full py-4 bg-emerald-600 hover:bg-emerald-500 text-white rounded-xl font-bold uppercase text-sm tracking-widest flex items-center justify-center gap-3 shadow-lg shadow-emerald-950/30 active:scale-95 transition-all"
-                            >
-                                <CheckCircle size={18} /> Sahkan Hantaran / Confirm Delivery
-                                <ChevronRight size={16} className="opacity-50" />
-                            </button>
-                        ) : (
+                        (order.status === 'Loaded' || order.status === 'Pending Approval' || !isDeliveredOrDone) ? (() => {
+                            const btnTotalDrops = Math.max(1, Number((order as any).trip_drop_count) || 1);
+                            const btnDoneDrops = countCompletedDrops(order.pod_photo_url);
+                            return (
+                                <button
+                                    onClick={() => handleOpenUnloadModal(order)}
+                                    data-action="OPEN_UNLOAD_MODAL"
+                                    data-action-name="打开送货签收窗口"
+                                    data-target={`工单 #${order.orderNumber || order.id}`}
+                                    className="w-full py-4 bg-emerald-600 hover:bg-emerald-500 text-white rounded-xl font-bold uppercase text-sm tracking-widest flex items-center justify-center gap-3 shadow-lg shadow-emerald-950/30 active:scale-95 transition-all"
+                                >
+                                    <CheckCircle size={18} />
+                                    <span>
+                                        Sahkan Hantaran / Confirm Delivery
+                                        {btnTotalDrops > 1 && ` (Drop ${Math.min(btnDoneDrops + 1, btnTotalDrops)}/${btnTotalDrops})`}
+                                    </span>
+                                    <ChevronRight size={16} className="opacity-50" />
+                                </button>
+                            );
+                        })() : (
                             <div className="w-full py-3.5 px-4 bg-slate-900/80 border border-slate-800 rounded-xl flex items-center justify-between text-xs">
                                 <div className="flex items-center gap-2">
                                     <span className="w-2 h-2 rounded-full bg-amber-400 animate-pulse" />
@@ -2871,11 +2948,25 @@ const DriverDelivery: React.FC<DriverDeliveryProps> = ({ user, onNavigate }) => 
                         <div>
                             <h2 className="font-black text-white text-lg flex items-center gap-2">
                                 <span>SAHKAN HANTARAN / CONFIRM DELIVERY</span>
-                                {(selectedOrder as any).stop_sequence && (
-                                    <span className="text-xs font-bold px-2 py-0.5 rounded border font-mono bg-blue-500/10 text-blue-400 border-blue-500/20">
-                                        Hentian #{(selectedOrder as any).stop_sequence}
-                                    </span>
-                                )}
+                                {(() => {
+                                    const modalTotal = Math.max(1, Number((selectedOrder as any).trip_drop_count) || 1);
+                                    const modalDone = countCompletedDrops(selectedOrder.pod_photo_url);
+                                    if (modalTotal > 1) {
+                                        return (
+                                            <span className="text-xs font-bold px-2 py-0.5 rounded border font-mono bg-emerald-500/20 text-emerald-400 border-emerald-500/30">
+                                                Drop #{Math.min(modalDone + 1, modalTotal)} / {modalTotal}
+                                            </span>
+                                        );
+                                    }
+                                    if ((selectedOrder as any).stop_sequence) {
+                                        return (
+                                            <span className="text-xs font-bold px-2 py-0.5 rounded border font-mono bg-blue-500/10 text-blue-400 border-blue-500/20">
+                                                Hentian #{(selectedOrder as any).stop_sequence}
+                                            </span>
+                                        );
+                                    }
+                                    return null;
+                                })()}
                             </h2>
                             <p className="text-[11px] text-slate-400 uppercase font-mono font-bold">
                                 DO: {selectedOrder.orderNumber} • {selectedOrder.customer}
@@ -3061,14 +3152,13 @@ const DriverDelivery: React.FC<DriverDeliveryProps> = ({ user, onNavigate }) => 
                             </div>
                         )}
 
-                        {/* Final Drop Toggle Checkbox */}
-                        {/* Final Drop Toggle Checkbox (Hidden: Trip completion handled by office scan QR) */}
-                        {false && (
+                        {/* Final Drop Toggle Checkbox for Multi-Drop Orders */}
+                        {(selectedOrder as any).trip_drop_count > 1 && (
                             <div className="bg-slate-900 border border-slate-800 p-4 rounded-xl flex items-center justify-between">
                                 <div>
                                     <p className="text-sm font-bold text-white uppercase">HANTARAN TERAKHIR (TAMAT TRIP)? / FINAL DROP (END TRIP)?</p>
                                     <p className="text-[10px] text-slate-500 uppercase font-medium">
-                                        Tandakan ini jika semua drop point / destinasi untuk trip ini telah selesai.
+                                        Tandakan jika ini adalah DO terakhir dan trip telah selesai.
                                     </p>
                                 </div>
                                 <input 

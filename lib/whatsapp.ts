@@ -66,6 +66,31 @@ export async function sendWhatsAppText(to: string, text: string): Promise<any> {
 }
 
 /**
+ * Marks an incoming WhatsApp message as read (triggers blue ticks on sender's phone)
+ */
+export async function markWhatsAppMessageAsRead(messageId: string): Promise<any> {
+  try {
+    const { phoneNumberId, accessToken } = getWhatsAppConfig();
+    const response = await fetch(`https://graph.facebook.com/v21.0/${phoneNumberId}/messages`, {
+      method: 'POST',
+      headers: {
+        'Authorization': `Bearer ${accessToken}`,
+        'Content-Type': 'application/json',
+      },
+      body: JSON.stringify({
+        messaging_product: 'whatsapp',
+        status: 'read',
+        message_id: messageId,
+      }),
+    });
+    return await response.json();
+  } catch (err) {
+    console.warn('[WhatsApp] Failed to mark message as read:', err);
+    return null;
+  }
+}
+
+/**
  * Send an approved WhatsApp Template message
  */
 export async function sendWhatsAppTemplate(

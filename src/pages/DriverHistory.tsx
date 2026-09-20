@@ -18,6 +18,7 @@ const DriverHistory: React.FC<DriverHistoryProps> = ({ user, onNavigate }) => {
 
     // Later DO Upload State
     const [laterUploadTarget, setLaterUploadTarget] = useState<{ orderId: string; photoIndex: number } | null>(null);
+    const laterUploadTargetRef = useRef<{ orderId: string; photoIndex: number } | null>(null);
     const [laterUploading, setLaterUploading] = useState(false);
     const laterFileInputRef = useRef<HTMLInputElement>(null);
 
@@ -118,19 +119,21 @@ const DriverHistory: React.FC<DriverHistoryProps> = ({ user, onNavigate }) => {
     };
 
     const handleTriggerLaterUpload = (orderId: string, idx: number) => {
+        laterUploadTargetRef.current = { orderId, photoIndex: idx };
         setLaterUploadTarget({ orderId, photoIndex: idx });
         laterFileInputRef.current?.click();
     };
 
     const handleLaterFileSelect = async (e: React.ChangeEvent<HTMLInputElement>) => {
         const file = e.target.files?.[0];
-        if (!file || !laterUploadTarget) return;
+        const target = laterUploadTargetRef.current || laterUploadTarget;
+        if (!file || !target) return;
 
         setLaterUploading(true);
         try {
             const compressedBase64 = await compressImage(file);
             const base64Only = compressedBase64.split(',')[1];
-            const targetOrder = tasks.find(t => t.id === laterUploadTarget.orderId);
+            const targetOrder = tasks.find(t => t.id === target.orderId);
             if (!targetOrder) throw new Error("Order not found");
 
             const now = new Date();
@@ -165,20 +168,20 @@ const DriverHistory: React.FC<DriverHistoryProps> = ({ user, onNavigate }) => {
             const { data: freshOrder, error: fetchErr } = await supabase
                 .from('sales_orders')
                 .select('status, trip_drop_count, pod_photo_url, notes')
-                .eq('id', laterUploadTarget.orderId)
+                .eq('id', target.orderId)
                 .single();
 
             if (fetchErr) throw fetchErr;
 
             const currentPhotos = freshOrder.pod_photo_url ? freshOrder.pod_photo_url.split(',') : [];
-            while (currentPhotos.length <= laterUploadTarget.photoIndex) {
+            while (currentPhotos.length <= target.photoIndex) {
                 currentPhotos.push('');
             }
-            currentPhotos[laterUploadTarget.photoIndex] = publicUrl;
+            currentPhotos[target.photoIndex] = publicUrl;
             const updatedPodUrl = currentPhotos.join(',');
 
             const totalDrops = freshOrder.trip_drop_count || 1;
-            const filledDoCount = currentPhotos.filter((url, idx) => idx % 2 === 0 && Boolean(url.trim())).length;
+            const filledDoCount = currentPhotos.filter((url: string, idx: number) => idx % 2 === 0 && Boolean(url && url.trim())).length;
             const completedDrops = Math.floor(currentPhotos.filter(Boolean).length / 2);
 
             let updatedNotes = freshOrder.notes || '';
@@ -201,7 +204,7 @@ const DriverHistory: React.FC<DriverHistoryProps> = ({ user, onNavigate }) => {
             const { error: updateErr } = await supabase
                 .from('sales_orders')
                 .update(updatePayload)
-                .eq('id', laterUploadTarget.orderId);
+                .eq('id', target.orderId);
 
             if (updateErr) throw updateErr;
 
@@ -212,6 +215,7 @@ const DriverHistory: React.FC<DriverHistoryProps> = ({ user, onNavigate }) => {
         } finally {
             setLaterUploading(false);
             setLaterUploadTarget(null);
+            laterUploadTargetRef.current = null;
             if (e.target) e.target.value = '';
         }
     };
@@ -664,7 +668,6 @@ const DriverHistory: React.FC<DriverHistoryProps> = ({ user, onNavigate }) => {
                 ref={laterFileInputRef}
                 type="file"
                 accept="image/*"
-                capture="environment"
                 className="hidden"
                 onChange={handleLaterFileSelect}
             />

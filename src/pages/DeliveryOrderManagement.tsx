@@ -31,7 +31,7 @@ import {
     ParsedDeliveryOrder
 } from '../types';
 import { V2Item } from '../types/v2';
-import { compressImage, dataUrlToBase64Payload } from '../utils/imageCompress';
+import { compressImage, dataUrlToBase64Payload, dataURLtoBlob } from '../utils/imageCompress';
 import * as XLSX from 'xlsx';
 import { useTranslation } from "react-i18next";
 import { deductStockForOrder, reverseStockForOrder, adjustStockForOrderDelta } from '../services/stockService';
@@ -628,6 +628,79 @@ const DeliveryOrderManagement: React.FC<DeliveryOrderManagementProps> = ({ user 
     // Editing State
     const [editingOrderId, setEditingOrderId] = useState<string | null>(null);
     const [editingOrderPhoto, setEditingOrderPhoto] = useState<string | null>(null);
+
+    // Admin POD Manual Upload
+    const [adminPodUploadTarget, setAdminPodUploadTarget] = useState<{ orderId: string; photoIndex: number } | null>(null);
+    const adminPodUploadTargetRef = useRef<{ orderId: string; photoIndex: number } | null>(null);
+    const [isAdminPodUploading, setIsAdminPodUploading] = useState(false);
+    const adminPodFileInputRef = useRef<HTMLInputElement>(null);
+
+    const handleTriggerAdminPodUpload = (orderId: string, idx: number) => {
+        adminPodUploadTargetRef.current = { orderId, photoIndex: idx };
+        setAdminPodUploadTarget({ orderId, photoIndex: idx });
+        adminPodFileInputRef.current?.click();
+    };
+
+    const handleAdminPodFileSelect = async (e: React.ChangeEvent<HTMLInputElement>) => {
+        const file = e.target.files?.[0];
+        const target = adminPodUploadTargetRef.current || adminPodUploadTarget;
+        if (!file || !target) return;
+
+        setIsAdminPodUploading(true);
+        try {
+            const compressedDataUrl = await compressImage(file, 1600, 0.85);
+            const blob = dataURLtoBlob(compressedDataUrl);
+            const targetOrder = orders.find(o => o.id === target.orderId);
+            const orderNum = targetOrder?.orderNumber || (targetOrder as any)?.order_number || 'DO';
+
+            const fileName = `admin_pod_${orderNum}_${Date.now()}.jpg`;
+            const { error: uploadError } = await supabase.storage
+                .from('work-photos')
+                .upload(fileName, blob, { contentType: 'image/jpeg' });
+
+            if (uploadError) throw uploadError;
+
+            const { data: urlData } = supabase.storage.from('work-photos').getPublicUrl(fileName);
+            const publicUrl = urlData.publicUrl;
+
+            // Fetch latest sales_order
+            const { data: freshOrder, error: fetchErr } = await supabase
+                .from('sales_orders')
+                .select('pod_photo_url, notes')
+                .eq('id', target.orderId)
+                .single();
+
+            if (fetchErr) throw fetchErr;
+
+            const currentPhotos = freshOrder.pod_photo_url ? freshOrder.pod_photo_url.split(',') : [];
+            while (currentPhotos.length <= target.photoIndex) {
+                currentPhotos.push('');
+            }
+            currentPhotos[target.photoIndex] = publicUrl;
+            const updatedPodUrl = currentPhotos.join(',');
+
+            const { error: updateErr } = await supabase
+                .from('sales_orders')
+                .update({ 
+                    pod_photo_url: updatedPodUrl,
+                    updated_at: new Date().toISOString()
+                })
+                .eq('id', target.orderId);
+
+            if (updateErr) throw updateErr;
+
+            // Update local orders state
+            setOrders(prev => prev.map(o => o.id === target.orderId ? { ...o, pod_photo_url: updatedPodUrl } : o));
+            alert("✅ Gambar DO/POD berjaya dimuat naik oleh Admin! / POD Photo successfully uploaded by Admin!");
+        } catch (err: any) {
+            alert("Gagal memuat naik gambar POD: " + err.message);
+        } finally {
+            setIsAdminPodUploading(false);
+            setAdminPodUploadTarget(null);
+            adminPodUploadTargetRef.current = null;
+            if (e.target) e.target.value = '';
+        }
+    };
 
     // New Order Form State
     const [deliveryMethod, setDeliveryMethod] = useState<'DELIVERY' | 'SELF_PICKUP'>('DELIVERY');
@@ -6216,7 +6289,25 @@ const DeliveryOrderManagement: React.FC<DeliveryOrderManagementProps> = ({ user 
                                             <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
                                                 {/* POD Photos */}
                                                 <div>
-                                                    <label className="block text-[10px] font-bold text-slate-500 uppercase tracking-wider mb-2">Delivery Photos (DO / Goods)</label>
+                                                    <div className="flex items-center justify-between mb-2">
+                                                        <label className="block text-[10px] font-bold text-slate-500 uppercase tracking-wider">
+                                                            Delivery Photos (DO / Goods)
+                                                        </label>
+                                                        <button
+                                                            type="button"
+                                                            onClick={() => {
+                                                                const photos = currentOrder.pod_photo_url ? currentOrder.pod_photo_url.split(',') : [];
+                                                                const nextIdx = photos.findIndex(p => !p || !p.trim());
+                                                                handleTriggerAdminPodUpload(currentOrder.id, nextIdx >= 0 ? nextIdx : photos.length);
+                                                            }}
+                                                            disabled={isAdminPodUploading}
+                                                            className="px-2 py-0.5 bg-blue-600/20 hover:bg-blue-600/30 border border-blue-500/40 text-blue-400 rounded text-[9px] font-bold uppercase transition-all flex items-center gap-1 active:scale-95 cursor-pointer disabled:opacity-50"
+                                                            title="Upload or attach DO / POD photo directly from WhatsApp/PC"
+                                                        >
+                                                            <Plus size={10} />
+                                                            <span>{isAdminPodUploading ? 'Uploading...' : 'Upload DO / POD'}</span>
+                                                        </button>
+                                                    </div>
                                                     {currentOrder.pod_photo_url ? (
                                                         <div className="flex flex-wrap gap-2">
                                                             {currentOrder.pod_photo_url.split(',').map((url, idx) => {
@@ -6226,29 +6317,52 @@ const DeliveryOrderManagement: React.FC<DeliveryOrderManagementProps> = ({ user 
                                                                     return (
                                                                         <div
                                                                             key={idx}
-                                                                            className="h-20 w-20 rounded-lg border border-dashed border-amber-500/40 bg-amber-950/20 flex flex-col items-center justify-center p-1 text-center shrink-0"
-                                                                            title={isDo ? t('Surat DO belum dimuat naik / DO photo missing') : t('Gambar barang belum dimuat naik / Goods photo missing')}
+                                                                            onClick={() => handleTriggerAdminPodUpload(currentOrder.id, idx)}
+                                                                            className="h-20 w-20 rounded-lg border border-dashed border-amber-500/40 bg-amber-950/20 hover:bg-amber-900/30 hover:border-amber-400 flex flex-col items-center justify-center p-1 text-center shrink-0 cursor-pointer transition-all group"
+                                                                            title={isDo ? t('Klik untuk muat naik DO / Click to upload DO') : t('Klik untuk muat naik gambar barang / Click to upload Goods photo')}
                                                                         >
-                                                                            <span className="text-base">📄</span>
-                                                                            <span className="text-[9px] font-bold text-amber-400 mt-0.5 uppercase leading-tight">
-                                                                                {isDo ? t('Tiada DO') : t('Tiada Barang')}
+                                                                            <span className="text-base group-hover:scale-110 transition-transform">📄</span>
+                                                                            <span className="text-[9px] font-bold text-amber-400 mt-0.5 uppercase leading-tight group-hover:text-amber-300">
+                                                                                {isDo ? t('Muat Naik DO') : t('Muat Naik')}
                                                                             </span>
-                                                                            <span className="text-[8px] text-amber-300/60 font-mono">Slot {idx + 1}</span>
+                                                                            <span className="text-[8px] text-amber-300/60 font-mono">Slot {idx + 1} (Upload)</span>
                                                                         </div>
                                                                     );
                                                                 }
                                                                 return (
-                                                                    <a key={idx} href={cleanUrl} target="_blank" rel="noopener noreferrer" className="relative group overflow-hidden rounded-lg border border-slate-800 hover:border-blue-500 h-20 w-20 bg-black flex-shrink-0 block transition-all">
-                                                                        <img src={cleanUrl} alt={`POD Photo ${idx + 1}`} className="w-full h-full object-cover opacity-85 group-hover:opacity-100 transition-opacity" />
-                                                                        <div className="absolute inset-0 flex items-center justify-center bg-black/40 opacity-0 group-hover:opacity-100 transition-opacity pointer-events-none">
-                                                                            <span className="text-[9px] bg-blue-500 text-white font-bold px-1.5 py-0.5 rounded shadow">View</span>
-                                                                        </div>
-                                                                    </a>
+                                                                    <div key={idx} className="relative group/pod">
+                                                                        <a href={cleanUrl} target="_blank" rel="noopener noreferrer" className="overflow-hidden rounded-lg border border-slate-800 hover:border-blue-500 h-20 w-20 bg-black flex-shrink-0 block transition-all">
+                                                                            <img src={cleanUrl} alt={`POD Photo ${idx + 1}`} className="w-full h-full object-cover opacity-85 group-hover/pod:opacity-100 transition-opacity" />
+                                                                            <div className="absolute inset-0 flex items-center justify-center bg-black/40 opacity-0 group-hover/pod:opacity-100 transition-opacity pointer-events-none">
+                                                                                <span className="text-[9px] bg-blue-500 text-white font-bold px-1.5 py-0.5 rounded shadow">View</span>
+                                                                            </div>
+                                                                        </a>
+                                                                        <button
+                                                                            type="button"
+                                                                            onClick={(e) => {
+                                                                                e.stopPropagation();
+                                                                                handleTriggerAdminPodUpload(currentOrder.id, idx);
+                                                                            }}
+                                                                            className="absolute bottom-1 right-1 bg-black/80 hover:bg-blue-600 text-white p-1 rounded text-[8px] font-bold border border-white/20 opacity-0 group-hover/pod:opacity-100 transition-opacity cursor-pointer"
+                                                                            title="Ganti gambar ini / Replace this photo"
+                                                                        >
+                                                                            <Edit3 size={10} />
+                                                                        </button>
+                                                                    </div>
                                                                 );
                                                             })}
                                                         </div>
                                                     ) : (
-                                                        <div className="text-xs text-slate-600 italic">No delivery photos uploaded</div>
+                                                        <div className="flex items-center gap-2">
+                                                            <div className="text-xs text-slate-600 italic">No delivery photos uploaded</div>
+                                                            <button
+                                                                type="button"
+                                                                onClick={() => handleTriggerAdminPodUpload(currentOrder.id, 0)}
+                                                                className="text-[10px] text-blue-400 underline hover:text-blue-300 font-bold cursor-pointer"
+                                                            >
+                                                                Upload Now
+                                                            </button>
+                                                        </div>
                                                     )}
                                                 </div>
 
@@ -8361,6 +8475,15 @@ const DeliveryOrderManagement: React.FC<DeliveryOrderManagementProps> = ({ user 
                     </div>
                 </div>
             )}
+
+            {/* Hidden Input for Admin POD Upload */}
+            <input
+                ref={adminPodFileInputRef}
+                type="file"
+                accept="image/*"
+                className="hidden"
+                onChange={handleAdminPodFileSelect}
+            />
 
         </div >
     );
