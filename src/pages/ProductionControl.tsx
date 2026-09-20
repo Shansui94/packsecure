@@ -16,7 +16,7 @@ import { getBubbleWrapSku } from '../utils/skuMapper';
 import { 
     Box, Settings, Clock, Layers, LogOut, Calendar, Package,
     Camera, Check, AlertTriangle, User as UserIcon, RefreshCw, Play, Loader, Send, Sparkles, Image as ImageIcon,
-    Video, Square, X, FlaskConical, QrCode, Printer
+    Video, Square, X, FlaskConical, QrCode, Printer, Plus
 } from 'lucide-react';
 import { supabase } from '../services/supabase';
 import { getMachineByCode, getMachineById } from '../services/productionService';
@@ -179,6 +179,7 @@ interface ProductionLaneProps {
     machineMetadata: Machine | null;
     user: User | null;
     operatorId: string | null;
+    operatorEmployeeId?: string | null;
     operatorName?: string | null;
     activeJob: JobOrder | null;
     jobs: JobOrder[];
@@ -189,10 +190,11 @@ interface ProductionLaneProps {
     isControlMode: boolean;
     onTakeoverClick?: () => void;
     onOpenPrinterModal?: () => void;
+    clockInTime?: string | null;
 }
 
 const ProductionLane: React.FC<ProductionLaneProps> = ({ 
-    laneId, machineMetadata, operatorId, operatorName, jobs, onProductionComplete, onBeforeProduce, className, presetSku, isControlMode, onTakeoverClick, onOpenPrinterModal
+    laneId, machineMetadata, operatorId, operatorEmployeeId, operatorName, jobs, onProductionComplete, onBeforeProduce, className, presetSku, isControlMode, onTakeoverClick, onOpenPrinterModal, clockInTime
 }) => {
     const { t } = useTranslation();
     const [step, setStep] = useState<1 | 2 | 3>(1);
@@ -204,10 +206,91 @@ const ProductionLane: React.FC<ProductionLaneProps> = ({
 
     const [isLiveRun, setIsLiveRun] = useState(false);
     const [liveCount, setLiveCount] = useState(0);
+    const [todayMachineCount, setTodayMachineCount] = useState<number>(0);
+    const [shiftMachineCount, setShiftMachineCount] = useState<number>(0);
+    const [isSubmittingManualRoll, setIsSubmittingManualRoll] = useState(false);
+
     const [activeSku, setActiveSku] = useState<string | null>(null);
     const [selectedRolls, setSelectedRolls] = useState<number>(1);
     const [isPrintingCurrent, setIsPrintingCurrent] = useState(false);
     const [printFeedback, setPrintFeedback] = useState<string | null>(null);
+
+    // Fetch Machine Totals (Today's total & Current Shift total)
+    const fetchMachineTotals = useCallback(async () => {
+        if (!machineMetadata?.id) return;
+        const machineId = machineMetadata.id;
+        
+        try {
+            // Today start in MYT (UTC+8)
+            const now = new Date();
+            const myt = new Date(now.getTime() + 8 * 3600000);
+            const ymd = myt.toISOString().slice(0, 10);
+            const todayStart = new Date(`${ymd}T00:00:00+08:00`).toISOString();
+
+            // 1. Today's machine total
+            const { data: todayLogs } = await supabase
+                .from('production_logs_v2')
+                .select('output_qty')
+                .eq('machine_id', machineId)
+                .gte('created_at', todayStart);
+
+            const todaySum = (todayLogs || []).reduce((sum, l) => sum + (Number(l.output_qty) || 1), 0);
+            setTodayMachineCount(todaySum);
+
+            // 2. Shift total
+            const effectiveShiftStart = clockInTime || 
+                localStorage.getItem(`operatorClockInTime_${operatorEmployeeId || operatorId}`) || 
+                localStorage.getItem('operatorClockInTime') || null;
+
+            if (effectiveShiftStart) {
+                const { data: shiftLogs } = await supabase
+                    .from('production_logs_v2')
+                    .select('output_qty')
+                    .eq('machine_id', machineId)
+                    .gte('created_at', effectiveShiftStart);
+                const shiftSum = (shiftLogs || []).reduce((sum, l) => sum + (Number(l.output_qty) || 1), 0);
+                setShiftMachineCount(shiftSum);
+            } else {
+                setShiftMachineCount(todaySum);
+            }
+        } catch (e) {
+            console.error("Failed to fetch machine totals:", e);
+        }
+    }, [machineMetadata?.id, operatorId, operatorEmployeeId, clockInTime]);
+
+    useEffect(() => {
+        fetchMachineTotals();
+    }, [fetchMachineTotals]);
+
+    // Manual roll bump (+1 卷现场补录)
+    const handleManualAddRoll = async () => {
+        if (onBeforeProduce && !onBeforeProduce()) return;
+        const targetMachine = machineMetadata?.id || 'T2-M01';
+        const targetSku = activeSku || (selectedSize ? getBubbleWrapSku(selectedLayer, selectedMaterial, selectedSize, selectedRolls, derivedPackaging) : 'BW-GENERAL');
+        const rollCount = selectedRolls || 1;
+
+        setIsSubmittingManualRoll(true);
+        try {
+            const { error } = await supabase.from('production_logs_v2').insert([{
+                machine_id: targetMachine,
+                sku: targetSku,
+                output_qty: rollCount,
+                operator_id: operatorId || null,
+                note: `【现场手工记数】操作员确认产出 ${rollCount} 卷`
+            }]);
+
+            if (error) throw error;
+
+            setLiveCount(prev => prev + rollCount);
+            await fetchMachineTotals();
+            onProductionComplete();
+        } catch (err: any) {
+            console.error("Manual add roll failed:", err);
+            alert(t('补录失败') + ': ' + (err.message || 'Network error'));
+        } finally {
+            setIsSubmittingManualRoll(false);
+        }
+    };
 
     const handlePrintCurrentLabel = async (copyCount: number = 1) => {
         const targetSku = activeSku || (selectedSize ? getBubbleWrapSku(selectedLayer, selectedMaterial, selectedSize, selectedRolls, derivedPackaging) : 'BW-GENERAL');
@@ -317,15 +400,18 @@ const ProductionLane: React.FC<ProductionLaneProps> = ({
                         setStep(3);
 
                         // Query existing production logs since updated_at to calculate current session yield
-                        const startTime = data.updated_at;
+                        // 10-minute backward buffer to prevent millisecond race condition between status change and first IoT pulse
+                        const rawStart = data.updated_at ? new Date(data.updated_at).getTime() : Date.now();
+                        const bufferedStart = new Date(rawStart - 10 * 60 * 1000).toISOString();
+                        
                         const { data: logsData } = await supabase
                             .from('production_logs_v2')
                             .select('output_qty')
                             .eq('machine_id', machineId)
-                            .eq('sku', data.product_sku)
-                            .gte('created_at', startTime);
+                            .or(`sku.eq.${data.product_sku},sku.eq.UNKNOWN-BUBBLEWRAP,sku.eq.UNKNOWN`)
+                            .gte('created_at', bufferedStart);
 
-                        if (logsData) {
+                        if (logsData && logsData.length > 0) {
                             const { data: siblingLanes } = await supabase
                                 .from('machine_active_products')
                                 .select('lane_id')
@@ -335,16 +421,19 @@ const ProductionLane: React.FC<ProductionLaneProps> = ({
                             const activeLanesCount = siblingLanes && siblingLanes.length > 0 ? siblingLanes.length : 1;
 
                             const total = logsData.reduce((sum, log) => {
-                                const logLane = (log as any).Source_Lane || (log as any).source_lane;
+                                const logLane = (log as any).source_lane || (log as any).Source_Lane;
                                 if (logLane && logLane !== 'Unknown' && logLane !== laneId) {
                                     return sum;
                                 }
                                 return sum + (Number(log.output_qty) || 1);
                             }, 0);
-                            setLiveCount(Math.floor(total / activeLanesCount));
+                            // Ensure at least 1 roll if total > 0 so dual-lane single rolls aren't floored to 0
+                            const resolvedCount = total > 0 ? Math.max(1, Math.round(total / activeLanesCount)) : 0;
+                            setLiveCount(resolvedCount);
                         } else {
                             setLiveCount(0);
                         }
+                        await fetchMachineTotals();
                     }
                 } else {
                     // No active product for this lane, reset to step 1
@@ -359,7 +448,7 @@ const ProductionLane: React.FC<ProductionLaneProps> = ({
         };
 
         loadActiveProduct();
-    }, [machineMetadata, laneId]);
+    }, [machineMetadata, laneId, fetchMachineTotals]);
 
     const handleTypeSelect = (layer: ProductLayer, material: ProductMaterial) => {
         setSelectedLayer(layer);
@@ -479,21 +568,20 @@ const ProductionLane: React.FC<ProductionLaneProps> = ({
                     }
                     
                     const logSku = newLog.sku || newLog.product_sku;
-                    const logQty = newLog.output_qty || newLog.alarm_count || 1;
+                    const logQty = Number(newLog.output_qty) || Number(newLog.alarm_count) || 1;
                     const logLane = newLog.lane_id || newLog.source_lane;
 
-                    const isOldFirmwareSkipped = logSku === 'UNKNOWN' && logLane === 'Unknown';
-
                     const matchMachine = newLog.machine_id?.trim() === machineId?.trim();
-                    const matchSku = logSku?.trim() === activeSku?.trim();
+                    if (!matchMachine) return;
 
-                    if (!isOldFirmwareSkipped && (!matchMachine || !matchSku)) {
-                        return;
-                    }
+                    const isGenericPulse = logSku === 'UNKNOWN-BUBBLEWRAP' || logSku === 'UNKNOWN' || !logSku;
+                    const matchSku = logSku?.trim() === activeSku?.trim() || isGenericPulse;
+                    if (!matchSku) return;
                     
-                    if (!isOldFirmwareSkipped && logLane && logLane !== laneId) return;
+                    if (logLane && logLane !== 'Unknown' && logLane !== laneId) return;
 
                     setLiveCount(prev => prev + logQty);
+                    fetchMachineTotals();
 
                     // --- AUTO-UPDATE MATCHING JOB ---
                     const currentProduct = `${selectedLayer} ${selectedMaterial} ${selectedSize}`;
@@ -521,7 +609,7 @@ const ProductionLane: React.FC<ProductionLaneProps> = ({
         return () => {
             supabase.removeChannel(channel);
         };
-    }, [isLiveRun, activeSku, machineMetadata, laneId, jobs, selectedLayer, selectedMaterial, selectedSize]);
+    }, [isLiveRun, activeSku, machineMetadata, laneId, jobs, selectedLayer, selectedMaterial, selectedSize, fetchMachineTotals]);
 
     const canProduceDL = !machineMetadata || machineMetadata.name?.includes('Double Layer') || machineMetadata.type?.includes('Double') || machineMetadata.name?.includes('Double');
 
@@ -719,13 +807,27 @@ const ProductionLane: React.FC<ProductionLaneProps> = ({
                                     <div className="w-full flex flex-col items-center animate-fade-in-up">
                                         <div className="text-center mb-4">
                                             <div className="text-apple-green font-bold text-xs uppercase tracking-[0.2em] mb-1 animate-pulse">{t('Live Production Active')}</div>
-                                            <div className="text-[60px] font-black text-apple-textMain dark:text-white leading-none tabular-nums drop-shadow-md">
+                                            <div className="text-[60px] font-black text-apple-textMain dark:text-white leading-none tabular-nums drop-shadow-md my-1">
                                                 {liveCount}
                                             </div>
-                                            <div className="text-apple-textMuted text-xs font-mono">{t('Units Produced This Session')}</div>
+                                            <div className="text-apple-textMuted text-xs font-mono">{t('Units Produced This Session')} ({t('本次运行')})</div>
+
+                                            {/* 多维度产量胶囊卡片：消除重新启动或换人时显示0的误解 */}
+                                            <div className="mt-3 flex items-center justify-center gap-2 flex-wrap">
+                                                <div className="px-3 py-1 rounded-xl bg-emerald-500/10 border border-emerald-500/25 flex items-center gap-1.5 text-xs">
+                                                    <span className="text-emerald-400 font-medium">{t('今日机台累计')}:</span>
+                                                    <span className="text-emerald-300 font-bold font-mono text-sm">{todayMachineCount}</span>
+                                                    <span className="text-emerald-400/80 text-[10px]">{t('卷')}</span>
+                                                </div>
+                                                <div className="px-3 py-1 rounded-xl bg-blue-500/10 border border-blue-500/25 flex items-center gap-1.5 text-xs">
+                                                    <span className="text-blue-400 font-medium">{t('本班次累计')}:</span>
+                                                    <span className="text-blue-300 font-bold font-mono text-sm">{shiftMachineCount}</span>
+                                                    <span className="text-blue-400/80 text-[10px]">{t('卷')}</span>
+                                                </div>
+                                            </div>
                                         </div>
 
-                                    {/* 🖨️ 车间一键打标控制区 (大触控热区、手套友好设计) */}
+                                    {/* 🖨️ 车间一键打标控制区 与 ➕ 补录控制 */}
                                     <div className="w-full mb-4 space-y-2">
                                         <div className="flex items-center gap-2">
                                             <button
@@ -744,10 +846,24 @@ const ProductionLane: React.FC<ProductionLaneProps> = ({
                                                 </span>
                                             </button>
 
+                                            {/* 手工补录 +1 卷 (传感器未触发或延迟时的现场保障) */}
+                                            {isControlMode && (
+                                                <button
+                                                    type="button"
+                                                    onClick={handleManualAddRoll}
+                                                    disabled={isSubmittingManualRoll}
+                                                    className="px-3 min-h-[58px] bg-emerald-600/15 hover:bg-emerald-600/25 text-emerald-300 hover:text-emerald-200 border border-emerald-500/30 rounded-2xl flex flex-col items-center justify-center text-[10px] font-bold transition cursor-pointer active:scale-95 disabled:opacity-50 shrink-0"
+                                                    title={t('现场手动补录 1 卷产出并同步至总账')}
+                                                >
+                                                    <Plus size={18} className="mb-0.5 text-emerald-400" />
+                                                    <span>{isSubmittingManualRoll ? t('补录中...') : `+${selectedRolls || 1}卷补录`}</span>
+                                                </button>
+                                            )}
+
                                             <button
                                                 type="button"
                                                 onClick={() => onOpenPrinterModal && onOpenPrinterModal()}
-                                                className="px-3.5 min-h-[58px] bg-white/5 hover:bg-white/10 text-gray-300 hover:text-white border border-white/10 rounded-2xl flex flex-col items-center justify-center text-[10px] font-bold transition cursor-pointer active:scale-95"
+                                                className="px-3 min-h-[58px] bg-white/5 hover:bg-white/10 text-gray-300 hover:text-white border border-white/10 rounded-2xl flex flex-col items-center justify-center text-[10px] font-bold transition cursor-pointer active:scale-95 shrink-0"
                                                 title={t('设置打印机与纸张规格')}
                                             >
                                                 <Settings size={18} className="mb-0.5 text-blue-400" />
@@ -861,6 +977,33 @@ const ProductionControl: React.FC<ProductionControlProps> = ({ user, jobs = [], 
     const [activeJob, setActiveJob] = useState<JobOrder | null>(null);
     const [recentLogs, setRecentLogs] = useState<GroupedProductionLog[]>([]);
     const [machinePhotos, setMachinePhotos] = useState<any[]>([]);
+    const [todayMachineTotal, setTodayMachineTotal] = useState<number>(0);
+
+    const fetchTodayMachineTotal = useCallback(async (machineId?: string) => {
+        const target = (machineId || machineMetadata?.id || selectedMachine)?.trim();
+        if (!target) return;
+        try {
+            const now = new Date();
+            const myt = new Date(now.getTime() + 8 * 3600000);
+            const ymd = myt.toISOString().slice(0, 10);
+            const todayStart = new Date(`${ymd}T00:00:00+08:00`).toISOString();
+            const { data } = await supabase
+                .from('production_logs_v2')
+                .select('output_qty')
+                .eq('machine_id', target)
+                .gte('created_at', todayStart);
+            const total = (data || []).reduce((sum, r) => sum + (Number(r.output_qty) || 1), 0);
+            setTodayMachineTotal(total);
+        } catch (e) {
+            console.error("fetchTodayMachineTotal error:", e);
+        }
+    }, [selectedMachine, machineMetadata?.id]);
+
+    useEffect(() => {
+        if (selectedMachine) {
+            fetchTodayMachineTotal(selectedMachine);
+        }
+    }, [selectedMachine, fetchTodayMachineTotal]);
 
     // Operator ID State
     const [operatorId, setOperatorId] = useState<string | null>(localStorage.getItem('operatorId'));
@@ -2156,6 +2299,7 @@ const ProductionControl: React.FC<ProductionControlProps> = ({ user, jobs = [], 
             );
             setRecentLogs(sortedGrouped);
         }
+        await fetchTodayMachineTotal(targetMachine);
     };
 
     const handleReprintLog = async (log: GroupedProductionLog) => {
@@ -2729,11 +2873,14 @@ const ProductionControl: React.FC<ProductionControlProps> = ({ user, jobs = [], 
                                 <span className="text-xs text-gray-400 font-normal">Production Workspace</span>
                             </h2>
                             {selectedMachine && (
-                                <div className="flex items-center gap-2 mt-0.5">
+                                <div className="flex items-center gap-2 mt-0.5 flex-wrap">
                                     <p className="text-xs text-gray-400 flex items-center gap-1.5">
                                         <span className="w-1.5 h-1.5 rounded-full bg-emerald-400"></span>
                                         <span>{t('当前机台')}: <strong className="text-gray-200 font-medium">{currentMachineName}</strong></span>
                                     </p>
+                                    <span className="text-[11px] bg-emerald-500/15 text-emerald-300 border border-emerald-500/30 px-2 py-0.5 rounded-md font-mono font-bold">
+                                        {t('今日累计')}: {todayMachineTotal} {t('卷')}
+                                    </span>
                                     <button
                                         type="button"
                                         onClick={() => {
@@ -3774,6 +3921,7 @@ const ProductionControl: React.FC<ProductionControlProps> = ({ user, jobs = [], 
                                                 machineMetadata={machineMetadata}
                                                 user={user}
                                                 operatorId={operatorId}
+                                                operatorEmployeeId={operatorEmployeeId}
                                                 operatorName={operatorName}
                                                 activeJob={activeJob}
                                                 jobs={jobs}
@@ -3783,6 +3931,7 @@ const ProductionControl: React.FC<ProductionControlProps> = ({ user, jobs = [], 
                                                 isControlMode={isControlMode}
                                                 onTakeoverClick={() => initiateTakeover(selectedMachine!)}
                                                 onOpenPrinterModal={() => setShowPrinterModal(true)}
+                                                clockInTime={clockInTime}
                                             />
                                         </div>
                                         <div className="flex-1 min-w-0">
@@ -3794,6 +3943,7 @@ const ProductionControl: React.FC<ProductionControlProps> = ({ user, jobs = [], 
                                                 machineMetadata={machineMetadata}
                                                 user={user}
                                                 operatorId={operatorId}
+                                                operatorEmployeeId={operatorEmployeeId}
                                                 operatorName={operatorName}
                                                 activeJob={activeJob}
                                                 jobs={jobs}
@@ -3803,6 +3953,7 @@ const ProductionControl: React.FC<ProductionControlProps> = ({ user, jobs = [], 
                                                 isControlMode={isControlMode}
                                                 onTakeoverClick={() => initiateTakeover(selectedMachine!)}
                                                 onOpenPrinterModal={() => setShowPrinterModal(true)}
+                                                clockInTime={clockInTime}
                                             />
                                         </div>
                                     </div>
@@ -3812,6 +3963,7 @@ const ProductionControl: React.FC<ProductionControlProps> = ({ user, jobs = [], 
                                         machineMetadata={machineMetadata}
                                         user={user}
                                         operatorId={operatorId}
+                                        operatorEmployeeId={operatorEmployeeId}
                                         operatorName={operatorName}
                                         activeJob={activeJob}
                                         jobs={jobs}
@@ -3821,6 +3973,7 @@ const ProductionControl: React.FC<ProductionControlProps> = ({ user, jobs = [], 
                                         isControlMode={isControlMode}
                                         onTakeoverClick={() => initiateTakeover(selectedMachine!)}
                                         onOpenPrinterModal={() => setShowPrinterModal(true)}
+                                        clockInTime={clockInTime}
                                     />
                                 )
                             )}
