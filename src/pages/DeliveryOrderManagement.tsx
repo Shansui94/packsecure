@@ -6219,14 +6219,33 @@ const DeliveryOrderManagement: React.FC<DeliveryOrderManagementProps> = ({ user 
                                                     <label className="block text-[10px] font-bold text-slate-500 uppercase tracking-wider mb-2">Delivery Photos (DO / Goods)</label>
                                                     {currentOrder.pod_photo_url ? (
                                                         <div className="flex flex-wrap gap-2">
-                                                            {currentOrder.pod_photo_url.split(',').map((url, idx) => (
-                                                                <a key={idx} href={url.trim()} target="_blank" rel="noopener noreferrer" className="relative group overflow-hidden rounded-lg border border-slate-800 hover:border-blue-500 h-20 w-20 bg-black flex-shrink-0 block transition-all">
-                                                                    <img src={url.trim()} alt={`POD Photo ${idx + 1}`} className="w-full h-full object-cover opacity-85 group-hover:opacity-100 transition-opacity" />
-                                                                    <div className="absolute inset-0 flex items-center justify-center bg-black/40 opacity-0 group-hover:opacity-100 transition-opacity pointer-events-none">
-                                                                        <span className="text-[9px] bg-blue-500 text-white font-bold px-1.5 py-0.5 rounded shadow">View</span>
-                                                                    </div>
-                                                                </a>
-                                                            ))}
+                                                            {currentOrder.pod_photo_url.split(',').map((url, idx) => {
+                                                                const cleanUrl = url.trim();
+                                                                const isDo = idx % 2 === 0;
+                                                                if (!cleanUrl) {
+                                                                    return (
+                                                                        <div
+                                                                            key={idx}
+                                                                            className="h-20 w-20 rounded-lg border border-dashed border-amber-500/40 bg-amber-950/20 flex flex-col items-center justify-center p-1 text-center shrink-0"
+                                                                            title={isDo ? t('Surat DO belum dimuat naik / DO photo missing') : t('Gambar barang belum dimuat naik / Goods photo missing')}
+                                                                        >
+                                                                            <span className="text-base">📄</span>
+                                                                            <span className="text-[9px] font-bold text-amber-400 mt-0.5 uppercase leading-tight">
+                                                                                {isDo ? t('Tiada DO') : t('Tiada Barang')}
+                                                                            </span>
+                                                                            <span className="text-[8px] text-amber-300/60 font-mono">Slot {idx + 1}</span>
+                                                                        </div>
+                                                                    );
+                                                                }
+                                                                return (
+                                                                    <a key={idx} href={cleanUrl} target="_blank" rel="noopener noreferrer" className="relative group overflow-hidden rounded-lg border border-slate-800 hover:border-blue-500 h-20 w-20 bg-black flex-shrink-0 block transition-all">
+                                                                        <img src={cleanUrl} alt={`POD Photo ${idx + 1}`} className="w-full h-full object-cover opacity-85 group-hover:opacity-100 transition-opacity" />
+                                                                        <div className="absolute inset-0 flex items-center justify-center bg-black/40 opacity-0 group-hover:opacity-100 transition-opacity pointer-events-none">
+                                                                            <span className="text-[9px] bg-blue-500 text-white font-bold px-1.5 py-0.5 rounded shadow">View</span>
+                                                                        </div>
+                                                                    </a>
+                                                                );
+                                                            })}
                                                         </div>
                                                     ) : (
                                                         <div className="text-xs text-slate-600 italic">No delivery photos uploaded</div>
