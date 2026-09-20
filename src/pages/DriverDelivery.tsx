@@ -309,20 +309,16 @@ const DriverDelivery: React.FC<DriverDeliveryProps> = ({ user, onNavigate }) => 
     };
 
     const isOrderFullyDelivered = (order: SalesOrder) => {
-        const totalDrops = Math.max(1, Number((order as any).trip_drop_count) || 1);
-        const completedDrops = countCompletedDrops(order.pod_photo_url);
-
+        if (order.status === 'Delivered') return true;
+        if (order.status === 'Cancelled') return true;
         if (order.status === 'Pending Approval') return isPendingApprovalDone(order);
 
-        // If multi-drop order, it is only fully delivered if all drops are submitted
-        if (totalDrops > 1) {
+        if (order.status === 'Loaded') {
+            const totalDrops = Math.max(1, Number((order as any).trip_drop_count) || 1);
+            const completedDrops = countCompletedDrops(order.pod_photo_url);
             return completedDrops >= totalDrops;
         }
 
-        if (order.status === 'Delivered') return true;
-        if (order.status === 'Loaded') {
-            return completedDrops >= totalDrops;
-        }
         return false;
     };
 
@@ -1847,19 +1843,14 @@ const DriverDelivery: React.FC<DriverDeliveryProps> = ({ user, onNavigate }) => 
                 const ordDone = countCompletedDrops(o.pod_photo_url);
                 const orderDropTarget = Math.max(1, Number((o as any).trip_drop_count) || 1);
                 const effectiveDone = o.status === 'Delivered' 
-                    ? (orderDropTarget > 1 ? ordDone : Math.max(1, ordDone))
+                    ? Math.max(orderDropTarget, ordDone)
                     : ordDone;
                 return sum + effectiveDone;
             }, 0);
             grp.completedDrops = Math.min(grp.completedDrops, grp.totalDrops);
 
-            // Bulletproof: Trip is only all done if total drops requirement is met AND all multi-drop orders have completed all drops
-            const areAllOrdersDelivered = grp.orders.every(o => {
-                const drops = Number((o as any).trip_drop_count) || 1;
-                const done = countCompletedDrops(o.pod_photo_url);
-                if (drops > 1) return done >= drops;
-                return o.status === 'Delivered';
-            });
+            // Trip is only all done if all orders are fully delivered and all drops met
+            const areAllOrdersDelivered = grp.orders.every(o => isOrderFullyDelivered(o));
             grp.isAllDone = areAllOrdersDelivered && grp.completedDrops >= grp.totalDrops && grp.totalDrops > 0;
 
             // Extract Trip Remark or sequence if present
