@@ -3,7 +3,8 @@ import { DragDropContext, Droppable, Draggable, DropResult } from '@hello-pangea
 import { supabase } from '../services/supabase';
 import { getV2Items, getInventoryStatus } from '../services/apiV2';
 import { SalesOrder, SalesOrderItem, User } from '../types';
-import { Calendar, User as UserIcon, Truck, MapPin, Package, Camera, Trash2, X, ChevronDown, ChevronUp, CheckCircle, RefreshCw, Clock, AlertTriangle, Search, Phone, ExternalLink, Zap, PackageCheck, Car, CheckCircle2 } from 'lucide-react';
+import { Calendar, User as UserIcon, Truck, MapPin, Package, Camera, Trash2, X, ChevronDown, ChevronUp, CheckCircle, RefreshCw, Clock, AlertTriangle, Search, Phone, ExternalLink, Zap, PackageCheck, Car, CheckCircle2, Image as ImageIcon, Video, FolderOpen } from 'lucide-react';
+import Webcam from 'react-webcam';
 import { parsePrepPhotos, stringifyPrepPhotos, PrepPhoto } from '../utils/prepPhotos';
 import { compressImage, dataURLtoBlob } from '../utils/imageCompress';
 import { guessItemLocation } from './DeliveryOrderManagement';
@@ -229,10 +230,15 @@ const OrderSummary: React.FC<OrderSummaryProps> = ({ user }) => {
     const [searchTerm, setSearchTerm] = useState('');
     const [expandedTripIds, setExpandedTripIds] = useState<Record<string, boolean>>({});
 
-    // Photo Upload States
+    // Photo Upload & Camera States
     const [uploadingTarget, setUploadingTarget] = useState<{ type: 'trip' | 'order'; id: string } | null>(null);
+    const [photoActionTarget, setPhotoActionTarget] = useState<{ type: 'trip' | 'order'; id: string } | null>(null);
     const [previewImageUrl, setPreviewImageUrl] = useState<string | null>(null);
-    const fileInputRef = useRef<HTMLInputElement>(null);
+    const cameraInputRef = useRef<HTMLInputElement>(null);
+    const galleryInputRef = useRef<HTMLInputElement>(null);
+    const [showWebcam, setShowWebcam] = useState(false);
+    const [webcamError, setWebcamError] = useState<any>(null);
+    const webcamRef = useRef<Webcam>(null);
     const fetchIdRef = useRef(0);
 
     // Self-Pickup Handover States
@@ -734,21 +740,12 @@ const OrderSummary: React.FC<OrderSummaryProps> = ({ user }) => {
 
     const triggerUpload = (type: 'trip' | 'order', id: string) => {
         setUploadingTarget({ type, id });
-        if (fileInputRef.current) {
-            fileInputRef.current.value = '';
-            fileInputRef.current.click();
-        }
+        setPhotoActionTarget({ type, id });
     };
 
-    const handlePhotoSelect = async (e: React.ChangeEvent<HTMLInputElement>) => {
-        const file = e.target.files?.[0];
-        const target = uploadingTarget;
-        if (!file || !target) return;
-
+    const processUpload = async (blob: Blob, target: { type: 'trip' | 'order'; id: string }) => {
         setLoading(true);
         try {
-            const compressed = await compressImage(file);
-            const blob = dataURLtoBlob(compressed);
             const uploadWarehouse = activeFactory === 'Taiping' ? activeTaipingWarehouse : activeFactory;
             const filename = `prep_${target.type}_${target.id}_${Date.now()}.jpg`;
 
@@ -829,6 +826,53 @@ const OrderSummary: React.FC<OrderSummaryProps> = ({ user }) => {
         } finally {
             setLoading(false);
             setUploadingTarget(null);
+            setPhotoActionTarget(null);
+        }
+    };
+
+    const handlePhotoSelect = async (e: React.ChangeEvent<HTMLInputElement>) => {
+        const file = e.target.files?.[0];
+        const target = uploadingTarget;
+        if (!file || !target) return;
+
+        setLoading(true);
+        try {
+            const compressed = await compressImage(file);
+            const blob = dataURLtoBlob(compressed);
+            await processUpload(blob, target);
+        } catch (err: any) {
+            console.error("Photo processing error:", err);
+            alert("Upload failed: " + err.message);
+            setLoading(false);
+            setUploadingTarget(null);
+            setPhotoActionTarget(null);
+        } finally {
+            if (cameraInputRef.current) cameraInputRef.current.value = '';
+            if (galleryInputRef.current) galleryInputRef.current.value = '';
+        }
+    };
+
+    const handleWebcamCapture = async () => {
+        const target = uploadingTarget;
+        if (!target) return;
+        const imageSrc = webcamRef.current?.getScreenshot();
+        if (!imageSrc) {
+            alert(t('未能截取摄像头画面，请重试 / Failed to capture image'));
+            return;
+        }
+
+        setShowWebcam(false);
+        setWebcamError(null);
+        setLoading(true);
+        try {
+            const blob = dataURLtoBlob(imageSrc);
+            await processUpload(blob, target);
+        } catch (err: any) {
+            console.error("Webcam upload error:", err);
+            alert("Webcam capture failed: " + err.message);
+            setLoading(false);
+            setUploadingTarget(null);
+            setPhotoActionTarget(null);
         }
     };
 
@@ -1253,14 +1297,260 @@ const OrderSummary: React.FC<OrderSummaryProps> = ({ user }) => {
                     </div>
                 )}
 
-                {/* Hidden File Input for Camera/Gallery Upload */}
+                {/* Hidden File Inputs for Native Camera and Gallery */}
                 <input
-                    ref={fileInputRef}
+                    ref={cameraInputRef}
+                    type="file"
+                    accept="image/*"
+                    capture="environment"
+                    className="hidden"
+                    onChange={handlePhotoSelect}
+                />
+                <input
+                    ref={galleryInputRef}
                     type="file"
                     accept="image/*"
                     className="hidden"
                     onChange={handlePhotoSelect}
                 />
+
+                {/* Photo Action Sheet / Modal */}
+                {photoActionTarget && (() => {
+                    const isTrip = photoActionTarget.type === 'trip';
+                    const trip = isTrip ? allTripGroups.find(g => g.tripId === photoActionTarget.id) : null;
+                    const order = !isTrip ? orders.find(o => o.id === photoActionTarget.id) : null;
+                    const uploadWarehouse = activeFactory === 'Taiping' ? activeTaipingWarehouse : activeFactory;
+
+                    return (
+                        <div className="fixed inset-0 z-[9999] bg-black/80 backdrop-blur-sm flex items-end sm:items-center justify-center p-3 sm:p-4 animate-in fade-in duration-200">
+                            <div className="bg-slate-900 border border-slate-700 rounded-3xl w-full max-w-md overflow-hidden shadow-2xl animate-in slide-in-from-bottom-8 sm:zoom-in-95 duration-200 flex flex-col">
+                                {/* Header */}
+                                <div className="p-4 bg-slate-950 border-b border-slate-800 flex items-center justify-between">
+                                    <div className="flex items-center gap-2.5 min-w-0">
+                                        <div className="w-10 h-10 rounded-2xl bg-amber-500/20 border border-amber-500/30 flex items-center justify-center text-amber-400 shrink-0">
+                                            <Camera size={20} />
+                                        </div>
+                                        <div className="min-w-0">
+                                            <h3 className="text-sm font-black text-white truncate">
+                                                {t('Add Prep Photo / 添加备货照片')}
+                                            </h3>
+                                            <p className="text-[11px] text-slate-400 truncate">
+                                                {isTrip 
+                                                    ? `${trip?.tripId || photoActionTarget.id} · ${trip?.lorryPlate || t('No Plate')} (${trip?.orders.length || 0} DOs)`
+                                                    : `${order?.orderNumber || photoActionTarget.id} · ${order?.customer || ''}`}
+                                            </p>
+                                        </div>
+                                    </div>
+                                    <button
+                                        type="button"
+                                        onClick={() => {
+                                            setPhotoActionTarget(null);
+                                            setUploadingTarget(null);
+                                        }}
+                                        className="p-2 text-slate-400 hover:text-white rounded-xl hover:bg-slate-800 transition cursor-pointer"
+                                    >
+                                        <X size={18} />
+                                    </button>
+                                </div>
+
+                                {/* Warehouse Location Info */}
+                                <div className="px-5 py-2.5 bg-amber-500/10 border-b border-amber-500/20 flex items-center justify-between text-xs">
+                                    <span className="text-slate-400 flex items-center gap-1.5">
+                                        <MapPin size={13} className="text-amber-400" />
+                                        <span>{t('Staging Location / 备货库位')}:</span>
+                                    </span>
+                                    <span className="font-bold font-mono text-amber-300 bg-amber-500/20 px-2 py-0.5 rounded-lg border border-amber-500/30">
+                                        {uploadWarehouse}
+                                    </span>
+                                </div>
+
+                                {/* Actions Grid */}
+                                <div className="p-4 sm:p-5 space-y-3">
+                                    {/* Primary Action: Direct Camera (拍照) */}
+                                    <button
+                                        type="button"
+                                        onClick={() => {
+                                            setPhotoActionTarget(null);
+                                            if (cameraInputRef.current) {
+                                                cameraInputRef.current.value = '';
+                                                cameraInputRef.current.click();
+                                            }
+                                        }}
+                                        className="w-full py-4 px-4 bg-gradient-to-r from-emerald-600 to-teal-600 hover:from-emerald-500 hover:to-teal-500 active:scale-[0.98] text-white rounded-2xl font-black text-base shadow-lg shadow-emerald-950/50 flex items-center justify-between transition-all cursor-pointer border border-emerald-400/30 group"
+                                    >
+                                        <div className="flex items-center gap-3">
+                                            <div className="w-11 h-11 rounded-xl bg-white/20 flex items-center justify-center text-white group-hover:scale-110 transition-transform">
+                                                <Camera size={24} />
+                                            </div>
+                                            <div className="text-left">
+                                                <div className="text-sm font-black tracking-wide">
+                                                    📸 {t('Ambil Gambar / Take Photo / 现场拍照')}
+                                                </div>
+                                                <div className="text-[10px] text-emerald-100 font-normal mt-0.5">
+                                                    {t('启动手机相机实时拍摄货品 (Launch Camera)')}
+                                                </div>
+                                            </div>
+                                        </div>
+                                        <div className="text-emerald-200 text-xs font-bold bg-emerald-700/40 px-2 py-1 rounded-lg border border-emerald-400/20">
+                                            {t('Recommended')}
+                                        </div>
+                                    </button>
+
+                                    {/* Secondary Action: Photo Gallery (相册选择) */}
+                                    <button
+                                        type="button"
+                                        onClick={() => {
+                                            setPhotoActionTarget(null);
+                                            if (galleryInputRef.current) {
+                                                galleryInputRef.current.value = '';
+                                                galleryInputRef.current.click();
+                                            }
+                                        }}
+                                        className="w-full py-3.5 px-4 bg-slate-800/90 hover:bg-slate-750 active:scale-[0.98] text-white rounded-2xl font-bold text-sm shadow-md flex items-center gap-3 transition-all cursor-pointer border border-slate-700/80 group"
+                                    >
+                                        <div className="w-10 h-10 rounded-xl bg-slate-700 flex items-center justify-center text-slate-300 group-hover:scale-110 transition-transform">
+                                            <ImageIcon size={20} />
+                                        </div>
+                                        <div className="text-left">
+                                            <div className="text-sm font-bold text-slate-200">
+                                                📁 {t('Pilih dari Galeri / Gallery Upload / 相册上传')}
+                                            </div>
+                                            <div className="text-[10px] text-slate-400 font-normal mt-0.5">
+                                                {t('从手机相册或电脑文件选取已有图片 (Album / Files)')}
+                                            </div>
+                                        </div>
+                                    </button>
+
+                                    {/* Tertiary Action: Live Webcam (电脑端摄像头) */}
+                                    <button
+                                        type="button"
+                                        onClick={() => {
+                                            setPhotoActionTarget(null);
+                                            setShowWebcam(true);
+                                        }}
+                                        className="w-full py-3 px-4 bg-slate-950 hover:bg-slate-800/80 active:scale-[0.98] text-slate-400 hover:text-slate-200 rounded-2xl font-medium text-xs flex items-center gap-3 transition-all cursor-pointer border border-slate-800 group"
+                                    >
+                                        <div className="w-9 h-9 rounded-xl bg-slate-900 flex items-center justify-center text-purple-400 group-hover:scale-110 transition-transform border border-purple-500/20">
+                                            <Video size={16} />
+                                        </div>
+                                        <div className="text-left flex-1">
+                                            <div className="text-xs font-bold text-slate-300">
+                                                💻 {t('Webcam Live / 电脑摄像头取景')}
+                                            </div>
+                                            <div className="text-[9px] text-slate-500 mt-0.5">
+                                                {t('适用电脑网页端调用摄像头实时截图')}
+                                            </div>
+                                        </div>
+                                    </button>
+                                </div>
+
+                                {/* Footer Cancel */}
+                                <div className="p-3 bg-slate-950/80 border-t border-slate-800/80 text-center">
+                                    <button
+                                        type="button"
+                                        onClick={() => {
+                                            setPhotoActionTarget(null);
+                                            setUploadingTarget(null);
+                                        }}
+                                        className="w-full py-2.5 text-xs font-bold text-slate-400 hover:text-slate-200 rounded-xl hover:bg-slate-800 transition cursor-pointer"
+                                    >
+                                        {t('Cancel / Batal / 取消')}
+                                    </button>
+                                </div>
+                            </div>
+                        </div>
+                    );
+                })()}
+
+                {/* Webcam Live Capture Modal */}
+                {showWebcam && (
+                    <div className="fixed inset-0 z-[10000] bg-black/95 backdrop-blur-md flex flex-col items-center justify-center p-4">
+                        <div className="bg-slate-900 border border-slate-700 rounded-3xl w-full max-w-md overflow-hidden shadow-2xl flex flex-col">
+                            {/* Header */}
+                            <div className="p-4 bg-slate-950 border-b border-slate-800 flex items-center justify-between">
+                                <div className="flex items-center gap-2">
+                                    <Camera size={18} className="text-amber-400" />
+                                    <h3 className="text-sm font-black text-white">{t('Webcam Live Photo / 摄像头拍照')}</h3>
+                                </div>
+                                <button
+                                    type="button"
+                                    onClick={() => {
+                                        setShowWebcam(false);
+                                        setWebcamError(null);
+                                        setUploadingTarget(null);
+                                    }}
+                                    className="p-1.5 text-slate-400 hover:text-white rounded-lg hover:bg-slate-800 transition cursor-pointer"
+                                >
+                                    <X size={18} />
+                                </button>
+                            </div>
+
+                            {/* Viewfinder */}
+                            <div className="p-4 bg-black flex flex-col items-center justify-center min-h-[260px] relative">
+                                {webcamError ? (
+                                    <div className="p-4 bg-red-500/10 border border-red-500/20 rounded-2xl flex flex-col items-center text-center gap-2 text-red-400">
+                                        <AlertTriangle size={24} />
+                                        <p className="text-xs font-bold">{t('无法启动摄像头 / Cannot access webcam')}</p>
+                                        <p className="text-[11px] text-slate-400 leading-normal">
+                                            {t('请检查浏览器权限，或使用上方手机拍照/相册上传功能。')}
+                                        </p>
+                                    </div>
+                                ) : (
+                                    <div className="relative aspect-video w-full rounded-2xl overflow-hidden border border-white/10 bg-black flex items-center justify-center">
+                                        <Webcam
+                                            audio={false}
+                                            ref={webcamRef}
+                                            screenshotFormat="image/jpeg"
+                                            screenshotQuality={0.9}
+                                            videoConstraints={{
+                                                facingMode: "environment",
+                                                width: { ideal: 1920, min: 1280 },
+                                                height: { ideal: 1080, min: 720 }
+                                            }}
+                                            onUserMediaError={(err) => setWebcamError(err)}
+                                            className="w-full h-full object-cover"
+                                        />
+                                    </div>
+                                )}
+                            </div>
+
+                            {/* Actions */}
+                            <div className="p-4 bg-slate-950 border-t border-slate-800 flex gap-2">
+                                <button
+                                    type="button"
+                                    onClick={() => {
+                                        setShowWebcam(false);
+                                        setWebcamError(null);
+                                        setUploadingTarget(null);
+                                    }}
+                                    className="flex-1 py-3 bg-slate-800 hover:bg-slate-700 text-slate-300 rounded-xl font-bold text-xs transition cursor-pointer"
+                                >
+                                    {t('Cancel / 取消')}
+                                </button>
+                                <button
+                                    type="button"
+                                    disabled={!!webcamError}
+                                    onClick={handleWebcamCapture}
+                                    className="flex-1 py-3 bg-gradient-to-r from-amber-500 to-orange-500 hover:from-amber-400 hover:to-orange-400 disabled:opacity-50 disabled:grayscale text-slate-950 font-black text-xs rounded-xl shadow-lg shadow-amber-950/50 flex items-center justify-center gap-2 transition cursor-pointer"
+                                >
+                                    <Camera size={16} />
+                                    <span>{t('Capture & Save / 截图并保存')}</span>
+                                </button>
+                            </div>
+                        </div>
+                    </div>
+                )}
+
+                {/* Loading / Uploading Overlay */}
+                {loading && uploadingTarget && (
+                    <div className="fixed inset-0 z-[10001] bg-black/80 backdrop-blur-sm flex flex-col items-center justify-center p-4">
+                        <div className="bg-slate-900 border border-slate-700 rounded-2xl p-6 shadow-2xl flex flex-col items-center gap-3">
+                            <RefreshCw size={32} className="text-amber-400 animate-spin" />
+                            <span className="text-sm font-bold text-white">{t('正在压缩并上传照片... / Uploading Photo...')}</span>
+                            <span className="text-xs text-slate-400">{t('请稍候，系统正在同步备货状态')}</span>
+                        </div>
+                    </div>
+                )}
 
                 {/* Self-Pickup Handover Modal */}
                 {handoverTarget && (
@@ -1907,7 +2197,8 @@ const SelfPickupHandoverModal: React.FC<SelfPickupHandoverModalProps> = ({
     const [selectedPhoto, setSelectedPhoto] = useState<File | null>(null);
     const [photoPreview, setPhotoPreview] = useState<string | null>(null);
     const [isSubmitting, setIsSubmitting] = useState(false);
-    const fileInputRef = useRef<HTMLInputElement>(null);
+    const cameraInputRef = useRef<HTMLInputElement>(null);
+    const galleryInputRef = useRef<HTMLInputElement>(null);
 
     const getItemUomShort = (name: string, sku?: string) => {
         const s = (sku || '').toLowerCase();
@@ -2066,36 +2357,93 @@ const SelfPickupHandoverModal: React.FC<SelfPickupHandoverModalProps> = ({
                         {photoPreview ? (
                             <div className="relative rounded-xl overflow-hidden border border-emerald-500/40">
                                 <img src={photoPreview} alt="Handover Preview" className="w-full h-44 object-cover" />
-                                <button
-                                    type="button"
-                                    onClick={() => {
-                                        setSelectedPhoto(null);
-                                        setPhotoPreview(null);
-                                    }}
-                                    className="absolute top-2 right-2 p-1.5 bg-black/70 hover:bg-black text-white rounded-full transition cursor-pointer"
-                                >
-                                    <X size={14} />
-                                </button>
-                            </div>
-                        ) : (
-                            <button
-                                type="button"
-                                onClick={() => fileInputRef.current?.click()}
-                                className="w-full py-4 px-3 border border-dashed border-slate-700 hover:border-emerald-500/60 rounded-xl bg-slate-950/40 hover:bg-slate-950 flex flex-col items-center justify-center gap-1.5 text-slate-400 hover:text-white transition group cursor-pointer"
-                            >
-                                <Camera size={20} className="text-slate-500 group-hover:text-emerald-400 transition" />
-                                <span className="font-bold text-xs">点击拍照或上传装车/签收凭证</span>
-                                <span className="text-[10px] text-slate-500">支持手机相机拍照或相册选择</span>
-                            </button>
-                        )}
-                        <input
-                            ref={fileInputRef}
-                            type="file"
-                            accept="image/*"
-                            capture="environment"
-                            className="hidden"
-                            onChange={handlePhotoChange}
-                        />
+                                    <button
+                                        type="button"
+                                        onClick={() => {
+                                            setSelectedPhoto(null);
+                                            setPhotoPreview(null);
+                                        }}
+                                        className="absolute top-2 right-2 p-1.5 bg-black/70 hover:bg-black text-white rounded-full transition cursor-pointer"
+                                        title={t('Remove Photo')}
+                                    >
+                                        <X size={14} />
+                                    </button>
+                                    <div className="absolute bottom-2 inset-x-2 flex gap-1.5">
+                                        <button
+                                            type="button"
+                                            onClick={() => {
+                                                if (cameraInputRef.current) {
+                                                    cameraInputRef.current.value = '';
+                                                    cameraInputRef.current.click();
+                                                }
+                                            }}
+                                            className="flex-1 py-1.5 px-2 rounded-lg bg-black/80 hover:bg-black text-[10px] font-bold text-emerald-400 border border-emerald-500/30 flex items-center justify-center gap-1 backdrop-blur-sm transition"
+                                        >
+                                            <Camera size={12} />
+                                            <span>{t('重拍 / Retake')}</span>
+                                        </button>
+                                        <button
+                                            type="button"
+                                            onClick={() => {
+                                                if (galleryInputRef.current) {
+                                                    galleryInputRef.current.value = '';
+                                                    galleryInputRef.current.click();
+                                                }
+                                            }}
+                                            className="flex-1 py-1.5 px-2 rounded-lg bg-black/80 hover:bg-black text-[10px] font-bold text-slate-300 border border-white/10 flex items-center justify-center gap-1 backdrop-blur-sm transition"
+                                        >
+                                            <ImageIcon size={12} />
+                                            <span>{t('相册 / Album')}</span>
+                                        </button>
+                                    </div>
+                                </div>
+                            ) : (
+                                <div className="grid grid-cols-2 gap-2.5">
+                                    <button
+                                        type="button"
+                                        onClick={() => {
+                                            if (cameraInputRef.current) {
+                                                cameraInputRef.current.value = '';
+                                                cameraInputRef.current.click();
+                                            }
+                                        }}
+                                        className="py-3.5 px-3 border border-emerald-500/40 hover:border-emerald-500 rounded-xl bg-emerald-500/10 hover:bg-emerald-500/20 active:scale-[0.98] flex flex-col items-center justify-center gap-1.5 text-emerald-400 hover:text-emerald-300 transition group cursor-pointer"
+                                    >
+                                        <Camera size={22} className="group-hover:scale-110 transition-transform" />
+                                        <span className="font-black text-xs">📸 {t('现场拍照 / Camera')}</span>
+                                        <span className="text-[9px] text-emerald-300/70">{t('调起手机相机')}</span>
+                                    </button>
+                                    <button
+                                        type="button"
+                                        onClick={() => {
+                                            if (galleryInputRef.current) {
+                                                galleryInputRef.current.value = '';
+                                                galleryInputRef.current.click();
+                                            }
+                                        }}
+                                        className="py-3.5 px-3 border border-slate-700 hover:border-slate-500 rounded-xl bg-slate-950/50 hover:bg-slate-900 active:scale-[0.98] flex flex-col items-center justify-center gap-1.5 text-slate-300 hover:text-white transition group cursor-pointer"
+                                    >
+                                        <ImageIcon size={22} className="group-hover:scale-110 transition-transform text-slate-400" />
+                                        <span className="font-bold text-xs">📁 {t('相册上传 / Gallery')}</span>
+                                        <span className="text-[9px] text-slate-500">{t('挑选已有照片')}</span>
+                                    </button>
+                                </div>
+                            )}
+                            <input
+                                ref={cameraInputRef}
+                                type="file"
+                                accept="image/*"
+                                capture="environment"
+                                className="hidden"
+                                onChange={handlePhotoChange}
+                            />
+                            <input
+                                ref={galleryInputRef}
+                                type="file"
+                                accept="image/*"
+                                className="hidden"
+                                onChange={handlePhotoChange}
+                            />
                     </div>
                 </div>
 

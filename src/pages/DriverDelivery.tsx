@@ -965,6 +965,19 @@ const DriverDelivery: React.FC<DriverDeliveryProps> = ({ user, onNavigate }) => 
             // If the order has multiple drops (trip_drop_count > 1), keep status 'Loaded' until all drops are submitted
             const totalDrops = Math.max(1, Number(freshTripDropCount) || 1);
             const completedDrops = countCompletedDrops(podPhotoUrl);
+
+            // Safety guard: if driver marked isFinalDrop before all drops are finished, prompt confirmation
+            if (isFinalDrop && completedDrops < totalDrops) {
+                const confirmEarly = window.confirm(
+                    `⚠️ AMARAN: Anda baru menyelesaikan ${completedDrops}/${totalDrops} hentian.\nAdakah anda pasti baki ${totalDrops - completedDrops} hentian dibatalkan dan trip ini tamat lebih awal?`
+                );
+                if (!confirmEarly) {
+                    setIsFinalDrop(false);
+                    setSubmitting(false);
+                    return;
+                }
+            }
+
             const isAllDropsCompleted = isFinalDrop || completedDrops >= totalDrops;
 
             let nextStatus = selectedOrder.status === 'Pending Approval' 
@@ -1832,11 +1845,22 @@ const DriverDelivery: React.FC<DriverDeliveryProps> = ({ user, onNavigate }) => 
 
             grp.completedDrops = grp.orders.reduce((sum, o) => {
                 const ordDone = countCompletedDrops(o.pod_photo_url);
-                const effectiveDone = o.status === 'Delivered' ? Math.max(1, ordDone) : ordDone;
+                const orderDropTarget = Math.max(1, Number((o as any).trip_drop_count) || 1);
+                const effectiveDone = o.status === 'Delivered' 
+                    ? (orderDropTarget > 1 ? ordDone : Math.max(1, ordDone))
+                    : ordDone;
                 return sum + effectiveDone;
             }, 0);
             grp.completedDrops = Math.min(grp.completedDrops, grp.totalDrops);
-            grp.isAllDone = grp.completedDrops >= grp.totalDrops && grp.totalDrops > 0;
+
+            // Bulletproof: Trip is only all done if total drops requirement is met AND all multi-drop orders have completed all drops
+            const areAllOrdersDelivered = grp.orders.every(o => {
+                const drops = Number((o as any).trip_drop_count) || 1;
+                const done = countCompletedDrops(o.pod_photo_url);
+                if (drops > 1) return done >= drops;
+                return o.status === 'Delivered';
+            });
+            grp.isAllDone = areAllOrdersDelivered && grp.completedDrops >= grp.totalDrops && grp.totalDrops > 0;
 
             // Extract Trip Remark or sequence if present
             for (const ord of grp.orders) {
@@ -3153,22 +3177,36 @@ const DriverDelivery: React.FC<DriverDeliveryProps> = ({ user, onNavigate }) => 
                         )}
 
                         {/* Final Drop Toggle Checkbox for Multi-Drop Orders */}
-                        {(selectedOrder as any).trip_drop_count > 1 && (
-                            <div className="bg-slate-900 border border-slate-800 p-4 rounded-xl flex items-center justify-between">
-                                <div>
-                                    <p className="text-sm font-bold text-white uppercase">HANTARAN TERAKHIR (TAMAT TRIP)? / FINAL DROP (END TRIP)?</p>
-                                    <p className="text-[10px] text-slate-500 uppercase font-medium">
-                                        Tandakan jika ini adalah DO terakhir dan trip telah selesai.
-                                    </p>
+                        {(selectedOrder as any).trip_drop_count > 1 && (() => {
+                            const curDone = countCompletedDrops(selectedOrder.pod_photo_url);
+                            const totalTarget = Math.max(1, Number((selectedOrder as any).trip_drop_count) || 1);
+                            const isAtFinalStep = curDone + 1 >= totalTarget;
+
+                            return (
+                                <div className={`p-4 rounded-xl border flex items-center justify-between transition-colors ${
+                                    isFinalDrop 
+                                        ? 'bg-amber-950/30 border-amber-500/50' 
+                                        : 'bg-slate-900 border-slate-800'
+                                }`}>
+                                    <div className="pr-2">
+                                        <p className="text-sm font-bold text-white uppercase flex items-center gap-1.5">
+                                            {isAtFinalStep ? '🏁 HANTARAN TERAKHIR (TAMAT TRIP)?' : '⚠️ TAMAT TRIP LEBIH AWAL?'}
+                                        </p>
+                                        <p className="text-[10px] text-slate-400 font-medium mt-0.5">
+                                            {isAtFinalStep 
+                                                ? `Hentian ${curDone + 1} daripada ${totalTarget}. Tandakan jika ini hentian terakhir.`
+                                                : `Hentian ${curDone + 1} drpd ${totalTarget}. Hanya tanda jika baki ${totalTarget - curDone - 1} hentian dibatalkan.`}
+                                        </p>
+                                    </div>
+                                    <input 
+                                        type="checkbox"
+                                        checked={isFinalDrop}
+                                        onChange={(e) => setIsFinalDrop(e.target.checked)}
+                                        className="w-6 h-6 rounded-lg bg-black border border-slate-700 accent-amber-500 outline-none cursor-pointer shrink-0"
+                                    />
                                 </div>
-                                <input 
-                                    type="checkbox"
-                                    checked={isFinalDrop}
-                                    onChange={(e) => setIsFinalDrop(e.target.checked)}
-                                    className="w-6 h-6 rounded-lg bg-black border border-slate-700 accent-blue-600 outline-none cursor-pointer"
-                                />
-                            </div>
-                        )}
+                            );
+                        })()}
                     </div>
 
                     {/* Footer Actions */}
