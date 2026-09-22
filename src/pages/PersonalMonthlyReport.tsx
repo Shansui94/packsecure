@@ -299,6 +299,22 @@ interface DailyMetrics {
 const PersonalMonthlyReport: React.FC<Props> = ({ user }) => {
     const today = new Date();
     const getSafeOrigin = (o?: string) => (o || '').toUpperCase().trim();
+
+    // Special Lorry detection & tagging (VPC 9821 has custom logistics compensation rate)
+    const isVpc9821 = (plate?: string | null): boolean => {
+        if (!plate) return false;
+        const clean = String(plate).toUpperCase().replace(/[^A-Z0-9]/g, '');
+        return clean === 'VPC9821';
+    };
+
+    const formatLorryPlate = (plate?: string | null): string => {
+        if (!plate || plate === 'N/A' || plate === '-') return plate || '-';
+        if (isVpc9821(plate)) {
+            return String(plate).includes('✓') ? String(plate) : `${plate} ✓`;
+        }
+        return String(plate);
+    };
+
     // Check if a pending edit payload actually has real differences from the original order
     const hasRealPreEditChanges = (notes?: string | null, original?: any) => {
         if (!notes) return false;
@@ -500,8 +516,11 @@ const PersonalMonthlyReport: React.FC<Props> = ({ user }) => {
 
             let initialLorryId = source.lorry_id || selectedTrip.lorry_id || '';
             if (!initialLorryId && (selectedTrip.lorry_plate || driverLorryPlate) && (selectedTrip.lorry_plate || driverLorryPlate) !== 'N/A') {
-                const targetPlate = selectedTrip.lorry_plate || driverLorryPlate;
-                const matched = (lorries || []).find(l => (l.plate_number || l.plateNumber || l.plate) === targetPlate);
+                const targetClean = String(selectedTrip.lorry_plate || driverLorryPlate || '').toUpperCase().replace(/[^A-Z0-9]/g, '');
+                const matched = (lorries || []).find(l => {
+                    const lClean = String(l.plate_number || l.plateNumber || l.plate || '').toUpperCase().replace(/[^A-Z0-9]/g, '');
+                    return lClean && lClean === targetClean;
+                });
                 if (matched?.id) initialLorryId = matched.id;
             }
             setSelectedLorryId(initialLorryId);
@@ -1508,7 +1527,7 @@ const PersonalMonthlyReport: React.FC<Props> = ({ user }) => {
                             'Tarikh / Date': day.dateStr,
                             'Hari / Day': weekday,
                             'Masa Kerja / Working Time': tIdx === 0 ? attendanceText : `↳ (Trip #${tIdx + 1})`,
-                            'No. Pendaftaran Lorry / Lorry Plate': (trip.lorry_plate && trip.lorry_plate !== 'N/A' ? trip.lorry_plate : (day.lorryPlate && day.lorryPlate !== 'N/A' ? day.lorryPlate : (driverLorryPlate !== 'N/A' ? driverLorryPlate : '-'))),
+                            'No. Pendaftaran Lorry / Lorry Plate': formatLorryPlate(trip.lorry_plate && trip.lorry_plate !== 'N/A' ? trip.lorry_plate : (day.lorryPlate && day.lorryPlate !== 'N/A' ? day.lorryPlate : (driverLorryPlate !== 'N/A' ? driverLorryPlate : '-'))),
                             'No. DO / Order': trip.order_number || '-',
                             'Pelanggan / Customer': trip.customer || '-',
                             'Tempat Asal / Origin': trip.trip_origin || 'TAIPING',
@@ -1662,7 +1681,7 @@ const PersonalMonthlyReport: React.FC<Props> = ({ user }) => {
                     rows.push({
                         date: dateDisplay,
                         workingTime: tIdx === 0 ? workingTimeText : '↳ (Trip tambahan)',
-                        lorryPlate: (trip.lorry_plate && trip.lorry_plate !== 'N/A' ? trip.lorry_plate : (day.lorryPlate && day.lorryPlate !== 'N/A' ? day.lorryPlate : (driverLorryPlate !== 'N/A' ? driverLorryPlate : '-'))),
+                        lorryPlate: formatLorryPlate(trip.lorry_plate && trip.lorry_plate !== 'N/A' ? trip.lorry_plate : (day.lorryPlate && day.lorryPlate !== 'N/A' ? day.lorryPlate : (driverLorryPlate !== 'N/A' ? driverLorryPlate : '-'))),
                         orderNumber: trip.order_number || '-',
                         customer: trip.customer || '-',
                         origin: trip.trip_origin || 'TAIPING',
@@ -1721,7 +1740,7 @@ const PersonalMonthlyReport: React.FC<Props> = ({ user }) => {
             driverName: viewedProfile?.name || user?.name || 'Driver',
             employeeId: viewedProfile?.employee_id || user?.employeeId || 'N/A',
             baseLocation: viewedProfile?.base_location || 'Taiping',
-            plateNumber: driverLorryPlate || 'N/A',
+            plateNumber: formatLorryPlate(driverLorryPlate) || 'N/A',
             totalTrips: actualTripsCount,
             completedTrips: completedCount,
             pendingScanTrips: pendingScanCount,
@@ -1940,7 +1959,7 @@ const PersonalMonthlyReport: React.FC<Props> = ({ user }) => {
                             tripRows.push({
                                 date: dateDisplay,
                                 workingTime: tIdx === 0 ? workingTimeText : '↳ (Trip tambahan)',
-                                lorryPlate: tripPlate,
+                                lorryPlate: formatLorryPlate(tripPlate),
                                 orderNumber: t.order_number || '-',
                                 customer: t.customer || '-',
                                 origin: t.trip_origin || 'TAIPING',
@@ -2015,7 +2034,7 @@ const PersonalMonthlyReport: React.FC<Props> = ({ user }) => {
                     driverName: driver.name || driver.employee_id || 'Pemandu',
                     employeeId: driver.employee_id || 'N/A',
                     baseLocation: driver.base_location || 'Taiping',
-                    plateNumber: plate,
+                    plateNumber: formatLorryPlate(plate),
                     totalTrips: actualTripsCount,
                     completedTrips: completedCount,
                     pendingScanTrips: pendingScanCount,
@@ -2645,11 +2664,14 @@ const PersonalMonthlyReport: React.FC<Props> = ({ user }) => {
                             </span>
                         )}
                         {isDriver && (
-                            <div className="flex items-center gap-1.5 px-3 py-1.5 bg-gradient-to-r from-amber-500/15 to-orange-500/10 border border-amber-500/30 rounded-lg text-xs font-bold text-amber-300 shadow-sm" title="No. Plat Lori untuk Pemandu ini / Lorry Plate">
+                            <div className="flex items-center gap-1.5 px-3 py-1.5 bg-gradient-to-r from-amber-500/15 to-orange-500/10 border border-amber-500/30 rounded-lg text-xs font-bold text-amber-300 shadow-sm" title={isVpc9821(driverLorryPlate) ? "No. Plat Lori: VPC 9821 (Kadar Khas / Special Rate) ✓" : "No. Plat Lori untuk Pemandu ini / Lorry Plate"}>
                                 <Truck size={14} className="text-amber-400 shrink-0" />
                                 <span className="text-gray-400">Lori:</span>
-                                <span className="font-mono text-amber-200 font-black tracking-wider bg-amber-950/60 px-2 py-0.5 rounded border border-amber-500/30">
-                                    {driverLorryPlate !== 'N/A' ? driverLorryPlate : 'Tiada Lori / N/A'}
+                                <span className="font-mono text-amber-200 font-black tracking-wider bg-amber-950/60 px-2 py-0.5 rounded border border-amber-500/30 inline-flex items-center gap-1.5">
+                                    <span>{driverLorryPlate !== 'N/A' ? driverLorryPlate.replace('✓', '').trim() : 'Tiada Lori / N/A'}</span>
+                                    {isVpc9821(driverLorryPlate) && (
+                                        <span className="text-emerald-400 font-black text-sm" title="VPC 9821 (Lori Khas / Special Rate) ✓">✓</span>
+                                    )}
                                 </span>
                             </div>
                         )}
@@ -2890,7 +2912,12 @@ const PersonalMonthlyReport: React.FC<Props> = ({ user }) => {
                                         <div className="mt-2.5 flex items-center gap-1.5 text-[11px] text-amber-300 font-bold bg-amber-500/10 px-2.5 py-1 rounded-xl border border-amber-500/20 w-fit">
                                             <Truck size={13} className="text-amber-400 shrink-0" />
                                             <span className="text-gray-400 text-[10px]">No. Lori:</span>
-                                            <span className="font-mono font-black text-amber-200">{driverLorryPlate}</span>
+                                            <span className="font-mono font-black text-amber-200 inline-flex items-center gap-1">
+                                                <span>{driverLorryPlate.replace('✓', '').trim()}</span>
+                                                {isVpc9821(driverLorryPlate) && (
+                                                    <span className="text-emerald-400 font-black text-xs" title="VPC 9821 (Lori Khas / Special Rate) ✓">✓</span>
+                                                )}
+                                            </span>
                                         </div>
                                     )}
                                     {!isDriver && (
@@ -3412,7 +3439,12 @@ const PersonalMonthlyReport: React.FC<Props> = ({ user }) => {
                                                         {isDriver && (day.lorryPlate || driverLorryPlate) && (day.lorryPlate || driverLorryPlate) !== 'N/A' && (
                                                             <span className="text-[9px] font-mono text-amber-300 font-bold flex items-center gap-1 bg-amber-500/10 px-1.5 py-0.5 rounded border border-amber-500/20">
                                                                 <Truck size={10} className="text-amber-400 shrink-0" />
-                                                                <span>{day.lorryPlate || driverLorryPlate}</span>
+                                                                <span className="inline-flex items-center gap-1">
+                                                                    <span>{(day.lorryPlate || driverLorryPlate).replace('✓', '').trim()}</span>
+                                                                    {isVpc9821(day.lorryPlate || driverLorryPlate) && (
+                                                                        <span className="text-emerald-400 font-black text-xs" title="VPC 9821 (Lori Khas / Special Rate) ✓">✓</span>
+                                                                    )}
+                                                                </span>
                                                             </span>
                                                         )}
                                                     </div>
@@ -3425,7 +3457,12 @@ const PersonalMonthlyReport: React.FC<Props> = ({ user }) => {
                                                             {(day.lorryPlate || driverLorryPlate) && (day.lorryPlate || driverLorryPlate) !== 'N/A' && (
                                                                 <span className="text-[9px] font-mono text-blue-300 font-bold flex items-center gap-1 bg-blue-500/10 px-1.5 py-0.5 rounded border border-blue-500/20">
                                                                     <Truck size={10} className="text-blue-400 shrink-0" />
-                                                                    <span>{day.lorryPlate || driverLorryPlate}</span>
+                                                                    <span className="inline-flex items-center gap-1">
+                                                                        <span>{(day.lorryPlate || driverLorryPlate).replace('✓', '').trim()}</span>
+                                                                        {isVpc9821(day.lorryPlate || driverLorryPlate) && (
+                                                                            <span className="text-emerald-400 font-black text-xs" title="VPC 9821 (Lori Khas / Special Rate) ✓">✓</span>
+                                                                        )}
+                                                                    </span>
                                                                 </span>
                                                             )}
                                                         </div>
@@ -3437,7 +3474,12 @@ const PersonalMonthlyReport: React.FC<Props> = ({ user }) => {
                                                             {(day.lorryPlate || driverLorryPlate) && (day.lorryPlate || driverLorryPlate) !== 'N/A' && (
                                                                 <span className="text-[9px] font-mono text-amber-300 font-bold flex items-center gap-1 bg-amber-500/10 px-1.5 py-0.5 rounded border border-amber-500/20">
                                                                     <Truck size={10} className="text-amber-400 shrink-0" />
-                                                                    <span>{day.lorryPlate || driverLorryPlate}</span>
+                                                                    <span className="inline-flex items-center gap-1">
+                                                                        <span>{(day.lorryPlate || driverLorryPlate).replace('✓', '').trim()}</span>
+                                                                        {isVpc9821(day.lorryPlate || driverLorryPlate) && (
+                                                                            <span className="text-emerald-400 font-black text-xs" title="VPC 9821 (Lori Khas / Special Rate) ✓">✓</span>
+                                                                        )}
+                                                                    </span>
                                                                 </span>
                                                             )}
                                                         </div>
@@ -3627,7 +3669,12 @@ const PersonalMonthlyReport: React.FC<Props> = ({ user }) => {
                                                                             {(td.lorry_plate || day.lorryPlate) && (td.lorry_plate || day.lorryPlate) !== 'N/A' && (
                                                                                 <span className="inline-flex items-center gap-1 px-1.5 py-0.5 rounded bg-black/60 border border-amber-500/30 text-[9px] font-mono font-bold text-amber-300 tracking-wider" title="No. Plat Lori untuk Trip ini / Lorry Plate">
                                                                                     <Truck size={10} className="text-amber-400 shrink-0" />
-                                                                                    <span>{td.lorry_plate || day.lorryPlate}</span>
+                                                                                    <span className="inline-flex items-center gap-1">
+                                                                                        <span>{(td.lorry_plate || day.lorryPlate).replace('✓', '').trim()}</span>
+                                                                                        {isVpc9821(td.lorry_plate || day.lorryPlate) && (
+                                                                                            <span className="text-emerald-400 font-black text-xs" title="VPC 9821 (Lori Khas / Special Rate) ✓">✓</span>
+                                                                                        )}
+                                                                                    </span>
                                                                                 </span>
                                                                             )}
                                                                             <span className={`ml-1 px-1.5 py-0.5 rounded font-black border text-[9.5px] ${
@@ -4220,7 +4267,7 @@ const PersonalMonthlyReport: React.FC<Props> = ({ user }) => {
                                                         <option value="">-- Select Lorry --</option>
                                                         {lorries.map(l => (
                                                             <option key={l.id} value={l.id}>
-                                                                {l.plateNumber || l.plate_number} {l.driverName ? `(${l.driverName})` : ''}
+                                                                {formatLorryPlate(l.plateNumber || l.plate_number)} {l.driverName ? `(${l.driverName})` : ''}
                                                             </option>
                                                         ))}
                                                     </select>
@@ -5463,7 +5510,7 @@ const PersonalMonthlyReport: React.FC<Props> = ({ user }) => {
                                 </div>
                                 <div>
                                     <span className="text-gray-500 block text-[9px] uppercase font-bold">No. Lorry / Vehicle</span>
-                                    <span className="font-bold text-xs text-black">{report.plateNumber}</span>
+                                    <span className="font-bold text-xs text-black">{formatLorryPlate(report.plateNumber)}</span>
                                 </div>
                                 <div>
                                     <span className="text-gray-500 block text-[9px] uppercase font-bold">Pusat / Base Location</span>
