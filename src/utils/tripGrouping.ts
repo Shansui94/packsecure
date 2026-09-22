@@ -267,10 +267,11 @@ export function groupOrdersIntoTrips(
             return sum + c;
         }, 0);
 
-        const areAllDropsDone = tripDrops <= 1 || totalCompletedDrops >= tripDrops;
-        const isAllDelivered = nonCancelled.length > 0 && nonCancelled.every(o => o.status === 'Delivered') && areAllDropsDone;
+        const allDbDelivered = nonCancelled.length > 0 && nonCancelled.every(o => o.status === 'Delivered');
+        const areAllDropsDone = allDbDelivered || tripDrops <= 1 || totalCompletedDrops >= tripDrops;
+        const isAllDelivered = allDbDelivered || (nonCancelled.length > 0 && areAllDropsDone && nonCancelled.every(o => o.status === 'Delivered'));
         const isAnyTransit = orders.some(o => o.status === 'In-Transit');
-        const isAnyLoaded = orders.some(o => o.status === 'Loaded') || (!areAllDropsDone && nonCancelled.length > 0);
+        const isAnyLoaded = orders.some(o => o.status === 'Loaded') || (!allDbDelivered && !areAllDropsDone && nonCancelled.length > 0);
         const isAnyPending = orders.some(o => o.status === 'Pending Approval' || o.status === 'Pending');
 
         let status = primary.status;

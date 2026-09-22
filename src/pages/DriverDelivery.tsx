@@ -297,24 +297,24 @@ const DriverDelivery: React.FC<DriverDeliveryProps> = ({ user, onNavigate }) => 
     const laterFileInputRef = useRef<HTMLInputElement>(null);
 
     // Helpers to check order delivery status (multi-drop aware: 1 DO = 1 drop)
-    const isPendingApprovalDone = (t: SalesOrder) => {
+    const isPendingApprovalDone = (t: SalesOrder, isMultiOrderTrip: boolean = false) => {
         if (t.status !== 'Pending Approval') return false;
         // If it's an Extra Job or Pick Up, it has already been submitted with photo proof and is only awaiting Admin approval.
         const isExtra = (t as any).job_type === 'Extra Job' || (t as any).job_type === 'Pick Up' || t.orderNumber?.startsWith('TRIP-JOB') || t.orderNumber?.startsWith('TRIP-PU') || (!t.items || t.items.length === 0);
         if (isExtra) return true;
 
-        const totalDrops = Math.max(1, Number((t as any).trip_drop_count) || 1);
+        const totalDrops = isMultiOrderTrip ? 1 : Math.max(1, Number((t as any).trip_drop_count) || 1);
         const completedDrops = countCompletedDrops(t.pod_photo_url);
-        return completedDrops >= totalDrops;
+        return completedDrops >= totalDrops || Boolean(t.notes && t.notes.includes('Proof uploaded'));
     };
 
-    const isOrderFullyDelivered = (order: SalesOrder) => {
+    const isOrderFullyDelivered = (order: SalesOrder, isMultiOrderTrip: boolean = false) => {
         if (order.status === 'Delivered') return true;
         if (order.status === 'Cancelled') return true;
-        if (order.status === 'Pending Approval') return isPendingApprovalDone(order);
+        if (order.status === 'Pending Approval') return isPendingApprovalDone(order, isMultiOrderTrip);
 
         if (order.status === 'Loaded') {
-            const totalDrops = Math.max(1, Number((order as any).trip_drop_count) || 1);
+            const totalDrops = isMultiOrderTrip ? 1 : Math.max(1, Number((order as any).trip_drop_count) || 1);
             const completedDrops = countCompletedDrops(order.pod_photo_url);
             return completedDrops >= totalDrops;
         }
@@ -1569,8 +1569,9 @@ const DriverDelivery: React.FC<DriverDeliveryProps> = ({ user, onNavigate }) => 
                                     now.toLocaleTimeString('en-GB', { hour: '2-digit', minute: '2-digit' });
 
                     for (const ord of driverLoadedOrders) {
+                        const isMultiOrder = driverLoadedOrders.filter(o => o.trip_id && o.trip_id === ord.trip_id).length > 1;
+                        const totalDrops = isMultiOrder ? 1 : (ord.trip_drop_count || 1);
                         const completedDrops = countCompletedDrops(ord.pod_photo_url);
-                        const totalDrops = ord.trip_drop_count || 1;
 
                         if (completedDrops >= totalDrops && totalDrops > 0) {
                             fullyDeliveredIds.push(ord.id);
@@ -1850,7 +1851,8 @@ const DriverDelivery: React.FC<DriverDeliveryProps> = ({ user, onNavigate }) => 
             grp.completedDrops = Math.min(grp.completedDrops, grp.totalDrops);
 
             // Trip is only all done if all orders are fully delivered and all drops met
-            const areAllOrdersDelivered = grp.orders.every(o => isOrderFullyDelivered(o));
+            const isMultiOrder = grp.orders.length > 1;
+            const areAllOrdersDelivered = grp.orders.every(o => isOrderFullyDelivered(o, isMultiOrder));
             grp.isAllDone = areAllOrdersDelivered && grp.completedDrops >= grp.totalDrops && grp.totalDrops > 0;
 
             // Extract Trip Remark or sequence if present
@@ -1963,7 +1965,7 @@ const DriverDelivery: React.FC<DriverDeliveryProps> = ({ user, onNavigate }) => 
         });
     };
 
-    const renderOrderCard = (order: SalesOrder) => {
+    const renderOrderCard = (order: SalesOrder, isMultiOrderTrip: boolean = false) => {
         const isExtraJob = (order as any).job_type === 'Extra Job' || (order as any).job_type === 'Pick Up' || order.orderNumber?.startsWith('TRIP-JOB') || order.orderNumber?.startsWith('TRIP-PU') || (order.notes && order.notes.startsWith('[') && (!order.items || order.items.length === 0));
 
         if (isExtraJob) {
@@ -2075,7 +2077,7 @@ const DriverDelivery: React.FC<DriverDeliveryProps> = ({ user, onNavigate }) => 
             );
         }
 
-        const isDeliveredOrDone = isOrderFullyDelivered(order);
+        const isDeliveredOrDone = isOrderFullyDelivered(order, isMultiOrderTrip);
 
         return (
             <div key={order.id} className="bg-slate-900 border border-slate-800 rounded-2xl overflow-hidden shadow-lg relative">
@@ -2400,7 +2402,7 @@ const DriverDelivery: React.FC<DriverDeliveryProps> = ({ user, onNavigate }) => 
                         </div>
                     ) : (
                         (order.status === 'Loaded' || order.status === 'Pending Approval' || !isDeliveredOrDone) ? (() => {
-                            const btnTotalDrops = Math.max(1, Number((order as any).trip_drop_count) || 1);
+                            const btnTotalDrops = isMultiOrderTrip ? 1 : Math.max(1, Number((order as any).trip_drop_count) || 1);
                             const btnDoneDrops = countCompletedDrops(order.pod_photo_url);
                             return (
                                 <button
@@ -2775,7 +2777,7 @@ const DriverDelivery: React.FC<DriverDeliveryProps> = ({ user, onNavigate }) => 
 
                                         {/* Drops List */}
                                         <div className="space-y-3">
-                                            {trip.orders.map((order) => renderOrderCard(order))}
+                                            {trip.orders.map((order) => renderOrderCard(order, trip.orders.length > 1))}
                                         </div>
                                     </div>
                                 )}

@@ -2198,19 +2198,32 @@ const PersonalMonthlyReport: React.FC<Props> = ({ user }) => {
 
             // 2.3 Driver Delivery / Trip Photos
             if (isDriver) {
+                const seenLoadPhotos = new Set<string>();
                 dayDeliveries.forEach(d => {
                     const orderRef = d.order_number ? `[${d.order_number}] ` : '';
                     if (d.proof_of_load_url) {
-                        dayPhotos.push({
-                            created_at: d.pod_timestamp || d.created_at || `${dateStr}T12:00:00.000Z`,
-                            category: `${orderRef}Proof of Load / Naik Barang`,
-                            photo_url: d.proof_of_load_url,
-                            risk_flag: false,
-                            type: 'load',
-                            order_number: d.order_number,
-                            customer: d.customer,
-                            badge_color: 'amber'
-                        });
+                        const cleanUrl = d.proof_of_load_url.trim();
+                        if (cleanUrl && !seenLoadPhotos.has(cleanUrl)) {
+                            seenLoadPhotos.add(cleanUrl);
+                            const sharedOrders = dayDeliveries
+                                .filter(other => other.proof_of_load_url && other.proof_of_load_url.trim() === cleanUrl)
+                                .map(other => other.order_number)
+                                .filter(Boolean);
+                            const labelRef = sharedOrders.length > 1
+                                ? `[Muatan Trip: ${sharedOrders.join(', ')}] `
+                                : orderRef;
+
+                            dayPhotos.push({
+                                created_at: d.pod_timestamp || d.created_at || `${dateStr}T12:00:00.000Z`,
+                                category: `${labelRef}Proof of Load / Naik Barang`,
+                                photo_url: cleanUrl,
+                                risk_flag: false,
+                                type: 'load',
+                                order_number: sharedOrders.length > 1 ? sharedOrders.join(', ') : d.order_number,
+                                customer: d.customer,
+                                badge_color: 'amber'
+                            });
+                        }
                     }
                     if (d.pod_photo_url) {
                         d.pod_photo_url.split(',').forEach((url: string, index: number) => {
