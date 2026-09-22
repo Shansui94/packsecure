@@ -611,7 +611,7 @@ const LiveStock: React.FC<LiveStockProps> = ({ onNavigate }) => {
                 supabase
                     .from('sales_orders')
                     .select('id, order_number, customer, status, items, delivery_address, created_at, trip_origin')
-                    .in('status', ['New', 'Production', 'Ready'])
+                    .in('status', ['New', 'Production', 'Ready', 'Planned'])
             ]);
 
             if (invRes.error) throw invRes.error;
@@ -655,14 +655,14 @@ const LiveStock: React.FC<LiveStockProps> = ({ onNavigate }) => {
                         type: r.type || 'FG',
                         uom: r.uom || 'ROL',
                         loc_id: normLoc,
-                        current_stock: Math.max(0, rawQty),
+                        current_stock: rawQty,
                         reserved_stock: 0,
-                        available_stock: Math.max(0, rawQty),
+                        available_stock: rawQty,
                         last_updated: r.last_updated || ''
                     });
                 } else {
                     const existing = physMap.get(key)!;
-                    existing.current_stock = Math.max(0, existing.current_stock + Math.max(0, rawQty));
+                    existing.current_stock = existing.current_stock + rawQty;
                     existing.available_stock = existing.current_stock;
                     if (r.last_updated && (!existing.last_updated || new Date(r.last_updated) > new Date(existing.last_updated))) {
                         existing.last_updated = r.last_updated;
@@ -683,7 +683,7 @@ const LiveStock: React.FC<LiveStockProps> = ({ onNavigate }) => {
                     order.items.forEach(item => {
                         const sku = item.sku?.trim();
                         const qty = Number(item.quantity) || 0;
-                        const rawLoc = item.sourceLocation || (order as any).sourceLocation || (order as any).factory_id;
+                        const rawLoc = item.sourceLocation || (order as any).sourceLocation || (order as any).factory_id || order.trip_origin;
                         const loc = normalizeLoc(rawLoc);
                         if (sku && activeSkus.has(sku) && qty > 0) {
                             const key = `${sku}|${loc}`;
@@ -697,7 +697,7 @@ const LiveStock: React.FC<LiveStockProps> = ({ onNavigate }) => {
             const activeInventory: StockRow[] = [];
             physMap.forEach((item, key) => {
                 const resQty = reservedMap.get(key) || 0;
-                const phyStock = Math.max(0, item.current_stock);
+                const phyStock = item.current_stock;
                 const availStock = phyStock - resQty;
                 activeInventory.push({
                     ...item,
@@ -736,7 +736,7 @@ const LiveStock: React.FC<LiveStockProps> = ({ onNavigate }) => {
             const isMatchLoc = locationFilter === 'All' || r.loc_id === locationFilter;
             if (isMatchLoc) {
                 if (!skuMap.has(r.sku)) {
-                    const phy = Math.max(0, r.current_stock || 0);
+                    const phy = r.current_stock || 0;
                     const res = r.reserved_stock || 0;
                     skuMap.set(r.sku, {
                         ...r,
@@ -748,7 +748,7 @@ const LiveStock: React.FC<LiveStockProps> = ({ onNavigate }) => {
                     });
                 } else {
                     const item = skuMap.get(r.sku)!;
-                    item.current_stock = Math.max(0, item.current_stock + Math.max(0, r.current_stock || 0));
+                    item.current_stock = item.current_stock + (r.current_stock || 0);
                     item.reserved_stock = (item.reserved_stock || 0) + (r.reserved_stock || 0);
                     item.available_stock = item.current_stock - item.reserved_stock;
                     if (r.last_updated && (!item.last_updated || new Date(r.last_updated) > new Date(item.last_updated))) {
@@ -806,7 +806,7 @@ const LiveStock: React.FC<LiveStockProps> = ({ onNavigate }) => {
     const totalItems = filtered.length;
     const totalQty = filtered.reduce((sum, r) => sum + (r.available_stock || 0), 0);
     const lowStockCount = filtered.filter(r => (r.available_stock || 0) < LOW_STOCK_THRESHOLD && (r.available_stock || 0) >= 0).length;
-    const negativeCount = rows.filter(r => (r.available_stock || 0) < 0).length;
+    const negativeCount = filtered.filter(r => (r.available_stock || 0) < 0).length;
 
     const getStockColor = (qty: number) => {
         if (qty < 0) return 'text-red-600 dark:text-red-500';

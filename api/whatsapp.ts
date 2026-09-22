@@ -7,7 +7,12 @@ import {
   sendWhatsAppTemplate,
   downloadWhatsAppMediaAsBase64,
   normalizePhoneNumber,
-  markWhatsAppMessageAsRead
+  markWhatsAppMessageAsRead,
+  formatTripDispatchMessage,
+  generateCustomerShippedTemplate,
+  generateCustomerDeliveredTemplate,
+  TripDispatchOrder,
+  TripDispatchInfo
 } from '../lib/whatsapp.js';
 
 function getSupabase() {
@@ -18,15 +23,172 @@ function getSupabase() {
 
 const apiKey = process.env.GOOGLE_API_KEY || process.env.GEMINI_API_KEY || '';
 
-// ─── Outbound Send Message Handler ─────────────────────────────────────────────
+// ─── Outbound Send / Dispatch Message Handler ──────────────────────────────────
 export async function handleWhatsAppSend(req: VercelRequest, res: VercelResponse) {
   try {
     const supabase = getSupabase();
-    const { to, employeeId, userId, text, template, language, components } = req.body || {};
+    const action = req.query?.action || req.body?.action;
 
+    // ── Special Action 1: Dispatch Trip to Driver ──────────────────────────────
+    if (action === 'dispatch-trip' || req.body?.tripId || req.body?.tripNumber) {
+      const { tripId, tripNumber, preview, customNotes, driverId: explicitDriverId } = req.body || {};
+
+      let tripQuery = supabase.from('trips_v2').select('*');
+      if (tripId) {
+        tripQuery = tripQuery.eq('id', tripId);
+      } else if (tripNumber) {
+        tripQuery = tripQuery.eq('trip_number', tripNumber);
+      }
+
+      const { data: trip, error: tripErr } = await tripQuery.maybeSingle();
+      if (tripErr) {
+        return res.status(500).json({ error: `查询车次失败: ${tripErr.message}` });
+      }
+      if (!trip) {
+        return res.status(404).json({ error: '未找到指定车次记录' });
+      }
+
+      const driverId = explicitDriverId || trip.driver_id;
+      let driverName = 'Pemandu';
+      let driverPhone = '';
+
+      if (driverId) {
+        const { data: driver } = await supabase
+          .from('users_public')
+          .select('id, name, phone, employee_id')
+          .eq('id', driverId)
+          .maybeSingle();
+
+        if (driver) {
+          driverName = driver.name || 'Pemandu';
+          driverPhone = driver.phone || '';
+        }
+      }
+
+      let vehiclePlate = '';
+      if (trip.lorry_id) {
+        const { data: lorry } = await supabase
+          .from('lorries')
+          .select('plate_number')
+          .eq('id', trip.lorry_id)
+          .maybeSingle();
+        if (lorry) vehiclePlate = lorry.plate_number;
+      }
+
+      // Fetch sales orders belonging to this trip
+      const { data: rawOrders } = await supabase
+        .from('sales_orders')
+        .select('*')
+        .eq('trip_id', trip.id)
+        .order('stop_sequence', { ascending: true });
+
+      const ordersList: TripDispatchOrder[] = (rawOrders || []).map((o: any, idx: number) => {
+        let itemsStr = '';
+        if (Array.isArray(o.items)) {
+          itemsStr = o.items.map((i: any) => `${i.quantity || 1}x ${i.product || i.sku || 'Roll'}`).join(', ');
+        }
+        return {
+          orderNumber: o.order_number || `DO-${idx + 1}`,
+          customer: o.customer || 'Pelanggan',
+          deliveryAddress: o.delivery_address || '',
+          phone: o.customer_phone || o.phone || '',
+          itemsSummary: itemsStr,
+          stopSequence: o.stop_sequence || idx + 1,
+        };
+      });
+
+      const tripInfo: TripDispatchInfo = {
+        tripNumber: trip.trip_number || 'TRIP-001',
+        driverName,
+        vehiclePlate,
+        date: trip.started_at ? new Date(trip.started_at).toLocaleDateString('en-GB') : undefined,
+      };
+
+      let messageText = formatTripDispatchMessage(tripInfo, ordersList);
+      if (customNotes) {
+        messageText += `\n\n📌 *Nota Tambahan Pejabat:*\n${customNotes}`;
+      }
+
+      // If user only requested a preview
+      if (preview) {
+        return res.status(200).json({
+          success: true,
+          preview: true,
+          text: messageText,
+          driverName,
+          driverPhone,
+          orderCount: ordersList.length,
+        });
+      }
+
+      // Actual sending to driver
+      if (!driverPhone) {
+        return res.status(400).json({
+          error: `司机 ${driverName} 尚未绑定 WhatsApp 手机号，无法推送行程。请让其在 WhatsApp 发送工号自绑定。`,
+          previewText: messageText,
+        });
+      }
+
+      const sendResult = await sendWhatsAppText(driverPhone, messageText);
+
+      // Log dispatch note on trip
+      await supabase
+        .from('trips_v2')
+        .update({ clerk_notes: `Dispatched to WhatsApp at ${new Date().toISOString()}` })
+        .eq('id', trip.id);
+
+      return res.status(200).json({
+        success: true,
+        data: sendResult,
+        recipient: driverPhone,
+        text: messageText,
+      });
+    }
+
+    // ── Special Action 2: Generate Customer Reply Template ─────────────────────
+    if (action === 'customer-template') {
+      const { orderId, orderNumber, type } = req.body || {};
+      let query = supabase.from('sales_orders').select('*');
+      if (orderId) query = query.eq('id', orderId);
+      else if (orderNumber) query = query.eq('order_number', orderNumber);
+
+      const { data: order } = await query.maybeSingle();
+      if (!order) {
+        return res.status(404).json({ error: '未找到订单记录' });
+      }
+
+      let templateResult;
+      if (type === 'delivered') {
+        templateResult = generateCustomerDeliveredTemplate(
+          order.customer || '客户',
+          order.order_number,
+          order.customer_phone,
+          order.pod_photo_url
+        );
+      } else {
+        let itemsStr = '';
+        if (Array.isArray(order.items)) {
+          itemsStr = order.items.map((i: any) => `${i.quantity}卷`).join(', ');
+        }
+        templateResult = generateCustomerShippedTemplate(
+          order.customer || '客户',
+          order.order_number,
+          order.customer_phone,
+          itemsStr
+        );
+      }
+
+      return res.status(200).json({
+        success: true,
+        ...templateResult,
+        customerPhone: order.customer_phone || '',
+      });
+    }
+
+    // ── Standard Outbound Message (by employeeId or phone) ─────────────────────
+    const { to, employeeId, userId, text, template, language, components } = req.body || {};
     let targetPhone = to;
 
-    // If targetPhone is not directly provided, lookup by employeeId or userId in Supabase
     if (!targetPhone && (employeeId || userId)) {
       let query = supabase.from('users_public').select('id, name, phone, employee_id');
       if (employeeId) {
@@ -36,15 +198,11 @@ export async function handleWhatsAppSend(req: VercelRequest, res: VercelResponse
       }
 
       const { data: user, error: dbErr } = await query.maybeSingle();
-      if (dbErr) {
-        return res.status(500).json({ error: `查询员工资料失败: ${dbErr.message}` });
-      }
-      if (!user) {
-        return res.status(404).json({ error: '未找到对应员工记录' });
-      }
+      if (dbErr) return res.status(500).json({ error: `查询员工资料失败: ${dbErr.message}` });
+      if (!user) return res.status(404).json({ error: '未找到对应员工记录' });
       if (!user.phone) {
-        return res.status(400).json({ 
-          error: `员工 ${user.name || employeeId} 尚未绑定 WhatsApp 手机号，请先让其在 WhatsApp 发送工号完成绑定` 
+        return res.status(400).json({
+          error: `员工 ${user.name || employeeId} 尚未绑定 WhatsApp 手机号，请先让其在 WhatsApp 发送工号完成绑定`,
         });
       }
       targetPhone = user.phone;
@@ -58,9 +216,7 @@ export async function handleWhatsAppSend(req: VercelRequest, res: VercelResponse
     if (template) {
       result = await sendWhatsAppTemplate(targetPhone, template, language || 'zh_CN', components);
     } else {
-      if (!text) {
-        return res.status(400).json({ error: '缺少消息内容 (text)' });
-      }
+      if (!text) return res.status(400).json({ error: '缺少消息内容 (text)' });
       result = await sendWhatsAppText(targetPhone, text);
     }
 
@@ -87,7 +243,6 @@ export async function handleWhatsAppWebhook(req: VercelRequest, res: VercelRespo
     const changes = entry?.changes?.[0];
     const value = changes?.value;
 
-    // Ignore delivery/read receipts
     if (!value?.messages || value.messages.length === 0) {
       return res.status(200).json({ status: 'EVENT_IGNORED' });
     }
@@ -99,14 +254,13 @@ export async function handleWhatsAppWebhook(req: VercelRequest, res: VercelRespo
 
     console.log(`[WhatsApp Inbound] From: ${fromNumber}, Type: ${msgType}`);
 
-    // Mark incoming message as read immediately so sender sees blue ticks
+    // Mark message as read immediately so sender sees blue ticks
     if (msg.id) {
       markWhatsAppMessageAsRead(msg.id).catch(() => {});
     }
 
     // Match sender against users_public
     const localPhone = fromNumber.startsWith('60') ? '0' + fromNumber.substring(2) : fromNumber;
-    
     const { data: matchedUsers } = await supabase
       .from('users_public')
       .select('id, name, role, phone, employee_id, factory_id, base_location')
@@ -114,11 +268,11 @@ export async function handleWhatsAppWebhook(req: VercelRequest, res: VercelRespo
 
     const employee = matchedUsers && matchedUsers.length > 0 ? matchedUsers[0] : null;
 
-    // BRANCH A: UNBOUND USER (Self-binding flow)
+    // ── BRANCH A: UNBOUND USER (Self-binding flow) ───────────────────────────
     if (!employee) {
       const textContent = (msg.text?.body || '').trim();
-
       const pinMatch = textContent.match(/\b\d{3,6}\b/);
+
       if (pinMatch) {
         const candidatePin = pinMatch[0];
         const { data: candidateUsers } = await supabase
@@ -134,169 +288,362 @@ export async function handleWhatsAppWebhook(req: VercelRequest, res: VercelRespo
             .update({ phone: fromNumber, updated_at: new Date().toISOString() })
             .eq('id', targetUser.id);
 
-          const welcomeReply = `✅ 绑定成功！\n` +
-            `欢迎您，*${targetUser.name}*（工号: ${targetUser.employee_id} | 角色: ${targetUser.role || '员工'}）\n\n` +
-            `您现在可以直接在 WhatsApp 中与系统互动：\n` +
-            `• 回复【*打卡*】：登记上下班考勤\n` +
-            `• 回复【*工时*】：查询个人出勤简报\n` +
-            `• 回复【*库存 <品名>*】：查询仓库实时物料\n` +
-            `• 拍照片发送：自动识别电子秤废料 或 司机签收单回传！`;
+          const welcomeReply = `✅ *Ikatan Berjaya / 绑定成功！*\n` +
+            `Selamat datang, *${targetUser.name}* (No. Pekerja: ${targetUser.employee_id} | Jawatan: ${targetUser.role || 'Staf'})\n\n` +
+            `Anda kini boleh gunakan WhatsApp ini untuk:\n` +
+            `• Hantar 【*打卡 / Masuk*】: Rekod kedatangan harian\n` +
+            `• Hantar 【*工时 / Jam*】: Semak status kerja\n` +
+            `• Pemandu Lori: Terus hantar *gambar DO bertandatangan* selepas selesai penghantaran! 🚚\n` +
+            `• Lapor masalah: Rosak / Pancit / Xde orang terus di sini.`;
 
           await sendWhatsAppText(fromNumber, welcomeReply);
           return res.status(200).json({ status: 'BOUND_SUCCESS' });
         }
       }
 
-      const promptReply = `👋 您好！欢迎使用 *Packsecure OS 智能系统*。\n` +
-        `检测到您的 WhatsApp 号码尚未关联员工档案。\n\n` +
-        `👉 请直接在此回复您的【*4位工号/PIN码*】（例如：3190 或 013）即可自动完成绑定！`;
+      const promptReply = `👋 Halo! Selamat datang ke *Packsecure OS*.\n` +
+        `Nombor WhatsApp anda belum dihubungkan dengan profil pekerja.\n\n` +
+        `👉 Sila balas dengan *No. Pekerja / PIN 4 digit* anda (contoh: 3190 atau 013) untuk pengesahan segera!`;
 
       await sendWhatsAppText(fromNumber, promptReply);
       return res.status(200).json({ status: 'PROMPT_BINDING' });
     }
 
-    // BRANCH B: BOUND EMPLOYEE INTERACTIONS
-    const empName = employee.name || '同事';
+    // ── BRANCH B: BOUND EMPLOYEE INTERACTIONS ────────────────────────────────
+    const empName = employee.name || 'Pemandu / Staf';
     const empRole = employee.role || 'Operator';
+    const isDriver = empRole === 'Driver' || empRole === 'LogisticsCoordinator';
 
-    // 1. Photo / Image message
+    // ── CASE 1: EMPLOYEE SENDS AN IMAGE ──────────────────────────────────────
     if (msgType === 'image') {
       const imageId = msg.image?.id;
+      const caption = (msg.image?.caption || '').trim();
+
       if (!imageId) {
-        await sendWhatsAppText(fromNumber, `收到照片，但无法读取图片编号，请重试。`);
+        await sendWhatsAppText(fromNumber, `Gambar diterima tetapi tiada ID gambar. Sila cuba lagi.`);
         return res.status(200).json({ status: 'NO_IMAGE_ID' });
       }
 
-      if (empRole === 'Driver') {
+      let base64 = '';
+      let mimeType = 'image/jpeg';
+      try {
+        const media = await downloadWhatsAppMediaAsBase64(imageId);
+        base64 = media.base64;
+        mimeType = media.mimeType;
+      } catch (err) {
+        console.warn('[WhatsApp Media Download Failed]:', err);
+      }
+
+      // ── DRIVER WORKFLOW: POD / DELIVERY RECEIPT / EXPENSE ────────────────────
+      if (isDriver) {
+        let aiClassification: any = { is_do: true, do_number: null, category: 'POD' };
+
+        if (base64 && apiKey) {
+          try {
+            const genAI = new GoogleGenerativeAI(apiKey);
+            const model = genAI.getGenerativeModel({ model: 'gemini-2.5-flash' });
+            const prompt = `You are a logistics AI in a factory. Analyze this photo sent by driver ${empName}.
+Is it:
+1. A signed delivery order / DO receipt / invoice? Look for DO number like DO-AMEER-xxxx or DO-xxxx or stamps.
+2. A lorry expense / repair receipt (workshop, tire, petrol, diesel, service)?
+3. Pallet collection or factory work?
+Caption from driver: "${caption}".
+Output strictly valid JSON:
+{
+  "type": "DO" | "EXPENSE" | "PALLET" | "OTHER",
+  "do_number": string or null,
+  "customer_name": string or null,
+  "expense_amount": number or null,
+  "category": "POD" | "LORRY_SERVICE" | "AMBIK_PALLET" | "SHOPEE" | "OTHER",
+  "summary": string
+}`;
+
+            const aiRes = await model.generateContent([
+              prompt,
+              { inlineData: { data: base64, mimeType } },
+            ]);
+            const rawText = aiRes.response.text().replace(/```json/g, '').replace(/```/g, '').trim();
+            aiClassification = JSON.parse(rawText);
+          } catch (e) {
+            console.warn('[Gemini Vision Driver Classification Error]:', e);
+          }
+        }
+
+        // Record in work_photos for company archive
+        try {
+          await supabase.from('work_photos').insert({
+            user_id: employee.id,
+            employee_id: employee.employee_id,
+            employee_name: empName,
+            category: aiClassification.category || 'POD',
+            user_note: caption || 'WhatsApp submission',
+            ai_description: aiClassification.summary || 'Received via WhatsApp',
+            location: employee.base_location || 'TAIPING',
+          });
+        } catch (photoErr) {
+          console.warn('[work_photos insert error]:', photoErr);
+        }
+
+        // Sub-branch 1: Expense / Tire / Pallet
+        if (aiClassification.type === 'EXPENSE' || aiClassification.type === 'PALLET') {
+          const catLabel = aiClassification.category === 'AMBIK_PALLET' ? 'Ambik Pallet (栈板)' : 'Lorry Service / Resit (修车/单据)';
+          await sendWhatsAppText(
+            fromNumber,
+            `📝 *Resit / Tugas Tambahan Direkodkan!* 🛠️\n` +
+            `• Pemandu: *${empName}*\n` +
+            `• Kategori: ${catLabel}\n` +
+            `• Catatan: ${aiClassification.summary || caption || 'Tiada'}\n\n` +
+            `Foto telah disimpan ke rekod syarikat untuk semakan pihak pentadbir. Terima kasih! 👍`
+          );
+          return res.status(200).json({ status: 'EXPENSE_RECORDED' });
+        }
+
+        // Sub-branch 2: Signed DO / Delivery POD
+        let matchedOrder: any = null;
+
+        // Try matching by recognized DO number
+        if (aiClassification.do_number) {
+          const { data: found } = await supabase
+            .from('sales_orders')
+            .select('*')
+            .ilike('order_number', `%${aiClassification.do_number}%`)
+            .maybeSingle();
+          if (found) matchedOrder = found;
+        }
+
+        // If no direct DO match, match the driver's earliest pending order
+        if (!matchedOrder) {
+          const { data: pendingOrders } = await supabase
+            .from('sales_orders')
+            .select('*')
+            .eq('driver_id', employee.id)
+            .neq('status', 'Delivered')
+            .neq('status', 'Cancelled')
+            .order('stop_sequence', { ascending: true })
+            .limit(1);
+
+          if (pendingOrders && pendingOrders.length > 0) {
+            matchedOrder = pendingOrders[0];
+          }
+        }
+
+        if (matchedOrder) {
+          await supabase
+            .from('sales_orders')
+            .update({
+              status: 'Delivered',
+              pod_timestamp: new Date().toISOString(),
+            })
+            .eq('id', matchedOrder.id);
+
+          await sendWhatsAppText(
+            fromNumber,
+            `✅ *Penghantaran Disahkan Selesai!* 🚚\n\n` +
+            `• Pelanggan: *${matchedOrder.customer}*\n` +
+            `• No. DO: *${matchedOrder.order_number}*\n` +
+            `• Status: *Delivered (Selesai)*\n` +
+            `• Masa: ${new Date().toLocaleTimeString('ms-MY', { timeZone: 'Asia/Kuala_Lumpur' })}\n\n` +
+            `Terima kasih ${empName}! Teruskan ke destinasi seterusnya dengan selamat. 💪`
+          );
+          return res.status(200).json({ status: 'ORDER_DELIVERED' });
+        }
+
+        // Fallback acknowledgement
         await sendWhatsAppText(
           fromNumber,
-          `📸 司机 ${empName} 您好！\n已成功接收到您上传的送货单据/签收凭证 照片。📦\n系统已自动归档关联至今日行程！`
+          `📸 Gambar diterima & disimpan, Pemandu ${empName}!\n` +
+          `Sila maklumkan no. DO jika ingin mengesahkan pesanan tertentu. Terima kasih!`
         );
         return res.status(200).json({ status: 'DRIVER_PHOTO_SAVED' });
       }
 
+      // ── OPERATOR WORKFLOW: WEIGHING SCALE / SCRAP ────────────────────────────
       try {
-        const { base64, mimeType } = await downloadWhatsAppMediaAsBase64(imageId);
-        
-        if (apiKey) {
+        if (base64 && apiKey) {
           const genAI = new GoogleGenerativeAI(apiKey);
           const model = genAI.getGenerativeModel({ model: 'gemini-2.5-flash' });
-
           const prompt = `You are an industrial vision AI in a manufacturing plant. Analyze this photo.
 If it is a digital weighing scale, read the number on the digital LED/LCD display (e.g. 14.50, 20.1).
 Output valid JSON only: { "is_scale": boolean, "weight_kg": number or null, "description": string }`;
 
           const aiRes = await model.generateContent([
             prompt,
-            { inlineData: { data: base64, mimeType } }
+            { inlineData: { data: base64, mimeType } },
           ]);
+          const raw = aiRes.response.text().replace(/```json/g, '').replace(/```/g, '').trim();
+          const parsed = JSON.parse(raw);
 
-          const aiText = aiRes.response.text();
-          let parsedResult: any = {};
-          try {
-            const cleanJson = aiText.replace(/```json/g, '').replace(/```/g, '').trim();
-            parsedResult = JSON.parse(cleanJson);
-          } catch {
-            parsedResult = { is_scale: false };
-          }
+          if (parsed.is_scale && parsed.weight_kg) {
+            await supabase.from('work_photos').insert({
+              user_id: employee.id,
+              employee_id: employee.employee_id,
+              employee_name: empName,
+              category: 'SCALE',
+              user_note: `Berat dikesan: ${parsed.weight_kg} kg`,
+              location: employee.base_location || 'TAIPING',
+            });
 
-          if (parsedResult.is_scale && parsedResult.weight_kg) {
             await sendWhatsAppText(
               fromNumber,
-              `⚖️ *电子秤称重识别成功！*\n` +
-              `• 记录人员: ${empName} (${empRole})\n` +
-              `• 秤重读数: *${parsedResult.weight_kg} kg*\n` +
-              `• 记录时间: ${new Date().toLocaleTimeString('zh-CN', { timeZone: 'Asia/Kuala_Lumpur' })}\n` +
-              `已为您自动登记进今日车间废料与产出台账！♻️`
+              `⚖️ *Bacaan Penimbang Dikesan! / 称重识别成功*\n` +
+              `• Rekod: *${parsed.weight_kg} kg*\n` +
+              `• Operator: ${empName} (${employee.employee_id || '-'})\n` +
+              `• Masa: ${new Date().toLocaleTimeString('zh-CN', { timeZone: 'Asia/Kuala_Lumpur' })}\n` +
+              `Data telah direkodkan ke lejar pengeluaran & sisa! ♻️`
             );
             return res.status(200).json({ status: 'SCALE_RECORDED' });
           }
         }
       } catch (visionErr) {
-        console.error('[WhatsApp Vision Error]:', visionErr);
+        console.warn('[Operator Scale Vision Error]:', visionErr);
       }
 
       await sendWhatsAppText(
         fromNumber,
-        `📸 照片已接收！记录人：${empName}。\n照片已安全同步保存至现场日志。`
+        `📸 Gambar telah diterima dan disimpan selamat ke arkib sistem. Terima kasih, ${empName}!`
       );
       return res.status(200).json({ status: 'PHOTO_PROCESSED' });
     }
 
-    // 2. Text Command message
+    // ── CASE 2: EMPLOYEE SENDS A TEXT MESSAGE ────────────────────────────────
     const text = (msg.text?.body || '').trim();
     const lower = text.toLowerCase();
 
-    // Command 1: Punch / Clock-in
+    // ── DRIVER FIELD ISSUES & EXCEPTIONS (Live Triage) ───────────────────────
+    if (isDriver && /rosak|pancit|tayar|bengkel|xde orang|xde org|kedai tutup|tutup|kemalangan|xleh hantar|sangkut|hujan lebat|tunggu lama/i.test(lower)) {
+      try {
+        await supabase.from('work_photos').insert({
+          user_id: employee.id,
+          employee_id: employee.employee_id,
+          employee_name: empName,
+          category: 'EXCEPTION',
+          user_note: text,
+          risk_flag: true,
+          risk_reason: text,
+          location: employee.base_location || 'TAIPING',
+        });
+      } catch (logErr) {
+        console.warn('[Exception log error]:', logErr);
+      }
+
+      const alertReply = `⚠️ *Makluman Masalah Diterima! / 现场异常已记录* 🚨\n\n` +
+        `Pemandu: *${empName}*\n` +
+        `Isu: "${text}"\n\n` +
+        `Pihak koordinator operasi telah dimaklumkan secara automatik. Sila pastikan keselamatan diri & lori. Tunggu arahan seterusnya atau hubungi pejabat jika kecemasan!`;
+
+      await sendWhatsAppText(fromNumber, alertReply);
+      return res.status(200).json({ status: 'DRIVER_ISSUE_ALERTED' });
+    }
+
+    // ── DRIVER QUICK STATUS (e.g. "Stop 1 selesai", "DO-001 siap") ────────────
+    if (isDriver && /selesai|siap|hantar|delivered/i.test(lower)) {
+      const { data: pendingOrders } = await supabase
+        .from('sales_orders')
+        .select('*')
+        .eq('driver_id', employee.id)
+        .neq('status', 'Delivered')
+        .neq('status', 'Cancelled')
+        .order('stop_sequence', { ascending: true })
+        .limit(1);
+
+      if (pendingOrders && pendingOrders.length > 0) {
+        const orderToUpdate = pendingOrders[0];
+        await supabase
+          .from('sales_orders')
+          .update({ status: 'Delivered', pod_timestamp: new Date().toISOString() })
+          .eq('id', orderToUpdate.id);
+
+        await sendWhatsAppText(
+          fromNumber,
+          `✅ *Status Dikemas Kini!* 🚚\n` +
+          `DO: *${orderToUpdate.order_number}* (${orderToUpdate.customer})\n` +
+          `Status: *Delivered (Selesai)*\n` +
+          `Jangan lupa hantar foto DO yang dicop bila ada kelapangan. Terima kasih ${empName}!`
+        );
+        return res.status(200).json({ status: 'ORDER_QUICK_DELIVERED' });
+      }
+    }
+
+    // Command 1: Punch / Clock-in (打卡)
     if (/打卡|上班|下班|masuk|keluar|punch|clock/i.test(lower)) {
       const timeStr = new Date().toLocaleTimeString('zh-CN', { timeZone: 'Asia/Kuala_Lumpur' });
       const dateStr = new Date().toISOString().split('T')[0];
-      
       await sendWhatsAppText(
         fromNumber,
-        `⏰ *考勤打卡记录成功！*\n` +
-        `• 姓名: ${empName} (${employee.employee_id || '-'})\n` +
-        `• 角色: ${empRole}\n` +
-        `• 时间: ${dateStr} ${timeStr}\n` +
-        `• 地点: ${employee.base_location || employee.factory_id || 'TAIPING'}\n` +
-        `祝您今天工作顺利，注意安全！💪`
+        `⏰ *Rekod Kedatangan / 考勤打卡成功！*\n` +
+        `• Nama: *${empName}* (${employee.employee_id || '-'})\n` +
+        `• Jawatan: ${empRole}\n` +
+        `• Masa: ${dateStr} ${timeStr}\n` +
+        `• Lokasi: ${employee.base_location || employee.factory_id || 'TAIPING'}\n` +
+        `Semoga hari anda berjalan lancar & selamat bekerja! 💪`
       );
       return res.status(200).json({ status: 'ATTENDANCE_RECORDED' });
     }
 
-    // Command 2: Work hours / Personal Summary
-    if (/工时|出勤|jam kerja|gaji|提成/i.test(lower)) {
+    // Command 2: Work hours / Personal Summary (工时)
+    if (/工时|出勤|jam kerja|gaji|trip saya|jadual/i.test(lower)) {
+      // Check active trip if driver
+      let tripNotice = '';
+      if (isDriver) {
+        const { data: activeTrips } = await supabase
+          .from('trips_v2')
+          .select('trip_number, status')
+          .eq('driver_id', employee.id)
+          .neq('status', 'Completed')
+          .limit(1);
+
+        if (activeTrips && activeTrips.length > 0) {
+          tripNotice = `\n• Trip Semasa: *${activeTrips[0].trip_number}* (${activeTrips[0].status})`;
+        }
+      }
+
       await sendWhatsAppText(
         fromNumber,
-        `📊 *个人考勤与工时档案*\n` +
-        `• 姓名: ${empName} (工号: ${employee.employee_id || '-'})\n` +
-        `• 职务: ${empRole}\n` +
-        `• 厂区: ${employee.base_location || employee.factory_id || 'TAIPING'}\n` +
-        `• 状态: 正常出勤 (Active)\n\n` +
-        `💡 如需申请请假或调班，请直接回复【请假】。`
+        `📊 *Profil & Status Pekerja*\n` +
+        `• Nama: *${empName}* (No: ${employee.employee_id || '-'})\n` +
+        `• Jawatan: ${empRole}\n` +
+        `• Kilang: ${employee.base_location || employee.factory_id || 'TAIPING'}\n` +
+        `• Status: Aktif Berkhidmat (Active)${tripNotice}\n\n` +
+        `💡 Hubungi HR untuk maklumat terperinci cuti & gaji.`
       );
       return res.status(200).json({ status: 'HOURS_QUERIED' });
     }
 
-    // Command 3: Inventory Query
+    // Command 3: Inventory Query (库存)
     if (/库存|stok|balance/i.test(lower)) {
       const searchKeyword = text.replace(/库存|stok|balance/gi, '').trim();
-
       let stockQuery = supabase.from('live_stock').select('*').limit(5);
       if (searchKeyword) {
         stockQuery = stockQuery.ilike('item_id', `%${searchKeyword}%`);
       }
 
       const { data: stockItems } = await stockQuery;
-
       if (stockItems && stockItems.length > 0) {
         const lines = stockItems.map(
-          (s: any) => `📦 *${s.item_id}*: 剩余 ${s.quantity} (${s.factory_id || '厂区'})`
+          (s: any) => `📦 *${s.item_id}*: Baki ${s.quantity} (${s.factory_id || 'Kilang'})`
         );
         await sendWhatsAppText(
           fromNumber,
-          `📋 *Packsecure 实时库存查询*:\n\n${lines.join('\n')}`
+          `📋 *Baki Stok Packsecure (Semasa)*:\n\n${lines.join('\n')}`
         );
       } else {
         await sendWhatsAppText(
           fromNumber,
-          `📦 未找到名称包含 "${searchKeyword || '全部'}" 的库存物料，请确认型号后重试。`
+          `📦 Tiada rekod stok untuk "${searchKeyword || 'semua'}". Sila sahkan kod barang.`
         );
       }
       return res.status(200).json({ status: 'STOCK_QUERIED' });
     }
 
     // Command 4: Help menu
-    if (/帮助|help|menu|菜单/i.test(lower)) {
-      const helpText = `📖 *Packsecure 员工助手使用指南*\n\n` +
-        `你好，${empName}！您可以发送：\n` +
-        `1️⃣ 发送【*打卡*】快速登记考勤\n` +
-        `2️⃣ 发送【*工时*】查询个人考勤与职务档案\n` +
-        `3️⃣ 发送【*库存 500*】查询指定规格气泡膜或物料剩余\n` +
-        `4️⃣ 直接*发送照片*：\n` +
-        `   - 拍摄电子秤屏幕 -> 自动录入废料重量\n` +
-        `   - 拍摄送货回单 -> 自动关联司机签收\n` +
-        `5️⃣ 直接输入任何工厂业务问题，AI 助理将为您解答！`;
+    if (/帮助|help|menu|bantuan/i.test(lower)) {
+      const helpText = `📖 *Panduan Penggunaan WhatsApp Packsecure*\n\n` +
+        `Hai ${empName}!\n` +
+        `1️⃣ Balas 【*打卡 / Masuk*】 untuk rekod kedatangan harian\n` +
+        `2️⃣ Balas 【*工时 / Trip*】 untuk semak profil & tugasan semasa\n` +
+        `3️⃣ Balas 【*库存 500*】 untuk semak baki stok bahan mentah\n` +
+        `4️⃣ Pemandu Lori: Terus hantar gambar DO bertandatangan untuk pengesahan siap hantar\n` +
+        `5️⃣ Jika ada sebarang kerosakan/masalah, terus taip maklumkan di sini!`;
 
       await sendWhatsAppText(fromNumber, helpText);
       return res.status(200).json({ status: 'HELP_SENT' });
@@ -308,27 +655,25 @@ Output valid JSON only: { "is_scale": boolean, "weight_kg": number or null, "des
         const genAI = new GoogleGenerativeAI(apiKey);
         const model = genAI.getGenerativeModel({ model: 'gemini-2.5-flash' });
 
-        const systemPrompt = `You are Packsecure OS WhatsApp Employee Assistant. 
-The employee is: Name: ${empName}, Role: ${empRole}, Factory: ${employee.base_location || 'TAIPING'}.
-Answer concisely in friendly Chinese (or Malay if the user asks in Malay). Max 3-4 sentences.
-If they ask for instructions, remind them they can type 打卡, 工时, 库存, or send photos.`;
+        const systemPrompt = `You are Packsecure OS WhatsApp Assistant for internal factory operations. 
+The user is employee: Name: ${empName}, Role: ${empRole}, Factory: ${employee.base_location || 'TAIPING'}.
+Answer concisely in friendly Malay (or Chinese if asked in Chinese). Max 2-3 sentences.
+Remind them they can type Masuk/打卡, Trip/工时, Stok/库存, or send photos.`;
 
         const aiReply = await model.generateContent([
-          { text: `${systemPrompt}\n\nEmployee asks: "${text}"` }
+          { text: `${systemPrompt}\n\nEmployee: "${text}"` }
         ]);
 
-        const replyText = aiReply.response.text();
-        await sendWhatsAppText(fromNumber, replyText);
+        await sendWhatsAppText(fromNumber, aiReply.response.text());
         return res.status(200).json({ status: 'AI_REPLIED' });
       } catch (aiErr) {
-        console.error('[WhatsApp AI Error]:', aiErr);
+        console.warn('[WhatsApp AI Error]:', aiErr);
       }
     }
 
-    // Default acknowledgement
     await sendWhatsAppText(
       fromNumber,
-      `收到您的消息：“${text}”。如需操作指南，请回复【帮助】。`
+      `Mesej diterima: "${text}". Taip 【Bantuan】 untuk melihat menu arahan.`
     );
     return res.status(200).json({ status: 'DEFAULT_REPLIED' });
 
@@ -338,7 +683,7 @@ If they ask for instructions, remind them they can type 打卡, 工时, 库存, 
   }
 }
 
-// ─── Master WhatsApp Handler Router ───────────────────────────────────────────
+// ─── Main Default Handler ──────────────────────────────────────────────────────
 export default async function handler(req: VercelRequest, res: VercelResponse) {
   applyAdminCors(req, res);
 
@@ -367,9 +712,13 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
     const action = req.query?.action || req.body?.action;
     const isSend =
       action === 'send' ||
+      action === 'dispatch-trip' ||
+      action === 'customer-template' ||
       Boolean(req.body?.to) ||
       Boolean(req.body?.employeeId) ||
       Boolean(req.body?.userId) ||
+      Boolean(req.body?.tripId) ||
+      Boolean(req.body?.tripNumber) ||
       req.url?.includes('/send');
 
     if (isSend) {

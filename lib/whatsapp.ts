@@ -166,3 +166,114 @@ export async function downloadWhatsAppMediaAsBase64(mediaId: string): Promise<{ 
 
   return { base64, mimeType };
 }
+
+export interface TripDispatchOrder {
+  orderNumber: string;
+  customer: string;
+  deliveryAddress: string;
+  phone?: string;
+  itemsSummary?: string;
+  stopSequence?: number;
+}
+
+export interface TripDispatchInfo {
+  tripNumber: string;
+  driverName?: string;
+  vehiclePlate?: string;
+  date?: string;
+}
+
+/**
+ * Formats a comprehensive Malay dispatch schedule with Google Maps links for drivers.
+ */
+export function formatTripDispatchMessage(
+  trip: TripDispatchInfo,
+  orders: TripDispatchOrder[]
+): string {
+  const driver = trip.driverName || 'Pemandu';
+  const lori = trip.vehiclePlate ? ` (${trip.vehiclePlate})` : '';
+  const dateStr = trip.date || new Date().toLocaleDateString('en-GB');
+
+  let text = `🚛 *Jadual Penghantaran Pek Laju*\n` +
+    `Pemandu: *${driver}*${lori}\n` +
+    `Trip: *${trip.tripNumber}* (${orders.length} Hantaran)\n` +
+    `Tarikh: ${dateStr}\n\n` +
+    `━━━━━━━━━━━━━━━━━━━━\n`;
+
+  const sortedOrders = [...orders].sort(
+    (a, b) => (a.stopSequence || 0) - (b.stopSequence || 0)
+  );
+
+  sortedOrders.forEach((o, idx) => {
+    const seq = o.stopSequence || idx + 1;
+    const cleanAddr = o.deliveryAddress?.trim() || 'Alamat tidak dinyatakan';
+    const mapsLink = `https://www.google.com/maps/search/?api=1&query=${encodeURIComponent(cleanAddr)}`;
+
+    text += `📍 *Stop ${seq}: ${o.customer}*\n` +
+      `• DO: *${o.orderNumber}* ${o.itemsSummary ? `(${o.itemsSummary})` : ''}\n` +
+      `• Alamat: ${cleanAddr}\n`;
+
+    if (o.phone) {
+      text += `• Tel: ${o.phone}\n`;
+    }
+
+    text += `🗺️ *Navigasi Google Maps:*\n${mapsLink}\n\n`;
+  });
+
+  text += `━━━━━━━━━━━━━━━━━━━━\n` +
+    `💡 *Arahan Lapangan (SOP):*\n` +
+    `1. Lepas selesai hantar barang, *ambil gambar DO yang sudah dicop/ditandatangan* & terus hantar ke sini.\n` +
+    `2. Jika ada masalah (kedai tutup / xde orang / tayar pancit / lori rosak), terus maklumkan di sini!`;
+
+  return text;
+}
+
+/**
+ * Generates a copyable customer shipping notification template & direct wa.me link
+ * (For sales/customer service/drivers to send via their personal WhatsApp if needed).
+ */
+export function generateCustomerShippedTemplate(
+  customerName: string,
+  orderNumber: string,
+  customerPhone?: string,
+  itemsSummary?: string
+): { text: string; waMeLink?: string } {
+  const text = `老板您好！您在 Pek Laju 采购的包装材料已装车发货啦！📦\n` +
+    `• 单号: ${orderNumber} ${itemsSummary ? `(${itemsSummary})` : ''}\n` +
+    `• 收货单位: ${customerName}\n` +
+    `罗里司机正在配送途中，收到货后如有任何问题请随时联系我们，感谢您的支持！🙏`;
+
+  let waMeLink = undefined;
+  if (customerPhone) {
+    const cleanPhone = normalizePhoneNumber(customerPhone);
+    waMeLink = `https://wa.me/${cleanPhone}?text=${encodeURIComponent(text)}`;
+  }
+
+  return { text, waMeLink };
+}
+
+/**
+ * Generates a copyable customer delivery confirmation template & direct wa.me link
+ */
+export function generateCustomerDeliveredTemplate(
+  customerName: string,
+  orderNumber: string,
+  customerPhone?: string,
+  podPhotoUrl?: string
+): { text: string; waMeLink?: string } {
+  let text = `✅ *Pek Laju: 送达签收通知*\n\n` +
+    `尊敬的 ${customerName}，您的订单 (*${orderNumber}*) 已由司机送达完成签收！\n` +
+    `感谢您的信任与合作！祝生意兴隆！🎉`;
+
+  if (podPhotoUrl) {
+    text += `\n\n📄 *电子签收凭单 (POD):*\n${podPhotoUrl}`;
+  }
+
+  let waMeLink = undefined;
+  if (customerPhone) {
+    const cleanPhone = normalizePhoneNumber(customerPhone);
+    waMeLink = `https://wa.me/${cleanPhone}?text=${encodeURIComponent(text)}`;
+  }
+
+  return { text, waMeLink };
+}

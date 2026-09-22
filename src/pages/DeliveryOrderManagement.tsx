@@ -1,4 +1,4 @@
-import React, { useState, useEffect, useRef } from 'react';
+import React, { useState, useEffect, useRef, useMemo, useCallback } from 'react';
 import { DragDropContext, Droppable, Draggable, DropResult } from '@hello-pangea/dnd';
 import { supabase } from '../services/supabase';
 import { getV2Items } from '../services/apiV2';
@@ -80,6 +80,13 @@ const getDefaultLocForOrigin = (origin: string): string => {
     if (u === 'JOHOR' || u === 'J1') return 'Johor';
     if (u === 'TAIPING' || u === 'T1' || u === 'SPD' || u === 'OPM') return 'OPM Lama';
     return normalizeWarehouseName(origin);
+};
+
+const getVehicleRollCapacity = (plateNumber?: string): number => {
+    const cleanPlate = (plateNumber || '').toLowerCase().replace(/\s+/g, '');
+    if (cleanPlate === 'vpc9821') return 65;
+    if (cleanPlate === 'aph9821') return 92;
+    return 82;
 };
 
 export const guessItemLocation = (item: { sku?: string; product?: string; rawProductName?: string }, origin: string): string => {
@@ -1477,6 +1484,49 @@ const DeliveryOrderManagement: React.FC<DeliveryOrderManagementProps> = ({ user 
             const { error } = await supabase.from('sales_orders').update({ status: 'Cancelled' }).eq('id', orderId);
             if (error) throw error;
 
+            // ⚡ Cascade: If this order was part of a multi-drop trip, automatically recalibrate trip_drop_count for remaining active sibling orders
+            const tripId = (target as any)?.trip_id;
+            if (tripId) {
+                const remainingActive = orders.filter(o => (o as any).trip_id === tripId && o.id !== orderId && o.status !== 'Cancelled');
+                const newCount = remainingActive.length;
+                if (newCount > 0) {
+                    await supabase.from('sales_orders')
+                        .update({ trip_drop_count: newCount })
+                        .eq('trip_id', tripId)
+                        .neq('status', 'Cancelled');
+
+                    setOrders(prev => prev.map(o => {
+                        if (o.id === orderId) return { ...o, status: 'Cancelled' };
+                        if ((o as any).trip_id === tripId && o.status !== 'Cancelled') {
+                            return { ...o, trip_drop_count: newCount };
+                        }
+                        return o;
+                    }));
+                }
+            } else if (target?.driverId && target?.orderDate) {
+                const remainingActive = orders.filter(o =>
+                    o.id !== orderId &&
+                    o.driverId === target.driverId &&
+                    o.orderDate === target.orderDate &&
+                    o.status !== 'Cancelled'
+                );
+                const newCount = remainingActive.length;
+                if (newCount > 0) {
+                    const siblingIds = remainingActive.map(o => o.id);
+                    await supabase.from('sales_orders')
+                        .update({ trip_drop_count: newCount })
+                        .in('id', siblingIds);
+
+                    setOrders(prev => prev.map(o => {
+                        if (o.id === orderId) return { ...o, status: 'Cancelled' };
+                        if (siblingIds.includes(o.id)) {
+                            return { ...o, trip_drop_count: newCount };
+                        }
+                        return o;
+                    }));
+                }
+            }
+
             // ⚡ If order was already Loaded or Delivered, reverse stock back to warehouse
             if (target && ['Loaded', 'Delivered', 'Pending Approval'].includes(target.status)) {
                 await reverseStockForOrder({
@@ -1685,6 +1735,30 @@ const DeliveryOrderManagement: React.FC<DeliveryOrderManagementProps> = ({ user 
         const updated = [...newOrderItems];
         updated.splice(index, 1);
         setNewOrderItems(updated);
+    };
+
+    const handleUpdateModalItemSku = (index: number, rawInput: string) => {
+        const parts = rawInput.split(' - ');
+        const inputSku = parts[0].trim().toLowerCase();
+        const matched = v2Items.find(v => v.sku.toLowerCase() === inputSku);
+
+        setNewOrderItems(prev => {
+            const updated = [...prev];
+            if (matched) {
+                updated[index] = {
+                    ...updated[index],
+                    sku: matched.sku,
+                    product: matched.name,
+                    packaging: (matched.uom as any) || updated[index].packaging || 'Unit'
+                };
+            } else {
+                updated[index] = {
+                    ...updated[index],
+                    sku: rawInput.trim()
+                };
+            }
+            return updated;
+        });
     };
 
     const matchV2ItemByName = (product?: string): V2Item | null => {
@@ -3787,6 +3861,23 @@ const DeliveryOrderManagement: React.FC<DeliveryOrderManagementProps> = ({ user 
             return alert("Cannot create an empty trip. Please add items, a driver, destinations, or notes.");
         }
 
+        // 🛡️ HARD SKU VALIDATION GUARD: Prohibit saving if any item is not a real SKU
+        const invalidItems = (newOrderItems || []).filter(it => {
+            const cleanSku = (it.sku || '').trim().toLowerCase();
+            return !cleanSku || !v2Items.some(v => v.sku.toLowerCase() === cleanSku);
+        });
+
+        if (invalidItems.length > 0) {
+            const itemNames = invalidItems.map((it, i) => `${i + 1}. [${it.sku || '无料号'}] ${it.product || '未命名物料'}`).join('\n');
+            alert(
+                `【系统防呆拦截 · 禁止出车/保存】\n\n` +
+                `检测到本单包含 ${invalidItems.length} 项【非标准物料】（未匹配标准料号库）：\n` +
+                itemNames + `\n\n` +
+                `所有出车物料必须为系统标准 SKU。请在右侧物料列表中点击选择标准料号后再保存！`
+            );
+            return;
+        }
+
         // Remind if Customer or Destinations is not filled
         const isCustomerMissing = !orderCustomer.trim() || orderCustomer.trim() === 'General Customer';
         const isAddressMissing = !newOrderAddress.trim();
@@ -3954,6 +4045,24 @@ const DeliveryOrderManagement: React.FC<DeliveryOrderManagementProps> = ({ user 
                 const { error } = await supabase.from('sales_orders').update(payload).eq('id', editingOrderId);
                 if (error) throw error;
 
+                // ⚡ Cascade: If this order belongs to a multi-drop trip, cascade the updated trip_drop_count to all active sibling orders
+                const tripId = (existingOrder as any)?.trip_id;
+                if (tripId) {
+                    await supabase.from('sales_orders')
+                        .update({ trip_drop_count: payload.trip_drop_count })
+                        .eq('trip_id', tripId)
+                        .neq('status', 'Cancelled');
+                } else if (existingOrder?.driverId && existingOrder?.orderDate) {
+                    const siblingIds = orders
+                        .filter(o => o.id !== editingOrderId && o.driverId === existingOrder.driverId && o.orderDate === existingOrder.orderDate && o.status !== 'Cancelled')
+                        .map(o => o.id);
+                    if (siblingIds.length > 0) {
+                        await supabase.from('sales_orders')
+                            .update({ trip_drop_count: payload.trip_drop_count })
+                            .in('id', siblingIds);
+                    }
+                }
+
                 // ⚡ If order is Loaded/Delivered/Pending, adjust stock ledger delta (e.g. partial delivery return)
                 if (existingOrder && ['Loaded', 'Delivered', 'Pending Approval'].includes(existingOrder.status)) {
                     await adjustStockForOrderDelta(
@@ -3966,9 +4075,18 @@ const DeliveryOrderManagement: React.FC<DeliveryOrderManagementProps> = ({ user 
 
                 alert(`Order Updated!\nAssigned to ${finalFactoryName}`);
 
-                // Optimistic Update: Edit
+                // Optimistic Update: Edit (including sibling orders)
                 newOrderObj = { ...orders.find(o => o.id === editingOrderId)!, ...payload, id: editingOrderId, orderNumber: doNumber };
-                setOrders(prev => prev.map(o => o.id === editingOrderId ? newOrderObj! : o));
+                setOrders(prev => prev.map(o => {
+                    if (o.id === editingOrderId) return newOrderObj!;
+                    if (tripId && (o as any).trip_id === tripId && o.status !== 'Cancelled') {
+                        return { ...o, trip_drop_count: payload.trip_drop_count };
+                    }
+                    if (!tripId && existingOrder?.driverId && o.driverId === existingOrder.driverId && o.orderDate === existingOrder.orderDate && o.status !== 'Cancelled') {
+                        return { ...o, trip_drop_count: payload.trip_drop_count };
+                    }
+                    return o;
+                }));
 
             } else {
                 const { data, error } = await supabase.from('sales_orders').insert(payload).select().single();
@@ -4162,6 +4280,44 @@ const DeliveryOrderManagement: React.FC<DeliveryOrderManagementProps> = ({ user 
 
     const modalLorry = lorries.find(l => l.id === selectedLorryId);
     const modalLoad = calculateLoad(newOrderItems || [], modalLorry);
+    const modalMaxRolls = getVehicleRollCapacity(modalLorry?.plateNumber);
+    const modalTotalRolls = (newOrderItems || []).reduce((sum, it) => sum + (Number(it.quantity) || 0), 0);
+    const modalRollPercent = modalMaxRolls > 0 ? ((modalTotalRolls / modalMaxRolls) * 100).toFixed(1) : '0';
+    const isModalOverloaded = modalTotalRolls > modalMaxRolls;
+    const isModalNearCapacity = !isModalOverloaded && modalTotalRolls >= modalMaxRolls * 0.9;
+
+    const modalUnmappedItemsCount = useMemo(() => {
+        return (newOrderItems || []).reduce((count, it) => {
+            const cleanSku = (it.sku || '').trim().toLowerCase();
+            const isReal = Boolean(cleanSku && v2Items.some(v => v.sku.toLowerCase() === cleanSku));
+            return isReal ? count : count + 1;
+        }, 0);
+    }, [newOrderItems, v2Items]);
+
+    const currentEditingOrder = useMemo(() => {
+        return editingOrderId ? orders.find(o => o.id === editingOrderId) : null;
+    }, [editingOrderId, orders]);
+
+    const editingTripContext = useMemo(() => {
+        if (!currentEditingOrder) return null;
+        const tripId = currentEditingOrder.trip_id;
+        const activeSiblings = orders.filter(o =>
+            o.id !== currentEditingOrder.id &&
+            o.status !== 'Cancelled' &&
+            (
+                (tripId && o.trip_id === tripId) ||
+                (!tripId && currentEditingOrder.driverId && o.driverId === currentEditingOrder.driverId && o.orderDate === currentEditingOrder.orderDate)
+            )
+        );
+        const totalDrops = tripDropCount || Number(currentEditingOrder.trip_drop_count) || (activeSiblings.length + 1);
+        const stopSeq = currentEditingOrder.stop_sequence || currentEditingOrder.tripSequence || 1;
+        return {
+            tripId,
+            totalDrops,
+            stopSeq,
+            siblings: activeSiblings
+        };
+    }, [currentEditingOrder, orders, tripDropCount]);
 
     return (
         <div className="min-h-screen bg-slate-950 text-slate-100 p-6 font-sans selection:bg-blue-500/30">
@@ -5064,19 +5220,22 @@ const DeliveryOrderManagement: React.FC<DeliveryOrderManagementProps> = ({ user 
                                 }
                                 const grp = tripGroupMap.get(order.trip_id)!;
                                 grp.orders.push(order);
-                                grp.totalDrops = grp.orders.length;
+                                const specifiedDrops = grp.orders.map(o => Number(o.trip_drop_count)).filter(d => Boolean(d) && d > 0);
+                                const allSameExplicit = specifiedDrops.length > 0 && specifiedDrops.every(d => d === specifiedDrops[0]);
+                                grp.totalDrops = (allSameExplicit && specifiedDrops[0] > 0) ? specifiedDrops[0] : grp.orders.length;
                                 const rolls = (order.items || []).reduce((acc: number, it: any) => acc + (Number(it.quantity) || 0), 0);
                                 grp.totalRolls += rolls;
                             } else {
                                 const rolls = (order.items || []).reduce((acc: number, it: any) => acc + (Number(it.quantity) || 0), 0);
+                                const orderDrops = Math.max(1, Number(order.trip_drop_count) || 1);
                                 driverTrips.push({
                                     key: `order_${order.id}`,
                                     tripId: undefined,
                                     tripNumber: order.orderNumber,
                                     driverId: order.driverId,
-                                    isMultiDrop: false,
+                                    isMultiDrop: orderDrops > 1,
                                     orders: [order],
-                                    totalDrops: 1,
+                                    totalDrops: orderDrops,
                                     totalRolls: rolls,
                                     status: order.status || 'New',
                                     zone: order.zone,
@@ -5346,7 +5505,12 @@ const DeliveryOrderManagement: React.FC<DeliveryOrderManagementProps> = ({ user 
                                                                                                     const locMatch = item.remark.match(/\(Loc:\s*(.*?)\)/);
                                                                                                     if (locMatch && locMatch[1]) loc = locMatch[1];
                                                                                                 }
-                                                                                                return { ...item, sourceLocation: loc || defaultLoc };
+                                                                                                let sku = (item.sku || '').trim();
+                                                                                                if (!sku && item.product) {
+                                                                                                    const matched = matchV2ItemByName(item.product);
+                                                                                                    if (matched) sku = matched.sku;
+                                                                                                }
+                                                                                                return { ...item, sku, sourceLocation: loc || defaultLoc };
                                                                                             });
                                                                                             setNewOrderItems(itemsWithExtractedLoc);
                                                                                             setEditingOrderPhoto(doOrder.proof_of_load_url || null);
@@ -5484,7 +5648,12 @@ const DeliveryOrderManagement: React.FC<DeliveryOrderManagementProps> = ({ user 
                                                                                 const locMatch = item.remark.match(/\(Loc:\s*(.*?)\)/);
                                                                                 if (locMatch && locMatch[1]) loc = locMatch[1];
                                                                             }
-                                                                            return { ...item, sourceLocation: loc || defaultLoc };
+                                                                            let sku = (item.sku || '').trim();
+                                                                            if (!sku && item.product) {
+                                                                                const matched = matchV2ItemByName(item.product);
+                                                                                if (matched) sku = matched.sku;
+                                                                            }
+                                                                            return { ...item, sku, sourceLocation: loc || defaultLoc };
                                                                         });
                                                                         setNewOrderItems(itemsWithExtractedLoc);
                                                                         setEditingOrderPhoto(order.proof_of_load_url || null);
@@ -5783,7 +5952,12 @@ const DeliveryOrderManagement: React.FC<DeliveryOrderManagementProps> = ({ user 
                                                             loc = locMatch[1];
                                                         }
                                                     }
-                                                    return { ...item, sourceLocation: loc || defaultLoc };
+                                                    let sku = (item.sku || '').trim();
+                                                    if (!sku && item.product) {
+                                                        const matched = matchV2ItemByName(item.product);
+                                                        if (matched) sku = matched.sku;
+                                                    }
+                                                    return { ...item, sku, sourceLocation: loc || defaultLoc };
                                                 });
                                                 setNewOrderItems(itemsWithExtractedLoc);
                                                 setEditingOrderPhoto(order.proof_of_load_url || null);
@@ -5912,16 +6086,35 @@ const DeliveryOrderManagement: React.FC<DeliveryOrderManagementProps> = ({ user 
                         <div className="bg-slate-950 border-0 sm:border border-slate-800 rounded-none sm:rounded-2xl w-full max-w-6xl h-full sm:h-[min(96vh,920px)] overflow-hidden flex flex-col shadow-2xl shadow-black">
                             {/* Modal Header */}
                             <div className="py-3 px-4 sm:px-6 border-b border-slate-800 flex justify-between items-center gap-3 bg-slate-900/50">
-                                <div className="min-w-0 flex-1 flex items-center gap-3">
+                                <div className="min-w-0 flex-1 flex flex-wrap items-center gap-2 sm:gap-3">
                                     <h2 className="text-base sm:text-lg font-bold text-slate-100 flex items-center gap-2">
-                                        <FileText className="text-blue-400" size={18} />
-                                        <span>{t('Edit Delivery Order / 查看与编辑送货单')}</span>
-                                        {editingOrderId && (
-                                            <span className="text-xs font-mono font-bold text-amber-300 bg-amber-500/10 px-2 py-0.5 rounded border border-amber-500/20">
-                                                #{orders.find(o => o.id === editingOrderId)?.orderNumber || editingOrderId.slice(0, 8)}
-                                            </span>
-                                        )}
+                                        <FileText className="text-blue-400 shrink-0" size={18} />
+                                        <span>{editingOrderId ? t('Edit Delivery Order / 查看与编辑送货单') : t('Create Trip & Delivery Order / 新建送货单')}</span>
                                     </h2>
+                                    {editingOrderId && (
+                                        <div className="flex flex-wrap items-center gap-2">
+                                            <span className="text-xs font-mono font-bold text-amber-300 bg-amber-500/10 px-2 py-0.5 rounded border border-amber-500/20">
+                                                #{currentEditingOrder?.orderNumber || editingOrderId.slice(0, 8)}
+                                            </span>
+                                            {currentEditingOrder?.status && (
+                                                <span className={`text-[10px] font-bold px-2 py-0.5 rounded border uppercase tracking-wider ${
+                                                    currentEditingOrder.status === 'New' ? 'text-amber-400 border-amber-500/20 bg-amber-500/10' :
+                                                    currentEditingOrder.status === 'Delivered' ? 'text-emerald-400 border-emerald-500/20 bg-emerald-500/10' :
+                                                    currentEditingOrder.status === 'Loaded' ? 'text-blue-400 border-blue-500/20 bg-blue-500/10' :
+                                                    currentEditingOrder.status === 'Pending Approval' ? 'text-red-400 border-red-500/20 bg-red-500/10 animate-pulse' :
+                                                    'text-slate-400 border-slate-700 bg-slate-800'
+                                                }`}>
+                                                    {currentEditingOrder.status}
+                                                </span>
+                                            )}
+                                            {editingTripContext && editingTripContext.totalDrops > 1 && (
+                                                <span className="text-[10px] font-bold text-indigo-300 bg-indigo-500/10 px-2 py-0.5 rounded border border-indigo-500/20 flex items-center gap-1">
+                                                    <Truck size={11} className="text-indigo-400" />
+                                                    <span>多点车次 · 第 {editingTripContext.stopSeq} 站 / 共 {editingTripContext.totalDrops} 站</span>
+                                                </span>
+                                            )}
+                                        </div>
+                                    )}
                                     {toast && (
                                         <div className={`px-2.5 py-1 rounded-lg flex items-center gap-1.5 text-[10px] font-bold border ${toast.type === 'error' ? 'bg-red-900/40 text-red-200 border-red-500/30' : 'bg-emerald-900/40 text-emerald-200 border-emerald-500/30'}`}>
                                             <AlertTriangle size={12} />
@@ -5989,6 +6182,19 @@ const DeliveryOrderManagement: React.FC<DeliveryOrderManagementProps> = ({ user 
                                                  <span>{t('Customer Self-Pickup')}</span>
                                              </button>
                                          </div>
+
+                                         {/* Dedicated Self-Pickup Bay Helper Card */}
+                                         {deliveryMethod === 'SELF_PICKUP' && (
+                                             <div className="bg-amber-950/20 border border-amber-500/30 rounded-xl p-2.5 flex flex-col gap-1.5 animate-in fade-in">
+                                                 <div className="flex items-center justify-between text-xs font-bold text-amber-300">
+                                                     <span className="flex items-center gap-1.5"><Package size={13} /> {t('客户到厂自提配置 (Self-Pickup Bay)')}</span>
+                                                     <span className="text-[9px] bg-amber-500/20 text-amber-300 px-1.5 py-0.5 rounded font-mono">BAY-COLLECT</span>
+                                                 </div>
+                                                 <div className="text-[11px] text-amber-200/80 leading-tight">
+                                                     {t('提货厂区')}: <span className="font-bold text-amber-200">{tripOrigin || 'TAIPING (OPM Lama)'}</span> · {t('自提无需指派罗里与司机，出厂凭客户签名签收放行。')}
+                                                 </div>
+                                             </div>
+                                         )}
                                      </div>
 
                                      <div className="grid grid-cols-1 lg:grid-cols-2 gap-4">
@@ -6018,11 +6224,14 @@ const DeliveryOrderManagement: React.FC<DeliveryOrderManagementProps> = ({ user 
                                                              }}
                                                          >
                                                              <option value="">-- Select Lorry --</option>
-                                                             {allLorriesForModal.map(l => (
-                                                                 <option key={l.id} value={l.id}>
-                                                                     {l.plateNumber} {l.driverName ? `(${l.driverName})` : ''}
-                                                                 </option>
-                                                             ))}
+                                                             {allLorriesForModal.map(l => {
+                                                                 const cap = getVehicleRollCapacity(l.plateNumber);
+                                                                 return (
+                                                                     <option key={l.id} value={l.id}>
+                                                                         {l.plateNumber} ({cap} 卷) {l.driverName ? `- ${l.driverName}` : ''}
+                                                                     </option>
+                                                                 );
+                                                             })}
                                                          </select>
                                                      )}
                                                  </div>
@@ -6142,16 +6351,18 @@ const DeliveryOrderManagement: React.FC<DeliveryOrderManagementProps> = ({ user 
                                         value={newOrderAddress}
                                         onChange={e => {
                                             setNewOrderAddress(e.target.value);
-                                            // Auto-calc drops supporting multipliers (e.g. "Penang x 3, KL")
-                                            const drops = e.target.value.split(',').reduce((total, s) => {
-                                                if (s.trim().length === 0) return total;
-                                                const match = s.match(/[x*]\s*(\d+)/i);
-                                                if (match && match[1]) {
-                                                    return total + parseInt(match[1], 10);
-                                                }
-                                                return total + 1;
-                                            }, 0) || 1;
-                                            setTripDropCount(drops);
+                                            // Only auto-calc drops for newly created orders so editing existing drop counts isn't overwritten
+                                            if (!editingOrderId) {
+                                                const drops = e.target.value.split(',').reduce((total, s) => {
+                                                    if (s.trim().length === 0) return total;
+                                                    const match = s.match(/[x*]\s*(\d+)/i);
+                                                    if (match && match[1]) {
+                                                        return total + parseInt(match[1], 10);
+                                                    }
+                                                    return total + 1;
+                                                }, 0) || 1;
+                                                setTripDropCount(drops);
+                                            }
                                         }}
                                     />
 
@@ -6407,36 +6618,74 @@ const DeliveryOrderManagement: React.FC<DeliveryOrderManagementProps> = ({ user 
                                         <Box size={16} /> Trip Items
                                     </h3>
 
-                                    {/* Volume & Weight Load Progress Bars for Modal */}
-                                    <div className="space-y-2 mb-4 bg-slate-900/50 p-3 rounded-xl border border-slate-800/80">
+                                    {/* 🚚 Roll-based Vehicle Load Dashboard (BUSINESS_RULES.md 4.1) */}
+                                    <div className={`space-y-2 mb-4 p-3.5 rounded-2xl border transition-all ${
+                                        isModalOverloaded 
+                                            ? 'bg-red-950/30 border-red-500/60 shadow-[0_0_15px_rgba(239,68,68,0.2)]'
+                                            : isModalNearCapacity
+                                            ? 'bg-amber-950/20 border-amber-500/40'
+                                            : 'bg-slate-900/60 border-slate-800/90'
+                                    }`}>
+                                        <div className="flex items-center justify-between">
+                                            <div className="flex items-center gap-2">
+                                                <span className="text-[11px] font-black uppercase tracking-wider text-slate-300 flex items-center gap-1.5">
+                                                    <Truck size={14} className={isModalOverloaded ? 'text-red-400' : 'text-blue-400'} />
+                                                    <span>{t('车辆装载率 (Roll Capacity)')}</span>
+                                                </span>
+                                                {modalLorry && (
+                                                    <span className="text-[10px] font-mono font-bold text-slate-400 bg-slate-950 px-1.5 py-0.5 rounded border border-slate-800">
+                                                        {modalLorry.plateNumber} · 额定 {modalMaxRolls} 卷
+                                                    </span>
+                                                )}
+                                            </div>
+                                            {deliveryMethod === 'SELF_PICKUP' ? (
+                                                <span className="text-[10px] font-bold text-amber-400 bg-amber-500/10 px-2 py-0.5 rounded border border-amber-500/30">
+                                                    📦 客户自提 · 合计 {modalTotalRolls} 卷
+                                                </span>
+                                            ) : isModalOverloaded ? (
+                                                <span className="text-[10px] font-black uppercase text-red-400 bg-red-950/60 border border-red-500/60 px-2 py-0.5 rounded-full flex items-center gap-1 animate-pulse">
+                                                    <AlertTriangle size={11} className="text-red-400" />
+                                                    {t('超载 {{count}} 卷', { count: modalTotalRolls - modalMaxRolls })} ({modalRollPercent}%)
+                                                </span>
+                                            ) : isModalNearCapacity ? (
+                                                <span className="text-[10px] font-bold text-amber-300 bg-amber-950/50 border border-amber-500/40 px-2 py-0.5 rounded-full flex items-center gap-1">
+                                                    <span>⚡ 接近满载</span> ({modalRollPercent}%)
+                                                </span>
+                                            ) : (
+                                                <span className="text-[10px] font-bold text-emerald-400 bg-emerald-950/50 border border-emerald-500/40 px-2 py-0.5 rounded-full flex items-center gap-1">
+                                                    <span>🟢 容量健康</span> ({modalRollPercent}%)
+                                                </span>
+                                            )}
+                                        </div>
+
+                                        {/* Primary Roll Progress Bar */}
                                         <div>
-                                            <div className="flex justify-between text-[10px] font-mono leading-none mb-1">
-                                                <span className="text-slate-400">{t('Volume Vol (')}{modalLoad.totalVol}/{modalLoad.maxVol} m³)</span>
-                                                <span className={getPercentColor(Number(modalLoad.percentVol))}>
-                                                    {modalLoad.percentVol}%
+                                            <div className="flex justify-between text-[11px] font-mono font-bold leading-none mb-1.5">
+                                                <span className="text-slate-300">
+                                                    {t('总装载卷数')}: <span className={isModalOverloaded ? 'text-red-400 font-black' : 'text-blue-400'}>{modalTotalRolls}</span> / {modalMaxRolls} {t('卷 (Rolls)')}
+                                                </span>
+                                                <span className={isModalOverloaded ? 'text-red-400 font-black' : isModalNearCapacity ? 'text-amber-400 font-bold' : 'text-emerald-400 font-bold'}>
+                                                    {modalRollPercent}%
                                                 </span>
                                             </div>
-                                            <div className="w-full bg-slate-950 h-1.5 rounded-full overflow-hidden border border-slate-800">
+                                            <div className="w-full bg-slate-950 h-2 rounded-full overflow-hidden border border-slate-800">
                                                 <div
-                                                    className={`h-full rounded-full transition-all duration-300 ${getPercentBarColor(Number(modalLoad.percentVol))}`}
-                                                    style={{ width: `${Math.min(Number(modalLoad.percentVol), 100)}%` }}
+                                                    className={`h-full rounded-full transition-all duration-300 ${
+                                                        isModalOverloaded
+                                                            ? 'bg-red-500 shadow-[0_0_8px_rgba(239,68,68,0.6)] animate-pulse'
+                                                            : isModalNearCapacity
+                                                            ? 'bg-amber-500'
+                                                            : 'bg-gradient-to-r from-blue-500 to-emerald-400'
+                                                    }`}
+                                                    style={{ width: `${Math.min(Number(modalRollPercent), 100)}%` }}
                                                 />
                                             </div>
                                         </div>
 
-                                        <div>
-                                            <div className="flex justify-between text-[10px] font-mono leading-none mb-1">
-                                                <span className="text-slate-400">{t('Weight (')}{modalLoad.totalWeight}/{modalLoad.maxWeight} kg)</span>
-                                                <span className={getPercentColor(Number(modalLoad.percentWeight))}>
-                                                    {modalLoad.percentWeight}%
-                                                </span>
-                                            </div>
-                                            <div className="w-full bg-slate-950 h-1.5 rounded-full overflow-hidden border border-slate-800">
-                                                <div
-                                                    className={`h-full rounded-full transition-all duration-300 ${getPercentBarColor(Number(modalLoad.percentWeight))}`}
-                                                    style={{ width: `${Math.min(Number(modalLoad.percentWeight), 100)}%` }}
-                                                />
-                                            </div>
+                                        {/* Secondary Volume and Weight stats */}
+                                        <div className="flex items-center justify-between text-[9px] font-mono text-slate-500 pt-0.5 border-t border-slate-800/50">
+                                            <span>{t('参考体积')}: {modalLoad.totalVol}/{modalLoad.maxVol} m³</span>
+                                            <span>{t('参考承重')}: {modalLoad.totalWeight}/{modalLoad.maxWeight} kg</span>
                                         </div>
                                     </div>
 
@@ -6505,81 +6754,149 @@ const DeliveryOrderManagement: React.FC<DeliveryOrderManagementProps> = ({ user 
                                                 </button>
                                             </div>
                                         </div>
-                                        <div className="px-4 py-2 border-b border-slate-800/80 text-[10px] font-bold text-slate-600 uppercase shrink-0 flex items-center gap-2">
-                                            <Box size={12} /> Line items
+                                        <div className="px-4 py-2 border-b border-slate-800/80 text-[10px] font-bold text-slate-400 uppercase shrink-0 flex items-center justify-between">
+                                            <div className="flex items-center gap-2">
+                                                <Box size={12} className="text-blue-400" />
+                                                <span>{t('Line items / 单内物料明细')} ({newOrderItems.length})</span>
+                                            </div>
+                                            {modalUnmappedItemsCount > 0 ? (
+                                                <span className="text-[9px] font-black uppercase text-red-400 bg-red-950/80 border border-red-500/60 px-2 py-0.5 rounded flex items-center gap-1 animate-pulse">
+                                                    <AlertTriangle size={10} className="text-red-400" />
+                                                    {t('需修正 {{count}} 项非标物料', { count: modalUnmappedItemsCount })}
+                                                </span>
+                                            ) : (
+                                                <span className="text-[9px] font-bold text-emerald-400 bg-emerald-950/40 border border-emerald-500/30 px-2 py-0.5 rounded flex items-center gap-1">
+                                                    <CheckCircle size={10} className="text-emerald-400" />
+                                                    {t('全项匹配标准品')}
+                                                </span>
+                                            )}
                                         </div>
-                                        <div className="flex-1 min-h-0 p-4 space-y-2 overflow-y-auto custom-scrollbar max-h-[min(42vh,380px)] xl:max-h-none">
+                                        <div className="flex-1 min-h-0 p-4 space-y-2.5 overflow-y-auto custom-scrollbar max-h-[min(42vh,380px)] xl:max-h-none">
                                             {newOrderItems.length === 0 ? (
                                                 <div className="text-center py-12 text-slate-700 text-sm italic border-2 border-dashed border-slate-800/50 rounded-xl">
                                                     No items yet. Use Quick Add above or Scan Photo.
                                                 </div>
                                             ) : (
-                                                newOrderItems.map((item, idx) => (
-                                                    <div key={idx} className="bg-slate-950 p-3 rounded-xl border border-slate-800 flex flex-col gap-2 group hover:border-slate-700 transition-colors">
-                                                        <div className="flex justify-between items-start">
-                                                            <div className="flex-1">
-                                                                <div className="font-bold text-white text-sm leading-tight">{item.product}</div>
-                                                                <div className="flex items-center gap-2 mt-1">
-                                                                    <span className="text-[10px] text-slate-500 font-mono">{item.sku}</span>
-                                                                    <span className="text-[10px] bg-blue-500/10 text-blue-400 px-1.5 py-0.5 rounded uppercase font-bold border border-blue-500/20">
-                                                                        {item.packaging || 'Unit'}
-                                                                    </span>
+                                                newOrderItems.map((item, idx) => {
+                                                    const cleanSku = (item.sku || '').trim().toLowerCase();
+                                                    const isRealSku = Boolean(cleanSku && v2Items.some(x => x.sku.toLowerCase() === cleanSku));
+                                                    const matchedV2 = v2Items.find(x => x.sku.toLowerCase() === cleanSku);
+
+                                                    return (
+                                                        <div
+                                                            key={idx}
+                                                            className={`p-3 rounded-xl border flex flex-col gap-2 transition-all ${
+                                                                !isRealSku
+                                                                    ? 'bg-red-950/25 border-2 border-red-500/80 shadow-[0_0_12px_rgba(239,68,68,0.15)]'
+                                                                    : 'bg-slate-950 border-slate-800 hover:border-slate-700'
+                                                            }`}
+                                                        >
+                                                            <div className="flex justify-between items-start gap-2">
+                                                                <div className="flex-1 min-w-0">
+                                                                    <div className="font-bold text-white text-sm leading-tight truncate">
+                                                                        {item.product || matchedV2?.name || '未知物料'}
+                                                                    </div>
+                                                                    <div className="flex flex-wrap items-center gap-2 mt-1">
+                                                                        {isRealSku ? (
+                                                                            <span className="text-[10px] font-mono font-bold text-emerald-400 bg-emerald-500/10 border border-emerald-500/30 px-1.5 py-0.5 rounded flex items-center gap-1">
+                                                                                <CheckCircle size={10} className="text-emerald-400" />
+                                                                                <span>{item.sku}</span>
+                                                                            </span>
+                                                                        ) : (
+                                                                            <span className="text-[9px] font-black uppercase text-red-300 bg-red-600/30 border border-red-500/60 px-1.5 py-0.5 rounded flex items-center gap-1 animate-pulse">
+                                                                                <AlertTriangle size={10} className="text-red-400 shrink-0" />
+                                                                                <span>{t('非标/必须选标准SKU')}</span>
+                                                                            </span>
+                                                                        )}
+                                                                        <span className="text-[10px] bg-blue-500/10 text-blue-400 px-1.5 py-0.5 rounded uppercase font-bold border border-blue-500/20">
+                                                                            {item.packaging || matchedV2?.uom || 'Unit'}
+                                                                        </span>
+                                                                    </div>
+                                                                </div>
+
+                                                                <div className="flex items-center gap-2 shrink-0">
+                                                                    {/* INLINE QUANTITY EDIT */}
+                                                                    <div className="flex items-center gap-1">
+                                                                        <span className="text-[10px] text-slate-500 font-bold uppercase">Qty:</span>
+                                                                        <input
+                                                                            type="number"
+                                                                            min={1}
+                                                                            className="w-16 bg-slate-900 border border-slate-700 rounded-lg px-2 py-1 text-right font-bold text-orange-400 focus:border-orange-500 outline-none text-sm"
+                                                                            value={item.quantity}
+                                                                            onChange={(e) => {
+                                                                                const val = Number(e.target.value);
+                                                                                const updated = [...newOrderItems];
+                                                                                updated[idx].quantity = val;
+                                                                                setNewOrderItems(updated);
+                                                                            }}
+                                                                        />
+                                                                    </div>
+                                                                    <button
+                                                                        type="button"
+                                                                        onClick={() => handleRemoveItem(idx)}
+                                                                        className="text-slate-500 hover:text-red-400 p-1 rounded-lg hover:bg-slate-900 transition-colors cursor-pointer"
+                                                                        title={t('Delete item')}
+                                                                    >
+                                                                        <X size={16} />
+                                                                    </button>
                                                                 </div>
                                                             </div>
-                                                            <div className="flex items-center gap-3">
-                                                                {/* INLINE QUANTITY EDIT */}
-                                                                <input
-                                                                    type="number"
-                                                                    className="w-16 bg-slate-900 border border-slate-700 rounded-lg px-2 py-1 text-right font-bold text-orange-400 focus:border-orange-500 outline-none text-sm"
-                                                                    value={item.quantity}
-                                                                    onChange={(e) => {
-                                                                        const val = Number(e.target.value);
-                                                                        const updated = [...newOrderItems];
-                                                                        updated[idx].quantity = val;
-                                                                        setNewOrderItems(updated);
-                                                                    }}
-                                                                />
-                                                                <button onClick={() => handleRemoveItem(idx)} className="text-slate-600 hover:text-red-500 p-1 rounded-full hover:bg-slate-900 transition-colors">
-                                                                    <X size={16} />
-                                                                </button>
-                                                            </div>
-                                                        </div>
 
-                                                        {/* INLINE LOCATION & REMARK EDIT */}
-                                                        <div className="flex flex-col gap-2 mt-1">
-                                                            <div className="flex items-center gap-2">
-                                                                <div className="text-[10px] font-bold text-slate-600 uppercase w-16">Pickup:</div>
-                                                                <select
-                                                                    className="flex-1 bg-slate-900 border border-slate-800 rounded px-2 py-1 text-xs text-blue-400 font-bold focus:border-blue-500 outline-none"
-                                                                    value={normalizeWarehouseName(item.sourceLocation || getDefaultLocForOrigin(tripOrigin))}
-                                                                    onChange={(e) => {
-                                                                        const val = e.target.value;
-                                                                        const updated = [...newOrderItems];
-                                                                        updated[idx].sourceLocation = val;
-                                                                        setNewOrderItems(updated);
-                                                                    }}
-                                                                >
-                                                                    {getAvailableWarehousesForOrigin(tripOrigin).map(loc => <option key={loc} value={loc}>{loc}</option>)}
-                                                                </select>
-                                                            </div>
-                                                            <div className="flex items-center gap-2">
-                                                                <div className="text-[10px] font-bold text-slate-600 uppercase w-16">Remark:</div>
-                                                                <input
-                                                                    type="text"
-                                                                    placeholder="Add remark..."
-                                                                    className="flex-1 bg-transparent border-b border-slate-800 text-xs text-slate-400 focus:border-blue-500 outline-none py-0.5 placeholder:text-slate-700"
-                                                                    value={item.remark || ''}
-                                                                    onChange={(e) => {
-                                                                        const val = e.target.value;
-                                                                        const updated = [...newOrderItems];
-                                                                        updated[idx].remark = val;
-                                                                        setNewOrderItems(updated);
-                                                                    }}
-                                                                />
+                                                            {/* Inline standard SKU selection if invalid */}
+                                                            {!isRealSku && (
+                                                                <div className="p-2 rounded-lg bg-red-950/40 border border-red-500/40 flex flex-col gap-1 mt-1">
+                                                                    <label className="text-[10px] font-bold text-red-300 uppercase flex items-center gap-1">
+                                                                        <AlertTriangle size={11} /> {t('重选标准料号 (匹配后允许出车):')}
+                                                                    </label>
+                                                                    <input
+                                                                        type="text"
+                                                                        list="global-v2items-datalist"
+                                                                        className="w-full bg-red-950/80 border-2 border-red-500 text-red-100 placeholder:text-red-400 focus:border-red-400 rounded-lg px-2.5 py-1.5 text-xs font-mono font-bold outline-none animate-pulse"
+                                                                        placeholder={t('-- 键入或选择标准物料 (如 BW-S50 或 SF-CLEAR) --')}
+                                                                        value={item.sku ? `${item.sku} - ${item.product || ''}` : ''}
+                                                                        onChange={e => handleUpdateModalItemSku(idx, e.target.value)}
+                                                                    />
+                                                                </div>
+                                                            )}
+
+                                                            {/* INLINE LOCATION & REMARK EDIT */}
+                                                            <div className="flex flex-col sm:flex-row gap-2 mt-0.5 pt-2 border-t border-slate-900">
+                                                                <div className="flex items-center gap-1.5 flex-1 min-w-[140px]">
+                                                                    <div className="text-[10px] font-bold text-slate-500 uppercase shrink-0">Pickup:</div>
+                                                                    <select
+                                                                        className="w-full bg-slate-900 border border-slate-800 rounded px-2 py-1 text-xs text-blue-400 font-bold focus:border-blue-500 outline-none cursor-pointer"
+                                                                        value={normalizeWarehouseName(item.sourceLocation || getDefaultLocForOrigin(tripOrigin))}
+                                                                        onChange={(e) => {
+                                                                            const val = e.target.value;
+                                                                            const updated = [...newOrderItems];
+                                                                            updated[idx].sourceLocation = val;
+                                                                            setNewOrderItems(updated);
+                                                                        }}
+                                                                    >
+                                                                        {getAvailableWarehousesForOrigin(tripOrigin).map(loc => (
+                                                                            <option key={loc} value={loc}>{loc}</option>
+                                                                        ))}
+                                                                    </select>
+                                                                </div>
+                                                                <div className="flex items-center gap-1.5 flex-[2]">
+                                                                    <div className="text-[10px] font-bold text-slate-500 uppercase shrink-0">Remark:</div>
+                                                                    <input
+                                                                        type="text"
+                                                                        placeholder="Add remark..."
+                                                                        className="w-full bg-transparent border-b border-slate-800 text-xs text-slate-300 focus:border-blue-500 outline-none py-0.5 placeholder:text-slate-600"
+                                                                        value={item.remark || ''}
+                                                                        onChange={(e) => {
+                                                                            const val = e.target.value;
+                                                                            const updated = [...newOrderItems];
+                                                                            updated[idx].remark = val;
+                                                                            setNewOrderItems(updated);
+                                                                        }}
+                                                                    />
+                                                                </div>
                                                             </div>
                                                         </div>
-                                                    </div>
-                                                ))
+                                                    );
+                                                })
                                             )}
                                         </div>
 
@@ -6588,23 +6905,58 @@ const DeliveryOrderManagement: React.FC<DeliveryOrderManagementProps> = ({ user 
                                 </div>
                             </div>
 
+                            {/* Global V2 Items Datalist for Modal */}
+                            <datalist id="global-v2items-datalist">
+                                {v2Items.map(prod => (
+                                    <option key={prod.sku} value={`${prod.sku} - ${prod.name}`}>
+                                        {prod.name}
+                                    </option>
+                                ))}
+                            </datalist>
+
                             {/* Modal Footer */}
-                            <div className="p-6 border-t border-slate-800 bg-slate-900/50 flex justify-end gap-3">
-                                <button onClick={handleCloseModal} className="px-6 py-2 rounded-xl text-slate-400 hover:text-white font-bold transition-colors">Cancel</button>
-                                <button
-                                    onClick={handleSubmitOrder}
-                                    disabled={isSubmitting}
-                                    data-action="SAVE_TRIP_ORDER"
-                                    data-action-name={editingOrderId ? '保存送货单修改' : '创建并确认送货单'}
-                                    data-target={editingOrderId ? `DO #${editingOrderId}` : `新建行程 (客户: ${orderCustomer || 'General Customer'})`}
-                                    className="px-8 py-2 bg-gradient-to-r from-blue-600 to-blue-500 hover:from-blue-500 hover:to-blue-400 disabled:opacity-60 disabled:cursor-not-allowed text-white rounded-xl font-bold shadow-lg shadow-blue-900/30 transition-all active:scale-95 flex items-center gap-2 cursor-pointer"
-                                >
-                                    {isSubmitting ? (
-                                        <><span className="w-4 h-4 border-2 border-white/30 border-t-white rounded-full animate-spin" />Saving...</>
-                                    ) : (
-                                        editingOrderId ? 'Save Changes' : 'Confirm Trip'
+                            <div className="p-4 sm:p-6 border-t border-slate-800 bg-slate-900/50 flex flex-col sm:flex-row items-center justify-between gap-3">
+                                <div className="text-xs text-slate-400 flex items-center gap-2">
+                                    <span className="font-mono font-bold text-slate-300">
+                                        {t('合计')}: <span className="text-blue-400 font-bold">{modalTotalRolls}</span> / {modalMaxRolls} {t('卷')}
+                                    </span>
+                                    {modalUnmappedItemsCount > 0 && (
+                                        <span className="text-[10px] font-black text-red-400 bg-red-950/60 border border-red-500/40 px-2 py-0.5 rounded flex items-center gap-1">
+                                            <AlertTriangle size={11} className="text-red-400" />
+                                            {t('包含 {{count}} 项非标物料', { count: modalUnmappedItemsCount })}
+                                        </span>
                                     )}
-                                </button>
+                                </div>
+                                <div className="flex items-center gap-3 w-full sm:w-auto justify-end">
+                                    <button onClick={handleCloseModal} className="px-5 py-2.5 rounded-xl text-slate-400 hover:text-white font-bold transition-colors cursor-pointer text-xs sm:text-sm">
+                                        Cancel
+                                    </button>
+                                    <button
+                                        onClick={handleSubmitOrder}
+                                        disabled={isSubmitting || modalUnmappedItemsCount > 0}
+                                        data-action="SAVE_TRIP_ORDER"
+                                        data-action-name={editingOrderId ? '保存送货单修改' : '创建并确认送货单'}
+                                        data-target={editingOrderId ? `DO #${editingOrderId}` : `新建行程 (客户: ${orderCustomer || 'General Customer'})`}
+                                        className={`px-6 sm:px-8 py-2.5 rounded-xl font-bold text-xs sm:text-sm shadow-lg transition-all active:scale-95 flex items-center gap-2 cursor-pointer ${
+                                            modalUnmappedItemsCount > 0
+                                                ? 'bg-red-950/80 text-red-300 border-2 border-red-500/80 cursor-not-allowed opacity-90'
+                                                : isSubmitting
+                                                ? 'bg-blue-600/50 text-white cursor-not-allowed'
+                                                : 'bg-gradient-to-r from-blue-600 to-indigo-600 hover:from-blue-500 hover:to-indigo-500 text-white shadow-blue-900/30'
+                                        }`}
+                                        title={modalUnmappedItemsCount > 0 ? `尚有 ${modalUnmappedItemsCount} 项未匹配标准料号，禁止保存！` : ''}
+                                    >
+                                        {isSubmitting ? (
+                                            <><span className="w-4 h-4 border-2 border-white/30 border-t-white rounded-full animate-spin" />Saving...</>
+                                        ) : modalUnmappedItemsCount > 0 ? (
+                                            <><AlertTriangle size={16} className="text-red-400" />存在非标物料 (禁止保存 · 需修正 {modalUnmappedItemsCount} 项)</>
+                                        ) : (
+                                            editingOrderId 
+                                                ? `${t('Save Changes / 保存修改')} (${modalTotalRolls} 卷 · ${modalLorry?.plateNumber || '自提/未派车'})` 
+                                                : `${t('Confirm Trip / 确认创建')} (${modalTotalRolls} 卷)`
+                                        )}
+                                    </button>
+                                </div>
                             </div>
                         </div>
                     </div>

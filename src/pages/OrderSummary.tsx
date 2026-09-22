@@ -579,7 +579,15 @@ const OrderSummary: React.FC<OrderSummaryProps> = ({ user }) => {
 
         // Finalize trip properties
         Object.values(groups).forEach(g => {
-            g.totalDrops = g.orders.length;
+            const explicitDrops = g.orders.map(o => Number(o.trip_drop_count)).filter(d => Boolean(d) && d > 0);
+            const allSameExplicit = explicitDrops.length > 0 && explicitDrops.every(d => d === explicitDrops[0]);
+            if (allSameExplicit && explicitDrops[0] > 1) {
+                g.totalDrops = explicitDrops[0];
+            } else if (g.orders.length === 1 && explicitDrops.length === 1) {
+                g.totalDrops = explicitDrops[0];
+            } else {
+                g.totalDrops = g.orders.length;
+            }
             if (g.photos.length > 0 || tripsMap[g.tripId]?.status === 'Prepared') {
                 g.isPrepared = true;
             }

@@ -178,8 +178,27 @@ export function groupOrdersIntoTrips(
         const customers = Array.from(new Set(orders.map(o => o.customer).filter(Boolean))).join(', ');
         const combinedItems = orders.flatMap(o => o.items || []);
 
-        // Total drops for trip: maximum of order count and the trip_drop_count recorded on orders
-        const tripDrops = Math.max(orders.length, Math.max(...orders.map(o => Number(o.trip_drop_count) || 1)));
+        // Filter active non-cancelled orders for drop calculations
+        const activeOrders = orders.filter(o => o.status !== 'Cancelled' && o.status !== 'cancelled');
+        const activeCount = activeOrders.length > 0 ? activeOrders.length : orders.length;
+
+        // Total drops for trip: check explicit trip_drop_count recorded across orders
+        const explicitDropCounts = (activeOrders.length > 0 ? activeOrders : orders)
+            .map(o => Number(o.trip_drop_count))
+            .filter(d => Boolean(d) && d > 0);
+        
+        const allSameExplicit = explicitDropCounts.length > 0 && explicitDropCounts.every(d => d === explicitDropCounts[0]);
+        let tripDrops = activeCount;
+        if (allSameExplicit && explicitDropCounts[0] > 1) {
+            // Explicit multi-drop setting from admin (e.g. 4 orders recalibrated to 3 drops, or 1 order with 4 drops)
+            tripDrops = explicitDropCounts[0];
+        } else if (activeCount === 1 && explicitDropCounts.length === 1) {
+            tripDrops = explicitDropCounts[0];
+        } else if (explicitDropCounts.length > 0) {
+            tripDrops = Math.max(activeCount, ...explicitDropCounts);
+        } else {
+            tripDrops = Math.max(1, activeCount);
+        }
 
         // Origin: first non-empty origin
         const originRaw = orders.find(o => o.trip_origin)?.trip_origin || primary.trip_origin || 'TAIPING';
