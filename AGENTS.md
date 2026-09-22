@@ -103,6 +103,7 @@ npm run lint           # ESLint
 - 数据结构字典：[DATA_DICTIONARY.md](docs/DATA_DICTIONARY.md)（表结构、枚举值、状态机）
 - 系统语言与国际化规范：[I18N_GUIDELINES.md](docs/I18N_GUIDELINES.md)（管理层与司机需三语、外籍工人需六语、车间移动端大图标红绿黄高对比度设计、防语言混杂红线）
 - WhatsApp 现场排障手册与词典：[WHATSAPP_ISSUE_TRIAGE.md](docs/WHATSAPP_ISSUE_TRIAGE.md)（现场俚语缩写、司机/操作员常见故障矩阵）
+- 全页面联动升级与跨模块核查清单：[PAGE_SYNC_CHECKLIST.md](docs/PAGE_SYNC_CHECKLIST.md)（跨页面状态机对齐、历史老数据防误伤、共享计算工具一致性、全系统50页面依赖字典）
 
 ## WhatsApp 现场问题与用户排障响应规范
 
@@ -117,6 +118,8 @@ npm run lint           # ESLint
 1. **部署前编译自检**：任何前端代码修改完成后，在汇报或建议部署前，必须运行 `npm run build` 或验证 TS 类型，杜绝生产构建报错。
 2. **移动端响应式优先**：司机端、操作员端、考勤端必须确保在手机端宽度（375px~390px）下正常显示，弹窗不可遮挡底部导航或操作按钮。
 3. **生产数据修改预览**：执行任何批量更新/修复数据的脚本前，必须先查询输出受影响的行数与具体 ID 清单，禁止无条件全量更新。
+4. **跨页面联动升级自检 (Cross-Page Sync Audit)**：修改任何核心业务逻辑（物流配送、考勤工时、车间生产、仓储库存、车辆档案）或公共工具时，必须对照 [PAGE_SYNC_CHECKLIST.md](docs/PAGE_SYNC_CHECKLIST.md) 检视所有关联页面，确认各页面状态机一致、历史已结案老单不被误判唤醒，并在最终汇报中输出【跨页面联动升级核验表】。
+5. **生产主分支合并与部署 (Production Branch Alignment)**：系统生产环境（Vercel）部署绑定分支为 `origin/main`。功能在本地验证通过后，必须合并推送到 `origin/main`，禁止仅推送到 `test` 分支导致生产环境未生效。
 
 ## 常见入口速查
 
