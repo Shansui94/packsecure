@@ -14,6 +14,7 @@ import {
   TripDispatchOrder,
   TripDispatchInfo
 } from '../lib/whatsapp.js';
+import { handleWhatsAppRecipeWorkflow } from '../lib/whatsappRecipe.js';
 import { generateNightlyReport } from './cron/nightly-report.js';
 
 function getSupabase() {
@@ -661,7 +662,23 @@ Output valid JSON only: { "is_scale": boolean, "weight_kg": number or null, "des
       }
     }
 
-    // Command 6: AI Conversational Fallback (Gemini with Real-time DB Context)
+    // Command 6: Recipe (配方) Query, Modify & PIN Double-Confirmation
+    try {
+      const recipeRes = await handleWhatsAppRecipeWorkflow(
+        supabase,
+        fromNumber,
+        text,
+        employee,
+        apiKey
+      );
+      if (recipeRes.handled) {
+        return res.status(200).json({ status: recipeRes.status });
+      }
+    } catch (recipeErr) {
+      console.warn('[Recipe Workflow Error]:', recipeErr);
+    }
+
+    // Command 7: AI Conversational Fallback (Gemini with Real-time DB Context)
     if (apiKey) {
       try {
         const isExecutive = ['SuperAdmin', 'Admin', 'Director'].includes(empRole);

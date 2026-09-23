@@ -1,6 +1,6 @@
 import React, { useState, useEffect, useMemo } from 'react';
 import { supabase } from '../services/supabase';
-import { Search, RefreshCw, Box, Filter, X, TrendingUp, TrendingDown, Clipboard, ArrowUpDown, Truck, MapPin, Hash, ChevronLeft, ChevronRight, LayoutGrid, List, Scale, AlertTriangle } from 'lucide-react';
+import { Search, RefreshCw, Box, Filter, X, TrendingUp, TrendingDown, Clipboard, ArrowUpDown, Truck, MapPin, Hash, ChevronLeft, ChevronRight, LayoutGrid, List, Scale, AlertTriangle, Factory, ArrowDownRight, ArrowUpRight } from 'lucide-react';
 import { WAREHOUSES } from '../data/factoryData';
 import { StockReconciliationDashboard } from '../components/StockReconciliationDashboard';
 
@@ -30,6 +30,7 @@ interface LedgerRow {
     created_by_name?: string;
     do_driver_name?: string;
     production_operator?: string;
+    aggregated_count?: number;
 }
 
 const TYPE_STYLE: Record<string, { bgCard: string, badge: string }> = {
@@ -61,11 +62,14 @@ const TYPE_LABEL: Record<string, string> = {
 };
 
 const EVENT_STYLE: Record<string, { icon: React.FC<any>; color: string; bg: string }> = {
-    'Production': { icon: TrendingUp, color: 'text-green-600 dark:text-green-400', bg: 'bg-green-100 dark:bg-green-500/10' },
+    'Production': { icon: Factory, color: 'text-emerald-600 dark:text-emerald-400', bg: 'bg-emerald-100 dark:bg-emerald-500/10' },
     'Stock In': { icon: TrendingUp, color: 'text-cyan-600 dark:text-cyan-400', bg: 'bg-cyan-100 dark:bg-cyan-500/10' },
     'Stock Out': { icon: TrendingDown, color: 'text-red-600 dark:text-red-400', bg: 'bg-red-100 dark:bg-red-500/10' },
     'Audit Adjustment': { icon: Clipboard, color: 'text-purple-600 dark:text-purple-400', bg: 'bg-purple-100 dark:bg-purple-500/10' },
     'Transfer': { icon: ArrowUpDown, color: 'text-amber-600 dark:text-amber-400', bg: 'bg-amber-100 dark:bg-amber-500/10' },
+    'Transfer In': { icon: ArrowDownRight, color: 'text-blue-600 dark:text-blue-400', bg: 'bg-blue-100 dark:bg-blue-500/10' },
+    'Transfer Out': { icon: ArrowUpRight, color: 'text-amber-600 dark:text-amber-400', bg: 'bg-amber-100 dark:bg-amber-500/10' },
+    'Delivered': { icon: Truck, color: 'text-violet-600 dark:text-violet-400', bg: 'bg-violet-100 dark:bg-violet-500/10' },
 };
 
 const getEventStyle = (type: string, qty: number) => {
@@ -225,26 +229,38 @@ const DetailPanel: React.FC<{
     const totalOut = ledgerOut.reduce((s, r) => s + Math.abs(r.change_qty), 0);
 
     function groupLedgerAndSplit(records: LedgerRow[]) {
-        const grouped: LedgerRow[] = [];
+        const isUuid = (str?: string | null) => str ? /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i.test(str.trim()) : false;
+        const grouped: (LedgerRow & { aggregated_count?: number })[] = [];
+        
         records.forEach(r => {
             const dateStr = new Date(r.timestamp).toLocaleDateString('en-MY');
-            const isProduction = r.event_type === 'Production' || r.event_type === 'Stock In';
+            const isProduction = r.event_type === 'Production';
             const refStr = isProduction ? '' : (r.ref_doc || '');
-            
-            const existing = grouped.find(g => 
-                new Date(g.timestamp).toLocaleDateString('en-MY') === dateStr &&
-                (isProduction ? true : (g.ref_doc || '') === refStr) &&
-                (g.created_by_name || '') === (r.created_by_name || '') &&
-                (g.do_driver_name || '') === (r.do_driver_name || '') &&
-                (g.production_operator || '') === (r.production_operator || '')
-            );
-            
+            const rMachine = r.notes?.match(/API-Log:\s*(.+)/)?.[1]?.trim() || '';
+
+            const existing = grouped.find(g => {
+                const sameDate = new Date(g.timestamp).toLocaleDateString('en-MY') === dateStr;
+                const sameEvent = g.event_type === r.event_type;
+                if (!sameDate || !sameEvent) return false;
+
+                if (isProduction) {
+                    const gMachine = g.notes?.match(/API-Log:\s*(.+)/)?.[1]?.trim() || '';
+                    return gMachine === rMachine &&
+                           (g.production_operator || '') === (r.production_operator || '');
+                }
+
+                return (g.ref_doc || '') === refStr &&
+                       (g.created_by_name || '') === (r.created_by_name || '') &&
+                       (g.do_driver_name || '') === (r.do_driver_name || '');
+            });
+
             if (existing) {
                 existing.change_qty = Number(existing.change_qty) + Number(r.change_qty);
+                existing.aggregated_count = (existing.aggregated_count || 1) + 1;
                 if (!existing.notes?.includes('(Aggregated Daily Total)')) {
                     existing.notes = `(Aggregated Daily Total) ` + (existing.notes || '');
                 }
-                
+
                 // Track time range for aggregated production records
                 const rTime = new Date(r.timestamp).getTime();
                 const existingStart = new Date(existing.timestamp).getTime();
@@ -253,18 +269,20 @@ const DetailPanel: React.FC<{
                 const latest = Math.max(existingEnd, rTime);
                 existing.timestamp = new Date(earliest).toISOString();
                 existing.timestamp_end = new Date(latest).toISOString();
-                
-                // Keep event_type sensible based on net direction
-                if (existing.change_qty < 0 && !existing.event_type.includes('Out')) {
-                    existing.event_type = 'Transfer Out';
-                } else if (existing.change_qty > 0 && !existing.event_type.includes('In')) {
-                    existing.event_type = 'Transfer In';
+
+                // If ref_doc is an internal UUID, clear it on aggregated row so it doesn't show a raw UUID
+                if (existing.ref_doc && isUuid(existing.ref_doc)) {
+                    existing.ref_doc = '';
                 }
             } else {
-                grouped.push({ ...r, change_qty: Number(r.change_qty) });
+                grouped.push({
+                    ...r,
+                    change_qty: Number(r.change_qty),
+                    aggregated_count: 1
+                });
             }
         });
-        
+
         return {
             in: grouped.filter(r => r.change_qty > 0),
             out: grouped.filter(r => r.change_qty < 0)
@@ -277,6 +295,8 @@ const DetailPanel: React.FC<{
         const style = getEventStyle(row.event_type, row.change_qty);
         const Icon = style.icon;
         const isPos = row.change_qty > 0;
+        const isUuid = (str?: string | null) => str ? /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i.test(str.trim()) : false;
+
         return (
             <button key={row.txn_id} onClick={() => handleTxnClick(row)} className="w-full text-left px-5 py-3 flex items-start gap-3 hover:bg-slate-100 dark:hover:bg-white/[0.05] transition-colors border-b border-slate-200/50 dark:border-white/5 cursor-pointer group">
                 <div className={`mt-0.5 w-8 h-8 rounded-xl ${style.bg} flex items-center justify-center shrink-0 border border-transparent dark:border-white/5 group-hover:scale-110 transition-transform`}>
@@ -284,16 +304,36 @@ const DetailPanel: React.FC<{
                 </div>
                 <div className="flex-1 min-w-0">
                     <div className="flex items-baseline justify-between gap-2">
-                        <span className={`text-xs font-black tracking-wide ${style.color}`}>{row.event_type}</span>
+                        <span className={`text-xs font-black tracking-wide ${style.color}`}>
+                            {row.event_type === 'Production' ? 'Production (机台产出)' : row.event_type}
+                        </span>
                         <span className={`text-base font-black tabular-nums shrink-0 ${isPos ? 'text-green-600 dark:text-green-400' : 'text-red-600 dark:text-red-400'}`}>
                             {isPos ? '+' : ''}{row.change_qty}
                         </span>
                     </div>
-                    {(row.ref_doc || row.notes) && (
-                        <div className="text-[11px] text-slate-500 dark:text-gray-400 mt-1 truncate font-mono bg-slate-100 dark:bg-black/20 px-2 py-0.5 rounded border border-slate-200 dark:border-white/5 inline-block max-w-full">
-                            {row.ref_doc || row.notes}
-                        </div>
-                    )}
+
+                    {/* Human-friendly reference badge (avoid raw UUID) */}
+                    {(() => {
+                        let displayRef = '';
+                        if (row.event_type === 'Production') {
+                            const count = row.aggregated_count || 1;
+                            displayRef = count > 1 ? `🏭 车间连续生产产出 (${count} 笔班次记录汇总)` : '🏭 车间机台产出';
+                        } else if (row.ref_doc && !isUuid(row.ref_doc)) {
+                            displayRef = row.ref_doc;
+                        } else if (row.notes && !row.notes.includes('API-Log:') && !row.notes.includes('(Aggregated Daily Total)')) {
+                            displayRef = row.notes;
+                        } else if (row.ref_doc) {
+                            displayRef = `#${row.ref_doc.slice(0, 8)}`;
+                        }
+
+                        if (!displayRef) return null;
+                        return (
+                            <div className="text-[11px] text-slate-600 dark:text-gray-300 mt-1 truncate font-mono bg-slate-100 dark:bg-black/20 px-2 py-0.5 rounded border border-slate-200 dark:border-white/5 inline-block max-w-full">
+                                {displayRef}
+                            </div>
+                        );
+                    })()}
+
                     <div className="flex items-center justify-between mt-1.5">
                         <div className="text-[10px] text-slate-400 dark:text-gray-600 font-mono flex items-center gap-2 flex-wrap">
                             <span>
@@ -491,7 +531,9 @@ const DetailPanel: React.FC<{
                                     {selectedTxn.change_qty > 0 ? <TrendingUp size={24} /> : <TrendingDown size={24} />}
                                 </div>
                                 <div>
-                                    <h2 className="text-xl font-black text-slate-900 dark:text-white">{selectedTxn.event_type}</h2>
+                                    <h2 className="text-xl font-black text-slate-900 dark:text-white">
+                                        {selectedTxn.event_type === 'Production' ? 'Production (机台生产产出)' : selectedTxn.event_type}
+                                    </h2>
                                     <p className="text-xs text-slate-500 dark:text-gray-500 font-mono mt-0.5">{new Date(selectedTxn.timestamp).toLocaleString()}</p>
                                 </div>
                             </div>
@@ -522,10 +564,32 @@ const DetailPanel: React.FC<{
                             {/* Reference info */}
                             <div className="bg-blue-50 dark:bg-blue-500/5 border border-blue-100 dark:border-blue-500/10 p-5 rounded-2xl shadow-sm">
                                 <div className="text-[10px] text-blue-600 dark:text-blue-400/80 font-black uppercase tracking-widest mb-2 flex items-center gap-2"><Clipboard size={14}/> Transaction Reference</div>
-                                <div className="text-slate-800 dark:text-white font-mono text-sm break-all">{selectedTxn.ref_doc || selectedTxn.notes || 'No reference documented for this event.'}</div>
-                                {selectedTxn.ref_doc && selectedTxn.notes && (
+                                <div className="text-slate-800 dark:text-white font-mono text-sm break-all">
+                                    {selectedTxn.event_type === 'Production' ? (
+                                        <div className="space-y-1">
+                                            <div className="font-sans font-bold text-emerald-600 dark:text-emerald-400">
+                                                {((selectedTxn as any).aggregated_count > 1 || selectedTxn.notes?.includes('(Aggregated Daily Total)'))
+                                                    ? `🏭 车间连续生产产出 (${(selectedTxn as any).aggregated_count || '多'} 笔班次记录汇总)`
+                                                    : '🏭 车间机台生产产出 (Machine Output)'}
+                                            </div>
+                                            {selectedTxn.production_operator && (
+                                                <div className="text-xs text-slate-600 dark:text-gray-300 font-sans">
+                                                    值班操作员: <span className="font-bold text-amber-500">👷 {selectedTxn.production_operator}</span>
+                                                </div>
+                                            )}
+                                        </div>
+                                    ) : (
+                                        selectedTxn.ref_doc || selectedTxn.notes || 'No reference documented for this event.'
+                                    )}
+                                </div>
+                                {selectedTxn.notes && (
                                     <div className="mt-3 text-xs text-slate-500 dark:text-gray-400 border-t border-blue-200 dark:border-white/5 pt-3">
                                         Note: {selectedTxn.notes}
+                                    </div>
+                                )}
+                                {selectedTxn.ref_doc && /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i.test(selectedTxn.ref_doc.trim()) && (
+                                    <div className="mt-1 text-[10px] text-slate-400 dark:text-gray-500 font-mono">
+                                        Internal ID: {selectedTxn.ref_doc}
                                     </div>
                                 )}
                             </div>

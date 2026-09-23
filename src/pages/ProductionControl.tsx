@@ -217,6 +217,9 @@ const ProductionLane: React.FC<ProductionLaneProps> = ({
     const [isPrintingCurrent, setIsPrintingCurrent] = useState(false);
     const [printFeedback, setPrintFeedback] = useState<string | null>(null);
 
+    // Machine base width (2M machines like T2-M01 / J1-M01 have 200cm base width)
+    const machineBaseWidth = Number((machineMetadata as any)?.base_width) || (machineMetadata?.name?.includes('2M') || machineMetadata?.id === 'T2-M01' || machineMetadata?.id === 'J1-M01' ? 200 : 100);
+
     // Downtime Stop modal & 20-min idle monitoring
     const [showLaneDowntimeModal, setShowLaneDowntimeModal] = useState(false);
     const [laneDowntimeReason, setLaneDowntimeReason] = useState<string>('换卷接膜');
@@ -230,10 +233,12 @@ const ProductionLane: React.FC<ProductionLaneProps> = ({
             setIdleMinutes(0);
             return;
         }
-        const interval = setInterval(() => {
-            const mins = Math.floor((Date.now() - lastRollTimestamp) / 60000);
+        const checkIdle = () => {
+            const mins = Math.floor(Math.max(0, Date.now() - lastRollTimestamp) / 60000);
             setIdleMinutes(mins);
-        }, 30000);
+        };
+        checkIdle();
+        const interval = setInterval(checkIdle, 30000);
         return () => clearInterval(interval);
     }, [isLiveRun, lastRollTimestamp]);
 
@@ -304,6 +309,8 @@ const ProductionLane: React.FC<ProductionLaneProps> = ({
             if (error) throw error;
 
             setLiveCount(prev => prev + rollCount);
+            setLastRollTimestamp(Date.now());
+            setIdleMinutes(0);
             await fetchMachineTotals();
             onProductionComplete();
         } catch (err: any) {
@@ -428,12 +435,17 @@ const ProductionLane: React.FC<ProductionLaneProps> = ({
                         
                         const { data: logsData } = await supabase
                             .from('production_logs_v2')
-                            .select('output_qty')
+                            .select('output_qty, created_at')
                             .eq('machine_id', machineId)
                             .or(`sku.eq.${data.product_sku},sku.eq.UNKNOWN-BUBBLEWRAP,sku.eq.UNKNOWN`)
-                            .gte('created_at', bufferedStart);
+                            .gte('created_at', bufferedStart)
+                            .order('created_at', { ascending: false });
 
                         if (logsData && logsData.length > 0) {
+                            const latestLogTime = logsData[0]?.created_at ? new Date(logsData[0].created_at).getTime() : rawStart;
+                            setLastRollTimestamp(latestLogTime);
+                            setIdleMinutes(Math.floor(Math.max(0, Date.now() - latestLogTime) / 60000));
+
                             const { data: siblingLanes } = await supabase
                                 .from('machine_active_products')
                                 .select('lane_id')
@@ -454,6 +466,8 @@ const ProductionLane: React.FC<ProductionLaneProps> = ({
                             setLiveCount(resolvedCount);
                         } else {
                             setLiveCount(0);
+                            setLastRollTimestamp(rawStart);
+                            setIdleMinutes(Math.floor(Math.max(0, Date.now() - rawStart) / 60000));
                         }
                         await fetchMachineTotals();
                     }
@@ -481,8 +495,7 @@ const ProductionLane: React.FC<ProductionLaneProps> = ({
     const handleSizeSelect = (size: ProductSize) => {
         setSelectedSize(size);
         const numericSize = parseInt(size.replace(/[^0-9]/g, '')) || 100;
-        const machineWidth = (machineMetadata as any)?.base_width || (machineMetadata?.name?.includes('2M') || machineMetadata?.id === 'T2-M01' || machineMetadata?.id === 'J1-M01' ? 200 : 100);
-        const maxRollsAcross = Math.floor(machineWidth / numericSize) || 1;
+        const maxRollsAcross = Math.floor(machineBaseWidth / numericSize) || 1;
 
         const defaultRolls = size === '100cm' ? 1 :
             size === '50cm' ? 2 :
@@ -563,9 +576,9 @@ const ProductionLane: React.FC<ProductionLaneProps> = ({
             const v3Sku = getBubbleWrapSku(selectedLayer, selectedMaterial, selectedSize, selectedRolls, derivedPackaging);
 
             const numericSize = parseInt(selectedSize.replace(/[^0-9]/g, '')) || 100;
-            const machineBaseWidth = (machineMetadata as any)?.base_width || (machineMetadata?.name?.includes('2M') || machineMetadata?.id === 'T2-M01' || machineMetadata?.id === 'J1-M01' ? 200 : 100);
             const calculatedYield = Math.floor((machineBaseWidth / numericSize) / selectedRolls) || 1;
             setLastRollTimestamp(Date.now());
+            setIdleMinutes(0);
 
             try {
                 const machineId = machineMetadata?.id || 'T2-M01';
@@ -644,6 +657,8 @@ const ProductionLane: React.FC<ProductionLaneProps> = ({
                     if (logLane && logLane !== 'Unknown' && logLane !== laneId) return;
 
                     setLiveCount(prev => prev + logQty);
+                    setLastRollTimestamp(Date.now());
+                    setIdleMinutes(0);
                     fetchMachineTotals();
 
                     // --- AUTO-UPDATE MATCHING JOB ---
@@ -832,14 +847,14 @@ const ProductionLane: React.FC<ProductionLaneProps> = ({
                                         <button
                                             onClick={() => {
                                                 const numericSize = parseInt(selectedSize?.replace(/[^0-9]/g, '') || '100');
-                                                const maxRolls = Math.floor(100 / numericSize) || 1;
+                                                const maxRolls = Math.floor(machineBaseWidth / numericSize) || 1;
                                                 if (selectedRolls < maxRolls) {
                                                     setSelectedRolls(selectedRolls + 1);
                                                 }
                                             }}
                                             disabled={(() => {
                                                 const numericSize = parseInt(selectedSize?.replace(/[^0-9]/g, '') || '100');
-                                                const maxRolls = Math.floor(100 / numericSize) || 1;
+                                                const maxRolls = Math.floor(machineBaseWidth / numericSize) || 1;
                                                 return selectedRolls >= maxRolls;
                                             })()}
                                             className="w-6 h-6 rounded bg-white/5 hover:bg-white/10 flex items-center justify-center text-xs disabled:opacity-20 disabled:cursor-not-allowed"
@@ -955,9 +970,20 @@ const ProductionLane: React.FC<ProductionLaneProps> = ({
 
                                         {/* 20-min Idle Alert Badge */}
                                         {isLiveRun && idleMinutes >= 20 && (
-                                            <div className="bg-amber-500/20 border border-amber-500/40 text-amber-200 px-3.5 py-2 rounded-2xl text-xs flex items-center gap-2 animate-pulse mb-3">
-                                                <AlertTriangle size={16} className="text-amber-400 shrink-0" />
-                                                <span>{t('⚠️ 机台已连续 20+ 分钟未产出产卷，请确认是否停机换网或等待原料')}</span>
+                                            <div className="bg-amber-500/20 border border-amber-500/40 text-amber-200 px-3.5 py-2.5 rounded-2xl text-xs flex items-center justify-between gap-2 animate-pulse mb-3">
+                                                <div className="flex items-center gap-2">
+                                                    <AlertTriangle size={16} className="text-amber-400 shrink-0" />
+                                                    <span>{t('⚠️ 机台已连续 {{minutes}} 分钟未产出产卷，请确认是否停机换网或等待原料', { minutes: idleMinutes, defaultValue: `⚠️ 机台已连续 ${idleMinutes} 分钟未产出产卷，请确认是否停机换网或等待原料` })}</span>
+                                                </div>
+                                                {isControlMode && (
+                                                    <button
+                                                        type="button"
+                                                        onClick={() => setShowLaneDowntimeModal(true)}
+                                                        className="px-2.5 py-1 bg-amber-500 hover:bg-amber-400 text-black font-black rounded-xl text-[11px] shrink-0 cursor-pointer shadow transition"
+                                                    >
+                                                        {t('登记停机')}
+                                                    </button>
+                                                )}
                                             </div>
                                         )}
 
