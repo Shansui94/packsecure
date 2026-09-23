@@ -209,6 +209,7 @@ const ProductionLane: React.FC<ProductionLaneProps> = ({
     const [isLiveRun, setIsLiveRun] = useState(false);
     const [liveCount, setLiveCount] = useState(0);
     const [todayMachineCount, setTodayMachineCount] = useState<number>(0);
+    const [todayLaneCount, setTodayLaneCount] = useState<number>(0);
     const [shiftMachineCount, setShiftMachineCount] = useState<number>(0);
     const [isSubmittingManualRoll, setIsSubmittingManualRoll] = useState(false);
 
@@ -257,12 +258,24 @@ const ProductionLane: React.FC<ProductionLaneProps> = ({
             // 1. Today's machine total
             const { data: todayLogs } = await supabase
                 .from('production_logs_v2')
-                .select('output_qty')
+                .select('output_qty, source_lane, lane_id')
                 .eq('machine_id', machineId)
                 .gte('created_at', todayStart);
 
             const todaySum = (todayLogs || []).reduce((sum, l) => sum + (Number(l.output_qty) || 1), 0);
             setTodayMachineCount(todaySum);
+
+            // 1.1 Lane specific count if in dual-lane mode
+            if (laneId !== 'Single') {
+                const laneSum = (todayLogs || []).reduce((sum, l) => {
+                    const lLane = (l as any).source_lane || (l as any).lane_id;
+                    if (lLane === laneId) {
+                        return sum + (Number(l.output_qty) || 1);
+                    }
+                    return sum;
+                }, 0);
+                setTodayLaneCount(laneSum);
+            }
 
             // 2. Shift total
             const effectiveShiftStart = clockInTime || 
@@ -283,7 +296,7 @@ const ProductionLane: React.FC<ProductionLaneProps> = ({
         } catch (e) {
             console.error("Failed to fetch machine totals:", e);
         }
-    }, [machineMetadata?.id, operatorId, operatorEmployeeId, clockInTime]);
+    }, [machineMetadata?.id, operatorId, operatorEmployeeId, clockInTime, laneId]);
 
     useEffect(() => {
         fetchMachineTotals();
@@ -303,7 +316,9 @@ const ProductionLane: React.FC<ProductionLaneProps> = ({
                 sku: targetSku,
                 output_qty: rollCount,
                 operator_id: operatorId || null,
-                note: `【现场手工记数】操作员确认产出 ${rollCount} 卷`
+                source_lane: laneId,
+                lane_id: laneId,
+                note: `【现场手工记数】操作员确认产出 ${rollCount} 卷 (${laneId})`
             }]);
 
             if (error) throw error;
@@ -704,9 +719,9 @@ const ProductionLane: React.FC<ProductionLaneProps> = ({
             {/* PROGRESS BAR */}
             <div className="flex border-b border-black/5 dark:border-white/10 bg-black/[0.02] dark:bg-white/[0.02]">
                 {[
-                    { id: 1, label: "类型", icon: Layers },
-                    { id: 2, label: "规格", icon: Box },
-                    { id: 3, label: "生产", icon: Settings }
+                    { id: 1, label: t('类型', 'Type'), icon: Layers },
+                    { id: 2, label: t('规格', 'Size'), icon: Box },
+                    { id: 3, label: t('生产', 'Produce'), icon: Settings }
                 ].map((s) => {
                     const isActive = step === s.id;
                     const isPast = step > s.id;
@@ -841,7 +856,8 @@ const ProductionLane: React.FC<ProductionLaneProps> = ({
                                     <div className="flex items-center gap-3">
                                         <button
                                             onClick={() => setSelectedRolls(Math.max(1, selectedRolls - 1))}
-                                            className="w-6 h-6 rounded bg-white/5 hover:bg-white/10 flex items-center justify-center text-xs"
+                                            disabled={!isControlMode}
+                                            className="w-6 h-6 rounded bg-white/5 hover:bg-white/10 flex items-center justify-center text-xs disabled:opacity-20 disabled:cursor-not-allowed"
                                         >-</button>
                                         <span className="text-sm font-black text-white w-4 text-center">{selectedRolls}</span>
                                         <button
@@ -853,6 +869,7 @@ const ProductionLane: React.FC<ProductionLaneProps> = ({
                                                 }
                                             }}
                                             disabled={(() => {
+                                                if (!isControlMode) return true;
                                                 const numericSize = parseInt(selectedSize?.replace(/[^0-9]/g, '') || '100');
                                                 const maxRolls = Math.floor(machineBaseWidth / numericSize) || 1;
                                                 return selectedRolls >= maxRolls;
@@ -865,8 +882,9 @@ const ProductionLane: React.FC<ProductionLaneProps> = ({
                                     type="text"
                                     placeholder={t('Note (Optional)')}
                                     value={productionNote}
+                                    disabled={!isControlMode}
                                     onChange={(e) => setProductionNote(e.target.value)}
-                                    className="flex-1 bg-black/30 text-white text-xs px-3 py-2 rounded-xl border border-white/10 focus:border-cyan-500 focus:outline-none"
+                                    className="flex-1 bg-black/30 text-white text-xs px-3 py-2 rounded-xl border border-white/10 focus:border-cyan-500 focus:outline-none disabled:opacity-40 disabled:cursor-not-allowed"
                                 />
                             </div>
 
@@ -888,20 +906,39 @@ const ProductionLane: React.FC<ProductionLaneProps> = ({
                                             <div className="text-[60px] font-black text-apple-textMain dark:text-white leading-none tabular-nums drop-shadow-md my-1">
                                                 {liveCount}
                                             </div>
-                                            <div className="text-apple-textMuted text-xs font-mono">{t('Units Produced This Session')} ({t('本次运行')})</div>
+                                            <div className="text-apple-textMuted text-xs font-mono">{t('Units Produced This Session')} ({t('当前规格运行', 'Current Run')})</div>
 
                                             {/* 多维度产量胶囊卡片：消除重新启动或换人时显示0的误解 */}
                                             <div className="mt-3 flex items-center justify-center gap-2 flex-wrap">
-                                                <div className="px-3 py-1 rounded-xl bg-emerald-500/10 border border-emerald-500/25 flex items-center gap-1.5 text-xs">
-                                                    <span className="text-emerald-400 font-medium">{t('今日机台累计')}:</span>
-                                                    <span className="text-emerald-300 font-bold font-mono text-sm">{todayMachineCount}</span>
-                                                    <span className="text-emerald-400/80 text-[10px]">{t('卷')}</span>
-                                                </div>
-                                                <div className="px-3 py-1 rounded-xl bg-blue-500/10 border border-blue-500/25 flex items-center gap-1.5 text-xs">
-                                                    <span className="text-blue-400 font-medium">{t('本班次累计')}:</span>
-                                                    <span className="text-blue-300 font-bold font-mono text-sm">{shiftMachineCount}</span>
-                                                    <span className="text-blue-400/80 text-[10px]">{t('卷')}</span>
-                                                </div>
+                                                {laneId !== 'Single' ? (
+                                                    <>
+                                                        <div className="px-3 py-1 rounded-xl bg-purple-500/10 border border-purple-500/25 flex items-center gap-1.5 text-xs">
+                                                            <span className="text-purple-400 font-medium">{t('本通道累计', 'Lane Total')} ({laneId === 'Lane1' ? 'Lane 1' : laneId === 'Lane2' ? 'Lane 2' : laneId}):</span>
+                                                            <span className="text-purple-300 font-bold font-mono text-sm">{todayLaneCount > 0 ? todayLaneCount : liveCount}</span>
+                                                            <span className="text-purple-400/80 text-[10px]">{t('Rolls', 'Rolls')}</span>
+                                                        </div>
+                                                        <div className="px-3 py-1 rounded-xl bg-emerald-500/10 border border-emerald-500/25 flex items-center gap-1.5 text-xs">
+                                                            <span className="text-emerald-400 font-medium">{t('今日机台总计', 'Machine Total')}:</span>
+                                                            <span className="text-emerald-300 font-bold font-mono text-sm">{todayMachineCount}</span>
+                                                            <span className="text-emerald-400/80 text-[10px]">{t('Rolls', 'Rolls')}</span>
+                                                        </div>
+                                                    </>
+                                                ) : (
+                                                    <>
+                                                        <div className="px-3 py-1 rounded-xl bg-emerald-500/10 border border-emerald-500/25 flex items-center gap-1.5 text-xs">
+                                                            <span className="text-emerald-400 font-medium">{t('今日机台累计', "Today's Total")}:</span>
+                                                            <span className="text-emerald-300 font-bold font-mono text-sm">{todayMachineCount}</span>
+                                                            <span className="text-emerald-400/80 text-[10px]">{t('Rolls', 'Rolls')}</span>
+                                                        </div>
+                                                        {shiftMachineCount > 0 && shiftMachineCount !== todayMachineCount && (
+                                                            <div className="px-3 py-1 rounded-xl bg-blue-500/10 border border-blue-500/25 flex items-center gap-1.5 text-xs">
+                                                                <span className="text-blue-400 font-medium">{t('本班次累计', 'Shift Total')}:</span>
+                                                                <span className="text-blue-300 font-bold font-mono text-sm">{shiftMachineCount}</span>
+                                                                <span className="text-blue-400/80 text-[10px]">{t('Rolls', 'Rolls')}</span>
+                                                            </div>
+                                                        )}
+                                                    </>
+                                                )}
                                             </div>
                                         </div>
 
@@ -920,7 +957,7 @@ const ProductionLane: React.FC<ProductionLaneProps> = ({
                                                     <Printer size={24} className="text-white drop-shadow" />
                                                 )}
                                                 <span className="tracking-wide">
-                                                    {printFeedback || t('🖨️ 打印成品标签 (PRINT)')}
+                                                    {printFeedback || t('🖨️ 打印成品标签 (PRINT)', '🖨️ Print Label (PRINT)')}
                                                 </span>
                                             </button>
 
@@ -945,13 +982,13 @@ const ProductionLane: React.FC<ProductionLaneProps> = ({
                                                 title={t('设置打印机与纸张规格')}
                                             >
                                                 <Settings size={18} className="mb-0.5 text-blue-400" />
-                                                <span>{t('打印设置')}</span>
+                                                <span>{t('打印设置', 'Settings')}</span>
                                             </button>
                                         </div>
 
                                         {/* 快捷多张出纸选项 */}
                                         <div className="flex items-center justify-between px-1 text-[11px] text-gray-400">
-                                            <span>{t('快捷出纸张数')}:</span>
+                                            <span>{t('快捷出纸张数', 'Quick Copies')}:</span>
                                             <div className="flex gap-1.5">
                                                 {[1, 2, 5].map(num => (
                                                     <button
@@ -961,7 +998,7 @@ const ProductionLane: React.FC<ProductionLaneProps> = ({
                                                         disabled={isPrintingCurrent}
                                                         className="px-2.5 py-1 rounded-lg bg-white/5 hover:bg-white/10 text-gray-300 hover:text-white border border-white/10 font-mono font-bold transition cursor-pointer active:scale-95"
                                                     >
-                                                        {num}张
+                                                        {num} {t('张', num > 1 ? 'Copies' : 'Copy')}
                                                     </button>
                                                 ))}
                                             </div>
@@ -4066,50 +4103,78 @@ const ProductionControl: React.FC<ProductionControlProps> = ({ user, jobs = [], 
                                 />
                             ) : (
                                 selectedMachine === 'T2-M01' || selectedMachine === 'J1-M01' ? (
-                                    <div className="flex flex-col lg:flex-row gap-6">
-                                        <div className="flex-1 min-w-0">
-                                            <div className="text-center mb-2">
-                                                <span className="text-xs font-bold text-cyan-400 uppercase tracking-widest bg-cyan-500/10 px-3 py-1 rounded-full">Lane 1</span>
+                                    <div className="space-y-4">
+                                        {/* DUAL-LANE MACHINE HEADER BANNER */}
+                                        <div className="bg-gradient-to-r from-blue-950/40 via-purple-950/30 to-zinc-900/60 border border-purple-500/20 rounded-2xl p-4 flex flex-wrap items-center justify-between gap-3 shadow-lg backdrop-blur-md">
+                                            <div className="flex items-center gap-3">
+                                                <div className="w-3 h-3 rounded-full bg-cyan-400 animate-pulse" />
+                                                <div>
+                                                    <div className="flex items-center gap-2">
+                                                        <span className="text-sm font-bold text-white tracking-wide">{currentMachineName}</span>
+                                                        <span className="text-xs font-mono text-cyan-300 bg-cyan-500/20 border border-cyan-500/30 px-2 py-0.5 rounded-md font-bold">{selectedMachine}</span>
+                                                        <span className="text-[11px] font-semibold text-purple-300 bg-purple-500/20 border border-purple-500/30 px-2.5 py-0.5 rounded-full">
+                                                            {t('双通道复卷机', 'Dual-Lane Rewinder')}
+                                                        </span>
+                                                    </div>
+                                                    <p className="text-[11px] text-gray-400 mt-1">
+                                                        {t('双通道高速复卷机 · 双通道独立计数与调速运行', 'Dual-lane high-speed rewinder · Independent counting and speed control per lane')}
+                                                    </p>
+                                                </div>
                                             </div>
-                                            <ProductionLane
-                                                laneId="Lane1"
-                                                machineMetadata={machineMetadata}
-                                                user={user}
-                                                operatorId={operatorId}
-                                                operatorEmployeeId={operatorEmployeeId}
-                                                operatorName={operatorName}
-                                                activeJob={activeJob}
-                                                jobs={jobs}
-                                                onProductionComplete={fetchUserLogs}
-                                                onBeforeProduce={handleProductionAttempt}
-                                                presetSku={presetSku}
-                                                isControlMode={isControlMode}
-                                                onTakeoverClick={() => initiateTakeover(selectedMachine!)}
-                                                onOpenPrinterModal={() => setShowPrinterModal(true)}
-                                                clockInTime={clockInTime}
-                                            />
+                                            <div className="flex items-center gap-2">
+                                                <div className="px-3.5 py-1.5 rounded-xl bg-emerald-500/15 border border-emerald-500/30 flex items-center gap-2">
+                                                    <span className="text-xs text-emerald-400 font-medium">{t('今日整机总产量', "Today's Machine Total")}:</span>
+                                                    <span className="text-emerald-300 font-bold font-mono text-base">{todayMachineTotal}</span>
+                                                    <span className="text-emerald-400/80 text-[11px]">{t('Rolls', 'Rolls')}</span>
+                                                </div>
+                                            </div>
                                         </div>
-                                        <div className="flex-1 min-w-0">
-                                            <div className="text-center mb-2">
-                                                <span className="text-xs font-bold text-purple-400 uppercase tracking-widest bg-purple-500/10 px-3 py-1 rounded-full">Lane 2</span>
+
+                                        <div className="flex flex-col lg:flex-row gap-6">
+                                            <div className="flex-1 min-w-0">
+                                                <div className="text-center mb-2">
+                                                    <span className="text-xs font-bold text-cyan-400 uppercase tracking-widest bg-cyan-500/10 px-3 py-1 rounded-full">Lane 1</span>
+                                                </div>
+                                                <ProductionLane
+                                                    laneId="Lane1"
+                                                    machineMetadata={machineMetadata}
+                                                    user={user}
+                                                    operatorId={operatorId}
+                                                    operatorEmployeeId={operatorEmployeeId}
+                                                    operatorName={operatorName}
+                                                    activeJob={activeJob}
+                                                    jobs={jobs}
+                                                    onProductionComplete={fetchUserLogs}
+                                                    onBeforeProduce={handleProductionAttempt}
+                                                    presetSku={presetSku}
+                                                    isControlMode={isControlMode}
+                                                    onTakeoverClick={() => initiateTakeover(selectedMachine!)}
+                                                    onOpenPrinterModal={() => setShowPrinterModal(true)}
+                                                    clockInTime={clockInTime}
+                                                />
                                             </div>
-                                            <ProductionLane
-                                                laneId="Lane2"
-                                                machineMetadata={machineMetadata}
-                                                user={user}
-                                                operatorId={operatorId}
-                                                operatorEmployeeId={operatorEmployeeId}
-                                                operatorName={operatorName}
-                                                activeJob={activeJob}
-                                                jobs={jobs}
-                                                onProductionComplete={fetchUserLogs}
-                                                onBeforeProduce={handleProductionAttempt}
-                                                presetSku={presetSku}
-                                                isControlMode={isControlMode}
-                                                onTakeoverClick={() => initiateTakeover(selectedMachine!)}
-                                                onOpenPrinterModal={() => setShowPrinterModal(true)}
-                                                clockInTime={clockInTime}
-                                            />
+                                            <div className="flex-1 min-w-0">
+                                                <div className="text-center mb-2">
+                                                    <span className="text-xs font-bold text-purple-400 uppercase tracking-widest bg-purple-500/10 px-3 py-1 rounded-full">Lane 2</span>
+                                                </div>
+                                                <ProductionLane
+                                                    laneId="Lane2"
+                                                    machineMetadata={machineMetadata}
+                                                    user={user}
+                                                    operatorId={operatorId}
+                                                    operatorEmployeeId={operatorEmployeeId}
+                                                    operatorName={operatorName}
+                                                    activeJob={activeJob}
+                                                    jobs={jobs}
+                                                    onProductionComplete={fetchUserLogs}
+                                                    onBeforeProduce={handleProductionAttempt}
+                                                    presetSku={presetSku}
+                                                    isControlMode={isControlMode}
+                                                    onTakeoverClick={() => initiateTakeover(selectedMachine!)}
+                                                    onOpenPrinterModal={() => setShowPrinterModal(true)}
+                                                    clockInTime={clockInTime}
+                                                />
+                                            </div>
                                         </div>
                                     </div>
                                 ) : (
@@ -4380,7 +4445,7 @@ const ProductionControl: React.FC<ProductionControlProps> = ({ user, jobs = [], 
                                 </h3>
 
                                 {operatorTasks.length === 0 ? (
-                                    <p className="text-center py-3 text-xs text-gray-500">暂无待办任务 👍</p>
+                                    <p className="text-center py-3 text-xs text-gray-500">{t('暂无待办任务 👍', 'No Pending Tasks 👍')}</p>
                                 ) : (
                                     <div className="flex flex-col gap-2 max-h-48 overflow-y-auto custom-scrollbar">
                                         {operatorTasks.map(task => (
@@ -4404,7 +4469,7 @@ const ProductionControl: React.FC<ProductionControlProps> = ({ user, jobs = [], 
                                     <h4 className="text-xs font-semibold text-gray-300">
                                         {t('最近生产产出记录')}
                                     </h4>
-                                    <span className="text-[10px] text-blue-400 font-mono">{recentLogs.length} 条</span>
+                                    <span className="text-[10px] text-blue-400 font-mono">{recentLogs.length} {t('条', 'records')}</span>
                                 </div>
                                 <div className="max-h-48 overflow-y-auto custom-scrollbar">
                                     {recentLogs.map((log) => {
