@@ -83,7 +83,8 @@ const DetailPanel: React.FC<{
     locFilter: string;
     onClose: () => void;
     onOpenShortage?: (item: StockRow) => void;
-}> = ({ item, locFilter, onClose, onOpenShortage }) => {
+    onOpenReconcile?: (sku: string) => void;
+}> = ({ item, locFilter, onClose, onOpenShortage, onOpenReconcile }) => {
     const [ledger, setLedger] = useState<LedgerRow[]>([]);
     const [loading, setLoading] = useState(true);
     const [timeFilter, setTimeFilter] = useState<'Day' | 'All'>('Day');
@@ -362,6 +363,20 @@ const DetailPanel: React.FC<{
                                             预留: {item.reserved_stock}
                                         </span>
                                     )}
+                                </button>
+                            )}
+                            {onOpenReconcile && (
+                                <button
+                                    type="button"
+                                    onClick={() => {
+                                        onClose();
+                                        onOpenReconcile(item.sku);
+                                    }}
+                                    className="px-2.5 py-1 rounded-lg text-xs font-bold bg-purple-50 dark:bg-purple-500/15 text-purple-700 dark:text-purple-300 border border-purple-200 dark:border-purple-500/30 hover:bg-purple-100 dark:hover:bg-purple-500/25 flex items-center gap-1.5 transition-all cursor-pointer shrink-0 shadow-sm"
+                                    title="查看该物料的产销存平衡与盘点稽核"
+                                >
+                                    <Scale size={13} className="text-purple-600 dark:text-purple-400" />
+                                    <span>产销存稽核</span>
                                 </button>
                             )}
                             <div className="flex items-center border border-slate-200 bg-white dark:bg-black/40 rounded-lg p-1 dark:border-white/5 shrink-0 shadow-sm">
@@ -826,18 +841,18 @@ const LiveStock: React.FC<LiveStockProps> = ({ onNavigate }) => {
             <div className="max-w-7xl mx-auto">
 
                 {/* ── MAIN TAB SWITCHER (LIVE STOCK vs RECONCILIATION & AUDIT) ── */}
-                <div className="flex items-center gap-3 p-1.5 bg-black/40 border border-white/10 rounded-2xl w-fit mb-6 shadow-xl">
+                <div className="flex items-center gap-2 p-1.5 bg-slate-100 dark:bg-black/40 border border-slate-200 dark:border-white/10 rounded-2xl w-fit mb-6 shadow-sm">
                     <button
                         type="button"
                         onClick={() => setActiveTab('stock')}
                         className={`flex items-center gap-2 px-5 py-2.5 rounded-xl font-black text-xs transition-all active:scale-95 cursor-pointer ${
                             activeTab === 'stock'
-                                ? 'bg-gradient-to-r from-cyan-500 to-blue-600 text-black shadow-lg shadow-cyan-950/50'
-                                : 'text-gray-400 hover:text-white hover:bg-white/5'
+                                ? 'bg-white dark:bg-cyan-500/20 text-slate-900 dark:text-cyan-300 border border-slate-300 dark:border-cyan-500/40 shadow-sm'
+                                : 'text-slate-600 dark:text-gray-400 hover:text-slate-900 dark:hover:text-white hover:bg-slate-200/50 dark:hover:bg-white/5'
                         }`}
                     >
-                        <LayoutGrid size={15} />
-                        <span>📦 实时库存大屏 (Live Stock)</span>
+                        <LayoutGrid size={15} className={activeTab === 'stock' ? 'text-cyan-600 dark:text-cyan-400' : ''} />
+                        <span>实时库存大屏 (Live Stock)</span>
                     </button>
 
                     <button
@@ -848,13 +863,17 @@ const LiveStock: React.FC<LiveStockProps> = ({ onNavigate }) => {
                         }}
                         className={`flex items-center gap-2 px-5 py-2.5 rounded-xl font-black text-xs transition-all active:scale-95 cursor-pointer ${
                             activeTab === 'reconciliation'
-                                ? 'bg-gradient-to-r from-purple-500 to-indigo-600 text-white shadow-lg shadow-purple-950/50'
-                                : 'text-gray-400 hover:text-white hover:bg-white/5'
+                                ? 'bg-white dark:bg-purple-500/20 text-slate-900 dark:text-purple-300 border border-slate-300 dark:border-purple-500/40 shadow-sm'
+                                : 'text-slate-600 dark:text-gray-400 hover:text-slate-900 dark:hover:text-white hover:bg-slate-200/50 dark:hover:bg-white/5'
                         }`}
                     >
-                        <Scale size={15} />
-                        <span>⚖️ 产销存平衡与盘点稽核 (Reconciliation & Audit)</span>
-                        <span className="px-1.5 py-0.2 rounded text-[9px] bg-purple-400 text-black font-black uppercase">
+                        <Scale size={15} className={activeTab === 'reconciliation' ? 'text-purple-600 dark:text-purple-400' : ''} />
+                        <span>产销存平衡与盘点稽核 (Reconciliation & Audit)</span>
+                        <span className={`px-1.5 py-0.5 rounded text-[9px] font-black uppercase border ${
+                            activeTab === 'reconciliation'
+                                ? 'bg-purple-100 dark:bg-purple-500/30 text-purple-700 dark:text-purple-300 border-purple-300 dark:border-purple-500/40'
+                                : 'bg-slate-200 dark:bg-white/10 text-slate-600 dark:text-gray-400 border-slate-300 dark:border-white/10'
+                        }`}>
                             NEW
                         </span>
                     </button>
@@ -1186,6 +1205,7 @@ const LiveStock: React.FC<LiveStockProps> = ({ onNavigate }) => {
                         setSelectedItem(null);
                         setShortageItem(target);
                     }}
+                    onOpenReconcile={handleOpenReconcile}
                 />
             )}
 
@@ -1340,17 +1360,31 @@ const LiveStock: React.FC<LiveStockProps> = ({ onNavigate }) => {
                         </div>
 
                         {/* Footer Actions */}
-                        <div className="p-4 bg-slate-50 dark:bg-black/40 border-t border-slate-200/50 dark:border-white/5 flex items-center justify-between gap-3 shrink-0">
-                            <button
-                                onClick={() => {
-                                    const targetItem = shortageItem;
-                                    setShortageItem(null);
-                                    setSelectedItem(targetItem);
-                                }}
-                                className="px-4 py-2.5 rounded-xl border border-slate-300 dark:border-white/10 text-xs font-bold text-slate-700 dark:text-gray-300 hover:bg-slate-100 dark:hover:bg-white/5 transition-colors cursor-pointer"
-                            >
-                                查看流水历史
-                            </button>
+                        <div className="p-4 bg-slate-50 dark:bg-black/40 border-t border-slate-200/50 dark:border-white/5 flex items-center justify-between gap-3 shrink-0 flex-wrap">
+                            <div className="flex items-center gap-2">
+                                <button
+                                    onClick={() => {
+                                        const targetItem = shortageItem;
+                                        setShortageItem(null);
+                                        setSelectedItem(targetItem);
+                                    }}
+                                    className="px-3.5 py-2.5 rounded-xl border border-slate-300 dark:border-white/10 text-xs font-bold text-slate-700 dark:text-gray-300 hover:bg-slate-100 dark:hover:bg-white/5 transition-colors cursor-pointer"
+                                >
+                                    查看流水历史
+                                </button>
+                                <button
+                                    type="button"
+                                    onClick={() => {
+                                        const sku = shortageItem.sku;
+                                        setShortageItem(null);
+                                        handleOpenReconcile(sku);
+                                    }}
+                                    className="px-3.5 py-2.5 rounded-xl border border-purple-200 dark:border-purple-500/30 text-xs font-bold text-purple-700 dark:text-purple-300 bg-purple-50 dark:bg-purple-500/10 hover:bg-purple-100 dark:hover:bg-purple-500/20 transition-colors cursor-pointer flex items-center gap-1.5"
+                                >
+                                    <Scale size={14} />
+                                    <span>产销存稽核</span>
+                                </button>
+                            </div>
                             {onNavigate && (
                                 <button
                                     onClick={() => {

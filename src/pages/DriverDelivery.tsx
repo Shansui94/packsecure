@@ -1552,7 +1552,7 @@ const DriverDelivery: React.FC<DriverDeliveryProps> = ({ user, onNavigate }) => 
                 // 自动完成所有已 Loaded 且上传了足够卸货照片的订单 (严谨校验 multi-drop，防止未送完的订单被误杀)
                 const { data: driverLoadedOrders } = await supabase
                     .from('sales_orders')
-                    .select('id, order_number, trip_drop_count, pod_photo_url, notes')
+                    .select('id, order_number, trip_id, trip_drop_count, pod_photo_url, notes')
                     .eq('driver_id', user.uid)
                     .eq('status', 'Loaded');
 

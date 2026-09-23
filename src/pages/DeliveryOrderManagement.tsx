@@ -15,6 +15,7 @@ import {
     DriverStats,
     BalancedTripDraft
 } from '../utils/driverBalanceDispatch';
+import { parsePrepPhotos } from '../utils/prepPhotos';
 import {
     Plus, Search, Calendar, FileText, X, Truck, Package,
     User as UserIcon, Box, Zap, Trash2, Scissors, AlertTriangle, MapPin, Wrench, LayoutGrid, List, ArrowUp, ArrowDown,
@@ -6485,6 +6486,40 @@ const DeliveryOrderManagement: React.FC<DeliveryOrderManagementProps> = ({ user 
                                         )}
                                     </div>
                                 </div>
+
+                                {/* TRIP PREPARATION PHOTOS */}
+                                {(() => {
+                                    const currentOrder = orders.find(o => o.id === editingOrderId);
+                                    const prepPhotos = parsePrepPhotos(currentOrder?.preparation_photo_url);
+                                    if (prepPhotos.length === 0) return null;
+                                    return (
+                                        <div className="mt-3 p-3.5 rounded-xl border border-cyan-500/20 bg-cyan-950/10 flex flex-col gap-2">
+                                            <div className="flex items-center justify-between">
+                                                <label className="text-xs font-bold text-cyan-400 uppercase tracking-wider flex items-center gap-1.5">
+                                                    <span>📦 Trip Preparation Photos / Gambar Penyediaan</span>
+                                                    <span className="text-[10px] text-cyan-300/70 font-mono">({prepPhotos.length} {prepPhotos.length > 1 ? 'Photos' : 'Photo'})</span>
+                                                </label>
+                                            </div>
+                                            <div className="flex flex-wrap gap-2.5">
+                                                {prepPhotos.map((p, pIdx) => (
+                                                    <div key={pIdx} className="relative group">
+                                                        <a href={p.url} target="_blank" rel="noopener noreferrer" className="block relative overflow-hidden rounded-xl border border-cyan-500/30 hover:border-cyan-400 h-24 w-24 bg-black">
+                                                            <img src={p.url} alt={`Prep ${pIdx + 1}`} className="w-full h-full object-cover opacity-85 group-hover:opacity-100 transition-opacity" />
+                                                            <div className="absolute inset-0 flex items-center justify-center bg-black/40 opacity-0 group-hover:opacity-100 transition-opacity pointer-events-none">
+                                                                <span className="bg-cyan-600 text-white font-bold text-[9px] px-2 py-0.5 rounded shadow uppercase tracking-wider">Enlarge</span>
+                                                            </div>
+                                                            {p.location && (
+                                                                <span className="absolute bottom-1 left-1 px-1.5 py-0.5 bg-black/80 text-cyan-300 font-mono text-[8px] font-bold rounded border border-cyan-500/20">
+                                                                    {p.location}
+                                                                </span>
+                                                            )}
+                                                        </a>
+                                                    </div>
+                                                ))}
+                                            </div>
+                                        </div>
+                                    );
+                                })()}
 
                                 {/* DRIVER DELIVERY / POD INFO SECTION */}
                                 {(() => {

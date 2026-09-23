@@ -867,6 +867,7 @@ const HRPortal: React.FC<HRPortalProps> = ({ user, initialTab, initialRoleFilter
     const [newRateOrigin, setNewRateOrigin] = useState('TAIPING');
     const [newRateLocation, setNewRateLocation] = useState('');
     const [newRateBase, setNewRateBase] = useState('');
+    const [newRateVpc, setNewRateVpc] = useState('');
     const [newRateMaxPlaces, setNewRateMaxPlaces] = useState('3');
     const [newRateExtra, setNewRateExtra] = useState('');
     const [newZoneNotes, setNewZoneNotes] = useState('');
@@ -1302,13 +1303,20 @@ const HRPortal: React.FC<HRPortalProps> = ({ user, initialTab, initialRoleFilter
     const handleAddZone = async () => {
         if (!newRateLocation.trim() || !newRateBase || !newRateOrigin) return;
         setSavingZone(true);
+        
+        // Preserve other tags in notes while cleanly embedding [VPC_RATE: xx]
+        let finalNotes = (newZoneNotes || '').replace(/\[VPC_RATE:\s*[\d.]+\]/gi, '').trim();
+        if (newRateVpc && Number(newRateVpc) > 0) {
+            finalNotes = `${finalNotes}${finalNotes ? '\n' : ''}[VPC_RATE: ${Number(newRateVpc).toFixed(2)}]`.trim();
+        }
+
         const payload = { 
             origin: newRateOrigin.trim(), 
             location_name: newRateLocation.trim(), 
             base_rate: Number(newRateBase), 
             max_places: Number(newRateMaxPlaces),
             extra_rate_per_place: Number(newRateExtra),
-            notes: newZoneNotes 
+            notes: finalNotes 
         };
 
         let err;
@@ -1329,7 +1337,7 @@ const HRPortal: React.FC<HRPortalProps> = ({ user, initialTab, initialRoleFilter
             alert('Database did not return inserted data. RLS or constraint issue might be silently blocking it.');
         } else {
             alert('Record successfully added/updated!');
-            setNewRateLocation(''); setNewRateBase(''); setNewRateExtra(''); setNewZoneNotes('');
+            setNewRateLocation(''); setNewRateBase(''); setNewRateVpc(''); setNewRateExtra(''); setNewZoneNotes('');
             setEditingZoneId(null);
             await fetchDeliveryRates();
         }
@@ -1347,9 +1355,12 @@ const HRPortal: React.FC<HRPortalProps> = ({ user, initialTab, initialRoleFilter
         setNewRateOrigin(z.origin || 'TAIPING');
         setNewRateLocation(z.location_name || '');
         setNewRateBase(z.base_rate?.toString() || '');
+        
+        const vpcMatch = z.notes?.match(/\[VPC_RATE:\s*([\d.]+)\]/i);
+        setNewRateVpc(vpcMatch ? vpcMatch[1] : '');
         setNewRateMaxPlaces(z.max_places?.toString() || '0');
         setNewRateExtra(z.extra_rate_per_place?.toString() || '');
-        setNewZoneNotes(z.notes || '');
+        setNewZoneNotes((z.notes || '').replace(/\[VPC_RATE:\s*[\d.]+\]/gi, '').trim());
         setShowZoneForm(true);
         setShowZoneEditor(true);
     };
@@ -1359,6 +1370,7 @@ const HRPortal: React.FC<HRPortalProps> = ({ user, initialTab, initialRoleFilter
         setEditingZoneId(null);
         setNewRateLocation('');
         setNewRateBase('');
+        setNewRateVpc('');
         setNewRateExtra('');
         setNewZoneNotes('');
     };
@@ -2274,6 +2286,7 @@ const HRPortal: React.FC<HRPortalProps> = ({ user, initialTab, initialRoleFilter
                                                         <th className="px-4 py-3 font-bold">Origin</th>
                                                         <th className="px-4 py-3 font-bold">Destination</th>
                                                         <th className="px-4 py-3 font-bold">Base (RM)</th>
+                                                        <th className="px-4 py-3 font-bold text-emerald-400">★ VPC 9821 (RM)</th>
                                                         <th className="px-4 py-3 font-bold">Max Drops</th>
                                                         <th className="px-4 py-3 font-bold">+Rate / Drop</th>
                                                         <th className="px-4 py-3 font-bold">Notes</th>
@@ -2291,6 +2304,19 @@ const HRPortal: React.FC<HRPortalProps> = ({ user, initialTab, initialRoleFilter
                                                         <td className="px-4 py-2.5 text-xs font-bold text-white uppercase">{z.location_name}</td>
                                                         <td className="px-4 py-2.5 text-xs font-mono text-amber-400">
                                                             {Number(z.base_rate).toFixed(2)}
+                                                        </td>
+                                                        <td className="px-4 py-2.5 text-xs font-mono">
+                                                            {(() => {
+                                                                const vpcMatch = z.notes?.match(/\[VPC_RATE:\s*([\d.]+)\]/i);
+                                                                return vpcMatch ? (
+                                                                    <span className="inline-flex items-center gap-1 font-bold text-emerald-400 bg-emerald-500/10 border border-emerald-500/20 px-2 py-0.5 rounded">
+                                                                        <span>RM {Number(vpcMatch[1]).toFixed(2)}</span>
+                                                                        <span className="text-[10px]">✓</span>
+                                                                    </span>
+                                                                ) : (
+                                                                    <span className="text-zinc-600">—</span>
+                                                                );
+                                                            })()}
                                                         </td>
                                                         <td className="px-4 py-2.5 text-xs font-mono text-zinc-300">
                                                             {z.max_places}
@@ -2621,7 +2647,14 @@ const HRPortal: React.FC<HRPortalProps> = ({ user, initialTab, initialRoleFilter
                                 </div>
                                 <div>
                                     <label className="block text-[10px] text-amber-500/70 font-bold uppercase tracking-widest mb-1.5">Base Rate (RM)</label>
-                                    <input type="number" value={newRateBase} onChange={e => setNewRateBase(e.target.value)} placeholder="0" className="w-full bg-black/40 border border-amber-500/20 rounded-xl px-4 py-3 text-sm font-mono text-amber-400 focus:outline-none focus:border-amber-400 transition-colors" />
+                                    <input type="number" step="0.01" value={newRateBase} onChange={e => setNewRateBase(e.target.value)} placeholder="0" className="w-full bg-black/40 border border-amber-500/20 rounded-xl px-4 py-3 text-sm font-mono text-amber-400 focus:outline-none focus:border-amber-400 transition-colors" />
+                                </div>
+                                <div>
+                                    <label className="block text-[10px] text-emerald-400 font-bold uppercase tracking-widest mb-1.5 flex items-center justify-between">
+                                        <span>★ VPC 9821 价格 (RM)</span>
+                                        <span className="text-zinc-500 text-[9px] font-normal lowercase">(可选 · 65卷专用)</span>
+                                    </label>
+                                    <input type="number" step="0.01" value={newRateVpc} onChange={e => setNewRateVpc(e.target.value)} placeholder="留空默认走常规底价" className="w-full bg-black/40 border border-emerald-500/30 rounded-xl px-4 py-3 text-sm font-mono text-emerald-400 focus:outline-none focus:border-emerald-400 transition-colors" />
                                 </div>
                                 <div>
                                     <label className="block text-[10px] text-amber-500/70 font-bold uppercase tracking-widest mb-1.5">Max Free Drops</label>
@@ -2629,7 +2662,7 @@ const HRPortal: React.FC<HRPortalProps> = ({ user, initialTab, initialRoleFilter
                                 </div>
                                 <div>
                                     <label className="block text-[10px] text-amber-500/70 font-bold uppercase tracking-widest mb-1.5">+ Extra Rate / Drop</label>
-                                    <input type="number" value={newRateExtra} onChange={e => setNewRateExtra(e.target.value)} placeholder="0" className="w-full bg-black/40 border border-amber-500/20 rounded-xl px-4 py-3 text-sm font-mono text-amber-400 focus:outline-none focus:border-amber-400 transition-colors" />
+                                    <input type="number" step="0.01" value={newRateExtra} onChange={e => setNewRateExtra(e.target.value)} placeholder="0" className="w-full bg-black/40 border border-amber-500/20 rounded-xl px-4 py-3 text-sm font-mono text-amber-400 focus:outline-none focus:border-amber-400 transition-colors" />
                                 </div>
                                 <div className="col-span-2 mt-2">
                                     <label className="block text-[10px] text-zinc-500 font-bold uppercase tracking-widest mb-1.5">Internal Notes</label>

@@ -203,6 +203,17 @@ export function groupOrdersIntoTrips(
         // Origin: first non-empty origin
         const originRaw = orders.find(o => o.trip_origin)?.trip_origin || primary.trip_origin || 'TAIPING';
 
+        // Lorry plate resolution for vehicle-specific rate matching
+        const lorryId = orders.find(o => o.lorry_id)?.lorry_id || primary.lorry_id || null;
+        let tripPlate = dayLorryPlate || driverLorryPlate || 'N/A';
+        if (lorryId && lorriesList && lorriesList.length > 0) {
+            const found = lorriesList.find((l: any) => l.id === lorryId);
+            if (found?.plate_number || found?.plate) {
+                tripPlate = found.plate_number || found.plate;
+            }
+        }
+        const isVpcLorry = Boolean(tripPlate && String(tripPlate).toUpperCase().replace(/[^A-Z0-9]/g, '') === 'VPC9821');
+
         // Select the rate that gives highest base rate among the orders (furthest / primary destination)
         let bestRateInfo: any = null;
         let bestBaseRate = -1;
@@ -210,7 +221,16 @@ export function groupOrdersIntoTrips(
 
         for (const o of orders) {
             const r = findRateForOrder(o, originRaw, rateMap);
-            const curBase = r ? Number(r.base_rate) || 0 : 40;
+            let curBase = 40;
+            if (r) {
+                curBase = Number(r.base_rate) || 0;
+                if (isVpcLorry) {
+                    const vpcMatch = r.notes?.match(/\[VPC_RATE:\s*([\d.]+)\]/i);
+                    if (vpcMatch && Number(vpcMatch[1]) > 0) {
+                        curBase = Number(vpcMatch[1]);
+                    }
+                }
+            }
             if (curBase > bestBaseRate) {
                 bestBaseRate = curBase;
                 bestRateInfo = r;
@@ -239,6 +259,12 @@ export function groupOrdersIntoTrips(
             baseRate = approvedAmount;
         } else if (bestRateInfo) {
             baseRate = Number(bestRateInfo.base_rate) || 0;
+            if (isVpcLorry) {
+                const vpcMatch = bestRateInfo.notes?.match(/\[VPC_RATE:\s*([\d.]+)\]/i);
+                if (vpcMatch && Number(vpcMatch[1]) > 0) {
+                    baseRate = Number(vpcMatch[1]);
+                }
+            }
             extraRatePerPlace = Number(bestRateInfo.extra_rate_per_place ?? bestRateInfo.extra_drop_rate) || 0;
             const maxPlaces = (bestRateInfo.max_places !== undefined && bestRateInfo.max_places !== null) ? Number(bestRateInfo.max_places) : 1;
             extraDrops = Math.max(0, tripDrops - maxPlaces);
@@ -283,16 +309,6 @@ export function groupOrdersIntoTrips(
 
         const isDelivered = status === 'Delivered';
         const isUnscanned = status !== 'Delivered' && status !== 'Cancelled';
-
-        // Lorry plate resolution
-        const lorryId = orders.find(o => o.lorry_id)?.lorry_id || primary.lorry_id || null;
-        let tripPlate = dayLorryPlate || driverLorryPlate || 'N/A';
-        if (lorryId && lorriesList && lorriesList.length > 0) {
-            const found = lorriesList.find((l: any) => l.id === lorryId);
-            if (found?.plate_number || found?.plate) {
-                tripPlate = found.plate_number || found.plate;
-            }
-        }
 
         const isDriverConfirmed = nonCancelled.length > 0 && nonCancelled.every(o => 
             o.notes?.includes('[DRIVER_CONFIRMED') || o.driver_confirmed === true || o.driver_verified === true

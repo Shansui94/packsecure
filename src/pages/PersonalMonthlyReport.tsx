@@ -12,6 +12,7 @@ import * as XLSX from 'xlsx';
 import DriverTutorialModal from '../components/DriverTutorialModal';
 import { getPublicHoliday, getMonthPublicHolidays, PublicHoliday, getHolidayLocalizedName } from '../utils/malaysiaHolidays';
 import { groupOrdersIntoTrips, GroupedTrip } from '../utils/tripGrouping';
+import { parsePrepPhotos } from '../utils/prepPhotos';
 
 const normalizeWarehouseName = (loc: string): string => {
     if (!loc) return 'SPD';
@@ -1815,7 +1816,7 @@ const PersonalMonthlyReport: React.FC<Props> = ({ user }) => {
             while (hasMore) {
                 const { data, error } = await supabase
                     .from('sales_orders')
-                    .select('id, order_number, customer, items, notes, order_date, pod_timestamp, deadline, zone, delivery_address, created_at, trip_origin, trip_drop_count, driver_id, job_type, status, trip_id, lorry_id, pod_photo_url, pod_signature_url, proof_of_load_url, edit_status, pending_edit_payload, driver_confirmed')
+                    .select('*')
                     .in('driver_id', driverIds)
                     .neq('status', 'Cancelled')
                     .or(`deadline.gte.${firstDay},created_at.gte.${startDateTs},pod_timestamp.gte.${startDateTs},order_date.gte.${firstDay}`)
@@ -2218,6 +2219,7 @@ const PersonalMonthlyReport: React.FC<Props> = ({ user }) => {
             // 2.3 Driver Delivery / Trip Photos
             if (isDriver) {
                 const seenLoadPhotos = new Set<string>();
+                const seenPrepPhotos = new Set<string>();
                 dayDeliveries.forEach(d => {
                     const orderRef = d.order_number ? `[${d.order_number}] ` : '';
                     if (d.proof_of_load_url) {
@@ -2277,15 +2279,32 @@ const PersonalMonthlyReport: React.FC<Props> = ({ user }) => {
                         });
                     }
                     if (d.preparation_photo_url) {
-                        dayPhotos.push({
-                            created_at: d.created_at || `${dateStr}T12:00:00.000Z`,
-                            category: `${orderRef}Penyediaan / Preparation Photo`,
-                            photo_url: d.preparation_photo_url,
-                            risk_flag: false,
-                            type: 'prep',
-                            order_number: d.order_number,
-                            customer: d.customer,
-                            badge_color: 'cyan'
+                        const parsedPrep = parsePrepPhotos(d.preparation_photo_url);
+                        parsedPrep.forEach((p, pIdx) => {
+                            const cleanPrepUrl = p.url?.trim();
+                            if (cleanPrepUrl && !seenPrepPhotos.has(cleanPrepUrl)) {
+                                seenPrepPhotos.add(cleanPrepUrl);
+                                const sharedOrders = dayDeliveries
+                                    .filter(other => other.preparation_photo_url && other.preparation_photo_url.includes(cleanPrepUrl))
+                                    .map(other => other.order_number)
+                                    .filter(Boolean);
+                                const labelRef = sharedOrders.length > 1
+                                    ? `[Trip: ${sharedOrders.join(', ')}] `
+                                    : orderRef;
+                                const locLabel = p.location ? ` [${p.location}]` : '';
+                                const countLabel = parsedPrep.length > 1 ? ` (${pIdx + 1})` : '';
+
+                                dayPhotos.push({
+                                    created_at: d.created_at || `${dateStr}T12:00:00.000Z`,
+                                    category: `${labelRef}Penyediaan / Preparation${locLabel}${countLabel}`,
+                                    photo_url: cleanPrepUrl,
+                                    risk_flag: false,
+                                    type: 'prep',
+                                    order_number: sharedOrders.length > 1 ? sharedOrders.join(', ') : d.order_number,
+                                    customer: d.customer,
+                                    badge_color: 'cyan'
+                                });
+                            }
                         });
                     }
                     if (d.whatsapp_screenshot_url) {
