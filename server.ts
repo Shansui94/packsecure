@@ -18,6 +18,7 @@ import v2DocumentsHandler, {
 } from './api/v2-documents';
 import docsHandler, { handleDevLog } from './api/docs';
 import whatsappHandler, { handleWhatsAppSend, handleWhatsAppWebhook } from './api/whatsapp';
+import nightlyReportHandler from './api/cron/nightly-report';
 import multer from 'multer';
 import fs from 'fs';
 import path from 'path';
@@ -64,6 +65,7 @@ mountVercelHandler('/api/dev-log', handleDevLog);
 mountVercelHandler('/api/whatsapp', whatsappHandler);
 mountVercelHandler('/api/whatsapp/send', handleWhatsAppSend);
 mountVercelHandler('/api/whatsapp/webhook', handleWhatsAppWebhook);
+mountVercelHandler('/api/cron/nightly-report', nightlyReportHandler);
 mountVercelHandler('/api/agent/parse-trip-pdf', handleParseTripPdf);
 mountVercelHandler('/api/agent/omni-command', async (req, res) => {
     req.query = req.query || {};

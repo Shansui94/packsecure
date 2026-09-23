@@ -14,6 +14,7 @@ import {
   TripDispatchOrder,
   TripDispatchInfo
 } from '../lib/whatsapp.js';
+import { generateNightlyReport } from './cron/nightly-report.js';
 
 function getSupabase() {
   const supabaseUrl = process.env.SUPABASE_URL || process.env.VITE_SUPABASE_URL || '';
@@ -649,19 +650,56 @@ Output valid JSON only: { "is_scale": boolean, "weight_kg": number or null, "des
       return res.status(200).json({ status: 'HELP_SENT' });
     }
 
-    // Command 5: AI Conversational Fallback (Gemini)
+    // Command 5: Direct Evening Report request (晚报 / 日报)
+    if (/晚报|日报|report|ringkasan/i.test(lower)) {
+      try {
+        const { reportText } = await generateNightlyReport();
+        await sendWhatsAppText(fromNumber, reportText);
+        return res.status(200).json({ status: 'NIGHTLY_REPORT_SENT' });
+      } catch (repErr) {
+        console.warn('[Nightly Report Trigger Error]:', repErr);
+      }
+    }
+
+    // Command 6: AI Conversational Fallback (Gemini with Real-time DB Context)
     if (apiKey) {
       try {
+        const isExecutive = ['SuperAdmin', 'Admin', 'Director'].includes(empRole);
+        let realTimeContext = '';
+
+        if (isExecutive) {
+          const todayIso = new Date().toISOString().split('T')[0];
+          const [{ data: oData }, { data: tData }, { data: exData }] = await Promise.all([
+            supabase.from('sales_orders').select('id, status').gte('created_at', `${todayIso}T00:00:00.000Z`),
+            supabase.from('trips_v2').select('trip_number, status').gte('created_at', `${todayIso}T00:00:00.000Z`),
+            supabase.from('work_photos').select('employee_name, user_note, risk_reason').gte('created_at', `${todayIso}T00:00:00.000Z`).limit(5)
+          ]);
+
+          const totalO = oData?.length || 0;
+          const deliveredO = (oData || []).filter((o: any) => o.status === 'Delivered').length;
+          const tripsSummary = (tData || []).map((t: any) => `${t.trip_number} (${t.status})`).join(', ') || '今日暂无运行车次';
+          const exSummary = (exData || []).map((e: any) => `${e.employee_name}: ${e.risk_reason || e.user_note}`).join('; ') || '全天无现场突发异常';
+
+          realTimeContext = `\n[LIVE FACTORY DB DATA]:
+- User is Company SUPERADMIN / BOSS: ${empName}.
+- Today's Delivery Orders: ${totalO} 票 (已送达 ${deliveredO} 票, 送达率 ${totalO > 0 ? Math.round((deliveredO / totalO) * 100) : 100}%).
+- Today's Trips: ${tripsSummary}.
+- Recent Field Exceptions: ${exSummary}.
+GUIDELINES FOR EXECUTIVE ANSWER:
+- Answer in professional, compact Chinese with relevant business emojis (高管速报风格).
+- State key facts/conclusions in 2-4 structured bullet points.
+- Highlight any anomalies (e.g. unfinished trips or issues).`;
+        }
+
         const genAI = new GoogleGenerativeAI(apiKey);
         const model = genAI.getGenerativeModel({ model: 'gemini-2.5-flash' });
 
-        const systemPrompt = `You are Packsecure OS WhatsApp Assistant for internal factory operations. 
-The user is employee: Name: ${empName}, Role: ${empRole}, Factory: ${employee.base_location || 'TAIPING'}.
-Answer concisely in friendly Malay (or Chinese if asked in Chinese). Max 2-3 sentences.
-Remind them they can type Masuk/打卡, Trip/工时, Stok/库存, or send photos.`;
+        const systemPrompt = `You are Packsecure OS WhatsApp Executive & Operations Assistant. 
+The user is: Name: ${empName}, Role: ${empRole}, Base: ${employee.base_location || 'TAIPING'}.
+${realTimeContext || 'Answer concisely in friendly Malay or Chinese. Max 2-3 sentences.'}`;
 
         const aiReply = await model.generateContent([
-          { text: `${systemPrompt}\n\nEmployee: "${text}"` }
+          { text: `${systemPrompt}\n\nUser asks: "${text}"` }
         ]);
 
         await sendWhatsAppText(fromNumber, aiReply.response.text());

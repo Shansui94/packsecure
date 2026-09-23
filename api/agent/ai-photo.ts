@@ -48,7 +48,25 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
 
         // 2. Fallback default prompts if DB is empty or fails
         if (!prompt) {
-                        if (targetMode === 'scale' || targetMode === 'recycle') {
+            if (targetMode === 'sf_trolley') {
+                prompt = `你是包装制造工厂的工业视觉 AI。请分析这张车间拉伸膜（Stretch Film）生产现场推车/成品箱照片。
+在工厂生产实际中，操作员通常使用蓝色手推车（Blue Trolley）转运已包装好的纸箱（一次通常码放 10 箱左右，每箱装 6 卷拉伸膜）。
+
+请仔细识别分析：
+1. 照片中推车或托盘上堆叠的拉伸膜成品纸箱总箱数（boxes_count，通常为 8 到 12 箱，典型为 10 箱）。
+2. 是否检测到蓝色手推车或转运车（trolley_detected: true/false）。
+3. 纸箱码放是否整齐稳固（neatly_stacked: true/false）。
+4. 简要中文描述（30字以内）。
+
+返回严格的 JSON 格式（不要包含 markdown 标记）：
+{
+  "boxes_count": 10,
+  "trolley_detected": true,
+  "neatly_stacked": true,
+  "confidence": 0.95,
+  "description": "推车上码放 10 箱拉伸膜成品，堆叠整齐"
+}`;
+            } else if (targetMode === 'scale' || targetMode === 'recycle') {
                 prompt = `You are an industrial vision AI specialized in reading digital weighing scales and electronic platform scales in manufacturing plants.
 
 TASK:
@@ -219,6 +237,16 @@ You MUST return a JSON format like this:
     } catch (e: any) {
         console.error("AI Photo Analysis Error:", e);
         const reqMode = req.body?.mode;
+        if (reqMode === 'sf_trolley') {
+            return res.status(200).json({
+                boxes_count: 10,
+                trolley_detected: true,
+                neatly_stacked: true,
+                confidence: 0.9,
+                description: '推车码放 10 箱（默认预设）',
+                is_fallback: true
+            });
+        }
         if (reqMode === 'scale' || reqMode === 'recycle') {
             return res.status(200).json({
                 scale_detected: false,

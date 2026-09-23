@@ -1257,16 +1257,47 @@ ${allDetectedDoNumbers.length > 0 ? `2. Detected potential DO numbers in documen
 - 3. Set "isHandwritten": true for this DO.
 
 ============================================================
-🚨 MALAYSIAN FACTORY JARGON & CONVERSION DIRECTIVE (车间行话与箱卷换算):
-- "Hitam Full" or "Hitam 1m" -> Bubble Wrap Black Full Roll (1m x 100m, uom: "ROLL").
-- "Hitam Half" or "Hitam 50cm" -> Bubble Wrap Black Half Roll (0.5m x 100m, uom: "ROLL").
-- "Clear Full" or "Putih Full" -> Bubble Wrap Clear Full Roll (1m x 100m, uom: "ROLL").
-- "Clear Half", "DL Half", or "SL Half" -> Bubble Wrap Clear Half Roll (0.5m x 100m, uom: "ROLL").
-- "SF" or "Stretch Film" in "CTN" or "Carton" (e.g. "SF BALCK X 1CTN", "Stretch Film 1 CTN"):
-    * 1 Carton of Stretch Film = 6 Rolls!
-    * Set "quantity": 6, "uom": "ROLL", and include "(1 CTN / 6 Rolls)" in the product description.
-- "Tape" / "Cukup Tape" in "CTN" or "Carton":
-    * Set "uom": "BOX".
+🚨 CRITICAL RULES FOR QUANTITY, UOM & PACKAGING MULTIPLIERS (单据官方打印数量与包装折算准则):
+1. ABSOLUTE TRUTH IS THE PRINTED "QTY / QUANTITY" COLUMN:
+   - The "quantity" field MUST strictly match the exact numeric value printed in the official "Qty" or "Quantity" column of the Delivery Order.
+   - NEVER multiply the printed quantity by packaging multipliers or parentheses in the product description!
+   - Examples of exact matching:
+     * If DO line says:
+       "Stretch Film 2.2kg 200core 23Micron ( Black ) ( One Carton Six Rolls )" with Qty: 20, UOM: UNIT
+       ==> MUST OUTPUT:
+           "quantity": 20,
+           "uom": "UNIT",
+           "product": "Stretch Film 2.2kg 23Micron Black (20 Cartons / 120 Rolls)",
+           "sku": "SF-BLACK-2.2"
+       ==> STRICTLY FORBIDDEN to output quantity: 120! The printed DO quantity is 20!
+
+     * If DO line says:
+       "Double Layer Clear 25cm x 100m (4 units)" with Quantity: 5, Unit: Roll
+       ==> MUST OUTPUT:
+           "quantity": 5,
+           "uom": "ROLL",
+           "product": "Double Layer Clear 25cm x 100m (5 Bundles / 20 Slit Rolls)",
+           "sku": "BW-DL-CLR-100Mx25CMx4ROLL-BLU"
+       ==> STRICTLY FORBIDDEN to output quantity: 20 or 4! The printed DO quantity is 5!
+
+2. PACKAGING BREAKDOWN IN PRODUCT NAME OR REMARKS:
+   - Retain the packaging breakdown in the "product" description or remarks, e.g. "(20 Cartons / 120 Rolls)" or "(5 Bundles / 20 Slit Rolls)".
+   - This ensures the driver knows how many physical rolls/pieces to count, while ensuring the official quantity stays 100% true to the DO and ERP/inventory system!
+
+3. BUBBLE WRAP SLITTING (分切规格) & SKU MATCHING:
+   - When description specifies slit width (e.g. 25cm, 30cm, 50cm):
+     * "25cm" or "25cm x 100m (4 units)":
+       - Double Layer ("Double" / "DL"): match to "BW-DL-CLR-100Mx25CMx4ROLL-BLU" (or "DL-25CM") for clear, or "BW-DL-BLK-100Mx25CMx4ROLL-RED" for black.
+       - Single Layer ("Single" / "SL"): match to "BW-SL-CLR-100Mx25CMx4ROLL-GRN" (or "SL-25CM") for clear, or "BW-SL-BLK-100Mx25CMx4ROLL-GRN" for black.
+       - NEVER match a 25cm slit roll to a 100cm uncut full roll SKU!
+     * "50cm" or "Half Roll" or "2 in 1":
+       - Match to the corresponding 50CM / Half SKU.
+     * "1m" or "100cm" or "Full Roll":
+       - Match to standard 100CM full roll SKU.
+   - "SF" or "Stretch Film" in "CTN" or "Carton":
+     - UOM is "UNIT" or "CTN". Product SKU is "SF-BLACK-2.2" or "SF-CLEAR-2.2". Quantity is the exact number of cartons on the DO!
+   - "Tape" / "Cukup Tape" in "CTN" or "Carton":
+     - Set "uom": "BOX". Quantity is the exact carton count on the DO.
 
 TASK:
 Extract structured data for each Delivery Order (DO) across ALL pages and synthesize the whole Trip summary.
@@ -1286,9 +1317,9 @@ FOR EACH DELIVERY ORDER:
 - "items": Array of valid outbound products on this DO (EXCLUDING struck-through items):
   [
     {
-      "product": "Product description (e.g. Stretch Film 2.2kg 23Micron Black (1 CTN / 6 Rolls))",
-      "quantity": 6, // Positive integer (换算为卷数或箱数)
-      "uom": "ROLL" or "BOX" or "UNIT",
+      "product": "Product description (e.g. Stretch Film 2.2kg 23Micron Black (20 Cartons / 120 Rolls))",
+      "quantity": 20, // Must strictly match the printed DO Quantity column!
+      "uom": "UNIT" or "ROLL" or "BOX" or "CTN",
       "sku": "Matched SKU from the Reference Product List below, or empty string if no clear match"
     }
   ]
@@ -1307,26 +1338,26 @@ EXACT JSON OUTPUT FORMAT REQUIRED:
   "suggestedTripDate": "2026-09-18",
   "primaryZone": "PENANG",
   "totalDrops": 2,
-  "totalRolls": 26,
+  "totalRolls": 25,
   "destinationsSummary": "Bukit Mertajam, Butterworth",
   "tripRemarks": "",
   "deliveryOrders": [
     {
-      "doNumber": "OPM2609-0284",
-      "customer": "PERNIAGAAN THUNG TATT",
-      "deliveryAddress": "G-27 LEBUH KOTA PERMAI 1, TAMAN KOTA PERMAI, 14000 BUKIT MERTAJAM, PENANG",
-      "phone": "017-4816678",
-      "zone": "PENANG",
-      "orderDate": "2026-09-08",
+      "doNumber": "OPM2609-0877",
+      "customer": "BOON CHEE AUTO TRADING SDN BHD",
+      "deliveryAddress": "22, JALAN RIMBUNAN RAYA, LAMAN RIMBUNAN 52100, KUALA LUMPUR",
+      "phone": "017-3778911",
+      "zone": "KUALA LUMPUR",
+      "orderDate": "2026-09-22",
       "terms": "C.O.D.",
-      "remarks": "[EXCHANGE / 换货: AMBIL BALIK SF BLACK X 1CTN]",
-      "isExchange": true,
-      "exchangeReturnNotes": "AMBIL BALIK SF BLACK X 1CTN",
+      "remarks": "",
+      "isExchange": false,
+      "exchangeReturnNotes": "",
       "isHandwritten": false,
       "items": [
-        { "product": "Stretch Film 2.2kg 23Micron Black (1 CTN / 6 Rolls)", "quantity": 6, "uom": "ROLL", "sku": "" }
+        { "product": "Stretch Film 2.2kg 23Micron Black (20 Cartons / 120 Rolls)", "quantity": 20, "uom": "UNIT", "sku": "SF-BLACK-2.2" }
       ],
-      "doTotal": 6
+      "doTotal": 20
     },
     {
       "doNumber": "MANUAL-2609-001",

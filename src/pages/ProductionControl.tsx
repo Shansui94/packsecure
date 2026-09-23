@@ -16,14 +16,16 @@ import { getBubbleWrapSku } from '../utils/skuMapper';
 import { 
     Box, Settings, Clock, Layers, LogOut, Calendar, Package,
     Camera, Check, AlertTriangle, User as UserIcon, RefreshCw, Play, Loader, Send, Sparkles, Image as ImageIcon,
-    Video, Square, X, FlaskConical, QrCode, Printer, Plus
+    Video, Square, X, FlaskConical, QrCode, Printer, Plus, Globe, ChevronDown, FileCheck, History, Pause
 } from 'lucide-react';
 import { supabase } from '../services/supabase';
 import { getMachineByCode, getMachineById } from '../services/productionService';
 import { RecycleMachineControl } from '../components/RecycleMachineControl';
+import { StretchFilmControl } from '../components/StretchFilmControl';
 import { Scanner } from '@yudiel/react-qr-scanner';
 import MachineInspectionModal from '../components/MachineInspectionModal';
 import { useTranslation } from 'react-i18next';
+import { changeLanguage, LANGUAGES, SupportedLanguage } from '../utils/i18n';
 import { ThermalPrinterModal } from '../components/ThermalPrinterModal';
 import { thermalPrinterService, LabelData } from '../services/thermalPrinterService';
 
@@ -214,6 +216,26 @@ const ProductionLane: React.FC<ProductionLaneProps> = ({
     const [selectedRolls, setSelectedRolls] = useState<number>(1);
     const [isPrintingCurrent, setIsPrintingCurrent] = useState(false);
     const [printFeedback, setPrintFeedback] = useState<string | null>(null);
+
+    // Downtime Stop modal & 20-min idle monitoring
+    const [showLaneDowntimeModal, setShowLaneDowntimeModal] = useState(false);
+    const [laneDowntimeReason, setLaneDowntimeReason] = useState<string>('换卷接膜');
+    const [laneDowntimeNote, setLaneDowntimeNote] = useState<string>('');
+    const [isStoppingRun, setIsStoppingRun] = useState(false);
+    const [lastRollTimestamp, setLastRollTimestamp] = useState<number>(Date.now());
+    const [idleMinutes, setIdleMinutes] = useState(0);
+
+    useEffect(() => {
+        if (!isLiveRun) {
+            setIdleMinutes(0);
+            return;
+        }
+        const interval = setInterval(() => {
+            const mins = Math.floor((Date.now() - lastRollTimestamp) / 60000);
+            setIdleMinutes(mins);
+        }, 30000);
+        return () => clearInterval(interval);
+    }, [isLiveRun, lastRollTimestamp]);
 
     // Fetch Machine Totals (Today's total & Current Shift total)
     const fetchMachineTotals = useCallback(async () => {
@@ -459,7 +481,7 @@ const ProductionLane: React.FC<ProductionLaneProps> = ({
     const handleSizeSelect = (size: ProductSize) => {
         setSelectedSize(size);
         const numericSize = parseInt(size.replace(/[^0-9]/g, '')) || 100;
-        const machineWidth = 100; // Fixed per user instructions
+        const machineWidth = (machineMetadata as any)?.base_width || (machineMetadata?.name?.includes('2M') || machineMetadata?.id === 'T2-M01' || machineMetadata?.id === 'J1-M01' ? 200 : 100);
         const maxRollsAcross = Math.floor(machineWidth / numericSize) || 1;
 
         const defaultRolls = size === '100cm' ? 1 :
@@ -479,19 +501,59 @@ const ProductionLane: React.FC<ProductionLaneProps> = ({
         setActiveSku(null);
     };
 
-    const toggleProductionRun = async () => {
-        if (isLiveRun) {
-            try {
-                const machineId = machineMetadata?.id || 'T2-M01';
-                await supabase.from('machine_active_products')
-                    .delete()
-                    .eq('machine_id', machineId)
-                    .eq('lane_id', laneId);
-            } catch (err) {
-                console.error("Failed to clear active product:", err);
-            }
+    const handleConfirmLaneDowntime = async () => {
+        setIsStoppingRun(true);
+        try {
+            const machineId = machineMetadata?.id || 'T2-M01';
+            const targetSku = activeSku || (selectedSize ? getBubbleWrapSku(selectedLayer, selectedMaterial, selectedSize, selectedRolls, derivedPackaging) : 'BW-GENERAL');
+            
+            // 1. Record downtime event in production_logs_v2 (output_qty: 0)
+            await supabase.from('production_logs_v2').insert([{
+                machine_id: machineId,
+                sku: targetSku,
+                output_qty: 0,
+                operator_id: operatorId || null,
+                note: `【停机归因】原因: ${laneDowntimeReason}${laneDowntimeNote ? ` | 备注: ${laneDowntimeNote}` : ''}`
+            }]);
+
+            // 2. Clear machine_active_products
+            await supabase.from('machine_active_products')
+                .delete()
+                .eq('machine_id', machineId)
+                .eq('lane_id', laneId);
+
             setIsLiveRun(false);
             setActiveSku(null);
+            setShowLaneDowntimeModal(false);
+            setLaneDowntimeNote('');
+            onProductionComplete();
+        } catch (err: any) {
+            console.error("Failed to stop run with downtime log:", err);
+            alert(t('停机登记失败') + ': ' + (err.message || 'Error'));
+        } finally {
+            setIsStoppingRun(false);
+        }
+    };
+
+    const handleDirectStop = async () => {
+        try {
+            const machineId = machineMetadata?.id || 'T2-M01';
+            await supabase.from('machine_active_products')
+                .delete()
+                .eq('machine_id', machineId)
+                .eq('lane_id', laneId);
+            setIsLiveRun(false);
+            setActiveSku(null);
+            setShowLaneDowntimeModal(false);
+            onProductionComplete();
+        } catch (err) {
+            console.error("Direct stop failed:", err);
+        }
+    };
+
+    const toggleProductionRun = async () => {
+        if (isLiveRun) {
+            setShowLaneDowntimeModal(true);
         } else {
             if (onBeforeProduce && !onBeforeProduce()) return;
             if (!derivedPackaging || !selectedSize) {
@@ -501,8 +563,9 @@ const ProductionLane: React.FC<ProductionLaneProps> = ({
             const v3Sku = getBubbleWrapSku(selectedLayer, selectedMaterial, selectedSize, selectedRolls, derivedPackaging);
 
             const numericSize = parseInt(selectedSize.replace(/[^0-9]/g, '')) || 100;
-            const machineBaseWidth = 100;
+            const machineBaseWidth = (machineMetadata as any)?.base_width || (machineMetadata?.name?.includes('2M') || machineMetadata?.id === 'T2-M01' || machineMetadata?.id === 'J1-M01' ? 200 : 100);
             const calculatedYield = Math.floor((machineBaseWidth / numericSize) / selectedRolls) || 1;
+            setLastRollTimestamp(Date.now());
 
             try {
                 const machineId = machineMetadata?.id || 'T2-M01';
@@ -890,6 +953,14 @@ const ProductionLane: React.FC<ProductionLaneProps> = ({
                                         </div>
                                     </div>
 
+                                        {/* 20-min Idle Alert Badge */}
+                                        {isLiveRun && idleMinutes >= 20 && (
+                                            <div className="bg-amber-500/20 border border-amber-500/40 text-amber-200 px-3.5 py-2 rounded-2xl text-xs flex items-center gap-2 animate-pulse mb-3">
+                                                <AlertTriangle size={16} className="text-amber-400 shrink-0" />
+                                                <span>{t('⚠️ 机台已连续 20+ 分钟未产出产卷，请确认是否停机换网或等待原料')}</span>
+                                            </div>
+                                        )}
+
                                         {isControlMode ? (
                                             <button
                                                 onClick={toggleProductionRun}
@@ -925,6 +996,98 @@ const ProductionLane: React.FC<ProductionLaneProps> = ({
                 })()}
 
             </div>
+
+            {/* DOWNTIME STOP REASON MODAL FOR PRODUCTION LANE */}
+            {showLaneDowntimeModal && (
+                <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/80 backdrop-blur-sm animate-fade-in">
+                    <div className="bg-zinc-900 border border-white/15 rounded-3xl max-w-md w-full p-5 md:p-6 shadow-2xl space-y-4 relative">
+                        <div className="flex items-center justify-between pb-3 border-b border-white/10">
+                            <div className="flex items-center gap-2 text-white font-black text-base">
+                                <Pause className="text-amber-400" size={18} />
+                                <span>{t('登记停机归因 (Downtime Logging)')}</span>
+                            </div>
+                            <button
+                                type="button"
+                                onClick={() => setShowLaneDowntimeModal(false)}
+                                className="p-1 rounded-xl text-gray-400 hover:text-white hover:bg-white/10"
+                            >
+                                <X size={16} />
+                            </button>
+                        </div>
+
+                        <div>
+                            <label className="text-[11px] font-bold text-gray-300 uppercase tracking-wider block mb-2">
+                                {t('请选择本次停机/暂停原因')}:
+                            </label>
+                            <div className="grid grid-cols-2 gap-2">
+                                {[
+                                    { key: '换卷接膜', label: '换卷接膜 (Roll Splicing)', icon: '🔄' },
+                                    { key: '换网清滤网', label: '换网清滤网 (Filter Change)', icon: '🧼' },
+                                    { key: '断膜破损处理', label: '断膜破损 (Film Tear)', icon: '⚡' },
+                                    { key: '机械电气故障', label: '机电故障 (Machine Fault)', icon: '🛠️' },
+                                    { key: '待原料/待纸管', label: '待原料/纸管 (Waiting)', icon: '⏳' },
+                                    { key: '调机温控升温', label: '调机升温 (Temp Adjust)', icon: '🌡️' },
+                                    { key: '用餐交班休息', label: '用餐休息 (Meal / Break)', icon: '🍱' },
+                                    { key: '其他原因', label: '其他原因 (Other)', icon: '📝' }
+                                ].map(r => (
+                                    <button
+                                        key={r.key}
+                                        type="button"
+                                        onClick={() => setLaneDowntimeReason(r.key)}
+                                        className={`p-2.5 rounded-xl border text-xs font-semibold flex items-center gap-2 transition cursor-pointer text-left ${
+                                            laneDowntimeReason === r.key
+                                                ? 'bg-amber-500/20 text-amber-200 border-amber-500/60 shadow-md'
+                                                : 'bg-white/5 text-gray-300 border-white/10 hover:bg-white/10'
+                                        }`}
+                                    >
+                                        <span>{r.icon}</span>
+                                        <span className="truncate">{r.label}</span>
+                                    </button>
+                                ))}
+                            </div>
+                        </div>
+
+                        <div>
+                            <label className="text-[11px] font-bold text-gray-300 uppercase tracking-wider block mb-1">
+                                {t('补充备注说明 (选填)')}:
+                            </label>
+                            <textarea
+                                value={laneDowntimeNote}
+                                onChange={e => setLaneDowntimeNote(e.target.value)}
+                                placeholder="例如: 滤网杂质过多更换耗时约12分钟 / 等待原料送达..."
+                                className="w-full bg-black/40 border border-white/10 text-xs p-3 rounded-xl focus:border-amber-500 focus:outline-none text-white min-h-[60px]"
+                            />
+                        </div>
+
+                        <div className="flex flex-col gap-2 pt-1">
+                            <div className="flex gap-2">
+                                <button
+                                    type="button"
+                                    onClick={() => setShowLaneDowntimeModal(false)}
+                                    className="flex-1 py-3 bg-white/5 hover:bg-white/10 text-gray-300 rounded-xl text-xs font-bold transition cursor-pointer"
+                                >
+                                    {t('取消继续运行')}
+                                </button>
+                                <button
+                                    type="button"
+                                    onClick={handleConfirmLaneDowntime}
+                                    disabled={isStoppingRun}
+                                    className="flex-2 py-3 bg-gradient-to-r from-amber-600 to-amber-700 hover:from-amber-500 hover:to-amber-600 text-white rounded-xl text-xs font-black shadow-lg transition active:scale-95 cursor-pointer disabled:opacity-50"
+                                >
+                                    {isStoppingRun ? t('正在保存...') : t('确认停机并登记原因')}
+                                </button>
+                            </div>
+                            <button
+                                type="button"
+                                onClick={handleDirectStop}
+                                className="text-[11px] text-gray-400 hover:text-rose-400 py-1 text-center transition underline cursor-pointer"
+                            >
+                                {t('急停 / 跳过归因直接停止机台')}
+                            </button>
+                        </div>
+                    </div>
+                </div>
+            )}
         </div>
     );
 };
@@ -965,6 +1128,14 @@ const ProductionControl: React.FC<ProductionControlProps> = ({ user, jobs = [], 
     const [showInspectionModal, setShowInspectionModal] = useState(false);
     const [showPrinterModal, setShowPrinterModal] = useState(false);
     const [printerStatus, setPrinterStatus] = useState(thermalPrinterService.getStatus());
+
+    // 6-Language Switcher & Shift Handover Modal states
+    const [showLangMenu, setShowLangMenu] = useState(false);
+    const [showShiftHandoverModal, setShowShiftHandoverModal] = useState(false);
+    const [handoverNotes, setHandoverNotes] = useState('');
+    const [isSubmittingHandover, setIsSubmittingHandover] = useState(false);
+    const currentLang = (localStorage.getItem('packsecure_lang') as SupportedLanguage) || 'zh-CN';
+    const currentLangObj = LANGUAGES.find(l => l.code === currentLang) || LANGUAGES[0];
 
     useEffect(() => {
         const unsub = thermalPrinterService.subscribe((s) => {
@@ -1765,7 +1936,7 @@ const ProductionControl: React.FC<ProductionControlProps> = ({ user, jobs = [], 
         syncAttendance();
     }, [selectedMachine, operatorEmployeeId, isControlMode]);
 
-    const handleManualClockOut = async () => {
+    const handleManualClockOut = async (customHandoverNotes?: string) => {
         const targetMachine = selectedMachine;
         if (!targetMachine) return;
         const empId = operatorEmployeeId || user?.employeeId || user?.employee_id || user?.id || 'OP-AUTO';
@@ -1813,11 +1984,15 @@ const ProductionControl: React.FC<ProductionControlProps> = ({ user, jobs = [], 
                 for (const shift of shiftsToClose) {
                     const clockIn = new Date(shift.clock_in);
                     const hoursWorked = Math.max(0, (now.getTime() - clockIn.getTime()) / 3600000);
+                    const finalNotes = customHandoverNotes 
+                        ? `交班总结: ${customHandoverNotes} (登出结算)` 
+                        : 'Manual Clock-Out (扫码/一键登出)';
+
                     const { error: updErr } = await supabase.from('operator_attendance')
                         .update({
                             clock_out: clockEventTime,
                             hours_worked: Math.round(hoursWorked * 100) / 100,
-                            notes: 'Manual Clock-Out (扫码/一键登出)'
+                            notes: finalNotes
                         })
                         .eq('id', shift.id);
 
@@ -2920,6 +3095,43 @@ const ProductionControl: React.FC<ProductionControlProps> = ({ user, jobs = [], 
                     )}
 
                     <div className="flex items-center gap-2 ml-auto flex-wrap sm:flex-nowrap">
+                        {/* 🌐 6-Language Quick Switcher */}
+                        <div className="relative">
+                            <button
+                                type="button"
+                                onClick={() => setShowLangMenu(prev => !prev)}
+                                className="px-2.5 py-1.5 rounded-xl border border-white/10 bg-white/5 hover:bg-white/10 text-xs font-medium text-gray-200 flex items-center gap-1.5 transition cursor-pointer shrink-0"
+                                title={t('切换界面语言 / Change Language')}
+                            >
+                                <Globe size={14} className="text-cyan-400" />
+                                <span className="font-mono">{currentLangObj?.flag || '🌐'}</span>
+                                <span className="hidden md:inline text-[11px]">{currentLangObj?.label || '语言'}</span>
+                                <ChevronDown size={12} className="text-gray-400" />
+                            </button>
+                            {showLangMenu && (
+                                <div className="absolute right-0 top-full mt-2 w-44 bg-zinc-900/95 border border-white/15 rounded-2xl shadow-2xl p-1.5 z-50 backdrop-blur-md animate-fade-in divide-y divide-white/5">
+                                    {LANGUAGES.map(lang => (
+                                        <button
+                                            key={lang.code}
+                                            type="button"
+                                            onClick={() => {
+                                                changeLanguage(lang.code);
+                                                setShowLangMenu(false);
+                                            }}
+                                            className={`w-full px-3 py-2 rounded-xl text-xs flex items-center gap-2.5 transition cursor-pointer text-left ${
+                                                currentLang === lang.code
+                                                    ? 'bg-purple-600/30 text-purple-200 font-bold border border-purple-500/40'
+                                                    : 'hover:bg-white/10 text-gray-300'
+                                            }`}
+                                        >
+                                            <span className="text-base">{lang.flag}</span>
+                                            <span>{lang.label}</span>
+                                        </button>
+                                    ))}
+                                </div>
+                            )}
+                        </div>
+
                         {/* 🖨️ SoonMark M4201 标签打印机直连状态胶囊按钮 */}
                         <button
                             type="button"
@@ -2956,20 +3168,14 @@ const ProductionControl: React.FC<ProductionControlProps> = ({ user, jobs = [], 
 
                         {(clockInTime || selectedMachine) && (
                             <div className="flex items-center gap-1.5 shrink-0">
-                                {/* 一键登出按钮 (免扫码直接下机结算考勤) */}
+                                {/* 一键交班登出按钮 (呼出交班总结面板) */}
                                 <button
-                                    onClick={async () => {
-                                        const confirmMsg = `${t('确定要一键登出当前机台吗？')} [${currentMachineName}]\n${t('系统将自动记录下线考勤时间并解除机台绑定。')}`;
-                                        const confirmed = window.confirm(confirmMsg);
-                                        if (confirmed) {
-                                            await handleManualClockOut();
-                                        }
-                                    }}
+                                    onClick={() => setShowShiftHandoverModal(true)}
                                     className="bg-rose-600 hover:bg-rose-500 active:scale-95 text-white font-bold py-1.5 px-3 rounded-xl shadow-lg border border-rose-400/50 flex items-center gap-1.5 text-xs shrink-0 transition-all cursor-pointer"
-                                    title={t('一键解绑并记录下线考勤')}
+                                    title={t('交班总结并结算考勤下线')}
                                 >
                                     <LogOut size={14} className="text-white" />
-                                    <span>{t('一键登出')}</span>
+                                    <span>{t('交班登出')}</span>
                                 </button>
 
                                 {/* 扫码登出按钮 (备选) */}
@@ -3820,95 +4026,18 @@ const ProductionControl: React.FC<ProductionControlProps> = ({ user, jobs = [], 
                                     onTakeoverClick={() => initiateTakeover(selectedMachine!)}
                                 />
                             ) : isSfMachine ? (
-                                <div className="flex flex-col gap-6 animate-fade-in">
-                                    {/* 专属拍照录入板 */}
-                                    <div className="bg-white/5 border border-white/10 rounded-3xl p-6 backdrop-blur-md">
-                                        <h3 className="text-sm font-black tracking-widest text-purple-400 uppercase flex items-center gap-2 mb-4">
-                                            <Camera size={16} /> {t('拍照登记产量')}
-                                        </h3>
-                                        
-                                        {!photoPreview ? (
-                                            <div className="flex gap-4">
-                                                <button 
-                                                    onClick={() => setShowWebcam(true)} 
-                                                    className="flex-1 py-12 bg-purple-600/10 hover:bg-purple-600/20 border border-dashed border-purple-500/30 hover:border-purple-500/50 rounded-2xl flex flex-col items-center justify-center gap-2 transition-all text-center cursor-pointer active:scale-95"
-                                                >
-                                                    <div className="w-12 h-12 rounded-full bg-purple-500/20 flex items-center justify-center text-purple-400 border border-purple-500/30">
-                                                        <Camera size={20} />
-                                                    </div>
-                                                    <span className="text-sm font-bold text-purple-300">{t('开启相机')}</span>
-                                                    <span className="text-xs text-gray-500">{t('使用设备相机实时拍摄')}</span>
-                                                </button>
-                                                
-                                                <button 
-                                                    onClick={triggerFileSelect} 
-                                                    className="flex-1 py-12 bg-white/[0.02] hover:bg-white/5 border border-dashed border-white/10 hover:border-white/20 rounded-2xl flex flex-col items-center justify-center gap-2 transition-all text-center cursor-pointer active:scale-95"
-                                                >
-                                                    <div className="w-12 h-12 rounded-full bg-white/5 flex items-center justify-center text-gray-400 border border-white/10">
-                                                        <ImageIcon size={20} />
-                                                    </div>
-                                                    <span className="text-sm font-bold text-gray-300">{t('上传文件')}</span>
-                                                    <span className="text-xs text-gray-500">{t('从相册选择照片或文件')}</span>
-                                                </button>
-                                            </div>
-                                        ) : (
-                                            <div className="space-y-4">
-                                                <div className="relative aspect-video max-w-xl mx-auto rounded-2xl bg-black overflow-hidden border border-white/10">
-                                                    {mediaType === 'video' ? (
-                                                        <video src={photoPreview} controls className="w-full h-full object-cover" />
-                                                    ) : (
-                                                        <img src={photoPreview} alt="Preview" className="w-full h-full object-cover" />
-                                                    )}
-                                                    {(uploadingPhoto || analyzingPhoto) && (
-                                                        <div className="absolute inset-0 bg-black/60 flex flex-col items-center justify-center gap-2">
-                                                            <Loader className="animate-spin text-purple-400" size={24} />
-                                                            <span className="text-xs text-purple-300 font-bold">{t('AI 正在分析场景...')}</span>
-                                                        </div>
-                                                    )}
-                                                </div>
-
-                                                {aiAnalysis && (
-                                                    <div className="p-4 bg-purple-500/5 border border-purple-500/10 rounded-xl max-w-xl mx-auto">
-                                                        <div className="text-[10px] text-purple-400 uppercase font-black tracking-widest flex items-center gap-1.5">
-                                                            <Sparkles size={11} /> {t('AI 图像场景分析')}:
-                                                        </div>
-                                                        <p className="text-xs text-white mt-1 leading-normal font-medium">{aiAnalysis}</p>
-                                                    </div>
-                                                )}
-
-                                                {/* 备注与操作 */}
-                                                <div className="max-w-xl mx-auto space-y-4">
-                                                    <div className="space-y-1">
-                                                        <label className="text-[10px] text-gray-400 uppercase font-black tracking-wider">{t('生产备注')}</label>
-                                                        <textarea 
-                                                            value={photoNote}
-                                                            onChange={e => setPhotoNote(e.target.value)}
-                                                            placeholder={t('生产备注')}
-                                                            className="w-full bg-white/5 border border-white/10 text-xs px-3 py-2 rounded-xl focus:border-purple-500 focus:outline-none min-h-[60px] text-white"
-                                                        />
-                                                    </div>
-
-                                                    <div className="flex gap-2 justify-end">
-                                                        <button 
-                                                            onClick={cancelPhotoSelect} 
-                                                            className="px-4 py-2 text-xs font-bold text-gray-400 hover:text-white transition-all rounded-xl hover:bg-white/5 active:scale-95"
-                                                        >
-                                                            {t('取消')}
-                                                        </button>
-                                                        <button 
-                                                            onClick={submitPhotoLog} 
-                                                            disabled={uploadingPhoto || !photoBase64}
-                                                            className="px-6 py-2 bg-purple-600 hover:bg-purple-500 disabled:bg-purple-600/50 disabled:cursor-not-allowed text-white font-bold text-xs rounded-xl flex items-center gap-1.5 transition-all active:scale-95 shadow-lg shadow-purple-500/10 border border-purple-500/20"
-                                                        >
-                                                            {uploadingPhoto ? <Loader className="animate-spin" size={12} /> : <Check size={12} />}
-                                                            <span>{t('提交拍照')}</span>
-                                                        </button>
-                                                    </div>
-                                                </div>
-                                            </div>
-                                        )}
-                                    </div>
-                                </div>
+                                <StretchFilmControl
+                                    machineId={selectedMachine || 'T4-M04'}
+                                    machineName={currentMachineName}
+                                    operatorId={operatorId}
+                                    operatorEmployeeId={operatorEmployeeId}
+                                    operatorName={operatorName}
+                                    user={user}
+                                    isControlMode={isControlMode}
+                                    onTakeoverClick={() => initiateTakeover(selectedMachine!)}
+                                    onProductionComplete={fetchUserLogs}
+                                    onOpenPrinterModal={() => setShowPrinterModal(true)}
+                                />
                             ) : (
                                 selectedMachine === 'T2-M01' || selectedMachine === 'J1-M01' ? (
                                     <div className="flex flex-col lg:flex-row gap-6">
@@ -4818,6 +4947,123 @@ const ProductionControl: React.FC<ProductionControlProps> = ({ user, jobs = [], 
                 currentSku={activeSku}
                 operatorName={operatorName}
             />
+
+            {/* 📋 操作员交班总结模态框 (Shift Handover Modal) */}
+            {showShiftHandoverModal && (
+                <div className="fixed inset-0 z-[650] flex items-center justify-center p-4 bg-black/80 backdrop-blur-md animate-fade-in">
+                    <div className="bg-zinc-900 border border-white/15 rounded-3xl max-w-lg w-full p-5 md:p-6 shadow-2xl space-y-4 relative">
+                        <div className="flex items-center justify-between pb-3 border-b border-white/10">
+                            <div className="flex items-center gap-2.5 text-white font-black text-base">
+                                <div className="p-2 rounded-xl bg-purple-500/20 text-purple-400 border border-purple-500/30">
+                                    <FileCheck size={18} />
+                                </div>
+                                <div>
+                                    <h3 className="text-base font-bold text-white">{t('操作员交班总结')}</h3>
+                                    <p className="text-[11px] text-gray-400 font-normal">Shift Handover & Clock-Out Summary</p>
+                                </div>
+                            </div>
+                            <button
+                                type="button"
+                                onClick={() => setShowShiftHandoverModal(false)}
+                                className="p-1 rounded-xl text-gray-400 hover:text-white hover:bg-white/10"
+                            >
+                                <X size={16} />
+                            </button>
+                        </div>
+
+                        {/* Shift Info Cards */}
+                        <div className="grid grid-cols-2 gap-3 text-xs">
+                            <div className="bg-white/5 border border-white/10 p-3 rounded-2xl">
+                                <p className="text-gray-400 text-[11px]">{t('当前机台')}</p>
+                                <p className="text-white font-bold text-sm mt-0.5 truncate">{currentMachineName}</p>
+                            </div>
+                            <div className="bg-white/5 border border-white/10 p-3 rounded-2xl">
+                                <p className="text-gray-400 text-[11px]">{t('值班操作员')}</p>
+                                <p className="text-white font-bold text-sm mt-0.5 truncate">
+                                    {operatorName || user?.name || '操作员'} ({operatorEmployeeId || user?.employeeId || 'OP'})
+                                </p>
+                            </div>
+                            <div className="bg-emerald-950/20 border border-emerald-500/20 p-3 rounded-2xl">
+                                <p className="text-emerald-400 text-[11px]">{t('今日机台累计产量')}</p>
+                                <p className="text-emerald-300 font-black text-lg font-mono mt-0.5">
+                                    {todayMachineTotal} <span className="text-xs font-normal text-emerald-400">{t('卷 / 箱')}</span>
+                                </p>
+                            </div>
+                            <div className="bg-purple-950/20 border border-purple-500/20 p-3 rounded-2xl">
+                                <p className="text-purple-400 text-[11px]">{t('本班次考勤工时')}</p>
+                                <p className="text-purple-300 font-black text-lg font-mono mt-0.5">
+                                    {durationText || (clockInTime ? `${Math.round(Math.max(0, (Date.now() - new Date(clockInTime).getTime()) / 3600000) * 10) / 10} 小时` : '进行中')}
+                                </p>
+                            </div>
+                        </div>
+
+                        {/* Handover SOP Checklist */}
+                        <div className="bg-black/30 border border-white/5 rounded-2xl p-3 text-xs space-y-2">
+                            <p className="text-[11px] font-bold text-gray-300 uppercase tracking-wider">
+                                {t('5S / 机台交接 SOP 核查')}:
+                            </p>
+                            <div className="grid grid-cols-2 gap-2 text-gray-400 text-[11px]">
+                                <span className="flex items-center gap-1.5 text-emerald-400">
+                                    <Check size={13} /> {t('机台周边已清理')}
+                                </span>
+                                <span className="flex items-center gap-1.5 text-emerald-400">
+                                    <Check size={13} /> {t('滤网与温区状态正常')}
+                                </span>
+                                <span className="flex items-center gap-1.5 text-emerald-400">
+                                    <Check size={13} /> {t('成品与外箱已码齐')}
+                                </span>
+                                <span className="flex items-center gap-1.5 text-emerald-400">
+                                    <Check size={13} /> {t('工具与纸管已归位')}
+                                </span>
+                            </div>
+                        </div>
+
+                        {/* Handover note */}
+                        <div>
+                            <label className="text-[11px] font-bold text-gray-300 uppercase tracking-wider block mb-1">
+                                {t('交班留言给下一班 / 管理员备注 (选填)')}:
+                            </label>
+                            <textarea
+                                value={handoverNotes}
+                                onChange={e => setHandoverNotes(e.target.value)}
+                                placeholder="例如: 3号区升温稍慢需留意 / 滤网刚换新 / 剩余纸管充足..."
+                                className="w-full bg-black/40 border border-white/10 text-xs p-3 rounded-2xl focus:border-purple-500 focus:outline-none text-white min-h-[70px]"
+                            />
+                        </div>
+
+                        {/* Action buttons */}
+                        <div className="flex gap-2 pt-2">
+                            <button
+                                type="button"
+                                onClick={() => setShowShiftHandoverModal(false)}
+                                className="flex-1 py-3 bg-white/5 hover:bg-white/10 text-gray-300 rounded-2xl text-xs font-bold transition cursor-pointer"
+                            >
+                                {t('取消返回')}
+                            </button>
+                            <button
+                                type="button"
+                                onClick={async () => {
+                                    setIsSubmittingHandover(true);
+                                    try {
+                                        await handleManualClockOut(handoverNotes);
+                                        setShowShiftHandoverModal(false);
+                                        setHandoverNotes('');
+                                    } catch (err) {
+                                        console.error("Handover error:", err);
+                                    } finally {
+                                        setIsSubmittingHandover(false);
+                                    }
+                                }}
+                                disabled={isSubmittingHandover}
+                                className="flex-2 py-3 bg-gradient-to-r from-rose-600 to-rose-700 hover:from-rose-500 hover:to-rose-600 text-white rounded-2xl text-xs font-black shadow-lg transition active:scale-95 cursor-pointer disabled:opacity-50 flex items-center justify-center gap-2"
+                            >
+                                {isSubmittingHandover ? <Loader className="animate-spin" size={15} /> : <LogOut size={15} />}
+                                <span>{t('确认交班并下机结算')}</span>
+                            </button>
+                        </div>
+                    </div>
+                </div>
+            )}
             
             <style>{`
                 .custom-scrollbar::-webkit-scrollbar { width: 4px; }

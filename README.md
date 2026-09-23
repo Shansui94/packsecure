@@ -91,9 +91,15 @@ packsecure/
 │   └── lib/                     # 权限鉴权、CORS 与中间件
 ├── server.ts                    # 本地 Node.js/Express 开发调试服务
 ├── scripts/                     # 数据库迁移、健康检查、自动化诊断脚本
-├── docs/                        # 业务真理库与数据字典文档
+├── docs/                        # 系统知识库与业务真理库（详见 docs/README.md）
+│   ├── README.md                # 文档知识库与全景索引中心
 │   ├── BUSINESS_RULES.md        # 核心业务真理库（厂区、机台、工时、时薪费率）
-│   └── DATA_DICTIONARY.md       # 数据库表结构字典与枚举说明
+│   ├── DATA_DICTIONARY.md       # 数据库表结构字典与枚举说明
+│   ├── GITHUB_WORKFLOW_GUIDE.md # GitHub 协作与高效实战指南
+│   ├── I18N_GUIDELINES.md       # 国际化多语言规范
+│   ├── PAGE_SYNC_CHECKLIST.md   # 全页面联动与跨模块自检表
+│   ├── SYSTEM_ISSUES.md         # 系统缺陷与巡检看板
+│   └── WHATSAPP_ISSUE_TRIAGE.md # 现场 WhatsApp 排障手册与词典
 ├── .env.example                 # 环境变量配置模板
 └── package.json
 ```
@@ -137,6 +143,17 @@ npm run check:health   # 系统健康度一键检查 (DB 连通性、核心表�
 npm run check:scan     # 端到端系统诊断扫描
 npm run daily-report   # 每日自动化考勤与报表排查
 ```
+
+---
+
+## 📚 系统知识库与文档导航 (Documentation Hub)
+
+系统完整文档已按架构、规范与 SOP 模块化沉淀，全局导航详见 **[docs/README.md](./docs/README.md)**：
+
+- 🏛️ **业务真理与数据**：[`docs/BUSINESS_RULES.md`](./docs/BUSINESS_RULES.md) (厂区/时薪/工时) · [`docs/DATA_DICTIONARY.md`](./docs/DATA_DICTIONARY.md) (数据字典) · [`docs/I18N_GUIDELINES.md`](./docs/I18N_GUIDELINES.md) (多语言规范)
+- 🚀 **工程规范与协同**：[`docs/GITHUB_WORKFLOW_GUIDE.md`](./docs/GITHUB_WORKFLOW_GUIDE.md) (GitHub/Vercel工作流) · [`MANUAL_DEPLOY.md`](./MANUAL_DEPLOY.md) (部署指南) · [`docs/PAGE_SYNC_CHECKLIST.md`](./docs/PAGE_SYNC_CHECKLIST.md) (联动自检) · [`docs/SYSTEM_ISSUES.md`](./docs/SYSTEM_ISSUES.md) (缺陷追踪)
+- 🏭 **现场 SOP 与指导书**：[`SOP_Driver_Delivery.md`](./SOP_Driver_Delivery.md) (司机配送) · [`SOP_HR_Leave_Approval.md`](./SOP_HR_Leave_Approval.md) (HR审批) · [`SOP_Machine_Labeling.md`](./SOP_Machine_Labeling.md) (机台标贴) · [`QR_CODES_LIST.md`](./QR_CODES_LIST.md) (机台二维码)
+- 🤖 **AI 与现场排障**：[`AGENTS.md`](./AGENTS.md) (智能体开发规范) · [`docs/WHATSAPP_ISSUE_TRIAGE.md`](./docs/WHATSAPP_ISSUE_TRIAGE.md) (现场群聊排障手册)
 
 ---
 

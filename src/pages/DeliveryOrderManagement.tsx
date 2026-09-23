@@ -21,8 +21,9 @@ import {
     User as UserIcon, Box, Zap, Trash2, Scissors, AlertTriangle, MapPin, Wrench, LayoutGrid, List, ArrowUp, ArrowDown,
     CheckCircle, XCircle, Camera, Sparkles, ImagePlus, Download,
     RotateCcw, RefreshCw, Settings, ShieldCheck, Clock, Award, TrendingUp, Info,
-    ChevronDown, ChevronUp, Edit3, Phone
+    ChevronDown, ChevronUp, Edit3, Phone, MessageSquare
 } from 'lucide-react';
+import WhatsAppDispatchModal from '../components/WhatsAppDispatchModal';
 import { WAREHOUSES } from '../data/factoryData';
 import {
     SalesOrder,
@@ -779,6 +780,25 @@ const DeliveryOrderManagement: React.FC<DeliveryOrderManagementProps> = ({ user 
     const [skuMappings, setSkuMappings] = useState<any[]>([]);
     const [tripsV2List, setTripsV2List] = useState<any[]>([]);
     const [expandedTripKeys, setExpandedTripKeys] = useState<Record<string, boolean>>({});
+
+    // WhatsApp Dispatch & Customer Template Modal States
+    const [whatsappTripModal, setWhatsappTripModal] = useState<{
+        tripId: string;
+        tripNumber: string;
+        driverName: string;
+        driverPhone: string;
+    } | null>(null);
+
+    const [whatsappCustomerModal, setWhatsappCustomerModal] = useState<{
+        orderNumber: string;
+        customerName: string;
+        customerPhone: string;
+        orderStatus: string;
+        tripNumber?: string;
+        driverName?: string;
+        driverPhone?: string;
+        deliveryDate?: string;
+    } | null>(null);
 
     const parsedCargoSummary = React.useMemo(() => {
         if (!parsedTripBatch) return [];
@@ -1818,6 +1838,69 @@ const DeliveryOrderManagement: React.FC<DeliveryOrderManagementProps> = ({ user 
             const defaultBaby = v2Items.find(i => i.sku === 'SF-BABYROLL-CLEAR' || i.sku === 'SF-BABYROLL');
             if (defaultBaby) return defaultBaby;
         }
+
+        // Slitting Bubble Wrap: 25cm (4 units) / 50cm (2 in 1 / half)
+        if (raw.includes('25cm') || raw.includes('25 cm') || raw.includes('4 units') || raw.includes('4 unit')) {
+            const isDouble = raw.includes('double') || raw.includes('dl');
+            const isBlack = raw.includes('black') || raw.includes('hitam') || raw.includes('blk');
+            if (isDouble && isBlack) {
+                const found = v2Items.find(i => i.sku === 'BW-DL-BLK-100Mx25CMx4ROLL-RED' || i.sku === 'DL-HITAM-25CM');
+                if (found) return found;
+            }
+            if (isDouble && !isBlack) {
+                const found = v2Items.find(i => i.sku === 'BW-DL-CLR-100Mx25CMx4ROLL-BLU' || i.sku === 'DL-25CM');
+                if (found) return found;
+            }
+            if (!isDouble && isBlack) {
+                const found = v2Items.find(i => i.sku === 'BW-SL-BLK-100Mx25CMx4ROLL-GRN' || i.sku === 'HITAM-25CM');
+                if (found) return found;
+            }
+            if (!isDouble && !isBlack) {
+                const found = v2Items.find(i => i.sku === 'BW-SL-CLR-100Mx25CMx4ROLL-GRN' || i.sku === 'SL-25CM');
+                if (found) return found;
+            }
+        }
+        if (raw.includes('50cm') || raw.includes('50 cm') || raw.includes('half') || raw.includes('2 in 1') || raw.includes('2 units')) {
+            const isDouble = raw.includes('double') || raw.includes('dl');
+            const isBlack = raw.includes('black') || raw.includes('hitam') || raw.includes('blk');
+            if (isDouble && isBlack) {
+                const found = v2Items.find(i => i.sku.includes('DL') && i.sku.includes('BLK') && (i.sku.includes('50CM') || i.sku.includes('HALF')));
+                if (found) return found;
+            }
+            if (isDouble && !isBlack) {
+                const found = v2Items.find(i => i.sku.includes('DL') && i.sku.includes('CLR') && (i.sku.includes('50CM') || i.sku.includes('HALF')));
+                if (found) return found;
+            }
+            if (!isDouble && isBlack) {
+                const found = v2Items.find(i => i.sku.includes('SL') && i.sku.includes('BLK') && (i.sku.includes('50CM') || i.sku.includes('HALF')));
+                if (found) return found;
+            }
+            if (!isDouble && !isBlack) {
+                const found = v2Items.find(i => i.sku.includes('SL') && i.sku.includes('CLR') && (i.sku.includes('50CM') || i.sku.includes('HALF')));
+                if (found) return found;
+            }
+        }
+
+        // Stretch Film standard matching (defaults to 2.2KG)
+        if (raw.includes('stretch film') || raw.includes('sf')) {
+            if (raw.includes('black') || raw.includes('hitam')) {
+                if (raw.includes('2.0') || raw.includes('2.0kg') || raw.includes('2kg')) {
+                    const found = v2Items.find(i => i.sku === 'SF-BLACK-2.0');
+                    if (found) return found;
+                }
+                const found = v2Items.find(i => i.sku === 'SF-BLACK-2.2');
+                if (found) return found;
+            }
+            if (raw.includes('clear') || raw.includes('putih')) {
+                if (raw.includes('2.0') || raw.includes('2.0kg') || raw.includes('2kg')) {
+                    const found = v2Items.find(i => i.sku === 'SF-CLEAR-2.0');
+                    if (found) return found;
+                }
+                const found = v2Items.find(i => i.sku === 'SF-CLEAR-2.2');
+                if (found) return found;
+            }
+        }
+
         if (raw.includes('sf clear') && !raw.includes('2.0')) {
             const found = v2Items.find(i => i.sku === 'SF-CLEAR-2.2');
             if (found) return found;
@@ -5404,6 +5487,28 @@ const DeliveryOrderManagement: React.FC<DeliveryOrderManagementProps> = ({ user 
                                                                                     <Trash2 size={14} />
                                                                                 </button>
 
+                                                                                {/* WhatsApp Dispatch Button */}
+                                                                                {tripGroup.tripId && (
+                                                                                    <button
+                                                                                        type="button"
+                                                                                        onClick={(e) => {
+                                                                                            e.stopPropagation();
+                                                                                            const driverObj = drivers.find(d => d.uid === tripGroup.driverId);
+                                                                                            setWhatsappTripModal({
+                                                                                                tripId: tripGroup.tripId!,
+                                                                                                tripNumber: tripGroup.tripNumber,
+                                                                                                driverName: driverObj?.name || driver.name || 'Pemandu',
+                                                                                                driverPhone: (driverObj as any)?.phone || (driver as any)?.phone || ''
+                                                                                            });
+                                                                                        }}
+                                                                                        className="px-2 py-1 text-emerald-400 bg-emerald-500/15 hover:bg-emerald-500/25 hover:text-emerald-300 rounded-md transition-colors flex items-center gap-1 text-[11px] font-bold border border-emerald-500/30 shadow-sm"
+                                                                                        title="Hantar Jadual ke WhatsApp Pemandu"
+                                                                                    >
+                                                                                        <span>📱</span>
+                                                                                        <span className="hidden sm:inline">Hantar WA</span>
+                                                                                    </button>
+                                                                                )}
+
                                                                                 {/* Reassign Driver Button */}
                                                                                 <button
                                                                                     type="button"
@@ -5557,17 +5662,40 @@ const DeliveryOrderManagement: React.FC<DeliveryOrderManagementProps> = ({ user 
                                                                                                     </span>
                                                                                                 )}
                                                                                             </div>
-                                                                                            <button
-                                                                                                type="button"
-                                                                                                onClick={(e) => {
-                                                                                                    e.stopPropagation();
-                                                                                                    handleDeleteOrder(doOrder.id, doOrder.orderNumber);
-                                                                                                }}
-                                                                                                className="p-1 text-slate-500 hover:text-red-400 transition-colors"
-                                                                                                title="Cancel this DO"
-                                                                                            >
-                                                                                                <Trash2 size={12} />
-                                                                                            </button>
+                                                                                            <div className="flex items-center gap-1 shrink-0">
+                                                                                                <button
+                                                                                                    type="button"
+                                                                                                    onClick={(e) => {
+                                                                                                        e.stopPropagation();
+                                                                                                        const driverObj = drivers.find(d => d.uid === tripGroup.driverId);
+                                                                                                        setWhatsappCustomerModal({
+                                                                                                            orderNumber: doOrder.orderNumber,
+                                                                                                            customerName: doOrder.customer || '',
+                                                                                                            customerPhone: (doOrder as any).customer_phone || (doOrder as any).phone || '',
+                                                                                                            orderStatus: doOrder.status || 'Planned',
+                                                                                                            tripNumber: tripGroup.tripNumber,
+                                                                                                            driverName: driverObj?.name || driver.name,
+                                                                                                            driverPhone: (driverObj as any)?.phone || (driver as any)?.phone,
+                                                                                                            deliveryDate: doOrder.deadline
+                                                                                                        });
+                                                                                                    }}
+                                                                                                    className="p-1 text-slate-500 hover:text-emerald-400 transition-colors"
+                                                                                                    title="WhatsApp Mesej Pelanggan"
+                                                                                                >
+                                                                                                    <MessageSquare size={12} className="text-emerald-400/80 hover:text-emerald-400" />
+                                                                                                </button>
+                                                                                                <button
+                                                                                                    type="button"
+                                                                                                    onClick={(e) => {
+                                                                                                        e.stopPropagation();
+                                                                                                        handleDeleteOrder(doOrder.id, doOrder.orderNumber);
+                                                                                                    }}
+                                                                                                    className="p-1 text-slate-500 hover:text-red-400 transition-colors"
+                                                                                                    title="Cancel this DO"
+                                                                                                >
+                                                                                                    <Trash2 size={12} />
+                                                                                                </button>
+                                                                                            </div>
                                                                                         </div>
 
                                                                                         <div className="text-xs text-white font-bold truncate">
@@ -5720,6 +5848,28 @@ const DeliveryOrderManagement: React.FC<DeliveryOrderManagementProps> = ({ user 
                                                                                     title="Split Order / Partial Delivery"
                                                                                 >
                                                                                     <Scissors size={14} />
+                                                                                </button>
+
+                                                                                <button
+                                                                                    type="button"
+                                                                                    onClick={(e) => {
+                                                                                        e.stopPropagation();
+                                                                                        const driverObj = drivers.find(d => d.uid === order.driverId);
+                                                                                        setWhatsappCustomerModal({
+                                                                                            orderNumber: order.orderNumber,
+                                                                                            customerName: order.customer || '',
+                                                                                            customerPhone: (order as any).customer_phone || (order as any).phone || '',
+                                                                                            orderStatus: order.status || 'New',
+                                                                                            tripNumber: order.orderNumber,
+                                                                                            driverName: driverObj?.name || driver.name,
+                                                                                            driverPhone: (driverObj as any)?.phone || (driver as any)?.phone,
+                                                                                            deliveryDate: order.deadline
+                                                                                        });
+                                                                                    }}
+                                                                                    className="p-1.5 text-emerald-400 bg-emerald-500/10 hover:bg-emerald-500/20 hover:text-emerald-300 rounded-md transition-colors ml-1"
+                                                                                    title="WhatsApp Mesej Pelanggan"
+                                                                                >
+                                                                                    <MessageSquare size={14} />
                                                                                 </button>
                                                                             </div>
                                                                             <div className="flex flex-col items-end gap-1.5">
@@ -7876,10 +8026,12 @@ const DeliveryOrderManagement: React.FC<DeliveryOrderManagementProps> = ({ user 
                                                                     >
                                                                         <option value="Rolls">{t('Rolls / 卷')}</option>
                                                                         <option value="Box">{t('Box / 箱')}</option>
+                                                                        <option value="Carton">{t('Carton / 箱')}</option>
                                                                         <option value="Units">{t('Units / 件')}</option>
+                                                                        <option value="Bundle">{t('Bundle / 捆')}</option>
                                                                     </select>
 
-                                                                    <div className="min-w-0 flex-1">
+                                                                    <div className="min-w-0 flex-1 flex flex-col gap-1">
                                                                         <input
                                                                             type="text"
                                                                             className="w-full bg-slate-900 border border-slate-700 focus:border-blue-500 rounded-lg px-2.5 py-1 text-xs font-medium text-white outline-none placeholder:text-slate-600"
@@ -7888,6 +8040,25 @@ const DeliveryOrderManagement: React.FC<DeliveryOrderManagementProps> = ({ user 
                                                                             onChange={e => handleUpdateParsedItemName(idx, itemIdx, e.target.value)}
                                                                             title={it.rawProductName || it.product}
                                                                         />
+                                                                        {(() => {
+                                                                            const text = `${it.product || ''} ${it.rawProductName || ''}`.toLowerCase();
+                                                                            let breakdownBadge: string | null = null;
+                                                                            const qty = Number(it.quantity) || 0;
+                                                                            if (text.includes('six rolls') || text.includes('6 rolls') || text.includes('6 roll') || text.includes('6rolls') || text.includes('carton') || text.includes('ctn')) {
+                                                                                breakdownBadge = `📦 ${qty} 箱 = ${qty * 6} 卷 (6 rolls/ctn)`;
+                                                                            } else if (text.includes('4 units') || text.includes('4 unit') || text.includes('4 roll') || text.includes('4roll') || text.includes('25cm')) {
+                                                                                breakdownBadge = `🧻 ${qty} 捆 = ${qty * 4} 小卷 (4 units/bundle)`;
+                                                                            } else if (text.includes('2 in 1') || text.includes('2 units') || text.includes('50cm')) {
+                                                                                breakdownBadge = `🧻 ${qty} 捆 = ${qty * 2} 小卷 (2 in 1)`;
+                                                                            }
+                                                                            if (!breakdownBadge || qty <= 0) return null;
+                                                                            return (
+                                                                                <span className="text-[10px] text-cyan-300 bg-cyan-950/40 border border-cyan-500/30 px-2 py-0.5 rounded-md font-mono flex items-center gap-1 w-fit">
+                                                                                    <span>💡</span>
+                                                                                    <span>{breakdownBadge}</span>
+                                                                                </span>
+                                                                            );
+                                                                        })()}
                                                                     </div>
                                                                 </div>
 
@@ -8885,6 +9056,38 @@ const DeliveryOrderManagement: React.FC<DeliveryOrderManagementProps> = ({ user 
                 className="hidden"
                 onChange={handleAdminPodFileSelect}
             />
+
+            {/* WhatsApp Trip Dispatch Modal */}
+            {whatsappTripModal && (
+                <WhatsAppDispatchModal
+                    mode="trip"
+                    tripId={whatsappTripModal.tripId}
+                    tripNumber={whatsappTripModal.tripNumber}
+                    driverName={whatsappTripModal.driverName}
+                    driverPhone={whatsappTripModal.driverPhone}
+                    onClose={() => setWhatsappTripModal(null)}
+                    onSuccess={() => {
+                        setToast({ message: `Jadual WhatsApp berjaya dihantar kepada ${whatsappTripModal.driverName}!`, type: 'success' });
+                        setWhatsappTripModal(null);
+                    }}
+                />
+            )}
+
+            {/* WhatsApp Customer Template Modal */}
+            {whatsappCustomerModal && (
+                <WhatsAppDispatchModal
+                    mode="customer"
+                    orderNumber={whatsappCustomerModal.orderNumber}
+                    customerName={whatsappCustomerModal.customerName}
+                    customerPhone={whatsappCustomerModal.customerPhone}
+                    orderStatus={whatsappCustomerModal.orderStatus}
+                    tripNumber={whatsappCustomerModal.tripNumber}
+                    driverName={whatsappCustomerModal.driverName}
+                    driverPhone={whatsappCustomerModal.driverPhone}
+                    deliveryDate={whatsappCustomerModal.deliveryDate}
+                    onClose={() => setWhatsappCustomerModal(null)}
+                />
+            )}
 
         </div >
     );

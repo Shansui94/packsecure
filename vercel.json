@@ -4,6 +4,12 @@
             "maxDuration": 60
         }
     },
+    "crons": [
+        {
+            "path": "/api/cron/nightly-report",
+            "schedule": "0 14 * * *"
+        }
+    ],
     "rewrites": [
         {
             "source": "/api/agent/universal-intake",

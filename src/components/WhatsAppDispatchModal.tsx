@@ -2,8 +2,9 @@ import React, { useState, useEffect } from 'react';
 import { X, Send, Copy, Check, MessageSquare, ExternalLink, AlertCircle, RefreshCw, Smartphone } from 'lucide-react';
 
 export interface WhatsAppDispatchModalProps {
-  isOpen: boolean;
+  isOpen?: boolean;
   onClose: () => void;
+  onSuccess?: (msg?: string) => void;
   mode: 'trip' | 'customer';
   // For Trip Mode
   tripId?: string;
@@ -14,12 +15,14 @@ export interface WhatsAppDispatchModalProps {
   orderNumber?: string;
   customerName?: string;
   customerPhone?: string;
-  orderStatus?: 'shipped' | 'delivered';
+  orderStatus?: string;
+  deliveryDate?: string;
 }
 
 export const WhatsAppDispatchModal: React.FC<WhatsAppDispatchModalProps> = ({
-  isOpen,
+  isOpen = true,
   onClose,
+  onSuccess,
   mode,
   tripId,
   tripNumber,
@@ -29,7 +32,9 @@ export const WhatsAppDispatchModal: React.FC<WhatsAppDispatchModalProps> = ({
   customerName,
   customerPhone,
   orderStatus = 'shipped',
+  deliveryDate,
 }) => {
+  if (!isOpen) return null;
   const [loading, setLoading] = useState(false);
   const [sending, setSending] = useState(false);
   const [messageText, setMessageText] = useState('');
@@ -293,3 +298,5 @@ export const WhatsAppDispatchModal: React.FC<WhatsAppDispatchModalProps> = ({
     </div>
   );
 };
+
+export default WhatsAppDispatchModal;
