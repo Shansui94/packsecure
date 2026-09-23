@@ -66,8 +66,8 @@
 ### 1.5 `driver_extra_tasks` / `work_photos` (司机额外任务记录)
 * `id`: UUID
 * `driver_id`: 司机 ID
-* `category`: `SHOPEE` | `AMBIK PALLET` | `LORRY SERVICE` | `RETURN` | `OTHER`
-* `amount`: 审核认定的补贴金额 (RM)
+* `category`: `SHOPEE / SPD` | `TAIPING TRIP` | `SHOPEE` | `AMBIK PALLET` | `LORRY SERVICE` | `RETURN` | `OTHER`
+* `amount`: 审核认定的补贴金额 (RM，如 Shopee/Spd 20.00，Taiping Trip 7.00，Pallet 10.00，Lorry Service 15.00)
 * `photo_url`: 现场凭证照片
 * `notes`: 司机填写的说明
 * `status`: `Pending` | `Approved` | `Rejected`

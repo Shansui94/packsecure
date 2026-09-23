@@ -354,7 +354,7 @@ Output strictly valid JSON:
   "do_number": string or null,
   "customer_name": string or null,
   "expense_amount": number or null,
-  "category": "POD" | "LORRY_SERVICE" | "AMBIK_PALLET" | "SHOPEE" | "OTHER",
+  "category": "POD" | "LORRY_SERVICE" | "AMBIK_PALLET" | "SHOPEE / SPD" | "SHOPEE" | "TAIPING_TRIP" | "OTHER",
   "summary": string
 }`;
 

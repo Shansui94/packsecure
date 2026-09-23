@@ -91,11 +91,12 @@ Trip Earnings = Base Rate + MAX(0, Drops - Max Places) * Extra Rate Per Place
 
 ### 4.3 司机额外任务补贴 (Extra Allowance)
 司机在出车送货之外完成的额外任务，拍照提交后需经 Admin / Manager 审核（Approved）方可计入当月工资：
-1. 🛍️ **`SHOPEE` (Shopee / Parcel)**：按次/单补贴
-2. 🪵 **`AMBIK PALLET` (Angkat Pallet)**：栈板搬运补贴
-3. 🔧 **`LORRY SERVICE`**：罗里送保修/保养补贴
-4. ↩️ **`RETURN`**：客户退换货处理补贴
-5. 🛠️ **`OTHER`**：其他特定临时任务
+1. 🛍️ **`SHOPEE / SPD` (Shopee / Spd)**：**RM 20.00** / trip
+2. 🚚 **`TAIPING TRIP` (Taiping Trip)**：**RM 7.00** / trip
+3. 🪵 **`AMBIK PALLET` (Angkat Pallet)**：**RM 10.00** / trip
+4. 🔧 **`LORRY SERVICE`**：**RM 15.00** / trip（送修 / 验车 Puspakom）
+5. ↩️ **`RETURN`**：客户退换货处理补贴（Admin / Manager 审核确定）
+6. 🛠️ **`OTHER`**：其他特定临时任务（Admin / Manager 审核确定）
 
 ### 4.4 司机端配送状态机 (Driver SOP)
 ```mermaid

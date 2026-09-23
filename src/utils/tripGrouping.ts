@@ -365,12 +365,20 @@ export function groupOrdersIntoTrips(
         const drops = Math.max(1, Number(o.trip_drop_count) || 1);
         const approvedMatch = o.notes?.match(/\[APPROVED_AMOUNT:\s*([\d.]+)\]/);
         const approvedAmount = approvedMatch ? parseFloat(approvedMatch[1]) : null;
-        const earnings = approvedAmount !== null ? approvedAmount : 40;
+        const defaultJobRate = (
+            o.zone?.toUpperCase().includes('TAIPING TRIP') ? 7 :
+            o.zone?.toUpperCase().includes('SHOPEE') ? 20 :
+            o.zone?.toUpperCase().includes('PALLET') ? 10 :
+            o.zone?.toUpperCase().includes('SERVICE') ? 15 : 40
+        );
+        const earnings = approvedAmount !== null ? approvedAmount : defaultJobRate;
 
         const iconMap: Record<string, string> = {
             'AMBIK PALLET': '🪵',
             'LORRY SERVICE': '🔧',
             'SHOPEE': '🛍️',
+            'SHOPEE / SPD': '🛍️',
+            'TAIPING TRIP': '🚚',
             'RETURN': '↩️',
             'OTHER': '🛠️'
         };

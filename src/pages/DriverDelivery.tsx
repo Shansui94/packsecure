@@ -1972,6 +1972,8 @@ const DriverDelivery: React.FC<DriverDeliveryProps> = ({ user, onNavigate }) => 
             const extraJobPhoto = (order as any).proof_of_load_url || (order as any).proofOfLoadUrl;
             const categoryIconMap: Record<string, string> = {
                 'SHOPEE': '🛍️',
+                'SHOPEE / SPD': '🛍️',
+                'TAIPING TRIP': '🚚',
                 'AMBIK PALLET': '🪵',
                 'LORRY SERVICE': '🔧',
                 'RETURN': '↩️',
@@ -3228,14 +3230,26 @@ const DriverDelivery: React.FC<DriverDeliveryProps> = ({ user, onNavigate }) => 
             {/* PICK UP / EXTRA JOB MODAL */}
             {isPickUpModalOpen && (() => {
                 const driverOrigin = (currentLorry?.factory_id || user?.base_location || 'TAIPING').toUpperCase();
-                const matchedRate = deliveryRates.find(r => 
-                    r.origin?.toUpperCase() === driverOrigin && 
-                    r.location_name?.toUpperCase() === pickUpCategory
+                const matchedRate = deliveryRates.find(r => {
+                    const rOrigin = r.origin?.toUpperCase();
+                    const rLoc = r.location_name?.toUpperCase();
+                    if (rOrigin !== driverOrigin) return false;
+                    if (pickUpCategory === 'SHOPEE' || pickUpCategory === 'SHOPEE / SPD') {
+                        return rLoc === 'SHOPEE / SPD' || rLoc === 'SHOPEE';
+                    }
+                    return rLoc === pickUpCategory;
+                });
+                const defaultRate = (
+                    pickUpCategory === 'SHOPEE / SPD' || pickUpCategory === 'SHOPEE' ? 20 :
+                    pickUpCategory === 'TAIPING TRIP' ? 7 :
+                    pickUpCategory === 'AMBIK PALLET' ? 10 :
+                    pickUpCategory === 'LORRY SERVICE' ? 15 : 0
                 );
-                const currentRateAmount = matchedRate ? Number(matchedRate.base_rate) || 0 : 0;
+                const currentRateAmount = matchedRate ? Number(matchedRate.base_rate) || 0 : defaultRate;
 
                 const EXTRA_JOB_CATEGORIES = [
-                    { id: 'SHOPEE', label: 'Shopee', desc: 'Shopee / Parcel', icon: '🛍️' },
+                    { id: 'SHOPEE / SPD', label: 'Shopee / Spd', desc: 'Shopee / Spd / Parcel', icon: '🛍️' },
+                    { id: 'TAIPING TRIP', label: 'Taiping Trip', desc: 'Trip Taiping / Local Trip', icon: '🚚' },
                     { id: 'AMBIK PALLET', label: 'Angkat Pallet', desc: 'Pallet Handling', icon: '🪵' },
                     { id: 'LORRY SERVICE', label: 'Lorry Service', desc: 'Servis / Puspakom', icon: '🔧' },
                     { id: 'RETURN', label: 'Return', desc: 'Barang Pulang / Returns', icon: '↩️' },

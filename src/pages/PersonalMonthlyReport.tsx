@@ -4009,7 +4009,14 @@ const PersonalMonthlyReport: React.FC<Props> = ({ user }) => {
                                                 <button
                                                     type="button"
                                                     onClick={async () => {
-                                                        const defaultVal = (selectedTrip.earnings || 10).toString();
+                                                        const orderZone = (selectedTrip.zone || '').toUpperCase();
+                                                        const fallbackAmt = (
+                                                            orderZone.includes('TAIPING TRIP') ? 7 :
+                                                            orderZone.includes('SHOPEE') ? 20 :
+                                                            orderZone.includes('PALLET') ? 10 :
+                                                            orderZone.includes('SERVICE') ? 15 : 10
+                                                        );
+                                                        const defaultVal = (selectedTrip.earnings || fallbackAmt).toString();
                                                         const amountStr = window.prompt("确认批准此额外任务金额 (RM) / Confirm approved salary (RM):", defaultVal);
                                                         if (amountStr === null) return;
                                                         const val = parseFloat(amountStr) || 0;

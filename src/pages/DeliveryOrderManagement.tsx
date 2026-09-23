@@ -1629,9 +1629,23 @@ const DeliveryOrderManagement: React.FC<DeliveryOrderManagementProps> = ({ user 
         if ((order as any).job_type === 'Extra Job' || (order.orderNumber && order.orderNumber.startsWith('TRIP-JOB'))) {
             setReviewingExtraJob(order);
             const driverOrigin = ((order as any).trip_origin || (order as any).tripOrigin || 'TAIPING').toUpperCase();
-            const matched = deliveryRates.find(r => r.origin?.toUpperCase() === driverOrigin && r.location_name?.toUpperCase() === order.zone?.toUpperCase());
+            const orderZone = (order.zone || '').toUpperCase();
+            const matched = deliveryRates.find(r => {
+                if (r.origin?.toUpperCase() !== driverOrigin) return false;
+                const rLoc = r.location_name?.toUpperCase();
+                if (orderZone === 'SHOPEE' || orderZone === 'SHOPEE / SPD') {
+                    return rLoc === 'SHOPEE / SPD' || rLoc === 'SHOPEE';
+                }
+                return rLoc === orderZone;
+            });
+            const fallbackRate = (
+                orderZone.includes('TAIPING TRIP') ? '7' :
+                orderZone.includes('SHOPEE') ? '20' :
+                orderZone.includes('PALLET') ? '10' :
+                orderZone.includes('SERVICE') ? '15' : '0'
+            );
             const parsedNoteAmount = order.notes?.match(/\[APPROVED_AMOUNT:\s*([\d.]+)\]/)?.[1];
-            setExtraJobAmountInput(parsedNoteAmount || (matched ? matched.base_rate.toString() : '0'));
+            setExtraJobAmountInput(parsedNoteAmount || (matched ? matched.base_rate.toString() : fallbackRate));
             return;
         }
 
