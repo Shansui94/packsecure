@@ -15,7 +15,7 @@ import {
   TripDispatchInfo
 } from '../lib/whatsapp.js';
 import { handleWhatsAppRecipeWorkflow } from '../lib/whatsappRecipe.js';
-import { generateNightlyReport } from './cron/nightly-report.js';
+import { generateNightlyReport } from '../lib/nightlyReport.js';
 
 function getSupabase() {
   const supabaseUrl = process.env.SUPABASE_URL || process.env.VITE_SUPABASE_URL || '';

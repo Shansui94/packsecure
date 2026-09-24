@@ -1,6 +1,6 @@
 import { SupabaseClient } from '@supabase/supabase-js';
 import { GoogleGenerativeAI } from '@google/generative-ai';
-import { sendWhatsAppText } from './whatsapp';
+import { sendWhatsAppText } from './whatsapp.js';
 
 export interface RecipeItem {
   id: string;

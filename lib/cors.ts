@@ -16,7 +16,7 @@ function isAllowedOrigin(origin: string): boolean {
 
 /** Reflect origin for browser calls from the app; omit header for non-browser requests. */
 export function applyAdminCors(req: VercelRequest, res: VercelResponse): void {
-    const origin = req.headers.origin;
+    const origin = req.headers?.origin;
     if (typeof origin === 'string' && isAllowedOrigin(origin)) {
         res.setHeader('Access-Control-Allow-Origin', origin);
         res.setHeader('Vary', 'Origin');
