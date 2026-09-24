@@ -184,6 +184,7 @@ export async function handleAlarm(req: VercelRequest, res: VercelResponse) {
                 output_qty: laneData?.yield ?? 1,
                 sku: resolvedSku,
                 operator_id: resolvedOpId,
+                note: laneId !== 'Single' ? `[${laneId}] Auto-log` : 'Auto-log',
             };
         });
 

@@ -220,6 +220,8 @@ const ProductionLane: React.FC<ProductionLaneProps> = ({
 
     // Machine base width (2M machines like T2-M01 / J1-M01 have 200cm base width)
     const machineBaseWidth = Number((machineMetadata as any)?.base_width) || (machineMetadata?.name?.includes('2M') || machineMetadata?.id === 'T2-M01' || machineMetadata?.id === 'J1-M01' ? 200 : 100);
+    // Effective lane width: for multi-lane machines (Lane 1, Lane 2), each lane physically spans half the machine width (100cm)
+    const laneBaseWidth = laneId === 'Single' ? machineBaseWidth : Math.floor(machineBaseWidth / 2);
 
     // Downtime Stop modal & 20-min idle monitoring
     const [showLaneDowntimeModal, setShowLaneDowntimeModal] = useState(false);
@@ -258,7 +260,7 @@ const ProductionLane: React.FC<ProductionLaneProps> = ({
             // 1. Today's machine total
             const { data: todayLogs } = await supabase
                 .from('production_logs_v2')
-                .select('output_qty, source_lane, lane_id')
+                .select('output_qty, note')
                 .eq('machine_id', machineId)
                 .gte('created_at', todayStart);
 
@@ -268,8 +270,8 @@ const ProductionLane: React.FC<ProductionLaneProps> = ({
             // 1.1 Lane specific count if in dual-lane mode
             if (laneId !== 'Single') {
                 const laneSum = (todayLogs || []).reduce((sum, l) => {
-                    const lLane = (l as any).source_lane || (l as any).lane_id;
-                    if (lLane === laneId) {
+                    const noteStr = l.note || '';
+                    if (noteStr.includes(`[${laneId}]`) || noteStr.includes(laneId)) {
                         return sum + (Number(l.output_qty) || 1);
                     }
                     return sum;
@@ -316,9 +318,7 @@ const ProductionLane: React.FC<ProductionLaneProps> = ({
                 sku: targetSku,
                 output_qty: rollCount,
                 operator_id: operatorId || null,
-                source_lane: laneId,
-                lane_id: laneId,
-                note: `【现场手工记数】操作员确认产出 ${rollCount} 卷 (${laneId})`
+                note: `[${laneId}] 【现场手工记数】操作员确认产出 ${rollCount} 卷`
             }]);
 
             if (error) throw error;
@@ -510,7 +510,7 @@ const ProductionLane: React.FC<ProductionLaneProps> = ({
     const handleSizeSelect = (size: ProductSize) => {
         setSelectedSize(size);
         const numericSize = parseInt(size.replace(/[^0-9]/g, '')) || 100;
-        const maxRollsAcross = Math.floor(machineBaseWidth / numericSize) || 1;
+        const maxRollsAcross = Math.floor(laneBaseWidth / numericSize) || 1;
 
         const defaultRolls = size === '100cm' ? 1 :
             size === '50cm' ? 2 :
@@ -591,7 +591,7 @@ const ProductionLane: React.FC<ProductionLaneProps> = ({
             const v3Sku = getBubbleWrapSku(selectedLayer, selectedMaterial, selectedSize, selectedRolls, derivedPackaging);
 
             const numericSize = parseInt(selectedSize.replace(/[^0-9]/g, '')) || 100;
-            const calculatedYield = Math.floor((machineBaseWidth / numericSize) / selectedRolls) || 1;
+            const calculatedYield = Math.floor((laneBaseWidth / numericSize) / selectedRolls) || 1;
             setLastRollTimestamp(Date.now());
             setIdleMinutes(0);
 
@@ -660,7 +660,8 @@ const ProductionLane: React.FC<ProductionLaneProps> = ({
                     
                     const logSku = newLog.sku || newLog.product_sku;
                     const logQty = Number(newLog.output_qty) || Number(newLog.alarm_count) || 1;
-                    const logLane = newLog.lane_id || newLog.source_lane;
+                    const logNote = newLog.note || '';
+                    const logLane = newLog.lane_id || newLog.source_lane || (logNote.includes('[Lane1]') ? 'Lane1' : logNote.includes('[Lane2]') ? 'Lane2' : undefined);
 
                     const matchMachine = newLog.machine_id?.trim() === machineId?.trim();
                     if (!matchMachine) return;
@@ -669,7 +670,7 @@ const ProductionLane: React.FC<ProductionLaneProps> = ({
                     const matchSku = logSku?.trim() === activeSku?.trim() || isGenericPulse;
                     if (!matchSku) return;
                     
-                    if (logLane && logLane !== 'Unknown' && logLane !== laneId) return;
+                    if (laneId !== 'Single' && logLane && logLane !== laneId) return;
 
                     setLiveCount(prev => prev + logQty);
                     setLastRollTimestamp(Date.now());
@@ -863,7 +864,7 @@ const ProductionLane: React.FC<ProductionLaneProps> = ({
                                         <button
                                             onClick={() => {
                                                 const numericSize = parseInt(selectedSize?.replace(/[^0-9]/g, '') || '100');
-                                                const maxRolls = Math.floor(machineBaseWidth / numericSize) || 1;
+                                                const maxRolls = Math.floor(laneBaseWidth / numericSize) || 1;
                                                 if (selectedRolls < maxRolls) {
                                                     setSelectedRolls(selectedRolls + 1);
                                                 }
@@ -871,7 +872,7 @@ const ProductionLane: React.FC<ProductionLaneProps> = ({
                                             disabled={(() => {
                                                 if (!isControlMode) return true;
                                                 const numericSize = parseInt(selectedSize?.replace(/[^0-9]/g, '') || '100');
-                                                const maxRolls = Math.floor(machineBaseWidth / numericSize) || 1;
+                                                const maxRolls = Math.floor(laneBaseWidth / numericSize) || 1;
                                                 return selectedRolls >= maxRolls;
                                             })()}
                                             className="w-6 h-6 rounded bg-white/5 hover:bg-white/10 flex items-center justify-center text-xs disabled:opacity-20 disabled:cursor-not-allowed"
