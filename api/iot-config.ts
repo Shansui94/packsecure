@@ -48,6 +48,74 @@ export async function handleAlarm(req: VercelRequest, res: VercelResponse) {
             return res.status(400).json({ error: 'machine_id is required' });
         }
 
+        const isReboot = (alarm_count === 0);
+
+        // --- 1. REBOOT SIGNAL HANDLING ---
+        // If it's a device reboot / heartbeat, acknowledge with 200 OK without inserting zero-qty production rows.
+        if (isReboot) {
+            console.log(`[IoT Reboot] Machine ${machine_id} reboot signal acknowledged.`);
+            return res.status(200).json({
+                status: 'ok',
+                message: `Reboot acknowledged for machine ${machine_id}`,
+            });
+        }
+
+        // --- 2. ACTIVE CHATTER STORM DETECTOR (Circuit Breaker) ---
+        // Bubble wrap production is continuous extrusion: 100m roll = ~5 minutes (300s).
+        // Slitting width (cutting size) produces 100cm, 50cm, 33cm rolls simultaneously from the 2M sheet,
+        // but the winder always completes 1 cycle every ~5 minutes.
+        // If incoming HTTP pulses arrive less than 30s apart, the machine is in an active hardware chatter / queue dump storm.
+        // We reject all pulses during a storm to prevent any ghost rows from leaking through.
+        const nowTime = Date.now();
+        const lastIncomingTime = (global as any).__machinePulseMap?.get(machine_id) || 0;
+        if (!(global as any).__machinePulseMap) {
+            (global as any).__machinePulseMap = new Map<string, number>();
+        }
+        (global as any).__machinePulseMap.set(machine_id, nowTime);
+
+        const timeSincePrevPulseSec = Math.floor((nowTime - lastIncomingTime) / 1000);
+        if (lastIncomingTime > 0 && timeSincePrevPulseSec < 30) {
+            console.warn(`[IoT Guard] Machine ${machine_id} in active chatter storm (pulse interval ${timeSincePrevPulseSec}s < 30s). Suppressed.`);
+            return res.status(200).json({
+                status: 'ignored',
+                reason: 'BURST_CHATTER_ACTIVE',
+                machine_id,
+                time_since_prev_pulse_sec: timeSincePrevPulseSec,
+                message: `Active chatter storm detected (<30s between incoming pulses). Discarded to prevent queue replay pollution.`
+            });
+        }
+
+        // --- 3. SERVER-SIDE 100M ROLL PHYSICAL CYCLE GUARD (240s = 4.0 mins) ---
+        // Minimum physical cycle floor for 100m roll extrusion is 240 seconds (4.0 minutes).
+        // Legitimate factory cycles take ~300s-320s (5.3 minutes).
+        const MIN_CYCLE_SECONDS = 240;
+
+        const { data: lastLog } = await supabase
+            .from('production_logs_v2')
+            .select('created_at, output_qty')
+            .eq('machine_id', machine_id)
+            .gt('output_qty', 0)
+            .order('created_at', { ascending: false })
+            .limit(1)
+            .maybeSingle();
+
+        if (lastLog?.created_at) {
+            const lastTime = new Date(lastLog.created_at).getTime();
+            const elapsedSec = Math.floor((nowTime - lastTime) / 1000);
+
+            if (elapsedSec < MIN_CYCLE_SECONDS) {
+                console.warn(`[IoT Guard] Suppressed chatter from machine ${machine_id}: elapsed ${elapsedSec}s < ${MIN_CYCLE_SECONDS}s (5-min physical cycle)`);
+                return res.status(200).json({
+                    status: 'ignored',
+                    reason: 'COOLDOWN_ACTIVE',
+                    machine_id,
+                    elapsed_seconds: elapsedSec,
+                    min_required_seconds: MIN_CYCLE_SECONDS,
+                    message: `Pulse ignored: 100m roll extrusion requires at least ${MIN_CYCLE_SECONDS}s between cycles (elapsed: ${elapsedSec}s).`
+                });
+            }
+        }
+
         // Fetch machine rolls_per_alarm config
         const { data: machineInfo } = await supabase
             .from('sys_machines_v2')
@@ -103,9 +171,7 @@ export async function handleAlarm(req: VercelRequest, res: VercelResponse) {
             }
         }
 
-        const isReboot = (alarm_count === 0);
-        
-        // --- 1. NATIVE V2 INSERTION ---
+        // --- 3. NATIVE V2 INSERTION ---
         const insertRowsV2 = lanes.map((laneId: string) => {
             const laneData = activeLaneMap[laneId] ?? activeLaneMap['Single'] ?? null;
             const resolvedSku = (laneData?.sku && laneData.sku !== 'UNKNOWN') ? laneData.sku : 'UNKNOWN-BUBBLEWRAP';
@@ -115,7 +181,7 @@ export async function handleAlarm(req: VercelRequest, res: VercelResponse) {
 
             return {
                 machine_id,
-                output_qty: isReboot ? 0 : (laneData?.yield ?? 1),
+                output_qty: laneData?.yield ?? 1,
                 sku: resolvedSku,
                 operator_id: resolvedOpId,
             };

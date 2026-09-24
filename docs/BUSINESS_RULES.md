@@ -40,6 +40,27 @@
 * **`J1-M01`**：2M Double Layer (J1) —— 2米双层气泡膜机台
 * **`J1-M02`**：Recycle Machine (J1) —— 塑料回收造粒机台
 
+### 2.5 气泡膜生产节拍与标准体积基准 (Bubble Wrap Production Rhythm & Standard Units)
+* **标准基准体积单位**：系统内气泡膜统一标准体积折算基准为 **`100cm x 100m`**（1 卷标准基准体积）。
+* **物理生产节拍 (Physical Cycle Time)**：
+  * 气泡膜机台为连续挤出吹膜工艺，单次卷取长度恒定为 **100 米**。
+  * **2 米宽机台分切数学真相**：2米（200cm）每次走满 100 米产出面积为 $200\text{m}^2$，**恒定等于 2 个标准 Unit（100cm × 100m 为 1 个 Unit）**：
+    * 切 100cm：全机产出 **2 卷**（100cm × 2 卷 = 200cm），折算为 **2 个 Unit**；
+    * 切 50cm：全机产出 **4 卷**（50cm × 4 卷 = 200cm），折算为 **2 个 Unit**（因为 1 Unit = `50CMx2ROLL` 2卷一捆）；
+    * 切 33cm：全机产出 **6 卷**（33cm × 6 卷 $\approx$ 200cm），折算为 **2 个 Unit**（因为 1 Unit = `33CMx3ROLL` 3卷一捆）；
+    * 双轴混切（Lane 1 切 50cm，Lane 2 切 33cm）：Lane 1 出 2 卷 50cm（1个Unit），Lane 2 出 3 卷 33cm（1个Unit），全机合计产出 **2 个 Unit**。
+  * **车间常用产品俗称与标准 SKU 对照表 (Factory Color Nicknames)**：
+    * 🟠 **`OREN`**：`BW-SL-CLR-100Mx50CMx2ROLL-ORN`（单层透明 50cm × 2 卷一捆，橙色包装，1 Unit）
+    * 🔴 **`MERAH`**：`BW-SL-CLR-100Mx100CMx1ROLL-RED`（单层透明 100cm × 1 卷，红色包装，1 Unit）
+    * 🟡 **`DL-FULL`**：`BW-DL-CLR-100Mx100CMx1ROLL-YEL`（双层透明 100cm × 1 卷，黄色包装，1 Unit）
+    * 🔵 **`DL-HALF`**：`BW-DL-CLR-100Mx50CMx2ROLL-BLU`（双层透明 50cm × 2 卷一捆，蓝色包装，1 Unit）
+    * 🔵 **`DL-33CM`**：`BW-DL-CLR-100Mx33CMx3ROLL-BLU`（双层透明 33cm × 3 卷一捆，蓝色包装，1 Unit）
+    * 🟢 **`HITAM-FULL`**：`BW-SL-BLK-100Mx100CMx1ROLL-GRN`（单层黑色 100cm × 1 卷，绿色包装，1 Unit）
+    * 🟢 **`DL-HITAM-HALF`**：`BW-DL-BLK-100Mx50CMx2ROLL-GRN`（双层黑色 50cm × 2 卷一捆，绿色包装，1 Unit）
+  * **耗时恒定**：无论按何种刀具分切，机台走满 100 米耗时恒定为 **约 5 分钟 (300 秒，实测物理区间 270s ~ 330s)**。
+  * **云端防抖底线 (Hard Cooldown Floor)**：全系统统一设定气泡膜物理最低生产周期底线为 **240 秒 (4 分钟)**。
+  * **连击熔断保护 (Burst Circuit Breaker)**：任意机台若在 30 秒内连续收到请求，判定为硬件触点抖动或离线队列重放，云端自动静默丢弃并返回 200 OK 迫使硬件清空队列，彻底杜绝虚增入账。
+
 ---
 
 ## 3. 考勤与机台时薪计算规则 (Shift Splits & Hourly Rates)
