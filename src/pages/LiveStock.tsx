@@ -452,13 +452,23 @@ const DetailPanel: React.FC<{
                     <div className="px-4 py-4 border-r border-slate-200 dark:border-white/5 text-center flex flex-col items-center justify-center">
                         <div className="text-[10px] text-slate-500 dark:text-gray-500 font-black uppercase tracking-widest mb-1 flex items-center gap-1">Available <span className="hidden sm:inline">Stock</span></div>
                         <div className={`text-3xl font-black notranslate ${(item.available_stock || 0) < 0 ? 'text-red-500 dark:text-red-400' : (item.available_stock || 0) < LOW_STOCK_THRESHOLD ? 'text-amber-500 dark:text-amber-400' : 'text-slate-800 dark:text-white'}`} translate="no">
-                            {Number(item.available_stock || item.current_stock).toLocaleString()}
+                            {(() => {
+                                const isWeight = item.uom?.toLowerCase() === 'kg' || item.type === 'Raw';
+                                return isWeight
+                                    ? Number(item.available_stock ?? item.current_stock ?? 0).toLocaleString(undefined, { maximumFractionDigits: 1 }) + ' kg'
+                                    : Math.round(item.available_stock ?? item.current_stock ?? 0).toLocaleString();
+                            })()}
                         </div>
                     </div>
                     <div className="px-4 py-4 border-r border-slate-200 dark:border-white/5 text-center flex flex-col items-center justify-center bg-slate-100/50 dark:bg-white/[0.02]">
                         <div className="text-[10px] text-slate-400 dark:text-gray-500 font-black uppercase tracking-widest mb-1 flex items-center gap-1">Physical <span className="hidden sm:inline">Stock</span></div>
                         <div className="text-xl font-black text-slate-600 dark:text-gray-400 notranslate" translate="no">
-                            {Number(item.current_stock).toLocaleString()}
+                            {(() => {
+                                const isWeight = item.uom?.toLowerCase() === 'kg' || item.type === 'Raw';
+                                return isWeight
+                                    ? Number(item.current_stock || 0).toLocaleString(undefined, { maximumFractionDigits: 1 }) + ' kg'
+                                    : Math.round(item.current_stock || 0).toLocaleString();
+                            })()}
                         </div>
                     </div>
                     <div className="px-4 py-4 sm:border-r border-slate-200 dark:border-white/5 text-center flex flex-col items-center justify-center bg-red-50/50 dark:bg-red-500/5">
@@ -883,7 +893,14 @@ const LiveStock: React.FC<LiveStockProps> = ({ onNavigate }) => {
     };
 
     const totalItems = filtered.length;
-    const totalQty = filtered.reduce((sum, r) => sum + (r.available_stock || 0), 0);
+    // 💡 严格区分成品件数 (Roll/Unit/Box 必须是整数) 与 原材料重量 (kg)
+    const fgUnits = filtered
+        .filter(r => r.type !== 'Raw' && r.uom?.toLowerCase() !== 'kg')
+        .reduce((sum, r) => sum + (r.available_stock || 0), 0);
+    const rawKg = filtered
+        .filter(r => r.type === 'Raw' || r.uom?.toLowerCase() === 'kg')
+        .reduce((sum, r) => sum + (r.available_stock || 0), 0);
+    const isRawOnly = typeFilter === 'Raw';
     const lowStockCount = filtered.filter(r => (r.available_stock || 0) < LOW_STOCK_THRESHOLD && (r.available_stock || 0) >= 0).length;
     const negativeCount = filtered.filter(r => (r.available_stock || 0) < 0).length;
 
@@ -968,10 +985,29 @@ const LiveStock: React.FC<LiveStockProps> = ({ onNavigate }) => {
                             <div className="text-[10px] text-slate-500 dark:text-gray-500 font-bold uppercase mb-0.5">SKUs</div>
                             <div className="text-xl font-black text-slate-800 dark:text-white">{totalItems}</div>
                         </div>
-                        <div className="bg-slate-50 dark:bg-white/5 border border-slate-200 dark:border-white/10 rounded-xl px-4 py-3 min-w-[100px] shadow-sm">
-                            <div className="text-[10px] text-slate-500 dark:text-gray-500 font-bold uppercase mb-0.5">Total Units</div>
-                            <div className="text-xl font-black text-slate-800 dark:text-white">{totalQty.toLocaleString()}</div>
-                        </div>
+                        {isRawOnly ? (
+                            <div className="bg-slate-50 dark:bg-white/5 border border-slate-200 dark:border-white/10 rounded-xl px-4 py-3 min-w-[100px] shadow-sm">
+                                <div className="text-[10px] text-slate-500 dark:text-gray-500 font-bold uppercase mb-0.5">Total Weight</div>
+                                <div className="text-xl font-black text-slate-800 dark:text-white">
+                                    {Math.round(rawKg).toLocaleString()} <span className="text-xs font-normal text-slate-500">kg</span>
+                                </div>
+                            </div>
+                        ) : (
+                            <div className="bg-slate-50 dark:bg-white/5 border border-slate-200 dark:border-white/10 rounded-xl px-4 py-3 min-w-[100px] shadow-sm">
+                                <div className="text-[10px] text-slate-500 dark:text-gray-500 font-bold uppercase mb-0.5">Total Units</div>
+                                <div className="text-xl font-black text-slate-800 dark:text-white">
+                                    {Math.round(fgUnits).toLocaleString()}
+                                </div>
+                            </div>
+                        )}
+                        {!isRawOnly && rawKg > 0 && (
+                            <div className="bg-slate-50 dark:bg-white/5 border border-slate-200 dark:border-white/10 rounded-xl px-4 py-3 min-w-[100px] shadow-sm">
+                                <div className="text-[10px] text-amber-600 dark:text-amber-400 font-bold uppercase mb-0.5">Raw Material</div>
+                                <div className="text-xl font-black text-amber-700 dark:text-amber-300 font-mono">
+                                    {Math.round(rawKg).toLocaleString()} <span className="text-xs font-normal text-slate-500">kg</span>
+                                </div>
+                            </div>
+                        )}
                         {lowStockCount > 0 && (
                             <div className="bg-amber-50 border border-amber-200 dark:bg-amber-500/10 dark:border-amber-500/20 rounded-xl px-4 py-3 min-w-[100px] shadow-sm">
                                 <div className="text-[10px] text-amber-600 dark:text-amber-400 font-bold uppercase mb-0.5">Low Stock</div>
@@ -1094,7 +1130,17 @@ const LiveStock: React.FC<LiveStockProps> = ({ onNavigate }) => {
                                 const hasReservation = (item.reserved_stock || 0) > 0;
                                 const shouldShowShortageModal = isShortage || hasReservation;
                                 const badge = getStockBadge(item.available_stock || 0, item.current_stock);
-                                const styleConfig = TYPE_STYLE[item.type] || DEFAULT_STYLE;
+                                const isWeight = item.uom?.toLowerCase() === 'kg' || item.type === 'Raw';
+                                const displayAvail = isWeight
+                                    ? Number(item.available_stock || 0).toLocaleString(undefined, { maximumFractionDigits: 1 })
+                                    : Math.round(item.available_stock || 0).toLocaleString();
+                                const displayPhy = isWeight
+                                    ? Number(item.current_stock || 0).toLocaleString(undefined, { maximumFractionDigits: 1 })
+                                    : Math.round(item.current_stock || 0).toLocaleString();
+                                const displayRes = isWeight
+                                    ? Number(item.reserved_stock || 0).toLocaleString(undefined, { maximumFractionDigits: 1 })
+                                    : Math.round(item.reserved_stock || 0).toLocaleString();
+
                                 return (
                                     <button
                                         key={item.sku}
@@ -1121,10 +1167,10 @@ const LiveStock: React.FC<LiveStockProps> = ({ onNavigate }) => {
                                             </span>
                                             <div className="flex flex-col items-end">
                                                 <div className={`text-xl sm:text-2xl font-black tracking-tighter leading-none notranslate ${getStockColor(item.available_stock || 0)}`} translate="no">
-                                                    {Number(item.available_stock || 0).toLocaleString()}
+                                                    {displayAvail} {isWeight && <span className="text-[10px] font-normal opacity-70">kg</span>}
                                                 </div>
                                                 <div className="text-[9px] text-slate-400 dark:text-gray-500 mt-1 font-mono tracking-tight notranslate" translate="no">
-                                                    Phy: {item.current_stock} | Res: {item.reserved_stock}
+                                                    Phy: {displayPhy} | Res: {displayRes}
                                                 </div>
                                             </div>
                                         </div>
@@ -1243,12 +1289,28 @@ const LiveStock: React.FC<LiveStockProps> = ({ onNavigate }) => {
                                         </div>
                                     </div>
                                     <div className="flex flex-col items-end shrink-0 pl-3 border-l border-slate-200 dark:border-white/10">
-                                        <div className={`text-lg sm:text-xl font-black tracking-tighter notranslate ${getStockColor(item.available_stock || 0)}`} translate="no">
-                                            {Number(item.available_stock || 0).toLocaleString()}
-                                        </div>
-                                        <div className="text-[10px] text-slate-400 dark:text-gray-500 font-mono mt-0.5 notranslate" translate="no">
-                                            P:{item.current_stock} R:{item.reserved_stock}
-                                        </div>
+                                        {(() => {
+                                            const isWeight = item.uom?.toLowerCase() === 'kg' || item.type === 'Raw';
+                                            const displayAvail = isWeight
+                                                ? Number(item.available_stock || 0).toLocaleString(undefined, { maximumFractionDigits: 1 })
+                                                : Math.round(item.available_stock || 0).toLocaleString();
+                                            const displayPhy = isWeight
+                                                ? Number(item.current_stock || 0).toLocaleString(undefined, { maximumFractionDigits: 1 })
+                                                : Math.round(item.current_stock || 0).toLocaleString();
+                                            const displayRes = isWeight
+                                                ? Number(item.reserved_stock || 0).toLocaleString(undefined, { maximumFractionDigits: 1 })
+                                                : Math.round(item.reserved_stock || 0).toLocaleString();
+                                            return (
+                                                <>
+                                                    <div className={`text-lg sm:text-xl font-black tracking-tighter notranslate ${getStockColor(item.available_stock || 0)}`} translate="no">
+                                                        {displayAvail} {isWeight && <span className="text-[10px] font-normal opacity-70">kg</span>}
+                                                    </div>
+                                                    <div className="text-[10px] text-slate-400 dark:text-gray-500 font-mono mt-0.5 notranslate" translate="no">
+                                                        P:{displayPhy} R:{displayRes}
+                                                    </div>
+                                                </>
+                                            );
+                                        })()}
                                     </div>
                                 </button>
                             );

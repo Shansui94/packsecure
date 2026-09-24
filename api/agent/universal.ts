@@ -368,6 +368,23 @@ export async function handleIntake(req: VercelRequest, res: VercelResponse) {
                     const validMachineId = (await resolveValidMachineId(parsedData.machineId || context?.currentMachine)) || 'T1-M03';
                     const validSku = await resolveValidSku(parsedData.sku, validMachineId);
 
+                    // 🔒 智能核实物料 UOM：计件成品 (Roll/Unit/Box) 严禁录入带小数点的非整卷数量
+                    const { data: itemMaster } = await supabase
+                        .from('master_items_v2')
+                        .select('uom, gross_weight_kg')
+                        .eq('sku', validSku)
+                        .maybeSingle();
+
+                    let finalOutputQty = weightVal;
+                    const isDiscreteUnit = itemMaster?.uom && itemMaster.uom.toLowerCase() !== 'kg';
+                    if (isDiscreteUnit) {
+                        if (itemMaster?.gross_weight_kg && Number(itemMaster.gross_weight_kg) > 0) {
+                            finalOutputQty = Math.max(1, Math.round(weightVal / Number(itemMaster.gross_weight_kg)));
+                        } else {
+                            finalOutputQty = Math.max(1, Math.round(weightVal));
+                        }
+                    }
+
                     const originalNote = [
                         `【万能快拍生产入库】${parsedData.summary || ''}`,
                         parsedData.sku && parsedData.sku !== validSku ? `(现场输入规格: ${parsedData.sku})` : '',
@@ -379,7 +396,7 @@ export async function handleIntake(req: VercelRequest, res: VercelResponse) {
                         .insert({
                             machine_id: validMachineId,
                             sku: validSku,
-                            output_qty: weightVal,
+                            output_qty: finalOutputQty,
                             reject_qty: 0,
                             operator_id: isValidUUID(empId) ? empId : null,
                             note: originalNote,
@@ -396,7 +413,7 @@ export async function handleIntake(req: VercelRequest, res: VercelResponse) {
                             id: prodLog.log_id,
                             machine_id: validMachineId,
                             sku: validSku,
-                            output_qty: weightVal
+                            output_qty: finalOutputQty
                         });
                     }
                 } catch (e) {
