@@ -263,12 +263,27 @@ export async function handleWhatsAppWebhook(req: VercelRequest, res: VercelRespo
 
     // Match sender against users_public
     const localPhone = fromNumber.startsWith('60') ? '0' + fromNumber.substring(2) : fromNumber;
-    const { data: matchedUsers } = await supabase
+    let { data: matchedUsers } = await supabase
       .from('users_public')
       .select('id, name, role, phone, employee_id, factory_id, base_location')
       .or(`phone.eq.${fromNumber},phone.eq.${localPhone},phone.eq.+${fromNumber}`);
 
-    const employee = matchedUsers && matchedUsers.length > 0 ? matchedUsers[0] : null;
+    let employee = matchedUsers && matchedUsers.length > 0 ? matchedUsers[0] : null;
+
+    // Fallback: If direct query misses (e.g. formatted with dashes '012-5668590' or spaces), check normalized phones
+    if (!employee) {
+      const { data: allPhoneUsers } = await supabase
+        .from('users_public')
+        .select('id, name, role, phone, employee_id, factory_id, base_location')
+        .not('phone', 'is', null);
+
+      if (allPhoneUsers && allPhoneUsers.length > 0) {
+        employee = allPhoneUsers.find((u: any) => {
+          if (!u.phone) return false;
+          return normalizePhoneNumber(u.phone) === fromNumber;
+        }) || null;
+      }
+    }
 
     // ── BRANCH A: UNBOUND USER (Self-binding flow) ───────────────────────────
     if (!employee) {
@@ -303,9 +318,11 @@ export async function handleWhatsAppWebhook(req: VercelRequest, res: VercelRespo
         }
       }
 
-      const promptReply = `👋 Halo! Selamat datang ke *Packsecure OS*.\n` +
-        `Nombor WhatsApp anda belum dihubungkan dengan profil pekerja.\n\n` +
-        `👉 Sila balas dengan *No. Pekerja / PIN 4 digit* anda (contoh: 3190 atau 013) untuk pengesahan segera!`;
+      const promptReply = `👋 Halo / 您好！欢迎使用 *Packsecure OS 运营助手* 🤖\n\n` +
+        `您的 WhatsApp 号码尚未关联员工/管理档案。\n` +
+        `Nombor WhatsApp anda belum dihubungkan dengan profil sistem.\n\n` +
+        `👉 请直接回复您的 *4 位员工工号 / PIN 码* 进行快捷身份绑定：\n` +
+        `Sila balas dengan *No. Pekerja / PIN 4 digit* anda (contoh: 8335 / 1311 / 9821) untuk pengesahan segera!`;
 
       await sendWhatsAppText(fromNumber, promptReply);
       return res.status(200).json({ status: 'PROMPT_BINDING' });
@@ -637,18 +654,54 @@ Output valid JSON only: { "is_scale": boolean, "weight_kg": number or null, "des
       return res.status(200).json({ status: 'STOCK_QUERIED' });
     }
 
-    // Command 4: Help menu
-    if (/帮助|help|menu|bantuan/i.test(lower)) {
-      const helpText = `📖 *Panduan Penggunaan WhatsApp Packsecure*\n\n` +
-        `Hai ${empName}!\n` +
-        `1️⃣ Balas 【*打卡 / Masuk*】 untuk rekod kedatangan harian\n` +
-        `2️⃣ Balas 【*工时 / Trip*】 untuk semak profil & tugasan semasa\n` +
-        `3️⃣ Balas 【*库存 500*】 untuk semak baki stok bahan mentah\n` +
-        `4️⃣ Pemandu Lori: Terus hantar gambar DO bertandatangan untuk pengesahan siap hantar\n` +
-        `5️⃣ Jika ada sebarang kerosakan/masalah, terus taip maklumkan di sini!`;
+    // ── GREETING & COMMAND MENU (你好 / 早安 / Help / Menu / Bantuan) ─────────
+    const isGreetingOrHelp = /^(你好|您好|早安|嗨|哈喽|在吗|halo|hello|hi|hey|help|帮助|menu|bantuan)[!！~。.\s]*$/i.test(text) ||
+      /^(help|帮助|menu|bantuan)$/i.test(lower);
 
-      await sendWhatsAppText(fromNumber, helpText);
-      return res.status(200).json({ status: 'HELP_SENT' });
+    if (isGreetingOrHelp) {
+      const isExecutive = ['SuperAdmin', 'Admin', 'Director', 'Manager'].includes(empRole);
+
+      if (isExecutive) {
+        const executiveGreeting = `👋 *老板 / 管理层您好！* 我是 Packsecure OS 智能助理 🏢\n\n` +
+          `👤 当前身份：*${empName}*（${empRole}）\n` +
+          `📍 厂区：${employee.base_location || employee.factory_id || 'TAIPING'}\n\n` +
+          `📌 *快捷功能指令（直接发送对应文字即可）：*\n` +
+          `1️⃣ 📊 【*晚报*】或【*日报*】：查看今日全厂车次、送货签收率、现场异常与物料预警\n` +
+          `2️⃣ 🧪 【*配方 500*】或【*查看配方*】：查询机台配方、原料比例、净重/毛重及包数换算\n` +
+          `3️⃣ ✏️ 【*更改配方*】：快捷提交配方调整申请（需 PIN 码安全二次核实）\n` +
+          `4️⃣ 📦 【*库存*】或【*库存 500*】：实时查询各车间原料余量\n` +
+          `5️⃣ 💬 *自由提问*：直接输入任何生产、物流或运营疑问，AI 将结合实时系统数据库为您分析解答！`;
+
+        await sendWhatsAppText(fromNumber, executiveGreeting);
+        return res.status(200).json({ status: 'EXECUTIVE_GREETING_SENT' });
+      }
+
+      if (isDriver) {
+        const driverGreeting = `👋 *Halo Pemandu ${empName}!* (Packsecure OS 🚚)\n\n` +
+          `No. Pekerja: *${employee.employee_id || '-'}* | Lori: *${employee.lorry_id || '-'}*\n\n` +
+          `📌 *Menu Arahan Pantas:*\n` +
+          `1️⃣ Balas 【*打卡* / *Masuk*】: Rekod kedatangan harian\n` +
+          `2️⃣ Balas 【*工时* / *Trip*】: Semak tugasan trip & status profil\n` +
+          `3️⃣ 📸 *Hantar Foto DO*: Ambil gambar DO bertandatangan untuk pengesahan serahan automatik\n` +
+          `4️⃣ 🛠️ *Hantar Resit*: Foto resit bengkel / servis / tayar / ambik pallet untuk rekod tuntutan\n` +
+          `5️⃣ ⚠️ *Lapor Masalah*: Taip rosak / tayar pancit / kedai tutup terus di sini untuk makluman operasi`;
+
+        await sendWhatsAppText(fromNumber, driverGreeting);
+        return res.status(200).json({ status: 'DRIVER_GREETING_SENT' });
+      }
+
+      // Operators and general staff
+      const staffGreeting = `👋 *Halo ${empName}!* (Packsecure OS 🏭)\n\n` +
+        `Jawatan: *${empRole}* (${employee.employee_id || '-'})\n\n` +
+        `📌 *Menu Arahan:*\n` +
+        `1️⃣ Balas 【*打卡* / *Masuk*】: Rekod kehadiran harian\n` +
+        `2️⃣ Balas 【*工时*】: Semak ringkasan kehadiran & kilang\n` +
+        `3️⃣ Balas 【*库存 500*】: Semak baki stok bahan mentah\n` +
+        `4️⃣ ⚖️ *Hantar Foto Timbang*: Ambil foto paparan skrin penimbang digital untuk auto-log sisa/berat\n` +
+        `5️⃣ Balas 【*Bantuan*】: Paparkan arahan ini bila-bila masa`;
+
+        await sendWhatsAppText(fromNumber, staffGreeting);
+        return res.status(200).json({ status: 'STAFF_GREETING_SENT' });
     }
 
     // Command 5: Direct Evening Report request (晚报 / 日报)
