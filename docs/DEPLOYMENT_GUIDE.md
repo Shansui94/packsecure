@@ -2,7 +2,7 @@
 
 Packsecure OS 前端基于 React 19 + TypeScript + Vite 构建，后端 API 采用 Vercel Serverless Functions（`api/` 目录），数据库使用 Supabase。
 
-系统通过根目录的 [vercel.json](vercel.json) 自动完成单页应用（SPA）前端路由回退与 Serverless API 映射。
+系统通过根目录的 [vercel.json](../vercel.json) 自动完成单页应用（SPA）前端路由回退与 Serverless API 映射。
 
 ---
 

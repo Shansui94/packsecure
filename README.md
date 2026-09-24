@@ -96,10 +96,17 @@ packsecure/
 │   ├── BUSINESS_RULES.md        # 核心业务真理库（厂区、机台、工时、时薪费率）
 │   ├── DATA_DICTIONARY.md       # 数据库表结构字典与枚举说明
 │   ├── GITHUB_WORKFLOW_GUIDE.md # GitHub 协作与高效实战指南
+│   ├── DEPLOYMENT_GUIDE.md      # 生产环境部署与发布指南
 │   ├── I18N_GUIDELINES.md       # 国际化多语言规范
 │   ├── PAGE_SYNC_CHECKLIST.md   # 全页面联动与跨模块自检表
 │   ├── SYSTEM_ISSUES.md         # 系统缺陷与巡检看板
-│   └── WHATSAPP_ISSUE_TRIAGE.md # 现场 WhatsApp 排障手册与词典
+│   ├── WHATSAPP_ISSUE_TRIAGE.md # 现场 WhatsApp 排障手册与词典
+│   ├── sops/                    # 车间标准化操作规程 (SOP)
+│   │   ├── SOP_Driver_Delivery.md
+│   │   ├── SOP_HR_Leave_Approval.md
+│   │   └── SOP_Machine_Labeling.md
+│   └── operations/              # 现场硬件配置与机台清单
+│       └── QR_CODES_LIST.md
 ├── .env.example                 # 环境变量配置模板
 └── package.json
 ```
@@ -142,6 +149,7 @@ cp .env.example .env
 npm run check:health   # 系统健康度一键检查 (DB 连通性、核心表完整性)
 npm run check:scan     # 端到端系统诊断扫描
 npm run daily-report   # 每日自动化考勤与报表排查
+npm run sync:sops      # 一键将 docs/sops/*.md 动态同步至数据库 SOP 中心
 ```
 
 ---
@@ -151,8 +159,8 @@ npm run daily-report   # 每日自动化考勤与报表排查
 系统完整文档已按架构、规范与 SOP 模块化沉淀，全局导航详见 **[docs/README.md](./docs/README.md)**：
 
 - 🏛️ **业务真理与数据**：[`docs/BUSINESS_RULES.md`](./docs/BUSINESS_RULES.md) (厂区/时薪/工时) · [`docs/DATA_DICTIONARY.md`](./docs/DATA_DICTIONARY.md) (数据字典) · [`docs/I18N_GUIDELINES.md`](./docs/I18N_GUIDELINES.md) (多语言规范)
-- 🚀 **工程规范与协同**：[`docs/GITHUB_WORKFLOW_GUIDE.md`](./docs/GITHUB_WORKFLOW_GUIDE.md) (GitHub/Vercel工作流) · [`MANUAL_DEPLOY.md`](./MANUAL_DEPLOY.md) (部署指南) · [`docs/PAGE_SYNC_CHECKLIST.md`](./docs/PAGE_SYNC_CHECKLIST.md) (联动自检) · [`docs/SYSTEM_ISSUES.md`](./docs/SYSTEM_ISSUES.md) (缺陷追踪)
-- 🏭 **现场 SOP 与指导书**：[`SOP_Driver_Delivery.md`](./SOP_Driver_Delivery.md) (司机配送) · [`SOP_HR_Leave_Approval.md`](./SOP_HR_Leave_Approval.md) (HR审批) · [`SOP_Machine_Labeling.md`](./SOP_Machine_Labeling.md) (机台标贴) · [`QR_CODES_LIST.md`](./QR_CODES_LIST.md) (机台二维码)
+- 🚀 **工程规范与协同**：[`docs/GITHUB_WORKFLOW_GUIDE.md`](./docs/GITHUB_WORKFLOW_GUIDE.md) (GitHub工作流) · [`docs/DEPLOYMENT_GUIDE.md`](./docs/DEPLOYMENT_GUIDE.md) (部署指南) · [`docs/PAGE_SYNC_CHECKLIST.md`](./docs/PAGE_SYNC_CHECKLIST.md) (联动自检) · [`docs/SYSTEM_ISSUES.md`](./docs/SYSTEM_ISSUES.md) (缺陷追踪)
+- 🏭 **现场 SOP 与指导书**：[`docs/sops/SOP_Driver_Delivery.md`](./docs/sops/SOP_Driver_Delivery.md) (司机配送) · [`docs/sops/SOP_HR_Leave_Approval.md`](./docs/sops/SOP_HR_Leave_Approval.md) (HR审批) · [`docs/sops/SOP_Machine_Labeling.md`](./docs/sops/SOP_Machine_Labeling.md) (机台标贴) · [`docs/operations/QR_CODES_LIST.md`](./docs/operations/QR_CODES_LIST.md) (机台二维码)
 - 🤖 **AI 与现场排障**：[`AGENTS.md`](./AGENTS.md) (智能体开发规范) · [`docs/WHATSAPP_ISSUE_TRIAGE.md`](./docs/WHATSAPP_ISSUE_TRIAGE.md) (现场群聊排障手册)
 
 ---

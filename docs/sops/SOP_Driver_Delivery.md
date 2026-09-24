@@ -1,5 +1,21 @@
+---
+title: 卡车绑定与扫码还车 SOP (司机端)
+code: SOP-LOG-001
+version: v2.1.0
+last_updated: 2026-09-24
+page_id: driver-delivery
+description: 指导司机如何进行卡车绑定、送货拍照上传、以及回厂扫码交单结束行程。
+applicable_roles: [Driver, SuperAdmin, Admin, Manager]
+languages: [ZH, MS]
+sort_order: 1
+---
+
 # PackSecure 司机配送与扫码还车 SOP (Standard Operating Procedure)
 ### Prosedur Operasi Standard Penghantaran & Pemulangan Lori
+
+> **Dokumen No / 编号**: `SOP-LOG-001` ｜ **Versi / 版本**: `v2.1.0` ｜ **Tarikh / 生效日期**: `2026-09-24`  
+> **Peranan / 适用工种**: 司机 (Driver)、物流调度员 (Logistics Coordinator)  
+> **Bahasa / 语言**: Bahasa Melayu / 中文双语
 
 本文档旨在指导司机如何使用 PackSecure 手机系统进行卡车绑定、送货照相上传，以及回厂扫码交单结束行程。
 *Dokumen ini bertujuan untuk membimbing pemandu menggunakan sistem telefon PackSecure bagi menambat lori, memuat naik foto penghantaran, dan mengimbas kod QR di pejabat untuk tamat trip.*

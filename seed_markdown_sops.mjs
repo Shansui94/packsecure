@@ -9,91 +9,143 @@ dotenv.config();
 const __filename = fileURLToPath(import.meta.url);
 const __dirname = path.dirname(__filename);
 
-const supabase = createClient(
-    process.env.VITE_SUPABASE_URL,
-    process.env.VITE_SUPABASE_ANON_KEY
-);
+const supabaseUrl = process.env.VITE_SUPABASE_URL || process.env.SUPABASE_URL;
+const supabaseKey = process.env.SUPABASE_SERVICE_ROLE_KEY || process.env.VITE_SUPABASE_ANON_KEY;
+
+if (!supabaseUrl || !supabaseKey) {
+    console.error("Missing Supabase credentials in environment variables.");
+    process.exit(1);
+}
+
+const supabase = createClient(supabaseUrl, supabaseKey);
+
+/**
+ * Simple YAML Frontmatter parser
+ */
+function parseFrontmatter(fileContent) {
+    const frontmatterRegex = /^---\r?\n([\s\S]*?)\r?\n---\r?\n?([\s\S]*)$/;
+    const match = fileContent.match(frontmatterRegex);
+
+    if (!match) {
+        return { data: {}, content: fileContent };
+    }
+
+    const yamlBlock = match[1];
+    const bodyContent = match[2];
+    const data = {};
+
+    yamlBlock.split(/\r?\n/).forEach(line => {
+        const colonIndex = line.indexOf(':');
+        if (colonIndex > 0) {
+            const key = line.slice(0, colonIndex).trim();
+            let value = line.slice(colonIndex + 1).trim();
+
+            // Handle array [A, B, C]
+            if (value.startsWith('[') && value.endsWith(']')) {
+                data[key] = value
+                    .slice(1, -1)
+                    .split(',')
+                    .map(item => item.trim().replace(/^['"]|['"]$/g, ''))
+                    .filter(Boolean);
+            } else {
+                // Remove quotes
+                data[key] = value.replace(/^['"]|['"]$/g, '');
+            }
+        }
+    });
+
+    return { data, content: bodyContent };
+}
 
 async function run() {
-    console.log("Starting SOP Markdown seeding...");
+    console.log("🚀 Starting Dynamic SOP Markdown Sync...");
 
-    // 1. Read markdown files
-    const driverSOPPath = path.join(__dirname, 'SOP_Driver_Delivery.md');
-    const hrSOPPath = path.join(__dirname, 'SOP_HR_Leave_Approval.md');
-    const machineSOPPath = path.join(__dirname, 'SOP_Machine_Labeling.md');
-
-    let driverContent = '';
-    let hrContent = '';
-    let machineContent = '';
-
-    try {
-        driverContent = fs.readFileSync(driverSOPPath, 'utf-8');
-        hrContent = fs.readFileSync(hrSOPPath, 'utf-8');
-        machineContent = fs.readFileSync(machineSOPPath, 'utf-8');
-    } catch (err) {
-        console.error("Error reading markdown files:", err);
+    const sopsDir = path.join(__dirname, 'docs', 'sops');
+    if (!fs.existsSync(sopsDir)) {
+        console.error(`SOP directory not found at: ${sopsDir}`);
         process.exit(1);
     }
 
-    // 2. Define article database models
-    const articles = [
-        {
-            title: '卡车绑定与扫码还车 SOP (司机端)',
-            description: '指导司机如何进行卡车绑定、送货拍照上传、以及回厂扫码交单结束行程。',
-            content: driverContent,
-            page_id: 'driver-delivery',
-            target_roles: ['Driver', 'SuperAdmin', 'Admin', 'Manager'],
-            sort_order: 1,
-            is_published: true,
-            created_by: 'System Seed'
-        },
-        {
-            title: 'HR 假期审批标准操作规程 (HR/管理端)',
-            description: '指导 HR 及管理人员在系统后台正确审核、批准、拒绝和撤销员工的请假申请。',
-            content: hrContent,
-            page_id: 'leave-calendar',
-            target_roles: ['HR', 'SuperAdmin', 'Admin', 'Manager'],
-            sort_order: 2,
-            is_published: true,
-            created_by: 'System Seed'
-        },
-        {
-            title: '生产设备标签与扫码 SOP (操作工端)',
-            description: '指导工厂管理人员及操作工如何正确打印、安装和扫描机器 QR 识别码进行生产计数。',
-            content: machineContent,
-            page_id: 'scanner',
-            target_roles: ['Operator', 'SuperAdmin', 'Admin', 'Manager'],
-            sort_order: 3,
-            is_published: true,
-            created_by: 'System Seed'
-        }
-    ];
+    const files = fs.readdirSync(sopsDir).filter(f => f.endsWith('.md'));
+    console.log(`📁 Found ${files.length} SOP markdown files in docs/sops:`, files);
 
-    // 3. Clear existing articles to avoid duplicates
-    console.log("Cleaning existing SOP articles...");
+    const articles = [];
+
+    files.forEach((file, index) => {
+        const filePath = path.join(sopsDir, file);
+        const rawContent = fs.readFileSync(filePath, 'utf-8');
+        const { data, content } = parseFrontmatter(rawContent);
+
+        // Derive title
+        let title = data.title;
+        if (!title) {
+            const h1Match = rawContent.match(/^#\s+(.+)$/m);
+            title = h1Match ? h1Match[1].trim() : file.replace(/\.md$/, '');
+        }
+
+        // Derive roles
+        const roles = data.applicable_roles || data.target_roles || ['SuperAdmin', 'Admin', 'Manager'];
+
+        // Derive page_id
+        let pageId = data.page_id || '';
+        if (!pageId) {
+            if (file.toLowerCase().includes('driver')) pageId = 'driver-delivery';
+            else if (file.toLowerCase().includes('leave')) pageId = 'leave-calendar';
+            else if (file.toLowerCase().includes('machine')) pageId = 'scanner';
+            else pageId = file.toLowerCase().replace(/\.md$/, '').replace(/[^a-z0-9]/g, '-');
+        }
+
+        // Derive description
+        let description = data.description || '';
+        if (!description) {
+            const lines = content.split(/\r?\n/).map(l => l.trim()).filter(l => l && !l.startsWith('#') && !l.startsWith('>'));
+            description = lines[0] ? lines[0].slice(0, 120) : `${title} 标准作业指导书`;
+        }
+
+        articles.push({
+            title,
+            description,
+            content: rawContent, // Keep complete markdown including header
+            page_id: pageId,
+            target_roles: roles,
+            sort_order: parseInt(data.sort_order, 10) || (index + 1),
+            is_published: true,
+            created_by: 'System Seed'
+        });
+    });
+
+    // 1. Clean existing seeded articles
+    console.log("🧹 Cleaning previously seeded SOP articles...");
     const { error: deleteError } = await supabase
         .from('sop_articles')
         .delete()
-        .neq('id', '00000000-0000-0000-0000-000000000000'); // Delete all
+        .eq('created_by', 'System Seed');
 
     if (deleteError) {
-        console.error("Failed to clean table:", deleteError);
-        process.exit(1);
+        console.error("⚠️ Failed to clean seeded articles, trying fallback delete:", deleteError.message);
+        // Fallback: delete all if created_by isn't filtered
+        await supabase
+            .from('sop_articles')
+            .delete()
+            .neq('id', '00000000-0000-0000-0000-000000000000');
     }
 
-    // 4. Insert new seeded articles
-    console.log("Inserting seeded articles...");
-    const { data, error: insertError } = await supabase
+    // 2. Insert new articles
+    console.log(`📥 Inserting ${articles.length} parsed SOP articles into Supabase...`);
+    const { data: inserted, error: insertError } = await supabase
         .from('sop_articles')
         .insert(articles)
-        .select('id, title, page_id');
+        .select('id, title, page_id, sort_order');
 
     if (insertError) {
-        console.error("Failed to seed articles:", insertError);
+        console.error("❌ Failed to insert SOP articles:", insertError);
         process.exit(1);
     }
 
-    console.log("Successfully seeded SOP Articles:", data);
+    console.log("\n✅ Successfully synced SOP Articles to database:");
+    inserted.forEach(item => {
+        console.log(`  - [Order ${item.sort_order}] ${item.title} (page: ${item.page_id}, id: ${item.id})`);
+    });
 }
 
 run();

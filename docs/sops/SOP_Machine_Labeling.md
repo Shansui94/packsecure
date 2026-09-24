@@ -1,4 +1,20 @@
+---
+title: 生产设备标签与扫码 SOP (操作工端)
+code: SOP-PRD-001
+version: v2.0.0
+last_updated: 2026-09-24
+page_id: scanner
+description: 指导工厂管理人员及操作工如何正确打印、安装和扫描机器 QR 识别码进行生产计数。
+applicable_roles: [Operator, SuperAdmin, Admin, Manager]
+languages: [ZH, EN]
+sort_order: 3
+---
+
 # PackSecure 生产设备标签 SOP (Standard Operating Procedure)
+
+> **文档编号**: `SOP-PRD-001` ｜ **版本**: `v2.0.0` ｜ **生效日期**: `2026-09-24`  
+> **适用对象**: 车间主管 (Production Supervisor)、设备维护员 (Maintenance)、操作工 (Operator)  
+> **语言标准**: 中文 / English
 
 本文档旨在指导工厂管理人员如何正确生成、打印、安装和使用机器 QR 识别码系统。
 
@@ -6,7 +22,7 @@
 
 ## 1. 核心设备标签清单 (Core Machines)
 
-各厂区机台编号必须与系统核心业务真理库（[docs/BUSINESS_RULES.md](docs/BUSINESS_RULES.md)）及机台清单（[QR_CODES_LIST.md](QR_CODES_LIST.md)）保持完全一致：
+各厂区机台编号必须与系统核心业务真理库（[docs/BUSINESS_RULES.md](../BUSINESS_RULES.md)）及机台清单（[docs/operations/QR_CODES_LIST.md](../operations/QR_CODES_LIST.md)）保持完全一致：
 
 | 厂区 | 设备名称 | 生产线 (Line) | QR 码识别内容 (Machine ID) | 规格说明 |
 | :--- | :--- | :--- | :--- | :--- |
@@ -23,7 +39,7 @@
 | **柔佛 Johor**| **2M Double Layer (J1)** | Johor J1 | `J1-M01` | 2米双层气泡膜机台 |
 | **柔佛 Johor**| **Recycle Machine (J1)** | Johor J1 | `J1-M02` | 塑料回收造粒机台 |
 
-> 完整 12 台设备的详细清单及制作参数，请参阅 [QR_CODES_LIST.md](QR_CODES_LIST.md)。
+> 完整 12 台设备的详细清单及制作参数，请参阅 [docs/operations/QR_CODES_LIST.md](../operations/QR_CODES_LIST.md)。
 
 ---
 

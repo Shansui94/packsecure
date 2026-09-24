@@ -42,6 +42,7 @@ export interface GroupedTrip {
     isUnscanned: boolean;
     displayString: string;
     orders: any[]; // The underlying individual sales_orders
+    is_hr_approved?: boolean;
 }
 
 /**
@@ -320,7 +321,15 @@ export function groupOrdersIntoTrips(
 
         // Combined notes, preserving pending payload from any order
         const pendingPayloadOrder = orders.find(o => o.notes?.includes('[PENDING_EDIT_PAYLOAD]') || o.pending_edit_payload);
-        const combinedNotes = pendingPayloadOrder?.notes || primary.notes || null;
+        const hasHrApproved = orders.some(o => o.notes?.includes('[HR_APPROVED]') || o.is_hr_approved);
+        let combinedNotes = pendingPayloadOrder?.notes || primary.notes || null;
+        if (hasHrApproved) {
+            if (!combinedNotes) {
+                combinedNotes = '[HR_APPROVED]';
+            } else if (!combinedNotes.includes('[HR_APPROVED]')) {
+                combinedNotes = `${combinedNotes}\n[HR_APPROVED]`;
+            }
+        }
 
         result.push({
             id: primary.id,
@@ -356,7 +365,8 @@ export function groupOrdersIntoTrips(
             isDelivered,
             isUnscanned,
             displayString,
-            orders
+            orders,
+            is_hr_approved: hasHrApproved
         });
     });
 
@@ -423,7 +433,8 @@ export function groupOrdersIntoTrips(
             isDelivered,
             isUnscanned,
             displayString,
-            orders: [o]
+            orders: [o],
+            is_hr_approved: Boolean(o.notes?.includes('[HR_APPROVED]') || o.is_hr_approved)
         });
     });
 

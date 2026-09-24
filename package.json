@@ -16,7 +16,8 @@
     "daily-report": "tsx scripts/check_daily_report.ts",
     "check:health": "tsx scripts/system_health_check.ts",
     "check:scan": "tsx scripts/e2e_system_scan.ts",
-    "reset:recording": "node scripts/reset_for_user_recording.mjs"
+    "reset:recording": "node scripts/reset_for_user_recording.mjs",
+    "sync:sops": "node seed_markdown_sops.mjs"
   },
   "dependencies": {
     "@dnd-kit/core": "^6.3.1",

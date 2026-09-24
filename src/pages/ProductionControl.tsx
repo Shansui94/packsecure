@@ -98,6 +98,8 @@ const CATEGORIES: Record<string, { label: string; emoji: string; color: string }
     startup: { label: '开机 Start', emoji: '🟢', color: 'bg-green-500/20 text-green-300 border-green-500/30' },
     recipe: { label: '原料配方', emoji: '🧪', color: 'bg-amber-500/20 text-amber-300 border-amber-500/30' },
     carton: { label: '成品纸箱', emoji: '📦', color: 'bg-emerald-500/20 text-emerald-300 border-emerald-500/30' },
+    trolley: { label: '推车出箱', emoji: '🛒', color: 'bg-indigo-500/20 text-indigo-300 border-indigo-500/30' },
+    sf_trolley: { label: '推车出箱', emoji: '🛒', color: 'bg-indigo-500/20 text-indigo-300 border-indigo-500/30' },
     other: { label: '其他 Other', emoji: '📋', color: 'bg-gray-500/20 text-gray-300 border-gray-500/30' },
 };
 
@@ -109,6 +111,15 @@ export const SPECIAL_WORK_CATEGORIES = [
     { key: 'driver_order', label: '协助司机 Trip', icon: '🚚', badge: '协助装车配货', color: 'bg-emerald-500/10 text-emerald-300 border-emerald-500/30', activeColor: 'bg-emerald-600 text-white border-emerald-400' },
     { key: 'shopee', label: 'Shopee 散单', icon: '🛍️', badge: '电商小件打包', color: 'bg-orange-500/10 text-orange-300 border-orange-500/30', activeColor: 'bg-orange-600 text-white border-orange-400' },
     { key: 'boss_order', label: 'Boss 特单', icon: '👑', badge: '老板指定急单', color: 'bg-purple-500/10 text-purple-300 border-purple-500/30', activeColor: 'bg-purple-600 text-white border-purple-400' },
+];
+
+// 厂区分组配置 (Taiping T1-T5, Nilai N1-N3, Kelantan K1, Johor J1)
+export const FACTORY_TABS = [
+    { key: 'all', label: '全部厂区', prefix: '' },
+    { key: 'taiping', label: '太平总厂 (T1-T5)', prefix: 'T' },
+    { key: 'nilai', label: '汝来分厂 (N1-N3)', prefix: 'N' },
+    { key: 'kelantan', label: '吉兰丹 (K1)', prefix: 'K' },
+    { key: 'johor', label: '柔佛分厂 (J1)', prefix: 'J' },
 ];
 
 // Parser for SKU
@@ -1212,6 +1223,8 @@ const ProductionControl: React.FC<ProductionControlProps> = ({ user, jobs = [], 
     const [activeJob, setActiveJob] = useState<JobOrder | null>(null);
     const [recentLogs, setRecentLogs] = useState<GroupedProductionLog[]>([]);
     const [machinePhotos, setMachinePhotos] = useState<any[]>([]);
+    const [photoFilterTab, setPhotoFilterTab] = useState<'machine' | 'all'>('machine');
+    const [selectedFactoryTab, setSelectedFactoryTab] = useState<string>('all');
     const [todayMachineTotal, setTodayMachineTotal] = useState<number>(0);
 
     const fetchTodayMachineTotal = useCallback(async (machineId?: string) => {
@@ -2152,6 +2165,17 @@ const ProductionControl: React.FC<ProductionControlProps> = ({ user, jobs = [], 
         return true;
     });
 
+    // Filter machines based on selected factory tab (Taiping T, Nilai N, Kelantan K, Johor J)
+    const displayedMachines = useMemo(() => {
+        if (selectedFactoryTab === 'all') return filteredMachines;
+        const tabObj = FACTORY_TABS.find(t => t.key === selectedFactoryTab);
+        if (!tabObj || !tabObj.prefix) return filteredMachines;
+        return filteredMachines.filter(m => {
+            const mId = ((m as any).machine_id || m.id || '').toUpperCase();
+            return mId.startsWith(tabObj.prefix) || (m.factory_id && m.factory_id.toLowerCase().includes(selectedFactoryTab));
+        });
+    }, [filteredMachines, selectedFactoryTab]);
+
     // Fetch schedule tasks
     useEffect(() => {
         if (!selectedMachine) { setScheduleTasks([]); return; }
@@ -2583,36 +2607,65 @@ const ProductionControl: React.FC<ProductionControlProps> = ({ user, jobs = [], 
         }
     }, [selectedMachine, machineMetadata]);
 
-    const fetchMachinePhotos = async () => {
-        const targetMachine = (machineMetadata?.id || selectedMachine)?.trim();
-        if (!targetMachine) return;
-        const shortKey = targetMachine.split('-')[0].trim();
+    const fetchMachinePhotos = useCallback(async () => {
+        try {
+            if (photoFilterTab === 'all') {
+                const { data } = await supabase
+                    .from('work_photos')
+                    .select('*')
+                    .order('created_at', { ascending: false })
+                    .limit(20);
+                if (data) setMachinePhotos(data);
+                return;
+            }
 
-        const { data } = await supabase
-            .from('work_photos')
-            .select('*')
-            .or(`machine_id.eq.${targetMachine},machine_id.eq.${shortKey},machine_id.ilike.${shortKey}-%`)
-            .order('created_at', { ascending: false })
-            .limit(20);
+            const targetMachine = (machineMetadata?.id || selectedMachine)?.trim();
+            if (!targetMachine) {
+                setMachinePhotos([]);
+                return;
+            }
+            const shortKey = targetMachine.split('-')[0].trim();
 
-        if (data) {
-            setMachinePhotos(data);
+            const { data } = await supabase
+                .from('work_photos')
+                .select('*')
+                .or(`machine_id.eq.${targetMachine},machine_id.eq.${shortKey},machine_id.ilike.${shortKey}-%`)
+                .order('created_at', { ascending: false })
+                .limit(20);
+
+            if (data) {
+                setMachinePhotos(data);
+            }
+        } catch (err) {
+            console.error("fetchMachinePhotos error:", err);
         }
-    };
+    }, [photoFilterTab, selectedMachine, machineMetadata?.id]);
 
     useEffect(() => {
-        if (selectedMachine) {
+        fetchMachinePhotos();
+        const chanName = photoFilterTab === 'all' ? 'all-work-photos' : `machine-photos-${selectedMachine || 'none'}`;
+        const sub = supabase.channel(chanName)
+            .on('postgres_changes', { event: '*', schema: 'public', table: 'work_photos' }, () => {
+                fetchMachinePhotos();
+            })
+            .subscribe();
+        return () => { supabase.removeChannel(sub); };
+    }, [fetchMachinePhotos, photoFilterTab, selectedMachine]);
+
+    // 监听万能快拍或 StretchFilmControl 派发的工作拍照事件
+    useEffect(() => {
+        const handlePhotoLogged = () => {
             fetchMachinePhotos();
-            const sub = supabase.channel(`machine-photos-${selectedMachine}`)
-                .on('postgres_changes', { event: '*', schema: 'public', table: 'work_photos' }, () => {
-                    fetchMachinePhotos();
-                })
-                .subscribe();
-            return () => { supabase.removeChannel(sub); };
-        } else {
-            setMachinePhotos([]);
-        }
-    }, [selectedMachine, machineMetadata]);
+            if (selectedMachine) {
+                fetchTodayMachineTotal(selectedMachine);
+                fetchUserLogs();
+            }
+        };
+        window.addEventListener('packsecure:photo-logged', handlePhotoLogged);
+        return () => {
+            window.removeEventListener('packsecure:photo-logged', handlePhotoLogged);
+        };
+    }, [fetchMachinePhotos, selectedMachine, fetchTodayMachineTotal]);
 
     const handleProductionAttempt = () => {
         if (!operatorId) {
@@ -3098,7 +3151,7 @@ const ProductionControl: React.FC<ProductionControlProps> = ({ user, jobs = [], 
     return (
         <>
             <div className="min-h-screen text-apple-textMain dark:text-white font-sans selection:bg-apple-blue/30 overflow-x-hidden relative animate-fade-in">
-                <div className="relative z-10 max-w-7xl mx-auto p-4 md:p-6 flex flex-col min-h-screen">
+                <div className="relative z-10 max-w-7xl mx-auto p-4 md:p-6 pb-32 flex flex-col min-h-screen">
 
                 {/* HEADER */}
                 <header className="flex justify-between items-center mb-5 apple-glass px-5 py-3.5 rounded-2xl shadow-lg sticky top-4 z-50 border border-white/10 gap-3 flex-wrap md:flex-nowrap">
@@ -3109,7 +3162,6 @@ const ProductionControl: React.FC<ProductionControlProps> = ({ user, jobs = [], 
                         <div>
                             <h2 className="text-base font-semibold text-white flex items-center gap-2">
                                 <span>{t('生产控制工作台')}</span>
-                                <span className="text-xs text-gray-400 font-normal">Production Workspace</span>
                             </h2>
                             {selectedMachine && (
                                 <div className="flex items-center gap-2 mt-0.5 flex-wrap">
@@ -3159,42 +3211,44 @@ const ProductionControl: React.FC<ProductionControlProps> = ({ user, jobs = [], 
                     )}
 
                     <div className="flex items-center gap-2 ml-auto flex-wrap sm:flex-nowrap">
-                        {/* 🌐 6-Language Quick Switcher */}
-                        <div className="relative">
-                            <button
-                                type="button"
-                                onClick={() => setShowLangMenu(prev => !prev)}
-                                className="px-2.5 py-1.5 rounded-xl border border-white/10 bg-white/5 hover:bg-white/10 text-xs font-medium text-gray-200 flex items-center gap-1.5 transition cursor-pointer shrink-0"
-                                title={t('切换界面语言 / Change Language')}
-                            >
-                                <Globe size={14} className="text-cyan-400" />
-                                <span className="font-mono">{currentLangObj?.flag || '🌐'}</span>
-                                <span className="hidden md:inline text-[11px]">{currentLangObj?.label || '语言'}</span>
-                                <ChevronDown size={12} className="text-gray-400" />
-                            </button>
-                            {showLangMenu && (
-                                <div className="absolute right-0 top-full mt-2 w-44 bg-zinc-900/95 border border-white/15 rounded-2xl shadow-2xl p-1.5 z-50 backdrop-blur-md animate-fade-in divide-y divide-white/5">
-                                    {LANGUAGES.map(lang => (
-                                        <button
-                                            key={lang.code}
-                                            type="button"
-                                            onClick={() => {
-                                                changeLanguage(lang.code);
-                                                setShowLangMenu(false);
-                                            }}
-                                            className={`w-full px-3 py-2 rounded-xl text-xs flex items-center gap-2.5 transition cursor-pointer text-left ${
-                                                currentLang === lang.code
-                                                    ? 'bg-purple-600/30 text-purple-200 font-bold border border-purple-500/40'
-                                                    : 'hover:bg-white/10 text-gray-300'
-                                            }`}
-                                        >
-                                            <span className="text-base">{lang.flag}</span>
-                                            <span>{lang.label}</span>
-                                        </button>
-                                    ))}
-                                </div>
-                            )}
-                        </div>
+                        {/* 🌐 6-Language Quick Switcher (Only in standalone Kiosk mode when no global user Layout) */}
+                        {!user && (
+                            <div className="relative">
+                                <button
+                                    type="button"
+                                    onClick={() => setShowLangMenu(prev => !prev)}
+                                    className="px-2.5 py-1.5 rounded-xl border border-white/10 bg-white/5 hover:bg-white/10 text-xs font-medium text-gray-200 flex items-center gap-1.5 transition cursor-pointer shrink-0"
+                                    title={t('切换界面语言 / Change Language')}
+                                >
+                                    <Globe size={14} className="text-cyan-400" />
+                                    <span className="font-mono">{currentLangObj?.flag || '🌐'}</span>
+                                    <span className="hidden md:inline text-[11px]">{currentLangObj?.label || '语言'}</span>
+                                    <ChevronDown size={12} className="text-gray-400" />
+                                </button>
+                                {showLangMenu && (
+                                    <div className="absolute right-0 top-full mt-2 w-44 bg-zinc-900/95 border border-white/15 rounded-2xl shadow-2xl p-1.5 z-50 backdrop-blur-md animate-fade-in divide-y divide-white/5">
+                                        {LANGUAGES.map(lang => (
+                                            <button
+                                                key={lang.code}
+                                                type="button"
+                                                onClick={() => {
+                                                    changeLanguage(lang.code);
+                                                    setShowLangMenu(false);
+                                                }}
+                                                className={`w-full px-3 py-2 rounded-xl text-xs flex items-center gap-2.5 transition cursor-pointer text-left ${
+                                                    currentLang === lang.code
+                                                        ? 'bg-purple-600/30 text-purple-200 font-bold border border-purple-500/40'
+                                                        : 'hover:bg-white/10 text-gray-300'
+                                                }`}
+                                            >
+                                                <span className="text-base">{lang.flag}</span>
+                                                <span>{lang.label}</span>
+                                            </button>
+                                        ))}
+                                    </div>
+                                )}
+                            </div>
+                        )}
 
                         {/* 🖨️ SoonMark M4201 标签打印机直连状态胶囊按钮 */}
                         <button
@@ -3333,24 +3387,48 @@ const ProductionControl: React.FC<ProductionControlProps> = ({ user, jobs = [], 
 
                 {/* MACHINE TABS SWITCHER (Hidden for Operators) */}
                 {user && user.role !== 'Operator' && (
-                    <div className="grid grid-cols-2 sm:flex sm:flex-wrap gap-2 mb-4">
-                        {filteredMachines.map(m => {
-                            const mId = (m as any).machine_id || m.id;
-                            const isSelected = selectedMachine === mId;
-                            return (
-                                <button
-                                    key={mId}
-                                    onClick={() => handleMachineTabClick(mId)}
-                                    className={`px-3 py-2 rounded-xl text-xs font-medium transition-all border text-center sm:shrink-0 ${
-                                        isSelected
-                                            ? 'bg-blue-600 text-white border-blue-500 shadow-sm'
-                                            : 'bg-white/5 text-gray-400 border-white/10 hover:text-white hover:bg-white/10'
-                                    }`}
-                                >
-                                    {formatMachineName(m.name)}
-                                </button>
-                            );
-                        })}
+                    <div className="mb-4 space-y-2">
+                        {/* 🏭 Factory Plant Filter Tabs */}
+                        <div className="flex items-center gap-1.5 overflow-x-auto pb-1 scrollbar-none">
+                            {FACTORY_TABS.map(tab => {
+                                const isActive = selectedFactoryTab === tab.key;
+                                return (
+                                    <button
+                                        key={tab.key}
+                                        type="button"
+                                        onClick={() => setSelectedFactoryTab(tab.key)}
+                                        className={`px-3 py-1 rounded-full text-xs font-semibold whitespace-nowrap transition cursor-pointer border ${
+                                            isActive
+                                                ? 'bg-blue-600 text-white border-blue-500 shadow-sm'
+                                                : 'bg-white/5 text-gray-400 border-white/10 hover:text-white hover:bg-white/10'
+                                        }`}
+                                    >
+                                        {t(tab.label)}
+                                    </button>
+                                );
+                            })}
+                        </div>
+
+                        {/* Machine Switcher Buttons */}
+                        <div className="grid grid-cols-2 sm:flex sm:flex-wrap gap-2">
+                            {displayedMachines.map(m => {
+                                const mId = (m as any).machine_id || m.id;
+                                const isSelected = selectedMachine === mId;
+                                return (
+                                    <button
+                                        key={mId}
+                                        onClick={() => handleMachineTabClick(mId)}
+                                        className={`px-3 py-2 rounded-xl text-xs font-medium transition-all border text-center sm:shrink-0 ${
+                                            isSelected
+                                                ? 'bg-blue-600 text-white border-blue-500 shadow-sm'
+                                                : 'bg-white/5 text-gray-400 border-white/10 hover:text-white hover:bg-white/10'
+                                        }`}
+                                    >
+                                        {formatMachineName(m.name)}
+                                    </button>
+                                );
+                            })}
+                        </div>
                     </div>
                 )}
 
@@ -4202,7 +4280,7 @@ const ProductionControl: React.FC<ProductionControlProps> = ({ user, jobs = [], 
 
                         {/* RIGHT COLUMN: WORK PHOTO LOGGER, RECENT PHOTOS, TASKS, ACTIVITY LOGS (4 cols) */}
                         {!isRecycleMachine && (
-                            <div className="lg:col-span-4 flex flex-col gap-6">
+                            <div className="lg:col-span-4 flex flex-col gap-6 pb-28">
 
                                 {/* 1. WORK PHOTO LOGGER (Only on bubble wrap lanes; Stretch Film & Recycle have photo logger in the main column) */}
                             {!isSfOrRecycle && (
@@ -4340,9 +4418,35 @@ const ProductionControl: React.FC<ProductionControlProps> = ({ user, jobs = [], 
 
                             {/* 📷 2. RECENT PHOTOS GRID (最近登记照片 - 全机台通用跨端呈现) */}
                             <div className="bg-white/5 border border-white/10 rounded-2xl p-4 backdrop-blur-md">
-                                <h3 className="text-xs font-semibold text-gray-300 uppercase tracking-wider flex items-center gap-1.5 mb-3">
-                                    <ImageIcon size={14} className="text-purple-400" /> {t('最近登记照片')} ({machinePhotos.length})
-                                </h3>
+                                <div className="flex items-center justify-between gap-2 mb-3">
+                                    <h3 className="text-xs font-semibold text-gray-300 uppercase tracking-wider flex items-center gap-1.5">
+                                        <ImageIcon size={14} className="text-purple-400" /> {t('最近登记照片')} ({machinePhotos.length})
+                                    </h3>
+                                    <div className="flex items-center gap-1 bg-white/5 p-0.5 rounded-lg border border-white/10 shrink-0">
+                                        <button
+                                            type="button"
+                                            onClick={() => setPhotoFilterTab('machine')}
+                                            className={`px-2 py-0.5 rounded-md text-[11px] font-medium transition cursor-pointer ${
+                                                photoFilterTab === 'machine'
+                                                    ? 'bg-purple-600 text-white shadow-sm'
+                                                    : 'text-gray-400 hover:text-white'
+                                            }`}
+                                        >
+                                            {t('本机留痕')}
+                                        </button>
+                                        <button
+                                            type="button"
+                                            onClick={() => setPhotoFilterTab('all')}
+                                            className={`px-2 py-0.5 rounded-md text-[11px] font-medium transition cursor-pointer ${
+                                                photoFilterTab === 'all'
+                                                    ? 'bg-purple-600 text-white shadow-sm'
+                                                    : 'text-gray-400 hover:text-white'
+                                            }`}
+                                        >
+                                            {t('全厂动态')}
+                                        </button>
+                                    </div>
+                                </div>
 
                                 {machinePhotos.length === 0 ? (
                                     <p className="text-center py-4 text-xs text-gray-500 font-mono">{t('暂无现场照片记录')}</p>
@@ -4352,6 +4456,7 @@ const ProductionControl: React.FC<ProductionControlProps> = ({ user, jobs = [], 
                                             const isVid = p.photo_url?.toLowerCase().endsWith('.webm') || 
                                                           p.photo_url?.toLowerCase().endsWith('.mp4') || 
                                                           p.photo_url?.toLowerCase().endsWith('.mov');
+                                            const catInfo = CATEGORIES[p.category] || CATEGORIES.other;
                                             return (
                                                 <div 
                                                     key={p.id} 
@@ -4359,6 +4464,19 @@ const ProductionControl: React.FC<ProductionControlProps> = ({ user, jobs = [], 
                                                     className="group relative bg-black/40 border border-white/5 rounded-xl overflow-hidden shadow-md cursor-pointer hover:border-purple-500/40 transition-all duration-300"
                                                 >
                                                     <div className="aspect-video w-full bg-black overflow-hidden relative flex items-center justify-center">
+                                                        {/* Category Badge */}
+                                                        <div className="absolute top-1 left-1 z-10 flex items-center gap-1 bg-black/70 backdrop-blur-xs px-1.5 py-0.5 rounded text-[8px] font-bold text-white border border-white/10">
+                                                            <span>{catInfo.emoji}</span>
+                                                            <span className="truncate max-w-[55px]">{t(catInfo.label)}</span>
+                                                        </div>
+
+                                                        {/* Machine ID Badge if viewing All Activity */}
+                                                        {photoFilterTab === 'all' && p.machine_id && (
+                                                            <div className="absolute top-1 right-1 z-10 bg-blue-600/80 backdrop-blur-xs px-1.5 py-0.5 rounded text-[8px] font-mono font-bold text-white">
+                                                                {p.machine_id}
+                                                            </div>
+                                                        )}
+
                                                         {isVid ? (
                                                             <>
                                                                 <video 

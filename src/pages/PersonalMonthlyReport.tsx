@@ -4,7 +4,7 @@ import {
     CalendarDays, Award, AlertTriangle, Camera,
     DollarSign, Clock, ChevronLeft, ChevronRight, Activity, Users, Truck, X,
     FileSpreadsheet, Printer, FileText, CheckCircle2, Percent, Layers, Plus, Search, Box,
-    User as UserIcon, MapPin, ImagePlus, Calendar, Sparkles, Download, CheckSquare
+    User as UserIcon, MapPin, ImagePlus, Calendar, Sparkles, Download, CheckSquare, Lock
 } from 'lucide-react';
 import { supabase } from '../services/supabase';
 import { getV2Items } from '../services/apiV2';
@@ -42,10 +42,10 @@ const getAvailableWarehousesForOrigin = (origin: string): string[] => {
 const normalizeLeaveType = (raw?: string | null): string => {
     if (!raw) return 'Leave';
     const lower = raw.toLowerCase().trim();
-    if (lower.includes('annual') || lower.includes('tahunan')) return 'Annual';
-    if (lower.includes('mc') || lower.includes('medical') || lower.includes('sakit') || lower.includes('hospital')) return 'Medical';
-    if (lower.includes('unpaid') || lower.includes('tanpa gaji')) return 'Unpaid';
-    if (lower.includes('emergency') || lower.includes('kecemasan')) return 'Emergency';
+    if (lower.includes('annual') || lower.includes('tahunan') || lower.includes('年假')) return 'Annual';
+    if (lower.includes('mc') || lower.includes('medical') || lower.includes('sakit') || lower.includes('hospital') || lower.includes('病假')) return 'Medical';
+    if (lower.includes('unpaid') || lower.includes('tanpa gaji') || lower.includes('无薪假') || lower.includes('事假')) return 'Unpaid';
+    if (lower.includes('emergency') || lower.includes('kecemasan') || lower.includes('紧急事假')) return 'Emergency';
     return raw;
 };
 
@@ -427,6 +427,11 @@ const PersonalMonthlyReport: React.FC<Props> = ({ user }) => {
     
     // Modal / selection states
     const [selectedTrip, setSelectedTrip] = useState<any | null>(null);
+    const isSelectedTripHrLocked = Boolean(
+        selectedTrip?.notes?.includes('[HR_APPROVED]') ||
+        selectedTrip?.is_hr_approved ||
+        (selectedTrip?.orders && selectedTrip.orders.some((o: any) => o.notes?.includes('[HR_APPROVED]') || o.is_hr_approved))
+    );
     const [selectedPhotoDay, setSelectedPhotoDay] = useState<any | null>(null);
     const [selectedAttendanceDay, setSelectedAttendanceDay] = useState<any | null>(null);
     const [showPayrollModal, setShowPayrollModal] = useState<boolean>(false);
@@ -540,6 +545,7 @@ const PersonalMonthlyReport: React.FC<Props> = ({ user }) => {
     }, [selectedTrip, selectedEmployeeId, lorries, driverLorryPlate]);
 
     const handleAddItem = () => {
+        if (isSelectedTripHrLocked || selectedTrip?.notes?.includes('[HR_APPROVED]') || selectedTrip?.is_hr_approved) return;
         if (!selectedV2Item || !currentItemQty) return;
         const newItem = {
             product: selectedV2Item.name,
@@ -556,6 +562,7 @@ const PersonalMonthlyReport: React.FC<Props> = ({ user }) => {
     };
 
     const handleRemoveItem = (index: number) => {
+        if (isSelectedTripHrLocked || selectedTrip?.notes?.includes('[HR_APPROVED]') || selectedTrip?.is_hr_approved) return;
         setNewOrderItems(prev => prev.filter((_, i) => i !== index));
     };
 
@@ -1234,6 +1241,12 @@ const PersonalMonthlyReport: React.FC<Props> = ({ user }) => {
             ? tripOrId.order_ids
             : [tripId];
         const oldNotes = (typeof tripOrId === 'object' ? tripOrId.notes : '') || '';
+        const isHrLocked = oldNotes.includes('[HR_APPROVED]') || (typeof tripOrId === 'object' && (tripOrId.is_hr_approved || (tripOrId.orders && tripOrId.orders.some((o: any) => o.notes?.includes('[HR_APPROVED]') || o.is_hr_approved))));
+
+        if (isHrLocked) {
+            alert("🔒 此 Trip 已由 HR 打勾审核锁定，任何人（包含 Admin / 管理员）均不可再更改！ / This trip is locked by HR and cannot be modified.");
+            return;
+        }
 
         setConfirmedTripIds(prev => {
             const updated = new Set(prev);
@@ -1274,8 +1287,13 @@ const PersonalMonthlyReport: React.FC<Props> = ({ user }) => {
     };
 
     const handleToggleHRApproveTrip = async (trip: any, checked: boolean) => {
-        const targetIds: string[] = (trip.order_ids && trip.order_ids.length > 0) ? trip.order_ids : [trip.id];
         const oldNotes = trip.notes || '';
+        const isHrLocked = oldNotes.includes('[HR_APPROVED]') || trip.is_hr_approved || (trip.orders && trip.orders.some((o: any) => o.notes?.includes('[HR_APPROVED]') || o.is_hr_approved));
+        if (!checked && isHrLocked) {
+            alert("🔒 此 Trip 已由 HR 打勾审核锁定，任何人（包含 Admin / 管理员）均不可再取消锁定或更改！ / This trip is locked by HR and cannot be un-approved.");
+            return;
+        }
+        const targetIds: string[] = (trip.order_ids && trip.order_ids.length > 0) ? trip.order_ids : [trip.id];
         let newNotes = oldNotes;
         if (checked) {
             if (!oldNotes.includes('[HR_APPROVED]')) {
@@ -1286,7 +1304,7 @@ const PersonalMonthlyReport: React.FC<Props> = ({ user }) => {
         }
 
         // Optimistic UI update: instant transition with ZERO screen flash/reload
-        setDeliveries(prev => prev.map(d => targetIds.includes(d.id) ? { ...d, notes: newNotes } : d));
+        setDeliveries(prev => prev.map(d => targetIds.includes(d.id) ? { ...d, notes: newNotes, is_hr_approved: checked } : d));
 
         try {
             await supabase
@@ -1296,7 +1314,7 @@ const PersonalMonthlyReport: React.FC<Props> = ({ user }) => {
         } catch (err) {
             console.error("Error saving HR approval:", err);
             // Revert state if error
-            setDeliveries(prev => prev.map(d => targetIds.includes(d.id) ? { ...d, notes: oldNotes } : d));
+            setDeliveries(prev => prev.map(d => targetIds.includes(d.id) ? { ...d, notes: oldNotes, is_hr_approved: !checked } : d));
         }
     };
 
@@ -1311,9 +1329,10 @@ const PersonalMonthlyReport: React.FC<Props> = ({ user }) => {
             driverTrips.forEach(d => allTripIds.add(d.id));
             setConfirmedTripIds(allTripIds);
 
-            // Optimistically update deliveries state in memory
+            // Optimistically update deliveries state in memory (skip HR approved)
             setDeliveries(prev => prev.map(d => {
                 const oldNotes = d.notes || '';
+                if (oldNotes.includes('[HR_APPROVED]') || d.is_hr_approved) return d;
                 const newNotes = oldNotes.includes('[DRIVER_CONFIRMED') 
                     ? oldNotes 
                     : (oldNotes ? `${oldNotes}\n` : '') + `[DRIVER_CONFIRMED: ${new Date().toISOString()}]`;
@@ -1323,6 +1342,7 @@ const PersonalMonthlyReport: React.FC<Props> = ({ user }) => {
             // Persist to Supabase in background for all monthly trips
             try {
                 for (const d of driverTrips) {
+                    if (d.notes?.includes('[HR_APPROVED]') || d.is_hr_approved) continue;
                     if (!d.notes?.includes('[DRIVER_CONFIRMED')) {
                         const newNotes = ((d.notes || '') + `\n[DRIVER_CONFIRMED: ${new Date().toISOString()}]`).trim();
                         await supabase.from('sales_orders').update({ notes: newNotes }).eq('id', d.id);
@@ -1335,9 +1355,10 @@ const PersonalMonthlyReport: React.FC<Props> = ({ user }) => {
         } else {
             setConfirmedTripIds(new Set());
 
-            // Optimistically update deliveries in memory
+            // Optimistically update deliveries in memory (skip HR approved)
             setDeliveries(prev => prev.map(d => {
                 const oldNotes = d.notes || '';
+                if (oldNotes.includes('[HR_APPROVED]') || d.is_hr_approved) return d;
                 const newNotes = oldNotes.replace(/\[DRIVER_CONFIRMED:[^\]]*\]\n?/gi, '').replace(/\[DRIVER_CONFIRMED\]\n?/gi, '').trim();
                 return { ...d, notes: newNotes, driver_confirmed: false };
             }));
@@ -1345,6 +1366,7 @@ const PersonalMonthlyReport: React.FC<Props> = ({ user }) => {
             // Persist uncheck in background for all monthly trips
             try {
                 for (const d of driverTrips) {
+                    if (d.notes?.includes('[HR_APPROVED]') || d.is_hr_approved) continue;
                     if (d.notes?.includes('[DRIVER_CONFIRMED')) {
                         const newNotes = (d.notes || '').replace(/\[DRIVER_CONFIRMED:[^\]]*\]\n?/gi, '').replace(/\[DRIVER_CONFIRMED\]\n?/gi, '').trim();
                         await supabase.from('sales_orders').update({ notes: newNotes }).eq('id', d.id);
@@ -1359,6 +1381,11 @@ const PersonalMonthlyReport: React.FC<Props> = ({ user }) => {
 
     const handleAdminApproveTrip = async (approve: boolean) => {
         if (!selectedTrip) return;
+
+        if (isSelectedTripHrLocked || selectedTrip.notes?.includes('[HR_APPROVED]') || selectedTrip.is_hr_approved || (selectedTrip.orders && selectedTrip.orders.some((o: any) => o.notes?.includes('[HR_APPROVED]') || o.is_hr_approved))) {
+            alert("🔒 此 Trip 已由 HR 打勾审核锁定，任何人（包含 Admin / 管理员）均不可再更改！ / This trip is locked by HR and cannot be modified.");
+            return;
+        }
 
         const targetIds: string[] = (selectedTrip.order_ids && selectedTrip.order_ids.length > 0)
             ? selectedTrip.order_ids
@@ -1414,6 +1441,17 @@ const PersonalMonthlyReport: React.FC<Props> = ({ user }) => {
 
     const handleSaveTrip = async () => {
         if (!selectedTrip) return;
+
+        if (
+            isSelectedTripHrLocked || 
+            selectedTrip.notes?.includes('[HR_APPROVED]') || 
+            selectedTrip.is_hr_approved || 
+            (newOrderNotes && newOrderNotes.includes('[HR_APPROVED]')) ||
+            (selectedTrip.orders && selectedTrip.orders.some((o: any) => o.notes?.includes('[HR_APPROVED]') || o.is_hr_approved))
+        ) {
+            alert("🔒 此 Trip 已由 HR 打勾审核锁定，任何人（包含 Admin / 管理员）均不可再更改！ / This trip is locked by HR and cannot be modified.");
+            return;
+        }
 
         const isUserAdmin = ['SuperAdmin', 'Admin'].includes(currentUserRole);
         const targetIds: string[] = (selectedTrip.order_ids && selectedTrip.order_ids.length > 0)
@@ -1510,7 +1548,10 @@ const PersonalMonthlyReport: React.FC<Props> = ({ user }) => {
                         ? `${day.shiftStart || '-'} → ${day.shiftEnd || 'Aktif'} (${day.hoursWorked.toFixed(1)} hrs - Kerja Cuti Umum)`
                         : `🇲🇾 Cuti Umum / Public Holiday (${day.publicHoliday?.nameMs || ''})`;
                 } else if (day.leaveStatus) {
-                    attendanceText = `Cuti / Leave (${day.leaveType || 'Leave'}) [${day.leaveStatus}]`;
+                    const isAL = day.leaveType === 'Annual';
+                    attendanceText = isAL
+                        ? `🏖️ 年假 / Cuti Tahunan (Annual Leave) [${day.leaveStatus}]`
+                        : `Cuti / Leave (${day.leaveType || 'Leave'}) [${day.leaveStatus}]`;
                 } else if (day.hasAttendance) {
                     attendanceText = `${day.shiftStart || '-'} → ${day.shiftEnd || 'Aktif'} (${day.hoursWorked.toFixed(1)} hrs)`;
                 }
@@ -1555,19 +1596,21 @@ const PersonalMonthlyReport: React.FC<Props> = ({ user }) => {
                         'Status': `🇲🇾 Cuti Umum / Public Holiday (${day.publicHoliday?.nameMs || ''})`
                     });
                 } else if (day.leaveStatus) {
+                    const isAL = day.leaveType === 'Annual';
+                    const leaveLabel = isAL ? '🏖️ 年假 / Cuti Tahunan (Annual Leave)' : `Cuti / Leave (${day.leaveType || 'Leave'})`;
                     excelRows.push({
                         'Tarikh / Date': day.dateStr,
                         'Hari / Day': weekday,
-                        'Masa Kerja / Working Time': `Cuti / Leave (${day.leaveType || 'Leave'}) [${day.leaveStatus}]`,
+                        'Masa Kerja / Working Time': `${leaveLabel} [${day.leaveStatus}]`,
                         'No. Pendaftaran Lorry / Lorry Plate': '-',
                         'No. DO / Order': '-',
-                        'Pelanggan / Customer': day.leaveReason ? `Cuti: ${day.leaveReason}` : `Cuti Diluluskan / Leave (${day.leaveStatus})`,
+                        'Pelanggan / Customer': day.leaveReason ? `${leaveLabel}: ${day.leaveReason}` : `${leaveLabel} [${day.leaveStatus}]`,
                         'Tempat Asal / Origin': '-',
                         'Destinasi / Destinations': '-',
-                        'Kategori Trip / Trip Category': `Cuti / ${day.leaveType || 'Leave'}`,
+                        'Kategori Trip / Trip Category': isAL ? '年假 / Annual Leave' : `Cuti / ${day.leaveType || 'Leave'}`,
                         'Jumlah Drops / Total Drops': 0,
                         'Harga / Allowance (RM)': 0,
-                        'Status': `🏖️ Cuti / Leave (${day.leaveType || 'Leave'}) [${day.leaveStatus}]`
+                        'Status': `${leaveLabel} [${day.leaveStatus}]`
                     });
                 } else {
                     const restLabel = day.isSunday 
@@ -1625,7 +1668,7 @@ const PersonalMonthlyReport: React.FC<Props> = ({ user }) => {
                 'Hari / Day': new Date(day.dateStr.replace(/-/g, '/')).toLocaleDateString('ms-MY', { weekday: 'long' }),
                 'Status Kehadiran / Attendance': day.isPublicHoliday
                     ? (day.hasAttendance ? `🇲🇾 Hadir (Kerja Cuti Umum: ${day.publicHoliday?.nameMs || ''})` : `🇲🇾 Cuti Umum / Public Holiday (${day.publicHoliday?.nameMs || ''})`)
-                    : (day.leaveStatus ? `Cuti / Leave (${day.leaveType || ''}) [${day.leaveStatus}]` : (day.hasAttendance ? 'Hadir / Present' : (day.isWeekend ? 'Weekend' : 'Tiada Log / No Log'))),
+                    : (day.leaveStatus ? (day.leaveType === 'Annual' ? `🏖️ 年假 / Cuti Tahunan (Annual Leave) [${day.leaveStatus}]` : `Cuti / Leave (${day.leaveType || ''}) [${day.leaveStatus}]`) : (day.hasAttendance ? 'Hadir / Present' : (day.isWeekend ? 'Weekend' : 'Tiada Log / No Log'))),
                 'Masa Masuk / Clock In': day.shiftStart || '-',
                 'Masa Keluar / Clock Out': day.shiftEnd || '-',
                 'Jam Kerja / Hours Worked': day.hoursWorked.toFixed(1),
@@ -1666,7 +1709,9 @@ const PersonalMonthlyReport: React.FC<Props> = ({ user }) => {
 
             let workingTimeText = '⚠️ 没有时间 / 未打卡';
             if (day.leaveStatus) {
-                workingTimeText = `Cuti / Leave (${day.leaveType || 'Leave'})`;
+                workingTimeText = day.leaveType === 'Annual'
+                    ? '🏖️ Cuti Tahunan / Annual Leave'
+                    : `Cuti / Leave (${day.leaveType || 'Leave'})`;
             } else if (day.hasAttendance) {
                 workingTimeText = `${day.shiftStart || '-'} → ${day.shiftEnd || 'Aktif'} (${day.hoursWorked.toFixed(1)}h)`;
             }
@@ -1698,15 +1743,16 @@ const PersonalMonthlyReport: React.FC<Props> = ({ user }) => {
                     });
                 });
             } else if (day.leaveStatus) {
+                const isAL = day.leaveType === 'Annual';
                 rows.push({
                     date: dateDisplay,
-                    workingTime: `Cuti / Leave (${day.leaveType || 'Leave'})`,
+                    workingTime: isAL ? '🏖️ Cuti Tahunan / Annual Leave' : `Cuti / Leave (${day.leaveType || 'Leave'})`,
                     orderNumber: '-',
-                    customer: day.leaveReason ? `Cuti: ${day.leaveReason}` : 'Cuti Diluluskan / Approved Leave',
+                    customer: day.leaveReason ? (isAL ? `年假 / AL: ${day.leaveReason}` : `Cuti: ${day.leaveReason}`) : (isAL ? '🏖️ Cuti Tahunan / Annual Leave' : 'Cuti Diluluskan / Approved Leave'),
                     origin: '-',
                     destination: '-',
                     drops: 0,
-                    status: `🏖️ Cuti (${day.leaveType || 'Leave'})`,
+                    status: isAL ? '🏖️ Cuti Tahunan' : `🏖️ Cuti (${day.leaveType || 'Leave'})`,
                     earnings: 0,
                     potentialEarnings: 0,
                     isDelivered: false,
@@ -1745,6 +1791,7 @@ const PersonalMonthlyReport: React.FC<Props> = ({ user }) => {
             totalTrips: actualTripsCount,
             completedTrips: completedCount,
             pendingScanTrips: pendingScanCount,
+            annualLeaveDays: annualLeaveDays,
             totalEarnings,
             tripRows: rows
         };
@@ -1899,6 +1946,7 @@ const PersonalMonthlyReport: React.FC<Props> = ({ user }) => {
                 let completedCount = 0;
                 let pendingScanCount = 0;
                 let actualTripsCount = 0;
+                let driverAnnualLeaveDays = 0;
                 const tripRows: any[] = [];
 
                 for (let i = 1; i <= daysInMonthCount; i++) {
@@ -1939,8 +1987,13 @@ const PersonalMonthlyReport: React.FC<Props> = ({ user }) => {
 
                     const leave = batchLeaves.find(l => (l.employee_id === driver.employee_id || l.employee_id === driverUid) && dateStr >= l.start_date && dateStr <= l.end_date);
                     if (leave) {
+                        const normType = normalizeLeaveType(leave.leave_type || leave.type);
+                        const isAL = normType === 'Annual';
+                        if (isAL) {
+                            driverAnnualLeaveDays++;
+                        }
                         const lType = leave.leave_type || leave.type || 'Leave';
-                        workingTimeText = `Cuti / Leave (${lType})`;
+                        workingTimeText = isAL ? '🏖️ Cuti Tahunan / Annual Leave' : `Cuti / Leave (${lType})`;
                     }
 
                     if (groupedTrips.length > 0) {
@@ -1976,15 +2029,17 @@ const PersonalMonthlyReport: React.FC<Props> = ({ user }) => {
                             });
                         });
                     } else if (leave) {
+                        const normType = normalizeLeaveType(leave.leave_type || leave.type);
+                        const isAL = normType === 'Annual';
                         tripRows.push({
                             date: dateDisplay,
-                            workingTime: `Cuti / Leave (${leave.leave_type || leave.type || 'Leave'})`,
+                            workingTime: isAL ? '🏖️ Cuti Tahunan / Annual Leave' : `Cuti / Leave (${leave.leave_type || leave.type || 'Leave'})`,
                             orderNumber: '-',
-                            customer: leave.reason ? `Cuti: ${leave.reason}` : 'Cuti Diluluskan / Approved Leave',
+                            customer: leave.reason ? (isAL ? `年假 / AL: ${leave.reason}` : `Cuti: ${leave.reason}`) : (isAL ? '🏖️ Cuti Tahunan / Annual Leave' : 'Cuti Diluluskan / Approved Leave'),
                             origin: '-',
                             destination: '-',
                             drops: 0,
-                            status: `🏖️ Cuti (${leave.leave_type || leave.type || 'Leave'})`,
+                            status: isAL ? '🏖️ Cuti Tahunan (Annual Leave)' : `🏖️ Cuti (${leave.leave_type || leave.type || 'Leave'})`,
                             earnings: 0,
                             potentialEarnings: 0,
                             isDelivered: false,
@@ -2039,6 +2094,7 @@ const PersonalMonthlyReport: React.FC<Props> = ({ user }) => {
                     totalTrips: actualTripsCount,
                     completedTrips: completedCount,
                     pendingScanTrips: pendingScanCount,
+                    annualLeaveDays: driverAnnualLeaveDays,
                     totalEarnings,
                     tripRows
                 };
@@ -2890,8 +2946,17 @@ const PersonalMonthlyReport: React.FC<Props> = ({ user }) => {
                                     <p className="text-[10px] text-indigo-300/90 font-mono mt-1.5 font-bold">
                                         🇲🇾 {publicHolidayDays} Cuti Umum {publicHolidayWorkedDays > 0 ? `(${publicHolidayWorkedDays} Bekerja)` : ''}
                                     </p>
+                                    {/* Prominent Annual Leave Callout */}
+                                    <div className="mt-2 py-1 px-2.5 bg-amber-500/15 border border-amber-500/30 rounded-xl flex items-center justify-between gap-2 shadow-sm">
+                                        <span className="text-[11px] font-bold text-amber-300 flex items-center gap-1.5 truncate">
+                                            <span>🏖️</span>
+                                            <span>年假 / Annual Leave (AL)</span>
+                                        </span>
+                                        <span className="font-mono text-xs font-black text-amber-200 bg-amber-500/30 px-2 py-0.5 rounded-lg border border-amber-400/40 shrink-0">
+                                            {annualLeaveDays} <span className="text-[9px] font-normal text-amber-300/80">hari</span>
+                                        </span>
+                                    </div>
                                     <div className="flex flex-wrap gap-1 mt-1.5 text-[9px]">
-                                        {annualLeaveDays > 0 && <span className="bg-amber-500/15 text-amber-300 px-1.5 py-0.5 rounded border border-amber-500/30 font-medium">AL: {annualLeaveDays}d</span>}
                                         {mcLeaveDays > 0 && <span className="bg-blue-500/15 text-blue-300 px-1.5 py-0.5 rounded border border-blue-500/30 font-medium">MC: {mcLeaveDays}d</span>}
                                         {unpaidLeaveDays > 0 && <span className="bg-rose-500/15 text-rose-300 px-1.5 py-0.5 rounded border border-rose-500/30 font-medium">UPL: {unpaidLeaveDays}d</span>}
                                         {emergencyLeaveDays > 0 && <span className="bg-orange-500/15 text-orange-300 px-1.5 py-0.5 rounded border border-orange-500/30 font-medium">EL: {emergencyLeaveDays}d</span>}
@@ -3429,9 +3494,16 @@ const PersonalMonthlyReport: React.FC<Props> = ({ user }) => {
                                                     )
                                                 ) : day.leaveStatus === 'Approved' ? (
                                                     <div className="flex flex-col items-start gap-0.5">
-                                                        <span className="inline-flex items-center px-2 py-0.5 rounded bg-amber-500/10 border border-amber-500/20 text-amber-400 text-[10px] font-black uppercase tracking-wider">
-                                                            🏖️ Cuti / {day.leaveType || 'Leave'}
-                                                        </span>
+                                                        {day.leaveType === 'Annual' ? (
+                                                            <span className="inline-flex items-center gap-1 px-2 py-0.5 rounded bg-amber-500/20 border border-amber-500/40 text-amber-300 text-[10px] font-black uppercase tracking-wider shadow-sm">
+                                                                <span>🏖️</span>
+                                                                <span>年假 / Annual Leave</span>
+                                                            </span>
+                                                        ) : (
+                                                            <span className="inline-flex items-center px-2 py-0.5 rounded bg-amber-500/10 border border-amber-500/20 text-amber-400 text-[10px] font-black uppercase tracking-wider">
+                                                                🏖️ Cuti / {day.leaveType || 'Leave'}
+                                                            </span>
+                                                        )}
                                                         {day.leaveReason && (
                                                             <span className="text-[9px] text-gray-400 max-w-[140px] truncate" title={day.leaveReason}>
                                                                 {day.leaveReason}
@@ -3440,12 +3512,19 @@ const PersonalMonthlyReport: React.FC<Props> = ({ user }) => {
                                                     </div>
                                                 ) : day.leaveStatus === 'Pending' ? (
                                                     <div className="flex flex-col items-start gap-0.5">
-                                                        <span className="inline-flex items-center gap-1 px-2 py-0.5 rounded bg-amber-500/15 border border-amber-500/35 border-dashed text-amber-300 text-[10px] font-black uppercase tracking-wider animate-pulse">
-                                                            <Clock size={10} className="animate-spin" />
-                                                            ⏳ Permohonan Cuti / Pending
-                                                        </span>
+                                                        {day.leaveType === 'Annual' ? (
+                                                            <span className="inline-flex items-center gap-1 px-2 py-0.5 rounded bg-amber-500/20 border border-amber-500/40 border-dashed text-amber-300 text-[10px] font-black uppercase tracking-wider animate-pulse">
+                                                                <Clock size={10} className="animate-spin" />
+                                                                ⏳ 申请年假中 / Pending AL
+                                                            </span>
+                                                        ) : (
+                                                            <span className="inline-flex items-center gap-1 px-2 py-0.5 rounded bg-amber-500/15 border border-amber-500/35 border-dashed text-amber-300 text-[10px] font-black uppercase tracking-wider animate-pulse">
+                                                                <Clock size={10} className="animate-spin" />
+                                                                ⏳ Permohonan Cuti / Pending
+                                                            </span>
+                                                        )}
                                                         <span className="text-[9px] text-amber-400 font-medium">
-                                                            {day.leaveType || 'Leave'} {day.leaveReason ? `(${day.leaveReason})` : ''}
+                                                            {day.leaveType === 'Annual' ? '年假 (Annual Leave)' : (day.leaveType || 'Leave')} {day.leaveReason ? `(${day.leaveReason})` : ''}
                                                         </span>
                                                     </div>
                                                 ) : day.hasAttendance ? (
@@ -3549,11 +3628,15 @@ const PersonalMonthlyReport: React.FC<Props> = ({ user }) => {
                                                             <span>Cuti Umum / {day.publicHoliday?.nameMs || 'Public Holiday'}</span>
                                                         </div>
                                                     ) : day.leaveStatus === 'Approved' ? (
-                                                        <span className="text-amber-400/80 text-xs font-medium">🏖️ Cuti / {day.leaveType || 'Leave'}</span>
+                                                        day.leaveType === 'Annual' ? (
+                                                            <span className="text-amber-300 text-xs font-bold">🏖️ 年假 / Cuti Tahunan (Annual Leave)</span>
+                                                        ) : (
+                                                            <span className="text-amber-400/80 text-xs font-medium">🏖️ Cuti / {day.leaveType || 'Leave'}</span>
+                                                        )
                                                     ) : day.leaveStatus === 'Pending' ? (
                                                         <span className="text-amber-300/80 text-xs font-medium flex items-center gap-1">
                                                             <Clock size={12} className="animate-spin text-amber-400" />
-                                                            <span>Cuti Menunggu / Pending</span>
+                                                            <span>{day.leaveType === 'Annual' ? '年假审批中 / Pending AL' : 'Cuti Menunggu / Pending'}</span>
                                                         </span>
                                                     ) : isDriver && day.tripCount > 0 ? (
                                                         day.dateStr > todayStr ? (
@@ -3659,6 +3742,11 @@ const PersonalMonthlyReport: React.FC<Props> = ({ user }) => {
                                                     {day.tripDetails && day.tripDetails.length > 0 ? (
                                                         <div className="flex flex-col items-center gap-2">
                                                             {day.tripDetails.map((td: any, idx: number) => {
+                                                                const isTdHrApproved = Boolean(
+                                                                    td.notes?.includes('[HR_APPROVED]') ||
+                                                                    td.is_hr_approved ||
+                                                                    (td.orders && td.orders.some((o: any) => o.notes?.includes('[HR_APPROVED]') || o.is_hr_approved))
+                                                                );
                                                                 const isPending = isTripPending(td);
                                                                 const isTripConfirmed = confirmedTripIds.has(td.id) || td.notes?.includes('[DRIVER_CONFIRMED') || td.driver_confirmed === true;
                                                                 const isUnscanned = td.status !== 'Delivered' && td.status !== 'Cancelled';
@@ -3668,8 +3756,8 @@ const PersonalMonthlyReport: React.FC<Props> = ({ user }) => {
                                                                         <button 
                                                                             onClick={() => setSelectedTrip(td)}
                                                                             className={`text-[10px] px-2.5 py-1 rounded-lg font-mono shadow-sm cursor-pointer transition-all flex items-center gap-1.5 ${
-                                                                                td.notes?.includes('[HR_APPROVED]')
-                                                                                    ? 'bg-indigo-500/15 text-indigo-300 border border-indigo-500/30 font-bold'
+                                                                                isTdHrApproved
+                                                                                    ? 'bg-purple-950/50 text-purple-300 border border-purple-500/40 font-bold'
                                                                                     : isUnscanned
                                                                                         ? 'bg-amber-500/15 text-amber-300 border border-amber-500/35 font-semibold'
                                                                                         : isPending 
@@ -3678,12 +3766,12 @@ const PersonalMonthlyReport: React.FC<Props> = ({ user }) => {
                                                                                                 ? 'bg-emerald-500/15 text-emerald-300 border border-emerald-500/30 font-bold'
                                                                                                 : 'bg-blue-500/10 text-blue-400 border border-blue-500/20 hover:bg-blue-500/20 hover:text-blue-300'
                                                                             }`}
-                                                                            title={td.notes?.includes('[HR_APPROVED]') ? "🔒 已被 HR 锁定 / Locked by HR" : (isUnscanned ? "🚚 未完成扫码/进行中 / Pending POD Scan" : "点击查看或提交预修改申请 / Click to view or pre-edit")}
+                                                                            title={isTdHrApproved ? "🔒 已被 HR 锁定 (不可修改) / Locked by HR" : (isUnscanned ? "🚚 未完成扫码/进行中 / Pending POD Scan" : "点击查看或提交预修改申请 / Click to view or pre-edit")}
                                                                         >
-                                                                            {td.notes?.includes('[HR_APPROVED]') && <div className="text-indigo-400 shrink-0">🔒</div>}
-                                                                            {isUnscanned && <span className="text-xs shrink-0">🚚</span>}
-                                                                            {isPending && !isUnscanned && !td.notes?.includes('[HR_APPROVED]') && <Clock size={10} className="text-amber-400 shrink-0" />}
-                                                                            {isTripConfirmed && !isUnscanned && !td.notes?.includes('[HR_APPROVED]') && <CheckCircle2 size={11} className="text-emerald-400 shrink-0" />}
+                                                                            {isTdHrApproved && <div className="text-purple-400 shrink-0">🔒</div>}
+                                                                            {isUnscanned && !isTdHrApproved && <span className="text-xs shrink-0">🚚</span>}
+                                                                            {isPending && !isUnscanned && !isTdHrApproved && <Clock size={10} className="text-amber-400 shrink-0" />}
+                                                                            {isTripConfirmed && !isUnscanned && !isTdHrApproved && <CheckCircle2 size={11} className="text-emerald-400 shrink-0" />}
                                                                             <span>{isUnscanned ? `[未扫码] ${td.displayString}` : (isPending ? `⏳ [待审核] ${td.displayString}` : td.displayString)}</span>
                                                                             {(td.lorry_plate || day.lorryPlate) && (td.lorry_plate || day.lorryPlate) !== 'N/A' && (
                                                                                 <span className="inline-flex items-center gap-1 px-1.5 py-0.5 rounded bg-black/60 border border-amber-500/30 text-[9px] font-mono font-bold text-amber-300 tracking-wider" title="No. Plat Lori untuk Trip ini / Lorry Plate">
@@ -3697,8 +3785,8 @@ const PersonalMonthlyReport: React.FC<Props> = ({ user }) => {
                                                                                 </span>
                                                                             )}
                                                                             <span className={`ml-1 px-1.5 py-0.5 rounded font-black border text-[9.5px] ${
-                                                                                td.notes?.includes('[HR_APPROVED]') 
-                                                                                    ? 'bg-indigo-500/20 text-indigo-300 border-indigo-500/30' 
+                                                                                isTdHrApproved 
+                                                                                    ? 'bg-purple-900/40 text-purple-300 border-purple-500/40' 
                                                                                     : isUnscanned
                                                                                         ? 'bg-amber-500/10 text-amber-400 border-amber-500/20'
                                                                                         : isPending
@@ -3711,29 +3799,34 @@ const PersonalMonthlyReport: React.FC<Props> = ({ user }) => {
 
                                                                         <div className="flex items-center gap-1.5 border-l border-slate-700/50 pl-1.5 ml-1">
                                                                             <label 
-                                                                                className={`flex items-center justify-center p-1 rounded transition-colors ${td.notes?.includes('[HR_APPROVED]') ? 'opacity-50 cursor-not-allowed' : 'hover:bg-white/5 cursor-pointer'}`}
-                                                                                title={td.notes?.includes('[HR_APPROVED]') ? "🔒 已被 HR 锁定 / Locked by HR" : (isTripConfirmed ? "✅ 该 Trip 已确认无误 / Trip Confirmed" : "⬜ 点击打钩确认此 Trip 无误 / Confirm this Trip")}
+                                                                                className={`flex items-center justify-center p-1 rounded transition-colors ${isTdHrApproved ? 'opacity-50 cursor-not-allowed' : 'hover:bg-white/5 cursor-pointer'}`}
+                                                                                title={isTdHrApproved ? "🔒 已被 HR 锁定 / Locked by HR" : (isTripConfirmed ? "✅ 该 Trip 已确认无误 / Trip Confirmed" : "⬜ 点击打钩确认此 Trip 无误 / Confirm this Trip")}
                                                                             >
                                                                                 <input
                                                                                     type="checkbox"
                                                                                     checked={isTripConfirmed}
                                                                                     onChange={(e) => handleToggleTripConfirmation(td, e.target.checked)}
                                                                                     className="w-4 h-4 accent-emerald-500 rounded cursor-pointer disabled:cursor-not-allowed"
-                                                                                    disabled={td.notes?.includes('[HR_APPROVED]')}
+                                                                                    disabled={isTdHrApproved}
                                                                                 />
                                                                             </label>
                                                                             {isAdminOrHR && (
                                                                                 <label 
-                                                                                    className={`flex items-center justify-center px-1.5 py-0.5 border text-[9px] font-bold uppercase rounded cursor-pointer transition-all ${td.notes?.includes('[HR_APPROVED]') ? 'bg-indigo-500/20 border-indigo-500/50 text-indigo-300' : 'bg-slate-800/50 border-slate-700 text-slate-500 hover:bg-slate-700'}`}
-                                                                                    title={td.notes?.includes('[HR_APPROVED]') ? "HR 已批准此 Trip (锁定) / HR Approved (Locked)" : "点击由 HR 批准此 Trip / Click to HR Approve"}
+                                                                                    className={`flex items-center justify-center px-1.5 py-0.5 border text-[9px] font-bold uppercase rounded transition-all ${
+                                                                                        isTdHrApproved 
+                                                                                            ? 'bg-purple-950/60 border-purple-500/50 text-purple-300 cursor-not-allowed opacity-90' 
+                                                                                            : 'bg-slate-800/50 border-slate-700 text-slate-500 hover:bg-slate-700 cursor-pointer'
+                                                                                    }`}
+                                                                                    title={isTdHrApproved ? "🔒 HR 已审核锁定此 Trip (任何人均不可取消或更改) / HR Approved (Locked)" : "点击由 HR 批准此 Trip / Click to HR Approve"}
                                                                                 >
                                                                                     <input
                                                                                         type="checkbox"
-                                                                                        checked={td.notes?.includes('[HR_APPROVED]') || false}
+                                                                                        checked={isTdHrApproved}
                                                                                         onChange={(e) => handleToggleHRApproveTrip(td, e.target.checked)}
-                                                                                        className="w-3 h-3 accent-indigo-500 rounded cursor-pointer mr-1"
+                                                                                        disabled={isTdHrApproved}
+                                                                                        className="w-3 h-3 accent-purple-500 rounded cursor-pointer disabled:cursor-not-allowed mr-1"
                                                                                     />
-                                                                                    HR
+                                                                                    {isTdHrApproved ? '🔒 HR' : 'HR'}
                                                                                 </label>
                                                                             )}
                                                                         </div>
@@ -3926,6 +4019,26 @@ const PersonalMonthlyReport: React.FC<Props> = ({ user }) => {
                         {/* Modal Body */}
                         <div className="flex-1 overflow-y-auto p-4 sm:p-6 lg:p-8 custom-scrollbar bg-slate-950 min-h-0">
 
+                            {/* HR Locked Banner */}
+                            {isSelectedTripHrLocked && (
+                                <div className="mb-6 p-4 bg-purple-950/60 border border-purple-500/50 rounded-2xl flex items-center justify-between gap-3 shadow-lg">
+                                    <div className="flex items-center gap-3 text-purple-200">
+                                        <Lock size={22} className="text-purple-400 shrink-0" />
+                                        <div>
+                                            <div className="text-sm font-black text-purple-200 flex items-center gap-2">
+                                                🔒 此 Trip 已由 HR 打勾审核锁定 / Locked by HR
+                                            </div>
+                                            <div className="text-xs text-purple-300/80 font-normal mt-0.5">
+                                                HR 已经打勾审核该行程，任何人（包含 Admin / 管理员）均不可再修改数据、调整货物数量或审批！
+                                            </div>
+                                        </div>
+                                    </div>
+                                    <span className="text-[10px] font-mono uppercase font-black bg-purple-900/80 text-purple-200 border border-purple-400/40 px-3 py-1.5 rounded-xl shrink-0">
+                                        Read-Only / 只读模式
+                                    </span>
+                                </div>
+                            )}
+
                             {/* Trip Price Breakdown Banner */}
                             <div className="mb-6 p-4 bg-gradient-to-r from-slate-900 to-slate-950 border border-slate-800 rounded-2xl flex flex-col sm:flex-row items-center justify-between gap-3 shadow-lg">
                                 <div className="flex items-center gap-3 text-slate-300 font-bold text-xs">
@@ -4004,7 +4117,12 @@ const PersonalMonthlyReport: React.FC<Props> = ({ user }) => {
                                                 </div>
                                             </div>
                                         </div>
-                                        {isAdminOrHR ? (
+                                        {isSelectedTripHrLocked ? (
+                                            <span className="text-[11px] text-purple-300 font-mono bg-purple-950/80 border border-purple-500/30 px-3 py-1.5 rounded-xl font-bold flex items-center gap-1.5">
+                                                <Lock size={12} className="text-purple-400" />
+                                                🔒 HR 已审核锁定，不可再审批
+                                            </span>
+                                        ) : isAdminOrHR ? (
                                             <div className="flex items-center gap-2 shrink-0">
                                                 <button
                                                     type="button"
@@ -4092,7 +4210,12 @@ const PersonalMonthlyReport: React.FC<Props> = ({ user }) => {
                                                 </div>
                                             </div>
                                         </div>
-                                        {isAdminOrHR ? (
+                                        {isSelectedTripHrLocked ? (
+                                            <span className="text-[11px] text-purple-300 font-mono bg-purple-950/80 border border-purple-500/30 px-3 py-1.5 rounded-xl font-bold flex items-center gap-1.5">
+                                                <Lock size={12} className="text-purple-400" />
+                                                🔒 HR 已审核锁定，不可再审批
+                                            </span>
+                                        ) : isAdminOrHR ? (
                                             <div className="flex items-center gap-2 shrink-0">
                                                 <button
                                                     type="button"
@@ -4137,7 +4260,12 @@ const PersonalMonthlyReport: React.FC<Props> = ({ user }) => {
                                                 </div>
                                             </div>
                                         </div>
-                                        {isAdminOrHR ? (
+                                        {isSelectedTripHrLocked ? (
+                                            <span className="text-[11px] text-purple-300 font-mono bg-purple-950/80 border border-purple-500/30 px-3 py-1.5 rounded-xl font-bold flex items-center gap-1.5">
+                                                <Lock size={12} className="text-purple-400" />
+                                                🔒 HR 已审核锁定，不可再审批
+                                            </span>
+                                        ) : isAdminOrHR ? (
                                             <div className="flex items-center gap-2 shrink-0">
                                                 <button
                                                     type="button"
@@ -4288,7 +4416,7 @@ const PersonalMonthlyReport: React.FC<Props> = ({ user }) => {
                                                                 setSelectedDriverId(l.driverUserId);
                                                             }
                                                         }}
-                                                        disabled={!isAdminOrHR}
+                                                        disabled={!isAdminOrHR || isSelectedTripHrLocked}
                                                     >
                                                         <option value="">-- Select Lorry --</option>
                                                         {lorries.map(l => (
@@ -4314,7 +4442,7 @@ const PersonalMonthlyReport: React.FC<Props> = ({ user }) => {
                                                                 setSelectedLorryId(l.id);
                                                             }
                                                         }}
-                                                        disabled={!isAdminOrHR}
+                                                        disabled={!isAdminOrHR || isSelectedTripHrLocked}
                                                     >
                                                         <option value="">-- Select Driver --</option>
                                                         {employeesList.map(d => (
@@ -4339,7 +4467,7 @@ const PersonalMonthlyReport: React.FC<Props> = ({ user }) => {
                                                             className="w-full bg-slate-900/50 border border-slate-800 rounded-xl px-4 py-2.5 text-xs text-slate-400 focus:border-blue-500/30 outline-none appearance-none cursor-pointer [color-scheme:dark] transition-all disabled:opacity-60 disabled:cursor-not-allowed"
                                                             value={newOrderDate}
                                                             onChange={e => setNewOrderDate(e.target.value)}
-                                                            disabled={!isAdminOrHR}
+                                                            disabled={!isAdminOrHR || isSelectedTripHrLocked}
                                                         />
                                                     </div>
                                                 </div>
@@ -4353,7 +4481,7 @@ const PersonalMonthlyReport: React.FC<Props> = ({ user }) => {
                                                             className="w-full bg-slate-900 border border-slate-800 rounded-xl px-4 py-2.5 text-xs text-slate-200 focus:border-blue-500/50 outline-none appearance-none cursor-pointer [color-scheme:dark] transition-all font-bold disabled:opacity-60 disabled:cursor-not-allowed"
                                                             value={newOrderDeliveryDate}
                                                             onChange={e => setNewOrderDeliveryDate(e.target.value)}
-                                                            disabled={!isAdminOrHR}
+                                                            disabled={!isAdminOrHR || isSelectedTripHrLocked}
                                                         />
                                                     </div>
                                                 </div>
@@ -4375,7 +4503,7 @@ const PersonalMonthlyReport: React.FC<Props> = ({ user }) => {
                                                 placeholder="-- Type or Select Customer (Auto-fills Address & Zone) --"
                                                 value={orderCustomer}
                                                 onChange={e => setOrderCustomer(e.target.value)}
-                                                disabled={!isAdminOrHR}
+                                                disabled={!isAdminOrHR || isSelectedTripHrLocked}
                                             />
                                             <datalist id="customers-list">
                                                 {customerDB.map((c, i) => (
@@ -4405,7 +4533,7 @@ const PersonalMonthlyReport: React.FC<Props> = ({ user }) => {
                                                 }, 0) || 1;
                                                 setTripDropCount(drops);
                                             }}
-                                            disabled={!isAdminOrHR}
+                                            disabled={!isAdminOrHR || isSelectedTripHrLocked}
                                         />
 
                                         {/* DRIVER PAYROLL RATES: Origin, Category, Drops */}
@@ -4423,10 +4551,12 @@ const PersonalMonthlyReport: React.FC<Props> = ({ user }) => {
                                                             type="button"
                                                             key={loc.id}
                                                             onClick={() => {
+                                                                if (!isAdminOrHR || isSelectedTripHrLocked) return;
                                                                 setTripOrigin(loc.id);
                                                                 setCurrentItemLoc(getDefaultLocForOrigin(loc.id));
                                                             }}
-                                                            className={`px-3 py-1.5 rounded-lg text-xs font-bold transition-all flex items-center gap-1 cursor-pointer ${
+                                                            disabled={!isAdminOrHR || isSelectedTripHrLocked}
+                                                            className={`px-3 py-1.5 rounded-lg text-xs font-bold transition-all flex items-center gap-1 cursor-pointer disabled:opacity-60 disabled:cursor-not-allowed ${
                                                                 tripOrigin.toUpperCase() === loc.id
                                                                     ? 'bg-blue-600 text-white shadow-md shadow-blue-900/50'
                                                                     : 'bg-slate-950 text-slate-400 border border-slate-800 hover:border-slate-700'
@@ -4437,13 +4567,14 @@ const PersonalMonthlyReport: React.FC<Props> = ({ user }) => {
                                                     ))}
                                                 </div>
                                                 <select
-                                                    className="w-full bg-slate-950 border border-slate-800 rounded-lg px-3 py-2 text-xs text-white focus:border-blue-500/50 outline-none cursor-pointer"
+                                                    className="w-full bg-slate-950 border border-slate-800 rounded-lg px-3 py-2 text-xs text-white focus:border-blue-500/50 outline-none cursor-pointer disabled:opacity-60 disabled:cursor-not-allowed"
                                                     value={tripOrigin}
                                                     onChange={e => {
                                                         const newOrigin = e.target.value;
                                                         setTripOrigin(newOrigin);
                                                         setCurrentItemLoc(getDefaultLocForOrigin(newOrigin));
                                                     }}
+                                                    disabled={!isAdminOrHR || isSelectedTripHrLocked}
                                                 >
                                                     <option value="TAIPING">Taiping</option>
                                                     <option value="NILAI">Nilai</option>
@@ -4456,7 +4587,8 @@ const PersonalMonthlyReport: React.FC<Props> = ({ user }) => {
                                                 <input
                                                     list="trip-category-list"
                                                     placeholder="-- Auto/Manual --"
-                                                    className={`w-full bg-slate-950 border rounded-lg px-3 py-2 text-xs text-white focus:outline-none transition-colors ${
+                                                    disabled={!isAdminOrHR || isSelectedTripHrLocked}
+                                                    className={`w-full bg-slate-950 border rounded-lg px-3 py-2 text-xs text-white focus:outline-none transition-colors disabled:opacity-60 disabled:cursor-not-allowed ${
                                                         tripCategory && !deliveryRates.some(r => getSafeOrigin(r.origin) === getSafeOrigin(tripOrigin) && r.location_name === tripCategory)
                                                             ? 'border-red-500/80 focus:border-red-500 text-red-100' // Invalid styling
                                                             : 'border-slate-800 focus:border-blue-500/50'     // Normal styling
@@ -4478,7 +4610,8 @@ const PersonalMonthlyReport: React.FC<Props> = ({ user }) => {
                                                 <input
                                                     type="number"
                                                     min={1}
-                                                    className="w-full bg-slate-950 border border-slate-800 rounded-lg px-3 py-2 text-xs text-white focus:border-emerald-500/50 outline-none font-mono font-bold"
+                                                    disabled={!isAdminOrHR || isSelectedTripHrLocked}
+                                                    className="w-full bg-slate-950 border border-slate-800 rounded-lg px-3 py-2 text-xs text-white focus:border-emerald-500/50 outline-none font-mono font-bold disabled:opacity-60 disabled:cursor-not-allowed"
                                                     value={tripDropCount}
                                                     onChange={e => setTripDropCount(parseInt(e.target.value) || 1)}
                                                 />
@@ -4495,7 +4628,7 @@ const PersonalMonthlyReport: React.FC<Props> = ({ user }) => {
                                                 placeholder="Enter notes for this trip..."
                                                 className="w-full bg-slate-900 border border-slate-800 rounded-xl px-4 py-3 text-sm text-slate-300 focus:border-blue-500/50 outline-none placeholder:text-slate-600 resize-none font-mono disabled:opacity-60 disabled:cursor-not-allowed"
                                                 value={newOrderNotes}
-                                                disabled={!isAdminOrHR}
+                                                disabled={!isAdminOrHR || isSelectedTripHrLocked}
                                                 onChange={e => setNewOrderNotes(e.target.value)}
                                             />
                                         </div>
@@ -4642,7 +4775,7 @@ const PersonalMonthlyReport: React.FC<Props> = ({ user }) => {
 
                                     {/* Item List Layout */}
                                     <div className="bg-slate-900/80 rounded-2xl border border-slate-800 shadow-lg flex flex-col flex-1 min-h-0 overflow-hidden">
-                                        {isAdminOrHR && (
+                                        {isAdminOrHR && !isSelectedTripHrLocked && (
                                             <div className="p-4 border-b border-slate-800 bg-slate-800/40 flex flex-col gap-3 shrink-0 z-10">
                                                 <div className="flex items-center justify-between gap-2">
                                                     <div className="flex items-center gap-2 text-xs font-bold text-slate-400 uppercase tracking-wider">
@@ -4726,7 +4859,7 @@ const PersonalMonthlyReport: React.FC<Props> = ({ user }) => {
                                                             <div className="flex items-center gap-3">
                                                                 <input
                                                                     type="number"
-                                                                    disabled={!isAdminOrHR}
+                                                                    disabled={!isAdminOrHR || isSelectedTripHrLocked}
                                                                     className="w-16 bg-slate-900 border border-slate-700 rounded-lg px-2 py-1 text-right font-bold text-orange-400 focus:border-orange-500 outline-none text-sm disabled:opacity-60 disabled:cursor-not-allowed"
                                                                     value={item.quantity}
                                                                     onChange={(e) => {
@@ -4736,9 +4869,11 @@ const PersonalMonthlyReport: React.FC<Props> = ({ user }) => {
                                                                         setNewOrderItems(updated);
                                                                     }}
                                                                 />
-                                                                <button onClick={() => handleRemoveItem(idx)} className="text-slate-600 hover:text-red-500 p-1 rounded-full hover:bg-slate-900 transition-colors cursor-pointer">
-                                                                    <X size={16} />
-                                                                </button>
+                                                                {!isSelectedTripHrLocked && (
+                                                                    <button onClick={() => handleRemoveItem(idx)} className="text-slate-600 hover:text-red-500 p-1 rounded-full hover:bg-slate-900 transition-colors cursor-pointer">
+                                                                        <X size={16} />
+                                                                    </button>
+                                                                )}
                                                             </div>
                                                         </div>
 
@@ -4746,7 +4881,7 @@ const PersonalMonthlyReport: React.FC<Props> = ({ user }) => {
                                                             <div className="flex items-center gap-2">
                                                                 <div className="text-[10px] font-bold text-slate-600 uppercase w-16">Pickup:</div>
                                                                 <select
-                                                                    className="flex-1 bg-slate-900 border border-slate-800 rounded px-2 py-1 text-xs text-blue-400 font-bold focus:border-blue-500 outline-none cursor-pointer"
+                                                                    className="flex-1 bg-slate-900 border border-slate-800 rounded px-2 py-1 text-xs text-blue-400 font-bold focus:border-blue-500 outline-none cursor-pointer disabled:opacity-60 disabled:cursor-not-allowed"
                                                                     value={normalizeWarehouseName(item.sourceLocation || getDefaultLocForOrigin(tripOrigin))}
                                                                     onChange={(e) => {
                                                                         const val = e.target.value;
@@ -4754,6 +4889,7 @@ const PersonalMonthlyReport: React.FC<Props> = ({ user }) => {
                                                                         updated[idx].sourceLocation = val;
                                                                         setNewOrderItems(updated);
                                                                     }}
+                                                                    disabled={!isAdminOrHR || isSelectedTripHrLocked}
                                                                 >
                                                                     {getAvailableWarehousesForOrigin(tripOrigin).map(loc => <option key={loc} value={loc}>{loc}</option>)}
                                                                 </select>
@@ -4763,7 +4899,7 @@ const PersonalMonthlyReport: React.FC<Props> = ({ user }) => {
                                                                 <input
                                                                     type="text"
                                                                     placeholder="Add remark..."
-                                                                    className="flex-1 bg-transparent border-b border-slate-800 text-xs text-slate-400 focus:border-blue-500 outline-none py-0.5 placeholder:text-slate-700"
+                                                                    className="flex-1 bg-transparent border-b border-slate-800 text-xs text-slate-400 focus:border-blue-500 outline-none py-0.5 placeholder:text-slate-700 disabled:opacity-60 disabled:cursor-not-allowed"
                                                                     value={item.remark || ''}
                                                                     onChange={(e) => {
                                                                         const val = e.target.value;
@@ -4771,6 +4907,7 @@ const PersonalMonthlyReport: React.FC<Props> = ({ user }) => {
                                                                         updated[idx].remark = val;
                                                                         setNewOrderItems(updated);
                                                                     }}
+                                                                    disabled={!isAdminOrHR || isSelectedTripHrLocked}
                                                                 />
                                                             </div>
                                                         </div>
@@ -4788,10 +4925,10 @@ const PersonalMonthlyReport: React.FC<Props> = ({ user }) => {
                             <button onClick={() => { setSelectedTrip(null); setIsEditingTrip(false); }} className="px-6 py-2 rounded-xl text-slate-400 hover:text-white font-bold transition-colors cursor-pointer">Cancel</button>
                             <button
                                 onClick={handleSaveTrip}
-                                disabled={newOrderNotes.includes('[HR_APPROVED]')}
+                                disabled={isSelectedTripHrLocked || newOrderNotes.includes('[HR_APPROVED]')}
                                 className="px-8 py-2 bg-gradient-to-r from-orange-500 to-amber-600 hover:from-orange-600 hover:to-amber-700 text-white rounded-xl font-bold shadow-lg shadow-orange-950/30 transition-all active:scale-95 flex items-center gap-2 cursor-pointer disabled:opacity-50 disabled:cursor-not-allowed disabled:hover:scale-100 disabled:active:scale-100"
                             >
-                                {newOrderNotes.includes('[HR_APPROVED]') ? '🔒 Locked by HR' : (isAdminOrHR ? '💾 保存修改 / Save Changes' : '💾 提交预修改申请 / Submit Pre-Edit')}
+                                {isSelectedTripHrLocked ? '🔒 已由 HR 审核锁定 (不可修改) / Locked by HR' : (newOrderNotes.includes('[HR_APPROVED]') ? '🔒 Locked by HR' : (isAdminOrHR ? '💾 保存修改 / Save Changes' : '💾 提交预修改申请 / Submit Pre-Edit'))}
                             </button>
                         </div>
                     </div>
@@ -5559,6 +5696,12 @@ const PersonalMonthlyReport: React.FC<Props> = ({ user }) => {
                                         <div>
                                             <span className="text-xs font-bold uppercase text-amber-800">Belum Imbas / Pending Scan: </span>
                                             <span className="text-sm font-extrabold text-amber-700 ml-1">{report.pendingScanTrips} Trips</span>
+                                        </div>
+                                    )}
+                                    {(report.annualLeaveDays ?? 0) > 0 && (
+                                        <div>
+                                            <span className="text-xs font-bold uppercase text-amber-800">Cuti Tahunan / AL: </span>
+                                            <span className="text-sm font-extrabold text-amber-900 ml-1">{report.annualLeaveDays} Hari</span>
                                         </div>
                                     )}
                                 </div>

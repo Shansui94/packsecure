@@ -1,6 +1,6 @@
 # Packsecure OS — 生产机台 QR 码清单 (Machine QR Codes List)
 
-根据系统核心业务真理库（[docs/BUSINESS_RULES.md](docs/BUSINESS_RULES.md)）与机台配置（[src/data/factoryData.ts](src/data/factoryData.ts)），现场张贴的机台二维码内容必须与系统内机台 ID **100% 完全一致**。
+根据系统核心业务真理库（[docs/BUSINESS_RULES.md](../BUSINESS_RULES.md)）与机台配置（[src/data/factoryData.ts](../../src/data/factoryData.ts)），现场张贴的机台二维码内容必须与系统内机台 ID **100% 完全一致**。
 
 车间操作工使用手机端扫码报工（`ProductionControl.tsx`）时，摄像头直接读取下方 **QR 内容 (Machine ID)** 自动锁定机台。
 

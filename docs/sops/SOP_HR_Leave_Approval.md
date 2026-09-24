@@ -1,4 +1,20 @@
+---
+title: HR 假期审批标准操作规程 (HR/管理端)
+code: SOP-HR-001
+version: v2.0.0
+last_updated: 2026-09-24
+page_id: leave-calendar
+description: 指导 HR 及管理人员在系统后台正确审核、批准、拒绝和撤销员工的请假申请。
+applicable_roles: [HR, SuperAdmin, Admin, Manager]
+languages: [ZH, EN]
+sort_order: 2
+---
+
 # PackSecure HR 假期审批标准操作规程 (Standard Operating Procedure for Leave Approval)
+
+> **文档编号**: `SOP-HR-001` ｜ **版本**: `v2.0.0` ｜ **生效日期**: `2026-09-24`  
+> **适用对象**: HR 人力资源、Admin 管理员、部门主管 (Manager)  
+> **语言标准**: 中文 / English
 
 本文档旨在指导 HR（人力资源）及工厂管理人员（Admin / Manager）如何在系统后台正确审核、批准、拒绝和撤销员工（包括司机及操作工）的请假申请。
 
