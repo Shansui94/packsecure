@@ -54,6 +54,19 @@ import './utils/i18n';
 import App from './App';
 import ErrorBoundary from './components/ErrorBoundary';
 
+// 🔒 自动捕获 Vite 代码分割 Chunk 404 (新版本发布部署后的自动无缝刷新)
+if (typeof window !== 'undefined') {
+    window.addEventListener('vite:preloadError', (event) => {
+        console.warn('Vite preload error detected, reloading to fetch latest app assets...', event);
+        const lastReload = Number(sessionStorage.getItem('ps_chunk_reload_ts') || '0');
+        const now = Date.now();
+        if (now - lastReload > 10000) {
+            sessionStorage.setItem('ps_chunk_reload_ts', String(now));
+            window.location.reload();
+        }
+    });
+}
+
 const rootElement = document.getElementById('root');
 if (rootElement) {
     createRoot(rootElement).render(
