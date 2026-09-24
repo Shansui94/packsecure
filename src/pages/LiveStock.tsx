@@ -1130,6 +1130,7 @@ const LiveStock: React.FC<LiveStockProps> = ({ onNavigate }) => {
                                 const hasReservation = (item.reserved_stock || 0) > 0;
                                 const shouldShowShortageModal = isShortage || hasReservation;
                                 const badge = getStockBadge(item.available_stock || 0, item.current_stock);
+                                const styleConfig = TYPE_STYLE[item.type] || DEFAULT_STYLE;
                                 const isWeight = item.uom?.toLowerCase() === 'kg' || item.type === 'Raw';
                                 const displayAvail = isWeight
                                     ? Number(item.available_stock || 0).toLocaleString(undefined, { maximumFractionDigits: 1 })
