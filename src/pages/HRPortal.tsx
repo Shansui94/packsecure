@@ -3212,7 +3212,7 @@ const HRPortal: React.FC<HRPortalProps> = ({ user, initialTab, initialRoleFilter
                     </div>
 
                     {pricingView === 'audit' ? (
-                        <HRAuditWorkbench />
+                        <HRAuditWorkbench onOpenRulebook={() => setPricingView('rulebook')} />
                     ) : (
                         <DriverPricingRulebookEditor />
                     )}

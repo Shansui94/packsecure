@@ -34,7 +34,11 @@ export interface AuditTripItem {
     hrNote?: string;
 }
 
-export const HRAuditWorkbench: React.FC = () => {
+export interface HRAuditWorkbenchProps {
+    onOpenRulebook?: () => void;
+}
+
+export const HRAuditWorkbench: React.FC<HRAuditWorkbenchProps> = ({ onOpenRulebook }) => {
     const [trips, setTrips] = useState<AuditTripItem[]>([]);
     const [loading, setLoading] = useState<boolean>(true);
     const [filterTab, setFilterTab] = useState<'all' | 'pending' | 'green' | 'yellow' | 'red' | 'approved'>('pending');
@@ -325,6 +329,16 @@ export const HRAuditWorkbench: React.FC = () => {
                 </div>
 
                 <div className="flex items-center space-x-3">
+                    {onOpenRulebook && (
+                        <button
+                            onClick={onOpenRulebook}
+                            className="px-3.5 py-2 bg-indigo-600 hover:bg-indigo-500 text-white rounded-lg text-xs font-bold transition flex items-center space-x-1.5 shadow-sm cursor-pointer"
+                        >
+                            <span>📜</span>
+                            <span>编辑运费规则库 (Markdown)</span>
+                        </button>
+                    )}
+
                     <button
                         onClick={handleBatchApproveMatches}
                         disabled={batchApproving || pendingMatchesCount === 0}
@@ -501,8 +515,16 @@ export const HRAuditWorkbench: React.FC = () => {
                                             </span>
                                         </td>
                                         <td className="p-3">
-                                            <div className="font-bold text-slate-800">{trip.tripNumber}</div>
-                                            <div className="text-[11px] text-slate-500">{trip.driverName} · {trip.date}</div>
+                                            <div className="font-bold text-slate-800 font-mono text-xs flex items-center gap-1.5" title={trip.tripNumber}>
+                                                <span className="bg-slate-100 text-slate-700 px-1.5 py-0.5 rounded border border-slate-200">
+                                                    {trip.tripNumber.length > 16 
+                                                        ? (trip.tripNumber.startsWith('trip_') 
+                                                            ? `#${trip.tripNumber.slice(5, 13)}` 
+                                                            : `#${trip.tripNumber.slice(0, 8)}`) 
+                                                        : trip.tripNumber}
+                                                </span>
+                                            </div>
+                                            <div className="text-[11px] text-slate-500 mt-1">{trip.driverName} · {trip.date}</div>
                                         </td>
                                         <td className="p-3">
                                             <span className="font-mono bg-slate-100 px-1.5 py-0.5 rounded border border-slate-200 font-bold text-slate-700">
@@ -542,15 +564,16 @@ export const HRAuditWorkbench: React.FC = () => {
                                                 </span>
                                             )}
                                         </td>
-                                        <td className="p-3 text-right">
+                                        <td className="p-3 text-right whitespace-nowrap">
                                             <button
                                                 onClick={(e) => {
                                                     e.stopPropagation();
                                                     setSelectedTrip(trip);
                                                 }}
-                                                className="px-3 py-1 bg-white hover:bg-indigo-50 text-indigo-600 border border-indigo-200 rounded-lg text-xs font-bold transition shadow-2xs"
+                                                className="px-3 py-1.5 bg-white hover:bg-indigo-50 text-indigo-600 border border-indigo-200 rounded-lg text-xs font-bold transition shadow-2xs whitespace-nowrap inline-flex items-center gap-1 cursor-pointer"
                                             >
-                                                审核核准 →
+                                                <span>审核核准</span>
+                                                <span>→</span>
                                             </button>
                                         </td>
                                     </tr>
