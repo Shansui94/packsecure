@@ -296,6 +296,11 @@ const DriverDelivery: React.FC<DriverDeliveryProps> = ({ user, onNavigate }) => 
     const [laterUploading, setLaterUploading] = useState(false);
     const laterFileInputRef = useRef<HTMLInputElement>(null);
 
+    // Direct Card Delivery Photo Upload State
+    const [directUploadingOrderId, setDirectUploadingOrderId] = useState<string | null>(null);
+    const directDeliveryOrderRef = useRef<SalesOrder | null>(null);
+    const directDeliveryInputRef = useRef<HTMLInputElement>(null);
+
     // Helpers to check order delivery status (multi-drop aware: 1 DO = 1 drop)
     const isPendingApprovalDone = (t: SalesOrder, isMultiOrderTrip: boolean = false) => {
         if (t.status !== 'Pending Approval') return false;
@@ -314,8 +319,20 @@ const DriverDelivery: React.FC<DriverDeliveryProps> = ({ user, onNavigate }) => 
         if (order.status === 'Pending Approval') return isPendingApprovalDone(order, isMultiOrderTrip);
 
         if (order.status === 'Loaded') {
+            // If order was explicitly returned for missing DO, keep in to-do
+            if (order.notes && (order.notes.includes('Menunggu gambar DO') || order.notes.includes('Pending signed DO'))) {
+                return false;
+            }
+
             const totalDrops = isMultiOrderTrip ? 1 : Math.max(1, Number((order as any).trip_drop_count) || 1);
+            const rawPhotos = order.pod_photo_url ? order.pod_photo_url.split(',') : [];
+            const validDoCount = rawPhotos.filter((_, idx) => idx % 2 === 0 && Boolean(_ && _.trim())).length;
             const completedDrops = countCompletedDrops(order.pod_photo_url);
+
+            // If there is any photo uploaded but DO is missing, it is not completed
+            if (rawPhotos.length > 0 && validDoCount < totalDrops) {
+                return false;
+            }
             return completedDrops >= totalDrops;
         }
 
@@ -1247,6 +1264,165 @@ const DriverDelivery: React.FC<DriverDeliveryProps> = ({ user, onNavigate }) => 
         }
     };
 
+    // Direct Delivery Photo Upload Handlers (Skip modal navigation)
+    const handleTriggerDirectDeliveryUpload = (order: SalesOrder) => {
+        directDeliveryOrderRef.current = order;
+        directDeliveryInputRef.current?.click();
+    };
+
+    const handleDirectDeliveryFileChange = async (e: React.ChangeEvent<HTMLInputElement>) => {
+        const file = e.target.files?.[0];
+        const targetOrder = directDeliveryOrderRef.current;
+        if (!file || !targetOrder) return;
+
+        try {
+            setDirectUploadingOrderId(targetOrder.id);
+
+            // 1. Compress image
+            const compressedBase64 = await compressImage(file);
+            const base64Only = compressedBase64.split(',')[1];
+
+            // 2. Fast GPS fetch (with 2.5s fallback so it never blocks)
+            const gpsStr = await new Promise<string>((resolve) => {
+                if ('geolocation' in navigator) {
+                    const timer = setTimeout(() => resolve('GPS Offline'), 2500);
+                    navigator.geolocation.getCurrentPosition(
+                        (pos) => {
+                            clearTimeout(timer);
+                            resolve(`Lat: ${pos.coords.latitude.toFixed(6)}, Lng: ${pos.coords.longitude.toFixed(6)}`);
+                        },
+                        () => {
+                            clearTimeout(timer);
+                            resolve('GPS Unavailable');
+                        },
+                        { enableHighAccuracy: true, timeout: 2500 }
+                    );
+                } else {
+                    resolve('GPS Not Supported');
+                }
+            });
+
+            // 3. Format Watermark
+            const now = new Date();
+            const timeStr = now.toLocaleDateString('en-GB', { day: '2-digit', month: 'short', year: 'numeric' }) + ' ' + 
+                            now.toLocaleTimeString('en-GB', { hour: '2-digit', minute: '2-digit', second: '2-digit' });
+            const shortTime = now.toLocaleDateString('en-GB', { day: '2-digit', month: '2-digit' }) + ' ' +
+                              now.toLocaleTimeString('en-GB', { hour: '2-digit', minute: '2-digit' });
+
+            const lines = [
+                `SO: ${targetOrder.orderNumber} | Plate: ${currentLorry?.plate_number || 'No Lorry'}`,
+                `Time: ${timeStr} | Type: POD / BUKTI HANTARAN`,
+                `Location: ${gpsStr}`
+            ];
+            const watermarkedBase64 = await watermarkImage(base64Only, lines);
+
+            // 4. Extract DO Number with AI in background
+            let extractedDoNumber = '';
+            try {
+                extractedDoNumber = await extractDoNumberFromAi(watermarkedBase64);
+            } catch (aiErr) {
+                console.warn("Direct upload AI DO extraction notice:", aiErr);
+            }
+
+            // 5. Upload to Supabase Storage
+            const fileName = `unload_pod_${targetOrder.orderNumber}_${Date.now()}.jpg`;
+            const blob = dataURLtoBlob(`data:image/jpeg;base64,${watermarkedBase64}`);
+            const { error: uploadError } = await supabase.storage
+                .from('work-photos')
+                .upload(fileName, blob, { contentType: 'image/jpeg' });
+            if (uploadError) throw uploadError;
+
+            const { data: urlData } = supabase.storage.from('work-photos').getPublicUrl(fileName);
+            const publicUrl = urlData.publicUrl;
+
+            // 6. Fetch freshest order from DB
+            const { data: freshOrder, error: fetchErr } = await supabase
+                .from('sales_orders')
+                .select('status, trip_drop_count, pod_photo_url, notes, trip_id')
+                .eq('id', targetOrder.id)
+                .single();
+            if (fetchErr) throw fetchErr;
+
+            const currentPhotos = freshOrder.pod_photo_url ? freshOrder.pod_photo_url.split(',') : [];
+            let updatedPodUrl = '';
+            
+            // Check if an empty DO slot exists to be backfilled
+            const missingDoIndex = currentPhotos.findIndex((url: string, idx: number) => idx % 2 === 0 && (!url || !url.trim()));
+            if (missingDoIndex !== -1) {
+                currentPhotos[missingDoIndex] = publicUrl;
+                if (missingDoIndex + 1 < currentPhotos.length && (!currentPhotos[missingDoIndex + 1] || !currentPhotos[missingDoIndex + 1].trim())) {
+                    currentPhotos[missingDoIndex + 1] = publicUrl;
+                }
+                updatedPodUrl = currentPhotos.join(',');
+            } else {
+                // Append pair [publicUrl, publicUrl] so both DO and Product slots are filled
+                const newPair = [publicUrl, publicUrl];
+                const existing = freshOrder.pod_photo_url ? freshOrder.pod_photo_url.trim().split(',').filter(Boolean) : [];
+                updatedPodUrl = [...existing, ...newPair].join(',');
+            }
+
+            const totalDrops = Math.max(1, Number(freshOrder.trip_drop_count) || 1);
+            const filledDoCount = updatedPodUrl.split(',').filter((url: string, idx: number) => idx % 2 === 0 && Boolean(url && url.trim())).length;
+            const completedDrops = countCompletedDrops(updatedPodUrl);
+            const isAllDropsCompleted = completedDrops >= totalDrops && filledDoCount >= totalDrops;
+
+            // Format notes
+            let updatedNotes = freshOrder.notes || '';
+            const cleanNotes = updatedNotes.replace(/\[AI DO:\s*.*?\]/g, '').trim();
+            const aiTag = extractedDoNumber ? `\n[AI DO: ${extractedDoNumber}]` : '';
+            const proofTag = `\n[${shortTime}] Proof uploaded (Direct)`;
+            
+            let newNotes = cleanNotes ? `${cleanNotes}${proofTag}${aiTag}` : `[${shortTime}] Proof uploaded (Direct)${aiTag}`;
+            if (isAllDropsCompleted && (newNotes.includes('Menunggu gambar DO') || newNotes.includes('Pending signed DO'))) {
+                newNotes = newNotes.replace(/\[.*?Menunggu gambar DO.*?\]/g, '').replace(/\[.*?Pending signed DO.*?\]/g, '').trim();
+                newNotes += `\n[${shortTime}] ✅ DO telah dibekalkan. Penghantaran lengkap.`;
+            }
+
+            const nextStatus = isAllDropsCompleted ? 'Delivered' : 'Loaded';
+
+            // 7. Update database
+            const { error: updateErr } = await supabase
+                .from('sales_orders')
+                .update({
+                    pod_photo_url: updatedPodUrl,
+                    pod_signature_url: publicUrl,
+                    pod_timestamp: new Date().toISOString(),
+                    status: nextStatus,
+                    notes: newNotes
+                })
+                .eq('id', targetOrder.id);
+            if (updateErr) throw updateErr;
+
+            // 8. If trip is all done, update trips_v2
+            if (freshOrder.trip_id) {
+                const { data: siblingOrders } = await supabase
+                    .from('sales_orders')
+                    .select('id, status')
+                    .eq('trip_id', freshOrder.trip_id);
+                const allStopsDone = (siblingOrders || []).every(s => (s.id === targetOrder.id ? nextStatus === 'Delivered' : s.status === 'Delivered' || s.status === 'Cancelled'));
+                if (allStopsDone) {
+                    await supabase
+                        .from('trips_v2')
+                        .update({
+                            status: 'Completed',
+                            completed_at: new Date().toISOString()
+                        })
+                        .eq('id', freshOrder.trip_id);
+                }
+            }
+
+            logActivity('Confirm Delivery (Direct)', `Delivered SO: ${targetOrder.orderNumber}`, user);
+            alert("✅ Gambar berjaya dimuat naik & penghantaran disahkan! / Photo uploaded & delivery confirmed!");
+            fetchTasks();
+        } catch (err: any) {
+            alert("Gagal memuat naik gambar / Failed to upload photo: " + err.message);
+        } finally {
+            setDirectUploadingOrderId(null);
+            directDeliveryOrderRef.current = null;
+            if (e.target) e.target.value = '';
+        }
+    };
+
     // 6. Bind Lorry (Scan QR)
     const handleScanComplete = async (text: string) => {
         try {
@@ -1949,7 +2125,35 @@ const DriverDelivery: React.FC<DriverDeliveryProps> = ({ user, onNavigate }) => 
     }, [tasks, tripsV2List, currentLorry]);
 
     const pendingTrips = React.useMemo(() => tripGroups.filter(t => !t.isAllDone), [tripGroups]);
-    const doneTrips = React.useMemo(() => tripGroups.filter(t => t.isAllDone), [tripGroups]);
+    const doneTrips = React.useMemo(() => {
+        const list = tripGroups.filter(t => t.isAllDone);
+        // Sort descending: newest trips on top, older trips at the bottom
+        return list.slice().sort((a, b) => {
+            const dateA = a.deliveryDate || '';
+            const dateB = b.deliveryDate || '';
+            if (dateA !== dateB) return dateB.localeCompare(dateA);
+
+            const getLatestPodTime = (grp: DriverTripGroup) => {
+                return grp.orders.reduce((max, o) => {
+                    const t = o.pod_timestamp 
+                        ? new Date(o.pod_timestamp).getTime() 
+                        : ((o as any).completed_at 
+                            ? new Date((o as any).completed_at).getTime() 
+                            : (o.created_at ? new Date(o.created_at).getTime() : 0));
+                    return Math.max(max, t);
+                }, 0);
+            };
+            const timeA = getLatestPodTime(a);
+            const timeB = getLatestPodTime(b);
+            if (timeA !== timeB) return timeB - timeA;
+
+            const seqA = a.sortSeq !== undefined ? a.sortSeq : 0;
+            const seqB = b.sortSeq !== undefined ? b.sortSeq : 0;
+            if (seqA !== seqB) return seqB - seqA;
+
+            return String(b.tripNumber || '').localeCompare(String(a.tripNumber || ''));
+        });
+    }, [tripGroups]);
     const currentTripList = activeTab === 'todo' ? pendingTrips : doneTrips;
 
     const pendingDropsCount = React.useMemo(() => pendingTrips.reduce((acc, t) => acc + (t.totalDrops - t.completedDrops), 0), [pendingTrips]);
@@ -2406,21 +2610,58 @@ const DriverDelivery: React.FC<DriverDeliveryProps> = ({ user, onNavigate }) => 
                         (order.status === 'Loaded' || order.status === 'Pending Approval' || !isDeliveredOrDone) ? (() => {
                             const btnTotalDrops = isMultiOrderTrip ? 1 : Math.max(1, Number((order as any).trip_drop_count) || 1);
                             const btnDoneDrops = countCompletedDrops(order.pod_photo_url);
+                            const rawPhotos = order.pod_photo_url ? order.pod_photo_url.split(',') : [];
+                            const validDoCount = rawPhotos.filter((_, idx) => idx % 2 === 0 && Boolean(_ && _.trim())).length;
+                            const isWaitingDo = Boolean(order.notes && (order.notes.includes('Menunggu gambar DO') || order.notes.includes('Pending signed DO'))) || (rawPhotos.length > 0 && validDoCount < btnTotalDrops);
+                            const isDirectUploadingThis = directUploadingOrderId === order.id;
+
                             return (
-                                <button
-                                    onClick={() => handleOpenUnloadModal(order)}
-                                    data-action="OPEN_UNLOAD_MODAL"
-                                    data-action-name="打开送货签收窗口"
-                                    data-target={`工单 #${order.orderNumber || order.id}`}
-                                    className="w-full py-4 bg-emerald-600 hover:bg-emerald-500 text-white rounded-xl font-bold uppercase text-sm tracking-widest flex items-center justify-center gap-3 shadow-lg shadow-emerald-950/30 active:scale-95 transition-all"
-                                >
-                                    <CheckCircle size={18} />
-                                    <span>
-                                        Sahkan Hantaran / Confirm Delivery
-                                        {btnTotalDrops > 1 && ` (Drop ${Math.min(btnDoneDrops + 1, btnTotalDrops)}/${btnTotalDrops})`}
-                                    </span>
-                                    <ChevronRight size={16} className="opacity-50" />
-                                </button>
+                                <div className="space-y-2">
+                                    {isWaitingDo && (
+                                        <div className="bg-amber-500/15 border border-amber-500/40 text-amber-300 p-2.5 rounded-xl flex items-center gap-2 text-xs font-bold animate-pulse">
+                                            <span>⚠️</span>
+                                            <span>Perlu muat naik gambar DO bertandatangan / Please upload signed DO photo</span>
+                                        </div>
+                                    )}
+                                    <button
+                                        onClick={() => handleTriggerDirectDeliveryUpload(order)}
+                                        disabled={isDirectUploadingThis}
+                                        data-action="DIRECT_DELIVERY_UPLOAD"
+                                        data-action-name="拍照/上传直接确认送货"
+                                        data-target={`工单 #${order.orderNumber || order.id}`}
+                                        className="w-full py-4 bg-emerald-600 hover:bg-emerald-500 disabled:bg-slate-800 text-white disabled:text-slate-500 rounded-xl font-black uppercase text-sm tracking-widest flex items-center justify-center gap-2.5 shadow-lg shadow-emerald-950/40 active:scale-95 transition-all cursor-pointer"
+                                    >
+                                        {isDirectUploadingThis ? (
+                                            <>
+                                                <div className="w-5 h-5 border-2 border-white/30 border-t-white rounded-full animate-spin" />
+                                                <span>MEMUAT NAIK & SAHKAN... / CONFIRMING...</span>
+                                            </>
+                                        ) : (
+                                            <>
+                                                <Camera size={20} className="text-emerald-200" />
+                                                <span>
+                                                    {isWaitingDo
+                                                        ? '📸 MUAT NAIK GAMBAR DO / UPLOAD DO'
+                                                        : (btnTotalDrops > 1
+                                                            ? `📸 MUAT NAIK GAMBAR (Drop ${Math.min(btnDoneDrops + 1, btnTotalDrops)}/${btnTotalDrops})`
+                                                            : '📸 MUAT NAIK GAMBAR / UPLOAD PHOTO')}
+                                                </span>
+                                            </>
+                                        )}
+                                    </button>
+                                    <div className="flex items-center justify-between px-1 text-[11px] text-slate-400">
+                                        <button
+                                            type="button"
+                                            onClick={() => handleOpenUnloadModal(order)}
+                                            className="hover:text-blue-400 flex items-center gap-1 transition-colors py-1 cursor-pointer"
+                                        >
+                                            <span>📝 Tambah Nota / More Options</span>
+                                        </button>
+                                        <span className="text-[10px] text-slate-500">
+                                            {isWaitingDo ? '⚠️ Ambil gambar DO bertandatangan' : '📸 Terus muat naik & sahkan hantaran'}
+                                        </span>
+                                    </div>
+                                </div>
                             );
                         })() : (
                             <div className="w-full py-3.5 px-4 bg-slate-900/80 border border-slate-800 rounded-xl flex items-center justify-between text-xs">
@@ -3517,6 +3758,13 @@ const DriverDelivery: React.FC<DriverDeliveryProps> = ({ user, onNavigate }) => 
                 accept="image/*"
                 className="hidden"
                 onChange={handleLaterFileSelect}
+            />
+            <input
+                ref={directDeliveryInputRef}
+                type="file"
+                accept="image/*"
+                className="hidden"
+                onChange={handleDirectDeliveryFileChange}
             />
             <input
                 ref={odometerCameraInputRef}
