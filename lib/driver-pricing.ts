@@ -2,10 +2,8 @@ import 'dotenv/config';
 import { VercelRequest, VercelResponse } from '@vercel/node';
 import { GoogleGenerativeAI } from '@google/generative-ai';
 import { createClient } from '@supabase/supabase-js';
-import fs from 'fs';
-import path from 'path';
-
-export const config = { maxDuration: 60 };
+import * as fs from 'fs';
+import * as path from 'path';
 
 // Initialize Supabase Client
 const supabaseUrl = process.env.VITE_SUPABASE_URL || process.env.SUPABASE_URL || '';
@@ -82,10 +80,9 @@ async function getActiveRulebookContent(): Promise<{ content: string; version: s
             return { content: data.content_md, version: data.version, id: data.id };
         }
     } catch (e) {
-        console.warn('[calc-driver-rate] Failed to fetch active rulebook from DB, falling back to local file/string:', e);
+        console.warn('[driver-pricing] Failed to fetch active rulebook from DB, falling back to local file/string:', e);
     }
 
-    // Try reading local docs file
     try {
         const localPath = path.resolve(process.cwd(), 'docs', 'sops', 'Driver_Pricing_Rules.md');
         if (fs.existsSync(localPath)) {
@@ -131,7 +128,6 @@ async function calculateLegacyRate(origin: string, addresses: string[], drops: n
         }
 
         if (!matchedRate) {
-            // Default floor for local trip
             return 40.0;
         }
 
@@ -146,7 +142,7 @@ async function calculateLegacyRate(origin: string, addresses: string[], drops: n
 
         return baseRate + extraRate;
     } catch (err) {
-        console.warn('[calc-driver-rate] calculateLegacyRate error:', err);
+        console.warn('[driver-pricing] calculateLegacyRate error:', err);
         return 40.0;
     }
 }
@@ -216,7 +212,10 @@ ${addressesText}
     return JSON.parse(cleanJson);
 }
 
-export default async function handler(req: VercelRequest, res: VercelResponse) {
+/**
+ * 运费核算及规则库主要 Handler
+ */
+export async function handleCalcDriverRate(req: VercelRequest, res: VercelResponse) {
     if (req.method === 'OPTIONS') {
         res.setHeader('Access-Control-Allow-Origin', '*');
         res.setHeader('Access-Control-Allow-Methods', 'GET, POST, OPTIONS');
@@ -231,17 +230,11 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
     try {
         const mode = req.body?.mode || req.query?.mode || 'single';
 
-        // =========================================================================
-        // MODE: GET ACTIVE RULEBOOK
-        // =========================================================================
         if (mode === 'get-active-rulebook') {
             const rulebook = await getActiveRulebookContent();
             return res.status(200).json({ success: true, ...rulebook });
         }
 
-        // =========================================================================
-        // MODE: LIST RULEBOOKS (Version History)
-        // =========================================================================
         if (mode === 'list-rulebooks') {
             try {
                 const { data, error } = await supabase
@@ -271,9 +264,6 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
             });
         }
 
-        // =========================================================================
-        // MODE: SAVE RULEBOOK (Publish New Version)
-        // =========================================================================
         if (mode === 'save-rulebook') {
             const { content_md, changelog, created_by = 'HR', title = '司机运费与送货价格真理库' } = req.body;
             if (!content_md || !content_md.trim()) {
@@ -281,7 +271,6 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
             }
 
             try {
-                // Fetch latest version count to increment version
                 const { data: latest } = await supabase
                     .from('pricing_rulebooks')
                     .select('version')
@@ -300,13 +289,11 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
                     }
                 }
 
-                // Deactivate prior active versions
                 await supabase
                     .from('pricing_rulebooks')
                     .update({ is_active: false })
                     .eq('rule_type', 'DRIVER_DELIVERY');
 
-                // Insert new active version
                 const { data: inserted, error: insErr } = await supabase
                     .from('pricing_rulebooks')
                     .insert({
@@ -331,14 +318,11 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
                     message: `成功发布新版本 ${nextVersion}，全系统即刻热生效！`
                 });
             } catch (err: any) {
-                console.error('[calc-driver-rate] save-rulebook error:', err);
+                console.error('[driver-pricing] save-rulebook error:', err);
                 return res.status(500).json({ error: err.message || 'Failed to save rulebook' });
             }
         }
 
-        // =========================================================================
-        // MODE: SANDBOX (Single Address Fast Simulation)
-        // =========================================================================
         if (mode === 'sandbox') {
             const { testAddress, origin = 'TAIPING', lorryPlate = 'PGD 1234', dropCount = 1, rulebookMd } = req.body;
             if (!testAddress) {
@@ -373,7 +357,6 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
                 };
             }
 
-            // Enforce Guardrails
             let clampedRate = Number(aiResult.total_ai_rate) || legacyRate;
             if (clampedRate < 40.0) clampedRate = 40.0;
             const isExtreme = clampedRate > 650.0;
@@ -404,14 +387,10 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
             });
         }
 
-        // =========================================================================
-        // MODE: BACKTEST (Batch Simulation on Past 50 Trips)
-        // =========================================================================
         if (mode === 'backtest') {
             const { rulebookMd, limit = 30 } = req.body;
             const rulebook = rulebookMd ? { content: rulebookMd, version: 'backtest-draft' } : await getActiveRulebookContent();
 
-            // Fetch recent non-cancelled sales orders
             const { data: sampleOrders, error: orderErr } = await supabase
                 .from('sales_orders')
                 .select('id, order_number, customer, delivery_address, zone, trip_id, notes, deadline, status')
@@ -436,7 +415,6 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
             let discrepancyCount = 0;
             const comparisons: any[] = [];
 
-            // Run sample comparisons (up to 12 items deep AI, remainder extrapolated or fast legacy)
             const deepSlice = sampleOrders.slice(0, 8);
             for (const o of deepSlice) {
                 const addr = o.delivery_address || '';
@@ -506,9 +484,7 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
             });
         }
 
-        // =========================================================================
-        // MODE: SINGLE (Production Pre-Dispatch or Post-Delivery Audit)
-        // =========================================================================
+        // MODE: SINGLE (Default)
         const {
             tripId,
             tripNumber,
@@ -538,7 +514,7 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
                 rulebookMd: rulebook.content
             });
         } catch (err: any) {
-            console.warn('[calc-driver-rate] Gemini execution failed, fallback to legacy:', err.message);
+            console.warn('[driver-pricing] Gemini execution failed, fallback to legacy:', err.message);
             aiResult = {
                 standardized_location: addrs[0] || '本地配送',
                 ai_zone: '系统查表匹配',
@@ -552,7 +528,6 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
             };
         }
 
-        // Safety Guardrail: Clamp between RM 40 and RM 650
         let finalAiRate = Number(aiResult.total_ai_rate) || legacyRate;
         if (finalAiRate < 40.0) finalAiRate = 40.0;
         const isExtremeBlocked = finalAiRate > 650.0;
@@ -584,14 +559,13 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
             ai_zone: aiResult.ai_zone,
             rule_citations: aiResult.rule_citations || [],
             confidence_score: aiResult.confidence_score || 0.9,
-            ai_reasoning: aiResult.ai_reasoning,
+            ai_reasoning: aiResult.reasoning || aiResult.ai_reasoning,
             discrepancy_level: discrepancyLevel,
             audit_status: discrepancyLevel === 'AUTO_MATCH' ? 'APPROVED' : 'PENDING',
             approved_amount: discrepancyLevel === 'AUTO_MATCH' ? finalAiRate : null,
             stage
         };
 
-        // Attempt persistence to trip_rate_audits if table exists
         if (saveAudit) {
             try {
                 const { data: auditSaved, error: auditErr } = await supabase
@@ -614,7 +588,182 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
         });
 
     } catch (e: any) {
-        console.error('[calc-driver-rate] Top level handler error:', e);
+        console.error('[driver-pricing] Top level handler error:', e);
         return res.status(500).json({ error: e.message || 'Internal server error in rate calculator' });
+    }
+}
+
+/**
+ * 纠错反馈与规则补丁建议 Handler
+ */
+export async function handleSuggestRulePatch(req: VercelRequest, res: VercelResponse) {
+    if (req.method === 'OPTIONS') {
+        res.setHeader('Access-Control-Allow-Origin', '*');
+        res.setHeader('Access-Control-Allow-Methods', 'GET, POST, OPTIONS');
+        res.setHeader('Access-Control-Allow-Headers', 'Content-Type, Authorization');
+        return res.status(200).end();
+    }
+
+    res.setHeader('Access-Control-Allow-Origin', '*');
+    res.setHeader('Access-Control-Allow-Methods', 'GET, POST, OPTIONS');
+    res.setHeader('Access-Control-Allow-Headers', 'Content-Type, Authorization');
+
+    try {
+        const action = req.body?.action || req.query?.action || 'suggest';
+
+        // ACTION: RECORD CORRECTION
+        if (action === 'record-correction') {
+            const {
+                audit_id,
+                trip_id,
+                address_text,
+                lorry_plate,
+                ai_rate,
+                hr_rate,
+                diff_reason,
+                reviewed_by = 'HR'
+            } = req.body;
+
+            if (!address_text || hr_rate === undefined) {
+                return res.status(400).json({ error: 'address_text and hr_rate are required' });
+            }
+
+            const diffAmount = Number(hr_rate) - Number(ai_rate || 0);
+
+            let caseId = null;
+            try {
+                const { data, error } = await supabase
+                    .from('rate_feedback_cases')
+                    .insert({
+                        audit_id: audit_id || null,
+                        trip_id: trip_id || null,
+                        address_text,
+                        lorry_plate: lorry_plate || null,
+                        ai_rate: Number(ai_rate) || 0,
+                        hr_rate: Number(hr_rate),
+                        diff_amount: diffAmount,
+                        diff_reason: diff_reason || 'HR人工复核修正',
+                        status: 'UNABSORBED'
+                    })
+                    .select('id')
+                    .maybeSingle();
+
+                if (!error && data) caseId = data.id;
+            } catch (ignore) {}
+
+            if (audit_id) {
+                try {
+                    await supabase
+                        .from('trip_rate_audits')
+                        .update({
+                            audit_status: 'ADJUSTED',
+                            approved_amount: Number(hr_rate),
+                            hr_note: diff_reason,
+                            reviewed_by,
+                            reviewed_at: new Date().toISOString()
+                        })
+                        .eq('id', audit_id);
+                } catch (ignore) {}
+            }
+
+            return res.status(200).json({
+                success: true,
+                caseId,
+                message: '纠错案例已成功记入自检反馈库'
+            });
+        }
+
+        // ACTION: SUGGEST PATCH
+        let cases: any[] = [];
+        try {
+            const { data } = await supabase
+                .from('rate_feedback_cases')
+                .select('*')
+                .eq('status', 'UNABSORBED')
+                .order('created_at', { ascending: false })
+                .limit(20);
+
+            if (data && data.length > 0) {
+                cases = data;
+            }
+        } catch (ignore) {}
+
+        if (cases.length === 0 && Array.isArray(req.body?.customCases) && req.body.customCases.length > 0) {
+            cases = req.body.customCases;
+        }
+
+        if (cases.length === 0) {
+            return res.status(200).json({
+                success: true,
+                hasSuggestions: false,
+                message: '当前暂无未吸纳的 HR 人工纠错记录，现有 Markdown 规则运行平稳。',
+                suggestions: []
+            });
+        }
+
+        const apiKey = process.env.GOOGLE_API_KEY || process.env.GEMINI_API_KEY;
+        if (!apiKey) {
+            return res.status(200).json({
+                success: true,
+                hasSuggestions: true,
+                suggestions: [
+                    {
+                        title: '待吸纳纠错提示',
+                        markdownPatch: `- 检测到 ${cases.length} 笔人工调价记录，请参阅反馈历史手动补充对应条款。`,
+                        affectedCasesCount: cases.length
+                    }
+                ]
+            });
+        }
+
+        const genAI = new GoogleGenerativeAI(apiKey);
+        const model = genAI.getGenerativeModel({
+            model: 'gemini-2.5-flash',
+            generationConfig: {
+                temperature: 0.2,
+                topP: 0.9
+            }
+        });
+
+        const caseSummaries = cases.map((c, i) =>
+            `${i + 1}. 地址: "${c.address_text}" | 车牌: ${c.lorry_plate || '标准'} | AI初核: RM${c.ai_rate} -> HR纠正为: RM${c.hr_rate} | 原因: "${c.diff_reason || '无备注'}"`
+        ).join('\n');
+
+        const prompt = `你是 Packsecure 运费真理库的 AI 优化顾问。
+近期 HR 在日常核对运费时，对 AI 的自动计算结果进行了以下人工修正 (Badcases)：
+
+${caseSummaries}
+
+请分析这些人工修正案例的共性模式（例如：某些新工业区边界、特定小车费率、常去客户的约定特惠价），并提炼出 1 至 3 条规范、简练且可直接追加到《Driver_Pricing_Rules.md》中的 Markdown 条款补丁。
+
+必须返回纯 JSON 格式（不得带有任何 markdown 代码块标识如 \`\`\`json 或 \`\`\`）：
+{
+  "hasSuggestions": true,
+  "summary": "分析摘要（例如：发现 3 笔纠错均集中在居林高科技园四期，HR 认为离主干道较近应按 RM 150 计算）",
+  "suggestions": [
+    {
+      "title": "规则补丁标题",
+      "targetSection": "建议插入的章节（例如：第 2.3 节 或 第 4 节地名消歧）",
+      "markdownPatch": "- **Kulim Hi-Tech Park Phase 4 / 居林四期**：基准价调整为 RM 150，免费落点 3 点（靠近高速主干道特惠）。",
+      "explanation": "解释为什么添加该条款及解决的问题"
+    }
+  ]
+}`;
+
+        const result = await model.generateContent(prompt);
+        const response = await result.response;
+        const text = response.text().replace(/```json|```/g, '').trim();
+        const parsed = JSON.parse(text);
+
+        return res.status(200).json({
+            success: true,
+            unabsorbedCount: cases.length,
+            caseIds: cases.map(c => c.id).filter(Boolean),
+            ...parsed
+        });
+
+    } catch (e: any) {
+        console.error('[driver-pricing] Suggest patch error:', e);
+        return res.status(500).json({ error: e.message || 'Failed to generate rule patches' });
     }
 }

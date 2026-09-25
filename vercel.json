@@ -48,6 +48,15 @@
             "destination": "/api/agent/universal?action=sop-assistant"
         },
         {
+            "source": "/api/agent/calc-driver-rate",
+            "destination": "/api/agent/universal?action=calc-driver-rate"
+        },
+        {
+            "source": "/api/agent/suggest-rule-patch",
+            "destination": "/api/agent/universal?action=suggest-rule-patch"
+        },
+
+        {
             "source": "/api/dev-log",
             "destination": "/api/docs?action=dev-log"
         },

@@ -229,11 +229,13 @@ export async function searchEntities(
     // Orders (sales_orders)
     if (!categoryFilter || categoryFilter === 'orders') {
         promises.push(
-            supabase
-                .from('sales_orders')
-                .select('id, order_number, customer, status, delivery_address, zone')
-                .or(`order_number.ilike.${pattern},customer.ilike.${pattern}`)
-                .limit(limit)
+            Promise.resolve(
+                supabase
+                    .from('sales_orders')
+                    .select('id, order_number, customer, status, delivery_address, zone')
+                    .or(`order_number.ilike.${pattern},customer.ilike.${pattern}`)
+                    .limit(limit)
+            )
                 .then(({ data }) =>
                     (data || []).map((o: any) => ({
                         id: `order-${o.id || o.order_number}`,
@@ -257,11 +259,13 @@ export async function searchEntities(
     // Customers (sys_customers)
     if (!categoryFilter || categoryFilter === 'customers') {
         promises.push(
-            supabase
-                .from('sys_customers')
-                .select('id, name, zone, phone, address')
-                .or(`name.ilike.${pattern},zone.ilike.${pattern}`)
-                .limit(limit)
+            Promise.resolve(
+                supabase
+                    .from('sys_customers')
+                    .select('id, name, zone, phone, address')
+                    .or(`name.ilike.${pattern},zone.ilike.${pattern}`)
+                    .limit(limit)
+            )
                 .then(({ data }) =>
                     (data || []).map((c: any) => ({
                         id: `cust-${c.id || c.name}`,
@@ -283,11 +287,13 @@ export async function searchEntities(
     // Machines (sys_machines)
     if (!categoryFilter || categoryFilter === 'machines') {
         promises.push(
-            supabase
-                .from('sys_machines')
-                .select('machine_id, name, status, current_sku, model')
-                .or(`machine_id.ilike.${pattern},name.ilike.${pattern}`)
-                .limit(limit)
+            Promise.resolve(
+                supabase
+                    .from('sys_machines')
+                    .select('machine_id, name, status, current_sku, model')
+                    .or(`machine_id.ilike.${pattern},name.ilike.${pattern}`)
+                    .limit(limit)
+            )
                 .then(({ data }) =>
                     (data || []).map((m: any) => ({
                         id: `machine-${m.machine_id}`,
@@ -311,11 +317,13 @@ export async function searchEntities(
     // Items (master_items)
     if (!categoryFilter || categoryFilter === 'items') {
         promises.push(
-            supabase
-                .from('master_items')
-                .select('sku, name, category, uom')
-                .or(`sku.ilike.${pattern},name.ilike.${pattern}`)
-                .limit(limit)
+            Promise.resolve(
+                supabase
+                    .from('master_items')
+                    .select('sku, name, category, uom')
+                    .or(`sku.ilike.${pattern},name.ilike.${pattern}`)
+                    .limit(limit)
+            )
                 .then(({ data }) =>
                     (data || []).map((i: any) => ({
                         id: `sku-${i.sku}`,
@@ -337,11 +345,13 @@ export async function searchEntities(
     // Staff / Users (users_public)
     if (!categoryFilter || categoryFilter === 'users') {
         promises.push(
-            supabase
-                .from('users_public')
-                .select('id, name, employee_id, role, email')
-                .or(`name.ilike.${pattern},employee_id.ilike.${pattern}`)
-                .limit(limit)
+            Promise.resolve(
+                supabase
+                    .from('users_public')
+                    .select('id, name, employee_id, role, email')
+                    .or(`name.ilike.${pattern},employee_id.ilike.${pattern}`)
+                    .limit(limit)
+            )
                 .then(({ data }) =>
                     (data || []).map((u: any) => ({
                         id: `user-${u.id || u.employee_id}`,
@@ -363,12 +373,14 @@ export async function searchEntities(
     // Documents (extracted_documents)
     if (!categoryFilter || categoryFilter === 'docs') {
         promises.push(
-            supabase
-                .from('extracted_documents')
-                .select('id, file_name, file_url, category_key, total_amount, doc_date, doc_number, vendor_name, vehicle_plate')
-                .or(`file_name.ilike.${pattern},vendor_name.ilike.${pattern},vehicle_plate.ilike.${pattern},category_key.ilike.${pattern}`)
-                .order('created_at', { ascending: false })
-                .limit(limit)
+            Promise.resolve(
+                supabase
+                    .from('extracted_documents')
+                    .select('id, file_name, file_url, category_key, total_amount, doc_date, doc_number, vendor_name, vehicle_plate')
+                    .or(`file_name.ilike.${pattern},vendor_name.ilike.${pattern},vehicle_plate.ilike.${pattern},category_key.ilike.${pattern}`)
+                    .order('created_at', { ascending: false })
+                    .limit(limit)
+            )
                 .then(({ data }) =>
                     (data || []).map((d: any) => ({
                         id: `doc-${d.id}`,

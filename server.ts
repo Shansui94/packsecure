@@ -19,9 +19,9 @@ import v2DocumentsHandler, {
 import docsHandler, { handleDevLog } from './api/docs';
 import whatsappHandler, { handleWhatsAppSend, handleWhatsAppWebhook } from './api/whatsapp';
 import nightlyReportHandler from './api/cron/nightly-report';
-import calcDriverRateHandler from './api/agent/calc-driver-rate';
-import suggestRulePatchHandler from './api/agent/suggest-rule-patch';
+import { handleCalcDriverRate as calcDriverRateHandler, handleSuggestRulePatch as suggestRulePatchHandler } from './lib/driver-pricing';
 import multer from 'multer';
+
 import fs from 'fs';
 import path from 'path';
 

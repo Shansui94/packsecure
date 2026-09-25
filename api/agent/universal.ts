@@ -1,8 +1,11 @@
 import { VercelRequest, VercelResponse } from '@vercel/node';
 import { GoogleGenerativeAI } from '@google/generative-ai';
 import { createClient } from '@supabase/supabase-js';
+import { handleCalcDriverRate, handleSuggestRulePatch } from '../../lib/driver-pricing';
 
 export const config = { maxDuration: 60 };
+export { handleCalcDriverRate, handleSuggestRulePatch };
+
 
 // Initialize Supabase Client
 const supabaseUrl = process.env.VITE_SUPABASE_URL || process.env.SUPABASE_URL || '';
@@ -1199,7 +1202,7 @@ export async function handleParseTripPdf(req: VercelRequest, res: VercelResponse
 
         files.forEach(f => {
             try {
-                const cleanB64 = cleanBase64Payload(f.base64 || f.data || '');
+                const cleanB64 = cleanBase64Payload(f.base64 || (f as any).data || '');
                 const rawStr = Buffer.from(cleanB64, 'base64').toString('latin1');
                 const pageMatches = rawStr.match(/\/Type\s*\/Page\b/g);
                 const pages = pageMatches ? pageMatches.length : 1;
@@ -1440,7 +1443,7 @@ CRITICAL: Return strictly a valid JSON object. Do not wrap in markdown quotes.
             } else if (nameLower.endsWith('.webp')) {
                 mime = 'image/webp';
             }
-            const cleanBase64 = cleanBase64Payload(f.base64 || f.data || '');
+            const cleanBase64 = cleanBase64Payload(f.base64 || (f as any).data || '');
             return {
                 inlineData: {
                     data: cleanBase64,
@@ -2450,7 +2453,18 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
         return handleSopAssistant(req, res);
     }
 
-    // 6. Default: Universal Intake (parse / commit)
+    // 6. Driver Rate Calculator / Rulebook Engine
+    if (action === 'calc-driver-rate' || action === 'driver-pricing' || req.query?.action === 'calc-driver-rate' || req.body?.action === 'calc-driver-rate') {
+        return handleCalcDriverRate(req, res);
+    }
+
+    // 7. Driver Pricing Rule Patch Suggester
+    if (action === 'suggest-rule-patch' || req.query?.action === 'suggest-rule-patch' || req.body?.action === 'suggest-rule-patch') {
+        return handleSuggestRulePatch(req, res);
+    }
+
+    // 8. Default: Universal Intake (parse / commit)
     return handleIntake(req, res);
 }
+
 

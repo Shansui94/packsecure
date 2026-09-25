@@ -154,18 +154,18 @@ export const logActivity = async (
         const safeDetails = maskSensitiveData(fullDetails);
 
         // Asynchronous fire-and-forget insert
-        supabase.from('user_activity_logs').insert([{
+        Promise.resolve(supabase.from('user_activity_logs').insert([{
             user_id: user.uid,
             email: user.email,
             name: user.name || user.email?.split('@')[0] || 'Unknown User',
             role: user.role,
             action: action,
             details: safeDetails
-        }]).then(({ error }) => {
+        }])).then(({ error }) => {
             if (error) {
                 console.warn('[Logger] Failed to insert activity log:', error.message);
             }
-        }).catch((err) => {
+        }).catch((err: any) => {
             console.warn('[Logger] Exception during activity logging:', err);
         });
 
