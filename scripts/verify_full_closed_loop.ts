@@ -4,8 +4,8 @@ import fs from 'fs';
 import path from 'path';
 
 // Import handlers directly for testing
-import calcDriverRateHandler from '../api/agent/calc-driver-rate';
-import suggestRulePatchHandler from '../api/agent/suggest-rule-patch';
+import { handleCalcDriverRate as calcDriverRateHandler, handleSuggestRulePatch as suggestRulePatchHandler } from '../lib/driver-pricing';
+
 
 function createMockReqRes(body: any, query: any = {}, method: string = 'POST') {
   let statusCode = 200;

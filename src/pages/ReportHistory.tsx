@@ -100,9 +100,9 @@ const ReportHistory: React.FC<ReportHistoryProps> = ({ user }: ReportHistoryProp
 
                 // Speed
                 if (s.logs.length > 1) {
-                    const sorted = [...s.logs].sort((a, b) => new Date(a.Timestamp).getTime() - new Date(b.Timestamp).getTime());
-                    const start = new Date(sorted[0].Timestamp).getTime();
-                    const end = new Date(sorted[sorted.length - 1].Timestamp).getTime();
+                    const sorted = [...s.logs].sort((a, b) => new Date(a.Timestamp || '').getTime() - new Date(b.Timestamp || '').getTime());
+                    const start = new Date(sorted[0].Timestamp || '').getTime();
+                    const end = new Date(sorted[sorted.length - 1].Timestamp || '').getTime();
                     const durationMinutes = (end - start) / 60000;
                     if (s.totalQty > 0 && durationMinutes > 0) {
                         s.avgSpeed = durationMinutes / s.totalQty;
@@ -121,13 +121,13 @@ const ReportHistory: React.FC<ReportHistoryProps> = ({ user }: ReportHistoryProp
 
     const handleDownload = (summary: MachineDailySummary) => {
         if (!summary.logs.length) return;
-        const sorted = [...summary.logs].sort((a, b) => new Date(a.Timestamp).getTime() - new Date(b.Timestamp).getTime());
+        const sorted = [...summary.logs].sort((a, b) => new Date(a.Timestamp || '').getTime() - new Date(b.Timestamp || '').getTime());
         generateSessionReport(
             summary.machineName,
             `Daily Report ${selectedDate}`,
             sorted,
-            new Date(sorted[0].Timestamp),
-            new Date(sorted[sorted.length - 1].Timestamp)
+            new Date(sorted[0].Timestamp || ''),
+            new Date(sorted[sorted.length - 1].Timestamp || '')
         );
     };
 

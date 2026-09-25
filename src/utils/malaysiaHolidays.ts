@@ -92,9 +92,8 @@ export function isHolidayApplicableToPlant(holiday: PublicHoliday, plant?: strin
     const p = plant.toUpperCase();
     if (holiday.region === 'NATIONAL') return true;
     if ((p.includes('TAIPING') || p.includes('PERAK')) && holiday.region === 'PERAK') return true;
-    if ((p.includes('NILAI') || p.includes('NEGERI SEMBILAN') || p.includes('NS')) && holiday.region === 'NEGERI_SEMBILAN') return true;
-    // Default fallback: if unknown plant, allow National holidays
-    return holiday.region === 'NATIONAL';
+    // Default fallback: if plant didn't match state holiday, it's not applicable
+    return false;
 }
 
 /**

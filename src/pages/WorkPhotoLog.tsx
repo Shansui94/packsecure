@@ -117,7 +117,7 @@ const WorkPhotoLog: React.FC<Props> = ({ user }) => {
     const [machines, setMachines] = useState<any[]>([]);
     const [selectedMachineId, setSelectedMachineId] = useState<string>('');
 
-    const isAdmin = user?.role === 'SuperAdmin' || user?.role === 'Admin' || user?.role === 'Manager' || user?.role === 'Director';
+    const isAdmin = user?.role === 'SuperAdmin' || user?.role === 'Admin' || user?.role === 'Manager' || (user?.role as any) === 'Director';
 
     // Load photos
     const loadPhotos = async () => {

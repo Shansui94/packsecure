@@ -31,7 +31,7 @@ export const generateDispatchPlan = (jobs: JobOrder[], lorries: Lorry[]): Dispat
 
         if (perfectMatch) {
             plan.push({
-                jobId: job.Job_ID,
+                jobId: job.Job_ID || '',
                 suggestedLorryId: perfectMatch.id,
                 confidenceScore: 0.95,
                 reason: `Perfect Zone Match (${zone})`
@@ -43,7 +43,7 @@ export const generateDispatchPlan = (jobs: JobOrder[], lorries: Lorry[]): Dispat
         const anyDriver = lorries.find(l => l.status === 'Available');
         if (anyDriver) {
             plan.push({
-                jobId: job.Job_ID,
+                jobId: job.Job_ID || '',
                 suggestedLorryId: anyDriver.id,
                 confidenceScore: 0.6,
                 reason: `Backfill: Driver Available (Pref: ${anyDriver.preferredZone})`

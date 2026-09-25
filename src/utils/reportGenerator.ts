@@ -64,7 +64,7 @@ export const generateSessionReport = (
 
     // Format Data
     const tableData = logs.map(log => ({
-        time: new Date(log.Timestamp).toLocaleTimeString(),
+        time: new Date(log.Timestamp || '').toLocaleTimeString(),
         job: log.Job_ID || '-',
         product: (() => {
             if (!log.Note) return 'Manual Entry';
@@ -89,7 +89,7 @@ export const generateSessionReport = (
             if (idx !== -1 && !log.Note.includes('|')) return log.Note.substring(idx + separator.length);
             return log.Note;
         })(),
-        qty: log.Output_Qty
+        qty: log.Output_Qty !== undefined ? log.Output_Qty : 0
     }));
 
     // Generate Table
