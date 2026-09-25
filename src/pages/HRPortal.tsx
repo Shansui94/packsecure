@@ -25,6 +25,8 @@ import {
     getDefaultRolePermissionsMap, 
     UserRole 
 } from '../config/modules';
+import { DriverPricingRulebookEditor } from '../components/pricing/DriverPricingRulebookEditor';
+import { HRAuditWorkbench } from '../components/pricing/HRAuditWorkbench';
 
 const formatYYYYMMDD = (dateStr: string | null | undefined): string => {
     if (!dateStr) return '';
@@ -766,7 +768,7 @@ const MachineRateItemCard: React.FC<{
 // ── MAIN COMPONENT ────────────────────────────────────────────
 interface HRPortalProps {
     user?: any;
-    initialTab?: 'personnel' | 'permissions' | 'payroll' | 'advances' | 'approvals' | 'badges';
+    initialTab?: 'personnel' | 'permissions' | 'payroll' | 'advances' | 'approvals' | 'badges' | 'driver-pricing-audit';
     initialRoleFilter?: string;
     onNavigate?: (page: string) => void;
 }
@@ -774,11 +776,12 @@ interface HRPortalProps {
 const HRPortal: React.FC<HRPortalProps> = ({ user, initialTab, initialRoleFilter, onNavigate }) => {
     const { t } = useTranslation();
     const isSuperAdminOrHR = user?.role === 'SuperAdmin' || user?.role === 'HR';
-    const [activeTab, setActiveTab] = useState<'personnel' | 'permissions' | 'payroll' | 'advances' | 'approvals' | 'badges'>(
+    const [activeTab, setActiveTab] = useState<'personnel' | 'permissions' | 'payroll' | 'advances' | 'approvals' | 'badges' | 'driver-pricing-audit'>(
         (initialTab && (initialTab !== 'payroll' && initialTab !== 'advances' || isSuperAdminOrHR)) 
             ? initialTab 
             : 'personnel'
     );
+    const [pricingView, setPricingView] = useState<'audit' | 'rulebook'>('audit');
     const [roleFilter, setRoleFilter] = useState<string>(initialRoleFilter || 'All');
 
     // ── Badges Studio State ──
@@ -1731,6 +1734,7 @@ const HRPortal: React.FC<HRPortalProps> = ({ user, initialTab, initialRoleFilter
     const TABS = [
         { id: 'personnel', label: `👥 Personnel (${activeEmps.length})`, count: 0 },
         { id: 'approvals', label: t('🔔 {{var0}}', { var0: t('新注册待审批') }), count: pendingCount },
+        { id: 'driver-pricing-audit', label: '🚦 AI 运费核验 & 规则库', count: 0 },
         { id: 'permissions', label: '🔐 Page Permissions', count: 0 },
         { id: 'payroll', label: '💰 Payroll', count: 0 },
         { id: 'advances', label: '💸 Salary Advances', count: 0 },
@@ -1739,7 +1743,7 @@ const HRPortal: React.FC<HRPortalProps> = ({ user, initialTab, initialRoleFilter
 
     const visibleTabs = TABS.filter(tab => {
         if (isLogisticsCoordinator) {
-            return tab.id === 'personnel';
+            return tab.id === 'personnel' || tab.id === 'driver-pricing-audit';
         }
         if (user?.role === 'HR') {
             return tab.id !== 'permissions';
@@ -3172,6 +3176,45 @@ const HRPortal: React.FC<HRPortalProps> = ({ user, initialTab, initialRoleFilter
                                 </form>
                             </div>
                         </div>
+                    )}
+                </div>
+            )}
+
+            {/* ── DRIVER PRICING & AI AUDIT ── */}
+            {activeTab === 'driver-pricing-audit' && (
+                <div className="space-y-4">
+                    <div className="flex items-center justify-between bg-white/5 border border-white/10 rounded-2xl p-3 px-5">
+                        <div className="flex items-center gap-2">
+                            <button
+                                onClick={() => setPricingView('audit')}
+                                className={`px-4 py-2 rounded-xl text-xs font-bold transition flex items-center gap-1.5 cursor-pointer ${
+                                    pricingView === 'audit'
+                                        ? 'bg-blue-600 text-white shadow-md'
+                                        : 'text-gray-400 hover:text-white'
+                                }`}
+                            >
+                                <span>🚦 运费自检核验流水</span>
+                            </button>
+                            <button
+                                onClick={() => setPricingView('rulebook')}
+                                className={`px-4 py-2 rounded-xl text-xs font-bold transition flex items-center gap-1.5 cursor-pointer ${
+                                    pricingView === 'rulebook'
+                                        ? 'bg-indigo-600 text-white shadow-md'
+                                        : 'text-gray-400 hover:text-white'
+                                }`}
+                            >
+                                <span>📜 动态 Markdown 规则库与回测沙盒</span>
+                            </button>
+                        </div>
+                        <span className="text-[11px] text-gray-500 hidden sm:inline">
+                            {pricingView === 'audit' ? '查看双轨计算差额、红绿灯状态并核销入账' : '在前端随时修改计费规则并运行历史 50 单批次回测'}
+                        </span>
+                    </div>
+
+                    {pricingView === 'audit' ? (
+                        <HRAuditWorkbench />
+                    ) : (
+                        <DriverPricingRulebookEditor />
                     )}
                 </div>
             )}

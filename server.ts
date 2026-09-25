@@ -19,6 +19,8 @@ import v2DocumentsHandler, {
 import docsHandler, { handleDevLog } from './api/docs';
 import whatsappHandler, { handleWhatsAppSend, handleWhatsAppWebhook } from './api/whatsapp';
 import nightlyReportHandler from './api/cron/nightly-report';
+import calcDriverRateHandler from './api/agent/calc-driver-rate';
+import suggestRulePatchHandler from './api/agent/suggest-rule-patch';
 import multer from 'multer';
 import fs from 'fs';
 import path from 'path';
@@ -67,6 +69,8 @@ mountVercelHandler('/api/whatsapp/send', handleWhatsAppSend);
 mountVercelHandler('/api/whatsapp/webhook', handleWhatsAppWebhook);
 mountVercelHandler('/api/cron/nightly-report', nightlyReportHandler);
 mountVercelHandler('/api/agent/parse-trip-pdf', handleParseTripPdf);
+mountVercelHandler('/api/agent/calc-driver-rate', calcDriverRateHandler);
+mountVercelHandler('/api/agent/suggest-rule-patch', suggestRulePatchHandler);
 mountVercelHandler('/api/agent/omni-command', async (req, res) => {
     req.query = req.query || {};
     req.query.action = 'omni-command';
