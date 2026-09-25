@@ -120,9 +120,9 @@ export const ALL_12_MACHINE_RECIPES: StandardMachineRecipe[] = [
     machineType: '2M Bubble Wrap',
     sku: 'BW-DL-CLR-100Mx100CMx1ROLL-YEL',
     productName: '2米双层气泡膜标准卷 (分切 1m / 50cm / 33cm)',
-    netWeightKg: 2.70,
+    netWeightKg: 5.60,
     coreWeightKg: 0.00,
-    grossWeightKg: 2.72,
+    grossWeightKg: 5.60,
     packSpec: '100cm×1卷 或 50cm×2卷捆 或 33cm×3卷捆',
     screws: [
       {
@@ -169,9 +169,9 @@ export const ALL_12_MACHINE_RECIPES: StandardMachineRecipe[] = [
     machineType: '1M Bubble Wrap',
     sku: 'BW-SL-CLR-100Mx100CMx1ROLL-RED',
     productName: '1米单层透明气泡膜 (MERAH / OREN)',
-    netWeightKg: 1.68,
+    netWeightKg: 3.80,
     coreWeightKg: 0.00,
-    grossWeightKg: 1.70,
+    grossWeightKg: 3.80,
     packSpec: '100cm×1卷 (MERAH) 或 50cm×2卷捆 (OREN)',
     screws: [
       {
@@ -231,9 +231,9 @@ export const ALL_12_MACHINE_RECIPES: StandardMachineRecipe[] = [
     machineType: '1M Bubble Wrap',
     sku: 'BW-DL-CLR-100Mx100CMx1ROLL-YEL',
     productName: '汝来 1米双层透明气泡膜 (DL-FULL / DL-HALF)',
-    netWeightKg: 2.15,
+    netWeightKg: 5.60,
     coreWeightKg: 0.00,
-    grossWeightKg: 2.176,
+    grossWeightKg: 5.60,
     packSpec: '100cm×1卷 (黄色) 或 50cm×2卷捆 (蓝色)',
     screws: [
       {
@@ -268,9 +268,9 @@ export const ALL_12_MACHINE_RECIPES: StandardMachineRecipe[] = [
     machineType: '1M Bubble Wrap',
     sku: 'BW-SL-CLR-100Mx50CMx2ROLL-ORN',
     productName: '汝来 1米单层气泡膜 (OREN 50CM / MERAH 100CM)',
-    netWeightKg: 1.35,
+    netWeightKg: 3.80,
     coreWeightKg: 0.00,
-    grossWeightKg: 1.36,
+    grossWeightKg: 3.80,
     packSpec: '50cm×2卷捆 (OREN) 或 100cm×1卷 (MERAH)',
     screws: [
       {
@@ -320,9 +320,9 @@ export const ALL_12_MACHINE_RECIPES: StandardMachineRecipe[] = [
     machineType: '2M Bubble Wrap',
     sku: 'BW-DL-CLR-100Mx100CMx1ROLL-YEL',
     productName: '柔佛 2米双层气泡膜标准卷 (供南马与新加坡)',
-    netWeightKg: 2.70,
+    netWeightKg: 5.60,
     coreWeightKg: 0.00,
-    grossWeightKg: 2.72,
+    grossWeightKg: 5.60,
     packSpec: '100cm×1卷 或 50cm×2卷捆 或 33cm×3卷捆',
     screws: [
       {
@@ -393,9 +393,9 @@ export const ALL_12_MACHINE_RECIPES: StandardMachineRecipe[] = [
     machineType: '1M Bubble Wrap',
     sku: 'BW-DL-CLR-100Mx100CMx1ROLL-YEL',
     productName: '吉兰丹 1米双层透明气泡膜',
-    netWeightKg: 2.15,
+    netWeightKg: 5.60,
     coreWeightKg: 0.00,
-    grossWeightKg: 2.176,
+    grossWeightKg: 5.60,
     packSpec: '100cm×1卷 或 50cm×2卷捆',
     screws: [
       {
@@ -429,9 +429,9 @@ export const ALL_12_MACHINE_RECIPES: StandardMachineRecipe[] = [
     machineType: '1M Bubble Wrap',
     sku: 'BW-SL-CLR-100Mx50CMx2ROLL-ORN',
     productName: '吉兰丹 1米单层气泡膜',
-    netWeightKg: 1.35,
+    netWeightKg: 3.80,
     coreWeightKg: 0.00,
-    grossWeightKg: 1.36,
+    grossWeightKg: 3.80,
     packSpec: '50cm×2卷捆 (OREN)',
     screws: [
       {
@@ -615,7 +615,28 @@ async function seed() {
       .eq('sku', m.sku);
   }
 
-  console.log('\n🎉 ALL 12 MACHINES RECIPES SEEDED & SYNCHRONIZED SUCCESSFULLY!');
+  // 6. Bulk align all Double Layer (DL = 5.6kg) and Single Layer (SL = 3.8kg) in master_items
+  const { data: allFGs } = await supabase.from('master_items').select('sku');
+  if (allFGs) {
+    for (const item of allFGs) {
+      const skuUpper = item.sku.toUpperCase();
+      if (skuUpper.includes('BW-DL') || skuUpper.startsWith('DL-')) {
+        await supabase.from('master_items').update({
+          net_weight_kg: 5.60,
+          core_weight_kg: 0.00,
+          gross_weight_kg: 5.60
+        }).eq('sku', item.sku);
+      } else if (skuUpper.includes('BW-SL') || skuUpper.startsWith('SL-') || skuUpper === 'MERAH' || skuUpper === 'OREN') {
+        await supabase.from('master_items').update({
+          net_weight_kg: 3.80,
+          core_weight_kg: 0.00,
+          gross_weight_kg: 3.80
+        }).eq('sku', item.sku);
+      }
+    }
+  }
+
+  console.log('\n🎉 ALL 12 MACHINES RECIPES SEEDED & SYNCHRONIZED SUCCESSFULLY (SL: 3.8kg, DL: 5.6kg)!');
 }
 
 seed().catch(console.error);

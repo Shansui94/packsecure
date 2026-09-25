@@ -56,10 +56,10 @@ export const ALL_12_MACHINE_CATALOG: MachineRecipeMeta[] = [
     category: '2米双层气泡膜',
     sku: 'BW-DL-CLR-100Mx100CMx1ROLL-YEL',
     productName: '2米双层气泡膜标准卷 (可切 1m / 50cm / 33cm)',
-    netWeightKg: 2.70,
+    netWeightKg: 5.60,
     coreWeightKg: 0.00,
-    grossWeightKg: 2.72,
-    packSpec: '100cm×1卷 或 50cm×2卷捆 或 33cm×3卷捆'
+    grossWeightKg: 5.60,
+    packSpec: '100cm×1卷 或 50cm×2卷捆 或 33cm×3卷捆 (标准Unit: 5.6kg, 全幅双卷 11.2kg)'
   },
   {
     machineKey: 'T3',
@@ -70,10 +70,10 @@ export const ALL_12_MACHINE_CATALOG: MachineRecipeMeta[] = [
     category: '1米单层气泡膜',
     sku: 'BW-SL-CLR-100Mx100CMx1ROLL-RED',
     productName: '1米单层透明气泡膜 (MERAH / OREN)',
-    netWeightKg: 1.68,
+    netWeightKg: 3.80,
     coreWeightKg: 0.00,
-    grossWeightKg: 1.70,
-    packSpec: '100cm×1卷 或 50cm×2卷捆'
+    grossWeightKg: 3.80,
+    packSpec: '100cm×1卷 (MERAH) 或 50cm×2卷捆 (OREN)'
   },
   {
     machineKey: 'T5',
@@ -100,10 +100,10 @@ export const ALL_12_MACHINE_CATALOG: MachineRecipeMeta[] = [
     category: '1米双层气泡膜',
     sku: 'BW-DL-CLR-100Mx100CMx1ROLL-YEL',
     productName: '汝来 1米双层透明气泡膜 (DL-FULL / DL-HALF)',
-    netWeightKg: 2.15,
+    netWeightKg: 5.60,
     coreWeightKg: 0.00,
-    grossWeightKg: 2.176,
-    packSpec: '100cm×1卷 或 50cm×2卷捆'
+    grossWeightKg: 5.60,
+    packSpec: '100cm×1卷 或 50cm×2卷捆 (标准Unit: 5.6kg)'
   },
   {
     machineKey: 'N2',
@@ -114,10 +114,10 @@ export const ALL_12_MACHINE_CATALOG: MachineRecipeMeta[] = [
     category: '1米单层气泡膜',
     sku: 'BW-SL-CLR-100Mx50CMx2ROLL-ORN',
     productName: '汝来 1米单层气泡膜 (OREN 50CM / MERAH 100CM)',
-    netWeightKg: 1.35,
+    netWeightKg: 3.80,
     coreWeightKg: 0.00,
-    grossWeightKg: 1.36,
-    packSpec: '50cm×2卷捆 或 100cm×1卷'
+    grossWeightKg: 3.80,
+    packSpec: '50cm×2卷捆 或 100cm×1卷 (标准Unit: 3.8kg)'
   },
   {
     machineKey: 'N3',
@@ -144,10 +144,10 @@ export const ALL_12_MACHINE_CATALOG: MachineRecipeMeta[] = [
     category: '2米双层气泡膜',
     sku: 'BW-DL-CLR-100Mx100CMx1ROLL-YEL',
     productName: '柔佛 2米双层气泡膜标准卷',
-    netWeightKg: 2.70,
+    netWeightKg: 5.60,
     coreWeightKg: 0.00,
-    grossWeightKg: 2.72,
-    packSpec: '100cm×1卷 或 50cm×2卷捆 或 33cm×3卷捆'
+    grossWeightKg: 5.60,
+    packSpec: '100cm×1卷 或 50cm×2卷捆 或 33cm×3卷捆 (标准Unit: 5.6kg, 全幅双卷 11.2kg)'
   },
   {
     machineKey: 'J2',
@@ -174,10 +174,10 @@ export const ALL_12_MACHINE_CATALOG: MachineRecipeMeta[] = [
     category: '1米双层气泡膜',
     sku: 'BW-DL-CLR-100Mx100CMx1ROLL-YEL',
     productName: '吉兰丹 1米双层透明气泡膜',
-    netWeightKg: 2.15,
+    netWeightKg: 5.60,
     coreWeightKg: 0.00,
-    grossWeightKg: 2.176,
-    packSpec: '100cm×1卷 或 50cm×2卷捆'
+    grossWeightKg: 5.60,
+    packSpec: '100cm×1卷 或 50cm×2卷捆 (标准Unit: 5.6kg)'
   },
   {
     machineKey: 'K2',
@@ -188,10 +188,10 @@ export const ALL_12_MACHINE_CATALOG: MachineRecipeMeta[] = [
     category: '1米单层气泡膜',
     sku: 'BW-SL-CLR-100Mx50CMx2ROLL-ORN',
     productName: '吉兰丹 1米单层气泡膜',
-    netWeightKg: 1.35,
+    netWeightKg: 3.80,
     coreWeightKg: 0.00,
-    grossWeightKg: 1.36,
-    packSpec: '50cm×2卷捆 (OREN)'
+    grossWeightKg: 3.80,
+    packSpec: '50cm×2卷捆 (OREN) 或 100cm×1卷 (MERAH)'
   }
 ];
 

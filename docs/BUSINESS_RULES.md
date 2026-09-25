@@ -57,6 +57,11 @@
     * 🔵 **`DL-33CM`**：`BW-DL-CLR-100Mx33CMx3ROLL-BLU`（双层透明 33cm × 3 卷一捆，蓝色包装，1 Unit）
     * 🟢 **`HITAM-FULL`**：`BW-SL-BLK-100Mx100CMx1ROLL-GRN`（单层黑色 100cm × 1 卷，绿色包装，1 Unit）
     * 🟢 **`DL-HITAM-HALF`**：`BW-DL-BLK-100Mx50CMx2ROLL-GRN`（双层黑色 50cm × 2 卷一捆，绿色包装，1 Unit）
+  * **气泡膜标准单卷/出货重量真理 (Bubble Wrap Standard Roll Weights)**：
+    * 气泡膜出厂全系列为**无纸管设计 (Core Weight = 0.00 kg)**，净重恒等于毛重。
+    * 🟡 **双层气泡膜 (Double Layer DL)**：标准单卷 (100cm×100m) 或等值分切捆 (50cm×2卷捆、33cm×3卷捆) **单 Unit 标重为 5.60 kg**。
+    * 🔴 **单层气泡膜 (Single Layer SL)**：标准单卷 (100cm×100m) 或等值分切捆 (50cm×2卷捆) **单 Unit 标重为 3.80 kg**。
+    * 🏭 **2米宽大机 (T2 / J1) 生产出货总重**：走满 100 米产出 2 个 Unit，全机一次落卷下线总重恒为 **$5.60\text{kg} \times 2 = 11.20\text{kg}$**。
   * **耗时恒定**：无论按何种刀具分切，机台走满 100 米耗时恒定为 **约 5 分钟 (300 秒，实测物理区间 270s ~ 330s)**。
   * **云端防抖底线 (Hard Cooldown Floor)**：全系统统一设定气泡膜物理最低生产周期底线为 **240 秒 (4 分钟)**。
   * **连击熔断保护 (Burst Circuit Breaker)**：任意机台若在 30 秒内连续收到请求，判定为硬件触点抖动或离线队列重放，云端自动静默丢弃并返回 200 OK 迫使硬件清空队列，彻底杜绝虚增入账。
