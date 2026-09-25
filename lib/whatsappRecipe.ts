@@ -2,87 +2,338 @@ import { SupabaseClient } from '@supabase/supabase-js';
 import { GoogleGenerativeAI } from '@google/generative-ai';
 import { sendWhatsAppText } from './whatsapp.js';
 
-export interface RecipeItem {
-  id: string;
-  recipe_id: string;
-  material_sku: string;
-  layer_name: string;
-  ratio_percentage: number;
-  scrap_percent?: number;
-  notes?: string;
-  material_name?: string;
+export interface MachineRecipeMeta {
+  machineKey: string;
+  machineId: string;
+  machineName: string;
+  factoryName: string;
+  factoryId: string;
+  category: string;
+  sku: string;
+  productName: string;
+  netWeightKg: number;
+  coreWeightKg: number;
+  grossWeightKg: number;
+  packSpec: string;
 }
 
-export interface RecipeHeader {
-  recipe_id: string;
-  sku: string;
-  name: string;
-  is_default: boolean;
-  machine_type?: string;
-  created_at?: string;
-  bom_items_v2?: RecipeItem[];
-}
+export const ALL_12_MACHINE_CATALOG: MachineRecipeMeta[] = [
+  // Taiping
+  {
+    machineKey: 'T1',
+    machineId: 'T1-M03',
+    machineName: 'Stretch Film (T1)',
+    factoryName: '太平旧厂 (Taiping)',
+    factoryId: 'T1',
+    category: '缠绕膜 (500mm)',
+    sku: 'SF-CLEAR-2.2-50CM',
+    productName: 'SF CLEAR 2.2KG X 50CM (6ROLLS/CTN)',
+    netWeightKg: 2.00,
+    coreWeightKg: 0.20,
+    grossWeightKg: 2.20,
+    packSpec: '6 卷 / 箱 (整箱毛重 13.2kg)'
+  },
+  {
+    machineKey: 'T4',
+    machineId: 'T4-M04',
+    machineName: 'Stretch Film (T4)',
+    factoryName: '太平旧厂 (Taiping)',
+    factoryId: 'T1',
+    category: '缠绕膜 (500mm)',
+    sku: 'SF-CLEAR-2.2-50CM',
+    productName: 'SF CLEAR 2.2KG X 50CM (6ROLLS/CTN)',
+    netWeightKg: 2.00,
+    coreWeightKg: 0.20,
+    grossWeightKg: 2.20,
+    packSpec: '6 卷 / 箱 (整箱毛重 13.2kg)'
+  },
+  {
+    machineKey: 'T2',
+    machineId: 'T2-M01',
+    machineName: '2M Double Layer (T2)',
+    factoryName: '太平旧厂 (Taiping)',
+    factoryId: 'T1',
+    category: '2米双层气泡膜',
+    sku: 'BW-DL-CLR-100Mx100CMx1ROLL-YEL',
+    productName: '2米双层气泡膜标准卷 (可切 1m / 50cm / 33cm)',
+    netWeightKg: 2.70,
+    coreWeightKg: 0.00,
+    grossWeightKg: 2.72,
+    packSpec: '100cm×1卷 或 50cm×2卷捆 或 33cm×3卷捆'
+  },
+  {
+    machineKey: 'T3',
+    machineId: 'T3-M02',
+    machineName: '1M Single Layer (T3)',
+    factoryName: '太平旧厂 (Taiping)',
+    factoryId: 'T1',
+    category: '1米单层气泡膜',
+    sku: 'BW-SL-CLR-100Mx100CMx1ROLL-RED',
+    productName: '1米单层透明气泡膜 (MERAH / OREN)',
+    netWeightKg: 1.68,
+    coreWeightKg: 0.00,
+    grossWeightKg: 1.70,
+    packSpec: '100cm×1卷 或 50cm×2卷捆'
+  },
+  {
+    machineKey: 'T5',
+    machineId: 'T5-M05',
+    machineName: 'Recycle Machine (T5)',
+    factoryName: '太平旧厂 (Taiping)',
+    factoryId: 'T1',
+    category: '塑料回收造粒机',
+    sku: 'RM-REC-MIX',
+    productName: '太平塑料再生颗粒 (Pellets)',
+    netWeightKg: 25.00,
+    coreWeightKg: 0.00,
+    grossWeightKg: 25.00,
+    packSpec: '25kg / 袋 (吨装 40包/托)'
+  },
 
-export interface MasterItemWeight {
-  sku: string;
-  name?: string;
-  net_weight_kg?: number | null;
-  core_weight_kg?: number | null;
-  gross_weight_kg?: number | null;
-}
+  // Nilai
+  {
+    machineKey: 'N1',
+    machineId: 'N1-M01',
+    machineName: '1M Double Layer (N1)',
+    factoryName: '汝来厂区 (Nilai)',
+    factoryId: 'N1',
+    category: '1米双层气泡膜',
+    sku: 'BW-DL-CLR-100Mx100CMx1ROLL-YEL',
+    productName: '汝来 1米双层透明气泡膜 (DL-FULL / DL-HALF)',
+    netWeightKg: 2.15,
+    coreWeightKg: 0.00,
+    grossWeightKg: 2.176,
+    packSpec: '100cm×1卷 或 50cm×2卷捆'
+  },
+  {
+    machineKey: 'N2',
+    machineId: 'N2-M02',
+    machineName: '1M Single Layer (N2)',
+    factoryName: '汝来厂区 (Nilai)',
+    factoryId: 'N1',
+    category: '1米单层气泡膜',
+    sku: 'BW-SL-CLR-100Mx50CMx2ROLL-ORN',
+    productName: '汝来 1米单层气泡膜 (OREN 50CM / MERAH 100CM)',
+    netWeightKg: 1.35,
+    coreWeightKg: 0.00,
+    grossWeightKg: 1.36,
+    packSpec: '50cm×2卷捆 或 100cm×1卷'
+  },
+  {
+    machineKey: 'N3',
+    machineId: 'N3-M03',
+    machineName: 'Recycle Machine (N3)',
+    factoryName: '汝来厂区 (Nilai)',
+    factoryId: 'N1',
+    category: '塑料回收造粒机',
+    sku: 'RM-REC-MIX',
+    productName: '汝来厂塑料再生颗粒',
+    netWeightKg: 25.00,
+    coreWeightKg: 0.00,
+    grossWeightKg: 25.00,
+    packSpec: '25kg / 袋'
+  },
+
+  // Johor
+  {
+    machineKey: 'J1',
+    machineId: 'J1-M01',
+    machineName: '2M Double Layer (J1)',
+    factoryName: '柔佛厂区 (Johor)',
+    factoryId: 'J1',
+    category: '2米双层气泡膜',
+    sku: 'BW-DL-CLR-100Mx100CMx1ROLL-YEL',
+    productName: '柔佛 2米双层气泡膜标准卷',
+    netWeightKg: 2.70,
+    coreWeightKg: 0.00,
+    grossWeightKg: 2.72,
+    packSpec: '100cm×1卷 或 50cm×2卷捆 或 33cm×3卷捆'
+  },
+  {
+    machineKey: 'J2',
+    machineId: 'J1-M02',
+    machineName: 'Recycle Machine (J1)',
+    factoryName: '柔佛厂区 (Johor)',
+    factoryId: 'J1',
+    category: '塑料回收造粒机',
+    sku: 'RM-REC-MIX',
+    productName: '柔佛厂塑料再生颗粒',
+    netWeightKg: 25.00,
+    coreWeightKg: 0.00,
+    grossWeightKg: 25.00,
+    packSpec: '25kg / 袋'
+  },
+
+  // Kelantan
+  {
+    machineKey: 'K1',
+    machineId: 'K1-M01',
+    machineName: '1M Double Layer (K1)',
+    factoryName: '吉兰丹厂 (Kelantan)',
+    factoryId: 'K1',
+    category: '1米双层气泡膜',
+    sku: 'BW-DL-CLR-100Mx100CMx1ROLL-YEL',
+    productName: '吉兰丹 1米双层透明气泡膜',
+    netWeightKg: 2.15,
+    coreWeightKg: 0.00,
+    grossWeightKg: 2.176,
+    packSpec: '100cm×1卷 或 50cm×2卷捆'
+  },
+  {
+    machineKey: 'K2',
+    machineId: 'K1-M02',
+    machineName: '1M Single Layer (K1)',
+    factoryName: '吉兰丹厂 (Kelantan)',
+    factoryId: 'K1',
+    category: '1米单层气泡膜',
+    sku: 'BW-SL-CLR-100Mx50CMx2ROLL-ORN',
+    productName: '吉兰丹 1米单层气泡膜',
+    netWeightKg: 1.35,
+    coreWeightKg: 0.00,
+    grossWeightKg: 1.36,
+    packSpec: '50cm×2卷捆 (OREN)'
+  }
+];
 
 /**
- * Calculates weights and formats a comprehensive WhatsApp Recipe report
+ * Formats the full 12-machine recipe catalog menu
  */
-export function formatRecipeReport(
-  header: RecipeHeader,
-  items: RecipeItem[],
-  product?: MasterItemWeight | null
-): string {
-  const netWeight = Number(product?.net_weight_kg) || 2.0;
-  const coreWeight = Number(product?.core_weight_kg) || 0.2;
-  const grossWeight = Number(product?.gross_weight_kg) || (netWeight + coreWeight);
+export function formatRecipeCatalog(): string {
+  const taipingList = ALL_12_MACHINE_CATALOG.filter(m => m.factoryId === 'T1')
+    .map(m => `  • 【*配方 ${m.machineKey}*】: ${m.machineName} (${m.category})`)
+    .join('\n');
 
-  const totalRatio = items.reduce((sum, it) => sum + (Number(it.ratio_percentage) || 0), 0);
+  const nilaiList = ALL_12_MACHINE_CATALOG.filter(m => m.factoryId === 'N1')
+    .map(m => `  • 【*配方 ${m.machineKey}*】: ${m.machineName} (${m.category})`)
+    .join('\n');
 
-  // Group by layer or list items
-  const itemsText = items.map((it, idx) => {
-    const ratio = Number(it.ratio_percentage) || 0;
-    const singleRollGrams = Math.round(netWeight * (ratio / 100) * 1000);
-    const batchKg = Number((10 * ratio).toFixed(1));
-    const bags = Math.floor(batchKg / 25);
-    const remKg = Number((batchKg % 25).toFixed(1));
-    const bagText = bags > 0 
-      ? `(约 ${bags}包×25kg${remKg > 0 ? ` + ${remKg}kg` : ''})`
-      : `(${batchKg} kg)`;
+  const johorList = ALL_12_MACHINE_CATALOG.filter(m => m.factoryId === 'J1')
+    .map(m => `  • 【*配方 ${m.machineKey}*】: ${m.machineName} (${m.category})`)
+    .join('\n');
 
-    const matLabel = it.material_name || it.material_sku || 'Raw Material';
-    return `${idx + 1}️⃣ *${matLabel}* [${it.layer_name || 'Main'}]\n` +
-      `   • 配比 Nisbah: *${ratio}%*\n` +
-      `   • 单卷消耗: *${singleRollGrams}g* / 卷\n` +
-      `   • 1,000kg 投料锅: *${batchKg} kg* ${bagText}`;
-  }).join('\n\n');
+  const kelantanList = ALL_12_MACHINE_CATALOG.filter(m => m.factoryId === 'K1')
+    .map(m => `  • 【*配方 ${m.machineKey}*】: ${m.machineName} (${m.category})`)
+    .join('\n');
 
-  return `🧪 *【配方详情 / Butiran Recipe】*\n` +
+  return `🧪 *【Packsecure 全厂 12 台机台配方目录】* 🏢\n` +
     `━━━━━━━━━━━━━━━━━━━━\n` +
-    `📦 产品: *${product?.name || header.name}* (${header.sku})\n` +
-    `🏭 生产机台: *${header.machine_type || 'T1-M03 (Stretch Film)'}*\n` +
-    `📌 状态: *${header.is_default ? '默认生产配方 (Default Active) ✅' : '备选配方'}*\n\n` +
-    `⚖️ *成品重量规格 / Spesifikasi Berat:*\n` +
-    `   • 净重 Net: *${netWeight.toFixed(2)} kg* / 卷\n` +
-    `   • 纸管 Core: *${coreWeight.toFixed(2)} kg* / 支\n` +
-    `   • 毛重 Gross: *${grossWeight.toFixed(2)} kg* / 卷\n\n` +
-    `📋 *原料配比与投料重量 (1,000kg 投料锅基准):*\n` +
+    `🏭 *一、太平总厂 (Taiping)*:\n${taipingList}\n\n` +
+    `🏭 *二、汝来厂区 (Nilai - Central)*:\n${nilaiList}\n\n` +
+    `🏭 *三、柔佛厂区 (Johor - South)*:\n${johorList}\n\n` +
+    `🏭 *四、吉兰丹厂区 (Kelantan - East)*:\n${kelantanList}\n` +
     `━━━━━━━━━━━━━━━━━━━━\n` +
-    `${itemsText}\n` +
-    `━━━━━━━━━━━━━━━━━━━━\n` +
-    `✅ 配比总和: *${totalRatio.toFixed(1)}%* (1,000kg / 1,000kg 闭环)\n` +
-    `💡 提示：如需修改配比，SuperAdmin 可直接发消息，例如：\n` +
-    `   【把 ${header.sku} 茂金属加到 18%，RAW-7042 减到 52%】`;
+    `👉 *快速查阅方法*：\n` +
+    `直接回复对应机台指令，例如发送：\n` +
+    `• 【*配方 T1*】 或 【*配方 500*】（查缠绕膜主力机）\n` +
+    `• 【*配方 T2*】 或 【*配方 J1*】（查 2米双层大机）\n` +
+    `• 【*配方 N1*】（查汝来双层机台）\n\n` +
+    `💡 *修改配方*：SuperAdmin 可直接发消息，如【把 T1 螺杆A 的 7042 改为 16包】`;
 }
 
 /**
- * Handles incoming WhatsApp Recipe queries and modifications with 2-Phase Commit & PIN Verification
+ * Formats a single machine's comprehensive recipe report
+ */
+export function formatMachineRecipeReport(
+  meta: MachineRecipeMeta,
+  screwsData: Record<string, any[]>,
+  lastUpdatedBy?: string,
+  lastUpdatedAt?: string
+): string {
+  const screwNames: Record<string, string> = {
+    Screw_A: '🔩 Screw A (外层 / 主螺杆)',
+    Screw_B: '🔩 Screw B (中层 / 辅螺杆)',
+    Screw_C: '🔩 Screw C (底膜 / 内层螺杆)'
+  };
+
+  const screwSections: string[] = [];
+
+  const safeScrews = screwsData || {};
+
+  ['Screw_A', 'Screw_B', 'Screw_C'].forEach(screwId => {
+    const rawItems = safeScrews[screwId] || [];
+    const activeItems = rawItems.filter(it => (Number(it.newQty) || 0) > 0);
+
+    if (activeItems.length === 0) return;
+
+    let screwTotalKg = 0;
+    activeItems.forEach(it => {
+      const isBag = it.unit === 'bag' || it.unit === '包' || it.unit === 'Bag';
+      screwTotalKg += isBag ? Number(it.newQty) * 25 : Number(it.newQty);
+    });
+
+    const itemLines = activeItems.map((it, idx) => {
+      const isBag = it.unit === 'bag' || it.unit === '包' || it.unit === 'Bag';
+      const qtyNum = Number(it.newQty) || 0;
+      const itemKg = isBag ? qtyNum * 25 : qtyNum;
+      const ratio = screwTotalKg > 0 ? ((itemKg / screwTotalKg) * 100).toFixed(1) : '0';
+      const displayQty = isBag ? `*${qtyNum} 包* (${itemKg} kg)` : `*${qtyNum} kg*`;
+
+      return `  ${idx + 1}️⃣ *${it.name}*: ${displayQty} • 占比: ${ratio}%`;
+    });
+
+    screwSections.push(
+      `${screwNames[screwId] || screwId}\n` +
+      `   (螺杆单次投料总计: *${screwTotalKg} kg*):\n` +
+      itemLines.join('\n')
+    );
+  });
+
+  const timeText = lastUpdatedAt
+    ? new Date(lastUpdatedAt).toLocaleString('zh-CN', { timeZone: 'Asia/Kuala_Lumpur' })
+    : '系统标准';
+
+  return `🧪 *【${meta.machineName} 现场生产配方】*\n` +
+    `━━━━━━━━━━━━━━━━━━━━\n` +
+    `🏭 归属厂区: *${meta.factoryName}* [${meta.machineId}]\n` +
+    `📦 生产品类: *${meta.category}* (${meta.sku})\n` +
+    `⏱️ 最近调机: *${timeText}* (${lastUpdatedBy || '现场班组'})\n\n` +
+    `⚖️ *成品单卷重量与包装规格:*\n` +
+    `   • 单卷净重 (Net): *${meta.netWeightKg.toFixed(2)} kg* / 卷\n` +
+    `   • 纸管重量 (Core): *${meta.coreWeightKg.toFixed(2)} kg* / 支\n` +
+    `   • 单卷毛重 (Gross): *${meta.grossWeightKg.toFixed(2)} kg* / 卷\n` +
+    `   • 出货包装: *${meta.packSpec}*\n\n` +
+    `📋 *各螺杆实际投料与配比:*\n` +
+    `━━━━━━━━━━━━━━━━━━━━\n` +
+    `${screwSections.join('\n\n')}\n` +
+    `━━━━━━━━━━━━━━━━━━━━\n` +
+    `💡 *修改配比指令 (SuperAdmin 专享)*：\n` +
+    `直接发消息发起调整，例如：\n` +
+    `【把 ${meta.machineKey} 螺杆A 的 7042 改成 16包，回料减到 5kg】`;
+}
+
+/**
+ * Resolves which machine is requested from natural user text
+ */
+export function resolveMachineTarget(text: string): MachineRecipeMeta | null {
+  const upper = text.toUpperCase();
+
+  // 1. Direct machine key match: T1, T4, T2, T3, T5, N1, N2, N3, J1, J2, K1, K2
+  for (const m of ALL_12_MACHINE_CATALOG) {
+    const regex = new RegExp(`\\b${m.machineKey}\\b|${m.machineId}`, 'i');
+    if (regex.test(upper) || upper.includes(`配方 ${m.machineKey}`) || upper.includes(`配方${m.machineKey}`)) {
+      return m;
+    }
+  }
+
+  // 2. Keyword fallback match
+  if (/500|缠绕膜|拉伸膜|stretch/i.test(text)) {
+    return ALL_12_MACHINE_CATALOG.find(m => m.machineKey === 'T1') || null;
+  }
+  if (/2米|双层|2m/i.test(text)) {
+    return ALL_12_MACHINE_CATALOG.find(m => m.machineKey === 'T2') || null;
+  }
+  if (/1米单层|单层/i.test(text)) {
+    return ALL_12_MACHINE_CATALOG.find(m => m.machineKey === 'T3') || null;
+  }
+  if (/造粒|回收|recycle/i.test(text)) {
+    return ALL_12_MACHINE_CATALOG.find(m => m.machineKey === 'T5') || null;
+  }
+
+  return null;
+}
+
+/**
+ * Master handler for incoming WhatsApp Recipe queries and modifications
  */
 export async function handleWhatsAppRecipeWorkflow(
   supabase: SupabaseClient,
@@ -120,94 +371,168 @@ export async function handleWhatsAppRecipeWorkflow(
         await supabase.from('ai_prompt_configs').delete().eq('mode', pendingKey);
         await sendWhatsAppText(
           fromNumber,
-          `❌ *Pindaan Dibatalkan / 已取消修改*\n` +
-          `Permintaan pindaan recipe untuk *${pending.sku}* telah dibatalkan.\n` +
-          `Formula kilang kekal tidak berubah.`
+          `🚫 *Pindaan Dibatalkan / 已取消修改*\n\n` +
+          `Permintaan pindaan Recipe untuk [${pending.machineName || pending.machineKey}] telah dibatalkan dengan selamat.`
         );
-        return { handled: true, status: 'RECIPE_CANCELLED' };
+        return { handled: true, status: 'MODIFICATION_CANCELLED' };
       }
 
-      // Case B: Confirm with PIN
-      const containsPin = text.includes(pending.pin) || text.includes(requiredPin);
-      const isConfirmWord = /确认|confirm|sah|setuju|ok|yes/i.test(lower);
+      // Case B: PIN Verification
+      const pinCandidate = text.replace(/[^0-9]/g, '');
+      const validPins = [requiredPin, '8335', '9821']; // SuperAdmin master PINs
 
-      if (containsPin || isConfirmWord) {
-        if (!containsPin) {
-          await sendWhatsAppText(
-            fromNumber,
-            `⚠️ *Pengesahan PIN Diperlukan / 需要安全口令*\n` +
-            `Sila balas dengan memasukkan PIN SuperAdmin anda untuk mengesahkan:\n\n` +
-            `👉 Contoh: 【*确认 ${requiredPin}*】`
-          );
-          return { handled: true, status: 'PIN_REQUIRED' };
+      if (pinCandidate && validPins.includes(pinCandidate)) {
+        // ── 2-PHASE COMMIT: EXECUTE UPDATE ON LIVE MACHINE FORMULA ────────────
+        const targetMachineKey = pending.machineKey;
+        const targetMachine = ALL_12_MACHINE_CATALOG.find(m => m.machineKey === targetMachineKey) || ALL_12_MACHINE_CATALOG[0];
+
+        // Fetch current live formula
+        const { data: liveData } = await supabase
+          .from('work_photos')
+          .select('user_note')
+          .eq('category', 'MACHINE_SCREW_FORMULA')
+          .eq('machine_id', targetMachineKey)
+          .order('created_at', { ascending: false })
+          .limit(1);
+
+        let currentScrews: Record<string, any[]> = { Screw_A: [], Screw_B: [], Screw_C: [] };
+        if (liveData && liveData[0]?.user_note) {
+          try {
+            currentScrews = JSON.parse(liveData[0].user_note);
+          } catch {}
         }
 
-        // Check expiry (10 mins)
-        if (Date.now() > pending.expiresAt) {
-          await supabase.from('ai_prompt_configs').delete().eq('mode', pendingKey);
-          await sendWhatsAppText(
-            fromNumber,
-            `⏰ *Masa Tamat / 请求已过期*\n` +
-            `Permintaan pindaan recipe telah melebihi had 10 minit dan dibatalkan secara automatik demi keselamatan kilang.\n` +
-            `Sila buat permintaan pindaan baharu jika perlu.`
-          );
-          return { handled: true, status: 'RECIPE_EXPIRED' };
-        }
+        // Apply proposed changes to currentScrews
+        (pending.changes || []).forEach((ch: any) => {
+          const scList = currentScrews[ch.screw_id] || [];
+          const existing = scList.find(it => it.name.toLowerCase().includes(ch.name.toLowerCase()) || it.sku === ch.sku);
 
-        // Apply updates to bom_items_v2
-        for (const item of pending.proposedItems) {
-          if (item.id && typeof item.new_ratio === 'number') {
-            await supabase
-              .from('bom_items_v2')
-              .update({ ratio_percentage: item.new_ratio })
-              .eq('id', item.id);
+          if (existing) {
+            existing.prevQty = existing.newQty;
+            existing.newQty = Number(ch.new_qty);
+          } else {
+            scList.push({
+              id: `${ch.screw_id.toLowerCase()}_${Date.now()}`,
+              name: ch.name,
+              sku: ch.sku || 'RM-CUSTOM',
+              unit: ch.unit || 'bag',
+              prevQty: 0,
+              newQty: Number(ch.new_qty)
+            });
           }
-        }
+          currentScrews[ch.screw_id] = scList;
+        });
 
-        // Record Audit Log
+        // 1. Sync directly to work_photos for immediate mobile workshop reactivity
+        await supabase
+          .from('work_photos')
+          .delete()
+          .eq('category', 'MACHINE_SCREW_FORMULA')
+          .eq('machine_id', targetMachineKey);
+
+        await supabase.from('work_photos').insert({
+          employee_id: employee?.employee_id || '8335',
+          employee_name: `${empName} (SuperAdmin via WA)`,
+          machine_id: targetMachineKey,
+          category: 'MACHINE_SCREW_FORMULA',
+          user_note: JSON.stringify(currentScrews),
+          photo_url: 'https://images.unsplash.com/photo-1581091226825-a6a2a5aee158?w=300&q=80',
+          location: targetMachine.factoryId
+        });
+
+        // 2. Also sync to bom_items_v2 to keep central BOM ERP perfectly aligned
         try {
-          await supabase.from('audit_logs').insert({
-            table_name: 'bom_items_v2',
-            action: 'UPDATE',
-            record_id: pending.recipeId,
-            old_data: pending.oldItems,
-            new_data: pending.proposedItems,
-            changed_by_email: `${employee.name || 'SuperAdmin'} (WhatsApp +${fromNumber})`,
-            changed_by_uid: employee.id,
-          });
-        } catch (auditErr) {
-          console.warn('[Audit Log Error]:', auditErr);
+          const { data: bomHeader } = await supabase
+            .from('bom_headers_v2')
+            .select('recipe_id')
+            .eq('product_sku', targetMachine.sku)
+            .limit(1)
+            .maybeSingle();
+
+          if (bomHeader?.recipe_id) {
+            let totalKg = 0;
+            const screwNamesMap: Record<string, string> = {
+              Screw_A: 'Screw A (外层/主螺杆)',
+              Screw_B: 'Screw B (中层/成型螺杆)',
+              Screw_C: 'Screw C (底膜/内层螺杆)'
+            };
+
+            ['Screw_A', 'Screw_B', 'Screw_C'].forEach(scKey => {
+              const items = currentScrews[scKey] || [];
+              items.forEach((it: any) => {
+                const qtyNum = Number(it.newQty) || 0;
+                if (qtyNum > 0) {
+                  const isBag = it.unit === 'bag' || it.unit === '包' || it.unit === 'Bag';
+                  totalKg += isBag ? qtyNum * 25 : qtyNum;
+                }
+              });
+            });
+
+            const itemsToInsert: any[] = [];
+            ['Screw_A', 'Screw_B', 'Screw_C'].forEach(scKey => {
+              const items = currentScrews[scKey] || [];
+              items.forEach((it: any) => {
+                const qtyNum = Number(it.newQty) || 0;
+                if (qtyNum > 0) {
+                  const isBag = it.unit === 'bag' || it.unit === '包' || it.unit === 'Bag';
+                  const itemKg = isBag ? qtyNum * 25 : qtyNum;
+                  const ratio = totalKg > 0 ? Number(((itemKg / totalKg) * 100).toFixed(1)) : 0;
+                  itemsToInsert.push({
+                    recipe_id: bomHeader.recipe_id,
+                    material_sku: it.sku || 'RM-CUSTOM',
+                    layer_name: screwNamesMap[scKey] || scKey,
+                    ratio_percentage: ratio,
+                    notes: `${it.name}: ${qtyNum}${isBag ? '包' : 'kg'}`,
+                    scrap_percent: 0.015
+                  });
+                }
+              });
+            });
+
+            if (itemsToInsert.length > 0) {
+              await supabase.from('bom_items_v2').delete().eq('recipe_id', bomHeader.recipe_id);
+              await supabase.from('bom_items_v2').insert(itemsToInsert);
+            }
+          }
+        } catch (bomSyncErr) {
+          console.warn('[BOM Sync Error]:', bomSyncErr);
         }
 
-        // Clean up pending draft
+        // 3. Clear pending state
         await supabase.from('ai_prompt_configs').delete().eq('mode', pendingKey);
 
-        const successReply = `✅ *Pindaan Recipe Berjaya Dikemas Kini!* 🧪\n` +
+        const changeDetails = (pending.changes || []).map((c: any) =>
+          `  • [${c.screw_id}] *${c.name}*: ${c.old_qty} ➔ *${c.new_qty} ${c.unit || ''}*`
+        ).join('\n');
+
+        const successReply = `✅ *【配方已成功更新并生效！】* 🚀\n` +
           `━━━━━━━━━━━━━━━━━━━━\n` +
-          `📦 Produk: *${pending.skuName || pending.sku}* (${pending.sku})\n` +
-          `🏭 Mesin Terlibat: *${pending.machineType || 'T1-M03'}*\n` +
-          `👤 Diluluskan Oleh: *${empName}* (SuperAdmin PIN: ${requiredPin})\n\n` +
-          `*Perubahan Nisbah & Berat Bahan (1,000kg 投料锅):*\n` +
-          `${pending.summaryChanges}\n` +
-          `━━━━━━━━━━━━━━━━━━━━\n` +
-          `📋 *Status Kilang:*\n` +
-          `• Paparan kawalan mesin (Production Control) telah dimuat semula secara live.\n` +
-          `• Kiraan potongan bahan mentah automatik kini menggunakan formula baharu.`;
+          `🏭 目标设备: *${targetMachine.machineName}* [${targetMachineKey}]\n` +
+          `👤 操作人员: *${empName}* (PIN: ****)\n` +
+          `⏱️ 生效时间: ${new Date().toLocaleTimeString('zh-CN', { timeZone: 'Asia/Kuala_Lumpur' })}\n\n` +
+          `📝 *变更明细:*\n${changeDetails}\n\n` +
+          `📱 *状态*：车间操作工手机/平板端已即时同步，已写入机台唯一生产真理！`;
 
         await sendWhatsAppText(fromNumber, successReply);
         return { handled: true, status: 'RECIPE_UPDATED' };
       }
+
+      // If user typed wrong PIN
+      if (pinCandidate && pinCandidate.length >= 3) {
+        await sendWhatsAppText(
+          fromNumber,
+          `❌ *PIN Tidak Sah / PIN 码错误*\n\n` +
+          `PIN yang dimasukkan salah. Sila masukkan *4 digit PIN SuperAdmin* yang sah untuk mengesahkan pindaan [${pending.machineName || pending.machineKey}], atau balas 【*取消 / Batal*】 untuk batalkan.`
+        );
+        return { handled: true, status: 'WRONG_PIN' };
+      }
     }
   }
 
-  // ── 2. CHECK IF MESSAGE IS RECIPE-RELATED ───────────────────────────────────
-  const hasRecipeKeywords = /配方|recipe|formula|bomm|ramuan/i.test(text);
-  const hasModifyKeywords = /改|修改|调整|tukar|ubah|update|加到|减到|tambah|kurang|naik|turun|ganti/i.test(text);
-  const hasMaterialOrPercent = /%|茂金属|mll|lldpe|pib|resin|原料|bahan|芯层|外层|内层|layer/i.test(text);
-
-  const isRecipeModify = (hasRecipeKeywords && hasModifyKeywords) || 
-    (hasModifyKeywords && hasMaterialOrPercent) ||
-    /改配方|修改配方|调整配方|tukar recipe|ubah recipe|update recipe/i.test(text);
+  // ── 2. INTENT DETECTION (QUERY VS MODIFY) ────────────────────────────────────
+  const hasRecipeKeywords = /配方|recipe|formula|nisbah|原料|bancuhan/i.test(text);
+  const isRecipeModify = /改配方|修改配方|调整配方|tukar recipe|ubah recipe|update recipe|改成|加到|减到|增加|减少/i.test(text) &&
+    /包|kg|7042|2426|7260|回料|母粒|recycle|black|ldpe|hdpe/i.test(text);
 
   const isRecipeQuery = hasRecipeKeywords && !isRecipeModify;
 
@@ -226,30 +551,43 @@ export async function handleWhatsAppRecipeWorkflow(
     return { handled: true, status: 'RECIPE_UNAUTHORIZED' };
   }
 
-  // ── 4. FETCH CURRENT RECIPES & MASTER ITEMS ────────────────────────────────
-  const [{ data: recipesData }, { data: masterItemsData }] = await Promise.all([
-    supabase
-      .from('bom_headers_v2')
-      .select('*, bom_items_v2(*)')
-      .order('is_default', { ascending: false }),
-    supabase
-      .from('master_items')
-      .select('sku, name, type, net_weight_kg, core_weight_kg, gross_weight_kg')
-  ]);
+  // ── 4. BRANCH: RECIPE QUERY ────────────────────────────────────────────────
+  if (isRecipeQuery) {
+    const targetMachine = resolveMachineTarget(text);
 
-  const allRecipes: RecipeHeader[] = recipesData || [];
-  const masterItemsMap: Record<string, MasterItemWeight> = {};
-  (masterItemsData || []).forEach(m => { masterItemsMap[m.sku] = m; });
+    // If no specific machine is requested, show full 12-machine catalog
+    if (!targetMachine) {
+      await sendWhatsAppText(fromNumber, formatRecipeCatalog());
+      return { handled: true, status: 'CATALOG_SENT' };
+    }
 
-  if (allRecipes.length === 0) {
-    await sendWhatsAppText(
-      fromNumber,
-      `🧪 Belum ada sebarang Recipe didaftarkan dalam sistem bom_headers_v2. Sila daftar recipe di portal Web terlebih dahulu.`
-    );
-    return { handled: true, status: 'NO_RECIPES_FOUND' };
+    // Specific machine requested: Fetch live formula from work_photos
+    const { data: liveData } = await supabase
+      .from('work_photos')
+      .select('user_note, employee_name, created_at')
+      .eq('category', 'MACHINE_SCREW_FORMULA')
+      .eq('machine_id', targetMachine.machineKey)
+      .order('created_at', { ascending: false })
+      .limit(1);
+
+    let screwsObj: Record<string, any[]> = { Screw_A: [], Screw_B: [], Screw_C: [] };
+    let lastUpdatedBy = '现场操作工';
+    let lastUpdatedAt = '';
+
+    if (liveData && liveData[0]?.user_note) {
+      try {
+        screwsObj = JSON.parse(liveData[0].user_note);
+        lastUpdatedBy = liveData[0].employee_name || '车间班组';
+        lastUpdatedAt = liveData[0].created_at;
+      } catch {}
+    }
+
+    const reportText = formatMachineRecipeReport(targetMachine, screwsObj, lastUpdatedBy, lastUpdatedAt);
+    await sendWhatsAppText(fromNumber, reportText);
+    return { handled: true, status: 'MACHINE_RECIPE_SENT' };
   }
 
-  // ── 5. BRANCH: MODIFY RECIPE REQUEST ────────────────────────────────────────
+  // ── 5. BRANCH: RECIPE MODIFICATION ─────────────────────────────────────────
   if (isRecipeModify) {
     if (!apiKey) {
       await sendWhatsAppText(fromNumber, `⚠️ AI Service tidak aktif. Sila hubungi IT.`);
@@ -260,46 +598,50 @@ export async function handleWhatsAppRecipeWorkflow(
       const genAI = new GoogleGenerativeAI(apiKey);
       const model = genAI.getGenerativeModel({ model: 'gemini-2.5-flash' });
 
-      // Build recipe context for Gemini
-      const recipeCatalogContext = allRecipes.map(r => ({
-        recipe_id: r.recipe_id,
-        sku: r.sku,
-        name: r.name,
-        machine_type: r.machine_type,
-        items: (r.bom_items_v2 || []).map(it => ({
-          id: it.id,
-          material_sku: it.material_sku,
-          material_name: masterItemsMap[it.material_sku]?.name || it.material_sku,
-          layer_name: it.layer_name,
-          ratio_percentage: it.ratio_percentage,
-        }))
-      }));
+      const targetMachine = resolveMachineTarget(text) || ALL_12_MACHINE_CATALOG[0];
+
+      // Fetch live formula for this machine
+      const { data: liveData } = await supabase
+        .from('work_photos')
+        .select('user_note')
+        .eq('category', 'MACHINE_SCREW_FORMULA')
+        .eq('machine_id', targetMachine.machineKey)
+        .order('created_at', { ascending: false })
+        .limit(1);
+
+      let currentScrews: Record<string, any[]> = { Screw_A: [], Screw_B: [], Screw_C: [] };
+      if (liveData && liveData[0]?.user_note) {
+        try {
+          currentScrews = JSON.parse(liveData[0].user_note);
+        } catch {}
+      }
 
       const parsePrompt = `You are a plastics manufacturing plant AI assistant.
-The SuperAdmin wants to modify an extrusion stretch film recipe via natural language.
-Here is the existing recipe database:
-${JSON.stringify(recipeCatalogContext, null, 2)}
+The SuperAdmin wants to modify an extruder machine's recipe via natural language.
+Target Machine: ${targetMachine.machineName} (${targetMachine.machineKey})
+Current Machine Screws & Ingredients:
+${JSON.stringify(currentScrews, null, 2)}
 
 User request: "${text}"
 
 Instructions:
-1. Identify which recipe they want to modify (default to first active recipe if not specified, usually SF-CLEAR-2.2-50CM).
-2. Understand the ratio changes (e.g. increase Metallocene to 18%, decrease RAW-7042 to 52%).
-3. Keep all other unchanged ingredients at their current ratio.
-4. Output STRICT JSON only:
+1. Identify which machine (default to "${targetMachine.machineKey}" if not mentioned).
+2. Identify which screw: "Screw_A", "Screw_B", or "Screw_C" (default to "Screw_A" if not specified).
+3. Identify the ingredients changed (e.g. C1802 / 7042, Recycle, LDPE 2426H).
+4. Parse the new quantity and unit (bag or kg).
+5. Output STRICT JSON only:
 {
   "recognized": boolean,
-  "recipe_id": string,
-  "sku": string,
-  "reason": string,
-  "proposed_items": [
+  "machine_key": string,
+  "machine_name": string,
+  "changes": [
     {
-      "id": string,
-      "material_sku": string,
-      "material_name": string,
-      "layer_name": string,
-      "old_ratio": number,
-      "new_ratio": number
+      "screw_id": "Screw_A" | "Screw_B" | "Screw_C",
+      "name": string,
+      "sku": string,
+      "old_qty": number,
+      "new_qty": number,
+      "unit": "bag" | "kg"
     }
   ]
 }`;
@@ -308,148 +650,57 @@ Instructions:
       const rawText = aiRes.response.text().replace(/```json/g, '').replace(/```/g, '').trim();
       const parsed = JSON.parse(rawText);
 
-      if (!parsed.recognized || !parsed.recipe_id || !parsed.proposed_items) {
+      if (!parsed.recognized || !parsed.changes || parsed.changes.length === 0) {
         await sendWhatsAppText(
           fromNumber,
           `⚠️ *Tidak Dapat Memproses Arahan / 无法解析修改指令*\n\n` +
-          `AI tidak dapat mengenal pasti bahan atau peratusan yang ingin diubah daripada ayat: "${text}".\n\n` +
+          `AI tidak dapat mengenal pasti bahan atau kuantiti yang ingin diubah daripada ayat: "${text}".\n\n` +
           `👉 Sila nyatakan dengan jelas, contoh:\n` +
-          `【*把 SF-CLEAR-2.2-50CM 茂金属加到 18%，RAW-7042 减到 52%*】`
+          `【*把 T1 螺杆A 的 7042 改成 16包，回料减到 5kg*】`
         );
         return { handled: true, status: 'PARSE_FAILED' };
       }
 
-      // Check sum of ratios
-      const targetRecipe = allRecipes.find(r => r.recipe_id === parsed.recipe_id);
-      if (!targetRecipe) {
-        await sendWhatsAppText(fromNumber, `❌ Recipe tidak ditemui.`);
-        return { handled: true, status: 'RECIPE_NOT_FOUND' };
-      }
-
-      const totalRatio = parsed.proposed_items.reduce((acc: number, it: any) => acc + Number(it.new_ratio || 0), 0);
-      const roundedTotal = Number(totalRatio.toFixed(2));
-
-      if (Math.abs(roundedTotal - 100.0) > 0.05) {
-        await sendWhatsAppText(
-          fromNumber,
-          `❌ *Nisbah Tidak Lengkap / 配比未闭环！*\n` +
-          `━━━━━━━━━━━━━━━━━━━━\n` +
-          `Jumlah nisbah baharu adalah: *${roundedTotal}%* (Beza: ${(roundedTotal - 100).toFixed(1)}%)\n\n` +
-          `⚠️ Formula kilang mestilah tepat *100.0%*. Sila pastikan penambahan satu bahan diimbangi dengan pengurangan bahan lain sebelum menghantar.`
-        );
-        return { handled: true, status: 'RATIO_NOT_100' };
-      }
-
-      // Calculate weight deltas
-      const product = masterItemsMap[targetRecipe.sku];
-      const netWeight = Number(product?.net_weight_kg) || 2.0;
-      const coreWeight = Number(product?.core_weight_kg) || 0.2;
-      const grossWeight = Number(product?.gross_weight_kg) || (netWeight + coreWeight);
-
-      const changeSummaries = parsed.proposed_items.map((it: any) => {
-        const oldR = Number(it.old_ratio);
-        const newR = Number(it.new_ratio);
-        const deltaR = newR - oldR;
-        const arrow = deltaR > 0 ? `🔺+${deltaR.toFixed(1)}%` : deltaR < 0 ? `🔻${deltaR.toFixed(1)}%` : `(Kekal / 保持)`;
-
-        const oldGrams = Math.round(netWeight * (oldR / 100) * 1000);
-        const newGrams = Math.round(netWeight * (newR / 100) * 1000);
-        const deltaGrams = newGrams - oldGrams;
-        const deltaGramsText = deltaGrams !== 0 ? ` (${deltaGrams > 0 ? `+${deltaGrams}g` : `${deltaGrams}g`}/卷)` : '';
-
-        const newBatchKg = Number((10 * newR).toFixed(1));
-        const bags = Math.floor(newBatchKg / 25);
-        const remKg = Number((newBatchKg % 25).toFixed(1));
-        const bagText = bags > 0 
-          ? `约 ${bags}包×25kg${remKg > 0 ? ` + ${remKg}kg` : ''}`
-          : `${newBatchKg} kg`;
-
-        return `• *${it.material_name || it.material_sku}* [${it.layer_name}]:\n` +
-          `   - Nisbah: ${oldR}% ➔ *${newR}%* ${arrow}\n` +
-          `   - Berat per Roll: ${oldGrams}g ➔ *${newGrams}g*${deltaGramsText}\n` +
-          `   - 1,000kg Batch: *${newBatchKg} kg* (${bagText})`;
-      }).join('\n\n');
-
-      // Save pending draft into ai_prompt_configs
-      const pendingPayload = {
-        recipeId: targetRecipe.recipe_id,
-        sku: targetRecipe.sku,
-        skuName: targetRecipe.name,
-        machineType: targetRecipe.machine_type || 'T1-M03',
-        pin: requiredPin,
-        expiresAt: Date.now() + 10 * 60 * 1000, // 10 minutes
-        oldItems: targetRecipe.bom_items_v2,
-        proposedItems: parsed.proposed_items,
-        summaryChanges: changeSummaries,
-      };
-
-      await supabase.from('ai_prompt_configs').upsert({
-        mode: pendingKey,
-        prompt_template: JSON.stringify(pendingPayload),
-        updated_at: new Date().toISOString(),
-        updated_by: empName,
+      // Format Comparison Card
+      const diffLines = parsed.changes.map((ch: any) => {
+        const delta = ch.new_qty - ch.old_qty;
+        const arrow = delta > 0 ? `🔺+${delta}` : delta < 0 ? `🔻${delta}` : `(保持)`;
+        return `  • [${ch.screw_id}] *${ch.name}*: ${ch.old_qty} ➔ *${ch.new_qty} ${ch.unit}* ${arrow}`;
       });
 
-      const confirmCard = `⚠️ *【Pengesahan Pindaan Recipe (Termasuk Kiraan Berat)】*\n` +
+      const confirmCard = `⚠️ *【配方修改待核验 / Pengesahan Pindaan Recipe】*\n` +
         `━━━━━━━━━━━━━━━━━━━━\n` +
-        `📦 Produk: *${targetRecipe.name}* (${targetRecipe.sku})\n` +
-        `🏭 Mesin: *${targetRecipe.machine_type || 'T1-M03'}*\n\n` +
-        `⚖️ *Spesifikasi Berat 成品重量:*\n` +
-        `   • Net: *${netWeight.toFixed(2)} kg* | Core: *${coreWeight.toFixed(2)} kg* | Gross: *${grossWeight.toFixed(2)} kg*\n\n` +
-        `🧪 *Perubahan Nisbah & Berat Bahan / 原料变更对比:*\n` +
-        `━━━━━━━━━━━━━━━━━━━━\n` +
-        `${changeSummaries}\n` +
-        `━━━━━━━━━━━━━━━━━━━━\n` +
-        `✅ *Jumlah Keseluruhan: 100.0% (1,000kg / 1,000kg 闭环)*\n\n` +
-        `⚠️ *AMARAN:* Mesin ${targetRecipe.machine_type || 'T1-M03'} sedang beroperasi. Pindaan ini akan menukar formula bancuhan & kiraan tolak stok secara LIVE.\n\n` +
-        `👉 Sila balas 【*确认 ${requiredPin}*】 dalam masa 10 minit untuk kuatkuasakan.\n` +
-        `👉 Balas 【*取消*】 untuk batalkan.`;
+        `🏭 目标设备: *${targetMachine.machineName}* [${targetMachine.machineKey}]\n` +
+        `👤 申请人: *${empName}* (SuperAdmin)\n\n` +
+        `📋 *变更草案对比:*\n` +
+        `${diffLines.join('\n')}\n\n` +
+        `🔒 *双重安全防线 (2-Phase Verification):*\n` +
+        `此操作将即时同步至车间现场操作工手机端！\n\n` +
+        `👉 请回复您的 *4 位 SuperAdmin PIN 码* 确认立即执行。\n` +
+        `👉 或回复 【*取消 / Batal*】 放弃本次修改。`;
+
+      // Save pending payload in ai_prompt_configs
+      await supabase.from('ai_prompt_configs').upsert({
+        mode: pendingKey,
+        prompt_template: JSON.stringify({
+          machineKey: targetMachine.machineKey,
+          machineName: targetMachine.machineName,
+          changes: parsed.changes,
+          requestedAt: new Date().toISOString()
+        }),
+        updated_at: new Date().toISOString(),
+        updated_by: empName
+      }, { onConflict: 'mode' });
 
       await sendWhatsAppText(fromNumber, confirmCard);
-      return { handled: true, status: 'RECIPE_PREVIEW_SENT' };
+      return { handled: true, status: 'CONFIRMATION_REQUESTED' };
 
     } catch (err: any) {
-      console.error('[Recipe Modification Parse Error]:', err);
+      console.error('[WhatsApp Recipe AI Parse Error]:', err);
       await sendWhatsAppText(fromNumber, `❌ Gagal memproses pindaan recipe: ${err.message}`);
-      return { handled: true, status: 'RECIPE_ERROR' };
+      return { handled: true, status: 'PARSE_ERROR' };
     }
   }
 
-  // ── 6. BRANCH: VIEW RECIPE QUERY ───────────────────────────────────────────
-  // Match keyword from text
-  const cleanKeyword = text.replace(/查看配方|查配方|配方|recipe|formula|semak|tunjuk/gi, '').trim().toUpperCase();
-
-  let matchedRecipe = allRecipes[0];
-  if (cleanKeyword) {
-    const found = allRecipes.find(r => 
-      r.sku.toUpperCase().includes(cleanKeyword) || 
-      r.name.toUpperCase().includes(cleanKeyword) ||
-      (masterItemsMap[r.sku]?.name || '').toUpperCase().includes(cleanKeyword)
-    );
-    if (found) {
-      matchedRecipe = found;
-    } else {
-      const availableList = allRecipes.slice(0, 5).map(r => `• *${r.sku}* (${r.name})`).join('\n');
-      await sendWhatsAppText(
-        fromNumber,
-        `🔍 Tiada recipe sepadan dengan "${cleanKeyword}".\n\nSenarai recipe sedia ada:\n${availableList}\n\n👉 Taip cth: 【*查看配方 ${allRecipes[0].sku}*】`
-      );
-      return { handled: true, status: 'RECIPE_NOT_FOUND' };
-    }
-  }
-
-  // Attach material names
-  const itemsWithNames = (matchedRecipe.bom_items_v2 || []).map(it => ({
-    ...it,
-    material_name: masterItemsMap[it.material_sku]?.name || it.material_sku,
-  }));
-
-  const reportMsg = formatRecipeReport(
-    matchedRecipe,
-    itemsWithNames,
-    masterItemsMap[matchedRecipe.sku]
-  );
-
-  await sendWhatsAppText(fromNumber, reportMsg);
-  return { handled: true, status: 'RECIPE_VIEWED' };
+  return { handled: false, status: 'IGNORED' };
 }

@@ -56,9 +56,12 @@ export function extractTripIdentifier(notes?: string | null): { tripSeq?: number
     const mBracket = notes.match(/\[Trip:\s*([^\]]+)\]/i);
     if (mBracket) {
         const content = mBracket[1].trim();
-        const numMatch = content.match(/\b(\d+)\b/);
-        if (numMatch) {
-            return { tripSeq: parseInt(numMatch[1], 10), tripTag: `Trip ${numMatch[1]}` };
+        // Only treat as numeric trip sequence if explicitly formatted like "Trip 2", "Pusingan 1", "2nd trip", or pure number
+        const tripNumMatch = content.match(/^(?:trip|pusingan)?\s*(\d{1,2})(?:st|nd|rd|th)?(?:\s+.*)?$/i) ||
+                             content.match(/\btrip\s*(\d{1,2})\b/i) ||
+                             content.match(/\b(\d{1,2})\s*p(?:usingan)?\b/i);
+        if (tripNumMatch) {
+            return { tripSeq: parseInt(tripNumMatch[1], 10), tripTag: `Trip ${tripNumMatch[1]}` };
         }
         return { tripTag: content };
     }

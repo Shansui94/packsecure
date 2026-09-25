@@ -724,7 +724,8 @@ const DeliveryOrderManagement: React.FC<DeliveryOrderManagementProps> = ({ user 
             noteText.includes('pick up') || 
             noteText.includes('self-pickup') || 
             noteText.includes('self pickup') || 
-            noteText.includes('ambil') || 
+            noteText.includes('ambil sendiri') || 
+            noteText.includes('customer ambil') || 
             noteText.includes('自提') || 
             noteText.includes('walk in') || 
             noteText.includes('walk-in');
@@ -3089,8 +3090,9 @@ const DeliveryOrderManagement: React.FC<DeliveryOrderManagementProps> = ({ user 
                 if (doItem.terms && !noteParts.some(p => p.includes(doItem.terms))) {
                     noteParts.push(`Terms: ${doItem.terms}`);
                 }
+                const doSpecificNote = [doItem.remarks, doItem.customer, doItem.deliveryAddress].filter(Boolean).join(' ');
                 const isSelfPickup = parsedDeliveryMethod === 'SELF_PICKUP' || 
-                    noteParts.some(p => /pickup|pick up|自提|ambil/i.test(p));
+                    /(?:self[- ]?pickup|自提|ambil\s+sendiri|customer\s+ambil)/i.test(doSpecificNote);
 
                 const orderPayload: any = {
                     id: orderId,
@@ -3314,7 +3316,7 @@ const DeliveryOrderManagement: React.FC<DeliveryOrderManagementProps> = ({ user 
         }
 
         const isSelfPickup = draft.tripCategory === 'SELF-PICKUP' || 
-            (draft.notes && /pickup|pick up|自提|ambil/i.test(draft.notes));
+            (draft.notes && /(?:self[- ]?pickup|自提|ambil\s+sendiri|customer\s+ambil)/i.test(draft.notes));
 
         const payload: Record<string, unknown> = {
             order_number: doNumber,
@@ -4086,12 +4088,12 @@ const DeliveryOrderManagement: React.FC<DeliveryOrderManagementProps> = ({ user 
             let finalNotes = newOrderNotes;
             if (deliveryMethod === 'SELF_PICKUP') {
                 const low = finalNotes.toLowerCase();
-                if (!low.includes('pickup') && !low.includes('pick up') && !low.includes('自提') && !low.includes('ambil')) {
+                if (!low.includes('pickup') && !low.includes('pick up') && !low.includes('自提') && !low.includes('ambil sendiri')) {
                     finalNotes = `[Self Pickup] ${finalNotes}`.trim();
                 }
             }
 
-            const isSelfPickup = deliveryMethod === 'SELF_PICKUP' || /pickup|pick up|自提|ambil/i.test(finalNotes);
+            const isSelfPickup = deliveryMethod === 'SELF_PICKUP' || /(?:self[- ]?pickup|自提|ambil\s+sendiri|customer\s+ambil)/i.test(finalNotes);
 
             const payload: any = {
                 order_number: doNumber,
@@ -6625,7 +6627,7 @@ const DeliveryOrderManagement: React.FC<DeliveryOrderManagementProps> = ({ user 
                                                  const val = e.target.value;
                                                  setNewOrderNotes(val);
                                                  const low = val.toLowerCase();
-                                                 if ((low.includes('pickup') || low.includes('pick up') || low.includes('self-pickup') || low.includes('ambil') || low.includes('自提') || low.includes('walk in')) && deliveryMethod !== 'SELF_PICKUP') {
+                                                 if ((low.includes('pickup') || low.includes('pick up') || low.includes('self-pickup') || low.includes('ambil sendiri') || low.includes('customer ambil') || low.includes('自提') || low.includes('walk in')) && deliveryMethod !== 'SELF_PICKUP') {
                                                      setDeliveryMethod('SELF_PICKUP');
                                                      setSelectedDriverId('');
                                                      setSelectedLorryId('');
