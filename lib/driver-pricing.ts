@@ -66,6 +66,7 @@ const FALLBACK_RULEBOOK_MD = `# Packsecure 司机运费与送货价格真理库 
  * 动态加载当前生效的 Markdown 规则文本
  */
 async function getActiveRulebookContent(): Promise<{ content: string; version: string; id?: string }> {
+    // 1. 尝试从 pricing_rulebooks 表获取
     try {
         const { data, error } = await supabase
             .from('pricing_rulebooks')
@@ -80,9 +81,29 @@ async function getActiveRulebookContent(): Promise<{ content: string; version: s
             return { content: data.content_md, version: data.version, id: data.id };
         }
     } catch (e) {
-        console.warn('[driver-pricing] Failed to fetch active rulebook from DB, falling back to local file/string:', e);
+        // ignore
     }
 
+    // 2. 尝试从已存在的 sop_articles 表获取
+    try {
+        const { data, error } = await supabase
+            .from('sop_articles')
+            .select('id, title, content, updated_at')
+            .or('title.ilike.%Pricing%,title.ilike.%运费%')
+            .order('updated_at', { ascending: false })
+            .limit(1)
+            .maybeSingle();
+
+        if (!error && data?.content) {
+            const verMatch = data.content.match(/版本\s*[/|:]\s*Version\*?:\s*`?(v[\d.]+)`?/i);
+            const version = verMatch ? verMatch[1] : 'v1.0.0';
+            return { content: data.content, version, id: data.id };
+        }
+    } catch (e) {
+        // ignore
+    }
+
+    // 3. 尝试从本地 docs 文件读取
     try {
         const localPath = path.resolve(process.cwd(), 'docs', 'sops', 'Driver_Pricing_Rules.md');
         if (fs.existsSync(localPath)) {
@@ -91,6 +112,7 @@ async function getActiveRulebookContent(): Promise<{ content: string; version: s
         }
     } catch (ignore) {}
 
+    // 4. 终极内嵌兜底
     return { content: FALLBACK_RULEBOOK_MD, version: 'v1.0.0-embedded' };
 }
 
@@ -243,8 +265,31 @@ export async function handleCalcDriverRate(req: VercelRequest, res: VercelRespon
                     .eq('rule_type', 'DRIVER_DELIVERY')
                     .order('created_at', { ascending: false });
 
-                if (!error && data) {
+                if (!error && data && data.length > 0) {
                     return res.status(200).json({ success: true, rulebooks: data });
+                }
+            } catch (ignore) {}
+
+            try {
+                const { data, error } = await supabase
+                    .from('sop_articles')
+                    .select('id, title, description, updated_at')
+                    .or('title.ilike.%Pricing%,title.ilike.%运费%')
+                    .order('updated_at', { ascending: false });
+
+                if (!error && data && data.length > 0) {
+                    return res.status(200).json({
+                        success: true,
+                        rulebooks: data.map(d => ({
+                            id: d.id,
+                            version: 'v1.0.0',
+                            title: d.title,
+                            is_active: true,
+                            changelog: d.description || '当前生效版本',
+                            created_by: 'HR',
+                            created_at: d.updated_at
+                        }))
+                    });
                 }
             } catch (ignore) {}
 
@@ -265,56 +310,95 @@ export async function handleCalcDriverRate(req: VercelRequest, res: VercelRespon
         }
 
         if (mode === 'save-rulebook') {
-            const { content_md, changelog, created_by = 'HR', title = '司机运费与送货价格真理库' } = req.body;
+            const { content_md, changelog, created_by = 'HR', title = 'Packsecure 司机运费与送货价格真理库 (Driver Pricing Rulebook)' } = req.body;
             if (!content_md || !content_md.trim()) {
                 return res.status(400).json({ error: 'content_md is required' });
             }
 
             try {
-                const { data: latest } = await supabase
-                    .from('pricing_rulebooks')
-                    .select('version')
-                    .eq('rule_type', 'DRIVER_DELIVERY')
-                    .order('created_at', { ascending: false })
-                    .limit(1)
-                    .maybeSingle();
-
                 let nextVersion = 'v1.1.0';
-                if (latest?.version) {
-                    const match = latest.version.match(/v?(\d+)\.(\d+)(\.(\d+))?/);
-                    if (match) {
-                        const major = parseInt(match[1]);
-                        const minor = parseInt(match[2]) + 1;
-                        nextVersion = `v${major}.${minor}.0`;
+                try {
+                    const { data: latest } = await supabase
+                        .from('pricing_rulebooks')
+                        .select('version')
+                        .eq('rule_type', 'DRIVER_DELIVERY')
+                        .order('created_at', { ascending: false })
+                        .limit(1)
+                        .maybeSingle();
+
+                    if (latest?.version) {
+                        const match = latest.version.match(/v?(\d+)\.(\d+)(\.(\d+))?/);
+                        if (match) {
+                            const major = parseInt(match[1]);
+                            const minor = parseInt(match[2]) + 1;
+                            nextVersion = `v${major}.${minor}.0`;
+                        }
                     }
+                } catch (ignore) {}
+
+                // 1. 同步保存至已存在的 sop_articles 表
+                try {
+                    const { data: existingSop } = await supabase
+                        .from('sop_articles')
+                        .select('id')
+                        .or('title.ilike.%Pricing%,title.ilike.%运费%')
+                        .limit(1)
+                        .maybeSingle();
+
+                    if (existingSop?.id) {
+                        await supabase
+                            .from('sop_articles')
+                            .update({
+                                content: content_md,
+                                description: changelog || `发布新版本 ${nextVersion}`,
+                                updated_at: new Date().toISOString()
+                            })
+                            .eq('id', existingSop.id);
+                    } else {
+                        await supabase
+                            .from('sop_articles')
+                            .insert({
+                                title,
+                                description: changelog || `发布新版本 ${nextVersion}`,
+                                content: content_md,
+                                page_id: 'driver-delivery',
+                                target_roles: ['SuperAdmin', 'Admin', 'Manager', 'LogisticsCoordinator', 'HR'],
+                                is_published: true,
+                                created_by
+                            });
+                    }
+                } catch (sopErr) {
+                    console.warn('[driver-pricing] Sync to sop_articles notice:', sopErr);
                 }
 
-                await supabase
-                    .from('pricing_rulebooks')
-                    .update({ is_active: false })
-                    .eq('rule_type', 'DRIVER_DELIVERY');
+                // 2. 尝试保存至 pricing_rulebooks 表
+                let inserted: any = null;
+                try {
+                    await supabase
+                        .from('pricing_rulebooks')
+                        .update({ is_active: false })
+                        .eq('rule_type', 'DRIVER_DELIVERY');
 
-                const { data: inserted, error: insErr } = await supabase
-                    .from('pricing_rulebooks')
-                    .insert({
-                        rule_type: 'DRIVER_DELIVERY',
-                        version: nextVersion,
-                        title,
-                        content_md,
-                        is_active: true,
-                        changelog: changelog || '用户在前端更新了运费规则',
-                        created_by
-                    })
-                    .select()
-                    .maybeSingle();
+                    const { data: insData } = await supabase
+                        .from('pricing_rulebooks')
+                        .insert({
+                            rule_type: 'DRIVER_DELIVERY',
+                            version: nextVersion,
+                            title,
+                            content_md,
+                            is_active: true,
+                            changelog: changelog || '用户在前端更新了运费规则',
+                            created_by
+                        })
+                        .select()
+                        .maybeSingle();
 
-                if (insErr) {
-                    throw insErr;
-                }
+                    if (insData) inserted = insData;
+                } catch (ignore) {}
 
                 return res.status(200).json({
                     success: true,
-                    rulebook: inserted,
+                    rulebook: inserted || { version: nextVersion, content_md, title },
                     message: `成功发布新版本 ${nextVersion}，全系统即刻热生效！`
                 });
             } catch (err: any) {

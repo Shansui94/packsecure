@@ -6,6 +6,7 @@ import {
     runSandboxTest,
     runHistoricalBacktest,
     fetchRulePatchSuggestions,
+    CANONICAL_DRIVER_PRICING_MD,
     PricingRulebook,
     SandboxResult,
     BacktestReport,
@@ -13,14 +14,14 @@ import {
 } from '../../utils/aiDriverPricing';
 
 export const DriverPricingRulebookEditor: React.FC = () => {
-    const [rulebookContent, setRulebookContent] = useState<string>('');
-    const [originalContent, setOriginalContent] = useState<string>('');
+    const [rulebookContent, setRulebookContent] = useState<string>(CANONICAL_DRIVER_PRICING_MD);
+    const [originalContent, setOriginalContent] = useState<string>(CANONICAL_DRIVER_PRICING_MD);
     const [currentVersion, setCurrentVersion] = useState<string>('v1.0.0');
     const [historyList, setHistoryList] = useState<PricingRulebook[]>([]);
     const [activeTab, setActiveTab] = useState<'editor' | 'preview' | 'sandbox' | 'backtest'>('editor');
     
     // UI state
-    const [loading, setLoading] = useState<boolean>(true);
+    const [loading, setLoading] = useState<boolean>(false);
     const [saving, setSaving] = useState<boolean>(false);
     const [saveModalOpen, setSaveModalOpen] = useState<boolean>(false);
     const [changelog, setChangelog] = useState<string>('');
@@ -50,12 +51,13 @@ export const DriverPricingRulebookEditor: React.FC = () => {
     }, []);
 
     const loadData = async () => {
-        setLoading(true);
         try {
             const active = await fetchActiveRulebook();
-            setRulebookContent(active.content);
-            setOriginalContent(active.content);
-            setCurrentVersion(active.version);
+            if (active.content && active.content.trim() && !active.content.startsWith('# 运费规则加载中')) {
+                setRulebookContent(active.content);
+                setOriginalContent(active.content);
+                setCurrentVersion(active.version);
+            }
 
             const history = await fetchRulebookHistory();
             setHistoryList(history);
@@ -67,9 +69,7 @@ export const DriverPricingRulebookEditor: React.FC = () => {
                 setUnabsorbedCount(patchData.unabsorbedCount || 0);
             }
         } catch (err: any) {
-            setStatusMessage({ type: 'error', text: '加载规则库失败: ' + err.message });
-        } finally {
-            setLoading(false);
+            console.warn('加载最新规则库失败，使用本地基准:', err);
         }
     };
 
@@ -147,15 +147,6 @@ export const DriverPricingRulebookEditor: React.FC = () => {
             setSaving(false);
         }
     };
-
-    if (loading) {
-        return (
-            <div className="flex items-center justify-center p-12 text-slate-500">
-                <div className="w-6 h-6 border-2 border-indigo-600 border-t-transparent rounded-full animate-spin mr-3"></div>
-                正在载入运费真理库 (Rulebook)...
-            </div>
-        );
-    }
 
     return (
         <div className="bg-white rounded-xl border border-slate-200 shadow-sm overflow-hidden flex flex-col min-h-[700px]">

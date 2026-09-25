@@ -2418,7 +2418,17 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
     const action = req.query?.action || req.body?.action;
     const reqType = req.query?.type || req.body?.type;
 
-    // 1. Query or Briefing requests
+    // 1. Driver Rate Calculator / Rulebook Engine (Prioritize before GET fallback!)
+    if (action === 'calc-driver-rate' || action === 'driver-pricing' || req.query?.action === 'calc-driver-rate' || req.body?.action === 'calc-driver-rate') {
+        return handleCalcDriverRate(req, res);
+    }
+
+    // 2. Driver Pricing Rule Patch Suggester
+    if (action === 'suggest-rule-patch' || req.query?.action === 'suggest-rule-patch' || req.body?.action === 'suggest-rule-patch') {
+        return handleSuggestRulePatch(req, res);
+    }
+
+    // 3. Query or Briefing requests
     if (
         action === 'query' ||
         action === 'briefing' ||
@@ -2453,17 +2463,7 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
         return handleSopAssistant(req, res);
     }
 
-    // 6. Driver Rate Calculator / Rulebook Engine
-    if (action === 'calc-driver-rate' || action === 'driver-pricing' || req.query?.action === 'calc-driver-rate' || req.body?.action === 'calc-driver-rate') {
-        return handleCalcDriverRate(req, res);
-    }
-
-    // 7. Driver Pricing Rule Patch Suggester
-    if (action === 'suggest-rule-patch' || req.query?.action === 'suggest-rule-patch' || req.body?.action === 'suggest-rule-patch') {
-        return handleSuggestRulePatch(req, res);
-    }
-
-    // 8. Default: Universal Intake (parse / commit)
+    // 6. Default: Universal Intake (parse / commit)
     return handleIntake(req, res);
 }
 
