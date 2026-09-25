@@ -1,7 +1,7 @@
 import { VercelRequest, VercelResponse } from '@vercel/node';
 import { GoogleGenerativeAI } from '@google/generative-ai';
 import { createClient } from '@supabase/supabase-js';
-import { handleCalcDriverRate, handleSuggestRulePatch } from '../../lib/driver-pricing';
+import { handleCalcDriverRate, handleSuggestRulePatch } from '../../lib/driver-pricing.js';
 
 export const config = { maxDuration: 60 };
 export { handleCalcDriverRate, handleSuggestRulePatch };
