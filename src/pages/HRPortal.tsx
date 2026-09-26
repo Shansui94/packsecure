@@ -4,7 +4,7 @@ import {
     Users, Download, AlertCircle,
     Wallet, Plus, Edit2, Save, X, ToggleLeft, Trash2,
     ToggleRight, Star, Award, MapPin, DollarSign, ChevronLeft, ChevronRight, ChevronDown, ChevronUp, Loader, Shield, Check, RefreshCw, UserPlus, CheckCircle2, Settings, Calendar,
-    Trophy, Sparkles, Target, Zap, Gift
+    Trophy, Sparkles, Target, Zap, Gift, FileText
 } from 'lucide-react';
 import { getSalaryAdvances, updateSalaryAdvanceStatus } from '../services/apiV2';
 import { calculateShiftSplit, getRatesForTarget } from '../utils/rateCalculator';
@@ -27,6 +27,7 @@ import {
 } from '../config/modules';
 import { DriverPricingRulebookEditor } from '../components/pricing/DriverPricingRulebookEditor';
 import { HRAuditWorkbench } from '../components/pricing/HRAuditWorkbench';
+import PersonalMonthlyReport from './PersonalMonthlyReport';
 
 const formatYYYYMMDD = (dateStr: string | null | undefined): string => {
     if (!dateStr) return '';
@@ -861,6 +862,24 @@ const HRPortal: React.FC<HRPortalProps> = ({ user, initialTab, initialRoleFilter
     const [payrollData, setPayrollData] = useState<any[]>([]);
     const [loadingPayroll, setLoadingPayroll] = useState(false);
     const [generatingPayroll, setGeneratingPayroll] = useState(false);
+
+    // ── Monthly Report Modal State ──
+    const [activeReportModal, setActiveReportModal] = useState<{
+        employeeId: string;
+        employeeName?: string;
+        month?: number;
+        year?: number;
+    } | null>(null);
+
+    const openMonthlyReport = (employeeId: string, name?: string, month?: number, year?: number) => {
+        if (!employeeId) return;
+        setActiveReportModal({
+            employeeId,
+            employeeName: name,
+            month: month || payMonth,
+            year: year || payYear
+        });
+    };
 
     // Delivery rates
     const [deliveryRates, setDeliveryRates] = useState<{ id: string; origin: string; location_name: string; base_rate: number; max_places: number; extra_rate_per_place: number; notes: string }[]>([]);
@@ -1893,10 +1912,16 @@ const HRPortal: React.FC<HRPortalProps> = ({ user, initialTab, initialRoleFilter
                                     {filteredEmps.map(emp => (
                                         <tr key={emp.id} className="hover:bg-white/[0.02] transition-colors">
                                             <td className="px-4 py-3">
-                                                <div className="font-bold text-white text-sm group flex items-center gap-2">
-                                                    {emp.name}
-                                                    {emp.role === 'SuperAdmin' && <Shield size={12} className="text-purple-400" />}
-                                                </div>
+                                                <button
+                                                    type="button"
+                                                    onClick={() => openMonthlyReport(emp.auth_user_id || emp.id, emp.name)}
+                                                    className="font-bold text-blue-400 hover:text-blue-300 hover:underline flex items-center gap-1.5 text-left text-sm group cursor-pointer transition-colors"
+                                                    title="点击查看月度个人报表 (Monthly Report)"
+                                                >
+                                                    <span>{emp.name}</span>
+                                                    <FileText size={12} className="opacity-60 group-hover:opacity-100 text-blue-400 shrink-0" />
+                                                    {emp.role === 'SuperAdmin' && <Shield size={12} className="text-purple-400 shrink-0" />}
+                                                </button>
                                                 <div className="text-[10px] text-gray-600 font-mono">ID: {emp.employee_id || 'N/A'} {emp.pin_code ? `| PIN: ${emp.pin_code}` : ''}</div>
                                                 {emp.email && <div className="text-[10px] text-gray-600">{emp.email}</div>}
                                             </td>
@@ -2372,7 +2397,15 @@ const HRPortal: React.FC<HRPortalProps> = ({ user, initialTab, initialRoleFilter
                                     {payrollData.map(row => (
                                         <tr key={row.emp.id} className="hover:bg-white/[0.02] transition-colors">
                                             <td className="px-4 py-4">
-                                                <div className="font-bold text-white">{row.emp.name}</div>
+                                                <button
+                                                    type="button"
+                                                    onClick={() => openMonthlyReport(row.emp.auth_user_id || row.emp.id, row.emp.name, payMonth, payYear)}
+                                                    className="font-bold text-blue-400 hover:text-blue-300 hover:underline flex items-center gap-1.5 text-left text-sm group cursor-pointer transition-colors"
+                                                    title={`点击查看 ${row.emp.name} 在 ${payYear}年${payMonth}月 的月度报表`}
+                                                >
+                                                    <span>{row.emp.name}</span>
+                                                    <FileText size={12} className="opacity-60 group-hover:opacity-100 text-blue-400 shrink-0" />
+                                                </button>
                                                 <div className="text-[10px] text-gray-600 font-mono">{row.emp.employee_id}</div>
                                             </td>
                                             <td className="px-4 py-4">
@@ -2475,7 +2508,15 @@ const HRPortal: React.FC<HRPortalProps> = ({ user, initialTab, initialRoleFilter
                                     {salaryAdvances.map(adv => (
                                         <tr key={adv.id} className="hover:bg-white/[0.01] transition-colors">
                                             <td className="px-4 py-4">
-                                                <div className="font-bold text-white text-sm">{adv.employee?.name || 'Unknown User'}</div>
+                                                <button
+                                                    type="button"
+                                                    onClick={() => openMonthlyReport(adv.employee?.auth_user_id || adv.employee?.id || adv.user_id, adv.employee?.name)}
+                                                    className="font-bold text-blue-400 hover:text-blue-300 hover:underline flex items-center gap-1.5 text-left text-sm group cursor-pointer transition-colors"
+                                                    title="点击查看月度个人报表 (Monthly Report)"
+                                                >
+                                                    <span>{adv.employee?.name || 'Unknown User'}</span>
+                                                    <FileText size={12} className="opacity-60 group-hover:opacity-100 text-blue-400 shrink-0" />
+                                                </button>
                                                 <div className="text-[10px] text-gray-600 font-mono">PIN: {adv.employee?.employee_id || 'N/A'}</div>
                                             </td>
                                             <td className="px-4 py-4 text-xs text-gray-400">
@@ -3216,6 +3257,45 @@ const HRPortal: React.FC<HRPortalProps> = ({ user, initialTab, initialRoleFilter
                     ) : (
                         <DriverPricingRulebookEditor />
                     )}
+                </div>
+            )}
+
+            {/* ── PERSONAL MONTHLY REPORT MODAL DIALOG ── */}
+            {activeReportModal && (
+                <div className="fixed inset-0 z-50 bg-black/80 backdrop-blur-md flex items-center justify-center p-2 sm:p-4 md:p-6 animate-in fade-in duration-200">
+                    <div className="bg-[#0b0c10] border border-white/15 rounded-2xl w-full max-w-7xl max-h-[94vh] flex flex-col shadow-2xl overflow-hidden ring-1 ring-white/10">
+                        {/* Top bar with employee name, month info and close button */}
+                        <div className="px-6 py-3.5 border-b border-white/10 flex items-center justify-between bg-black/50 shrink-0">
+                            <div className="flex items-center gap-2.5">
+                                <span className="text-xl">📊</span>
+                                <h3 className="text-sm md:text-base font-bold text-white flex items-center gap-2">
+                                    <span>{activeReportModal.employeeName || '员工'}</span>
+                                    <span className="text-xs text-blue-400 font-normal font-mono">
+                                        月度个人报表 / Personal Monthly Report
+                                    </span>
+                                </h3>
+                            </div>
+                            <button
+                                type="button"
+                                onClick={() => setActiveReportModal(null)}
+                                className="px-3 py-1.5 bg-white/10 hover:bg-white/20 text-white rounded-xl text-xs font-bold transition-all flex items-center gap-1.5 cursor-pointer shadow-sm active:scale-95"
+                            >
+                                <X size={15} />
+                                <span>关闭 / Close</span>
+                            </button>
+                        </div>
+                        {/* Scrollable container hosting PersonalMonthlyReport */}
+                        <div className="flex-1 overflow-y-auto">
+                            <PersonalMonthlyReport
+                                user={user}
+                                targetEmployeeId={activeReportModal.employeeId}
+                                initialMonth={activeReportModal.month}
+                                initialYear={activeReportModal.year}
+                                onClose={() => setActiveReportModal(null)}
+                                isModal={true}
+                            />
+                        </div>
+                    </div>
                 </div>
             )}
         </div>

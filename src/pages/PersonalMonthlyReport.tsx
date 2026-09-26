@@ -234,6 +234,11 @@ const SearchableSelect: React.FC<SearchableSelectProps> = ({
 
 interface Props {
     user: any;
+    targetEmployeeId?: string;
+    initialMonth?: number;
+    initialYear?: number;
+    onClose?: () => void;
+    isModal?: boolean;
 }
 
 const MONTH_NAMES = [
@@ -297,7 +302,14 @@ interface DailyMetrics {
     approvedClaims: number;
 }
 
-const PersonalMonthlyReport: React.FC<Props> = ({ user }) => {
+const PersonalMonthlyReport: React.FC<Props> = ({
+    user,
+    targetEmployeeId,
+    initialMonth,
+    initialYear,
+    onClose,
+    isModal
+}) => {
     const today = new Date();
     const getSafeOrigin = (o?: string) => (o || '').toUpperCase().trim();
 
@@ -354,10 +366,12 @@ const PersonalMonthlyReport: React.FC<Props> = ({ user }) => {
         return false;
     };
     const [selectedMonth, setSelectedMonth] = useState(() => {
+        if (initialMonth) return initialMonth;
         const saved = sessionStorage.getItem('pmr_selectedMonth');
         return saved ? parseInt(saved, 10) : today.getMonth() + 1;
     });
     const [selectedYear, setSelectedYear] = useState(() => {
+        if (initialYear) return initialYear;
         const saved = sessionStorage.getItem('pmr_selectedYear');
         return saved ? parseInt(saved, 10) : today.getFullYear();
     });
@@ -365,6 +379,7 @@ const PersonalMonthlyReport: React.FC<Props> = ({ user }) => {
 
     // HR/Admin Selector States
     const [selectedEmployeeId, setSelectedEmployeeId] = useState<string>(() => {
+        if (targetEmployeeId) return targetEmployeeId;
         return sessionStorage.getItem('pmr_selectedEmployeeId') || '';
     });
     const [employeesList, setEmployeesList] = useState<any[]>([]);
@@ -455,6 +470,10 @@ const PersonalMonthlyReport: React.FC<Props> = ({ user }) => {
 
     // Sync selectedEmployeeId when user loads and handle session storage restoration safely
     useEffect(() => {
+        if (targetEmployeeId) {
+            setSelectedEmployeeId(targetEmployeeId);
+            return;
+        }
         if (user) {
             const loggedInUid = user.uid || user.id;
             const savedUserUid = sessionStorage.getItem('pmr_loggedInUserUid');
@@ -468,7 +487,12 @@ const PersonalMonthlyReport: React.FC<Props> = ({ user }) => {
                 sessionStorage.setItem('pmr_selectedEmployeeId', loggedInUid);
             }
         }
-    }, [user]);
+    }, [user, targetEmployeeId]);
+
+    useEffect(() => {
+        if (initialMonth) setSelectedMonth(initialMonth);
+        if (initialYear) setSelectedYear(initialYear);
+    }, [initialMonth, initialYear]);
 
     // Keep sessionStorage synced when filters change
     useEffect(() => {
@@ -2700,7 +2724,7 @@ const PersonalMonthlyReport: React.FC<Props> = ({ user }) => {
 
     const canSelectEmployee = employeesList.length > 0;
     return (
-        <div className="min-h-screen bg-[#07070a] text-white p-4 md:p-6 font-sans pmr-no-print">
+        <div className={`${isModal ? 'w-full' : 'min-h-screen'} bg-[#07070a] text-white p-4 md:p-6 font-sans pmr-no-print`}>
             {/* Header Area / Kawasan Kepala Halaman */}
             <div className="max-w-6xl mx-auto flex flex-col md:flex-row justify-between items-start md:items-center gap-6 mb-6">
                 <div className="flex flex-col gap-2">
@@ -2819,6 +2843,17 @@ const PersonalMonthlyReport: React.FC<Props> = ({ user }) => {
                             <ChevronRight size={20} />
                         </button>
                     </div>
+
+                    {onClose && (
+                        <button
+                            onClick={onClose}
+                            className="flex items-center gap-1.5 bg-rose-600/20 hover:bg-rose-600/30 text-rose-300 border border-rose-500/30 px-4 py-2.5 rounded-2xl font-black uppercase text-xs tracking-widest transition-all cursor-pointer shadow-lg active:scale-95"
+                            title="关闭月报 / Close Monthly Report"
+                        >
+                            <X size={16} />
+                            <span>关闭 / Close</span>
+                        </button>
+                    )}
                 </div>
             </div>
 
