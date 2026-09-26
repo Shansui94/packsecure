@@ -370,6 +370,8 @@ const OrderSummary: React.FC<OrderSummaryProps> = ({ user }) => {
                 query = query.or(`deadline.eq.${selectedDate},and(deadline.is.null,order_date.eq.${selectedDate})`);
             }
 
+            query = query.order('deadline', { ascending: true }).order('created_at', { ascending: true });
+
             const { data: ordersData, error: ordersErr } = await query;
             if (ordersErr) throw ordersErr;
             if (fetchId !== fetchIdRef.current) return;
@@ -386,7 +388,8 @@ const OrderSummary: React.FC<OrderSummaryProps> = ({ user }) => {
                 notes: o.notes,
                 zone: o.zone,
                 deliveryAddress: o.delivery_address,
-                tripSequence: o.trip_sequence || o.stop_sequence || 0,
+                tripSequence: o.trip_sequence ? Number(o.trip_sequence) : (o.stop_sequence ? Number(o.stop_sequence) : 999),
+                stop_sequence: o.stop_sequence ? Number(o.stop_sequence) : 999,
                 factoryId: o.factory_id,
                 trip_origin: o.trip_origin,
                 trip_drop_count: o.trip_drop_count,
@@ -611,6 +614,10 @@ const OrderSummary: React.FC<OrderSummaryProps> = ({ user }) => {
                 g.isPrepared = true;
             }
 
+            // Calculate aggregated tripSequence
+            const minSeq = Math.min(...g.orders.map(o => o.tripSequence || 999));
+            g.tripSequence = (minSeq !== Infinity && minSeq !== 999) ? minSeq : 999;
+
             // Naik barang / Loaded check:
             // 1. trips_v2 record status indicates In Transit / En-Route / Loaded / Completed / Delivered
             // 2. OR all orders in the trip have status Loaded / In-Transit / Shipped / Delivered
@@ -622,10 +629,41 @@ const OrderSummary: React.FC<OrderSummaryProps> = ({ user }) => {
             g.isLoaded = Boolean(isTripV2Loaded || areAllOrdersLoaded);
             g.tripStatus = tripV2?.status || (g.isLoaded ? 'Loaded' : (g.isPrepared ? 'Prepared' : 'Planning'));
 
-            g.orders.sort((a, b) => (a.tripSequence || 0) - (b.tripSequence || 0));
+            // Sort orders inside this trip strictly by stop_sequence
+            g.orders.sort((a, b) => {
+                const stopA = (a as any).stop_sequence !== undefined && (a as any).stop_sequence !== null && (a as any).stop_sequence !== 999
+                    ? (a as any).stop_sequence
+                    : ((a.tripSequence !== undefined && a.tripSequence !== 999) ? a.tripSequence : 999);
+                const stopB = (b as any).stop_sequence !== undefined && (b as any).stop_sequence !== null && (b as any).stop_sequence !== 999
+                    ? (b as any).stop_sequence
+                    : ((b.tripSequence !== undefined && b.tripSequence !== 999) ? b.tripSequence : 999);
+                if (stopA !== stopB) return stopA - stopB;
+                return (a.orderNumber || '').localeCompare(b.orderNumber || '');
+            });
         });
 
-        return { trips: Object.values(groups), pickupOrders: pickups };
+        // Deterministic sorting of all trips
+        const sortedTrips = Object.values(groups).sort((a, b) => {
+            // 1. tripSequence
+            const seqA = a.tripSequence !== undefined && a.tripSequence !== null && a.tripSequence !== 999 ? a.tripSequence : 999;
+            const seqB = b.tripSequence !== undefined && b.tripSequence !== null && b.tripSequence !== 999 ? b.tripSequence : 999;
+            if (seqA !== seqB) return seqA - seqB;
+
+            // 2. Created date
+            const dateA = a.createdDate || '';
+            const dateB = b.createdDate || '';
+            if (dateA !== dateB) return dateA.localeCompare(dateB);
+
+            // 3. Earliest created_at tiebreaker
+            const timeA = (a.orders[0] as any)?.created_at || '';
+            const timeB = (b.orders[0] as any)?.created_at || '';
+            if (timeA !== timeB) return timeA.localeCompare(timeB);
+
+            // 4. Trip number tiebreaker
+            return a.tripNumber.localeCompare(b.tripNumber);
+        });
+
+        return { trips: sortedTrips, pickupOrders: pickups };
     }, [orders, tripsMap, drivers, lorries, selectedDate, dateMode]);
 
     // ─── FILTER TRIPS BY FACTORY & WAREHOUSE ───────────────────────────────────
@@ -957,6 +995,7 @@ const OrderSummary: React.FC<OrderSummaryProps> = ({ user }) => {
         if (destination.droppableId === source.droppableId && destination.index === source.index) return;
 
         const newDriverId = destination.droppableId === 'unassigned' ? null : destination.droppableId;
+        const oldDriverId = source.droppableId === 'unassigned' ? null : source.droppableId;
         const tripId = draggableId;
         const targetTrip = allTripGroups.find(g => g.tripId === tripId);
         if (!targetTrip) return;
@@ -985,6 +1024,43 @@ const OrderSummary: React.FC<OrderSummaryProps> = ({ user }) => {
             }
         }
 
+        // Calculate new trip ordering & re-sequence
+        const destTrips = filteredTrips
+            .filter(t => (newDriverId ? t.driverId === newDriverId : !t.driverId) && t.tripId !== tripId);
+        destTrips.splice(destination.index, 0, targetTrip);
+
+        const orderUpdates: { id: string; driver_id: string | null; trip_sequence: number }[] = [];
+        const orderSequenceMap = new Map<string, { driverId?: string; tripSequence: number }>();
+
+        destTrips.forEach((t, idx) => {
+            const seq = idx + 1;
+            t.orders.forEach(o => {
+                orderUpdates.push({ id: o.id, driver_id: newDriverId, trip_sequence: seq });
+                orderSequenceMap.set(o.id, { driverId: newDriverId || undefined, tripSequence: seq });
+            });
+        });
+
+        if (source.droppableId !== destination.droppableId) {
+            const sourceTrips = filteredTrips
+                .filter(t => (oldDriverId ? t.driverId === oldDriverId : !t.driverId) && t.tripId !== tripId);
+            sourceTrips.forEach((t, idx) => {
+                const seq = idx + 1;
+                t.orders.forEach(o => {
+                    orderUpdates.push({ id: o.id, driver_id: oldDriverId, trip_sequence: seq });
+                    orderSequenceMap.set(o.id, { driverId: oldDriverId || undefined, tripSequence: seq });
+                });
+            });
+        }
+
+        // Optimistically update orders state
+        setOrders(prev => prev.map(o => {
+            if (orderSequenceMap.has(o.id)) {
+                const update = orderSequenceMap.get(o.id)!;
+                return { ...o, driverId: update.driverId, tripSequence: update.tripSequence, trip_sequence: update.tripSequence };
+            }
+            return o;
+        }));
+
         try {
             // Find lorry tied to driver if applicable
             const matchedLorry = lorries.find(l => l.driver_id === newDriverId);
@@ -1000,12 +1076,18 @@ const OrderSummary: React.FC<OrderSummaryProps> = ({ user }) => {
                     .eq('id', tripId);
             }
 
-            // Cascade driver assignment to all orders in this trip
-            const orderIds = targetTrip.orders.map(o => o.id);
-            await supabase
-                .from('sales_orders')
-                .update({ driver_id: newDriverId })
-                .in('id', orderIds);
+            // Batch update all affected orders
+            await Promise.all(
+                orderUpdates.map(u =>
+                    supabase
+                        .from('sales_orders')
+                        .update({
+                            driver_id: u.driver_id,
+                            trip_sequence: u.trip_sequence
+                        })
+                        .eq('id', u.id)
+                )
+            );
 
             await fetchOrdersAndTrips();
         } catch (err) {

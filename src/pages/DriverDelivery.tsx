@@ -1947,9 +1947,14 @@ const DriverDelivery: React.FC<DriverDeliveryProps> = ({ user, onNavigate }) => 
                     groupKey = `trip_${tripId}`;
                     const v2Trip = tripsV2List.find(t => t.id === tripId);
                     tripNum = v2Trip?.trip_number || (order as any).trip_number || (order.orderNumber ? `TRIP-${order.orderNumber}` : `TRIP-${tripId.slice(0, 8)}`);
-                    if ((v2Trip as any)?.trip_sequence && Number((v2Trip as any).trip_sequence) !== 999) {
-                        sortSeq = Number((v2Trip as any).trip_sequence);
-                        tripIndexLabel = `Trip ${sortSeq}`;
+                    const explicitSeq = (order as any).trip_sequence && Number((order as any).trip_sequence) !== 999
+                        ? Number((order as any).trip_sequence)
+                        : ((order as any).tripSequence && Number((order as any).tripSequence) !== 999
+                            ? Number((order as any).tripSequence)
+                            : ((v2Trip as any)?.trip_sequence && Number((v2Trip as any).trip_sequence) !== 999 ? Number((v2Trip as any).trip_sequence) : null));
+                    if (explicitSeq) {
+                        sortSeq = explicitSeq;
+                        tripIndexLabel = `Trip ${explicitSeq}`;
                     }
                 } else {
                     // Smart grouping for orders without trip_id (matches OrderSummary logic)
@@ -2044,9 +2049,14 @@ const DriverDelivery: React.FC<DriverDeliveryProps> = ({ user, onNavigate }) => 
 
             // Check if trip sequence is specified (ignoring 999 unsequenced flag)
             if (grp.tripId) {
+                const orderWithSeq = grp.orders.find(o => (o as any).trip_sequence && Number((o as any).trip_sequence) !== 999) ||
+                                     grp.orders.find(o => (o as any).tripSequence && Number((o as any).tripSequence) !== 999);
                 const v2Trip = tripsV2List.find(t => t.id === grp.tripId);
-                if ((v2Trip as any)?.trip_sequence && Number((v2Trip as any).trip_sequence) !== 999) {
-                    grp.sortSeq = Number((v2Trip as any).trip_sequence);
+                const seq = orderWithSeq
+                    ? Number((orderWithSeq as any).trip_sequence || (orderWithSeq as any).tripSequence)
+                    : ((v2Trip as any)?.trip_sequence && Number((v2Trip as any).trip_sequence) !== 999 ? Number((v2Trip as any).trip_sequence) : null);
+                if (seq) {
+                    grp.sortSeq = seq;
                     grp.tripIndexLabel = `Trip ${grp.sortSeq}`;
                 }
             }
@@ -2083,7 +2093,7 @@ const DriverDelivery: React.FC<DriverDeliveryProps> = ({ user, onNavigate }) => 
             });
         }
 
-        // 4. Sort Trips: Delivery Date Ascending -> Regular before AdHoc -> Trip Seq Ascending -> Trip Number
+        // 4. Sort Trips: Delivery Date Ascending -> Regular before AdHoc -> Trip Seq Ascending -> Created At -> Trip Number
         result.sort((a, b) => {
             const dateA = a.deliveryDate || '9999-99-99';
             const dateB = b.deliveryDate || '9999-99-99';
@@ -2094,6 +2104,10 @@ const DriverDelivery: React.FC<DriverDeliveryProps> = ({ user, onNavigate }) => 
             const seqA = a.sortSeq !== undefined ? a.sortSeq : 999;
             const seqB = b.sortSeq !== undefined ? b.sortSeq : 999;
             if (seqA !== seqB) return seqA - seqB;
+
+            const createdA = (a.orders[0] as any)?.created_at || '';
+            const createdB = (b.orders[0] as any)?.created_at || '';
+            if (createdA !== createdB) return createdA.localeCompare(createdB);
 
             return String(a.tripNumber || '').localeCompare(String(b.tripNumber || ''));
         });

@@ -1371,6 +1371,34 @@ const DeliveryOrderManagement: React.FC<DeliveryOrderManagementProps> = ({ user 
 
     // --- HANDLERS ---
 
+    // Helper to get ordered trip keys for a driver in Kanban
+    const getDriverTripKeys = (driverUid: string | null): string[] => {
+        const dOrders = orders.filter(o => driverUid ? o.driverId === driverUid : !o.driverId);
+        const seen = new Set<string>();
+        const trips: { key: string; tripSequence: number; date: string; createdAt: string; tripNumber: string }[] = [];
+        dOrders.forEach(o => {
+            const key = o.trip_id ? `trip_${o.trip_id}` : `order_${o.id}`;
+            if (!seen.has(key)) {
+                seen.add(key);
+                const v2Trip = o.trip_id ? tripsV2List.find(t => t.id === o.trip_id) : null;
+                trips.push({
+                    key,
+                    tripSequence: Number((o as any).trip_sequence || o.tripSequence) || 999,
+                    date: o.deadline || o.orderDate || '',
+                    createdAt: (o as any).created_at || '',
+                    tripNumber: v2Trip?.trip_number || o.orderNumber || ''
+                });
+            }
+        });
+        trips.sort((a, b) => {
+            if (a.date !== b.date) return a.date.localeCompare(b.date);
+            if (a.tripSequence !== b.tripSequence) return a.tripSequence - b.tripSequence;
+            if (a.createdAt !== b.createdAt) return a.createdAt.localeCompare(b.createdAt);
+            return a.tripNumber.localeCompare(b.tripNumber);
+        });
+        return trips.map(t => t.key);
+    };
+
     const onDragEnd = async (result: DropResult) => {
         const { destination, source, draggableId } = result;
 
@@ -1401,7 +1429,6 @@ const DeliveryOrderManagement: React.FC<DeliveryOrderManagementProps> = ({ user 
         }
 
         if (movedOrders.length === 0) return;
-        const movedOrderIds = movedOrders.map(o => o.id);
 
         // Smart Reminder & Cross-Location Guard
         if (newDriverId && newDriverId !== oldDriverId) {
@@ -1420,43 +1447,94 @@ const DeliveryOrderManagement: React.FC<DeliveryOrderManagementProps> = ({ user 
             if (!checkDriverAvailability(newDriverId, anyDeadline)) return;
         }
 
+        // Calculate new trip ordering & re-sequence
+        const orderUpdates: { id: string; driver_id: string | null; trip_sequence: number }[] = [];
+        const orderSequenceMap = new Map<string, { driverId?: string; tripSequence: number }>();
+
+        if (source.droppableId === destination.droppableId) {
+            // Reordering within the SAME driver lane
+            const currentKeys = getDriverTripKeys(newDriverId);
+            const newKeys = currentKeys.filter(k => k !== draggableId);
+            newKeys.splice(destination.index, 0, draggableId);
+
+            newKeys.forEach((key, idx) => {
+                const seq = idx + 1;
+                const isKeyTrip = key.startsWith('trip_');
+                const tId = isKeyTrip ? key.replace('trip_', '') : null;
+                const oId = key.startsWith('order_') ? key.replace('order_', '') : (!isKeyTrip ? key : null);
+
+                const grpOrders = orders.filter(o => tId ? o.trip_id === tId : o.id === oId);
+                grpOrders.forEach(o => {
+                    orderUpdates.push({ id: o.id, driver_id: newDriverId, trip_sequence: seq });
+                    orderSequenceMap.set(o.id, { driverId: newDriverId || undefined, tripSequence: seq });
+                });
+            });
+        } else {
+            // Moving between DIFFERENT drivers (or to/from unassigned)
+            // 1. Destination driver lane: insert at destination.index
+            const destKeys = getDriverTripKeys(newDriverId).filter(k => k !== draggableId);
+            destKeys.splice(destination.index, 0, draggableId);
+            destKeys.forEach((key, idx) => {
+                const seq = idx + 1;
+                const isKeyTrip = key.startsWith('trip_');
+                const tId = isKeyTrip ? key.replace('trip_', '') : null;
+                const oId = key.startsWith('order_') ? key.replace('order_', '') : (!isKeyTrip ? key : null);
+
+                const grpOrders = orders.filter(o => tId ? o.trip_id === tId : o.id === oId);
+                grpOrders.forEach(o => {
+                    orderUpdates.push({ id: o.id, driver_id: newDriverId, trip_sequence: seq });
+                    orderSequenceMap.set(o.id, { driverId: newDriverId || undefined, tripSequence: seq });
+                });
+            });
+
+            // 2. Source driver lane: re-sequence remaining
+            const sourceKeys = getDriverTripKeys(oldDriverId).filter(k => k !== draggableId);
+            sourceKeys.forEach((key, idx) => {
+                const seq = idx + 1;
+                const isKeyTrip = key.startsWith('trip_');
+                const tId = isKeyTrip ? key.replace('trip_', '') : null;
+                const oId = key.startsWith('order_') ? key.replace('order_', '') : (!isKeyTrip ? key : null);
+
+                const grpOrders = orders.filter(o => tId ? o.trip_id === tId : o.id === oId);
+                grpOrders.forEach(o => {
+                    orderUpdates.push({ id: o.id, driver_id: oldDriverId, trip_sequence: seq });
+                    orderSequenceMap.set(o.id, { driverId: oldDriverId || undefined, tripSequence: seq });
+                });
+            });
+        }
+
         // Optimistic update of local orders state
-        const updatedOrders = orders.map(o => {
-            if (movedOrderIds.includes(o.id)) {
-                return { ...o, driverId: newDriverId || undefined };
+        setOrders(prev => prev.map(o => {
+            if (orderSequenceMap.has(o.id)) {
+                const update = orderSequenceMap.get(o.id)!;
+                return { ...o, driverId: update.driverId, tripSequence: update.tripSequence, trip_sequence: update.tripSequence };
             }
             return o;
-        });
-        setOrders(updatedOrders);
+        }));
 
-        // Update database
+        if (tripV2Id) {
+            setTripsV2List(prev => prev.map(t => t.id === tripV2Id ? { ...t, driver_id: newDriverId } : t));
+        }
+
+        // Persist to database in background
         try {
-            console.log("onDragEnd: Updating driver_id for orders:", movedOrderIds, "to:", newDriverId);
-            const { error: soErr } = await supabase
-                .from('sales_orders')
-                .update({ driver_id: newDriverId })
-                .in('id', movedOrderIds);
-
-            if (soErr) {
-                console.error("onDragEnd: sales_orders driver update error", soErr);
-                throw soErr;
-            }
-
-            if (tripV2Id) {
+            if (tripV2Id && newDriverId !== oldDriverId) {
                 await supabase
                     .from('trips_v2')
                     .update({ driver_id: newDriverId })
                     .eq('id', tripV2Id);
             }
 
-            // Sync trips list state
-            if (tripV2Id) {
-                setTripsV2List(prev => prev.map(t => t.id === tripV2Id ? { ...t, driver_id: newDriverId } : t));
-            }
-
+            await Promise.all(
+                orderUpdates.map(u =>
+                    supabase.from('sales_orders').update({
+                        driver_id: u.driver_id,
+                        trip_sequence: u.trip_sequence
+                    }).eq('id', u.id)
+                )
+            );
         } catch (err: any) {
-            console.error("Failed to update trip driver:", err);
-            alert(`Sync error: ${err.message || err}. Refreshing...`);
+            console.error("Failed to update trip sequence / driver:", err);
             fetchData();
         }
     };
@@ -3062,6 +3140,17 @@ const DeliveryOrderManagement: React.FC<DeliveryOrderManagementProps> = ({ user 
                 console.warn("trips_v2 insert non-fatal notice:", tripError.message);
             }
 
+            // Calculate next trip sequence for this driver on the target delivery date
+            let calculatedTripSeq = 1;
+            if (parsedDriverId) {
+                const existingDriverTrips = new Set(
+                    orders
+                        .filter(o => o.driverId === parsedDriverId && (o.deadline === parsedDeliveryDate || o.orderDate === parsedTripDate))
+                        .map(o => o.trip_id || o.id)
+                );
+                calculatedTripSeq = existingDriverTrips.size + 1;
+            }
+
             // 2. Insert each DO into sales_orders
             for (let i = 0; i < parsedTripBatch.deliveryOrders.length; i++) {
                 const doItem = parsedTripBatch.deliveryOrders[i];
@@ -3108,7 +3197,7 @@ const DeliveryOrderManagement: React.FC<DeliveryOrderManagementProps> = ({ user 
                     trip_origin: parsedTripOrigin.toUpperCase(),
                     trip_drop_count: isSelfPickup ? 1 : totalDrops,
                     stop_sequence: isSelfPickup ? 999 : i + 1,
-                    trip_sequence: isSelfPickup ? 999 : i + 1,
+                    trip_sequence: isSelfPickup ? 999 : calculatedTripSeq,
                     delivery_method: isSelfPickup ? 'SELF_PICKUP' : 'Company Delivery',
                     job_type: isSelfPickup ? 'Pickup' : 'Delivery',
                     items: (doItem.items || []).map(it => {
@@ -5291,11 +5380,13 @@ const DeliveryOrderManagement: React.FC<DeliveryOrderManagementProps> = ({ user 
                             orderDate?: string;
                             deadline?: string;
                             notes?: string;
+                            tripSequence?: number;
                         }[] = [];
 
                         const tripGroupMap = new Map<string, typeof driverTrips[0]>();
 
                         driverOrders.forEach(order => {
+                            const orderSeq = Number((order as any).trip_sequence || order.tripSequence) || 999;
                             if (order.trip_id) {
                                 if (!tripGroupMap.has(order.trip_id)) {
                                     const v2Trip = tripsV2List.find(t => t.id === order.trip_id);
@@ -5313,13 +5404,17 @@ const DeliveryOrderManagement: React.FC<DeliveryOrderManagementProps> = ({ user 
                                         tripOrigin: order.trip_origin,
                                         orderDate: order.orderDate,
                                         deadline: order.deadline,
-                                        notes: order.notes
+                                        notes: order.notes,
+                                        tripSequence: orderSeq
                                     };
                                     tripGroupMap.set(order.trip_id, group);
                                     driverTrips.push(group);
                                 }
                                 const grp = tripGroupMap.get(order.trip_id)!;
                                 grp.orders.push(order);
+                                if (orderSeq < (grp.tripSequence || 999)) {
+                                    grp.tripSequence = orderSeq;
+                                }
                                 const specifiedDrops = grp.orders.map(o => Number(o.trip_drop_count)).filter(d => Boolean(d) && d > 0);
                                 const allSameExplicit = specifiedDrops.length > 0 && specifiedDrops.every(d => d === specifiedDrops[0]);
                                 grp.totalDrops = (allSameExplicit && specifiedDrops[0] > 0) ? specifiedDrops[0] : grp.orders.length;
@@ -5342,15 +5437,46 @@ const DeliveryOrderManagement: React.FC<DeliveryOrderManagementProps> = ({ user 
                                     tripOrigin: order.trip_origin,
                                     orderDate: order.orderDate,
                                     deadline: order.deadline,
-                                    notes: order.notes
+                                    notes: order.notes,
+                                    tripSequence: orderSeq
                                 });
                             }
                         });
 
-                        // Sort drops inside multi-drop trips by stop_sequence
+                        // Sort driverTrips deterministically
+                        driverTrips.sort((a, b) => {
+                            // 1. Date comparison
+                            const dateA = a.deadline || a.orderDate || '';
+                            const dateB = b.deadline || b.orderDate || '';
+                            if (dateA !== dateB) return dateA.localeCompare(dateB);
+
+                            // 2. Trip Sequence comparison (1st trip, 2nd trip, 3rd trip)
+                            const seqA = a.tripSequence !== undefined && a.tripSequence !== null && a.tripSequence !== 999 ? a.tripSequence : 999;
+                            const seqB = b.tripSequence !== undefined && b.tripSequence !== null && b.tripSequence !== 999 ? b.tripSequence : 999;
+                            if (seqA !== seqB) return seqA - seqB;
+
+                            // 3. Earliest created_at tiebreaker
+                            const timeA = (a.orders[0] as any)?.created_at || '';
+                            const timeB = (b.orders[0] as any)?.created_at || '';
+                            if (timeA !== timeB) return timeA.localeCompare(timeB);
+
+                            // 4. Trip number tiebreaker
+                            return a.tripNumber.localeCompare(b.tripNumber);
+                        });
+
+                        // Sort drops inside multi-drop trips strictly by stop_sequence
                         driverTrips.forEach(t => {
                             if (t.isMultiDrop) {
-                                t.orders.sort((a, b) => ((a as any).stop_sequence || a.tripSequence || 0) - ((b as any).stop_sequence || b.tripSequence || 0));
+                                t.orders.sort((a, b) => {
+                                    const stopA = (a as any).stop_sequence !== undefined && (a as any).stop_sequence !== null && (a as any).stop_sequence !== 999
+                                        ? Number((a as any).stop_sequence)
+                                        : ((a.tripSequence !== undefined && a.tripSequence !== 999) ? Number(a.tripSequence) : 999);
+                                    const stopB = (b as any).stop_sequence !== undefined && (b as any).stop_sequence !== null && (b as any).stop_sequence !== 999
+                                        ? Number((b as any).stop_sequence)
+                                        : ((b.tripSequence !== undefined && b.tripSequence !== 999) ? Number(b.tripSequence) : 999);
+                                    if (stopA !== stopB) return stopA - stopB;
+                                    return (a.orderNumber || '').localeCompare(b.orderNumber || '');
+                                });
                             }
                         });
 
