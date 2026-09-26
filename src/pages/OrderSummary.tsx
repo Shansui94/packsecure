@@ -190,6 +190,8 @@ export interface TripGroup {
     zones: string[];
     photos: PrepPhoto[];
     isPrepared: boolean;
+    isLoaded?: boolean;
+    tripStatus?: string;
     tripSequence: number;
     createdDate?: string;
     // Special Badges
@@ -216,6 +218,7 @@ const OrderSummary: React.FC<OrderSummaryProps> = ({ user }) => {
     // Date Filtering States (Added 'pending_prep' mode)
     const [selectedDate, setSelectedDate] = useState<string>(getLocalDateString());
     const [dateMode, setDateMode] = useState<'today' | 'tomorrow' | 'pending_prep' | 'all_active' | 'custom'>('today');
+    const [showLoadedTrips, setShowLoadedTrips] = useState<boolean>(false);
 
     // Data States
     const [orders, setOrders] = useState<SalesOrder[]>([]);
@@ -423,6 +426,22 @@ const OrderSummary: React.FC<OrderSummaryProps> = ({ user }) => {
         fetchOrdersAndTrips();
     }, [fetchOrdersAndTrips]);
 
+    // ─── SUPABASE REALTIME SUBSCRIPTION (Live Dispatch & Naik Barang Sync) ───
+    useEffect(() => {
+        const channel = supabase.channel('order-summary-realtime-dispatch')
+            .on('postgres_changes', { event: '*', schema: 'public', table: 'sales_orders' }, () => {
+                fetchOrdersAndTrips();
+            })
+            .on('postgres_changes', { event: '*', schema: 'public', table: 'trips_v2' }, () => {
+                fetchOrdersAndTrips();
+            })
+            .subscribe();
+
+        return () => {
+            supabase.removeChannel(channel);
+        };
+    }, [fetchOrdersAndTrips]);
+
     // ─── ITEM NAME RESOLUTION ─────────────────────────────────────────────────
 
     const resolveItemName = (item: { product: string; sku?: string }) => {
@@ -591,6 +610,18 @@ const OrderSummary: React.FC<OrderSummaryProps> = ({ user }) => {
             if (g.photos.length > 0 || tripsMap[g.tripId]?.status === 'Prepared') {
                 g.isPrepared = true;
             }
+
+            // Naik barang / Loaded check:
+            // 1. trips_v2 record status indicates In Transit / En-Route / Loaded / Completed / Delivered
+            // 2. OR all orders in the trip have status Loaded / In-Transit / Shipped / Delivered
+            const tripV2 = tripsMap[g.tripId];
+            const isTripV2Loaded = tripV2 && ['In Transit', 'En-Route', 'Loaded', 'Completed', 'Delivered'].includes(tripV2.status);
+            const areAllOrdersLoaded = g.orders.length > 0 && g.orders.every(o =>
+                o.status === 'Loaded' || o.status === 'In-Transit' || o.status === 'Shipped' || o.status === 'Delivered'
+            );
+            g.isLoaded = Boolean(isTripV2Loaded || areAllOrdersLoaded);
+            g.tripStatus = tripV2?.status || (g.isLoaded ? 'Loaded' : (g.isPrepared ? 'Prepared' : 'Planning'));
+
             g.orders.sort((a, b) => (a.tripSequence || 0) - (b.tripSequence || 0));
         });
 
@@ -601,6 +632,11 @@ const OrderSummary: React.FC<OrderSummaryProps> = ({ user }) => {
 
     const filteredTrips = useMemo(() => {
         return allTripGroups.filter(trip => {
+            // 0. Driver Naik Barang / Loaded Filter: Hide trips where goods have already been loaded onto the lorry
+            if (!showLoadedTrips && trip.isLoaded) {
+                return false;
+            }
+
             // 1. Factory Hub check
             if (trip.tripOrigin !== activeFactory) {
                 return false;
@@ -631,7 +667,7 @@ const OrderSummary: React.FC<OrderSummaryProps> = ({ user }) => {
 
             return true;
         });
-    }, [allTripGroups, activeFactory, activeTaipingWarehouse, searchTerm]);
+    }, [allTripGroups, activeFactory, activeTaipingWarehouse, searchTerm, showLoadedTrips]);
 
     // ─── FILTER PICKUP ORDERS BY FACTORY & WAREHOUSE ───────────────────────────
 
@@ -647,6 +683,11 @@ const OrderSummary: React.FC<OrderSummaryProps> = ({ user }) => {
                 if (!hasItemInWarehouse) return false;
             }
 
+            // Hide already collected / delivered pickups unless showLoadedTrips is true
+            if (!showLoadedTrips && (item.isDelivered || item.order.status === 'Delivered')) {
+                return false;
+            }
+
             if (searchTerm.trim()) {
                 const term = searchTerm.toLowerCase();
                 const matchCustomer = item.order.customer.toLowerCase().includes(term);
@@ -658,7 +699,7 @@ const OrderSummary: React.FC<OrderSummaryProps> = ({ user }) => {
 
             return true;
         });
-    }, [allPickupOrders, activeFactory, activeTaipingWarehouse, searchTerm]);
+    }, [allPickupOrders, activeFactory, activeTaipingWarehouse, searchTerm, showLoadedTrips]);
 
     // ─── PRODUCTION REQUIREMENTS SUMMARY ──────────────────────────────────────
 
@@ -985,7 +1026,7 @@ const OrderSummary: React.FC<OrderSummaryProps> = ({ user }) => {
         );
     }, [drivers, filteredTrips, activeFactory]);
 
-    // Trips counts for Tab badges
+    // Trips counts for Tab badges (only counts pending prep/loading when showLoadedTrips is false)
     const factoryTripCounts = useMemo(() => {
         const counts: Record<FactoryHub, number> = {
             Taiping: 0,
@@ -994,12 +1035,18 @@ const OrderSummary: React.FC<OrderSummaryProps> = ({ user }) => {
             Johor: 0
         };
         allTripGroups.forEach(t => {
+            if (!showLoadedTrips && t.isLoaded) return;
             if (counts[t.tripOrigin] !== undefined) {
                 counts[t.tripOrigin]++;
             }
         });
         return counts;
-    }, [allTripGroups]);
+    }, [allTripGroups, showLoadedTrips]);
+
+    // Count of loaded trips (naik barang) for current factory
+    const loadedTripsCount = useMemo(() => {
+        return allTripGroups.filter(t => t.tripOrigin === activeFactory && t.isLoaded).length;
+    }, [allTripGroups, activeFactory]);
 
     return (
         <DragDropContext onDragEnd={onDragEnd}>
@@ -1075,6 +1122,27 @@ const OrderSummary: React.FC<OrderSummaryProps> = ({ user }) => {
                             title="Refresh"
                         >
                             <RefreshCw size={15} className={loading ? 'animate-spin text-blue-400' : ''} />
+                        </button>
+
+                        {/* Toggle Loaded / Naik Barang Trips */}
+                        <button
+                            onClick={() => setShowLoadedTrips(prev => !prev)}
+                            className={`px-3 py-1.5 rounded-xl text-xs font-bold flex items-center gap-1.5 border transition-all active:scale-95 ${
+                                showLoadedTrips
+                                    ? 'bg-amber-500/20 text-amber-300 border-amber-500/40 shadow-sm'
+                                    : 'bg-slate-900 border-slate-800 text-slate-400 hover:text-slate-200 hover:border-slate-700'
+                            }`}
+                            title={showLoadedTrips ? t('点击隐藏已装车发车的卡片') : t('点击查看已装车发车的历史卡片')}
+                        >
+                            <Truck size={14} className={showLoadedTrips ? 'text-amber-400' : 'text-slate-400'} />
+                            <span>{showLoadedTrips ? t('显示已装车') : t('已装车离场')}</span>
+                            {loadedTripsCount > 0 && (
+                                <span className={`px-1.5 py-0.5 rounded-full text-[10px] font-mono font-bold leading-none ${
+                                    showLoadedTrips ? 'bg-amber-500 text-slate-950' : 'bg-slate-800 text-slate-400 border border-slate-700'
+                                }`}>
+                                    {loadedTripsCount}
+                                </span>
+                            )}
                         </button>
                     </div>
                 </div>
@@ -1704,31 +1772,41 @@ const TripColumn: React.FC<TripColumnProps> = ({
                                                 )}
                                             </div>
 
-                                            {/* Prepared / Pending Badge */}
-                                            <button
-                                                onClick={(e) => {
-                                                    e.stopPropagation();
-                                                    onTogglePrepared(trip);
-                                                }}
-                                                className={`px-2 py-0.5 rounded-full text-[9px] font-black uppercase tracking-wider flex items-center gap-1 transition-all ${
-                                                    trip.isPrepared
-                                                        ? 'bg-emerald-500/20 text-emerald-300 border border-emerald-500/40 hover:bg-emerald-500/30'
-                                                        : 'bg-amber-500/10 text-amber-400 border border-amber-500/30 hover:bg-amber-500/20'
-                                                }`}
-                                                title="Click to toggle prepared status"
-                                            >
-                                                {trip.isPrepared ? (
-                                                    <>
-                                                        <CheckCircle size={10} className="text-emerald-400" />
-                                                        <span>{t('Prepared')}</span>
-                                                    </>
-                                                ) : (
-                                                    <>
-                                                        <Clock size={10} className="text-amber-400" />
-                                                        <span>{t('Pending Prep')}</span>
-                                                    </>
-                                                )}
-                                            </button>
+                                            {/* Prepared / Loaded Badge */}
+                                            {trip.isLoaded ? (
+                                                <span
+                                                    className="px-2 py-0.5 rounded-full text-[9px] font-black uppercase tracking-wider flex items-center gap-1 bg-blue-500/20 text-blue-300 border border-blue-500/40"
+                                                    title={t('已装车发车 / Pemandu telah sahkan naik barang')}
+                                                >
+                                                    <Truck size={10} className="text-blue-400" />
+                                                    <span>{t('已装车 / Loaded')}</span>
+                                                </span>
+                                            ) : (
+                                                <button
+                                                    onClick={(e) => {
+                                                        e.stopPropagation();
+                                                        onTogglePrepared(trip);
+                                                    }}
+                                                    className={`px-2 py-0.5 rounded-full text-[9px] font-black uppercase tracking-wider flex items-center gap-1 transition-all ${
+                                                        trip.isPrepared
+                                                            ? 'bg-emerald-500/20 text-emerald-300 border border-emerald-500/40 hover:bg-emerald-500/30'
+                                                            : 'bg-amber-500/10 text-amber-400 border border-amber-500/30 hover:bg-amber-500/20'
+                                                    }`}
+                                                    title="Click to toggle prepared status"
+                                                >
+                                                    {trip.isPrepared ? (
+                                                        <>
+                                                            <CheckCircle size={10} className="text-emerald-400" />
+                                                            <span>{t('Prepared')}</span>
+                                                        </>
+                                                    ) : (
+                                                        <>
+                                                            <Clock size={10} className="text-amber-400" />
+                                                            <span>{t('Pending Prep')}</span>
+                                                        </>
+                                                    )}
+                                                </button>
+                                            )}
                                         </div>
 
                                         {/* 🏷️ Special Flags & Indicators (COD, Malam, Pickup, Exchange) */}
