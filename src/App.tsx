@@ -74,8 +74,22 @@ function App() {
         return window.location.hash.startsWith('#/production/');
     });
     const [activePage, setActivePage] = useState<string>(() => {
+        const hash = window.location.hash.toLowerCase();
+        if (hash === '#/issues' || hash === '#/triage' || hash === '#/dev-log') return 'dev-log';
         return localStorage.getItem('lastActivePage') || 'factory-live-os';
     });
+
+    // Hash direct router for issues / dev-log
+    useEffect(() => {
+        const handleHashChange = () => {
+            const hash = window.location.hash.toLowerCase();
+            if (hash === '#/issues' || hash === '#/triage' || hash === '#/dev-log') {
+                setActivePage('dev-log');
+            }
+        };
+        window.addEventListener('hashchange', handleHashChange);
+        return () => window.removeEventListener('hashchange', handleHashChange);
+    }, []);
 
     // Ensure default dark theme class on html tag
     useEffect(() => {

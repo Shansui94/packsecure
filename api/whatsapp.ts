@@ -16,6 +16,7 @@ import {
 } from '../lib/whatsapp.js';
 import { handleWhatsAppRecipeWorkflow } from '../lib/whatsappRecipe.js';
 import { generateNightlyReport } from '../lib/nightlyReport.js';
+import { createIssueTicket, executeTriageAction, isCasualChitChat } from '../lib/issueTriage.js';
 
 function getSupabase() {
   const supabaseUrl = process.env.SUPABASE_URL || process.env.VITE_SUPABASE_URL || '';
@@ -30,6 +31,85 @@ export async function handleWhatsAppSend(req: VercelRequest, res: VercelResponse
   try {
     const supabase = getSupabase();
     const action = req.query?.action || req.body?.action;
+
+    // ── Triage Action: List Issue Tickets ──────────────────────────────────────
+    if (action === 'triage-list') {
+      const status = req.query?.status || req.body?.status;
+      const limit = Number(req.query?.limit || req.body?.limit || 50);
+      let query = supabase.from('issue_tickets').select('*').order('created_at', { ascending: false }).limit(limit);
+      if (status && status !== 'all') {
+        query = query.eq('status', status);
+      }
+      const { data: tickets, error: tErr } = await query;
+      if (tErr) return res.status(500).json({ error: tErr.message });
+      return res.status(200).json({ success: true, tickets: tickets || [] });
+    }
+
+    // ── Triage Action: Execute 3-Option Action ──────────────────────────────────
+    if (action === 'triage-action') {
+      const { ticketId, actionOption, resolvedBy, customReplyText, sendWhatsApp } = req.body || {};
+      if (!ticketId || !actionOption) {
+        return res.status(400).json({ error: '缺少 ticketId 或 actionOption (1/2/3)' });
+      }
+      const result = await executeTriageAction({
+        ticketId,
+        actionOption: Number(actionOption) as 1 | 2 | 3,
+        resolvedBy,
+        customReplyText,
+        sendWhatsApp: Boolean(sendWhatsApp)
+      });
+      return res.status(200).json(result);
+    }
+
+    // ── Triage Action: Simulate Sample Ticket for Testing ─────────────────────
+    if (action === 'triage-simulate') {
+      const scenario = req.body?.scenario || 'overload';
+      let mockPayload = {
+        rawText: 'Boss, lori 9821 takleh loading barang, sistem tulis terlebih muatan 70 roll.',
+        senderName: 'yan (Pemandu)',
+        senderPhone: '60125668590',
+        groupId: '120363048912345678@g.us'
+      };
+
+      if (scenario === 'pod_missing') {
+        mockPayload = {
+          rawText: 'Dah sampai kilang customer tapi xleh tekan Selesai / Complete, app kata kena upload gambar sign.',
+          senderName: 'SHAH (Pemandu)',
+          senderPhone: '60112345678',
+          groupId: '120363048912345678@g.us'
+        };
+      } else if (scenario === 'night_shift') {
+        mockPayload = {
+          rawText: 'Kenapa gaji malam saya kira rate siang? Tolong check sikit.',
+          senderName: 'Win Ko Zaw (Operator)',
+          senderPhone: '60169876543',
+          groupId: '120363048912345678@g.us'
+        };
+      } else if (scenario === 'machine_leak') {
+        mockPayload = {
+          rawText: 'Mesin T1-M03 bubble wrap keluar bocor angin / air leak, barcode takleh scan.',
+          senderName: 'Baby (Operator)',
+          senderPhone: '60178889999',
+          groupId: '120363048912345678@g.us'
+        };
+      }
+
+      const newTicket = await createIssueTicket(mockPayload);
+      return res.status(200).json({ success: true, ticket: newTicket });
+    }
+
+    // ── Triage Action: Close Ticket ───────────────────────────────────────────
+    if (action === 'triage-close') {
+      const { ticketId, resolutionNotes, resolvedBy } = req.body || {};
+      const { error } = await supabase.from('issue_tickets').update({
+        status: 'closed',
+        resolved_by: resolvedBy || 'Admin',
+        resolved_at: new Date().toISOString(),
+        resolution_notes: resolutionNotes || '已手动结案'
+      }).eq('id', ticketId);
+      if (error) return res.status(500).json({ error: error.message });
+      return res.status(200).json({ success: true, message: '工单已结案' });
+    }
 
     // ── Special Action 1: Dispatch Trip to Driver ──────────────────────────────
     if (action === 'dispatch-trip' || req.body?.tripId || req.body?.tripNumber) {
@@ -282,6 +362,28 @@ export async function handleWhatsAppWebhook(req: VercelRequest, res: VercelRespo
           if (!u.phone) return false;
           return normalizePhoneNumber(u.phone) === fromNumber;
         }) || null;
+      }
+    }
+
+    // ── STEP 0: ISSUE TRIAGE AUTO-CAPTURE (Group / Direct Complaints) ───────────
+    const textBody = (msg.text?.body || msg.image?.caption || '').trim();
+    const groupId = (msg as any).group_id || (msg as any).context?.group_id || null;
+
+    if (textBody && !isCasualChitChat(textBody)) {
+      try {
+        const triageTicket = await createIssueTicket({
+          rawText: textBody,
+          photoUrl: msgType === 'image' && msg.image?.id ? `whatsapp-media:${msg.image.id}` : null,
+          senderName: employee?.name || 'WhatsApp Group Member',
+          senderPhone: fromNumber,
+          groupId: groupId || undefined,
+          employeeId: employee?.employee_id || undefined
+        });
+        if (triageTicket) {
+          console.log(`[IssueTriage] Auto-captured issue ticket: ${triageTicket.ticket_number}`);
+        }
+      } catch (triageErr) {
+        console.warn('[IssueTriage Webhook Capture Error]:', triageErr);
       }
     }
 
@@ -800,8 +902,13 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
     return res.status(200).end();
   }
 
-  // 1. Meta Webhook Verification (GET)
+  // 1. Meta Webhook Verification or GET Triage Actions
   if (req.method === 'GET') {
+    const action = req.query?.action;
+    if (typeof action === 'string' && action.startsWith('triage-')) {
+      return handleWhatsAppSend(req, res);
+    }
+
     const mode = req.query['hub.mode'];
     const token = req.query['hub.verify_token'];
     const challenge = req.query['hub.challenge'];
@@ -823,6 +930,7 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
       action === 'send' ||
       action === 'dispatch-trip' ||
       action === 'customer-template' ||
+      (typeof action === 'string' && action.startsWith('triage-')) ||
       Boolean(req.body?.to) ||
       Boolean(req.body?.employeeId) ||
       Boolean(req.body?.userId) ||

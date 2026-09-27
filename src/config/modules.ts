@@ -399,13 +399,13 @@ export const MODULE_REGISTRY: ModuleDefinition[] = [
     },
     {
         id: 'dev-log',
-        label: '系统升级与工作日志',
-        labelEn: 'Dev & Task Log',
+        label: '现场工单与开发日志',
+        labelEn: 'Issue Triage & Dev Log',
         group: 'organization',
         icon: Activity,
-        defaultRoles: ['SuperAdmin', 'Admin'],
-        description: '系统版本升级迭代与每日工作Task汇报中心',
-        hiddenFromNav: true // 研发日志中心，可通过 ⌘K 访问
+        defaultRoles: ['SuperAdmin', 'Admin', 'Manager'],
+        description: 'WhatsApp 现场报障与工单看板、版本升级迭代与工作汇报中心',
+        hiddenFromNav: false // 显示在侧边栏，便于随时查看现场投诉流转
     },
     {
         id: 'system-docs',

@@ -9,6 +9,7 @@ import {
 } from 'lucide-react';
 import { useTranslation } from "react-i18next";
 import { DevLogModal, formatWhatsAppReport, type DevLogRecord } from '../components/DevLogModal';
+import { LiveIssueTriageTab } from '../components/LiveIssueTriageTab';
 
 interface Commit {
     hash: string;
@@ -331,6 +332,9 @@ const DevLog: React.FC<DevLogProps> = ({ user, onNavigate }) => {
     const [logs, setLogs] = useState<DevLogRecord[]>([]);
     const [loading, setLoading] = useState(true);
 
+    // Main Tab Switcher: 'triage' (现场投诉流转看板) vs 'devlog' (系统版本更新日志)
+    const [activeMainTab, setActiveMainTab] = useState<'triage' | 'devlog'>('triage');
+
     // Filter & search states
     const [activeFilter, setActiveFilter] = useState<'all' | 'upgrades' | 'tasks'>('all');
     const [searchQuery, setSearchQuery] = useState('');
@@ -536,91 +540,125 @@ const DevLog: React.FC<DevLogProps> = ({ user, onNavigate }) => {
                 </div>
             </div>
 
-            {/* Summary Statistics Cards */}
-            <div className="grid grid-cols-2 sm:grid-cols-4 gap-3 sm:gap-4 mb-8">
-                {[
-                    { label: '累计汇报天数', value: logs.length, icon: <Calendar size={18} />, color: 'text-blue-400', bg: 'bg-blue-500/10' },
-                    { label: '累计变更与任务', value: totalChanges, icon: <Activity size={18} />, color: 'text-emerald-400', bg: 'bg-emerald-500/10' },
-                    { label: '累计风险项', value: totalRisks, icon: <AlertTriangle size={18} />, color: 'text-amber-400', bg: 'bg-amber-500/10' },
-                    { label: 'Git 提交总数', value: totalCommits, icon: <GitCommit size={18} />, color: 'text-purple-400', bg: 'bg-purple-500/10' },
-                ].map(s => (
-                    <div key={s.label} className="apple-card flex flex-col items-center justify-center text-center p-4 sm:p-5 border border-white/5 shadow-md">
-                        <div className={`p-2.5 rounded-2xl mb-2.5 ${s.bg} ${s.color}`}>{s.icon}</div>
-                        <div className="text-2xl sm:text-3xl font-black text-white leading-none mb-1">{s.value}</div>
-                        <div className="text-[10px] sm:text-xs text-gray-400 font-bold tracking-wider">{s.label}</div>
-                    </div>
-                ))}
+            {/* Top Subtab Navigation */}
+            <div className="flex items-center gap-2 p-1.5 bg-slate-900/90 backdrop-blur-md rounded-2xl border border-white/10 mb-8 max-w-md">
+                <button
+                    type="button"
+                    onClick={() => setActiveMainTab('triage')}
+                    className={`flex-1 flex items-center justify-center gap-2 py-2.5 px-4 rounded-xl text-xs font-black transition cursor-pointer ${
+                        activeMainTab === 'triage'
+                            ? 'bg-gradient-to-r from-emerald-600 to-teal-600 text-white shadow-lg'
+                            : 'text-slate-400 hover:text-white'
+                    }`}
+                >
+                    <MessageSquare size={16} />
+                    <span>现场投诉流转看板</span>
+                </button>
+                <button
+                    type="button"
+                    onClick={() => setActiveMainTab('devlog')}
+                    className={`flex-1 flex items-center justify-center gap-2 py-2.5 px-4 rounded-xl text-xs font-black transition cursor-pointer ${
+                        activeMainTab === 'devlog'
+                            ? 'bg-blue-600 text-white shadow-lg'
+                            : 'text-slate-400 hover:text-white'
+                    }`}
+                >
+                    <Activity size={16} />
+                    <span>系统版本更新日志</span>
+                </button>
             </div>
 
-            {/* Filter & Search Bar */}
-            <div className="flex flex-col sm:flex-row items-stretch sm:items-center justify-between gap-3 mb-6 bg-white/[0.02] p-2.5 rounded-2xl border border-white/5">
-                {/* Tabs */}
-                <div className="flex items-center gap-1 bg-black/40 p-1 rounded-xl border border-white/5">
-                    {[
-                        { id: 'all', label: '全部汇报', count: logs.length },
-                        { id: 'upgrades', label: '🚀 系统升级', count: logs.filter(l => l.changes_json?.some(c => c.type !== '任务完成')).length },
-                        { id: 'tasks', label: '📋 任务汇报', count: logs.filter(l => l.changes_json?.some(c => c.type === '任务完成' || c.description?.includes('Task') || c.description?.includes('任务'))).length },
-                    ].map(tab => (
-                        <button
-                            key={tab.id}
-                            type="button"
-                            onClick={() => setActiveFilter(tab.id as any)}
-                            className={`px-3 py-1.5 rounded-lg text-xs font-bold transition-all flex items-center gap-1.5 ${activeFilter === tab.id ? 'bg-blue-600 text-white shadow' : 'text-gray-400 hover:text-white'}`}
-                        >
-                            <span>{tab.label}</span>
-                            <span className={`text-[10px] px-1.5 py-0.2 rounded-full ${activeFilter === tab.id ? 'bg-blue-700 text-white' : 'bg-white/10 text-gray-400'}`}>
-                                {tab.count}
-                            </span>
-                        </button>
-                    ))}
-                </div>
-
-                {/* Search Box */}
-                <div className="relative flex-1 sm:max-w-xs">
-                    <Search size={15} className="absolute left-3.5 top-1/2 -translate-y-1/2 text-gray-400" />
-                    <input
-                        type="text"
-                        placeholder="搜索日期 (YYYY-MM-DD) 或关键字..."
-                        value={searchQuery}
-                        onChange={(e) => setSearchQuery(e.target.value)}
-                        className="w-full bg-black/40 border border-white/10 rounded-xl pl-9 pr-4 py-2 text-xs text-white placeholder-gray-500 focus:outline-none focus:border-blue-500"
-                    />
-                </div>
-            </div>
-
-            {/* Timeline List */}
-            {loading ? (
-                <div className="text-center py-20 text-gray-400 font-medium animate-pulse flex flex-col items-center gap-3">
-                    <RefreshCw size={28} className="animate-spin text-blue-500" />
-                    <span>正在同步开发与任务日志...</span>
-                </div>
-            ) : filteredLogs.length === 0 ? (
-                <div className="text-center py-20 apple-card border-dashed border-white/10 rounded-3xl p-8">
-                    <Activity size={48} className="mx-auto text-gray-600 mb-4" />
-                    <h3 className="text-white font-bold text-lg">暂无匹配的工作与升级日志</h3>
-                    <p className="text-gray-400 text-sm mt-1.5 max-w-md mx-auto">
-                        点击上方「填写今日汇报 / 记录系统升级」按钮，即可快速记录今天的系统版本改动或 Task 任务进展，并支持 AI 一键整理！
-                    </p>
-                    <button
-                        type="button"
-                        onClick={handleOpenNewModal}
-                        className="mt-5 bg-blue-600 hover:bg-blue-500 text-white px-5 py-2.5 rounded-xl font-bold text-sm inline-flex items-center gap-2 shadow-md transition active:scale-95 cursor-pointer"
-                    >
-                        <Plus size={16} /> 立即填写今日第一条汇报
-                    </button>
-                </div>
+            {activeMainTab === 'triage' ? (
+                <LiveIssueTriageTab />
             ) : (
-                <div className="space-y-5 relative before:absolute before:inset-y-0 before:left-[42px] before:w-0.5 before:bg-white/5">
-                    {filteredLogs.map(log => (
-                        <div key={log.id || log.report_date} className="relative z-10">
-                            <LogCard
-                                log={log}
-                                onEdit={handleOpenEditModal}
-                                onDelete={handleDeleteLog}
+                <>
+                    {/* Summary Statistics Cards */}
+                    <div className="grid grid-cols-2 sm:grid-cols-4 gap-3 sm:gap-4 mb-8">
+                        {[
+                            { label: '累计汇报天数', value: logs.length, icon: <Calendar size={18} />, color: 'text-blue-400', bg: 'bg-blue-500/10' },
+                            { label: '累计变更与任务', value: totalChanges, icon: <Activity size={18} />, color: 'text-emerald-400', bg: 'bg-emerald-500/10' },
+                            { label: '累计风险项', value: totalRisks, icon: <AlertTriangle size={18} />, color: 'text-amber-400', bg: 'bg-amber-500/10' },
+                            { label: 'Git 提交总数', value: totalCommits, icon: <GitCommit size={18} />, color: 'text-purple-400', bg: 'bg-purple-500/10' },
+                        ].map(s => (
+                            <div key={s.label} className="apple-card flex flex-col items-center justify-center text-center p-4 sm:p-5 border border-white/5 shadow-md">
+                                <div className={`p-2.5 rounded-2xl mb-2.5 ${s.bg} ${s.color}`}>{s.icon}</div>
+                                <div className="text-2xl sm:text-3xl font-black text-white leading-none mb-1">{s.value}</div>
+                                <div className="text-[10px] sm:text-xs text-gray-400 font-bold tracking-wider">{s.label}</div>
+                            </div>
+                        ))}
+                    </div>
+
+                    {/* Filter & Search Bar */}
+                    <div className="flex flex-col sm:flex-row items-stretch sm:items-center justify-between gap-3 mb-6 bg-white/[0.02] p-2.5 rounded-2xl border border-white/5">
+                        {/* Tabs */}
+                        <div className="flex items-center gap-1 bg-black/40 p-1 rounded-xl border border-white/5">
+                            {[
+                                { id: 'all', label: '全部汇报', count: logs.length },
+                                { id: 'upgrades', label: '🚀 系统升级', count: logs.filter(l => l.changes_json?.some(c => c.type !== '任务完成')).length },
+                                { id: 'tasks', label: '📋 任务汇报', count: logs.filter(l => l.changes_json?.some(c => c.type === '任务完成' || c.description?.includes('Task') || c.description?.includes('任务'))).length },
+                            ].map(tab => (
+                                <button
+                                    key={tab.id}
+                                    type="button"
+                                    onClick={() => setActiveFilter(tab.id as any)}
+                                    className={`px-3 py-1.5 rounded-lg text-xs font-bold transition-all flex items-center gap-1.5 ${activeFilter === tab.id ? 'bg-blue-600 text-white shadow' : 'text-gray-400 hover:text-white'}`}
+                                >
+                                    <span>{tab.label}</span>
+                                    <span className={`text-[10px] px-1.5 py-0.2 rounded-full ${activeFilter === tab.id ? 'bg-blue-700 text-white' : 'bg-white/10 text-gray-400'}`}>
+                                        {tab.count}
+                                    </span>
+                                </button>
+                            ))}
+                        </div>
+
+                        {/* Search Box */}
+                        <div className="relative flex-1 sm:max-w-xs">
+                            <Search size={15} className="absolute left-3.5 top-1/2 -translate-y-1/2 text-gray-400" />
+                            <input
+                                type="text"
+                                placeholder="搜索日期 (YYYY-MM-DD) 或关键字..."
+                                value={searchQuery}
+                                onChange={(e) => setSearchQuery(e.target.value)}
+                                className="w-full bg-black/40 border border-white/10 rounded-xl pl-9 pr-4 py-2 text-xs text-white placeholder-gray-500 focus:outline-none focus:border-blue-500"
                             />
                         </div>
-                    ))}
-                </div>
+                    </div>
+
+                    {/* Timeline List */}
+                    {loading ? (
+                        <div className="text-center py-20 text-gray-400 font-medium animate-pulse flex flex-col items-center gap-3">
+                            <RefreshCw size={28} className="animate-spin text-blue-500" />
+                            <span>正在同步开发与任务日志...</span>
+                        </div>
+                    ) : filteredLogs.length === 0 ? (
+                        <div className="text-center py-20 apple-card border-dashed border-white/10 rounded-3xl p-8">
+                            <Activity size={48} className="mx-auto text-gray-600 mb-4" />
+                            <h3 className="text-white font-bold text-lg">暂无匹配的工作与升级日志</h3>
+                            <p className="text-gray-400 text-sm mt-1.5 max-w-md mx-auto">
+                                点击上方「填写今日汇报 / 记录系统升级」按钮，即可快速记录今天的系统版本改动或 Task 任务进展，并支持 AI 一键整理！
+                            </p>
+                            <button
+                                type="button"
+                                onClick={handleOpenNewModal}
+                                className="mt-5 bg-blue-600 hover:bg-blue-500 text-white px-5 py-2.5 rounded-xl font-bold text-sm inline-flex items-center gap-2 shadow-md transition active:scale-95 cursor-pointer"
+                            >
+                                <Plus size={16} /> 立即填写今日第一条汇报
+                            </button>
+                        </div>
+                    ) : (
+                        <div className="space-y-5 relative before:absolute before:inset-y-0 before:left-[42px] before:w-0.5 before:bg-white/5">
+                            {filteredLogs.map(log => (
+                                <div key={log.id || log.report_date} className="relative z-10">
+                                    <LogCard
+                                        log={log}
+                                        onEdit={handleOpenEditModal}
+                                        onDelete={handleDeleteLog}
+                                    />
+                                </div>
+                            ))}
+                        </div>
+                    )}
+                </>
             )}
 
             {/* Interactive Report Editor Modal */}
