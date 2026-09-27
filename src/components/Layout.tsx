@@ -787,10 +787,12 @@ const Layout: React.FC<LayoutProps> = ({ children, activePage, setActivePage, us
                             setActivePage={setActivePage} 
                         />
 
-                        <SmartIntakeModal 
-                            currentUser={user} 
-                            pageContext={{ activePage, userRole }} 
-                        />
+                        {userRole !== 'Driver' && activePage !== 'driver-delivery' && (
+                            <SmartIntakeModal 
+                                currentUser={user} 
+                                pageContext={{ activePage, userRole }} 
+                            />
+                        )}
 
                         <OmniCommandBar 
                             currentUser={user} 

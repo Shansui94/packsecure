@@ -654,11 +654,12 @@ Output valid JSON only: { "is_scale": boolean, "weight_kg": number or null, "des
       return res.status(200).json({ status: 'STOCK_QUERIED' });
     }
 
-    // ── GREETING & COMMAND MENU (你好 / 早安 / Help / Menu / Bantuan) ─────────
-    const isGreetingOrHelp = /^(你好|您好|早安|嗨|哈喽|在吗|halo|hello|hi|hey|help|帮助|menu|bantuan)[!！~。.\s]*$/i.test(text) ||
-      /^(help|帮助|menu|bantuan)$/i.test(lower);
+    // ── EXPLICIT COMMAND MENU ONLY (Help / Menu / 菜单 / Bantuan / Arahan) ──
+    // Note: Natural greetings like "你好/Hello/早安" now pass through directly to Gemini AI
+    // so the bot speaks naturally and conversationally instead of sending a stiff mechanical menu.
+    const isExplicitMenu = /^(help|帮助|menu|菜单|bantuan|arahan)$/i.test(lower.trim());
 
-    if (isGreetingOrHelp) {
+    if (isExplicitMenu) {
       const isExecutive = ['SuperAdmin', 'Admin', 'Director', 'Manager'].includes(empRole);
 
       if (isExecutive) {

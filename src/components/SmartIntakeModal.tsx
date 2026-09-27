@@ -504,6 +504,11 @@ export const SmartIntakeModal: React.FC<SmartIntakeModalProps> = ({ currentUser,
         });
     };
 
+    // 司机角色或司机配送页面不显示万能快拍悬浮球，避免在移动端遮挡司机拍照与交付操作
+    if (userRole === 'Driver' || pageContext?.activePage === 'driver-delivery') {
+        return null;
+    }
+
     return (
         <>
             {/* 全局悬浮触发胶囊 (固定于右下方，醒目且不遮挡常规内容) */}

@@ -44,3 +44,4 @@ deploy_preview.ps1
 orig_*
 upload.mjs
 update.cjs
+auth_info_baileys/

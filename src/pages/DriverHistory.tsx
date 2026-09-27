@@ -167,7 +167,7 @@ const DriverHistory: React.FC<DriverHistoryProps> = ({ user, onNavigate }) => {
 
             const { data: freshOrder, error: fetchErr } = await supabase
                 .from('sales_orders')
-                .select('status, trip_drop_count, pod_photo_url, notes')
+                .select('status, trip_drop_count, pod_photo_url, notes, trip_id')
                 .eq('id', target.orderId)
                 .single();
 
@@ -180,7 +180,25 @@ const DriverHistory: React.FC<DriverHistoryProps> = ({ user, onNavigate }) => {
             currentPhotos[target.photoIndex] = publicUrl;
             const updatedPodUrl = currentPhotos.join(',');
 
-            const totalDrops = freshOrder.trip_drop_count || 1;
+            let isMultiOrder = false;
+            const tripId = (freshOrder as any).trip_id;
+            if (tripId) {
+                const { count } = await supabase
+                    .from('sales_orders')
+                    .select('id', { count: 'exact', head: true })
+                    .eq('trip_id', tripId)
+                    .neq('status', 'Cancelled');
+                isMultiOrder = (count || 0) > 1;
+            }
+            if (!isMultiOrder) {
+                isMultiOrder = tasks.filter(t => 
+                    t.status !== 'Cancelled' && 
+                    t.driver_id === freshOrder.driver_id && 
+                    (tripId ? (t as any).trip_id === tripId : (t.order_date === freshOrder.order_date || t.deadline === freshOrder.deadline))
+                ).length > 1;
+            }
+
+            const totalDrops = isMultiOrder ? 1 : (freshOrder.trip_drop_count || 1);
             const filledDoCount = currentPhotos.filter((url: string, idx: number) => idx % 2 === 0 && Boolean(url && url.trim())).length;
             const completedDrops = Math.floor(currentPhotos.filter(Boolean).length / 2);
 
@@ -438,7 +456,11 @@ const DriverHistory: React.FC<DriverHistoryProps> = ({ user, onNavigate }) => {
                     </div>
                 ) : (
                     tasks.map((order) => {
-                        const orderTotalDrops = (order as any).trip_drop_count || 1;
+                        const isMultiOrder = Boolean(
+                            (order.trip_id && tasks.filter(t => t.trip_id === order.trip_id).length > 1) ||
+                            (order.driver_id && order.order_date && tasks.filter(t => t.driver_id === order.driver_id && (t.order_date === order.order_date || t.deadline === order.deadline)).length > 1)
+                        );
+                        const orderTotalDrops = isMultiOrder ? 1 : ((order as any).trip_drop_count || 1);
                         const rawPodStr = order.pod_photo_url ? order.pod_photo_url.trim() : '';
                         const rawPhotosList = rawPodStr ? rawPodStr.split(',') : [];
                         const completedDropsCount = Math.floor(rawPhotosList.filter(Boolean).length / 2);

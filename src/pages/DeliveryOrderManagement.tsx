@@ -2513,8 +2513,24 @@ const DeliveryOrderManagement: React.FC<DeliveryOrderManagementProps> = ({ user 
                         skuMappings,
                         v2Items
                     );
+
+                    let normUom = it.uom || 'Rolls';
+                    const rawLower = `${it.rawProductName || ''} ${it.product || ''} ${matchRes.product || ''}`.toLowerCase();
+                    if (rawLower.includes('per ctn') || rawLower.includes('rolls/ctn') || rawLower.includes('ctn') || rawLower.includes('carton')) {
+                        normUom = 'Carton';
+                    } else if (rawLower.includes('per box') || rawLower.includes('box')) {
+                        normUom = 'Box';
+                    } else if (rawLower.includes('bundle') || rawLower.includes('捆')) {
+                        normUom = 'Bundle';
+                    } else if (rawLower.includes('roll') || rawLower.includes('卷')) {
+                        normUom = 'Rolls';
+                    } else if (normUom.toUpperCase() === 'UNIT') {
+                        normUom = 'Units';
+                    }
+
                     return {
                         ...it,
+                        uom: normUom,
                         rawProductName: it.rawProductName || it.product,
                         product: matchRes.product,
                         sku: matchRes.sku,
@@ -2786,8 +2802,24 @@ const DeliveryOrderManagement: React.FC<DeliveryOrderManagementProps> = ({ user 
                         skuMappings,
                         v2Items
                     );
+
+                    let normUom = it.uom || 'Rolls';
+                    const rawLower = `${it.rawProductName || ''} ${it.product || ''} ${matchRes.product || ''}`.toLowerCase();
+                    if (rawLower.includes('per ctn') || rawLower.includes('rolls/ctn') || rawLower.includes('ctn') || rawLower.includes('carton')) {
+                        normUom = 'Carton';
+                    } else if (rawLower.includes('per box') || rawLower.includes('box')) {
+                        normUom = 'Box';
+                    } else if (rawLower.includes('bundle') || rawLower.includes('捆')) {
+                        normUom = 'Bundle';
+                    } else if (rawLower.includes('roll') || rawLower.includes('卷')) {
+                        normUom = 'Rolls';
+                    } else if (normUom.toUpperCase() === 'UNIT') {
+                        normUom = 'Units';
+                    }
+
                     return {
                         ...it,
+                        uom: normUom,
                         rawProductName: it.rawProductName || it.product,
                         product: matchRes.product,
                         sku: matchRes.sku,
@@ -7992,7 +8024,18 @@ const DeliveryOrderManagement: React.FC<DeliveryOrderManagementProps> = ({ user 
 
                                                 <div className="flex items-center gap-2">
                                                     <span className="text-xs font-bold px-2 py-0.5 rounded bg-slate-800 text-slate-300 border border-slate-700">
-                                                        Total: {doItem.doTotal || (doItem.items || []).reduce((s, it) => s + (Number(it.quantity) || 0), 0)} {t('Rolls')}
+                                                        Total: {doItem.doTotal || (doItem.items || []).reduce((s, it) => s + (Number(it.quantity) || 0), 0)} {(() => {
+                                                            const allUoms = (doItem.items || []).map(it => it.uom || 'Rolls');
+                                                            const uniqueUoms = Array.from(new Set(allUoms));
+                                                            if (uniqueUoms.length === 1) {
+                                                                const u = uniqueUoms[0];
+                                                                if (u === 'Box' || u === 'Carton') return t('Cartons / 箱');
+                                                                if (u === 'Units') return t('Units / 件');
+                                                                if (u === 'Bundle') return t('Bundles / 捆');
+                                                                return t('Rolls / 卷');
+                                                            }
+                                                            return t('Items / 件');
+                                                        })()}
                                                     </span>
                                                     <div className="flex items-center gap-1 border-l border-slate-800 pl-2">
                                                         <button
@@ -8149,7 +8192,7 @@ const DeliveryOrderManagement: React.FC<DeliveryOrderManagementProps> = ({ user 
 
                                                                     <select
                                                                         className="bg-slate-900 border border-slate-700 rounded-lg px-2 py-1 text-xs font-bold text-slate-300 outline-none cursor-pointer shrink-0"
-                                                                        value={it.uom || 'Rolls'}
+                                                                        value={it.uom?.toUpperCase() === 'UNIT' ? 'Units' : (it.uom || 'Rolls')}
                                                                         onChange={e => handleUpdateParsedItemUom(idx, itemIdx, e.target.value)}
                                                                     >
                                                                         <option value="Rolls">{t('Rolls / 卷')}</option>
@@ -8171,14 +8214,56 @@ const DeliveryOrderManagement: React.FC<DeliveryOrderManagementProps> = ({ user 
                                                                         {(() => {
                                                                             const text = `${it.product || ''} ${it.rawProductName || ''}`.toLowerCase();
                                                                             let breakdownBadge: string | null = null;
+                                                                            // 0. EXCLUSION GUARD:
+                                                                            // Courier Bags (快递袋), Pallets, Cores, Machines do NOT have roll breakdowns.
+                                                                            // They are sold and handled strictly as finished Boxes/Cartons/Units.
+                                                                            const isCourierBag = text.includes('courier') || 
+                                                                                text.includes('bag') || 
+                                                                                text.includes('beg') || 
+                                                                                text.includes('flyer') ||
+                                                                                /^cukupp-(?:b|w|pink|pur|green|yel|mint)-\d+/i.test(it.product || '') ||
+                                                                                /^cukupp-(?:b|w|pink|pur|green|yel|mint)-\d+/i.test(it.sku || '');
+
+                                                                            if (isCourierBag || text.includes('pallet') || text.includes('core') || text.includes('machine')) {
+                                                                                return null;
+                                                                            }
+
                                                                             const qty = Number(it.quantity) || 0;
-                                                                            if (text.includes('six rolls') || text.includes('6 rolls') || text.includes('6 roll') || text.includes('6rolls') || text.includes('carton') || text.includes('ctn')) {
+
+                                                                            // 1. Dynamic regex extraction from text: e.g. "96 ROLLS PER CTN", "48 ROLLS PER CTN", "(40rolls/ctn)", "(10rolls/ctn)"
+                                                                            const perCtnMatch = text.match(/(\d+)\s*(?:rolls?|roll)\s*(?:per|\/)\s*(?:ctn|carton|box)/i) 
+                                                                                || text.match(/\((\d+)\s*rolls?\/ctn\)/i);
+                                                                            const multiCtnMatch = text.match(/(\d+)\s*(?:cartons?|ctns?|boxes?)\s*\/\s*(\d+)\s*(?:rolls?|roll)/i);
+
+                                                                            // 2. AWB (Air Way Bill) packaging: e.g. "5000PCS X2 PER BOX", "5000 PCS PER BOX"
+                                                                            const awbMatch = text.match(/(\d+)\s*pcs?\s*(?:x\s*(\d+))?\s*(?:per|\/)\s*box/i);
+
+                                                                            if (multiCtnMatch) {
+                                                                                const ctnNum = parseInt(multiCtnMatch[1], 10);
+                                                                                const rollNum = parseInt(multiCtnMatch[2], 10);
+                                                                                const perCtn = Math.round(rollNum / (ctnNum || 1));
+                                                                                breakdownBadge = `📦 ${qty} 箱 = ${qty * perCtn} 卷 (${perCtn} rolls/ctn)`;
+                                                                            } else if (perCtnMatch) {
+                                                                                const perCtn = parseInt(perCtnMatch[1], 10);
+                                                                                breakdownBadge = `📦 ${qty} 箱 = ${qty * perCtn} 卷 (${perCtn} rolls/ctn)`;
+                                                                            } else if (awbMatch) {
+                                                                                const basePcs = parseInt(awbMatch[1], 10);
+                                                                                const multiplier = awbMatch[2] ? parseInt(awbMatch[2], 10) : 1;
+                                                                                const totalPerBox = basePcs * multiplier;
+                                                                                breakdownBadge = `📦 ${qty} 箱 = ${(qty * totalPerBox).toLocaleString()} 张 (${multiplier > 1 ? `${multiplier} 叠/箱` : `${totalPerBox} pcs/box`})`;
+                                                                            } else if (text.includes('tape')) {
+                                                                                // Tape standard packaging: 160M is 48 rolls/ctn, 80M/other is 96 rolls/ctn
+                                                                                const perCtn = (text.includes('160m') || text.includes('180 yard') || text.includes('180yard')) ? 48 : 96;
+                                                                                breakdownBadge = `📦 ${qty} 箱 = ${qty * perCtn} 卷 (${perCtn} rolls/ctn)`;
+                                                                            } else if (text.includes('stretch film') || text.includes('sf-') || text.includes('sf ') || text.includes('six rolls') || text.includes('6 rolls') || text.includes('6 roll') || text.includes('6rolls')) {
+                                                                                // Stretch Film is strictly 6 rolls per carton
                                                                                 breakdownBadge = `📦 ${qty} 箱 = ${qty * 6} 卷 (6 rolls/ctn)`;
                                                                             } else if (text.includes('4 units') || text.includes('4 unit') || text.includes('4 roll') || text.includes('4roll') || text.includes('25cm')) {
                                                                                 breakdownBadge = `🧻 ${qty} 捆 = ${qty * 4} 小卷 (4 units/bundle)`;
                                                                             } else if (text.includes('2 in 1') || text.includes('2 units') || text.includes('50cm')) {
                                                                                 breakdownBadge = `🧻 ${qty} 捆 = ${qty * 2} 小卷 (2 in 1)`;
                                                                             }
+
                                                                             if (!breakdownBadge || qty <= 0) return null;
                                                                             return (
                                                                                 <span className="text-[10px] text-cyan-300 bg-cyan-950/40 border border-cyan-500/30 px-2 py-0.5 rounded-md font-mono flex items-center gap-1 w-fit">

@@ -121,6 +121,17 @@ npm run lint           # ESLint
 4. **跨页面联动升级自检 (Cross-Page Sync Audit)**：修改任何核心业务逻辑（物流配送、考勤工时、车间生产、仓储库存、车辆档案）或公共工具时，必须对照 [PAGE_SYNC_CHECKLIST.md](docs/PAGE_SYNC_CHECKLIST.md) 检视所有关联页面，确认各页面状态机一致、历史已结案老单不被误判唤醒，并在最终汇报中输出【跨页面联动升级核验表】。
 5. **生产主分支合并与部署 (Production Branch Alignment)**：系统生产环境（Vercel）部署绑定分支为 `origin/main`。功能在本地验证通过后，必须合并推送到 `origin/main`，禁止仅推送到 `test` 分支导致生产环境未生效。
 
+## MCP 扩展与自动化工具 (MCP Servers)
+
+系统在 `C:\Users\User\.gemini\config\mcp_config.json` 中配置了 4 大核心 MCP 服务：
+
+| 服务名称 | 驱动 / 实现 | 主要功能与工具 |
+| :--- | :--- | :--- |
+| **`postgres`** | `@modelcontextprotocol/server-postgres` | 直连 Supabase Session Pooler (`aws-1-ap-south-1.pooler.supabase.com:5432`) 执行数据库排查与查询 |
+| **`github`** | `@modelcontextprotocol/server-github` | 管理 `Shansui94/packsecure` 代码仓库、提交 Issue 与检索代码 |
+| **`whatsapp`** | `scripts/mcp-whatsapp.cjs` | 官方 Meta WhatsApp Cloud API 出站工具，直接向客户/员工下发业务通知与模板消息 |
+| **`windows`** | `scripts/mcp-windows.cjs` | Windows 原生硬件与桌面自动化：<br>• `show_toast_notification`: 右下角原生 Toast 弹窗通知<br>• `play_system_alert`: 系统蜂鸣/警报提示音<br>• `list_serial_ports`: 扫描 COM 串口（地磅/电子秤/条码机）<br>• `get_windows_system_metrics`: 监测 CPU、内存、磁盘与运行时间 |
+
 ## 常见入口速查
 
 | 需求            | 文件                                              |
@@ -133,6 +144,9 @@ npm run lint           # ESLint
 | 改 Supabase 调用 | 各 `src/pages/`* 或 `src/services/`               |
 | AI 对话         | `api/agent/chat.ts`                             |
 | HR/司机管理 API   | `api/manage-employee.ts`、`api/create-driver.ts` |
+| WhatsApp 智能网关 | `api/whatsapp.ts` (自然语言问候直通 Gemini AI)    |
+| WhatsApp 出站 MCP | `scripts/mcp-whatsapp.cjs`                      |
+| Windows 桌面 MCP  | `scripts/mcp-windows.cjs`                       |
 | 活动日志          | `src/utils/logger.ts`                           |
 
 ## 验证建议

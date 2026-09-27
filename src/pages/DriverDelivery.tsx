@@ -975,12 +975,32 @@ const DriverDelivery: React.FC<DriverDeliveryProps> = ({ user, onNavigate }) => 
                 console.warn('[handleConfirmUnload] Fresh trip_drop_count check notice:', fetchErr);
             }
 
-            // If the order has multiple drops (trip_drop_count > 1), keep status 'Loaded' until all drops are submitted
-            const totalDrops = Math.max(1, Number(freshTripDropCount) || 1);
+            // Check if this order belongs to a multi-order trip
+            let isMultiOrder = false;
+            const tripId = (selectedOrder as any).trip_id;
+            if (tripId) {
+                const { count } = await supabase
+                    .from('sales_orders')
+                    .select('id', { count: 'exact', head: true })
+                    .eq('trip_id', tripId)
+                    .neq('status', 'Cancelled');
+                isMultiOrder = (count || 0) > 1;
+            }
+            if (!isMultiOrder) {
+                isMultiOrder = tasks.filter(t => 
+                    t.status !== 'Cancelled' && 
+                    t.driver_id === selectedOrder.driver_id && 
+                    (tripId ? (t as any).trip_id === tripId : (t.order_date === selectedOrder.order_date || t.deadline === selectedOrder.deadline))
+                ).length > 1;
+            }
+
+            // If the order is part of a multi-order trip, this individual order only needs 1 drop.
+            // If the order is a standalone multi-drop trip (trip_drop_count > 1), keep status 'Loaded' until all drops are submitted.
+            const totalDrops = isMultiOrder ? 1 : Math.max(1, Number(freshTripDropCount) || 1);
             const completedDrops = countCompletedDrops(podPhotoUrl);
 
             // Safety guard: if driver marked isFinalDrop before all drops are finished, prompt confirmation
-            if (isFinalDrop && completedDrops < totalDrops) {
+            if (!isMultiOrder && isFinalDrop && completedDrops < totalDrops) {
                 const confirmEarly = window.confirm(
                     `⚠️ AMARAN: Anda baru menyelesaikan ${completedDrops}/${totalDrops} hentian.\nAdakah anda pasti baki ${totalDrops - completedDrops} hentian dibatalkan dan trip ini tamat lebih awal?`
                 );
@@ -991,7 +1011,7 @@ const DriverDelivery: React.FC<DriverDeliveryProps> = ({ user, onNavigate }) => 
                 }
             }
 
-            const isAllDropsCompleted = isFinalDrop || completedDrops >= totalDrops;
+            const isAllDropsCompleted = isMultiOrder || isFinalDrop || completedDrops >= totalDrops;
 
             let nextStatus = selectedOrder.status === 'Pending Approval' 
                 ? 'Pending Approval' 
@@ -1214,7 +1234,25 @@ const DriverDelivery: React.FC<DriverDeliveryProps> = ({ user, onNavigate }) => 
             currentPhotos[target.photoIndex] = publicUrl;
             const updatedPodUrl = currentPhotos.join(',');
 
-            const totalDrops = freshOrder.trip_drop_count || 1;
+            let isMultiOrder = false;
+            const tripId = (freshOrder as any).trip_id;
+            if (tripId) {
+                const { count } = await supabase
+                    .from('sales_orders')
+                    .select('id', { count: 'exact', head: true })
+                    .eq('trip_id', tripId)
+                    .neq('status', 'Cancelled');
+                isMultiOrder = (count || 0) > 1;
+            }
+            if (!isMultiOrder) {
+                isMultiOrder = tasks.filter(t => 
+                    t.status !== 'Cancelled' && 
+                    t.driver_id === freshOrder.driver_id && 
+                    (tripId ? (t as any).trip_id === tripId : (t.order_date === freshOrder.order_date || t.deadline === freshOrder.deadline))
+                ).length > 1;
+            }
+
+            const totalDrops = isMultiOrder ? 1 : (freshOrder.trip_drop_count || 1);
             const filledDoCount = currentPhotos.filter((url: string, idx: number) => idx % 2 === 0 && Boolean(url && url.trim())).length;
             const completedDrops = countCompletedDrops(updatedPodUrl);
 
@@ -1361,10 +1399,28 @@ const DriverDelivery: React.FC<DriverDeliveryProps> = ({ user, onNavigate }) => 
                 updatedPodUrl = [...existing, ...newPair].join(',');
             }
 
-            const totalDrops = Math.max(1, Number(freshOrder.trip_drop_count) || 1);
+            let isMultiOrder = false;
+            const tripId = (freshOrder as any).trip_id;
+            if (tripId) {
+                const { count } = await supabase
+                    .from('sales_orders')
+                    .select('id', { count: 'exact', head: true })
+                    .eq('trip_id', tripId)
+                    .neq('status', 'Cancelled');
+                isMultiOrder = (count || 0) > 1;
+            }
+            if (!isMultiOrder) {
+                isMultiOrder = tasks.filter(t => 
+                    t.status !== 'Cancelled' && 
+                    t.driver_id === freshOrder.driver_id && 
+                    (tripId ? (t as any).trip_id === tripId : (t.order_date === freshOrder.order_date || t.deadline === freshOrder.deadline))
+                ).length > 1;
+            }
+
+            const totalDrops = isMultiOrder ? 1 : Math.max(1, Number(freshOrder.trip_drop_count) || 1);
             const filledDoCount = updatedPodUrl.split(',').filter((url: string, idx: number) => idx % 2 === 0 && Boolean(url && url.trim())).length;
             const completedDrops = countCompletedDrops(updatedPodUrl);
-            const isAllDropsCompleted = completedDrops >= totalDrops && filledDoCount >= totalDrops;
+            const isAllDropsCompleted = (isMultiOrder && completedDrops >= 1) || (completedDrops >= totalDrops && filledDoCount >= totalDrops);
 
             // Format notes
             let updatedNotes = freshOrder.notes || '';
@@ -2340,7 +2396,7 @@ const DriverDelivery: React.FC<DriverDeliveryProps> = ({ user, onNavigate }) => 
                             )}
                             {(order as any).trip_origin && <span className="text-[10px] font-black uppercase bg-slate-800 text-slate-300 px-2 py-0.5 rounded border border-slate-700">{(order as any).trip_origin}</span>}
                             {order.zone && <span className="text-[10px] font-black uppercase bg-amber-500/20 text-amber-400 px-2 py-0.5 rounded border border-amber-500/20">{order.zone}</span>}
-                            {!(order as any).stop_sequence && (order as any).trip_drop_count > 1 && (
+                            {!(order as any).stop_sequence && !isMultiOrderTrip && (order as any).trip_drop_count > 1 && (
                                 <span className="text-[10px] font-black uppercase bg-emerald-500/20 text-emerald-400 px-2 py-0.5 rounded border border-emerald-500/20">
                                     {(order as any).trip_drop_count} Hentian / Drops
                                 </span>
@@ -2505,7 +2561,7 @@ const DriverDelivery: React.FC<DriverDeliveryProps> = ({ user, onNavigate }) => 
                                                 📸 Bukti Penghantaran / Proof of Delivery (POD)
                                             </p>
                                             {(() => {
-                                                const totalDrops = Math.max(1, Number((order as any).trip_drop_count) || 1);
+                                                const totalDrops = isMultiOrderTrip ? 1 : Math.max(1, Number((order as any).trip_drop_count) || 1);
                                                 if (completedDropsCount >= totalDrops && totalDrops > 0) {
                                                     return (
                                                         <span className="text-[10px] font-mono font-bold text-emerald-400">
@@ -3223,7 +3279,11 @@ const DriverDelivery: React.FC<DriverDeliveryProps> = ({ user, onNavigate }) => 
                             <h2 className="font-black text-white text-lg flex items-center gap-2">
                                 <span>SAHKAN HANTARAN / CONFIRM DELIVERY</span>
                                 {(() => {
-                                    const modalTotal = Math.max(1, Number((selectedOrder as any).trip_drop_count) || 1);
+                                    const isSelectedMultiOrder = Boolean(
+                                        (selectedOrder.trip_id && tasks.filter(t => t.trip_id === selectedOrder.trip_id && t.status !== 'Cancelled').length > 1) ||
+                                        (selectedOrder.driver_id && selectedOrder.order_date && tasks.filter(t => t.driver_id === selectedOrder.driver_id && (t.order_date === selectedOrder.order_date || t.deadline === selectedOrder.deadline) && t.status !== 'Cancelled').length > 1)
+                                    );
+                                    const modalTotal = isSelectedMultiOrder ? 1 : Math.max(1, Number((selectedOrder as any).trip_drop_count) || 1);
                                     const modalDone = countCompletedDrops(selectedOrder.pod_photo_url);
                                     if (modalTotal > 1) {
                                         return (
@@ -3427,7 +3487,13 @@ const DriverDelivery: React.FC<DriverDeliveryProps> = ({ user, onNavigate }) => 
                         )}
 
                         {/* Final Drop Toggle Checkbox for Multi-Drop Orders */}
-                        {(selectedOrder as any).trip_drop_count > 1 && (() => {
+                        {(() => {
+                            const isSelectedMultiOrder = Boolean(
+                                (selectedOrder.trip_id && tasks.filter(t => t.trip_id === selectedOrder.trip_id && t.status !== 'Cancelled').length > 1) ||
+                                (selectedOrder.driver_id && selectedOrder.order_date && tasks.filter(t => t.driver_id === selectedOrder.driver_id && (t.order_date === selectedOrder.order_date || t.deadline === selectedOrder.deadline) && t.status !== 'Cancelled').length > 1)
+                            );
+                            if (isSelectedMultiOrder || !((selectedOrder as any).trip_drop_count > 1)) return null;
+
                             const curDone = countCompletedDrops(selectedOrder.pod_photo_url);
                             const totalTarget = Math.max(1, Number((selectedOrder as any).trip_drop_count) || 1);
                             const isAtFinalStep = curDone + 1 >= totalTarget;
