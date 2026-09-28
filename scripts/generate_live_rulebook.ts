@@ -181,6 +181,22 @@ ${renderTableRows(kelantan.zeroRates)}` : ''}
         fs.writeFileSync(tsPath, newTs, 'utf8');
         console.log('✓ Updated src/utils/aiDriverPricing.ts');
     }
+
+    // 3. Update Supabase sop_articles table (for SOP Center and active rulebook retrieval)
+    const { error: sopErr } = await supabase
+        .from('sop_articles')
+        .update({
+            content: fullMd,
+            description: 'Packsecure 司机运费与送货价格真理库（官方 Excel 校准版，支持太平、汝来、柔佛、吉兰丹 4 大基地）',
+            updated_at: new Date().toISOString()
+        })
+        .or('title.ilike.%Pricing%,title.ilike.%运费%');
+
+    if (sopErr) {
+        console.error('Failed to update sop_articles in Supabase:', sopErr.message);
+    } else {
+        console.log('✓ Updated sop_articles in Supabase database');
+    }
 }
 
 main().catch(console.error);

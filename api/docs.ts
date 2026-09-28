@@ -275,6 +275,13 @@ export const DOC_REGISTRY: DocDefinition[] = [
         relativePath: 'docs/BUSINESS_RULES.md'
     },
     {
+        id: 'driver-pricing-rules',
+        title: '司机运费规则真理库 (docs/sops/Driver_Pricing_Rules.md)',
+        description: '4 大起运基地（太平、汝来、柔佛、吉兰丹）官方核定运费与落点计费规则',
+        target: 'packsecure',
+        relativePath: 'docs/sops/Driver_Pricing_Rules.md'
+    },
+    {
         id: 'data-dictionary',
         title: '数据库结构字典 (docs/DATA_DICTIONARY.md)',
         description: 'Postgres 核心表结构、状态枚举与关键字段定义',
