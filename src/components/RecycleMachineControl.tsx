@@ -29,6 +29,7 @@ import { supabase } from '../services/supabase';
 import { User } from '../types';
 import { compressImage, dataURLtoBlob } from '../utils/imageCompress';
 import { useTranslation } from 'react-i18next';
+import { resolveOperatorSysId } from '../utils/operatorResolver';
 
 interface RecycleMachineControlProps {
     machineId: string;
@@ -97,31 +98,11 @@ const resolveOperatorUuid = async (
     empId: string | null | undefined,
     name: string | null | undefined
 ): Promise<string | null> => {
-    const isUuid = (val: string | null | undefined) =>
-        typeof val === 'string' && /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i.test(val);
-
-    if (isUuid(rawOpId)) return rawOpId!;
-
-    try {
-        const queryTerms: string[] = [];
-        if (empId) queryTerms.push(`employee_id.eq.${empId}`, `pin.eq.${empId}`);
-        if (rawOpId) queryTerms.push(`employee_id.eq.${rawOpId}`, `pin.eq.${rawOpId}`, `auth_user_id.eq.${rawOpId}`);
-        if (name) queryTerms.push(`name.eq.${name}`);
-
-        if (queryTerms.length > 0) {
-            const { data } = await supabase
-                .from('sys_users_v2')
-                .select('id')
-                .or(queryTerms.join(','))
-                .limit(1);
-            if (data && data[0]?.id) {
-                return data[0].id;
-            }
-        }
-    } catch (e) {
-        console.warn("Could not resolve operator UUID:", e);
-    }
-    return null;
+    return resolveOperatorSysId({
+        operatorId: rawOpId,
+        employeeId: empId,
+        operatorName: name
+    });
 };
 
 export const RecycleMachineControl: React.FC<RecycleMachineControlProps> = ({

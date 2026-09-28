@@ -106,6 +106,40 @@ Get-CimInstance Win32_LogicalDisk -Filter "DriveType=3" | Select-Object DeviceID
   };
 }
 
+/**
+ * Control local logged-in WhatsApp Desktop application
+ */
+async function controlDesktopWhatsApp(message, autoSend = false, phone = null) {
+  let psScript = '';
+  if (phone) {
+    let cleanPhone = String(phone).replace(/[^0-9]/g, '');
+    if (cleanPhone.startsWith('0')) cleanPhone = '60' + cleanPhone.slice(1);
+    psScript = `
+Start-Process "whatsapp://send?phone=${cleanPhone}"
+Start-Sleep -Milliseconds 1200
+Set-Clipboard -Value ${JSON.stringify(message)}
+Add-Type -AssemblyName System.Windows.Forms
+[System.Windows.Forms.SendKeys]::SendWait("^v${autoSend ? '{ENTER}' : ''}")
+`;
+  } else {
+    // Bring currently active WhatsApp chat window (e.g. OPM (MAIN)) to front and paste
+    psScript = `
+Start-Process "whatsapp://"
+Start-Sleep -Milliseconds 800
+Set-Clipboard -Value ${JSON.stringify(message)}
+Add-Type -AssemblyName System.Windows.Forms
+[System.Windows.Forms.SendKeys]::SendWait("^v${autoSend ? '{ENTER}' : ''}")
+`;
+  }
+  await runPowerShell(psScript);
+  return {
+    success: true,
+    action: autoSend ? 'sent' : 'drafted_in_input_box',
+    target: phone || 'active_chat',
+    preview: message
+  };
+}
+
 const rl = readline.createInterface({
   input: process.stdin,
   output: process.stdout,
@@ -196,13 +230,45 @@ rl.on('line', async (line) => {
             type: 'object',
             properties: {}
           }
+        },
+        {
+          name: 'control_desktop_whatsapp',
+          description: 'Directly control the locally opened and logged-in WhatsApp Desktop application on this Windows PC. Can draft or send text into the currently active chat (or jump to a specific contact phone).',
+          inputSchema: {
+            type: 'object',
+            properties: {
+              message: {
+                type: 'string',
+                description: 'The message text to type or send'
+              },
+              autoSend: {
+                type: 'boolean',
+                description: 'If false (default), pastes the message into the chat input box as a draft for review. If true, simulates pressing Enter to send immediately.'
+              },
+              phone: {
+                type: 'string',
+                description: 'Optional recipient phone number (e.g. 0102328335). If omitted, types directly into the currently active chat (like the open group chat).'
+              }
+            },
+            required: ['message']
+          }
         }
       ]
     });
   } else if (method === 'tools/call') {
     const { name, arguments: args } = params || {};
     try {
-      if (name === 'show_toast_notification') {
+      if (name === 'control_desktop_whatsapp') {
+        const res = await controlDesktopWhatsApp(args.message, args.autoSend || false, args.phone || null);
+        sendResponse(id, {
+          content: [
+            {
+              type: 'text',
+              text: JSON.stringify(res, null, 2)
+            }
+          ]
+        });
+      } else if (name === 'show_toast_notification') {
         await showToast(args.title, args.message);
         sendResponse(id, {
           content: [

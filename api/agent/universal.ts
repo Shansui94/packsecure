@@ -1319,12 +1319,48 @@ ${allDetectedDoNumbers.length > 0 ? `2. Detected potential DO numbers in documen
    - "Tape" / "Cukup Tape" in "CTN" or "Carton":
      - Set "uom": "BOX". Quantity is the exact carton count on the DO.
 
+============================================================
+🚨 CRITICAL THIRD-PARTY AGENT / DEALER DO DIRECTIVE (代理商/代发货单据识别与穿透准则):
+1. TOP HEADER & ISSUER IDENTIFICATION (出单方抬头检测):
+   - Check the top header, letterhead, company logo, or issuer stamp of each document.
+   - If the header is NOT "PackSecure" or "DIY Venture Sdn. Bhd." (for example: "WEHENG (M) SDN. BHD.", "META", "IKHTIAR", "2S", "ESTAR", "BLUECON", "AK", or ANY OTHER brand/distributor/company):
+     ==> THIS IS A THIRD-PARTY / AGENT DELIVERY ORDER (代理商代发单据)!
+     ==> Set "isAgentDelivery": true.
+     ==> Extract "agentName": Clean uppercase short brand name (e.g. "WEHENG", "META", "IKHTIAR", "2S", "ESTAR", "BLUECON", "AK").
+     ==> Extract "agentFullName": Full company name from the header (e.g. "WEHENG (M) SDN. BHD.").
+   - If the header is PackSecure / DIY Venture or a plain warehouse paper slip:
+     ==> Set "isAgentDelivery": false, "agentName": "", "agentFullName": "".
+
+2. DO NUMBER EXTRACTION FOR AGENT DOS:
+   - Extract the exact printed DO number on the agent's document (e.g. "DO-016827", "003252", "003094").
+   - Set "originalDoNumber": exact printed DO number from their paper.
+   - For "doNumber":
+     * If the printed number already starts with the agent name (e.g. "WH-016827"), keep it.
+     * Otherwise, format "doNumber" as "AGENT-ORIGINAL_DO" (e.g. "WEHENG-DO-016827", "META-DO-003252") (e.g. "WEHENG-DO-016827", "META-DO-003252").
+
+3. RECIPIENT CUSTOMER EXTRACTION (STRICT PENETRATION RULE / 严禁填成 General Customer 或 Agent 本身):
+   - DO NOT set "customer" to the Agent's own name (e.g. DO NOT set customer to "WEHENG")!
+   - DO NOT set "customer" to "General Customer"!
+   - LOOK DOWN at the "Sold To", "Deliver To", "Customer", or "Attention" section:
+     * Extract the ACTUAL END-RECIPIENT company/person and branch (e.g. "TWINS DIGITAL DENTAL LAB & SUPPLY SDN BHD (KL)").
+     * Format the "customer" field as: "[AGENT] EndRecipient" (e.g. "[WEHENG] TWINS DIGITAL DENTAL LAB").
+     * If "Deliver To" is blank or says "Self Pickup / Cash", use the "Sold To" customer name.
+     * If no sub-customer name exists at all, only then use "[AGENT] Direct Delivery".
+
+4. DRIVER ADVISORY IN REMARKS:
+   - For all agent DOs, prepend this exact bilingual instruction to "remarks":
+     "[代理商代发: AGENT_NAME | ⚠️ 司机请出示 AGENT DO (ORIGINAL_DO_NO) 给客户盖章签字，切勿以 Packsecure 名义交接]"
+
 TASK:
 Extract structured data for each Delivery Order (DO) across ALL pages and synthesize the whole Trip summary.
 
 FOR EACH DELIVERY ORDER:
-- "doNumber": Printed DO number (e.g., "OPM2609-0284") or generated "MANUAL-2609-001" for handwritten slips.
-- "customer": Recipient customer or company name (e.g. "PERNIAGAAN THUNG TATT", "CH INDUSTRY - HOLYN TRADING").
+- "doNumber": Printed DO number (e.g., "OPM2609-0284" or "WEHENG-DO-016827") or generated "MANUAL-2609-001" for handwritten slips.
+- "isAgentDelivery": true if issued by an agent/third-party company, false otherwise.
+- "agentName": Short agent brand name in uppercase (e.g. "WEHENG", "META"), or empty string.
+- "agentFullName": Full company name from the header, or empty string.
+- "originalDoNumber": Exact printed DO number on the agent's slip (e.g. "DO-016827").
+- "customer": Recipient customer or company name (e.g. "PERNIAGAAN THUNG TATT", "[WEHENG] TWINS DIGITAL DENTAL LAB").
 - "deliveryAddress": Complete delivery address with street, unit, industrial park, postcode, town, and state.
 - "phone": Contact phone/mobile if present (e.g. "017-4816678", "012-505 9929").
 - "zone": Primary Malaysian state/region (e.g., PENANG, KELANTAN, PERAK, KEDAH, SELANGOR, KL, NEGERI SEMBILAN, MELAKA, JOHOR, PAHANG, TERENGGANU).
@@ -1509,6 +1545,76 @@ CRITICAL: Return strictly a valid JSON object. Do not wrap in markdown quotes.
                     } else if (rawParsed.doNumber || rawParsed.customer) {
                         parsed = { ...rawParsed, deliveryOrders: [rawParsed] };
                     }
+                }
+
+                // Agent Delivery & AI Snapshot Normalization
+                if (parsed && Array.isArray(parsed.deliveryOrders)) {
+                    parsed.deliveryOrders = parsed.deliveryOrders.map((d: any) => {
+                        const isAgent = !!d.isAgentDelivery || (d.agentName && d.agentName.trim().length > 0);
+                        let rawAgent = (d.agentName || '').trim().toUpperCase();
+
+                        // Heuristic Auto-Detection for known agents if header detection missed
+                        if (!isAgent) {
+                            const checkText = `${d.doNumber || ''} ${d.customer || ''} ${d.remarks || ''}`.toUpperCase();
+                            if (checkText.includes('WEHENG') || checkText.includes('WE HENG')) {
+                                rawAgent = 'WEHENG';
+                            } else if (checkText.includes('META DO') || checkText.includes('META')) {
+                                rawAgent = 'META';
+                            } else if (checkText.includes('IKHTIAR')) {
+                                rawAgent = 'IKHTIAR';
+                            } else if (checkText.includes('2S DO') || checkText.includes('2S ')) {
+                                rawAgent = '2S';
+                            } else if (checkText.includes('ESTAR')) {
+                                rawAgent = 'ESTAR';
+                            } else if (checkText.includes('BLUECON')) {
+                                rawAgent = 'BLUECON';
+                            } else if (checkText.includes('AK DO')) {
+                                rawAgent = 'AK';
+                            }
+                        }
+
+                        const isAgentDelivery = isAgent || !!rawAgent;
+                        const agentName = rawAgent;
+                        let customer = (d.customer || '').trim();
+                        if (isAgentDelivery && agentName) {
+                            if (customer.toUpperCase() === agentName || customer.toUpperCase() === `${agentName} (M) SDN BHD` || customer.toLowerCase() === 'general customer' || !customer) {
+                                customer = `[${agentName}] Direct Delivery`;
+                            } else if (!customer.toUpperCase().startsWith(`[${agentName}]`)) {
+                                customer = `[${agentName}] ${customer}`;
+                            }
+                        }
+
+                        const originalDoNumber = d.originalDoNumber || d.doNumber || '';
+                        let remarks = (d.remarks || '').trim();
+                        if (isAgentDelivery && agentName && !remarks.includes('代理商代发')) {
+                            const agentNotice = `[代理商代发: ${agentName} | ⚠️ 司机请出示 ${agentName} DO (${originalDoNumber}) 给客户盖章签字，切勿以 Packsecure 名义交接]`;
+                            remarks = remarks ? `${agentNotice} ${remarks}` : agentNotice;
+                        }
+
+                        // Capture pristine AI snapshot for Diff audit & learning
+                        const aiSnapshot = {
+                            rawDoNumber: d.doNumber,
+                            rawCustomer: customer,
+                            rawAddress: d.deliveryAddress || '',
+                            rawPhone: d.phone || '',
+                            rawZone: d.zone || '',
+                            rawItems: JSON.parse(JSON.stringify(d.items || [])),
+                            isAgentDelivery,
+                            agentName,
+                            originalDoNumber
+                        };
+
+                        return {
+                            ...d,
+                            isAgentDelivery,
+                            agentName,
+                            originalDoNumber,
+                            customer,
+                            remarks,
+                            aiSnapshot,
+                            adminEdited: false
+                        };
+                    });
                 }
             } catch (jsonErr) {
                 console.warn("[DO PDF AI] Failed to parse Gemini response as JSON:", responseText);

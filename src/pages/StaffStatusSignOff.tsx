@@ -412,6 +412,27 @@ const StaffStatusSignOff: React.FC<StaffStatusSignOffProps> = ({ user, onNavigat
                 ? (myAtts.find(a => !a.clock_out) || myAtts[myAtts.length - 1])
                 : null;
 
+            // Live calculate elapsed hours for active duty records where hours_worked is unclosed (0 or null)
+            if (primaryAtt && !primaryAtt.clock_out && primaryAtt.clock_in) {
+                const isViewingToday = selectedDate === mytTodayYmd();
+                const inMs = new Date(primaryAtt.clock_in).getTime();
+                const refNow = isViewingToday 
+                    ? Date.now() 
+                    : new Date(`${selectedDate}T23:59:59+08:00`).getTime();
+                if (refNow > inMs) {
+                    const rawElapsed = Math.round(((refNow - inMs) / 3600000) * 10) / 10;
+                    const elapsed = isViewingToday 
+                        ? Math.max(0.1, Math.min(24, rawElapsed))
+                        : Math.min(8, Math.max(0, rawElapsed));
+                    if (!primaryAtt.hours_worked || Number(primaryAtt.hours_worked) === 0) {
+                        primaryAtt = {
+                            ...primaryAtt,
+                            hours_worked: elapsed
+                        };
+                    }
+                }
+            }
+
             // Check if employee is on leave
             const isOnLeave = leaves.some(l => 
                 l.employee_id === emp.employee_id || 
@@ -898,12 +919,24 @@ const StaffStatusSignOff: React.FC<StaffStatusSignOffProps> = ({ user, onNavigat
         const att = item.attendance;
 
         const defaultClockIn = formatMytDatetimeLocal(att?.clock_in, selectedDate);
-        const defaultClockOut = formatMytDatetimeLocal(att?.clock_out, selectedDate);
+        const nowMytDatetime = new Date().toLocaleString('sv', { timeZone: 'Asia/Kuala_Lumpur' }).replace(' ', 'T').slice(0, 16);
+        const defaultClockOut = att?.clock_out ? formatMytDatetimeLocal(att.clock_out, selectedDate) : nowMytDatetime;
+
+        let calculatedHours = att?.hours_worked !== undefined && att?.hours_worked !== null && Number(att.hours_worked) > 0 
+            ? Number(att.hours_worked) 
+            : 8;
+        if (defaultClockIn && defaultClockOut) {
+            const inT = new Date(defaultClockIn).getTime();
+            const outT = new Date(defaultClockOut).getTime();
+            if (outT > inT) {
+                calculatedHours = Math.round(((outT - inT) / 3600000) * 10) / 10;
+            }
+        }
 
         setEditForm({
             clock_in: defaultClockIn,
             clock_out: defaultClockOut,
-            hours_worked: att?.hours_worked !== undefined && att?.hours_worked !== null ? Number(att.hours_worked) : 8,
+            hours_worked: calculatedHours,
             machine_id: att?.machine_id || item.workContext.machineName || '',
             location: item.location,
             verification_notes: att?.verification_notes || '',
@@ -1095,8 +1128,14 @@ const StaffStatusSignOff: React.FC<StaffStatusSignOffProps> = ({ user, onNavigat
                                         </span>
                                     )}
                                 </div>
-                                <div className="text-[11px] text-gray-400 mt-0.5">
-                                    {t('核算工时')}: <strong className="text-emerald-300 font-black">{att.hours_worked || 0} h</strong>
+                                <div className="text-[11px] text-gray-400 mt-0.5 flex items-center gap-1.5 flex-wrap">
+                                    <span>{t('核算工时')}:</span>
+                                    <strong className="text-emerald-300 font-black">{att.hours_worked || 0} h</strong>
+                                    {status === 'ACTIVE' && (
+                                        <span className="text-[9px] px-1.5 py-0.2 rounded bg-emerald-500/15 text-emerald-300 border border-emerald-500/30 font-medium">
+                                            {t('实时在岗')}
+                                        </span>
+                                    )}
                                 </div>
                             </div>
                         ) : (

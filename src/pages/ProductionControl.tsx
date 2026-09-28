@@ -28,6 +28,7 @@ import { useTranslation } from 'react-i18next';
 import { changeLanguage, LANGUAGES, SupportedLanguage } from '../utils/i18n';
 import { ThermalPrinterModal } from '../components/ThermalPrinterModal';
 import { thermalPrinterService, LabelData } from '../services/thermalPrinterService';
+import { resolveOperatorSysId } from '../utils/operatorResolver';
 
 
 // --- TYPE DEFINITIONS ---
@@ -324,11 +325,16 @@ const ProductionLane: React.FC<ProductionLaneProps> = ({
 
         setIsSubmittingManualRoll(true);
         try {
+            const opSysId = await resolveOperatorSysId({ 
+                operatorId, 
+                employeeId: operatorEmployeeId, 
+                operatorName 
+            });
             const { error } = await supabase.from('production_logs_v2').insert([{
                 machine_id: targetMachine,
                 sku: targetSku,
                 output_qty: rollCount,
-                operator_id: operatorId || null,
+                operator_id: opSysId,
                 note: `[${laneId}] 【现场手工记数】操作员确认产出 ${rollCount} 卷`
             }]);
 
@@ -546,12 +552,17 @@ const ProductionLane: React.FC<ProductionLaneProps> = ({
             const machineId = machineMetadata?.id || 'T2-M01';
             const targetSku = activeSku || (selectedSize ? getBubbleWrapSku(selectedLayer, selectedMaterial, selectedSize, selectedRolls, derivedPackaging) : 'BW-GENERAL');
             
+            const opSysId = await resolveOperatorSysId({ 
+                operatorId, 
+                employeeId: operatorEmployeeId, 
+                operatorName 
+            });
             // 1. Record downtime event in production_logs_v2 (output_qty: 0)
             await supabase.from('production_logs_v2').insert([{
                 machine_id: machineId,
                 sku: targetSku,
                 output_qty: 0,
-                operator_id: operatorId || null,
+                operator_id: opSysId,
                 note: `【停机归因】原因: ${laneDowntimeReason}${laneDowntimeNote ? ` | 备注: ${laneDowntimeNote}` : ''}`
             }]);
 
@@ -1701,7 +1712,7 @@ const ProductionControl: React.FC<ProductionControlProps> = ({ user, jobs = [], 
         try {
             const { data, error } = await supabase
                 .from('sys_users_v2')
-                .select('auth_user_id, employee_id, name, photo_url, role')
+                .select('id, auth_user_id, employee_id, name, photo_url, role')
                 .eq('status', 'Active')
                 .order('name');
             if (error) throw error;
@@ -1717,11 +1728,12 @@ const ProductionControl: React.FC<ProductionControlProps> = ({ user, jobs = [], 
     };
 
     const handleSelectOperator = async (op: any) => {
-        localStorage.setItem('operatorId', op.auth_user_id);
+        const sysId = op.id || op.auth_user_id;
+        localStorage.setItem('operatorId', sysId);
         if (op.employee_id) localStorage.setItem('operatorEmployeeId', op.employee_id);
         if (op.name) localStorage.setItem('operatorName', op.name);
         
-        setOperatorId(op.auth_user_id);
+        setOperatorId(sysId);
         setOperatorEmployeeId(op.employee_id || null);
         setOperatorName(op.name || null);
         setIsControlMode(true);
@@ -1756,73 +1768,60 @@ const ProductionControl: React.FC<ProductionControlProps> = ({ user, jobs = [], 
         if (newPin.length === 4) {
             try {
                 if (user) {
-                    // Personal account: verify against logged-in user's pinCode
-                    if (user.pinCode === newPin) {
-                        localStorage.setItem('operatorId', user.uid);
-                        if (user.employeeId) localStorage.setItem('operatorEmployeeId', user.employeeId);
-                        if (user.name) localStorage.setItem('operatorName', user.name);
+                    // Check directly on DB to get valid sys_users_v2.id
+                    const { data } = await supabase
+                        .from('sys_users_v2')
+                        .select('id, pin_code, name, employee_id')
+                        .eq('auth_user_id', user.uid)
+                        .maybeSingle();
+                    
+                    if (data && (data.pin_code === newPin || user.pinCode === newPin)) {
+                        localStorage.setItem('operatorId', data.id);
+                        if (data.employee_id) localStorage.setItem('operatorEmployeeId', data.employee_id);
+                        if (data.name) localStorage.setItem('operatorName', data.name);
                         
-                        setOperatorId(user.uid);
-                        setOperatorEmployeeId(user.employeeId || null);
-                        setOperatorName(user.name || null);
-                        
+                        setOperatorId(data.id);
+                        setOperatorEmployeeId(data.employee_id || null);
+                        setOperatorName(data.name || null);
+
                         proceedMachineSelection(pendingMachine!);
                     } else {
-                        // Double check directly on DB in case state was not sync'd
-                        const { data } = await supabase
+                        // Check if this PIN code matches another operator in the database!
+                        const { data: anyOperator } = await supabase
                             .from('sys_users_v2')
-                            .select('pin_code, name, employee_id')
-                            .eq('auth_user_id', user.uid)
+                            .select('id, auth_user_id, employee_id, name, role')
+                            .eq('pin_code', newPin)
                             .maybeSingle();
-                        
-                        if (data && data.pin_code === newPin) {
-                            localStorage.setItem('operatorId', user.uid);
-                            if (data.employee_id) localStorage.setItem('operatorEmployeeId', data.employee_id);
-                            if (data.name) localStorage.setItem('operatorName', data.name);
+
+                        if (anyOperator && (anyOperator.role === 'Operator' || anyOperator.role === 'SuperAdmin' || anyOperator.role === 'Admin' || anyOperator.role === 'Manager')) {
+                            localStorage.setItem('operatorId', anyOperator.id || anyOperator.auth_user_id);
+                            localStorage.setItem('operatorEmployeeId', anyOperator.employee_id);
+                            localStorage.setItem('operatorName', anyOperator.name);
                             
-                            setOperatorId(user.uid);
-                            setOperatorEmployeeId(data.employee_id || null);
-                            setOperatorName(data.name || null);
+                            setOperatorId(anyOperator.id || anyOperator.auth_user_id);
+                            setOperatorEmployeeId(anyOperator.employee_id);
+                            setOperatorName(anyOperator.name);
 
                             proceedMachineSelection(pendingMachine!);
                         } else {
-                            // Check if this PIN code matches another operator in the database!
-                            const { data: anyOperator } = await supabase
-                                .from('sys_users_v2')
-                                .select('auth_user_id, employee_id, name, role')
-                                .eq('pin_code', newPin)
-                                .maybeSingle();
-
-                            if (anyOperator && (anyOperator.role === 'Operator' || anyOperator.role === 'SuperAdmin' || anyOperator.role === 'Admin' || anyOperator.role === 'Manager')) {
-                                localStorage.setItem('operatorId', anyOperator.auth_user_id);
-                                localStorage.setItem('operatorEmployeeId', anyOperator.employee_id);
-                                localStorage.setItem('operatorName', anyOperator.name);
-                                
-                                setOperatorId(anyOperator.auth_user_id);
-                                setOperatorEmployeeId(anyOperator.employee_id);
-                                setOperatorName(anyOperator.name);
-
-                                proceedMachineSelection(pendingMachine!);
-                            } else {
-                                setPinError("Invalid PIN code.");
-                                setEnteredPin('');
-                            }
+                            setPinError("Invalid PIN code.");
+                            setEnteredPin('');
                         }
                     }
                 } else {
                     // Shared Kiosk Mode (user is null): query sys_users_v2 to resolve the operator by pin_code
                     const { data } = await supabase
                         .from('sys_users_v2')
-                        .select('auth_user_id, employee_id, name, role')
+                        .select('id, auth_user_id, employee_id, name, role')
                         .eq('pin_code', newPin)
                         .maybeSingle();
                     
                     if (data && data.role === 'Operator') {
-                        localStorage.setItem('operatorId', data.auth_user_id);
+                        localStorage.setItem('operatorId', data.id || data.auth_user_id);
                         localStorage.setItem('operatorEmployeeId', data.employee_id);
                         localStorage.setItem('operatorName', data.name);
                         
-                        setOperatorId(data.auth_user_id);
+                        setOperatorId(data.id || data.auth_user_id);
                         setOperatorEmployeeId(data.employee_id);
                         setOperatorName(data.name);
                         setIsControlMode(true);
@@ -1997,10 +1996,13 @@ const ProductionControl: React.FC<ProductionControlProps> = ({ user, jobs = [], 
                 }
 
                 // Force sync operator_id in machine_active_products to prevent ghost operators
-                if (operatorId && selectedMachine) {
-                    await supabase.from('machine_active_products')
-                        .update({ operator_id: operatorId })
-                        .eq('machine_id', selectedMachine);
+                if (selectedMachine) {
+                    const opSysId = await resolveOperatorSysId({ operatorId, employeeId: operatorEmployeeId, operatorName, user });
+                    if (opSysId) {
+                        await supabase.from('machine_active_products')
+                            .update({ operator_id: opSysId })
+                            .eq('machine_id', selectedMachine);
+                    }
                 }
 
                 // 确保打卡同步落库后，立即主动拉取当前机台的活动操作员，以刷新 UI 状态

@@ -1,30 +1,25 @@
 #!/usr/bin/env node
 /**
  * generate-dev-log.mjs
- * Called by GitHub Actions daily at 11 PM MYT.
- * 1. Reads git log from stdin (passed by workflow)
- * 2. Queries Supabase for today's app metrics
- * 3. Calls Gemini API to analyse
+ * Called by GitHub Actions daily at 11 PM MYT or manually for backfills.
+ * 1. Reads git commits for the target date
+ * 2. Queries Supabase for the target date's app metrics
+ * 3. Calls Gemini API (gemini-2.5-flash) to analyse
  * 4. Upserts report into dev_logs table
  */
 
+import 'dotenv/config';
 import { execSync } from 'child_process';
 
-const GEMINI_API_KEY = process.env.GEMINI_API_KEY;
-const SUPABASE_URL = process.env.SUPABASE_URL;
-const SUPABASE_KEY = process.env.SUPABASE_SERVICE_KEY;  // service role key
-const REPORT_DATE = process.env.REPORT_DATE || new Date().toISOString().split('T')[0];
-
-if (!GEMINI_API_KEY || !SUPABASE_URL || !SUPABASE_KEY) {
-    console.error('❌ Missing required env vars: GEMINI_API_KEY, SUPABASE_URL, SUPABASE_SERVICE_KEY');
-    process.exit(1);
-}
+const GEMINI_API_KEY = process.env.GEMINI_API_KEY || process.env.GOOGLE_API_KEY;
+const SUPABASE_URL = process.env.SUPABASE_URL || process.env.VITE_SUPABASE_URL;
+const SUPABASE_KEY = process.env.SUPABASE_SERVICE_KEY || process.env.SUPABASE_SERVICE_ROLE_KEY;
 
 // ─── 1. Collect Git Info ─────────────────────────────────────
-function getGitCommits() {
+function getGitCommits(targetDate) {
     try {
-        const sinceISO = `${REPORT_DATE}T00:00:00+08:00`;
-        const untilISO = `${REPORT_DATE}T23:59:59+08:00`;
+        const sinceISO = `${targetDate}T00:00:00+08:00`;
+        const untilISO = `${targetDate}T23:59:59+08:00`;
 
         // Step 1: get commit lines
         const commitLines = execSync(
@@ -42,7 +37,7 @@ function getGitCommits() {
             try {
                 const files = execSync(
                     `git diff-tree --no-commit-id -r --name-only ${commit.hash}`,
-                    { encoding: 'utf8' }
+                    { encoding: 'utf8', cwd: process.cwd() }
                 ).trim().split('\n').filter(Boolean);
                 commit.files = files.slice(0, 10); // cap at 10 files
             } catch { /* ignore per-commit errors */ }
@@ -50,25 +45,38 @@ function getGitCommits() {
 
         return commits;
     } catch (e) {
-        console.warn('⚠️ Git log failed:', e.message);
+        console.warn(`⚠️ Git log failed for ${targetDate}:`, e.message);
         return [];
     }
 }
 
-function getGitDiffStat() {
+function getGitDiffStat(commits) {
+    if (!commits || commits.length === 0) {
+        return '当天没有代码提交。';
+    }
     try {
+        const oldestHash = commits[commits.length - 1].hash;
+        const newestHash = commits[0].hash;
+        const range = oldestHash === newestHash ? `${newestHash}~1 ${newestHash}` : `${oldestHash}~1 ${newestHash}`;
         return execSync(
-            `git diff --stat HEAD~${Math.max(1, getGitCommits().length)} HEAD 2>/dev/null || echo "No diff available"`,
-            { encoding: 'utf8' }
-        ).substring(0, 2000); // cap at 2k chars
+            `git diff --stat ${range}`,
+            { encoding: 'utf8', cwd: process.cwd(), stdio: ['pipe', 'pipe', 'ignore'] }
+        ).substring(0, 2000);
     } catch {
-        return 'No diff available';
+        try {
+            return execSync(
+                `git show --stat ${commits[0].hash}`,
+                { encoding: 'utf8', cwd: process.cwd(), stdio: ['pipe', 'pipe', 'ignore'] }
+            ).substring(0, 2000);
+        } catch {
+            return 'No diff available';
+        }
     }
 }
 
 // ─── 2. Fetch Supabase App Metrics ───────────────────────────
-async function fetchMetrics() {
-    const today = REPORT_DATE;
+async function fetchMetrics(targetDate) {
+    const today = targetDate;
     const yesterday = new Date(today);
     yesterday.setDate(yesterday.getDate() - 1);
     const yesterdayStr = yesterday.toISOString().split('T')[0];
@@ -103,16 +111,16 @@ async function fetchMetrics() {
             previous_date: yesterdayStr,
         };
     } catch (e) {
-        console.warn('⚠️ Metrics fetch failed:', e.message);
+        console.warn(`⚠️ Metrics fetch failed for ${targetDate}:`, e.message);
         return { error: e.message, report_date: today };
     }
 }
 
 // ─── 3. Call Gemini API ───────────────────────────────────────
-async function callGemini(commits, metrics, diffStat) {
+async function callGemini(targetDate, commits, metrics, diffStat) {
     const prompt = `
 你是 Packsecure 工厂管理系统的 AI 开发日志分析助手。
-今天是 ${REPORT_DATE}（马来西亚时间）。
+今天是 ${targetDate}（马来西亚时间）。
 
 以下是今天的代码改动和应用数据，请生成一份结构化的中文开发日志报告。
 
@@ -147,7 +155,7 @@ ${diffStat}
 
 只回复 JSON，不要 markdown 代码块，不要额外文字。
 `;
-    // Replace raw fetch with @google/genai SDK
+
     const { GoogleGenAI } = await import('@google/genai');
     const ai = new GoogleGenAI({ apiKey: GEMINI_API_KEY });
 
@@ -157,22 +165,30 @@ ${diffStat}
             contents: prompt,
             config: {
                 temperature: 0.4,
-                maxOutputTokens: 1500,
+                maxOutputTokens: 8192,
+                responseMimeType: 'application/json',
+                thinkingConfig: { thinkingBudget: 0 },
             }
         });
 
         const text = response.text || "{}";
 
         try {
-            // Strip any accidental markdown fences
-            const clean = text.replace(/```json\n?/g, '').replace(/```\n?/g, '').trim();
-            return { parsed: JSON.parse(clean), raw: text };
+            const parsed = JSON.parse(text);
+            return { parsed, raw: text };
         } catch {
-            console.warn('⚠️ Could not parse Gemini JSON, using raw text');
-            return {
-                parsed: { summary: text.substring(0, 500), changes: [], risks: [], recommendations: [], mood: 'quiet' },
-                raw: text
-            };
+            try {
+                const jsonMatch = text.match(/\{[\s\S]*\}/);
+                const clean = jsonMatch ? jsonMatch[0] : text.replace(/```json\n?/g, '').replace(/```\n?/g, '').trim();
+                const parsed = JSON.parse(clean);
+                return { parsed, raw: text };
+            } catch {
+                console.warn(`⚠️ Could not parse Gemini JSON for ${targetDate}, fallback to text summary`);
+                return {
+                    parsed: { summary: text.substring(0, 500), changes: [], risks: [], recommendations: [], mood: 'quiet' },
+                    raw: text
+                };
+            }
         }
     } catch (apiErr) {
         throw new Error(`Gemini API error: ${apiErr.message}`);
@@ -180,9 +196,9 @@ ${diffStat}
 }
 
 // ─── 4. Upsert into Supabase ──────────────────────────────────
-async function saveReport(commits, metrics, aiResult) {
+async function saveReport(targetDate, commits, metrics, aiResult) {
     const payload = {
-        report_date: REPORT_DATE,
+        report_date: targetDate,
         summary: aiResult.parsed.summary || '',
         commits_json: commits,
         metrics_json: metrics,
@@ -192,7 +208,7 @@ async function saveReport(commits, metrics, aiResult) {
         raw_ai_response: aiResult.raw,
     };
 
-    const resp = await fetch(`${SUPABASE_URL}/rest/v1/dev_logs`, {
+    const resp = await fetch(`${SUPABASE_URL}/rest/v1/dev_logs?on_conflict=report_date`, {
         method: 'POST',
         headers: {
             'apikey': SUPABASE_KEY,
@@ -208,29 +224,39 @@ async function saveReport(commits, metrics, aiResult) {
         throw new Error(`Supabase insert failed: ${err}`);
     }
 
-    console.log(`✅ Dev log saved for ${REPORT_DATE}`);
+    console.log(`✅ Dev log successfully saved for ${targetDate}`);
 }
 
-// ─── Main ────────────────────────────────────────────────────
-async function main() {
-    console.log(`🔍 Generating dev log for ${REPORT_DATE}...`);
+// ─── Main Routine ────────────────────────────────────────────
+export async function generateDevLogForDate(dateStr) {
+    if (!GEMINI_API_KEY || !SUPABASE_URL || !SUPABASE_KEY) {
+        throw new Error('❌ Missing required env vars: GEMINI_API_KEY / GOOGLE_API_KEY, SUPABASE_URL, SUPABASE_SERVICE_KEY / SUPABASE_SERVICE_ROLE_KEY');
+    }
 
-    const commits = getGitCommits();
-    console.log(`📦 Found ${commits.length} commits today`);
+    const targetDate = dateStr || process.argv[2] || process.env.REPORT_DATE || new Date(Date.now() + 8 * 3600 * 1000).toISOString().split('T')[0];
 
-    const diffStat = commits.length > 0 ? getGitDiffStat() : 'No commits today.';
+    console.log(`\n🔍 Generating dev log for ${targetDate}...`);
 
-    const metrics = await fetchMetrics();
-    console.log('📊 App metrics:', metrics);
+    const commits = getGitCommits(targetDate);
+    console.log(`📦 Found ${commits.length} commits for ${targetDate}`);
 
-    const aiResult = await callGemini(commits, metrics, diffStat);
-    console.log('🤖 AI summary:', aiResult.parsed.summary);
-    console.log('⚠️  Risks found:', aiResult.parsed.risks?.length ?? 0);
+    const diffStat = getGitDiffStat(commits);
 
-    await saveReport(commits, metrics, aiResult);
+    const metrics = await fetchMetrics(targetDate);
+    console.log(`📊 App metrics (trips today: ${metrics.trips_created_today}, users: ${metrics.total_users})`);
+
+    const aiResult = await callGemini(targetDate, commits, metrics, diffStat);
+    console.log(`🤖 AI summary: ${aiResult.parsed.summary}`);
+    console.log(`⚠️  Risks: ${aiResult.parsed.risks?.length ?? 0}, Changes: ${aiResult.parsed.changes?.length ?? 0}`);
+
+    await saveReport(targetDate, commits, metrics, aiResult);
+    return { date: targetDate, commitsCount: commits.length, summary: aiResult.parsed.summary };
 }
 
-main().catch(e => {
-    console.error('❌ Fatal error:', e.message);
-    process.exit(1);
-});
+// CLI runner
+if (process.argv[1] && process.argv[1].endsWith('generate-dev-log.mjs')) {
+    generateDevLogForDate().catch(e => {
+        console.error('❌ Fatal error:', e.message);
+        process.exit(1);
+    });
+}

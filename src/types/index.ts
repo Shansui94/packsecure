@@ -173,6 +173,9 @@ export interface SalesOrder {
     // Logistics V2
     trip_id?: string;
     stop_sequence?: number;
+    is_agent_delivery?: boolean;
+    agent_name?: string;
+    original_do_number?: string;
     pod_signature_url?: string | null;
     pod_photo_url?: string | null;
     pod_signed_by?: string | null;
@@ -212,6 +215,12 @@ export interface ParsedDeliveryOrder {
     isExchange?: boolean;
     exchangeReturnNotes?: string;
     isHandwritten?: boolean;
+    isAgentDelivery?: boolean;
+    agentName?: string;
+    agentFullName?: string;
+    originalDoNumber?: string;
+    aiSnapshot?: any;
+    adminEdited?: boolean;
 }
 
 export interface ParsedTripDOBatch {

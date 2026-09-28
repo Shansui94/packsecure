@@ -45,3 +45,5 @@ orig_*
 upload.mjs
 update.cjs
 auth_info_baileys/
+data/
+whatsapp_screen.png

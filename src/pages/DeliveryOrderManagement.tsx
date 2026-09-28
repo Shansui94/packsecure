@@ -21,7 +21,7 @@ import {
     User as UserIcon, Box, Zap, Trash2, Scissors, AlertTriangle, MapPin, Wrench, LayoutGrid, List, ArrowUp, ArrowDown,
     CheckCircle, XCircle, Camera, Sparkles, ImagePlus, Download,
     RotateCcw, RefreshCw, Settings, ShieldCheck, Clock, Award, TrendingUp, Info,
-    ChevronDown, ChevronUp, Edit3, Phone, MessageSquare
+    ChevronDown, ChevronUp, Edit3, Phone, MessageSquare, Building2
 } from 'lucide-react';
 import WhatsAppDispatchModal from '../components/WhatsAppDispatchModal';
 import { WAREHOUSES } from '../data/factoryData';
@@ -2540,7 +2540,22 @@ const DeliveryOrderManagement: React.FC<DeliveryOrderManagementProps> = ({ user 
                 });
                 return {
                     ...doOrder,
-                    items: alignedItems
+                    items: alignedItems,
+                    isAgentDelivery: doOrder.isAgentDelivery,
+                    agentName: doOrder.agentName,
+                    agentFullName: doOrder.agentFullName,
+                    originalDoNumber: doOrder.originalDoNumber,
+                    aiSnapshot: doOrder.aiSnapshot || {
+                        customer: doOrder.customer,
+                        deliveryAddress: doOrder.deliveryAddress,
+                        phone: doOrder.phone,
+                        zone: doOrder.zone,
+                        items: (doOrder.items || []).map(i => ({ product: i.product, sku: i.sku, quantity: i.quantity, uom: i.uom })),
+                        isAgentDelivery: doOrder.isAgentDelivery,
+                        agentName: doOrder.agentName,
+                        originalDoNumber: doOrder.originalDoNumber
+                    },
+                    adminEdited: false
                 };
             });
 
@@ -2830,7 +2845,22 @@ const DeliveryOrderManagement: React.FC<DeliveryOrderManagementProps> = ({ user 
                 return {
                     ...doOrder,
                     items: alignedItems,
-                    doTotal: alignedItems.reduce((sum, item) => sum + (Number(item.quantity) || 0), 0)
+                    doTotal: alignedItems.reduce((sum, item) => sum + (Number(item.quantity) || 0), 0),
+                    isAgentDelivery: doOrder.isAgentDelivery,
+                    agentName: doOrder.agentName,
+                    agentFullName: doOrder.agentFullName,
+                    originalDoNumber: doOrder.originalDoNumber,
+                    aiSnapshot: doOrder.aiSnapshot || {
+                        customer: doOrder.customer,
+                        deliveryAddress: doOrder.deliveryAddress,
+                        phone: doOrder.phone,
+                        zone: doOrder.zone,
+                        items: (doOrder.items || []).map(i => ({ product: i.product, sku: i.sku, quantity: i.quantity, uom: i.uom })),
+                        isAgentDelivery: doOrder.isAgentDelivery,
+                        agentName: doOrder.agentName,
+                        originalDoNumber: doOrder.originalDoNumber
+                    },
+                    adminEdited: false
                 };
             });
 
@@ -2910,7 +2940,7 @@ const DeliveryOrderManagement: React.FC<DeliveryOrderManagementProps> = ({ user 
         setParsedTripBatch(prev => {
             if (!prev) return null;
             const list = [...prev.deliveryOrders];
-            list[index] = { ...list[index], [field]: value };
+            list[index] = { ...list[index], [field]: value, adminEdited: true };
             return { ...prev, deliveryOrders: list };
         });
     };
@@ -2919,7 +2949,7 @@ const DeliveryOrderManagement: React.FC<DeliveryOrderManagementProps> = ({ user 
         setParsedTripBatch(prev => {
             if (!prev) return null;
             const orders = [...prev.deliveryOrders];
-            const order = { ...orders[doIndex] };
+            const order = { ...orders[doIndex], adminEdited: true };
             const items = [...(order.items || [])];
             items[itemIndex] = { ...items[itemIndex], quantity: Math.max(0, newQty) };
             order.items = items;
@@ -2939,7 +2969,7 @@ const DeliveryOrderManagement: React.FC<DeliveryOrderManagementProps> = ({ user 
         setParsedTripBatch(prev => {
             if (!prev) return null;
             const orders = [...prev.deliveryOrders];
-            const order = { ...orders[doIndex] };
+            const order = { ...orders[doIndex], adminEdited: true };
             const items = [...(order.items || [])];
             items[itemIndex] = { ...items[itemIndex], product: newName, rawProductName: newName };
             order.items = items;
@@ -2952,7 +2982,7 @@ const DeliveryOrderManagement: React.FC<DeliveryOrderManagementProps> = ({ user 
         setParsedTripBatch(prev => {
             if (!prev) return null;
             const orders = [...prev.deliveryOrders];
-            const order = { ...orders[doIndex] };
+            const order = { ...orders[doIndex], adminEdited: true };
             const items = [...(order.items || [])];
             items[itemIndex] = { ...items[itemIndex], uom: newUom };
             order.items = items;
@@ -2965,7 +2995,7 @@ const DeliveryOrderManagement: React.FC<DeliveryOrderManagementProps> = ({ user 
         setParsedTripBatch(prev => {
             if (!prev) return null;
             const orders = [...prev.deliveryOrders];
-            const order = { ...orders[doIndex] };
+            const order = { ...orders[doIndex], adminEdited: true };
             const items = (order.items || []).filter((_, idx) => idx !== itemIndex);
             order.items = items;
             order.doTotal = items.reduce((s, it) => s + (Number(it.quantity) || 0), 0);
@@ -2983,7 +3013,7 @@ const DeliveryOrderManagement: React.FC<DeliveryOrderManagementProps> = ({ user 
         setParsedTripBatch(prev => {
             if (!prev) return null;
             const orders = [...prev.deliveryOrders];
-            const order = { ...orders[doIndex] };
+            const order = { ...orders[doIndex], adminEdited: true };
             const defaultLoc = getDefaultLocForOrigin(parsedTripOrigin);
             const newItem: ParsedDOItem = {
                 product: '',
@@ -3011,7 +3041,7 @@ const DeliveryOrderManagement: React.FC<DeliveryOrderManagementProps> = ({ user 
         setParsedTripBatch(prev => {
             if (!prev) return null;
             const orders = [...prev.deliveryOrders];
-            const order = { ...orders[doIndex] };
+            const order = { ...orders[doIndex], adminEdited: true };
             order.items = [];
             order.doTotal = 0;
             orders[doIndex] = order;
@@ -3028,7 +3058,7 @@ const DeliveryOrderManagement: React.FC<DeliveryOrderManagementProps> = ({ user 
         setParsedTripBatch(prev => {
             if (!prev) return null;
             const orders = [...prev.deliveryOrders];
-            const order = { ...orders[doIndex] };
+            const order = { ...orders[doIndex], adminEdited: true };
             const items = [...(order.items || [])];
             const currentItem = { ...items[itemIndex] };
 
@@ -3073,7 +3103,7 @@ const DeliveryOrderManagement: React.FC<DeliveryOrderManagementProps> = ({ user 
         setParsedTripBatch(prev => {
             if (!prev) return null;
             const orders = [...prev.deliveryOrders];
-            const order = { ...orders[doIndex] };
+            const order = { ...orders[doIndex], adminEdited: true };
             const items = [...(order.items || [])];
             items[itemIndex] = { ...items[itemIndex], sourceLocation: newLocation };
             order.items = items;
@@ -3146,6 +3176,45 @@ const DeliveryOrderManagement: React.FC<DeliveryOrderManagementProps> = ({ user 
             return;
         }
 
+        // 🚨 司机与车辆防呆校验：自营配送未指定司机或车辆时提示确认
+        if (parsedDeliveryMethod !== 'SELF_PICKUP' && (!parsedDriverId || !parsedLorryId)) {
+            const missingFields: string[] = [];
+            if (!parsedDriverId) missingFields.push(t('未指派司机 (Driver Unassigned)'));
+            if (!parsedLorryId) missingFields.push(t('未绑定车辆 (Lorry Unassigned)'));
+            const proceed = window.confirm(
+                `⚠️ 出车调度提示 / Driver & Lorry Notice:\n\n` +
+                `当前车次尚未完成人员与车辆绑定：\n• ${missingFields.join('\n• ')}\n\n` +
+                `若现在创建，司机手机端将无法看到这批送货单！\n是否确认先保存为待指派车次？\n\n(Click OK to save as unassigned draft, or Cancel to assign driver/lorry)`
+            );
+            if (!proceed) return;
+        }
+
+        // 🚨 车辆装载风控校验 (VPC 9821 = 65 rolls, APH 9821 = 92 rolls, standard = 82 rolls)
+        if (parsedLorryId && parsedDeliveryMethod !== 'SELF_PICKUP') {
+            const matchedLorry = lorries.find(l => l.id === parsedLorryId);
+            if (matchedLorry) {
+                let maxCapacity = (matchedLorry as any).capacity || 82;
+                const plate = (matchedLorry.plateNumber || '').toUpperCase().replace(/\s+/g, '');
+                if (plate.includes('VPC9821') || (plate.includes('9821') && plate.includes('VPC'))) {
+                    maxCapacity = 65;
+                } else if (plate.includes('APH9821') || (plate.includes('9821') && plate.includes('APH'))) {
+                    maxCapacity = 92;
+                }
+                const totalRolls = parsedTripBatch.totalRolls || parsedTripBatch.deliveryOrders.reduce((sum, o) => {
+                    return sum + (o.items || []).reduce((iSum, it) => iSum + (Number(it.quantity) || 0), 0);
+                }, 0);
+                if (totalRolls > maxCapacity) {
+                    const proceedOverload = window.confirm(
+                        `🚨 车辆装载风控拦截 / Lorry Capacity Alert:\n\n` +
+                        `车辆 ${matchedLorry.plateNumber} 标准核载容量为 ${maxCapacity} 卷 (Rolls)。\n` +
+                        `当前车次总装车件数为 ${totalRolls} 卷 (超出核载 ${totalRolls - maxCapacity} 卷)！\n\n` +
+                        `超载可能导致司机手机端装车时被拦截或存在道路运输安全隐患。\n是否仍确认强行调度出车？`
+                    );
+                    if (!proceedOverload) return;
+                }
+            }
+        }
+
         setIsCreatingTrip(true);
         setToast(null);
 
@@ -3189,6 +3258,35 @@ const DeliveryOrderManagement: React.FC<DeliveryOrderManagementProps> = ({ user 
                 const orderId = crypto.randomUUID();
 
                 const noteParts: string[] = [];
+
+                // 🏢 代理商代发单据司机现场 SOP 指引
+                if (doItem.isAgentDelivery && doItem.agentName) {
+                    const originalDoStr = doItem.originalDoNumber || doItem.doNumber;
+                    noteParts.push(`[代理商代发: ${doItem.agentName} | ⚠️ 司机请出示 ${doItem.agentName} DO (${originalDoStr}) 给客户盖章签字，切勿以 Packsecure 名义交接]`);
+                }
+
+                // 🔍 AI 识别 vs 人工修改差异留痕 (Diff Audit Trail)
+                const snap = doItem.aiSnapshot;
+                const diffs: string[] = [];
+                if (snap) {
+                    if (snap.customer && snap.customer.trim() !== (doItem.customer || '').trim()) {
+                        diffs.push(`客户: "${snap.customer}" ➔ "${doItem.customer}"`);
+                    }
+                    if (snap.deliveryAddress && snap.deliveryAddress.trim() !== (doItem.deliveryAddress || '').trim()) {
+                        diffs.push(`地址变更`);
+                    }
+                    if (snap.items && Array.isArray(snap.items)) {
+                        const snapSummary = snap.items.map((it: any) => `${it.product || it.sku}:${it.quantity}`).join(',');
+                        const currSummary = (doItem.items || []).map((it: any) => `${it.product || it.sku}:${it.quantity}`).join(',');
+                        if (snapSummary !== currSummary) {
+                            diffs.push(`物料调整: [${snapSummary}] ➔ [${currSummary}]`);
+                        }
+                    }
+                }
+                if (diffs.length > 0) {
+                    noteParts.push(`[Admin已修正: ${diffs.join('; ')}]`);
+                }
+
                 if (doItem.isExchange && doItem.exchangeReturnNotes) {
                     noteParts.push(`[EXCHANGE / 换货: ${doItem.exchangeReturnNotes.trim()}]`);
                 } else if (doItem.isExchange) {
@@ -3289,6 +3387,32 @@ const DeliveryOrderManagement: React.FC<DeliveryOrderManagementProps> = ({ user 
                                 console.warn("Failed to auto-learn mapping for DO:", upsertErr);
                             }
                         }
+                    }
+                }
+
+                // 5. Auto-Learning: Update or insert customer address in sys_customers
+                if (doItem.customer && doItem.customer.trim()) {
+                    try {
+                        const cleanCustName = doItem.customer.trim();
+                        const matchedCust = customerDB.find(c => (c.name || '').toLowerCase().trim() === cleanCustName.toLowerCase());
+                        if (!matchedCust && doItem.deliveryAddress) {
+                            await supabase.from('sys_customers').insert({
+                                id: crypto.randomUUID(),
+                                name: cleanCustName,
+                                address: doItem.deliveryAddress || '',
+                                phone: doItem.phone || '',
+                                zone: doItem.zone || parsedZone || '',
+                                created_at: new Date().toISOString()
+                            });
+                        } else if (matchedCust && doItem.adminEdited && doItem.deliveryAddress && doItem.deliveryAddress !== matchedCust.address) {
+                            await supabase.from('sys_customers').update({
+                                address: doItem.deliveryAddress,
+                                phone: doItem.phone || matchedCust.phone || '',
+                                zone: doItem.zone || matchedCust.zone || ''
+                            }).eq('id', matchedCust.id);
+                        }
+                    } catch (custLearnErr) {
+                        console.warn("Failed to auto-learn customer address in sys_customers:", custLearnErr);
                     }
                 }
             }
@@ -7888,6 +8012,31 @@ const DeliveryOrderManagement: React.FC<DeliveryOrderManagementProps> = ({ user 
                                 </div>
                             )}
 
+                            {/* 🏢 AGENT / DEALER DO BANNER */}
+                            {parsedTripBatch.deliveryOrders.some(o => o.isAgentDelivery || o.agentName) && (
+                                <div className="bg-gradient-to-r from-orange-950/80 via-amber-950/40 to-slate-900/80 border border-orange-500/60 rounded-2xl p-4 flex flex-col sm:flex-row items-start sm:items-center justify-between gap-3 text-orange-200 text-xs shadow-lg">
+                                    <div className="flex items-center gap-3">
+                                        <div className="p-2 rounded-xl bg-orange-500/20 border border-orange-500/40 text-orange-400 shrink-0">
+                                            <Building2 size={22} className="text-orange-400" />
+                                        </div>
+                                        <div>
+                                            <div className="font-black text-sm text-orange-100 flex items-center gap-2 flex-wrap">
+                                                <span>{t('🟠 检测到第三方代理商代发单据 (Agent DO Detected)')}</span>
+                                                <span className="text-[10px] bg-orange-500/30 text-orange-200 px-2.5 py-0.5 rounded-full font-mono font-bold border border-orange-500/40">
+                                                    {Array.from(new Set(parsedTripBatch.deliveryOrders.filter(o => o.agentName).map(o => o.agentName))).join(', ')}
+                                                </span>
+                                            </div>
+                                            <div className="text-[11px] text-amber-200/90 mt-1 leading-relaxed">
+                                                {t('系统已自动将客户穿透识别为终端收件客户，并已自动注入司机现场交付指引（交接时出示代理商 DO，切勿提及 Packsecure 名义）。')}
+                                            </div>
+                                        </div>
+                                    </div>
+                                    <span className="px-3 py-1.5 rounded-xl bg-orange-600/30 border border-orange-500/50 text-orange-300 font-bold text-xs uppercase tracking-wider shrink-0">
+                                        {t('代理代发模式')}
+                                    </span>
+                                </div>
+                            )}
+
                             {/* 📦 Trip Cargo Breakdown Summary (车次装车总数清单) */}
                             {parsedCargoSummary.length > 0 && (
                                 <div className="bg-slate-900/60 border border-blue-500/30 rounded-2xl p-4 space-y-3">
@@ -8008,6 +8157,16 @@ const DeliveryOrderManagement: React.FC<DeliveryOrderManagementProps> = ({ user 
                                                     {doItem.isHandwritten && (
                                                         <span className="px-2 py-0.5 rounded-md bg-amber-500/20 border border-amber-500/50 text-amber-300 font-bold text-[11px] flex items-center gap-1 shadow-sm">
                                                             <span>📝</span> {t('手写便签 / 临时加单')}
+                                                        </span>
+                                                    )}
+                                                    {doItem.isAgentDelivery && (
+                                                        <span className="px-2 py-0.5 rounded-md bg-orange-500/20 border border-orange-500/50 text-orange-300 font-bold text-[11px] flex items-center gap-1 shadow-sm" title={doItem.agentFullName || doItem.agentName}>
+                                                            <span>🏢</span> {t('代理商代发')}: {doItem.agentName || 'Agent'}
+                                                        </span>
+                                                    )}
+                                                    {doItem.adminEdited && (
+                                                        <span className="px-1.5 py-0.5 rounded text-[10px] bg-sky-500/20 text-sky-300 border border-sky-500/40 font-bold flex items-center gap-1">
+                                                            <span>✏️</span> {t('已人工修改')}
                                                         </span>
                                                     )}
                                                     <div className="flex items-center gap-1.5">
@@ -8147,6 +8306,31 @@ const DeliveryOrderManagement: React.FC<DeliveryOrderManagementProps> = ({ user 
                                                     placeholder={t('例如：货款现结、到达前先致电、放门卫处等...')}
                                                 />
                                             </div>
+
+                                            {/* 🏢 Agent DO Detail Box */}
+                                            {doItem.isAgentDelivery && (
+                                                <div className="p-2.5 rounded-xl bg-orange-950/30 border border-orange-500/40 text-orange-200 text-xs flex flex-col sm:flex-row items-start sm:items-center justify-between gap-2 shadow-sm">
+                                                    <div className="flex items-center gap-2">
+                                                        <span className="text-base leading-none">🏢</span>
+                                                        <div>
+                                                            <div className="font-bold flex items-center gap-1.5 flex-wrap">
+                                                                <span className="text-orange-300">{t('代理商')}:</span>
+                                                                <span className="font-mono bg-orange-900/60 px-1.5 py-0.5 rounded border border-orange-500/40 text-orange-100 font-bold">
+                                                                    {doItem.agentFullName || doItem.agentName}
+                                                                </span>
+                                                                {doItem.originalDoNumber && (
+                                                                    <span className="text-[11px] text-orange-300 font-mono">
+                                                                        ({t('原单号')}: {doItem.originalDoNumber})
+                                                                    </span>
+                                                                )}
+                                                            </div>
+                                                        </div>
+                                                    </div>
+                                                    <div className="text-[11px] text-amber-300/90 font-medium">
+                                                        ⚠️ {t('司机现场交接时请出示代理商 DO，切勿提及 Packsecure 名义')}
+                                                    </div>
+                                                </div>
+                                            )}
 
                                             {/* Items List with Standard SKU Selector & Flexible Edit */}
                                             <div className="pt-2 border-t border-slate-800/60 space-y-2">

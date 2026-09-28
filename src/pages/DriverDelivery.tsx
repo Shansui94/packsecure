@@ -877,13 +877,26 @@ const DriverDelivery: React.FC<DriverDeliveryProps> = ({ user, onNavigate }) => 
             ? "Adakah anda pasti mahu TAMATKAN TRIP ini?\n\nAre you sure you want to END this trip?"
             : "Adakah anda pasti mahu HANTAR drop point ini?\n\nAre you sure you want to SUBMIT this drop point?";
         if (!window.confirm(confirmMsg)) return;
-        
-        // Product Photo is required unless it's a final drop where photos are optional.
-        // DO Photo is always optional during initial delivery (can be uploaded later).
-        const needsProductPhoto = !isFinalDrop;
-        if (needsProductPhoto && !unloadProductPhotoBase64) {
-            alert("⚠️ Sila ambil gambar barang! / Please take the Product photo!");
-            return;
+
+        const rawPod = selectedOrder.pod_photo_url ? selectedOrder.pod_photo_url.trim() : '';
+        const existingPhotos = rawPod ? rawPod.split(',') : [];
+        const hasExistingProduct = existingPhotos.some((url: string, idx: number) => idx % 2 === 1 && Boolean(url && url.trim()));
+        const hasExistingAny = existingPhotos.some((url: string) => Boolean(url && url.trim()));
+
+        // Check photo requirements:
+        // If driver already uploaded photos previously (e.g. updating POD or backfilling DO), allow submitting if DO or Product is provided
+        if (hasExistingAny) {
+            if (!unloadProductPhotoBase64 && !unloadDoPhotoBase64 && !isFinalDrop) {
+                alert("⚠️ Sila ambil sekurang-kurangnya satu gambar (DO atau Barang)! / Please take at least one photo (DO or Product)!");
+                return;
+            }
+        } else {
+            // Initial delivery: product photo is required unless it's a final drop or DO photo is provided
+            const needsProductPhoto = !isFinalDrop;
+            if (needsProductPhoto && !unloadProductPhotoBase64 && !unloadDoPhotoBase64) {
+                alert("⚠️ Sila ambil sekurang-kurangnya satu gambar (Barang atau DO)! / Please take at least one photo (Product or DO)!");
+                return;
+            }
         }
 
         setSubmitting(true);
@@ -935,31 +948,6 @@ const DriverDelivery: React.FC<DriverDeliveryProps> = ({ user, onNavigate }) => 
                 }
             }
 
-            // Append to existing photos as a structured pair [DO, Product] per drop
-            const newPair = [doUrl || '', prodUrl || ''];
-            const rawPod = selectedOrder.pod_photo_url ? selectedOrder.pod_photo_url.trim() : '';
-            const existingPhotos = rawPod ? rawPod.split(',') : [];
-            const newPhotos = [...existingPhotos, ...newPair];
-            const podPhotoUrl = newPhotos.join(',');
-
-            // Append driver notes to original order notes with timestamp
-            const now = new Date();
-            const timeStr = now.toLocaleDateString('en-GB', { day: '2-digit', month: '2-digit' }) + ' ' +
-                            now.toLocaleTimeString('en-GB', { hour: '2-digit', minute: '2-digit' });
-            
-            const hasNewPhotos = Boolean(doUrl) || Boolean(prodUrl);
-            const defaultNote = hasNewPhotos ? "Proof uploaded" : "Trip completed";
-            const newNoteSegment = deliveryNote.trim() 
-                ? `[${timeStr}] ${deliveryNote.trim()}`
-                : `[${timeStr}] ${defaultNote}`;
-
-            let finalNote = selectedOrder.notes || '';
-            if (finalNote) {
-                finalNote = `${finalNote}\n${newNoteSegment}`;
-            } else {
-                finalNote = newNoteSegment;
-            }
-
             // Multi-drop aware: Always fetch freshest trip_drop_count from DB to prevent stale client state
             let freshTripDropCount = (selectedOrder as any).trip_drop_count;
             try {
@@ -995,9 +983,53 @@ const DriverDelivery: React.FC<DriverDeliveryProps> = ({ user, onNavigate }) => 
             }
 
             // If the order is part of a multi-order trip, this individual order only needs 1 drop.
-            // If the order is a standalone multi-drop trip (trip_drop_count > 1), keep status 'Loaded' until all drops are submitted.
             const totalDrops = isMultiOrder ? 1 : Math.max(1, Number(freshTripDropCount) || 1);
+            const completedDropsBefore = countCompletedDrops(rawPod);
+
+            // Update photo slots intelligently to prevent duplicate drops
+            let podPhotoUrl = '';
+            if (isMultiOrder || totalDrops === 1 || completedDropsBefore >= totalDrops) {
+                // Updating existing drop (single-drop or re-editing completed drop)
+                const updatedPhotos = [...existingPhotos];
+                while (updatedPhotos.length < 2) updatedPhotos.push('');
+
+                const targetDoIndex = (totalDrops === 1 || isMultiOrder) ? 0 : Math.max(0, (completedDropsBefore - 1) * 2);
+                const targetProdIndex = targetDoIndex + 1;
+
+                if (doUrl) {
+                    updatedPhotos[targetDoIndex] = doUrl;
+                }
+                if (prodUrl) {
+                    updatedPhotos[targetProdIndex] = prodUrl;
+                }
+                const maxSlots = Math.max(2, totalDrops * 2);
+                podPhotoUrl = updatedPhotos.slice(0, maxSlots).join(',');
+            } else {
+                // Adding a NEW drop to an ongoing multi-drop delivery (e.g. Drop 2 of 3)
+                const newPair = [doUrl || '', prodUrl || ''];
+                const newPhotos = [...existingPhotos, ...newPair];
+                podPhotoUrl = newPhotos.join(',');
+            }
+
             const completedDrops = countCompletedDrops(podPhotoUrl);
+
+            // Append driver notes to original order notes with timestamp
+            const now = new Date();
+            const timeStr = now.toLocaleDateString('en-GB', { day: '2-digit', month: '2-digit' }) + ' ' +
+                            now.toLocaleTimeString('en-GB', { hour: '2-digit', minute: '2-digit' });
+            
+            const hasNewPhotos = Boolean(doUrl) || Boolean(prodUrl);
+            const defaultNote = hasNewPhotos ? "Proof uploaded" : "Trip completed";
+            const newNoteSegment = deliveryNote.trim() 
+                ? `[${timeStr}] ${deliveryNote.trim()}`
+                : `[${timeStr}] ${defaultNote}`;
+
+            let finalNote = selectedOrder.notes || '';
+            if (finalNote) {
+                finalNote = `${finalNote}\n${newNoteSegment}`;
+            } else {
+                finalNote = newNoteSegment;
+            }
 
             // Safety guard: if driver marked isFinalDrop before all drops are finished, prompt confirmation
             if (!isMultiOrder && isFinalDrop && completedDrops < totalDrops) {
@@ -1031,6 +1063,9 @@ const DriverDelivery: React.FC<DriverDeliveryProps> = ({ user, onNavigate }) => 
                 pod_photo_url: podPhotoUrl,
                 notes: updatedNotes
             };
+            if (doUrl || prodUrl) {
+                updatePayload.pod_signature_url = doUrl || prodUrl;
+            }
 
             // Update order status, set pod_photo_url, pod_timestamp, notes, etc.
             const { data: updatedData, error: updateError } = await supabase.from('sales_orders').update(updatePayload).eq('id', selectedOrder.id).select();
@@ -2355,6 +2390,21 @@ const DriverDelivery: React.FC<DriverDeliveryProps> = ({ user, onNavigate }) => 
 
         const isDeliveredOrDone = isOrderFullyDelivered(order, isMultiOrderTrip);
 
+        const isAgentOrder = Boolean(
+            (order as any).is_agent_delivery ||
+            (order.customer && order.customer.startsWith('[')) ||
+            (order.notes && (order.notes.includes('代理商代发') || order.notes.includes('DO 代理商') || order.notes.includes('AGENT DO') || order.notes.includes('Sila minta pelanggan cop')))
+        );
+
+        let agentTag = '';
+        if (order.customer && order.customer.startsWith('[')) {
+            const m = order.customer.match(/^\[(.*?)\]/);
+            if (m) agentTag = m[1].toUpperCase();
+        } else if (order.notes) {
+            const m = order.notes.match(/代理商代发:\s*([^\|\n\]]+)/i);
+            if (m) agentTag = m[1].trim().toUpperCase();
+        }
+
         return (
             <div key={order.id} className="bg-slate-900 border border-slate-800 rounded-2xl overflow-hidden shadow-lg relative">
                 {/* Status Strip */}
@@ -2378,6 +2428,11 @@ const DriverDelivery: React.FC<DriverDeliveryProps> = ({ user, onNavigate }) => 
                             {order.orderNumber && (
                                 <span className="text-[11px] font-mono font-black uppercase bg-blue-600/20 text-blue-300 px-2.5 py-0.5 rounded-md border border-blue-500/30">
                                     DO: {order.orderNumber}
+                                </span>
+                            )}
+                            {isAgentOrder && (
+                                <span className="text-[11px] font-black uppercase bg-orange-600/30 text-orange-300 px-2.5 py-0.5 rounded-md border border-orange-500/50 flex items-center gap-1 shadow-sm">
+                                    🏢 DO {agentTag || 'AGEN'} / 代理商单
                                 </span>
                             )}
                             {(order as any).terms && (
@@ -2409,6 +2464,26 @@ const DriverDelivery: React.FC<DriverDeliveryProps> = ({ user, onNavigate }) => 
                                 <span>🏢</span>
                                 <span>{order.customer}</span>
                             </h2>
+                        )}
+
+                        {/* ⚠️ Driver SOP Advisory for Agent DO */}
+                        {isAgentOrder && (
+                            <div className="bg-gradient-to-r from-orange-950/80 via-amber-950/50 to-slate-900 border-2 border-orange-500/80 rounded-xl p-3 my-2 shadow-lg">
+                                <div className="flex items-start gap-2.5">
+                                    <span className="text-xl leading-none mt-0.5">⚠️</span>
+                                    <div className="space-y-1">
+                                        <div className="text-xs font-black text-orange-200 uppercase tracking-wide">
+                                            ARAHAN PENGHANTARAN AGEN / 代理商送货指引
+                                        </div>
+                                        <div className="text-[12px] text-amber-200 font-bold leading-relaxed">
+                                            Sila minta pelanggan cop & tanda tangan pada <span className="underline text-white font-mono font-bold">DO {agentTag || 'AGEN'} ({order.orderNumber})</span> fizikal.
+                                        </div>
+                                        <div className="text-[11px] text-orange-300 font-semibold">
+                                            🚫 <span className="font-bold text-orange-100">JANGAN sebut nama Packsecure</span>. Serahkan hanya dokumen DO agen kepada pelanggan.
+                                        </div>
+                                    </div>
+                                </div>
+                            </div>
                         )}
 
                         {/* Address & Navigation */}
@@ -2694,41 +2769,24 @@ const DriverDelivery: React.FC<DriverDeliveryProps> = ({ user, onNavigate }) => 
                                         </div>
                                     )}
                                     <button
-                                        onClick={() => handleTriggerDirectDeliveryUpload(order)}
-                                        disabled={isDirectUploadingThis}
-                                        data-action="DIRECT_DELIVERY_UPLOAD"
-                                        data-action-name="拍照/上传直接确认送货"
+                                        onClick={() => handleOpenUnloadModal(order)}
+                                        data-action="OPEN_UNLOAD_MODAL"
+                                        data-action-name="打开送货卸货与拍照窗口"
                                         data-target={`工单 #${order.orderNumber || order.id}`}
-                                        className="w-full py-4 bg-emerald-600 hover:bg-emerald-500 disabled:bg-slate-800 text-white disabled:text-slate-500 rounded-xl font-black uppercase text-sm tracking-widest flex items-center justify-center gap-2.5 shadow-lg shadow-emerald-950/40 active:scale-95 transition-all cursor-pointer"
+                                        className="w-full py-4 bg-emerald-600 hover:bg-emerald-500 text-white rounded-xl font-black uppercase text-sm tracking-widest flex items-center justify-center gap-2.5 shadow-lg shadow-emerald-950/40 active:scale-95 transition-all cursor-pointer"
                                     >
-                                        {isDirectUploadingThis ? (
-                                            <>
-                                                <div className="w-5 h-5 border-2 border-white/30 border-t-white rounded-full animate-spin" />
-                                                <span>MEMUAT NAIK & SAHKAN... / CONFIRMING...</span>
-                                            </>
-                                        ) : (
-                                            <>
-                                                <Camera size={20} className="text-emerald-200" />
-                                                <span>
-                                                    {isWaitingDo
-                                                        ? '📸 MUAT NAIK GAMBAR DO / UPLOAD DO'
-                                                        : (btnTotalDrops > 1
-                                                            ? `📸 MUAT NAIK GAMBAR (Drop ${Math.min(btnDoneDrops + 1, btnTotalDrops)}/${btnTotalDrops})`
-                                                            : '📸 MUAT NAIK GAMBAR / UPLOAD PHOTO')}
-                                                </span>
-                                            </>
-                                        )}
+                                        <Camera size={20} className="text-emerald-200" />
+                                        <span>
+                                            {isWaitingDo
+                                                ? '📸 MUAT NAIK GAMBAR DO / UPLOAD DO'
+                                                : (btnTotalDrops > 1
+                                                    ? `📸 SAHKAN HANTARAN (Drop ${Math.min(btnDoneDrops + 1, btnTotalDrops)}/${btnTotalDrops})`
+                                                    : '📸 SAHKAN HANTARAN / CONFIRM DELIVERY')}
+                                        </span>
                                     </button>
-                                    <div className="flex items-center justify-between px-1 text-[11px] text-slate-400">
-                                        <button
-                                            type="button"
-                                            onClick={() => handleOpenUnloadModal(order)}
-                                            className="hover:text-blue-400 flex items-center gap-1 transition-colors py-1 cursor-pointer"
-                                        >
-                                            <span>📝 Tambah Nota / More Options</span>
-                                        </button>
-                                        <span className="text-[10px] text-slate-500">
-                                            {isWaitingDo ? '⚠️ Ambil gambar DO bertandatangan' : '📸 Terus muat naik & sahkan hantaran'}
+                                    <div className="flex items-center justify-center px-1 text-[11px] text-slate-400">
+                                        <span className="text-[10px] text-slate-400">
+                                            {isWaitingDo ? '⚠️ Sila ambil gambar DO bertandatangan' : '📸 Ambil gambar DO & Barang untuk sahkan penghantaran'}
                                         </span>
                                     </div>
                                 </div>
@@ -3310,6 +3368,42 @@ const DriverDelivery: React.FC<DriverDeliveryProps> = ({ user, onNavigate }) => 
                     </div>
 
                     <div className="flex-1 overflow-y-auto p-4 space-y-6 bg-black">
+                        {/* ⚠️ Peringatan DO Agen di Halaman Sahkan Hantaran */}
+                        {(() => {
+                            const isAgent = Boolean(
+                                (selectedOrder as any).is_agent_delivery ||
+                                (selectedOrder.customer && selectedOrder.customer.startsWith('[')) ||
+                                (selectedOrder.notes && (selectedOrder.notes.includes('代理商代发') || selectedOrder.notes.includes('DO 代理商') || selectedOrder.notes.includes('AGENT DO') || selectedOrder.notes.includes('Sila minta pelanggan cop')))
+                            );
+                            if (!isAgent) return null;
+                            let agent = '';
+                            if (selectedOrder.customer && selectedOrder.customer.startsWith('[')) {
+                                const m = selectedOrder.customer.match(/^\[(.*?)\]/);
+                                if (m) agent = m[1].toUpperCase();
+                            } else if (selectedOrder.notes) {
+                                const m = selectedOrder.notes.match(/代理商代发:\s*([^\|\n\]]+)/i);
+                                if (m) agent = m[1].trim().toUpperCase();
+                            }
+                            return (
+                                <div className="bg-gradient-to-r from-orange-950/90 via-amber-950/60 to-slate-900 border-2 border-orange-500 rounded-2xl p-4 shadow-xl">
+                                    <div className="flex items-start gap-3">
+                                        <span className="text-2xl leading-none">🏢</span>
+                                        <div className="space-y-1">
+                                            <div className="text-xs font-black text-orange-200 uppercase tracking-wide">
+                                                PERINGATAN PENTING: PENGHANTARAN DO AGEN ({agent || 'AGEN'})
+                                            </div>
+                                            <div className="text-xs text-amber-100 font-bold leading-relaxed">
+                                                Sila pastikan pelanggan cop & tanda tangan pada <span className="underline text-white font-mono font-bold">DO {agent || 'AGEN'} fizikal</span>.
+                                            </div>
+                                            <div className="text-[11px] text-orange-300 font-medium">
+                                                🚫 <span className="font-bold text-white">DILARANG sebut nama Packsecure</span>. Ambil gambar DO {agent || 'AGEN'} yang bercop untuk pengesahan.
+                                            </div>
+                                        </div>
+                                    </div>
+                                </div>
+                            );
+                        })()}
+
                         {/* GPS Location Panel */}
                         <div className="bg-slate-900/80 border border-slate-800 p-4 rounded-2xl flex items-center justify-between">
                             <div className="flex items-center gap-3">
@@ -3336,7 +3430,7 @@ const DriverDelivery: React.FC<DriverDeliveryProps> = ({ user, onNavigate }) => 
                             {/* DO Photo Slot */}
                             <div className="space-y-2">
                                 <label className="text-xs font-bold text-slate-400 uppercase tracking-widest block">
-                                    1. GAMBAR DO (Delivery Order) {isFinalDrop && <span className="text-[10px] text-amber-500 font-bold lowercase tracking-normal bg-amber-500/10 px-1.5 py-0.5 rounded ml-1">(pilihan / optional)</span>}
+                                    1. GAMBAR DO {selectedOrder.customer?.startsWith('[') ? 'AGEN ' : ''}(Delivery Order) {isFinalDrop && <span className="text-[10px] text-amber-500 font-bold lowercase tracking-normal bg-amber-500/10 px-1.5 py-0.5 rounded ml-1">(pilihan / optional)</span>}
                                 </label>
                                 {unloadDoPhotoBase64 ? (
                                     <div className="relative aspect-square rounded-xl overflow-hidden border border-slate-800 bg-slate-900 shadow-inner group">
@@ -3529,7 +3623,7 @@ const DriverDelivery: React.FC<DriverDeliveryProps> = ({ user, onNavigate }) => 
                     <div className="p-4 border-t border-slate-800 bg-slate-900 space-y-3 safe-bottom-padding">
                         <button
                             onClick={handleConfirmUnload}
-                            disabled={submitting || uploadingTarget !== null || !unloadProductPhotoBase64}
+                            disabled={submitting || uploadingTarget !== null || (!unloadProductPhotoBase64 && !unloadDoPhotoBase64 && !isFinalDrop && !(selectedOrder.pod_photo_url && selectedOrder.pod_photo_url.trim()))}
                             className="w-full py-4 bg-emerald-600 hover:bg-emerald-500 disabled:bg-slate-800 text-white disabled:text-slate-500 rounded-xl font-black text-lg uppercase tracking-widest shadow-lg shadow-emerald-950/40 disabled:shadow-none transition-all active:scale-95 flex items-center justify-center gap-2"
                         >
                             {submitting ? (

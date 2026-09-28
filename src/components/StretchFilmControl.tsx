@@ -32,6 +32,7 @@ import { User as UserType } from '../types';
 import { compressImage, dataURLtoBlob } from '../utils/imageCompress';
 import { useTranslation } from 'react-i18next';
 import { thermalPrinterService, LabelData } from '../services/thermalPrinterService';
+import { resolveOperatorSysId } from '../utils/operatorResolver';
 
 export interface StretchFilmPreset {
     sku: string;
@@ -406,6 +407,12 @@ export const StretchFilmControl: React.FC<StretchFilmControlProps> = ({
         setIsSubmitting(true);
         try {
             const uploadedPhotoUrl = await uploadPhotoToStorage('sf_trolley');
+            const opSysId = await resolveOperatorSysId({
+                operatorId,
+                employeeId: operatorEmployeeId || user?.employeeId,
+                operatorName,
+                user
+            });
 
             const finalNote = `【推车出箱报工】${boxesCount} 箱 (${totalRollsInBatch} 卷) | 净重约 ${totalWeightInBatch}kg | 规格: ${selectedPreset.sku}${batchNote ? ` | 备注: ${batchNote}` : ''}`;
             
@@ -415,7 +422,7 @@ export const StretchFilmControl: React.FC<StretchFilmControlProps> = ({
                     machine_id: machineId,
                     sku: selectedPreset.sku,
                     output_qty: totalRollsInBatch,
-                    operator_id: operatorId || uploaderEmployeeId,
+                    operator_id: opSysId,
                     note: finalNote
                 }])
                 .select()
@@ -527,6 +534,12 @@ export const StretchFilmControl: React.FC<StretchFilmControlProps> = ({
         setIsSubmitting(true);
         try {
             const uploadedPhotoUrl = await uploadPhotoToStorage('sf_defect');
+            const opSysId = await resolveOperatorSysId({
+                operatorId,
+                employeeId: operatorEmployeeId || user?.employeeId,
+                operatorName,
+                user
+            });
 
             const defectSummary = `【次品过磅】原因: ${defectReason} | 重量: ${wt} kg | 机台: ${machineId}${defectNote ? ` | 备注: ${defectNote}` : ''}`;
 
@@ -535,7 +548,7 @@ export const StretchFilmControl: React.FC<StretchFilmControlProps> = ({
                 machine_id: machineId,
                 sku: selectedPreset.sku,
                 output_qty: 0,
-                operator_id: operatorId || uploaderEmployeeId,
+                operator_id: opSysId,
                 note: defectSummary
             }]);
 
@@ -639,13 +652,19 @@ export const StretchFilmControl: React.FC<StretchFilmControlProps> = ({
     const handleConfirmDowntime = async () => {
         setIsLoggingDowntime(true);
         try {
+            const opSysId = await resolveOperatorSysId({
+                operatorId,
+                employeeId: operatorEmployeeId || user?.employeeId,
+                operatorName,
+                user
+            });
             const finalDowntimeNote = `【停机归因】原因: ${selectedDowntimeReason}${downtimeDetailNote ? ` | 备注: ${downtimeDetailNote}` : ''}`;
             
             const { error } = await supabase.from('production_logs_v2').insert([{
                 machine_id: machineId,
                 sku: selectedPreset.sku || 'SF-DOWNTIME',
                 output_qty: 0,
-                operator_id: operatorId || user?.employeeId || null,
+                operator_id: opSysId,
                 note: finalDowntimeNote
             }]);
 

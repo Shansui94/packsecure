@@ -247,6 +247,8 @@ export const CORE_TERMS: {
     { en: 'In', 'zh-CN': '入', 'zh-TW': '入', ms: 'Masuk', my: 'အဝင်', hi: 'अंदर', bn: 'প্রবেশ' },
     { en: 'Out', 'zh-CN': '出', 'zh-TW': '出', ms: 'Keluar', my: 'အထွက်', hi: 'बाहर', bn: 'প্রস্থান' },
     { en: 'Delivering', 'zh-CN': '配送中', 'zh-TW': '配送中', ms: 'Dalam Penghantaran', my: 'ပို့ဆောင်နေသည်', hi: 'वितरण जारी है', bn: 'বিতরণ চলছে' },
+    { en: 'Auto Logistic Sync', 'zh-CN': '物流自动计算', 'zh-TW': '物流自動計算', ms: 'Kiraan Logistik Auto', my: 'ထောက်ပံ့ပို့ဆောင်ရေး အလိုအလျောက် တွက်ချက်မှု', hi: 'स्वचालित रसद गणना', bn: 'স্বয়ংক্রিয় লজিস্টিক গণনা' },
+    { en: 'In-progress', 'zh-CN': '实时在岗', 'zh-TW': '即時在崗', ms: 'Sedang Bertugas', my: 'လုပ်ဆောင်နေသည်', hi: 'प्रगति पर', bn: 'চলমান' },
     { en: 'No pending staff records under current view.', 'zh-CN': '当前视图下没有待审核的员工记录。', 'zh-TW': '當前視圖下沒有待審核的員工記錄。', ms: 'Tiada rekod kakitangan menunggu semakan dalam paparan semasa.', my: 'လက်ရှိမြင်ကွင်းတွင် စစ်ဆေးရန်ကျန်သော ဝန်ထမ်းမှတ်တမ်းမရှိပါ။', hi: 'वर्तमान दृश्य में कोई लंबित कर्मचारी रिकॉर्ड नहीं है।', bn: 'বর্তমান দৃশ্যে কোনো মুলতুবি স্টাফ রেকর্ড নেই।' },
     { en: 'Are you sure to batch approve ', 'zh-CN': '确定要一键核准', 'zh-TW': '確定要一鍵核准', ms: 'Pasti ingin mengesahkan secara pukal ', my: 'အစုလိုက်အတည်ပြုရန် သေချာပါသလား ', hi: 'क्या आप बल्क में स्वीकृत करना चाहते हैं ', bn: 'আপনি কি নিশ্চিত যে ব্যাচ অনুমোদন করতে চান ' },
     { en: 'currently filtered ', 'zh-CN': '当前筛选出的', 'zh-TW': '當前篩選出的', ms: 'yang ditapis ', my: 'လက်ရှိစစ်ထုတ်ထားသော ', hi: 'वर्तमान फ़िल्टर किए गए ', bn: 'বর্তমানে ফিল্টার করা ' },
