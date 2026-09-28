@@ -99,9 +99,9 @@ export interface RulePatchSuggestion {
 }
 
 export const CANONICAL_DRIVER_PRICING_MD = `# Packsecure 司机运费与送货价格真理库 (Driver Pricing Rulebook)
-**版本 / Version**: \`v2.0.0 (数据库全量对齐版)\` ｜ **更新日期 / Date**: \`2026-09-28\` ｜ **审核人 / Owner**: \`HR & Logistics\` ｜ **状态 / Status**: \`Active\`
+**版本 / Version**: \`v2.1.0 (Excel 官方对照校准版)\` ｜ **更新日期 / Date**: \`2026-09-28\` ｜ **审核人 / Owner**: \`HR & Logistics\` ｜ **状态 / Status**: \`Active\`
 
-> **说明 (Instruction)**: 本文档是 Packsecure 司机送货价格计算的核心业务真理，与系统数据库 \`delivery_rates\` 官方有效运费表 100% 对齐。覆盖 **太平 (TAIPING)**、**汝来 (NILAI)**、**柔佛 (JOHOR)** 与 **吉兰丹 (KELANTAN)** 4 大出车起运基地。AI 运费核算引擎与 HR 审核工作台均以此规则为最高依据。任何管理人员或 HR 均可在前端在线修改并一键发布新版本。
+> **说明 (Instruction)**: 本文档是 Packsecure 司机送货价格计算的核心业务真理，与系统数据库 \`delivery_rates\` 官方有效运费表及工厂最新核定 Excel 100% 对齐。覆盖 **太平 (TAIPING)**、**汝来 (NILAI)**、**柔佛 (JOHOR)** 与 **吉兰丹 (KELANTAN)** 4 大出车起运基地。AI 运费核算引擎与 HR 审核工作台均以此规则为最高依据。任何管理人员或 HR 均可在前端在线修改并一键发布新版本。
 
 ---
 
@@ -125,28 +125,29 @@ export const CANONICAL_DRIVER_PRICING_MD = `# Packsecure 司机运费与送货�
    - 特殊车辆 **\`APH 9821\`**：92 卷重卡。
 5. **现场特殊支援任务补贴 (Extra Allowances)**：
    司机在日常干线/外坡送货之外，在厂区或本地完成的现场支援任务，经照片存证与 HR 审核后计入当月工资：
-   - 🛍️ **\`SHOPEE / SPD\` 散单送件**：**RM 20.00** / 趟
-   - 🚚 **\`TAIPING TRIP\` 厂区驳运**：**RM 7.00** / 趟
-   - 🪵 **\`AMBIK PALLET\` 搬运托盘**：**RM 10.00** / 趟
+   - 🛍️ **\`OPM - SHOPEE/SPD\` (或 \`SHOPEE / SPD\`) 散单送件**：**RM 20.00** / 趟（包含 1 点，超点 +RM 20 / 点）
+   - 🚚 **\`TAIPING TRIP\` 厂区驳运**：**RM 7.00** / 趟（包含 1 点，超点 +RM 7 / 点）
+   - 🪵 **\`AMBIL PALLET\` (或 \`AMBIK PALLET\`) 搬运托盘**：**RM 10.00** / 趟
    - 🔧 **\`LORRY SERVICE\` 送修验车 (Puspakom)**：**RM 15.00** / 趟
-   - 📦 **\`OPM - SHOPEE/SPD\` 短途件**：**RM 12.00** / 趟
    - ↩️ **\`RETURN\` / \`OTHER\`**：客户退货调拨或特定临时任务，由 Admin / Manager 依实际路程特批审核。
 
 ---
 
 ## 2. 太平厂起运 (TAIPING Origin) 价目表
-> 太平总厂 (TAIPING / OPM Lama) 出车，覆盖霹雳本地、槟城威省、吉打玻州、雪隆森美兰及东海岸各州的标准配送费率：
+> 太平总厂 (TAIPING / OPM Lama) 出车，覆盖霹雳本地、槟城威省、吉打玻州、雪隆森美兰及东海岸各州的标准配送费率（与官方 Excel 表完全一致）：
 
 ### 2.1 太平标准生效价目表 (Active Rates)
-| 目的地区域 (Zone / Location) | 标准基准价 (Base) | 免费落点数 (Max Places) | 超点补贴/点 (Extra Drop) | 备注说明 (Notes) |
-| :--- | :--- | :--- | :--- | :--- |
+| 目的地区域 (Zone / Location) | 标准基准价 (Base Rate) | 免费落点数 (Max Place) | 超点补贴/点 (Tambah Tempat Rate) | 备注说明 (Notes) |
+| :--- | :---: | :---: | :---: | :--- |
 | **KUALA TERENGGANU** | **RM 480** | 3 点 | +RM 15 / 点 | - |
 | **BESUT** | **RM 430** | 3 点 | +RM 15 / 点 | - |
 | **NEGERI SEMBILAN** | **RM 400** | 3 点 | +RM 15 / 点 | - |
+| **JENGKA** | **RM 380** | 3 点 | +RM 10 / 点 | Official Excel: Jengka (Pahang) |
 | **KELANTAN** | **RM 380** | 3 点 | +RM 15 / 点 | - |
 | **KOTA BHARU** | **RM 380** | 3 点 | +RM 15 / 点 | - |
 | **BENTONG** | **RM 330** | 3 点 | +RM 10 / 点 | - |
-| **KL** | **RM 330** | 0 点 | +RM 10 / 点 | - |
+| **KARAK** | **RM 330** | 3 点 | +RM 10 / 点 | Official Excel: Karak (Pahang) |
+| **KL** | **RM 330** | 3 点 | +RM 10 / 点 | Official Excel: KL (3 places included, +10/place) |
 | **KL (1 TEMPAT)** | **RM 250** | 0 点 | +RM 0 / 点 | - |
 | **ARAU** | **RM 165** | 3 点 | +RM 5 / 点 | - |
 | **BUKIT KAYU HITAM** | **RM 165** | 3 点 | +RM 5 / 点 | - |
@@ -173,18 +174,19 @@ export const CANONICAL_DRIVER_PRICING_MD = `# Packsecure 司机运费与送货�
 | **PENANG** | **RM 80** | 3 点 | +RM 5 / 点 | - |
 | **SIMPANG AMPAT (PENANG)** | **RM 80** | 3 点 | +RM 5 / 点 | - |
 | **SITIAWAN** | **RM 80** | 3 点 | +RM 5 / 点 | - |
+| **OPM - SHOPEE/SPD** | **RM 20** | 1 点 | +RM 20 / 点 | Official Excel: OPM - Shopee/Spd (+20/place extra) |
 | **SHOPEE** | **RM 20** | 1 点 | +RM 0 / 点 | Extra Job Rate |
 | **SHOPEE / SPD** | **RM 20** | 1 点 | +RM 0 / 点 | Extra Job Rate |
 | **LORRY SERVICE** | **RM 15** | 0 点 | +RM 0 / 点 | - |
-| **OPM - SHOPEE/SPD** | **RM 12** | 0 点 | +RM 0 / 点 | - |
-| **AMBIK PALLET** | **RM 10** | 0 点 | +RM 0 / 点 | - |
-| **TAIPING TRIP** | **RM 7** | 1 点 | +RM 0 / 点 | Extra Job Rate |
+| **AMBIK PALLET** | **RM 10** | 0 点 | +RM 0 / 点 | Alias for Ambil Pallet |
+| **AMBIL PALLET** | **RM 10** | 0 点 | +RM 0 / 点 | Official Excel: Ambil Pallet |
+| **TAIPING TRIP** | **RM 7** | 1 点 | +RM 7 / 点 | Official Excel: Taiping Trip (+7/place extra) |
 
 ### 2.2 太平待确权与待定义区域 (Pending Definitions)
 > ⚠️ 以下区域在数据库原表中费率为 0，开单时不可直接按 0 结算，必须由调度或 HR 明确具体经停城镇或手动补录有效费率：
 
-| 目的地区域 (Zone / Location) | 标准基准价 (Base) | 免费落点数 (Max Places) | 超点补贴/点 (Extra Drop) | 备注说明 (Notes) |
-| :--- | :--- | :--- | :--- | :--- |
+| 目的地区域 (Zone / Location) | 标准基准价 (Base Rate) | 免费落点数 (Max Place) | 超点补贴/点 (Tambah Tempat Rate) | 备注说明 (Notes) |
+| :--- | :---: | :---: | :---: | :--- |
 | **JOHOR** | **RM 0** | 1 点 | +RM 0 / 点 | Auto-imported from Trip form. HR please update rate. |
 | **LUNAS** | **RM 0** | 1 点 | +RM 0 / 点 | Auto-imported from Trip form. HR please update rate. |
 | **OTHER** | **RM 0** | 1 点 | +RM 0 / 点 | Extra Job Rate |
@@ -203,8 +205,8 @@ export const CANONICAL_DRIVER_PRICING_MD = `# Packsecure 司机运费与送货�
 > 汝来基地 (NILAI) 出车，向森美兰、雪兰莪、吉隆坡、马六甲、彭亨、登嘉楼及柔佛等地的配送费率：
 
 ### 3.1 汝来标准生效价目表 (Active Rates)
-| 目的地区域 (Zone / Location) | 标准基准价 (Base) | 免费落点数 (Max Places) | 超点补贴/点 (Extra Drop) | 备注说明 (Notes) |
-| :--- | :--- | :--- | :--- | :--- |
+| 目的地区域 (Zone / Location) | 标准基准价 (Base Rate) | 免费落点数 (Max Place) | 超点补贴/点 (Tambah Tempat Rate) | 备注说明 (Notes) |
+| :--- | :---: | :---: | :---: | :--- |
 | **DUNGUN** | **RM 320** | 3 点 | +RM 10 / 点 | - |
 | **KEMAMAN TERENGGANU** | **RM 280** | 3 点 | +RM 10 / 点 | - |
 | **JOHOR BAHRU** | **RM 250** | 3 点 | +RM 10 / 点 | - |
@@ -250,8 +252,8 @@ export const CANONICAL_DRIVER_PRICING_MD = `# Packsecure 司机运费与送货�
 ### 3.2 汝来待确权与待定义区域 (Pending Definitions)
 > ⚠️ 以下区域在数据库原表中费率为 0，开单时不可直接按 0 结算，必须由调度或 HR 明确具体经停城镇或手动补录有效费率：
 
-| 目的地区域 (Zone / Location) | 标准基准价 (Base) | 免费落点数 (Max Places) | 超点补贴/点 (Extra Drop) | 备注说明 (Notes) |
-| :--- | :--- | :--- | :--- | :--- |
+| 目的地区域 (Zone / Location) | 标准基准价 (Base Rate) | 免费落点数 (Max Place) | 超点补贴/点 (Tambah Tempat Rate) | 备注说明 (Notes) |
+| :--- | :---: | :---: | :---: | :--- |
 | **JOHOR** | **RM 0** | 1 点 | +RM 0 / 点 | Auto-imported from Trip form. HR please update rate. |
 | **KUALA LUMPUR** | **RM 0** | 1 点 | +RM 0 / 点 | Auto-imported from Trip form. HR please update rate. |
 | **OTHER** | **RM 0** | 1 点 | +RM 0 / 点 | Extra Job Rate |
@@ -268,8 +270,8 @@ export const CANONICAL_DRIVER_PRICING_MD = `# Packsecure 司机运费与送货�
 > 柔佛基地 (JOHOR) 出车，向新山、古来、笨珍、峇株巴辖、居銮、麻坡、丰盛港及昔加末等地的配送费率：
 
 ### 4.1 柔佛标准生效价目表 (Active Rates)
-| 目的地区域 (Zone / Location) | 标准基准价 (Base) | 免费落点数 (Max Places) | 超点补贴/点 (Extra Drop) | 备注说明 (Notes) |
-| :--- | :--- | :--- | :--- | :--- |
+| 目的地区域 (Zone / Location) | 标准基准价 (Base Rate) | 免费落点数 (Max Place) | 超点补贴/点 (Tambah Tempat Rate) | 备注说明 (Notes) |
+| :--- | :---: | :---: | :---: | :--- |
 | **MERSING** | **RM 130** | 1 点 | +RM 10 / 点 | - |
 | **SEGAMAT** | **RM 130** | 1 点 | +RM 10 / 点 | - |
 | **MUAR** | **RM 120** | 1 点 | +RM 10 / 点 | - |
@@ -291,8 +293,8 @@ export const CANONICAL_DRIVER_PRICING_MD = `# Packsecure 司机运费与送货�
 ### 4.2 柔佛待确权与待定义区域 (Pending Definitions)
 > ⚠️ 以下区域在数据库原表中费率为 0，开单时不可直接按 0 结算，必须由调度或 HR 明确具体经停城镇或手动补录有效费率：
 
-| 目的地区域 (Zone / Location) | 标准基准价 (Base) | 免费落点数 (Max Places) | 超点补贴/点 (Extra Drop) | 备注说明 (Notes) |
-| :--- | :--- | :--- | :--- | :--- |
+| 目的地区域 (Zone / Location) | 标准基准价 (Base Rate) | 免费落点数 (Max Place) | 超点补贴/点 (Tambah Tempat Rate) | 备注说明 (Notes) |
+| :--- | :---: | :---: | :---: | :--- |
 | **JOHOR** | **RM 0** | 1 点 | +RM 0 / 点 | Auto-imported from Trip form. HR please update rate. |
 | **MELAKA** | **RM 0** | 1 点 | +RM 0 / 点 | Auto-imported from Trip form. HR please update rate. |
 | **NILAI** | **RM 0** | 1 点 | +RM 0 / 点 | Auto-imported from Trip form. HR please update rate. |
@@ -306,8 +308,8 @@ export const CANONICAL_DRIVER_PRICING_MD = `# Packsecure 司机运费与送货�
 > 吉兰丹基地 (KELANTAN) 出车，向哥打峇鲁、巴西马、道北、马樟、巴西富地、丹那美拉、日里及话望生等地的配送费率：
 
 ### 5.1 吉兰丹标准生效价目表 (Active Rates)
-| 目的地区域 (Zone / Location) | 标准基准价 (Base) | 免费落点数 (Max Places) | 超点补贴/点 (Extra Drop) | 备注说明 (Notes) |
-| :--- | :--- | :--- | :--- | :--- |
+| 目的地区域 (Zone / Location) | 标准基准价 (Base Rate) | 免费落点数 (Max Place) | 超点补贴/点 (Tambah Tempat Rate) | 备注说明 (Notes) |
+| :--- | :---: | :---: | :---: | :--- |
 | **GUA MUSANG** | **RM 160** | 1 点 | +RM 10 / 点 | - |
 | **JELI** | **RM 80** | 1 点 | +RM 10 / 点 | - |
 | **KUALA KRAI** | **RM 60** | 1 点 | +RM 10 / 点 | - |
@@ -327,8 +329,8 @@ export const CANONICAL_DRIVER_PRICING_MD = `# Packsecure 司机运费与送货�
 ### 5.2 吉兰丹待确权与待定义区域 (Pending Definitions)
 > ⚠️ 以下区域在数据库原表中费率为 0，开单时不可直接按 0 结算，必须由调度或 HR 明确具体经停城镇或手动补录有效费率：
 
-| 目的地区域 (Zone / Location) | 标准基准价 (Base) | 免费落点数 (Max Places) | 超点补贴/点 (Extra Drop) | 备注说明 (Notes) |
-| :--- | :--- | :--- | :--- | :--- |
+| 目的地区域 (Zone / Location) | 标准基准价 (Base Rate) | 免费落点数 (Max Place) | 超点补贴/点 (Tambah Tempat Rate) | 备注说明 (Notes) |
+| :--- | :---: | :---: | :---: | :--- |
 | **OTHER** | **RM 0** | 1 点 | +RM 0 / 点 | Extra Job Rate |
 | **RETURN** | **RM 0** | 1 点 | +RM 0 / 点 | Extra Job Rate |
 
@@ -340,8 +342,10 @@ export const CANONICAL_DRIVER_PRICING_MD = `# Packsecure 司机运费与送货�
 - **Batu Kawan / 峇都交湾**：属于槟城威南，按 **SIMPANG AMPAT (PENANG) (RM 80)** 结算。
 - **Bukit Minyak / 武吉敏惹**：属于槟城威中，按 **BM (RM 80)** 结算。
 - **Nilai 3 / 汝来 3 工业区**：若从太平起运按 **NEGERI SEMBILAN (RM 400)** 结算；若从汝来本地起运按 **NILAI (RM 30)** 或 **NEGERI SEMBILAN (RM 80)** 结算。
+- **Karak / 加叻**：属于彭亨近郊，太平起运按 **KARAK (RM 330, 3点, +RM 10/点)** 结算。
+- **Jengka / 增卡**：属于彭亨腹地，太平起运按 **JENGKA (RM 380, 3点, +RM 10/点)** 结算。
 - **Skudai / 士姑来**：属于柔佛新山近郊，柔佛起运按 **JOHOR BAHRU (RM 40)** 结算。
-- **Rawang / 煤炭山**：属于雪兰莪，汝来起运按 **SELANGOR (RM 80)** 结算；太平起运按 **KL / SELANGOR** 相应标准结算。
+- **Rawang / 煤炭山**：属于雪兰莪，汝来起运按 **SELANGOR (RM 80)** 结算；太平起运按 **KL** 相应标准结算。
 - **多单拼车计费原则**：同一趟行程包含多个城镇时，以**最远核心目的地**作为 Base Rate，其余经停点按超点补贴 (+RM 5 ~ +RM 15 / 点) 累计。
 `;
 
