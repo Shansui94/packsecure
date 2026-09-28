@@ -114,6 +114,7 @@
 Trip Earnings = Base Rate + MAX(0, Drops - Max Places) * Extra Rate Per Place
 ```
 * 依据发货起点 (`trip_origin`) 与送达区域 (`zone`) 在 `delivery_rates` 表中匹配基准价与多点补贴。
+* 完整 4 大厂区（太平、汝来、柔佛、吉兰丹）全量官方价目表详见：[Driver_Pricing_Rules.md](sops/Driver_Pricing_Rules.md)。
 
 ### 4.3 司机额外任务补贴 (Extra Allowance)
 司机在出车送货之外完成的额外任务，拍照提交后需经 Admin / Manager 审核（Approved）方可计入当月工资：
