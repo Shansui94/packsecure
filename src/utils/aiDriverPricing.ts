@@ -207,46 +207,52 @@ export const CANONICAL_DRIVER_PRICING_MD = `# Packsecure 司机运费与送货�
 ### 3.1 汝来标准生效价目表 (Active Rates)
 | 目的地区域 (Zone / Location) | 标准基准价 (Base Rate) | 免费落点数 (Max Place) | 超点补贴/点 (Tambah Tempat Rate) | 备注说明 (Notes) |
 | :--- | :---: | :---: | :---: | :--- |
-| **DUNGUN** | **RM 320** | 3 点 | +RM 10 / 点 | - |
-| **KEMAMAN TERENGGANU** | **RM 280** | 3 点 | +RM 10 / 点 | - |
-| **JOHOR BAHRU** | **RM 250** | 3 点 | +RM 10 / 点 | - |
-| **KOTA TINGGI** | **RM 250** | 3 点 | +RM 10 / 点 | - |
-| **KUANTAN** | **RM 250** | 3 点 | +RM 10 / 点 | - |
-| **KULAI** | **RM 250** | 3 点 | +RM 10 / 点 | - |
-| **PEKAN** | **RM 250** | 3 点 | +RM 10 / 点 | - |
-| **PONTIAN** | **RM 250** | 3 点 | +RM 10 / 点 | - |
-| **ROMPIN** | **RM 250** | 3 点 | +RM 10 / 点 | - |
-| **BATU PAHAT** | **RM 200** | 2 点 | +RM 10 / 点 | - |
-| **KLUANG** | **RM 200** | 2 点 | +RM 10 / 点 | - |
-| **LABIS** | **RM 200** | 2 点 | +RM 10 / 点 | - |
-| **MERSING** | **RM 200** | 2 点 | +RM 10 / 点 | - |
-| **WEHENG / YANG IN** | **RM 200** | 2 点 | +RM 10 / 点 | - |
-| **JERANTUT** | **RM 150** | 2 点 | +RM 10 / 点 | - |
-| **LIPIS** | **RM 150** | 2 点 | +RM 10 / 点 | - |
+| **DUNGUN** | **RM 320** | 3 点 | +RM 10 / 点 | Official Excel: Nilai Origin |
+| **PAKA** | **RM 300** | 3 点 | +RM 10 / 点 | Official Excel: Nilai Origin |
+| **KEMAMAN TERENG** | **RM 280** | 3 点 | +RM 10 / 点 | Official Excel: Nilai Origin |
+| **KEMAMAN TERENGGANU** | **RM 280** | 3 点 | +RM 10 / 点 | Official Excel: Nilai Origin |
+| **JOHOR BAHRU** | **RM 250** | 3 点 | +RM 10 / 点 | Official Excel: Nilai Origin |
+| **KOTA TINGGI** | **RM 250** | 3 点 | +RM 10 / 点 | Official Excel: Nilai Origin |
+| **kuantan** | **RM 250** | 3 点 | +RM 10 / 点 | - |
+| **KULAI** | **RM 250** | 3 点 | +RM 10 / 点 | Official Excel: Nilai Origin |
+| **PEKAN** | **RM 250** | 3 点 | +RM 10 / 点 | Official Excel: Nilai Origin |
+| **PONTIAN** | **RM 250** | 3 点 | +RM 10 / 点 | Official Excel: Nilai Origin |
+| **ROMPIN** | **RM 250** | 3 点 | +RM 10 / 点 | Official Excel: Nilai Origin |
+| **BATU PAHAT** | **RM 200** | 2 点 | +RM 10 / 点 | Official Excel: Nilai Origin |
+| **KLUANG** | **RM 200** | 2 点 | +RM 10 / 点 | Official Excel: Nilai Origin |
+| **LABIS** | **RM 200** | 2 点 | +RM 10 / 点 | Official Excel: Nilai Origin |
+| **MERSING** | **RM 200** | 2 点 | +RM 10 / 点 | Official Excel: Nilai Origin |
+| **WEHENG / YANG IN** | **RM 200** | 1 点 | +RM 10 / 点 | Official Excel: Nilai Origin |
+| **SABAK BERNAM** | **RM 160** | 5 点 | +RM 5 / 点 | Official Excel: Nilai Origin |
+| **JERANTUT** | **RM 150** | 2 点 | +RM 10 / 点 | Official Excel: Nilai Origin |
+| **LIPAS** | **RM 150** | 2 点 | +RM 10 / 点 | Official Excel: Nilai Origin |
+| **LIPIS** | **RM 150** | 2 点 | +RM 10 / 点 | Official Excel: Nilai Origin |
 | **MARAN** | **RM 150** | 2 点 | +RM 10 / 点 | - |
-| **MUAR** | **RM 150** | 2 点 | +RM 10 / 点 | - |
-| **RAUB** | **RM 150** | 2 点 | +RM 10 / 点 | - |
-| **SEGAMAT** | **RM 150** | 2 点 | +RM 10 / 点 | - |
-| **TANGKAK** | **RM 150** | 2 点 | +RM 10 / 点 | - |
-| **TEMERLOH** | **RM 150** | 2 点 | +RM 10 / 点 | - |
-| **KUALA SELANGOR** | **RM 140** | 5 点 | +RM 5 / 点 | - |
-| **TANJUNG KARANG** | **RM 140** | 5 点 | +RM 5 / 点 | - |
-| **BERA** | **RM 120** | 2 点 | +RM 10 / 点 | - |
-| **KEMAYAN (PAHANG)** | **RM 120** | 2 点 | +RM 10 / 点 | - |
-| **MELAKA** | **RM 120** | 2 点 | +RM 10 / 点 | - |
-| **BATANG KALI** | **RM 100** | 3 点 | +RM 10 / 点 | - |
-| **KAPAR** | **RM 100** | 3 点 | +RM 10 / 点 | - |
-| **RASA** | **RM 100** | 3 点 | +RM 10 / 点 | - |
-| **BENTONG** | **RM 80** | 1 点 | +RM 10 / 点 | - |
-| **KL** | **RM 80** | 1 点 | +RM 10 / 点 | - |
-| **NEGERI SEMBILAN** | **RM 80** | 2 点 | +RM 5 / 点 | - |
-| **SELANGOR** | **RM 80** | 1 点 | +RM 10 / 点 | - |
-| **NILAI** | **RM 30** | 1 点 | +RM 0 / 点 | - |
+| **MUAR** | **RM 150** | 2 点 | +RM 10 / 点 | Official Excel: Nilai Origin |
+| **RAUB** | **RM 150** | 2 点 | +RM 10 / 点 | Official Excel: Nilai Origin |
+| **SEGAMAT** | **RM 150** | 2 点 | +RM 10 / 点 | Official Excel: Nilai Origin |
+| **TANGKAK** | **RM 150** | 2 点 | +RM 10 / 点 | Official Excel: Nilai Origin |
+| **TEMERLOH** | **RM 150** | 3 点 | +RM 10 / 点 | - |
+| **KUALA SELANGOR** | **RM 140** | 5 点 | +RM 5 / 点 | Official Excel: Nilai Origin |
+| **TANJUNG KARANG** | **RM 140** | 5 点 | +RM 5 / 点 | Official Excel: Nilai Origin |
+| **BERA** | **RM 120** | 2 点 | +RM 10 / 点 | Official Excel: Nilai Origin |
+| **KEMAYAN (PAHANG)** | **RM 120** | 2 点 | +RM 10 / 点 | Official Excel: Nilai Origin |
+| **MELAKA** | **RM 120** | 2 点 | +RM 10 / 点 | Official Excel: Nilai Origin |
+| **BATANG KALI** | **RM 100** | 3 点 | +RM 10 / 点 | Official Excel: Nilai Origin |
+| **KAPAR** | **RM 100** | 3 点 | +RM 10 / 点 | Official Excel: Nilai Origin |
+| **PUNCAK ALAM** | **RM 100** | 3 点 | +RM 10 / 点 | Official Excel: Nilai Origin |
+| **RASA** | **RM 100** | 3 点 | +RM 10 / 点 | Official Excel: Nilai Origin |
+| **BENTONG** | **RM 80** | 1 点 | +RM 10 / 点 | Official Excel: Nilai Origin |
+| **KL** | **RM 80** | 1 点 | +RM 10 / 点 | Official Excel: Nilai Origin |
+| **NEGERI SEMBILAN** | **RM 80** | 2 点 | +RM 5 / 点 | Official Excel: Nilai Origin |
+| **SELANGOR** | **RM 80** | 1 点 | +RM 10 / 点 | Official Excel: Nilai Origin |
+| **NILAI** | **RM 30** | 1 点 | +RM 0 / 点 | Official Excel: Nilai Origin |
 | **SHOPEE** | **RM 20** | 1 点 | +RM 0 / 点 | Extra Job Rate |
 | **SHOPEE / SPD** | **RM 20** | 1 点 | +RM 0 / 点 | Extra Job Rate |
-| **LORRY SERVICE** | **RM 15** | 0 点 | +RM 0 / 点 | - |
-| **AMBIK PALLET** | **RM 10** | 0 点 | +RM 0 / 点 | - |
-| **NILAI (loose)** | **RM 10** | 1 点 | +RM 10 / 点 | - |
+| **LORRY SERVICE** | **RM 15** | 0 点 | +RM 0 / 点 | Official Excel: Nilai Origin |
+| **AMBIK PALLET** | **RM 10** | 0 点 | +RM 0 / 点 | Official Excel: Nilai Origin |
+| **AMBIL PALLET** | **RM 10** | 0 点 | +RM 0 / 点 | Official Excel: Nilai Origin |
+| **NILAI (loose)** | **RM 10** | 1 点 | +RM 0 / 点 | Official Excel: Nilai Origin |
 | **TAIPING TRIP** | **RM 7** | 1 点 | +RM 0 / 点 | Extra Job Rate |
 
 ### 3.2 汝来待确权与待定义区域 (Pending Definitions)
