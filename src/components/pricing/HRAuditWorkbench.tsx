@@ -32,6 +32,7 @@ export interface AuditTripItem {
     confidenceScore?: number;
     auditRecordId?: string;
     hrNote?: string;
+    isTest?: boolean;
 }
 
 export interface HRAuditWorkbenchProps {
@@ -68,12 +69,28 @@ export const HRAuditWorkbench: React.FC<HRAuditWorkbenchProps> = ({ onOpenRulebo
 
             if (error) throw error;
 
-            // Fetch lorries for plate mapping
-            const { data: lorries } = await supabase.from('lorries').select('*');
-            const lorryMap: Record<string, string> = {};
-            lorries?.forEach(l => {
-                if (l.driver_id) lorryMap[l.driver_id] = l.plate_number || l.plate;
+            // Fetch users for driver name mapping
+            const { data: users } = await supabase.from('users_public').select('id, name');
+            const driverMap: Record<string, string> = {};
+            users?.forEach(u => {
+                if (u.id && u.name) driverMap[u.id] = u.name;
             });
+
+            // Fetch lorries for plate mapping
+            const { data: lorries } = await supabase.from('lorries').select('id, plate_number, driver_id, driver_name');
+            const lorryMap: Record<string, string> = {};
+            const lorryDriverMap: Record<string, string> = {};
+            lorries?.forEach(l => {
+                if (l.driver_id && l.plate_number) lorryMap[l.driver_id] = l.plate_number;
+                if (l.plate_number && l.driver_name) lorryDriverMap[l.plate_number] = l.driver_name;
+            });
+
+            // Fetch official calibrated delivery rates from DB
+            const { data: dbRates } = await supabase
+                .from('delivery_rates')
+                .select('origin, location_name, base_rate, max_places, extra_rate_per_place');
+
+            const allRates = dbRates || [];
 
             // Group orders by trip_id or date + driver
             const grouped = new Map<string, any[]>();
@@ -91,9 +108,16 @@ export const HRAuditWorkbench: React.FC<HRAuditWorkbenchProps> = ({ onOpenRulebo
                 const dateStr = (primary.deadline || primary.pod_timestamp || primary.created_at || '').slice(0, 10);
                 const addresses = Array.from(new Set(groupOrders.map(o => (o.delivery_address || '').trim()).filter(Boolean)));
                 const dropCount = Math.max(1, groupOrders.length);
-                const driverName = primary.driver_name || '司机待查';
                 const driverId = primary.driver_id;
-                const plate = lorryMap[driverId] || primary.lorry_plate || 'PGD 1234';
+                const plate = (driverId && lorryMap[driverId]) || primary.lorry_plate || 'PGD 1234';
+                const driverName = (driverId && driverMap[driverId]) || (plate && lorryDriverMap[plate]) || primary.driver_name || '司机待查';
+
+                // Detect if trip is a test run
+                const isTest = groupOrders.some(o => 
+                    (o.customer || '').toLowerCase().includes('general customer') || 
+                    (o.order_number || '').toUpperCase().startsWith('TEST') ||
+                    (o.order_number || '').toUpperCase().startsWith('DO-260928-01')
+                );
 
                 // Check existing approved amount in notes
                 let existingApproved: number | null = null;
@@ -105,75 +129,92 @@ export const HRAuditWorkbench: React.FC<HRAuditWorkbenchProps> = ({ onOpenRulebo
                     }
                 }
 
-                // Simulate/Fast calculate rate
+                // Official rate calculation matching origin and destination
+                const origin = (primary.trip_origin || 'TAIPING').toUpperCase();
+                const originRates = allRates.filter(r => (r.origin || 'TAIPING').toUpperCase() === origin);
                 const fullText = addresses.join(' ').toLowerCase();
-                let legacyRate = 40.0;
-                let aiRate = 80.0;
+
+                let matchedRate: any = null;
                 let zone = '待判定';
                 let standardized = addresses[0] || '本地短途';
-                let reasoning = '系统自动匹配';
-                let level: DiscrepancyLevel = 'AUTO_MATCH';
+                let reasoning = '依据官方标准价目表匹配';
 
                 if (fullText.includes('nilai') || fullText.includes('negeri sembilan')) {
-                    legacyRate = 400.0;
-                    aiRate = 400.0;
+                    matchedRate = originRates.find(r => r.location_name.toUpperCase() === 'NEGERI SEMBILAN') ||
+                                  originRates.find(r => r.location_name.toUpperCase() === 'NILAI');
                     zone = 'NEGERI SEMBILAN';
                     standardized = '森美兰 Nilai 工业区';
-                    reasoning = '目的地属于森美兰，基准价 RM 400，落点未超限。';
-                    level = 'AUTO_MATCH';
                 } else if (fullText.includes('batu kawan') || fullText.includes('simpang ampat')) {
-                    legacyRate = 80.0;
-                    aiRate = 80.0;
+                    matchedRate = originRates.find(r => r.location_name.toUpperCase().includes('SIMPANG AMPAT'));
                     zone = 'SIMPANG AMPAT / 威南';
                     standardized = 'Penang 威南 Batu Kawan';
-                    reasoning = '送往威南 Batu Kawan，基准价 RM 80。';
-                    level = 'AUTO_MATCH';
                 } else if (fullText.includes('bukit minyak') || fullText.includes('bm') || fullText.includes('mertajam')) {
-                    legacyRate = 80.0;
-                    aiRate = 80.0;
+                    matchedRate = originRates.find(r => r.location_name.toUpperCase() === 'BM') ||
+                                  originRates.find(r => r.location_name.toUpperCase().includes('MERTAJAM'));
                     zone = 'BUKIT MERTAJAM / 威中';
                     standardized = 'Penang 威中 Bukit Minyak';
-                    reasoning = '送往威中 Bukit Minyak，基准价 RM 80。';
-                    level = 'AUTO_MATCH';
-                } else if (fullText.includes('menglembu') || fullText.includes('ipoh')) {
-                    // Classic case: Menglembu in old system might fall back to 40 if not in list, but AI recognizes Ipoh!
-                    legacyRate = fullText.includes('ipoh') ? 80.0 : 40.0;
-                    aiRate = 80.0;
+                } else if (fullText.includes('menglembu') || fullText.includes('ipoh') || fullText.includes('station 18')) {
+                    matchedRate = originRates.find(r => r.location_name.toUpperCase() === 'IPOH');
                     zone = 'IPOH / 怡保近郊';
                     standardized = 'Perak 怡保万里望 (Menglembu)';
-                    reasoning = '识别为怡保近郊 Menglembu，按 IPOH 阶梯 RM 80 核算。';
-                    level = legacyRate === 40.0 ? 'AI_ENRICHED' : 'AUTO_MATCH';
-                } else if (fullText.includes('kl') || fullText.includes('selangor') || fullText.includes('kajang')) {
-                    legacyRate = 250.0;
-                    aiRate = 280.0;
+                } else if (fullText.includes('kl') || fullText.includes('kuala lumpur') || fullText.includes('selangor') || 
+                           fullText.includes('subang') || fullText.includes('shah alam') || fullText.includes('petaling') || 
+                           fullText.includes('gombak') || fullText.includes('kapar') || fullText.includes('port klang') || 
+                           fullText.includes('sungai besar') || fullText.includes('kajang')) {
+                    matchedRate = originRates.find(r => r.location_name.toUpperCase() === 'KL') ||
+                                  originRates.find(r => r.location_name.toUpperCase() === 'SELANGOR');
                     zone = 'SELANGOR / 雪兰莪';
                     standardized = '雪兰莪 / 吉隆坡长途';
-                    reasoning = '送往中马雪隆区域，基准价 RM 280。';
-                    level = 'MINOR_DRIFT';
-                } else if (fullText.includes('kelantan')) {
-                    legacyRate = 380.0;
-                    aiRate = 380.0;
+                } else if (fullText.includes('kelantan') || fullText.includes('kota bharu')) {
+                    matchedRate = originRates.find(r => r.location_name.toUpperCase() === 'KELANTAN') ||
+                                  originRates.find(r => r.location_name.toUpperCase() === 'KOTA BHARU');
                     zone = 'KELANTAN / 吉兰丹';
                     standardized = '东海岸吉兰丹全境';
-                    reasoning = '东海岸吉兰丹，基准价 RM 380。';
-                    level = 'AUTO_MATCH';
                 } else {
-                    legacyRate = 40.0;
-                    aiRate = 40.0;
+                    // Try direct substring match
+                    for (const r of originRates) {
+                        if (r.location_name && fullText.includes(r.location_name.toLowerCase())) {
+                            matchedRate = r;
+                            zone = r.location_name;
+                            standardized = r.location_name;
+                            break;
+                        }
+                    }
+                }
+
+                if (!matchedRate) {
+                    matchedRate = originRates.find(r => r.location_name.toUpperCase() === 'TAIPING') || {
+                        base_rate: 40,
+                        max_places: 1,
+                        extra_rate_per_place: 0
+                    };
                     zone = 'TAIPING 本地';
                     standardized = addresses[0] || '太平本地短途';
-                    reasoning = '太平近郊标准短途，按本地保底价 RM 40 核算。';
-                    level = 'AUTO_MATCH';
                 }
 
-                // If drops > 3, add extra drops
-                if (dropCount > 3) {
-                    aiRate += (dropCount - 3) * 5;
-                }
+                const baseRate = Number(matchedRate.base_rate);
+                const maxPlaces = Number(matchedRate.max_places) || 1;
+                const extraRatePerPlace = Number(matchedRate.extra_rate_per_place) || 0;
 
+                const legacyRate = baseRate;
+                const extraDrops = Math.max(0, dropCount - maxPlaces);
+                const extraEarnings = extraDrops * extraRatePerPlace;
+                const aiRate = baseRate + extraEarnings;
                 const diff = aiRate - legacyRate;
-                if (Math.abs(diff) > 25) {
+
+                let level: DiscrepancyLevel = 'AUTO_MATCH';
+                if (diff === 0) {
+                    level = 'AUTO_MATCH';
+                    reasoning = `基准价 RM ${baseRate.toFixed(2)} (含 ${maxPlaces} 点)，未超落点，零差额。`;
+                } else if (diff > 0 && diff <= 25) {
+                    level = 'MINOR_DRIFT';
+                    reasoning = `基准价 RM ${baseRate.toFixed(2)} (含 ${maxPlaces} 点)，落点 ${dropCount} 个，超点 ${extraDrops} 点加发 RM ${extraEarnings.toFixed(2)}。`;
+                } else if (diff > 25) {
                     level = 'HIGH_DISCREPANCY';
+                    reasoning = `基准价 RM ${baseRate.toFixed(2)} (含 ${maxPlaces} 点)，落点多达 ${dropCount} 个，超点 ${extraDrops} 点按 +RM ${extraRatePerPlace}/点加发 RM ${extraEarnings.toFixed(2)}。`;
+                } else {
+                    level = 'MINOR_DRIFT';
+                    reasoning = `送往 ${zone}，按规则核算 RM ${aiRate.toFixed(2)}。`;
                 }
 
                 parsedTrips.push({
@@ -523,8 +564,15 @@ export const HRAuditWorkbench: React.FC<HRAuditWorkbenchProps> = ({ onOpenRulebo
                                                             : `#${trip.tripNumber.slice(0, 8)}`) 
                                                         : trip.tripNumber}
                                                 </span>
+                                                {trip.isTest && (
+                                                    <span className="bg-amber-100 text-amber-800 text-[10px] px-1.5 py-0.5 rounded border border-amber-300 font-bold">
+                                                        测试单
+                                                    </span>
+                                                )}
                                             </div>
-                                            <div className="text-[11px] text-slate-500 mt-1">{trip.driverName} · {trip.date}</div>
+                                            <div className="text-[11px] text-slate-500 mt-1">
+                                                <span className="font-semibold text-slate-800">{trip.driverName}</span> · {trip.date}
+                                            </div>
                                         </td>
                                         <td className="p-3">
                                             <span className="font-mono bg-slate-100 px-1.5 py-0.5 rounded border border-slate-200 font-bold text-slate-700">
