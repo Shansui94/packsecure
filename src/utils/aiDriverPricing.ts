@@ -154,6 +154,7 @@ export const CANONICAL_DRIVER_PRICING_MD = `# Packsecure 司机运费与送货�
 | **KANGAR** | **RM 165** | 3 点 | +RM 5 / 点 | - |
 | **KUALA PERLIS** | **RM 165** | 3 点 | +RM 5 / 点 | - |
 | **PADANG BESAR** | **RM 165** | 3 点 | +RM 5 / 点 | - |
+| **PERLIS** | **RM 165** | 3 点 | +RM 5 / 点 | Official Excel: Perlis state rate (Kangar / Arau / Kuala Perlis) |
 | **ALOR SETAR** | **RM 150** | 3 点 | +RM 5 / 点 | - |
 | **BALING** | **RM 150** | 3 点 | +RM 5 / 点 | - |
 | **JITRA** | **RM 150** | 3 点 | +RM 5 / 点 | - |
@@ -192,7 +193,6 @@ export const CANONICAL_DRIVER_PRICING_MD = `# Packsecure 司机运费与送货�
 | **OTHER** | **RM 0** | 1 点 | +RM 0 / 点 | Extra Job Rate |
 | **PAHANG** | **RM 0** | 1 点 | +RM 0 / 点 | Auto-imported from Trip form. HR please update rate. |
 | **PERAK** | **RM 0** | 1 点 | +RM 0 / 点 | Auto-imported from Trip form. HR please update rate. |
-| **PERLIS** | **RM 0** | 1 点 | +RM 0 / 点 | Auto-imported from Trip form. HR please update rate. |
 | **RETURN** | **RM 0** | 1 点 | +RM 0 / 点 | Extra Job Rate |
 | **SELANGOR** | **RM 0** | 1 点 | +RM 0 / 点 | Auto-imported from Trip form. HR please update rate. |
 | **SERI MANJUNG** | **RM 0** | 1 点 | +RM 0 / 点 | Auto-imported from Trip form. HR please update rate. |

@@ -144,7 +144,32 @@ export const HRAuditWorkbench: React.FC<HRAuditWorkbenchProps> = ({ onOpenRulebo
                                   originRates.find(r => r.location_name.toUpperCase() === 'NILAI');
                     zone = 'NEGERI SEMBILAN';
                     standardized = '森美兰 Nilai 工业区';
-                } else if (fullText.includes('batu kawan') || fullText.includes('simpang ampat')) {
+                } else if (fullText.includes('kelantan') || fullText.includes('kota bharu') || fullText.includes('gual nering') || 
+                           fullText.includes('pasir mas') || fullText.includes('tumpat') || fullText.includes('machang') || 
+                           fullText.includes('tanah merah') || fullText.includes('gua musang')) {
+                    matchedRate = originRates.find(r => r.location_name.toUpperCase() === 'KELANTAN') ||
+                                  originRates.find(r => r.location_name.toUpperCase() === 'KOTA BHARU');
+                    zone = 'KELANTAN / 吉兰丹';
+                    standardized = '东海岸吉兰丹全境';
+                } else if (fullText.includes('perlis') || fullText.includes('kangar') || fullText.includes('arau') || 
+                           fullText.includes('padang besar') || fullText.includes('kuala perlis') || fullText.includes('bukit kayu hitam')) {
+                    matchedRate = originRates.find(r => r.location_name.toUpperCase() === 'PERLIS') ||
+                                  originRates.find(r => r.location_name.toUpperCase() === 'KANGAR') ||
+                                  originRates.find(r => r.location_name.toUpperCase() === 'ARAU');
+                    zone = 'PERLIS / 玻璃市';
+                    standardized = 'Perlis 玻璃市全境 (Kangar / Arau)';
+                } else if (fullText.includes('alor setar') || fullText.includes('jitra') || fullText.includes('pokok sena') || 
+                           fullText.includes('baling') || fullText.includes('sik') || (fullText.includes('kedah') && !fullText.includes('sungai petani'))) {
+                    matchedRate = originRates.find(r => r.location_name.toUpperCase() === 'ALOR SETAR') ||
+                                  originRates.find(r => r.location_name.toUpperCase() === 'KEDAH');
+                    zone = 'ALOR SETAR / 吉打北部';
+                    standardized = 'Kedah 亚罗士打 (Alor Setar)';
+                } else if (fullText.includes('sungai petani') || fullText.includes('bedong') || fullText.includes('pendang') || fullText.includes('gurun')) {
+                    matchedRate = originRates.find(r => r.location_name.toUpperCase() === 'SUNGAI PETANI') ||
+                                  originRates.find(r => r.location_name.toUpperCase() === 'BEDONG');
+                    zone = 'SUNGAI PETANI / 双溪大年';
+                    standardized = 'Kedah 双溪大年 (Sungai Petani)';
+                } else if (fullText.includes('batu kawan') || (fullText.includes('simpang ampat') && !fullText.includes('perlis') && !fullText.includes('kedah'))) {
                     matchedRate = originRates.find(r => r.location_name.toUpperCase().includes('SIMPANG AMPAT'));
                     zone = 'SIMPANG AMPAT / 威南';
                     standardized = 'Penang 威南 Batu Kawan';
@@ -165,11 +190,6 @@ export const HRAuditWorkbench: React.FC<HRAuditWorkbenchProps> = ({ onOpenRulebo
                                   originRates.find(r => r.location_name.toUpperCase() === 'SELANGOR');
                     zone = 'SELANGOR / 雪兰莪';
                     standardized = '雪兰莪 / 吉隆坡长途';
-                } else if (fullText.includes('kelantan') || fullText.includes('kota bharu')) {
-                    matchedRate = originRates.find(r => r.location_name.toUpperCase() === 'KELANTAN') ||
-                                  originRates.find(r => r.location_name.toUpperCase() === 'KOTA BHARU');
-                    zone = 'KELANTAN / 吉兰丹';
-                    standardized = '东海岸吉兰丹全境';
                 } else {
                     // Try direct substring match
                     for (const r of originRates) {
