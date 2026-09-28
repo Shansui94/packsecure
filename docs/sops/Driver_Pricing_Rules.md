@@ -189,8 +189,8 @@
 | **PONTIAN** | **RM 60** | 1 点 | +RM 10 / 点 | Official Excel: Johor Origin |
 | **KOTA TINGGI** | **RM 50** | 1 点 | +RM 10 / 点 | Official Excel: Johor Origin |
 | **JOHOR BAHRU** | **RM 40** | 1 点 | +RM 10 / 点 | Official Excel: Johor Origin |
-| **WEHENG** | **RM 40** | 1 点 | +RM 40 / 点 | Official Excel: Johor Origin |
-| **WEHENG / YANG IN** | **RM 40** | 1 点 | +RM 40 / 点 | Official Excel: Johor Origin |
+| **WEHENG** | **RM 40** | 1 点 | +RM 10 / 点 | Official Excel: Johor Origin |
+| **WEHENG / YANG IN** | **RM 40** | 1 点 | +RM 10 / 点 | Official Excel: Johor Origin |
 | **KULAI** | **RM 30** | 1 点 | +RM 10 / 点 | Official Excel: Johor Origin |
 | **SHOPEE** | **RM 20** | 1 点 | +RM 0 / 点 | Extra Job Rate |
 | **SHOPEE / SPD** | **RM 20** | 1 点 | +RM 0 / 点 | Extra Job Rate |

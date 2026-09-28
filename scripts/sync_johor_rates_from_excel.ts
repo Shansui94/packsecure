@@ -13,8 +13,9 @@ async function main() {
     await supabase.from('delivery_rates').update({ origin: 'JOHOR' }).ilike('origin', 'johor');
 
     const excelRates = [
-        { location_name: 'WEHENG', base_rate: 40, max_places: 1, extra_rate_per_place: 40 },
-        { location_name: 'WEHENG / YANG IN', base_rate: 40, max_places: 1, extra_rate_per_place: 40 },
+        // User confirmed: WEHENG Tambah Tempat Rate in Excel (40) was a typo; correct rate is RM 10
+        { location_name: 'WEHENG', base_rate: 40, max_places: 1, extra_rate_per_place: 10 },
+        { location_name: 'WEHENG / YANG IN', base_rate: 40, max_places: 1, extra_rate_per_place: 10 },
         { location_name: 'JOHOR BAHRU', base_rate: 40, max_places: 1, extra_rate_per_place: 10 },
         { location_name: 'KULAI', base_rate: 30, max_places: 1, extra_rate_per_place: 10 },
         { location_name: 'KOTA TINGGI', base_rate: 50, max_places: 1, extra_rate_per_place: 10 },
