@@ -79,10 +79,21 @@ export const HRAuditWorkbench: React.FC<HRAuditWorkbenchProps> = ({ onOpenRulebo
             // Fetch lorries for plate mapping
             const { data: lorries } = await supabase.from('lorries').select('id, plate_number, driver_id, driver_name');
             const lorryMap: Record<string, string> = {};
+            const lorryIdMap: Record<string, string> = {};
             const lorryDriverMap: Record<string, string> = {};
             lorries?.forEach(l => {
+                if (l.id && l.plate_number) lorryIdMap[l.id] = l.plate_number;
                 if (l.driver_id && l.plate_number) lorryMap[l.driver_id] = l.plate_number;
                 if (l.plate_number && l.driver_name) lorryDriverMap[l.plate_number] = l.driver_name;
+            });
+
+            // Fetch trips_v2 for real trip_number and assigned lorry_id
+            const { data: tripsV2 } = await supabase.from('trips_v2').select('id, trip_number, lorry_id');
+            const tripNumberMap: Record<string, string> = {};
+            const tripLorryMap: Record<string, string> = {};
+            tripsV2?.forEach(t => {
+                if (t.id && t.trip_number) tripNumberMap[t.id] = t.trip_number;
+                if (t.id && t.lorry_id) tripLorryMap[t.id] = t.lorry_id;
             });
 
             // Fetch official calibrated delivery rates from DB
@@ -109,8 +120,21 @@ export const HRAuditWorkbench: React.FC<HRAuditWorkbenchProps> = ({ onOpenRulebo
                 const addresses = Array.from(new Set(groupOrders.map(o => (o.delivery_address || '').trim()).filter(Boolean)));
                 const dropCount = Math.max(1, groupOrders.length);
                 const driverId = primary.driver_id;
-                const plate = (driverId && lorryMap[driverId]) || primary.lorry_plate || 'PGD 1234';
-                const driverName = (driverId && driverMap[driverId]) || (plate && lorryDriverMap[plate]) || primary.driver_name || '司机待查';
+                
+                // Real vehicle plate resolution (strictly no fictitious mock plates)
+                const assignedLorryId = primary.trip_id && tripLorryMap[primary.trip_id];
+                const plate = (assignedLorryId && lorryIdMap[assignedLorryId])
+                    || (driverId && lorryMap[driverId]) 
+                    || primary.lorry_plate 
+                    || '待定车辆';
+
+                const driverName = (driverId && driverMap[driverId]) || (plate && lorryDriverMap[plate]) || primary.driver_name || '待派司机';
+
+                // Real trip number resolution (prioritize trips_v2.trip_number or first DO number)
+                const realTripNumber = (primary.trip_id && tripNumberMap[primary.trip_id])
+                    || (primary.order_number 
+                        ? (groupOrders.length > 1 ? `${primary.order_number} (+${groupOrders.length - 1}单)` : primary.order_number)
+                        : `TRIP-${dateStr.replace(/-/g, '')}`);
 
                 // Detect if trip is a test run
                 const isTest = groupOrders.some(o => 
@@ -239,7 +263,7 @@ export const HRAuditWorkbench: React.FC<HRAuditWorkbenchProps> = ({ onOpenRulebo
 
                 parsedTrips.push({
                     id: key,
-                    tripNumber: primary.trip_id || `TRIP-${dateStr.replace(/-/g, '')}-${primary.id.slice(0, 4).toUpperCase()}`,
+                    tripNumber: realTripNumber,
                     driverName,
                     driverId,
                     lorryPlate: plate,
@@ -578,11 +602,7 @@ export const HRAuditWorkbench: React.FC<HRAuditWorkbenchProps> = ({ onOpenRulebo
                                         <td className="p-3">
                                             <div className="font-bold text-slate-800 font-mono text-xs flex items-center gap-1.5" title={trip.tripNumber}>
                                                 <span className="bg-slate-100 text-slate-700 px-1.5 py-0.5 rounded border border-slate-200">
-                                                    {trip.tripNumber.length > 16 
-                                                        ? (trip.tripNumber.startsWith('trip_') 
-                                                            ? `#${trip.tripNumber.slice(5, 13)}` 
-                                                            : `#${trip.tripNumber.slice(0, 8)}`) 
-                                                        : trip.tripNumber}
+                                                    {trip.tripNumber.startsWith('#') ? trip.tripNumber : `#${trip.tripNumber}`}
                                                 </span>
                                                 {trip.isTest && (
                                                     <span className="bg-amber-100 text-amber-800 text-[10px] px-1.5 py-0.5 rounded border border-amber-300 font-bold">
@@ -595,7 +615,11 @@ export const HRAuditWorkbench: React.FC<HRAuditWorkbenchProps> = ({ onOpenRulebo
                                             </div>
                                         </td>
                                         <td className="p-3">
-                                            <span className="font-mono bg-slate-100 px-1.5 py-0.5 rounded border border-slate-200 font-bold text-slate-700">
+                                            <span className={`font-mono px-1.5 py-0.5 rounded border font-bold text-xs ${
+                                                trip.lorryPlate === '待定车辆'
+                                                    ? 'bg-amber-50 text-amber-700 border-amber-200 border-dashed text-[11px]'
+                                                    : 'bg-slate-100 text-slate-700 border-slate-200'
+                                            }`}>
                                                 {trip.lorryPlate}
                                             </span>
                                         </td>
