@@ -196,7 +196,7 @@ export const CANONICAL_DRIVER_PRICING_MD = `# Packsecure 司机运费与送货�
 | **RETURN** | **RM 0** | 1 点 | +RM 0 / 点 | Extra Job Rate |
 | **SELANGOR** | **RM 0** | 1 点 | +RM 0 / 点 | Auto-imported from Trip form. HR please update rate. |
 | **SERI MANJUNG** | **RM 0** | 1 点 | +RM 0 / 点 | Auto-imported from Trip form. HR please update rate. |
-| **TAIPING** | **RM 0** | 1 点 | +RM 0 / 点 | Auto-imported from Trip form. HR please update rate. |
+| **taiping** | **RM 0** | 1 点 | +RM 0 / 点 | Auto-imported from Trip form. HR please update rate. |
 
 
 ---
@@ -232,7 +232,7 @@ export const CANONICAL_DRIVER_PRICING_MD = `# Packsecure 司机运费与送货�
 | **RAUB** | **RM 150** | 2 点 | +RM 10 / 点 | Official Excel: Nilai Origin |
 | **SEGAMAT** | **RM 150** | 2 点 | +RM 10 / 点 | Official Excel: Nilai Origin |
 | **TANGKAK** | **RM 150** | 2 点 | +RM 10 / 点 | Official Excel: Nilai Origin |
-| **TEMERLOH** | **RM 150** | 3 点 | +RM 10 / 点 | - |
+| **TEMERLOH** | **RM 150** | 2 点 | +RM 10 / 点 | Official Excel: Nilai Origin |
 | **KUALA SELANGOR** | **RM 140** | 5 点 | +RM 5 / 点 | Official Excel: Nilai Origin |
 | **TANJUNG KARANG** | **RM 140** | 5 点 | +RM 5 / 点 | Official Excel: Nilai Origin |
 | **BERA** | **RM 120** | 2 点 | +RM 10 / 点 | Official Excel: Nilai Origin |
@@ -278,21 +278,24 @@ export const CANONICAL_DRIVER_PRICING_MD = `# Packsecure 司机运费与送货�
 ### 4.1 柔佛标准生效价目表 (Active Rates)
 | 目的地区域 (Zone / Location) | 标准基准价 (Base Rate) | 免费落点数 (Max Place) | 超点补贴/点 (Tambah Tempat Rate) | 备注说明 (Notes) |
 | :--- | :---: | :---: | :---: | :--- |
-| **MERSING** | **RM 130** | 1 点 | +RM 10 / 点 | - |
-| **SEGAMAT** | **RM 130** | 1 点 | +RM 10 / 点 | - |
-| **MUAR** | **RM 120** | 1 点 | +RM 10 / 点 | - |
-| **TANGKAK** | **RM 120** | 1 点 | +RM 10 / 点 | - |
-| **BATU PAHAT** | **RM 90** | 1 点 | +RM 10 / 点 | - |
-| **KLUANG** | **RM 90** | 1 点 | +RM 10 / 点 | - |
-| **PONTIAN** | **RM 60** | 1 点 | +RM 10 / 点 | - |
-| **KOTA TINGGI** | **RM 50** | 1 点 | +RM 10 / 点 | - |
-| **JOHOR BAHRU** | **RM 40** | 1 点 | +RM 10 / 点 | - |
-| **WEHENG** | **RM 40** | 1 点 | +RM 0 / 点 | - |
-| **WEHENG / YANG IN** | **RM 40** | 1 点 | +RM 0 / 点 | Auto-imported from Trip form. HR please update rate. |
-| **KULAI** | **RM 30** | 1 点 | +RM 10 / 点 | - |
+| **MELAKA** | **RM 160** | 1 点 | +RM 10 / 点 | Official Excel: Johor Origin |
+| **MERSING** | **RM 130** | 1 点 | +RM 10 / 点 | Official Excel: Johor Origin |
+| **SEGAMAT** | **RM 130** | 1 点 | +RM 10 / 点 | Official Excel: Johor Origin |
+| **MUAR** | **RM 120** | 1 点 | +RM 10 / 点 | Official Excel: Johor Origin |
+| **TANGKAK** | **RM 120** | 1 点 | +RM 10 / 点 | Official Excel: Johor Origin |
+| **LABIS** | **RM 100** | 1 点 | +RM 10 / 点 | Official Excel: Johor Origin |
+| **BATU PAHAT** | **RM 90** | 1 点 | +RM 10 / 点 | Official Excel: Johor Origin |
+| **KLUANG** | **RM 90** | 1 点 | +RM 10 / 点 | Official Excel: Johor Origin |
+| **PONTIAN** | **RM 60** | 1 点 | +RM 10 / 点 | Official Excel: Johor Origin |
+| **KOTA TINGGI** | **RM 50** | 1 点 | +RM 10 / 点 | Official Excel: Johor Origin |
+| **JOHOR BAHRU** | **RM 40** | 1 点 | +RM 10 / 点 | Official Excel: Johor Origin |
+| **WEHENG** | **RM 40** | 1 点 | +RM 40 / 点 | Official Excel: Johor Origin |
+| **WEHENG / YANG IN** | **RM 40** | 1 点 | +RM 40 / 点 | Official Excel: Johor Origin |
+| **KULAI** | **RM 30** | 1 点 | +RM 10 / 点 | Official Excel: Johor Origin |
 | **SHOPEE** | **RM 20** | 1 点 | +RM 0 / 点 | Extra Job Rate |
 | **SHOPEE / SPD** | **RM 20** | 1 点 | +RM 0 / 点 | Extra Job Rate |
-| **LORRY SERVICE** | **RM 15** | 0 点 | +RM 0 / 点 | - |
+| **LORRY PUSPAKOM** | **RM 15** | 1 点 | +RM 0 / 点 | Official Excel: Johor Origin |
+| **LORRY SERVICE** | **RM 15** | 1 点 | +RM 0 / 点 | Official Excel: Johor Origin |
 | **AMBIK PALLET** | **RM 10** | 0 点 | +RM 0 / 点 | - |
 | **TAIPING TRIP** | **RM 7** | 1 点 | +RM 0 / 点 | Extra Job Rate |
 
@@ -302,7 +305,6 @@ export const CANONICAL_DRIVER_PRICING_MD = `# Packsecure 司机运费与送货�
 | 目的地区域 (Zone / Location) | 标准基准价 (Base Rate) | 免费落点数 (Max Place) | 超点补贴/点 (Tambah Tempat Rate) | 备注说明 (Notes) |
 | :--- | :---: | :---: | :---: | :--- |
 | **JOHOR** | **RM 0** | 1 点 | +RM 0 / 点 | Auto-imported from Trip form. HR please update rate. |
-| **MELAKA** | **RM 0** | 1 点 | +RM 0 / 点 | Auto-imported from Trip form. HR please update rate. |
 | **NILAI** | **RM 0** | 1 点 | +RM 0 / 点 | Auto-imported from Trip form. HR please update rate. |
 | **OTHER** | **RM 0** | 1 点 | +RM 0 / 点 | Extra Job Rate |
 | **RETURN** | **RM 0** | 1 点 | +RM 0 / 点 | Extra Job Rate |
