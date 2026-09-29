@@ -583,6 +583,358 @@ export async function syncApprovedAmountToOrderNotes(
 /**
  * 获取红绿灯状态视觉徽章配置
  */
+
+export interface ResolvedDeliveryRate {
+    matchedRate: any;
+    zone: string;
+    standardizedLocation: string;
+    baseRate: number;
+    maxPlaces: number;
+    extraRatePerPlace: number;
+    dropCount: number;
+    extraDrops: number;
+    extraEarnings: number;
+    aiRate: number;
+    legacyRate: number;
+    diffAmount: number;
+    reasoning: string;
+    discrepancyLevel: DiscrepancyLevel;
+}
+
+/**
+ * 统一官方运费解析核心算法 (支持 4 大起运基地、最远目的地优先、VPC 适配与超点动态核算)
+ */
+export function resolveDeliveryRate(params: {
+    addresses: string[];
+    dropCount?: number;
+    origin?: string;
+    lorryPlate?: string;
+    dbRates?: any[];
+}): ResolvedDeliveryRate {
+    const origin = (params.origin || 'TAIPING').trim().toUpperCase();
+    const addresses = (params.addresses || []).filter(Boolean);
+    const dropCount = Math.max(1, params.dropCount ?? addresses.length);
+    const fullText = addresses.join(' ').toLowerCase();
+    const isVpc = Boolean(params.lorryPlate && params.lorryPlate.toUpperCase().replace(/[^A-Z0-9]/g, '') === 'VPC9821');
+
+    const originRates = (params.dbRates || []).filter(r => (r.origin || 'TAIPING').trim().toUpperCase() === origin);
+
+    let matchedRate: any = null;
+    let zone = '待判定';
+    let standardized = addresses[0] || '本地短途';
+    let fallbackBase = 40;
+    let fallbackMaxPlaces = 1;
+    let fallbackExtraRate = 0;
+
+    if (origin === 'TAIPING') {
+        if (fullText.includes('kuala terengganu') || fullText.includes('marang') || fullText.includes('dungun') || fullText.includes('kemaman') || fullText.includes('terengganu')) {
+            zone = 'KUALA TERENGGANU';
+            standardized = '登嘉楼市区 (Kuala Terengganu)';
+            fallbackBase = 480; fallbackMaxPlaces = 3; fallbackExtraRate = 15;
+        } else if (fullText.includes('besut') || fullText.includes('jerteh') || fullText.includes('kuala besut')) {
+            zone = 'BESUT';
+            standardized = '登嘉楼北部勿述 (Besut)';
+            fallbackBase = 430; fallbackMaxPlaces = 3; fallbackExtraRate = 15;
+        } else if (fullText.includes('negeri sembilan') || fullText.includes('nilai') || fullText.includes('seremban') || fullText.includes('senawang') || fullText.includes('port dickson')) {
+            zone = 'NEGERI SEMBILAN';
+            standardized = '森美兰 Nilai / 芙蓉工业区';
+            fallbackBase = 400; fallbackMaxPlaces = 3; fallbackExtraRate = 15;
+        } else if (fullText.includes('jengka')) {
+            zone = 'JENGKA';
+            standardized = '彭亨增卡腹地 (Jengka)';
+            fallbackBase = 380; fallbackMaxPlaces = 3; fallbackExtraRate = 10;
+        } else if (fullText.includes('kelantan') || fullText.includes('kota bharu') || fullText.includes('gual nering') || 
+                   fullText.includes('pasir mas') || fullText.includes('tumpat') || fullText.includes('machang') || 
+                   fullText.includes('tanah merah') || fullText.includes('gua musang')) {
+            zone = 'KELANTAN';
+            standardized = '东海岸吉兰丹全境 (Kota Bharu)';
+            fallbackBase = 380; fallbackMaxPlaces = 3; fallbackExtraRate = 15;
+        } else if (fullText.includes('bentong')) {
+            zone = 'BENTONG';
+            standardized = '彭亨文冬 (Bentong)';
+            fallbackBase = 330; fallbackMaxPlaces = 3; fallbackExtraRate = 10;
+        } else if (fullText.includes('karak')) {
+            zone = 'KARAK';
+            standardized = '彭亨加叻 (Karak)';
+            fallbackBase = 330; fallbackMaxPlaces = 3; fallbackExtraRate = 10;
+        } else if (fullText.includes('kuantan') || fullText.includes('temerloh') || fullText.includes('mentakab') || fullText.includes('pahang')) {
+            zone = 'PAHANG';
+            standardized = '彭亨关丹 / 淡马鲁';
+            fallbackBase = 400; fallbackMaxPlaces = 3; fallbackExtraRate = 20;
+        } else if (fullText.includes('kl') || fullText.includes('kuala lumpur') || fullText.includes('selangor') || 
+                   fullText.includes('subang') || fullText.includes('shah alam') || fullText.includes('petaling') || 
+                   fullText.includes('gombak') || fullText.includes('kapar') || fullText.includes('port klang') || 
+                   fullText.includes('sungai besar') || fullText.includes('kajang') || fullText.includes('puchong') ||
+                   fullText.includes('rawang') || fullText.includes('cheras')) {
+            if (dropCount <= 1) {
+                zone = 'KL (1 TEMPAT)';
+                standardized = '雪兰莪 / 吉隆坡直达 (1 Tempat)';
+                fallbackBase = 250; fallbackMaxPlaces = 1; fallbackExtraRate = 0;
+            } else {
+                zone = 'KL';
+                standardized = '雪兰莪 / 吉隆坡长途 (3 Places)';
+                fallbackBase = 330; fallbackMaxPlaces = 3; fallbackExtraRate = 10;
+            }
+        } else if (fullText.includes('perlis') || fullText.includes('kangar') || fullText.includes('arau') || 
+                   fullText.includes('padang besar') || fullText.includes('kuala perlis') || fullText.includes('bukit kayu hitam')) {
+            zone = 'PERLIS';
+            standardized = 'Perlis 玻璃市全境 (Kangar / Arau)';
+            fallbackBase = 165; fallbackMaxPlaces = 3; fallbackExtraRate = 5;
+        } else if (fullText.includes('alor setar') || fullText.includes('jitra') || fullText.includes('pokok sena') || 
+                   fullText.includes('baling') || fullText.includes('sik') || fullText.includes('changlun') || fullText.includes('kodiang') ||
+                   (fullText.includes('kedah') && !fullText.includes('sungai petani'))) {
+            zone = 'ALOR SETAR';
+            standardized = 'Kedah 亚罗士打 (Alor Setar)';
+            fallbackBase = 150; fallbackMaxPlaces = 3; fallbackExtraRate = 5;
+        } else if (fullText.includes('sungai petani') || fullText.includes('bedong') || fullText.includes('pendang') || fullText.includes('gurun') || fullText.includes('bakar arang')) {
+            zone = 'SUNGAI PETANI';
+            standardized = 'Kedah 双溪大年 (Sungai Petani)';
+            fallbackBase = 100; fallbackMaxPlaces = 3; fallbackExtraRate = 5;
+        } else if (fullText.includes('batu kawan') || (fullText.includes('simpang ampat') && !fullText.includes('perlis') && !fullText.includes('kedah')) || fullText.includes('valdor') || fullText.includes('jawi') || fullText.includes('nibong tebal')) {
+            zone = 'SIMPANG AMPAT (PENANG)';
+            standardized = 'Penang 威南 Batu Kawan / Simpang Ampat';
+            fallbackBase = 80; fallbackMaxPlaces = 3; fallbackExtraRate = 5;
+        } else if (fullText.includes('bukit minyak') || fullText.includes('bm') || fullText.includes('mertajam') || fullText.includes('alma') || fullText.includes('juru')) {
+            zone = 'BM';
+            standardized = 'Penang 威中 Bukit Minyak / BM';
+            fallbackBase = 80; fallbackMaxPlaces = 3; fallbackExtraRate = 5;
+        } else if (fullText.includes('butterworth') || fullText.includes('bagan') || fullText.includes('mak mandin') || fullText.includes('kepala batas')) {
+            zone = 'BUTTERWORTH';
+            standardized = 'Penang 威北 Butterworth';
+            fallbackBase = 80; fallbackMaxPlaces = 3; fallbackExtraRate = 5;
+        } else if (fullText.includes('penang') || fullText.includes('bayan lepas') || fullText.includes('george town') || fullText.includes('jelutong') || fullText.includes('air itam')) {
+            zone = 'PENANG';
+            standardized = 'Penang 槟岛 (George Town / Bayan Lepas)';
+            fallbackBase = 80; fallbackMaxPlaces = 3; fallbackExtraRate = 5;
+        } else if (fullText.includes('kulim') || fullText.includes('lunas') || fullText.includes('padang serai')) {
+            zone = 'KULIM';
+            standardized = 'Kedah 居林高科技园 (Kulim)';
+            fallbackBase = 80; fallbackMaxPlaces = 3; fallbackExtraRate = 5;
+        } else if (fullText.includes('ipoh') || fullText.includes('menglembu') || fullText.includes('bercham') || fullText.includes('station 18') || fullText.includes('jelapang') || fullText.includes('chemor') || fullText.includes('lahat') || fullText.includes('batu gajah')) {
+            zone = 'IPOH';
+            standardized = 'Perak 怡保万里望 (Menglembu / Ipoh)';
+            fallbackBase = 80; fallbackMaxPlaces = 3; fallbackExtraRate = 5;
+        } else if (fullText.includes('sitiawan') || fullText.includes('manjung') || fullText.includes('lumut') || fullText.includes('pantai remis') || fullText.includes('ayer tawar')) {
+            zone = 'SITIAWAN';
+            standardized = 'Perak 实兆远/曼绒 (Sitiawan)';
+            fallbackBase = 80; fallbackMaxPlaces = 3; fallbackExtraRate = 5;
+        } else if (fullText.includes('kuala kangsar') || fullText.includes('padang rengas') || fullText.includes('sungai siput')) {
+            zone = 'KUALA KANGSAR';
+            standardized = 'Perak 江沙/和丰 (Kuala Kangsar)';
+            fallbackBase = 60; fallbackMaxPlaces = 3; fallbackExtraRate = 5;
+        } else if (fullText.includes('teluk intan') || fullText.includes('hutan melintang') || fullText.includes('langkap')) {
+            zone = 'TELUK INTAN';
+            standardized = 'Perak 安顺 (Teluk Intan)';
+            fallbackBase = 100; fallbackMaxPlaces = 3; fallbackExtraRate = 5;
+        } else if (fullText.includes('tanjung malim') || fullText.includes('sungkai') || fullText.includes('bidor') || fullText.includes('tapah') || fullText.includes('kampar')) {
+            zone = 'TANJUNG MALIM';
+            standardized = 'Perak 丹绒马林/金宝';
+            fallbackBase = 100; fallbackMaxPlaces = 3; fallbackExtraRate = 5;
+        } else if (fullText.includes('melaka') || fullText.includes('ayer keroh') || fullText.includes('alor gajah')) {
+            zone = 'MELAKA';
+            standardized = '马六甲全境 (Melaka)';
+            fallbackBase = 450; fallbackMaxPlaces = 3; fallbackExtraRate = 20;
+        } else if (fullText.includes('johor') || fullText.includes('jb') || fullText.includes('skudai') || fullText.includes('kulai') || fullText.includes('batu pahat')) {
+            zone = 'JOHOR';
+            standardized = '柔佛全境 (Johor)';
+            fallbackBase = 550; fallbackMaxPlaces = 3; fallbackExtraRate = 25;
+        } else {
+            zone = 'TAIPING';
+            standardized = addresses[0] || '太平本地短途 (Taiping Local)';
+            fallbackBase = 40; fallbackMaxPlaces = 1; fallbackExtraRate = 0;
+        }
+    } else if (origin === 'NILAI') {
+        if (fullText.includes('dungun') || fullText.includes('paka') || fullText.includes('kemaman') || fullText.includes('terengganu')) {
+            zone = 'DUNGUN';
+            standardized = '登嘉楼 (Dungun / Kemaman)';
+            fallbackBase = 320; fallbackMaxPlaces = 3; fallbackExtraRate = 10;
+        } else if (fullText.includes('johor bahru') || fullText.includes('jb') || fullText.includes('kota tinggi') || fullText.includes('kulai') || fullText.includes('pontian') || fullText.includes('pekan') || fullText.includes('rompin')) {
+            zone = 'JOHOR BAHRU';
+            standardized = '柔佛南部 (JB / Kulai / Kota Tinggi)';
+            fallbackBase = 250; fallbackMaxPlaces = 3; fallbackExtraRate = 10;
+        } else if (fullText.includes('batu pahat') || fullText.includes('kluang') || fullText.includes('labis') || fullText.includes('mersing') || fullText.includes('muar') || fullText.includes('segamat') || fullText.includes('tangkak')) {
+            zone = 'BATU PAHAT';
+            standardized = '柔佛北部 (Muar / Batu Pahat / Kluang)';
+            fallbackBase = 200; fallbackMaxPlaces = 2; fallbackExtraRate = 10;
+        } else if (fullText.includes('kuantan') || fullText.includes('jerantut') || fullText.includes('lipis') || fullText.includes('raub') || fullText.includes('temerloh') || fullText.includes('maran')) {
+            zone = 'KUANTAN';
+            standardized = '彭亨 (Kuantan / Temerloh / Raub)';
+            fallbackBase = 250; fallbackMaxPlaces = 3; fallbackExtraRate = 10;
+        } else if (fullText.includes('sabak bernam') || fullText.includes('kuala selangor') || fullText.includes('tanjung karang')) {
+            zone = 'SABAK BERNAM';
+            standardized = '雪兰莪北部沿海 (Sabak Bernam)';
+            fallbackBase = 160; fallbackMaxPlaces = 5; fallbackExtraRate = 5;
+        } else if (fullText.includes('melaka')) {
+            zone = 'MELAKA';
+            standardized = '马六甲 (Melaka)';
+            fallbackBase = 120; fallbackMaxPlaces = 2; fallbackExtraRate = 10;
+        } else if (fullText.includes('batang kali') || fullText.includes('kapar') || fullText.includes('puncak alam') || fullText.includes('rasa')) {
+            zone = 'KAPAR';
+            standardized = '雪兰莪外环 (Kapar / Puncak Alam)';
+            fallbackBase = 100; fallbackMaxPlaces = 3; fallbackExtraRate = 10;
+        } else if (fullText.includes('kl') || fullText.includes('kuala lumpur') || fullText.includes('selangor') || 
+                   fullText.includes('shah alam') || fullText.includes('subang') || fullText.includes('petaling') || 
+                   fullText.includes('kajang') || fullText.includes('bangi') || fullText.includes('puchong') || 
+                   fullText.includes('cyberjaya') || fullText.includes('putrajaya') || fullText.includes('bentong')) {
+            zone = 'KL';
+            standardized = '雪兰莪 / 吉隆坡 (KL / Selangor)';
+            fallbackBase = 80; fallbackMaxPlaces = 1; fallbackExtraRate = 10;
+        } else if (fullText.includes('seremban') || fullText.includes('senawang')) {
+            zone = 'NEGERI SEMBILAN';
+            standardized = '森美兰芙蓉 (Seremban)';
+            fallbackBase = 80; fallbackMaxPlaces = 2; fallbackExtraRate = 5;
+        } else {
+            zone = 'NILAI';
+            standardized = addresses[0] || '森美兰汝来本地 (Nilai Local)';
+            fallbackBase = 30; fallbackMaxPlaces = 1; fallbackExtraRate = 0;
+        }
+    } else if (origin === 'JOHOR') {
+        if (fullText.includes('melaka')) {
+            zone = 'MELAKA';
+            standardized = '马六甲 (Melaka)';
+            fallbackBase = 160; fallbackMaxPlaces = 1; fallbackExtraRate = 10;
+        } else if (fullText.includes('mersing') || fullText.includes('segamat')) {
+            zone = 'SEGAMAT';
+            standardized = '柔佛昔加末 / 丰盛港';
+            fallbackBase = 130; fallbackMaxPlaces = 1; fallbackExtraRate = 10;
+        } else if (fullText.includes('muar') || fullText.includes('tangkak')) {
+            zone = 'MUAR';
+            standardized = '柔佛麻坡 / 东甲 (Muar)';
+            fallbackBase = 120; fallbackMaxPlaces = 1; fallbackExtraRate = 10;
+        } else if (fullText.includes('labis')) {
+            zone = 'LABIS';
+            standardized = '柔佛拉美士 (Labis)';
+            fallbackBase = 100; fallbackMaxPlaces = 1; fallbackExtraRate = 10;
+        } else if (fullText.includes('batu pahat') || fullText.includes('kluang')) {
+            zone = 'BATU PAHAT';
+            standardized = '柔佛峇株巴辖 / 居銮';
+            fallbackBase = 90; fallbackMaxPlaces = 1; fallbackExtraRate = 10;
+        } else if (fullText.includes('pontian') || fullText.includes('pekan nanas')) {
+            zone = 'PONTIAN';
+            standardized = '柔佛笨珍 (Pontian)';
+            fallbackBase = 60; fallbackMaxPlaces = 1; fallbackExtraRate = 10;
+        } else if (fullText.includes('kota tinggi')) {
+            zone = 'KOTA TINGGI';
+            standardized = '柔佛哥打丁宜 (Kota Tinggi)';
+            fallbackBase = 50; fallbackMaxPlaces = 1; fallbackExtraRate = 10;
+        } else if (fullText.includes('kulai')) {
+            zone = 'KULAI';
+            standardized = '柔佛古来 (Kulai)';
+            fallbackBase = 30; fallbackMaxPlaces = 1; fallbackExtraRate = 10;
+        } else {
+            zone = 'WEHENG';
+            standardized = addresses[0] || '柔佛新山 / 卫恒本地 (Weheng / JB)';
+            fallbackBase = 40; fallbackMaxPlaces = 1; fallbackExtraRate = 10;
+        }
+    } else if (origin === 'KELANTAN') {
+        if (fullText.includes('gua musang')) {
+            zone = 'GUA MUSANG';
+            standardized = '吉兰丹话望生 (Gua Musang)';
+            fallbackBase = 160; fallbackMaxPlaces = 1; fallbackExtraRate = 10;
+        } else if (fullText.includes('jeli')) {
+            zone = 'JELI';
+            standardized = '吉兰丹日里 (Jeli)';
+            fallbackBase = 80; fallbackMaxPlaces = 1; fallbackExtraRate = 10;
+        } else if (fullText.includes('kuala krai')) {
+            zone = 'KUALA KRAI';
+            standardized = '吉兰丹瓜拉吉赖 (Kuala Krai)';
+            fallbackBase = 60; fallbackMaxPlaces = 1; fallbackExtraRate = 10;
+        } else if (fullText.includes('tanah merah')) {
+            zone = 'TANAH MERAH';
+            standardized = '吉兰丹丹那美拉 (Tanah Merah)';
+            fallbackBase = 50; fallbackMaxPlaces = 1; fallbackExtraRate = 10;
+        } else if (fullText.includes('machang') || fullText.includes('pasir puteh')) {
+            zone = 'MACHANG';
+            standardized = '吉兰丹马樟 / 巴西富地';
+            fallbackBase = 40; fallbackMaxPlaces = 1; fallbackExtraRate = 10;
+        } else if (fullText.includes('pasir mas') || fullText.includes('tumpat') || fullText.includes('bachok')) {
+            zone = 'PASIR MAS';
+            standardized = '吉兰丹巴西马 / 道北';
+            fallbackBase = 30; fallbackMaxPlaces = 1; fallbackExtraRate = 5;
+        } else {
+            zone = 'KOTA BHARU';
+            standardized = addresses[0] || '吉兰丹哥打峇鲁市区 (Kota Bharu)';
+            fallbackBase = 20; fallbackMaxPlaces = 1; fallbackExtraRate = 5;
+        }
+    }
+
+    // Try finding exact record in originRates by zone name
+    matchedRate = originRates.find(r => (r.location_name || '').trim().toUpperCase() === zone.toUpperCase());
+
+    // If not found by exact zone, try substring matching in originRates
+    if (!matchedRate) {
+        for (const r of originRates) {
+            const loc = (r.location_name || '').trim().toLowerCase();
+            if (loc && loc.length >= 3 && fullText.includes(loc)) {
+                matchedRate = r;
+                break;
+            }
+        }
+    }
+
+    // If still not found, construct fallback rate object
+    if (!matchedRate) {
+        matchedRate = {
+            origin,
+            location_name: zone,
+            base_rate: fallbackBase,
+            max_places: fallbackMaxPlaces,
+            extra_rate_per_place: fallbackExtraRate
+        };
+    }
+
+    let baseRate = Number(matchedRate.base_rate ?? fallbackBase);
+    let maxPlaces = Number(matchedRate.max_places ?? fallbackMaxPlaces);
+    if (isNaN(maxPlaces) || maxPlaces < 0) maxPlaces = 1;
+    let extraRatePerPlace = Number(matchedRate.extra_rate_per_place ?? fallbackExtraRate);
+    if (isNaN(extraRatePerPlace)) extraRatePerPlace = 0;
+
+    // VPC 9821 vehicle adaptation
+    if (isVpc && matchedRate.notes) {
+        const vpcM = matchedRate.notes.match(/\[VPC_RATE:\s*([\d.]+)\]/i);
+        if (vpcM && Number(vpcM[1]) > 0) {
+            baseRate = Number(vpcM[1]);
+        }
+    }
+
+    const legacyRate = baseRate;
+    const extraDrops = Math.max(0, dropCount - maxPlaces);
+    const extraEarnings = extraDrops * extraRatePerPlace;
+    const aiRate = baseRate + extraEarnings;
+    const diff = aiRate - legacyRate;
+
+    let level: DiscrepancyLevel = 'AUTO_MATCH';
+    let reasoning = `基准价 RM ${baseRate.toFixed(2)} (含 ${maxPlaces} 点)，未超落点，零差额。`;
+
+    if (diff === 0) {
+        level = 'AUTO_MATCH';
+        reasoning = `基准价 RM ${baseRate.toFixed(2)} (含 ${maxPlaces} 点)，未超落点，零差额。`;
+    } else if (diff > 0 && diff <= 25) {
+        level = 'MINOR_DRIFT';
+        reasoning = `基准价 RM ${baseRate.toFixed(2)} (含 ${maxPlaces} 点)，落点 ${dropCount} 个，超点 ${extraDrops} 点加发 RM ${extraEarnings.toFixed(2)}。`;
+    } else if (diff > 25) {
+        level = 'HIGH_DISCREPANCY';
+        reasoning = `基准价 RM ${baseRate.toFixed(2)} (含 ${maxPlaces} 点)，落点多达 ${dropCount} 个，超点 ${extraDrops} 点按 +RM ${extraRatePerPlace}/点加发 RM ${extraEarnings.toFixed(2)}。`;
+    }
+
+    return {
+        matchedRate,
+        zone,
+        standardizedLocation: standardized,
+        baseRate,
+        maxPlaces,
+        extraRatePerPlace,
+        dropCount,
+        extraDrops,
+        extraEarnings,
+        aiRate,
+        legacyRate,
+        diffAmount: diff,
+        reasoning,
+        discrepancyLevel: level
+    };
+}
+
 export function getDiscrepancyBadge(level: DiscrepancyLevel) {
     switch (level) {
         case 'AUTO_MATCH':

@@ -1,3 +1,4 @@
+import { resolveDeliveryRate } from './aiDriverPricing';
 /**
  * Trip Grouping Utility for Packsecure OS
  * 
@@ -85,35 +86,16 @@ export function extractTripIdentifier(notes?: string | null): { tripSeq?: number
  * Helper to match delivery rate for a specific order and origin
  */
 export function findRateForOrder(order: any, originRaw: string, rateMap: Record<string, any>) {
-    const origin = (originRaw || 'TAIPING').toLowerCase();
-    const zoneRaw = order.zone || order.delivery_address || 'Unknown';
-    const calcZone = zoneRaw.toLowerCase();
-    const key = `${origin}-${calcZone}`;
-    let rateInfo = rateMap[key];
-
-    if (!rateInfo && order.delivery_address) {
-        const addrLower = order.delivery_address.toLowerCase();
-        for (const k of Object.keys(rateMap)) {
-            if (k.startsWith(`${origin}-`)) {
-                const r = rateMap[k];
-                const loc = (r.location_name || '').toLowerCase().trim();
-                if (loc && loc.length >= 3 && addrLower.includes(loc)) {
-                    rateInfo = r;
-                    break;
-                }
-            }
-        }
-    }
-
-    if (!rateInfo) {
-        const matchedKey = Object.keys(rateMap).find(k => {
-            if (!k.startsWith(`${origin}-`)) return false;
-            const locName = k.slice(origin.length + 1);
-            return locName.includes(calcZone) || (calcZone.length >= 3 && calcZone.includes(locName));
-        });
-        if (matchedKey) rateInfo = rateMap[matchedKey];
-    }
-    return rateInfo;
+    const addr = (order.delivery_address || order.zone || '').trim();
+    const dbRates = Object.values(rateMap || {});
+    const resolved = resolveDeliveryRate({
+        addresses: [addr],
+        dropCount: 1,
+        origin: order.trip_origin || originRaw,
+        lorryPlate: order.lorry_plate,
+        dbRates
+    });
+    return resolved.matchedRate;
 }
 
 /**
@@ -132,9 +114,17 @@ export function groupOrdersIntoTrips(
     const extraJobOrders: any[] = [];
 
     ordersForDay.forEach(o => {
+        const combinedJobText = `${o.job_type || ''} ${o.order_number || ''} ${o.customer || ''} ${o.zone || ''} ${o.notes || ''} ${o.delivery_address || ''}`.toUpperCase();
         const isExtraJob = o.job_type === 'Extra Job' || 
             o.job_type === 'Pick Up' ||
-            (o.order_number && (o.order_number.startsWith('TRIP-JOB') || o.order_number.startsWith('TRIP-PU')));
+            (o.order_number && (o.order_number.startsWith('TRIP-JOB') || o.order_number.startsWith('TRIP-PU'))) ||
+            combinedJobText.includes('AMBIL PALLET') ||
+            combinedJobText.includes('AMBIK PALLET') ||
+            combinedJobText.includes('LORRY SERVICE') ||
+            combinedJobText.includes('PUSPAKOM') ||
+            combinedJobText.includes('TAIPING TRIP') ||
+            combinedJobText.includes('SHOPEE') ||
+            combinedJobText.includes('SPD');
 
         if (isExtraJob) {
             extraJobOrders.push(o);
@@ -157,9 +147,13 @@ export function groupOrdersIntoTrips(
                 if (!groupsMap.has(key)) groupsMap.set(key, []);
                 groupsMap.get(key)!.push(o);
             } else {
-                // If neither trip_id nor trip tag is present, treat as individual order trip
-                const key = `order_${o.id}`;
-                groupsMap.set(key, [o]);
+                // CRITICAL FIX: If neither trip_id nor trip tag is present, group into default daily trip for this driver
+                // Prevents charging multiple base rates for unlinked DOs delivered on the same run!
+                const dateKey = (o.deadline || o.deliveryDate || o.order_date || o.created_at || '').slice(0, 10);
+                const originKey = (o.trip_origin || 'TAIPING').toUpperCase();
+                const key = `daily_${dateKey || 'nodate'}_${originKey}_default`;
+                if (!groupsMap.has(key)) groupsMap.set(key, []);
+                groupsMap.get(key)!.push(o);
             }
         }
     });
@@ -218,29 +212,15 @@ export function groupOrdersIntoTrips(
         }
         const isVpcLorry = Boolean(tripPlate && String(tripPlate).toUpperCase().replace(/[^A-Z0-9]/g, '') === 'VPC9821');
 
-        // Select the rate that gives highest base rate among the orders (furthest / primary destination)
-        let bestRateInfo: any = null;
-        let bestBaseRate = -1;
-        let bestZone = primary.zone || primary.delivery_address || 'Unknown';
-
-        for (const o of orders) {
-            const r = findRateForOrder(o, originRaw, rateMap);
-            let curBase = 40;
-            if (r) {
-                curBase = Number(r.base_rate) || 0;
-                if (isVpcLorry) {
-                    const vpcMatch = r.notes?.match(/\[VPC_RATE:\s*([\d.]+)\]/i);
-                    if (vpcMatch && Number(vpcMatch[1]) > 0) {
-                        curBase = Number(vpcMatch[1]);
-                    }
-                }
-            }
-            if (curBase > bestBaseRate) {
-                bestBaseRate = curBase;
-                bestRateInfo = r;
-                bestZone = o.zone || o.delivery_address || 'Unknown';
-            }
-        }
+        // Unified rate calculation using official resolveDeliveryRate
+        const addresses = Array.from(new Set(orders.map(o => (o.delivery_address || o.zone || '').trim()).filter(Boolean)));
+        const resolved = resolveDeliveryRate({
+            addresses: addresses.length > 0 ? addresses : [primary.zone || primary.delivery_address || ''],
+            dropCount: tripDrops,
+            origin: originRaw,
+            lorryPlate: tripPlate,
+            dbRates: Object.values(rateMap || {})
+        });
 
         // Check if any order in the trip has an approved amount override
         let approvedAmount: number | null = null;
@@ -252,34 +232,18 @@ export function groupOrdersIntoTrips(
             }
         }
 
-        let baseRate = 0;
-        let extraRatePerPlace = 0;
-        let extraDrops = 0;
-        let extraDropTotal = 0;
-        let tEarnings = 0;
+        let baseRate = resolved.baseRate;
+        let extraRatePerPlace = resolved.extraRatePerPlace;
+        let extraDrops = resolved.extraDrops;
+        let extraDropTotal = resolved.extraEarnings;
+        let tEarnings = resolved.aiRate;
+        let bestZone = resolved.zone;
 
         if (approvedAmount !== null) {
             tEarnings = approvedAmount;
             baseRate = approvedAmount;
-        } else if (bestRateInfo) {
-            baseRate = Number(bestRateInfo.base_rate) || 0;
-            if (isVpcLorry) {
-                const vpcMatch = bestRateInfo.notes?.match(/\[VPC_RATE:\s*([\d.]+)\]/i);
-                if (vpcMatch && Number(vpcMatch[1]) > 0) {
-                    baseRate = Number(vpcMatch[1]);
-                }
-            }
-            extraRatePerPlace = Number(bestRateInfo.extra_rate_per_place ?? bestRateInfo.extra_drop_rate) || 0;
-            const maxPlaces = (bestRateInfo.max_places !== undefined && bestRateInfo.max_places !== null) ? Number(bestRateInfo.max_places) : 1;
-            extraDrops = Math.max(0, tripDrops - maxPlaces);
-            extraDropTotal = extraDrops * extraRatePerPlace;
-            tEarnings = baseRate + extraDropTotal;
-        } else {
-            baseRate = 40;
-            extraRatePerPlace = 10;
-            extraDrops = Math.max(0, tripDrops - 1);
-            extraDropTotal = extraDrops * extraRatePerPlace;
-            tEarnings = baseRate + extraDropTotal;
+            extraDropTotal = 0;
+            extraDrops = 0;
         }
 
         // Determine aggregated status
@@ -378,11 +342,12 @@ export function groupOrdersIntoTrips(
         const drops = Math.max(1, Number(o.trip_drop_count) || 1);
         const approvedMatch = o.notes?.match(/\[APPROVED_AMOUNT:\s*([\d.]+)\]/);
         const approvedAmount = approvedMatch ? parseFloat(approvedMatch[1]) : null;
+        const combinedJobText = `${o.zone || ''} ${o.notes || ''} ${o.customer || ''} ${o.order_number || ''}`.toUpperCase();
         const defaultJobRate = (
-            o.zone?.toUpperCase().includes('TAIPING TRIP') ? 7 :
-            o.zone?.toUpperCase().includes('SHOPEE') ? 20 :
-            o.zone?.toUpperCase().includes('PALLET') ? 10 :
-            o.zone?.toUpperCase().includes('SERVICE') ? 15 : 40
+            combinedJobText.includes('TAIPING TRIP') ? 7 :
+            (combinedJobText.includes('SHOPEE') || combinedJobText.includes('SPD')) ? 20 :
+            combinedJobText.includes('PALLET') ? 10 :
+            (combinedJobText.includes('SERVICE') || combinedJobText.includes('PUSPAKOM')) ? 15 : 40
         );
         const earnings = approvedAmount !== null ? approvedAmount : defaultJobRate;
 

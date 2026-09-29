@@ -1313,8 +1313,9 @@ const PersonalMonthlyReport: React.FC<Props> = ({
     const handleToggleHRApproveTrip = async (trip: any, checked: boolean) => {
         const oldNotes = trip.notes || '';
         const isHrLocked = oldNotes.includes('[HR_APPROVED]') || trip.is_hr_approved || (trip.orders && trip.orders.some((o: any) => o.notes?.includes('[HR_APPROVED]') || o.is_hr_approved));
-        if (!checked && isHrLocked) {
-            alert("🔒 此 Trip 已由 HR 打勾审核锁定，任何人（包含 Admin / 管理员）均不可再取消锁定或更改！ / This trip is locked by HR and cannot be un-approved.");
+        const isHrUser = currentUserRole === 'HR' || currentUserRole === 'SuperAdmin';
+        if (!checked && isHrLocked && !isHrUser) {
+            alert("🔒 此 Trip 已由 HR 打勾审核锁定，仅限 HR 专员有权解除打勾！ / This trip is locked by HR. Only HR can untick it.");
             return;
         }
         const targetIds: string[] = (trip.order_ids && trip.order_ids.length > 0) ? trip.order_ids : [trip.id];
@@ -3849,16 +3850,22 @@ const PersonalMonthlyReport: React.FC<Props> = ({
                                                                                 <label 
                                                                                     className={`flex items-center justify-center px-1.5 py-0.5 border text-[9px] font-bold uppercase rounded transition-all ${
                                                                                         isTdHrApproved 
-                                                                                            ? 'bg-purple-950/60 border-purple-500/50 text-purple-300 cursor-not-allowed opacity-90' 
+                                                                                            ? (currentUserRole === 'HR' || currentUserRole === 'SuperAdmin'
+                                                                                                ? 'bg-purple-950/80 border-purple-500/80 text-purple-300 hover:bg-purple-900/60 cursor-pointer'
+                                                                                                : 'bg-purple-950/60 border-purple-500/50 text-purple-300 cursor-not-allowed opacity-90')
                                                                                             : 'bg-slate-800/50 border-slate-700 text-slate-500 hover:bg-slate-700 cursor-pointer'
                                                                                     }`}
-                                                                                    title={isTdHrApproved ? "🔒 HR 已审核锁定此 Trip (任何人均不可取消或更改) / HR Approved (Locked)" : "点击由 HR 批准此 Trip / Click to HR Approve"}
+                                                                                    title={isTdHrApproved 
+                                                                                        ? (currentUserRole === 'HR' || currentUserRole === 'SuperAdmin' 
+                                                                                            ? "🔒 HR 已审核锁定 (HR 可点击解除打勾 / Click to untick)" 
+                                                                                            : "🔒 HR 已审核锁定此 Trip (非 HR 角色不可取消) / HR Approved (Locked)") 
+                                                                                        : "点击由 HR 批准此 Trip / Click to HR Approve"}
                                                                                 >
                                                                                     <input
                                                                                         type="checkbox"
                                                                                         checked={isTdHrApproved}
                                                                                         onChange={(e) => handleToggleHRApproveTrip(td, e.target.checked)}
-                                                                                        disabled={isTdHrApproved}
+                                                                                        disabled={isTdHrApproved && !(currentUserRole === 'HR' || currentUserRole === 'SuperAdmin')}
                                                                                         className="w-3 h-3 accent-purple-500 rounded cursor-pointer disabled:cursor-not-allowed mr-1"
                                                                                     />
                                                                                     {isTdHrApproved ? '🔒 HR' : 'HR'}

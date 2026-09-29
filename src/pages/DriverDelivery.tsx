@@ -306,7 +306,13 @@ const DriverDelivery: React.FC<DriverDeliveryProps> = ({ user, onNavigate }) => 
         if (t.status !== 'Pending Approval') return false;
         // If it's an Extra Job or Pick Up, it has already been submitted with photo proof and is only awaiting Admin approval.
         const isExtra = (t as any).job_type === 'Extra Job' || (t as any).job_type === 'Pick Up' || t.orderNumber?.startsWith('TRIP-JOB') || t.orderNumber?.startsWith('TRIP-PU') || (!t.items || t.items.length === 0);
-        if (isExtra) return true;
+        if (isExtra) {
+            // An extra job with proof_of_load_url (naik barang) but NO pod_photo_url is STILL in progress (driver needs to take delivery photo at destination)
+            if (t.proof_of_load_url && !t.pod_photo_url) {
+                return false;
+            }
+            return true;
+        }
 
         const totalDrops = isMultiOrderTrip ? 1 : Math.max(1, Number((t as any).trip_drop_count) || 1);
         const completedDrops = countCompletedDrops(t.pod_photo_url);
@@ -2330,25 +2336,54 @@ const DriverDelivery: React.FC<DriverDeliveryProps> = ({ user, onNavigate }) => 
                             </div>
                         </div>
 
-                        {/* Driver Photo Proof */}
-                        {extraJobPhoto && (
-                            <div className="mb-4 bg-slate-950/60 p-3 rounded-xl border border-slate-800">
-                                <p className="text-[10px] text-emerald-400 uppercase font-black mb-2 flex items-center gap-1">
-                                    📸 Bukti Gambar Tugasan / Task Photo Proof
-                                </p>
-                                <div className="w-full h-44 rounded-lg overflow-hidden border border-slate-700 bg-black relative group">
-                                    <img
-                                        src={extraJobPhoto}
-                                        alt="Proof"
-                                        className="w-full h-full object-cover cursor-zoom-in group-hover:scale-105 transition-transform"
-                                        onClick={() => setPreviewImageUrl(extraJobPhoto)}
-                                    />
-                                    <div className="absolute bottom-2 left-2 bg-black/80 backdrop-blur-sm px-2 py-0.5 rounded text-[9px] text-emerald-300 font-bold">
-                                        Ketik untuk besarkan gambar
+                        {/* Driver Photo Proof: Step 1 (Naik Barang) & Step 2 (Hantar Barang / POD) */}
+                        <div className="grid grid-cols-1 sm:grid-cols-2 gap-3 mb-4">
+                            {/* Step 1: Loading Photo (Naik Barang) */}
+                            {extraJobPhoto && (
+                                <div className="bg-slate-950/60 p-3 rounded-xl border border-slate-800">
+                                    <p className="text-[10px] text-blue-400 uppercase font-black mb-2 flex items-center gap-1">
+                                        📦 1. Gambar Naik Barang / Loading
+                                    </p>
+                                    <div className="w-full h-36 rounded-lg overflow-hidden border border-slate-700 bg-black relative group">
+                                        <img
+                                            src={extraJobPhoto}
+                                            alt="Naik Barang"
+                                            className="w-full h-full object-cover cursor-zoom-in group-hover:scale-105 transition-transform"
+                                            onClick={() => setPreviewImageUrl(extraJobPhoto)}
+                                        />
+                                        <div className="absolute bottom-1.5 left-1.5 bg-black/80 backdrop-blur-sm px-2 py-0.5 rounded text-[8px] text-blue-300 font-bold">
+                                            Ketik untuk besarkan
+                                        </div>
                                     </div>
                                 </div>
-                            </div>
-                        )}
+                            )}
+
+                            {/* Step 2: Delivery Photo (Hantar Barang / POD) */}
+                            {order.pod_photo_url ? (
+                                <div className="bg-slate-950/60 p-3 rounded-xl border border-emerald-500/30">
+                                    <p className="text-[10px] text-emerald-400 uppercase font-black mb-2 flex items-center gap-1">
+                                        🏁 2. Gambar Hantar Barang / POD
+                                    </p>
+                                    <div className="w-full h-36 rounded-lg overflow-hidden border border-slate-700 bg-black relative group">
+                                        <img
+                                            src={order.pod_photo_url.split(',')[0]}
+                                            alt="Hantar Barang"
+                                            className="w-full h-full object-cover cursor-zoom-in group-hover:scale-105 transition-transform"
+                                            onClick={() => setPreviewImageUrl(order.pod_photo_url.split(',')[0])}
+                                        />
+                                        <div className="absolute bottom-1.5 left-1.5 bg-black/80 backdrop-blur-sm px-2 py-0.5 rounded text-[8px] text-emerald-300 font-bold">
+                                            Ketik untuk besarkan
+                                        </div>
+                                    </div>
+                                </div>
+                            ) : (
+                                <div className="bg-slate-950/40 p-3 rounded-xl border border-dashed border-slate-800 flex flex-col items-center justify-center text-center">
+                                    <Camera size={24} className="text-slate-600 mb-1" />
+                                    <p className="text-[10px] font-bold text-slate-400">Belum Ambil Gambar Hantar</p>
+                                    <p className="text-[9px] text-slate-500">Ambil gambar semasa tiba di destinasi/pelanggan</p>
+                                </div>
+                            )}
+                        </div>
 
                         {/* Notes */}
                         {order.notes && (
@@ -2358,18 +2393,53 @@ const DriverDelivery: React.FC<DriverDeliveryProps> = ({ user, onNavigate }) => 
                             </div>
                         )}
 
+                        {/* Action Button: Take Delivery Photo (Hantar Barang) */}
+                        {!order.pod_photo_url ? (
+                            <div className="space-y-2 mb-3">
+                                <button
+                                    onClick={() => handleOpenUnloadModal(order)}
+                                    data-action="OPEN_EXTRA_UNLOAD_MODAL"
+                                    data-action-name="拍摄临时任务送达交货照片"
+                                    className="w-full py-3.5 bg-emerald-600 hover:bg-emerald-500 active:scale-95 text-white rounded-xl font-black uppercase text-xs tracking-wider flex items-center justify-center gap-2 shadow-lg shadow-emerald-950/40 transition-all cursor-pointer"
+                                >
+                                    <Camera size={16} className="text-emerald-200" />
+                                    <span>📸 AMBIL GAMBAR HANTAR BARANG / SAHKAN HANTARAN</span>
+                                </button>
+                                <div className="flex items-center justify-center px-1 text-[10px] text-slate-400">
+                                    <span>🚚 Naik barang selesai. Sila ambil gambar di lokasi pelanggan untuk selesaikan.</span>
+                                </div>
+                            </div>
+                        ) : (
+                            <div className="mb-3">
+                                <button
+                                    onClick={() => handleOpenUnloadModal(order)}
+                                    className="w-full py-2 bg-slate-800 hover:bg-slate-750 text-slate-300 hover:text-white border border-slate-700 rounded-xl font-bold uppercase text-[11px] flex items-center justify-center gap-1.5 transition-all"
+                                >
+                                    <Camera size={13} className="text-emerald-400" />
+                                    <span>+ Kemaskini Foto Hantar Barang / Update POD</span>
+                                </button>
+                            </div>
+                        )}
+
                         {/* Status Bar */}
                         <div className={`p-3 rounded-xl text-xs font-bold uppercase flex items-center justify-center gap-2 ${
-                            order.status === 'Pending Approval'
+                            !order.pod_photo_url
+                                ? 'bg-blue-500/15 border border-blue-500/30 text-blue-300'
+                                : order.status === 'Pending Approval'
                                 ? 'bg-amber-500/15 border border-amber-500/30 text-amber-300'
                                 : order.status === 'Delivered'
                                 ? 'bg-emerald-500/15 border border-emerald-500/30 text-emerald-300'
                                 : 'bg-red-500/15 border border-red-500/30 text-red-300'
                         }`}>
-                            {order.status === 'Pending Approval' ? (
+                            {!order.pod_photo_url ? (
+                                <>
+                                    <div className="w-2 h-2 rounded-full bg-blue-400 animate-pulse"></div>
+                                    <span>🚚 Naik Barang Selesai — Sedang Menghantar / In Transit</span>
+                                </>
+                            ) : order.status === 'Pending Approval' ? (
                                 <>
                                     <div className="w-2 h-2 rounded-full bg-amber-400 animate-pulse"></div>
-                                    <span>🟡 Sedang Menunggu Kelulusan Admin / Pending Approval</span>
+                                    <span>🟡 Telah Dihantar — Menunggu Kelulusan Admin / Pending Approval</span>
                                 </>
                             ) : order.status === 'Delivered' ? (
                                 <>

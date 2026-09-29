@@ -5,6 +5,7 @@ import {
     recordHrCorrection,
     syncApprovedAmountToOrderNotes,
     getDiscrepancyBadge,
+    resolveDeliveryRate,
     DiscrepancyLevel,
     AuditStatus
 } from '../../utils/aiDriverPricing';
@@ -153,113 +154,28 @@ export const HRAuditWorkbench: React.FC<HRAuditWorkbenchProps> = ({ onOpenRulebo
                     }
                 }
 
-                // Official rate calculation matching origin and destination
+                // Official rate calculation using unified resolveDeliveryRate
                 const origin = (primary.trip_origin || 'TAIPING').toUpperCase();
-                const originRates = allRates.filter(r => (r.origin || 'TAIPING').toUpperCase() === origin);
-                const fullText = addresses.join(' ').toLowerCase();
+                const resolved = resolveDeliveryRate({
+                    addresses,
+                    dropCount,
+                    origin,
+                    lorryPlate: plate,
+                    dbRates: allRates
+                });
 
-                let matchedRate: any = null;
-                let zone = '待判定';
-                let standardized = addresses[0] || '本地短途';
-                let reasoning = '依据官方标准价目表匹配';
-
-                if (fullText.includes('nilai') || fullText.includes('negeri sembilan')) {
-                    matchedRate = originRates.find(r => r.location_name.toUpperCase() === 'NEGERI SEMBILAN') ||
-                                  originRates.find(r => r.location_name.toUpperCase() === 'NILAI');
-                    zone = 'NEGERI SEMBILAN';
-                    standardized = '森美兰 Nilai 工业区';
-                } else if (fullText.includes('kelantan') || fullText.includes('kota bharu') || fullText.includes('gual nering') || 
-                           fullText.includes('pasir mas') || fullText.includes('tumpat') || fullText.includes('machang') || 
-                           fullText.includes('tanah merah') || fullText.includes('gua musang')) {
-                    matchedRate = originRates.find(r => r.location_name.toUpperCase() === 'KELANTAN') ||
-                                  originRates.find(r => r.location_name.toUpperCase() === 'KOTA BHARU');
-                    zone = 'KELANTAN / 吉兰丹';
-                    standardized = '东海岸吉兰丹全境';
-                } else if (fullText.includes('perlis') || fullText.includes('kangar') || fullText.includes('arau') || 
-                           fullText.includes('padang besar') || fullText.includes('kuala perlis') || fullText.includes('bukit kayu hitam')) {
-                    matchedRate = originRates.find(r => r.location_name.toUpperCase() === 'PERLIS') ||
-                                  originRates.find(r => r.location_name.toUpperCase() === 'KANGAR') ||
-                                  originRates.find(r => r.location_name.toUpperCase() === 'ARAU');
-                    zone = 'PERLIS / 玻璃市';
-                    standardized = 'Perlis 玻璃市全境 (Kangar / Arau)';
-                } else if (fullText.includes('alor setar') || fullText.includes('jitra') || fullText.includes('pokok sena') || 
-                           fullText.includes('baling') || fullText.includes('sik') || (fullText.includes('kedah') && !fullText.includes('sungai petani'))) {
-                    matchedRate = originRates.find(r => r.location_name.toUpperCase() === 'ALOR SETAR') ||
-                                  originRates.find(r => r.location_name.toUpperCase() === 'KEDAH');
-                    zone = 'ALOR SETAR / 吉打北部';
-                    standardized = 'Kedah 亚罗士打 (Alor Setar)';
-                } else if (fullText.includes('sungai petani') || fullText.includes('bedong') || fullText.includes('pendang') || fullText.includes('gurun')) {
-                    matchedRate = originRates.find(r => r.location_name.toUpperCase() === 'SUNGAI PETANI') ||
-                                  originRates.find(r => r.location_name.toUpperCase() === 'BEDONG');
-                    zone = 'SUNGAI PETANI / 双溪大年';
-                    standardized = 'Kedah 双溪大年 (Sungai Petani)';
-                } else if (fullText.includes('batu kawan') || (fullText.includes('simpang ampat') && !fullText.includes('perlis') && !fullText.includes('kedah'))) {
-                    matchedRate = originRates.find(r => r.location_name.toUpperCase().includes('SIMPANG AMPAT'));
-                    zone = 'SIMPANG AMPAT / 威南';
-                    standardized = 'Penang 威南 Batu Kawan';
-                } else if (fullText.includes('bukit minyak') || fullText.includes('bm') || fullText.includes('mertajam')) {
-                    matchedRate = originRates.find(r => r.location_name.toUpperCase() === 'BM') ||
-                                  originRates.find(r => r.location_name.toUpperCase().includes('MERTAJAM'));
-                    zone = 'BUKIT MERTAJAM / 威中';
-                    standardized = 'Penang 威中 Bukit Minyak';
-                } else if (fullText.includes('menglembu') || fullText.includes('ipoh') || fullText.includes('station 18')) {
-                    matchedRate = originRates.find(r => r.location_name.toUpperCase() === 'IPOH');
-                    zone = 'IPOH / 怡保近郊';
-                    standardized = 'Perak 怡保万里望 (Menglembu)';
-                } else if (fullText.includes('kl') || fullText.includes('kuala lumpur') || fullText.includes('selangor') || 
-                           fullText.includes('subang') || fullText.includes('shah alam') || fullText.includes('petaling') || 
-                           fullText.includes('gombak') || fullText.includes('kapar') || fullText.includes('port klang') || 
-                           fullText.includes('sungai besar') || fullText.includes('kajang')) {
-                    matchedRate = originRates.find(r => r.location_name.toUpperCase() === 'KL') ||
-                                  originRates.find(r => r.location_name.toUpperCase() === 'SELANGOR');
-                    zone = 'SELANGOR / 雪兰莪';
-                    standardized = '雪兰莪 / 吉隆坡长途';
-                } else {
-                    // Try direct substring match
-                    for (const r of originRates) {
-                        if (r.location_name && fullText.includes(r.location_name.toLowerCase())) {
-                            matchedRate = r;
-                            zone = r.location_name;
-                            standardized = r.location_name;
-                            break;
-                        }
-                    }
-                }
-
-                if (!matchedRate) {
-                    matchedRate = originRates.find(r => r.location_name.toUpperCase() === 'TAIPING') || {
-                        base_rate: 40,
-                        max_places: 1,
-                        extra_rate_per_place: 0
-                    };
-                    zone = 'TAIPING 本地';
-                    standardized = addresses[0] || '太平本地短途';
-                }
-
-                const baseRate = Number(matchedRate.base_rate);
-                const maxPlaces = Number(matchedRate.max_places) || 1;
-                const extraRatePerPlace = Number(matchedRate.extra_rate_per_place) || 0;
-
-                const legacyRate = baseRate;
-                const extraDrops = Math.max(0, dropCount - maxPlaces);
-                const extraEarnings = extraDrops * extraRatePerPlace;
-                const aiRate = baseRate + extraEarnings;
-                const diff = aiRate - legacyRate;
-
-                let level: DiscrepancyLevel = 'AUTO_MATCH';
-                if (diff === 0) {
-                    level = 'AUTO_MATCH';
-                    reasoning = `基准价 RM ${baseRate.toFixed(2)} (含 ${maxPlaces} 点)，未超落点，零差额。`;
-                } else if (diff > 0 && diff <= 25) {
-                    level = 'MINOR_DRIFT';
-                    reasoning = `基准价 RM ${baseRate.toFixed(2)} (含 ${maxPlaces} 点)，落点 ${dropCount} 个，超点 ${extraDrops} 点加发 RM ${extraEarnings.toFixed(2)}。`;
-                } else if (diff > 25) {
-                    level = 'HIGH_DISCREPANCY';
-                    reasoning = `基准价 RM ${baseRate.toFixed(2)} (含 ${maxPlaces} 点)，落点多达 ${dropCount} 个，超点 ${extraDrops} 点按 +RM ${extraRatePerPlace}/点加发 RM ${extraEarnings.toFixed(2)}。`;
-                } else {
-                    level = 'MINOR_DRIFT';
-                    reasoning = `送往 ${zone}，按规则核算 RM ${aiRate.toFixed(2)}。`;
-                }
+                const baseRate = resolved.baseRate;
+                const maxPlaces = resolved.maxPlaces;
+                const extraRatePerPlace = resolved.extraRatePerPlace;
+                const legacyRate = resolved.legacyRate;
+                const extraDrops = resolved.extraDrops;
+                const extraEarnings = resolved.extraEarnings;
+                const aiRate = resolved.aiRate;
+                const diff = resolved.diffAmount;
+                const level = resolved.discrepancyLevel;
+                const reasoning = resolved.reasoning;
+                const zone = resolved.zone;
+                const standardized = resolved.standardizedLocation;
 
                 parsedTrips.push({
                     id: key,

@@ -1762,6 +1762,28 @@ const DeliveryOrderManagement: React.FC<DeliveryOrderManagementProps> = ({ user 
 
             if (error) throw error;
 
+            // If order belongs to a trip, check if all sibling orders are now Delivered
+            const tripId = (order as any).trip_id;
+            if (tripId) {
+                const { data: siblingOrders } = await supabase
+                    .from('sales_orders')
+                    .select('id, status')
+                    .eq('trip_id', tripId)
+                    .neq('status', 'Cancelled');
+                const allDone = (siblingOrders || []).every(s => 
+                    s.id === order.id ? targetStatus === 'Delivered' : s.status === 'Delivered'
+                );
+                if (allDone) {
+                    await supabase
+                        .from('trips_v2')
+                        .update({
+                            status: 'Completed',
+                            completed_at: new Date().toISOString()
+                        })
+                        .eq('id', tripId);
+                }
+            }
+
             alert("✅ Approved & Stock Adjusted!");
 
             // Optimistic Update
