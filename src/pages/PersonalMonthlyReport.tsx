@@ -642,7 +642,7 @@ const PersonalMonthlyReport: React.FC<Props> = ({
 
             const role = data?.role || user.role;
             setCurrentUserRole(role);
-            const isAdminOrHRUser = ['SuperAdmin', 'Admin', 'HR'].includes(role);
+            const isAdminOrHRUser = ['SuperAdmin', 'Admin', 'HR', 'Manager', 'LogisticsCoordinator'].includes(role);
             
             if (isAdminOrHRUser) {
                 // HR Portal persists status as lowercase 'active'; Driver API / others may use 'Active'
@@ -667,7 +667,9 @@ const PersonalMonthlyReport: React.FC<Props> = ({
                 fetchGlobalPendingCounts();
             } else {
                 setEmployeesList([]);
-                setSelectedEmployeeId(user.uid || user.id);
+                if (!targetEmployeeId) {
+                    setSelectedEmployeeId(user.uid || user.id);
+                }
             }
         };
         fetchPermissions();
@@ -726,7 +728,7 @@ const PersonalMonthlyReport: React.FC<Props> = ({
                 const { data: v2Data } = await supabase
                     .from('sys_users_v2')
                     .select('*')
-                    .eq('auth_user_id', selectedEmployeeId)
+                    .or(`auth_user_id.eq.${selectedEmployeeId},id.eq.${selectedEmployeeId}`)
                     .maybeSingle();
                 profileData = v2Data;
 
@@ -734,7 +736,7 @@ const PersonalMonthlyReport: React.FC<Props> = ({
                     const { data: pubData } = await supabase
                         .from('users_public')
                         .select('*')
-                        .eq('id', selectedEmployeeId)
+                        .or(`id.eq.${selectedEmployeeId},auth_user_id.eq.${selectedEmployeeId}`)
                         .maybeSingle();
                     if (pubData) {
                         profileData = { ...pubData, auth_user_id: pubData.id };
@@ -2717,6 +2719,8 @@ const PersonalMonthlyReport: React.FC<Props> = ({
     const totalDropCount = dailyMetrics.reduce((sum, d) => sum + d.tripDetails.reduce((ts: number, t: any) => ts + (t.trip_drop_count || 1), 0), 0);
     const onTimeTripsCount = dailyMetrics.reduce((sum, d) => sum + d.tripDetails.filter((t: any) => !t.deadline || !t.pod_timestamp || t.pod_timestamp.split('T')[0] <= t.deadline).length, 0);
     const onTimeRate = totalTrips > 0 ? Math.round((onTimeTripsCount / totalTrips) * 100) : 100;
+    const totalTripEarnings = dailyMetrics.reduce((sum, d) => sum + (d.tripEarnings || 0), 0);
+    const pendingTripEarnings = dailyMetrics.reduce((sum, d) => sum + (d.tripDetails || []).filter((t: any) => isTripPending(t) || t.status !== 'Delivered').reduce((ts: number, t: any) => ts + (t.earnings || 0), 0), 0);
 
     const todayStr = useMemo(() => {
         const now = new Date();
@@ -3124,10 +3128,34 @@ const PersonalMonthlyReport: React.FC<Props> = ({
                                             )}
                                             <p className="text-[9px] text-green-500/80 mt-1 uppercase font-bold tracking-wider">Telah Disahkan / Confirmed</p>
                                         </>
+                                    ) : isDriver ? (
+                                        <>
+                                            <h3 className="text-2xl font-black text-emerald-400">
+                                                RM {(totalTripEarnings + totalClaimsAmount).toLocaleString('en-MY', { minimumFractionDigits: 2 })}
+                                            </h3>
+                                            <div className="flex flex-wrap items-center gap-1.5 mt-1">
+                                                <span className="text-[9px] text-emerald-400 font-bold bg-emerald-500/10 px-1.5 py-0.5 rounded border border-emerald-500/20">
+                                                    Anggaran Trip MTD
+                                                </span>
+                                                {pendingTripEarnings > 0 && (
+                                                    <span className="text-[9px] text-amber-400 font-bold bg-amber-500/10 px-1.5 py-0.5 rounded border border-amber-500/20">
+                                                        +RM {pendingTripEarnings.toFixed(2)} ⏳
+                                                    </span>
+                                                )}
+                                                {totalClaimsAmount > 0 && (
+                                                    <span className="text-[9px] text-teal-400 font-bold">
+                                                        + Claims: RM {totalClaimsAmount.toFixed(2)}
+                                                    </span>
+                                                )}
+                                            </div>
+                                            <p className="text-[9px] text-gray-400 mt-1 uppercase">Belum Tutup Akaun HR / Live MTD Earnings 🔍</p>
+                                        </>
                                     ) : (
                                         <>
                                             <h3 className="text-lg font-black text-gray-400 italic mt-1">RM {totalClaimsAmount > 0 ? totalClaimsAmount.toFixed(2) : '0.00'}</h3>
-                                            <p className="text-[9px] text-teal-400 font-bold mt-1">+ Claims: RM {totalClaimsAmount.toFixed(2)}</p>
+                                            {totalClaimsAmount > 0 && (
+                                                <p className="text-[9px] text-teal-400 font-bold mt-1">+ Claims: RM {totalClaimsAmount.toFixed(2)}</p>
+                                            )}
                                             <p className="text-[9px] text-gray-500 mt-1 uppercase">Klik perincian / Breakdown 🔍</p>
                                         </>
                                     )}
@@ -5537,6 +5565,24 @@ const PersonalMonthlyReport: React.FC<Props> = ({
                         {/* Body */}
                         <div className="p-5 space-y-4 bg-slate-950 font-sans text-sm">
                             <div className="bg-[#0d0d12] border border-white/5 p-4 rounded-xl space-y-3">
+                                {isDriver && (
+                                    <>
+                                        <div className="flex justify-between items-center text-xs">
+                                            <span className="text-gray-400 font-bold uppercase tracking-wider text-[10px]">Komisen Trip Selesai / Completed Trips</span>
+                                            <span className="font-mono font-bold text-emerald-400">
+                                                RM {totalTripEarnings.toFixed(2)}
+                                            </span>
+                                        </div>
+                                        {pendingTripEarnings > 0 && (
+                                            <div className="flex justify-between items-center text-xs">
+                                                <span className="text-amber-400 font-bold uppercase tracking-wider text-[10px]">Trip Menunggu Pengesahan / Pending Trips</span>
+                                                <span className="font-mono font-bold text-amber-400">
+                                                    + RM {pendingTripEarnings.toFixed(2)} ⏳
+                                                </span>
+                                            </div>
+                                        )}
+                                    </>
+                                )}
                                 <div className="flex justify-between items-center text-xs">
                                     <span className="text-gray-400 font-bold uppercase tracking-wider text-[10px]">Gaji Asas / Basic Salary</span>
                                     <span className="font-mono font-bold text-white">
@@ -5568,10 +5614,12 @@ const PersonalMonthlyReport: React.FC<Props> = ({
                             <div className="bg-green-950/20 border border-green-500/30 p-4 rounded-xl flex justify-between items-center">
                                 <div>
                                     <div className="text-[10px] text-green-400 uppercase font-black tracking-widest">Jumlah Bersih / Net Earnings</div>
-                                    <div className="text-xs text-gray-400">Termasuk Gaji & Claims Disahkan</div>
+                                    <div className="text-xs text-gray-400">
+                                        {payroll ? 'Termasuk Gaji & Claims Disahkan' : isDriver ? 'Anggaran Semasa Termasuk Trip & Claims' : 'Termasuk Gaji & Claims Disahkan'}
+                                    </div>
                                 </div>
                                 <div className="text-xl font-black text-green-300 font-mono">
-                                    RM {(Number(payroll?.net_salary || 0) + totalClaimsAmount).toFixed(2)}
+                                    RM {(payroll ? (Number(payroll.net_salary || 0) + totalClaimsAmount) : isDriver ? (totalTripEarnings + totalClaimsAmount) : totalClaimsAmount).toFixed(2)}
                                 </div>
                             </div>
 

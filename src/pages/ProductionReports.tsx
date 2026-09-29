@@ -39,6 +39,26 @@ const CHART_COLORS = [
     '#6b7280'  // gray-500 (for Others)
 ];
 
+// Helper to identify recycle machines/SKUs whose output is in KG pellets (not rolls)
+const isRecycleLog = (machineId?: string, sku?: string) => {
+    if (!machineId && !sku) return false;
+    const m = (machineId || '').toUpperCase();
+    const s = (sku || '').toUpperCase();
+    if (m === 'T5-M05' || m.startsWith('T5') || m === 'N3-M03' || m.startsWith('N3') || m === 'J1-M02') return true;
+    if (s.startsWith('RM-REC') || s.startsWith('REC-') || s.includes('RECYCLE')) return true;
+    return false;
+};
+
+// Standard unit roll weight (KG) per SKU based on BUSINESS_RULES.md
+const getRollWeightKg = (sku?: string, machineId?: string) => {
+    const s = (sku || '').toUpperCase();
+    const m = (machineId || '').toUpperCase();
+    if (s.includes('-DL-') || s.includes('DOUBLE')) return 5.60;
+    if (s.includes('-SL-') || s.includes('SINGLE')) return 3.80;
+    if (s.startsWith('SF-') || m.includes('T1-M03') || m.includes('T4-M04') || s.includes('STRETCH')) return 2.20;
+    return 4.50; // default bubble wrap standard
+};
+
 const ProductionReports: React.FC<ProductionReportsProps> = () => {
     const { t } = useTranslation();
     const today = new Date();
@@ -197,6 +217,8 @@ const ProductionReports: React.FC<ProductionReportsProps> = () => {
     // Calculate report aggregates and statistics
     const stats = useMemo(() => {
         let totalOutput = 0;
+        let totalRecycleKg = 0;
+        let totalGoodWeightKg = 0;
         let totalScrap = 0;
         const skuMap = new Map<string, { sku: string; name: string; output: number; scrap: number }>();
         const taipingSkuMap = new Map<string, { sku: string; name: string; output: number; scrap: number }>();
@@ -215,10 +237,20 @@ const ProductionReports: React.FC<ProductionReportsProps> = () => {
         }
 
         logs.forEach(l => {
-            const out = Number(l.output_qty) || 0;
+            const rawOut = Number(l.output_qty) || 0;
             const scr = Number(l.reject_qty) || 0;
-            totalOutput += out;
+            const isRecycle = isRecycleLog(l.machine_id, l.sku);
+
+            if (isRecycle) {
+                totalRecycleKg += rawOut;
+            } else {
+                const outRolls = Math.round(rawOut);
+                totalOutput += outRolls;
+                totalGoodWeightKg += outRolls * getRollWeightKg(l.sku, l.machine_id);
+            }
             totalScrap += scr;
+
+            const out = isRecycle ? Math.round(rawOut * 100) / 100 : Math.round(rawOut);
 
             // SKU Aggregation (All)
             if (l.sku) {
@@ -412,11 +444,16 @@ const ProductionReports: React.FC<ProductionReportsProps> = () => {
         // Count active days (days with production > 0)
         const activeDaysCount = Array.from(dailyMap.values()).filter(qty => qty > 0).length;
 
-        const scrapRate = totalOutput > 0 ? (totalScrap / totalOutput) * 100 : 0;
-        const yieldRate = totalOutput > 0 ? ((totalOutput - totalScrap) / totalOutput) * 100 : 100;
+        // Material weight-based engineering formula: Good product weight (KG) / Total material consumed (KG)
+        const totalMaterialKg = totalGoodWeightKg + totalScrap;
+        const yieldRate = totalMaterialKg > 0 ? (totalGoodWeightKg / totalMaterialKg) * 100 : 100;
+        const scrapRate = totalMaterialKg > 0 ? (totalScrap / totalMaterialKg) * 100 : 0;
 
         return {
             totalOutput,
+            totalRecycleKg,
+            totalGoodWeightKg,
+            totalMaterialKg,
             totalScrap,
             scrapRate,
             yieldRate,
@@ -1020,11 +1057,11 @@ const ProductionReports: React.FC<ProductionReportsProps> = () => {
                                         当月生产总量 / Total Production
                                     </div>
                                     <div className="text-2xl md:text-3xl font-black text-slate-800 dark:text-white font-mono">
-                                        {stats.totalOutput.toLocaleString()}
+                                        {Math.round(stats.totalOutput).toLocaleString()}
                                     </div>
                                 </div>
                                 <div className="text-[11px] text-blue-600 dark:text-blue-400 mt-2 font-semibold flex items-center gap-1">
-                                    <TrendingUp size={12} /> 卷 / Rolls (总计数)
+                                    <TrendingUp size={12} /> 卷 / Rolls (总成品计数){stats.totalRecycleKg > 0 ? ` · 造粒: ${stats.totalRecycleKg.toFixed(1)} kg` : ''}
                                 </div>
                             </div>
 
@@ -1038,12 +1075,15 @@ const ProductionReports: React.FC<ProductionReportsProps> = () => {
                                         {stats.yieldRate.toFixed(2)}%
                                     </div>
                                 </div>
-                                <div className="mt-2">
+                                <div className="mt-2 space-y-1">
                                     <div className="w-full bg-slate-100 dark:bg-white/10 rounded-full h-1.5 overflow-hidden">
                                         <div 
                                             className="bg-emerald-500 h-1.5 rounded-full" 
-                                            style={{ width: `${stats.yieldRate}%` }} 
+                                            style={{ width: `${Math.min(100, Math.max(0, stats.yieldRate))}%` }} 
                                         />
+                                    </div>
+                                    <div className="text-[10px] text-slate-400 dark:text-gray-500 font-mono">
+                                        良品 {Math.round(stats.totalGoodWeightKg).toLocaleString()} kg · 总料 {Math.round(stats.totalMaterialKg).toLocaleString()} kg
                                     </div>
                                 </div>
                             </div>
@@ -1055,7 +1095,7 @@ const ProductionReports: React.FC<ProductionReportsProps> = () => {
                                         损耗及废品 / Scrap Volume
                                     </div>
                                     <div className="text-2xl md:text-3xl font-black text-rose-600 dark:text-rose-400 font-mono">
-                                        {stats.totalScrap.toLocaleString()}
+                                        {stats.totalScrap.toLocaleString(undefined, { minimumFractionDigits: 1, maximumFractionDigits: 1 })} kg
                                     </div>
                                 </div>
                                 <div className="text-[11px] text-rose-600 dark:text-rose-400/80 mt-2 font-semibold flex items-center gap-1">
@@ -1462,9 +1502,9 @@ const ProductionReports: React.FC<ProductionReportsProps> = () => {
                                             <tr className="bg-slate-50 dark:bg-[#18181b] text-slate-500 dark:text-gray-400 text-[10px] uppercase tracking-wider border-b border-slate-200 dark:border-white/5 sticky top-0 z-10">
                                                 <th className="p-3 font-bold">SKU 编码</th>
                                                 <th className="p-3 font-bold">产品名称</th>
-                                                <th className="p-3 font-bold text-right">总产量 (卷)</th>
-                                                <th className="p-3 font-bold text-right">废品量 (卷)</th>
-                                                <th className="p-3 font-bold text-right">合格率</th>
+                                                <th className="p-3 font-bold text-right">总产量 (卷/KG)</th>
+                                                <th className="p-3 font-bold text-right">损耗废品 (KG)</th>
+                                                <th className="p-3 font-bold text-right">合格率 (重量比)</th>
                                                 <th className="p-3 font-bold text-right">产量占比</th>
                                             </tr>
                                         </thead>
@@ -1477,8 +1517,11 @@ const ProductionReports: React.FC<ProductionReportsProps> = () => {
                                                 </tr>
                                             ) : (
                                                 filteredSkuList.map(item => {
-                                                    const share = stats.totalOutput > 0 ? (item.output / stats.totalOutput) * 100 : 0;
-                                                    const yieldPct = item.output > 0 ? ((item.output - item.scrap) / item.output) * 100 : 100;
+                                                    const isRec = isRecycleLog(undefined, item.sku);
+                                                    const share = stats.totalOutput > 0 && !isRec ? (item.output / stats.totalOutput) * 100 : 0;
+                                                    const itemGoodKg = isRec ? item.output : item.output * getRollWeightKg(item.sku);
+                                                    const itemTotalKg = itemGoodKg + item.scrap;
+                                                    const yieldPct = itemTotalKg > 0 ? (itemGoodKg / itemTotalKg) * 100 : 100;
                                                     return (
                                                         <tr key={item.sku} className="hover:bg-slate-50 dark:hover:bg-white/[0.01] transition-colors">
                                                             <td className="p-3 font-mono font-semibold text-slate-600 dark:text-gray-400">
@@ -1488,16 +1531,16 @@ const ProductionReports: React.FC<ProductionReportsProps> = () => {
                                                                 {item.name}
                                                             </td>
                                                             <td className="p-3 text-right font-mono font-bold text-slate-800 dark:text-white">
-                                                                {item.output.toLocaleString()}
+                                                                {item.output.toLocaleString()}{isRec ? ' kg' : ' 卷'}
                                                             </td>
                                                             <td className="p-3 text-right font-mono text-rose-500">
-                                                                {item.scrap > 0 ? `-${item.scrap}` : '0'}
+                                                                {item.scrap > 0 ? `-${item.scrap} kg` : '0 kg'}
                                                             </td>
                                                             <td className={`p-3 text-right font-mono font-bold ${yieldPct > 98 ? 'text-emerald-500' : 'text-amber-500'}`}>
                                                                 {yieldPct.toFixed(1)}%
                                                             </td>
                                                             <td className="p-3 text-right font-mono font-black text-blue-600 dark:text-blue-400">
-                                                                {share.toFixed(1)}%
+                                                                {isRec ? '-' : `${share.toFixed(1)}%`}
                                                             </td>
                                                         </tr>
                                                     );

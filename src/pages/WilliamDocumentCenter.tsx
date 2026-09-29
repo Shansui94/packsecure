@@ -1226,6 +1226,11 @@ export default function WilliamDocumentCenter() {
                                                                 yuan yuan - update monthly
                                                             </span>
                                                         )}
+                                                        {cardData.vouchers.length > 1 && (
+                                                            <span className="text-[9px] px-1.5 py-0.2 rounded bg-emerald-500/20 text-emerald-300 font-mono font-bold">
+                                                                {cardData.vouchers.length} Files Sum (多单自动求和)
+                                                            </span>
+                                                        )}
                                                         {item.isLive && (
                                                             <span className="text-[9px] px-1.5 py-0.2 rounded bg-blue-500/20 text-blue-300 font-bold uppercase">Live DB</span>
                                                         )}
@@ -1598,12 +1603,18 @@ export default function WilliamDocumentCenter() {
                                             }}
                                             className="px-3.5 py-1.5 rounded-xl bg-amber-600 hover:bg-amber-500 text-white text-xs font-bold flex items-center gap-1.5 shadow"
                                         >
-                                            <Plus size={13} /> 上传并累加本月新发票
+                                            <Plus size={13} /> 上传并累加本月新发票 / PDF (支持多份同时上传)
                                         </button>
                                         <input
                                             type="file"
                                             ref={cardFileInputRef}
-                                            onChange={e => e.target.files && handleFilesSelected(e.target.files, catRow.category.category_key, curM)}
+                                            multiple
+                                            onChange={e => {
+                                                if (e.target.files && e.target.files.length > 0) {
+                                                    handleFilesSelected(e.target.files, catRow.category.category_key, curM);
+                                                    e.target.value = '';
+                                                }
+                                            }}
                                             accept="application/pdf,image/*"
                                             className="hidden"
                                         />

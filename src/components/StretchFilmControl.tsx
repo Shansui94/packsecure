@@ -766,7 +766,7 @@ export const StretchFilmControl: React.FC<StretchFilmControlProps> = ({
                     <div className="flex items-center gap-2 overflow-x-auto pb-1 max-w-full">
                         <button
                             type="button"
-                            onClick={() => { setActionMode('trolley'); resetPhoto(); }}
+                            onClick={() => setActionMode('trolley')}
                             className={`px-3.5 py-2 rounded-xl text-xs font-black flex items-center gap-1.5 transition-all cursor-pointer shrink-0 ${
                                 actionMode === 'trolley'
                                     ? 'bg-purple-600 text-white shadow-lg shadow-purple-900/40 border border-purple-400'
@@ -779,7 +779,7 @@ export const StretchFilmControl: React.FC<StretchFilmControlProps> = ({
 
                         <button
                             type="button"
-                            onClick={() => { setActionMode('qc'); resetPhoto(); }}
+                            onClick={() => setActionMode('qc')}
                             className={`px-3.5 py-2 rounded-xl text-xs font-black flex items-center gap-1.5 transition-all cursor-pointer shrink-0 ${
                                 actionMode === 'qc'
                                     ? 'bg-blue-600 text-white shadow-lg shadow-blue-900/40 border border-blue-400'
@@ -792,7 +792,12 @@ export const StretchFilmControl: React.FC<StretchFilmControlProps> = ({
 
                         <button
                             type="button"
-                            onClick={() => { setActionMode('defect'); resetPhoto(); }}
+                            onClick={() => {
+                                setActionMode('defect');
+                                if (photoBase64 && !defectWeight) {
+                                    runAiVisionScan(photoBase64, 'defect');
+                                }
+                            }}
                             className={`px-3.5 py-2 rounded-xl text-xs font-black flex items-center gap-1.5 transition-all cursor-pointer shrink-0 ${
                                 actionMode === 'defect'
                                     ? 'bg-rose-600 text-white shadow-lg shadow-rose-900/40 border border-rose-400'
@@ -805,7 +810,7 @@ export const StretchFilmControl: React.FC<StretchFilmControlProps> = ({
 
                         <button
                             type="button"
-                            onClick={() => { setActionMode('recipe'); resetPhoto(); }}
+                            onClick={() => setActionMode('recipe')}
                             className={`px-3.5 py-2 rounded-xl text-xs font-black flex items-center gap-1.5 transition-all cursor-pointer shrink-0 ${
                                 actionMode === 'recipe'
                                     ? 'bg-amber-600 text-white shadow-lg shadow-amber-900/40 border border-amber-400'
@@ -998,6 +1003,74 @@ export const StretchFilmControl: React.FC<StretchFilmControlProps> = ({
                                         <span>{aiVerificationText}</span>
                                     </p>
                                 )}
+
+                                {/* Quick Mode / Category Selector under Photo Preview */}
+                                <div className="p-2.5 bg-black/40 border border-white/10 rounded-2xl space-y-1.5">
+                                    <div className="flex items-center justify-between text-[10px] text-gray-400 font-bold uppercase tracking-wider">
+                                        <span>{t('照片分类 / Photo Category')}:</span>
+                                        <span className="text-purple-300 font-mono">
+                                            {actionMode === 'trolley' ? '🛒 推车出箱' : actionMode === 'defect' ? '⚠️ 次品 Defect' : actionMode === 'qc' ? '🔍 QC 质检' : '🧪 原料配料'}
+                                        </span>
+                                    </div>
+                                    <div className="grid grid-cols-2 sm:grid-cols-4 gap-1.5">
+                                        <button
+                                            type="button"
+                                            onClick={() => setActionMode('trolley')}
+                                            className={`py-2 px-2 rounded-xl text-xs font-bold transition-all border flex items-center justify-center gap-1 cursor-pointer ${
+                                                actionMode === 'trolley'
+                                                    ? 'bg-purple-600 text-white border-purple-400 shadow-md shadow-purple-900/40'
+                                                    : 'bg-white/5 text-gray-400 border-white/10 hover:text-white hover:bg-white/10'
+                                            }`}
+                                        >
+                                            <span>🛒</span>
+                                            <span>{t('推车出箱')}</span>
+                                        </button>
+
+                                        <button
+                                            type="button"
+                                            onClick={() => {
+                                                setActionMode('defect');
+                                                if (photoBase64 && !defectWeight) {
+                                                    runAiVisionScan(photoBase64, 'defect');
+                                                }
+                                            }}
+                                            className={`py-2 px-2 rounded-xl text-xs font-bold transition-all border flex items-center justify-center gap-1 cursor-pointer ${
+                                                actionMode === 'defect'
+                                                    ? 'bg-rose-600 text-white border-rose-400 shadow-md shadow-rose-900/40'
+                                                    : 'bg-rose-500/10 text-rose-300 border-rose-500/30 hover:bg-rose-500/20'
+                                            }`}
+                                        >
+                                            <Scale size={13} />
+                                            <span>{t('次品过磅')}</span>
+                                        </button>
+
+                                        <button
+                                            type="button"
+                                            onClick={() => setActionMode('qc')}
+                                            className={`py-2 px-2 rounded-xl text-xs font-bold transition-all border flex items-center justify-center gap-1 cursor-pointer ${
+                                                actionMode === 'qc'
+                                                    ? 'bg-blue-600 text-white border-blue-400 shadow-md shadow-blue-900/40'
+                                                    : 'bg-white/5 text-gray-400 border-white/10 hover:text-white hover:bg-white/10'
+                                            }`}
+                                        >
+                                            <ShieldCheck size={13} />
+                                            <span>{t('QC 质检')}</span>
+                                        </button>
+
+                                        <button
+                                            type="button"
+                                            onClick={() => setActionMode('recipe')}
+                                            className={`py-2 px-2 rounded-xl text-xs font-bold transition-all border flex items-center justify-center gap-1 cursor-pointer ${
+                                                actionMode === 'recipe'
+                                                    ? 'bg-amber-600 text-white border-amber-400 shadow-md shadow-amber-900/40'
+                                                    : 'bg-white/5 text-gray-400 border-white/10 hover:text-white hover:bg-white/10'
+                                            }`}
+                                        >
+                                            <FlaskConical size={13} />
+                                            <span>{t('原料配料')}</span>
+                                        </button>
+                                    </div>
+                                </div>
                             </div>
                         )}
                     </div>

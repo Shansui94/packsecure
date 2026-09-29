@@ -14,7 +14,16 @@ function getGeminiModel() {
     return genAI.getGenerativeModel({ model: 'gemini-2.5-flash' });
 }
 
-const MULTI_RECEIPT_CATEGORIES = ['PETROL_FLEET', 'TNGO_TOLL', 'LORRY_SERVICE', 'MACHINE_EXPENSES'];
+const MULTI_RECEIPT_CATEGORIES = [
+    'PETROL_FLEET', 
+    'TNGO_TOLL', 
+    'LORRY_SERVICE', 
+    'MACHINE_EXPENSES',
+    'ELECTRICITY_BILL',
+    'WATER_BILL',
+    'TNB_BILL',
+    'AIR_BILL'
+];
 
 // ----------------------------------------------------------------------
 // 1. DASHBOARD METRICS HANDLER

@@ -2236,6 +2236,30 @@ const DriverDelivery: React.FC<DriverDeliveryProps> = ({ user, onNavigate }) => 
     }, [tasks, tripsV2List, currentLorry]);
 
     const pendingTrips = React.useMemo(() => tripGroups.filter(t => !t.isAllDone), [tripGroups]);
+
+    // Split pending trips into active (runnable now) and queued (locked until prior regular trips finish)
+    const { visiblePendingTrips, queuedPendingTrips } = React.useMemo(() => {
+        const visible: DriverTripGroup[] = [];
+        const queued: DriverTripGroup[] = [];
+        let hasIncompleteRegularTrip = false;
+
+        for (const trip of pendingTrips) {
+            if (trip.isAdHoc) {
+                // Ad-hoc & extra jobs (Shopee, Taiping, Pallet, etc.) are always visible and executable
+                visible.push(trip);
+            } else if (!hasIncompleteRegularTrip) {
+                // First incomplete regular trip (e.g. Trip 1) is visible and executable
+                visible.push(trip);
+                hasIncompleteRegularTrip = true;
+            } else {
+                // Subsequent regular trips (Trip 2, Trip 3, etc.) are locked/hidden until Trip 1 is completed
+                queued.push(trip);
+            }
+        }
+
+        return { visiblePendingTrips: visible, queuedPendingTrips: queued };
+    }, [pendingTrips]);
+
     const doneTrips = React.useMemo(() => {
         const list = tripGroups.filter(t => t.isAllDone);
         // Sort descending: newest trips on top, older trips at the bottom
@@ -2265,9 +2289,10 @@ const DriverDelivery: React.FC<DriverDeliveryProps> = ({ user, onNavigate }) => 
             return String(b.tripNumber || '').localeCompare(String(a.tripNumber || ''));
         });
     }, [tripGroups]);
-    const currentTripList = activeTab === 'todo' ? pendingTrips : doneTrips;
 
-    const pendingDropsCount = React.useMemo(() => pendingTrips.reduce((acc, t) => acc + (t.totalDrops - t.completedDrops), 0), [pendingTrips]);
+    const currentTripList = activeTab === 'todo' ? visiblePendingTrips : doneTrips;
+
+    const pendingDropsCount = React.useMemo(() => visiblePendingTrips.reduce((acc, t) => acc + (t.totalDrops - t.completedDrops), 0), [visiblePendingTrips]);
     const doneDropsCount = React.useMemo(() => doneTrips.reduce((acc, t) => acc + t.completedDrops, 0), [doneTrips]);
 
     const toggleTripExpand = (tripKey: string, defaultExpanded: boolean) => {
@@ -3014,7 +3039,7 @@ const DriverDelivery: React.FC<DriverDeliveryProps> = ({ user, onNavigate }) => 
                         activeTab === 'todo' ? 'bg-blue-600 text-white shadow-lg shadow-blue-900/40' : 'bg-slate-900 text-slate-500'
                     }`}
                 >
-                    Dalam Proses / Pending ({pendingTrips.length} {pendingTrips.length === 1 ? 'Trip' : 'Trips'})
+                    Dalam Proses / Pending ({visiblePendingTrips.length} {visiblePendingTrips.length === 1 ? 'Trip' : 'Trips'}{queuedPendingTrips.length > 0 ? ` • ${queuedPendingTrips.length} Kunci` : ''})
                 </button>
                 <button
                     onClick={() => setActiveTab('done')}
@@ -3225,6 +3250,55 @@ const DriverDelivery: React.FC<DriverDeliveryProps> = ({ user, onNavigate }) => 
                             </div>
                         );
                     })
+                )}
+
+                {/* LOCKED UPCOMING TRIPS BANNER */}
+                {activeTab === 'todo' && queuedPendingTrips.length > 0 && (
+                    <div className="bg-slate-900/90 border border-amber-500/30 rounded-2xl p-4 space-y-2.5 shadow-lg">
+                        <div className="flex items-center justify-between">
+                            <div className="flex items-center gap-2">
+                                <span className="p-1.5 rounded-lg bg-amber-500/20 text-amber-400 text-sm">🔒</span>
+                                <div>
+                                    <h4 className="text-xs font-black text-amber-300 uppercase tracking-wider">
+                                        {queuedPendingTrips.length} Trip Seterusnya Terkunci / Next Trip Locked
+                                    </h4>
+                                    <p className="text-[10px] text-slate-400 font-bold">
+                                        Selesaikan Trip semasa sebelum memulakan trip seterusnya
+                                    </p>
+                                </div>
+                            </div>
+                            <span className="text-[10px] font-black uppercase bg-amber-500/20 text-amber-300 px-2 py-0.5 rounded border border-amber-500/30">
+                                Berperingkat
+                            </span>
+                        </div>
+                        <div className="space-y-1.5 pt-1">
+                            {queuedPendingTrips.map(qt => (
+                                <div key={qt.key} className="bg-black/50 border border-slate-800 rounded-xl px-3 py-2 flex items-center justify-between text-xs">
+                                    <div className="flex items-center gap-2">
+                                        <span className="text-slate-300 font-mono text-[11px] font-bold">
+                                            {qt.tripIndexLabel || qt.tripNumber}
+                                        </span>
+                                        {qt.zone && (
+                                            <span className="text-[9px] bg-slate-800 text-slate-400 px-1.5 py-0.5 rounded">
+                                                📍 {qt.zone}
+                                            </span>
+                                        )}
+                                    </div>
+                                    <div className="flex items-center gap-2">
+                                        <span className="text-[10px] font-bold text-slate-400">
+                                            {qt.totalDrops} Drops • {qt.totalRolls} Rolls
+                                        </span>
+                                        <span className="text-[10px] font-bold text-amber-400/90 bg-amber-500/10 px-2 py-0.5 rounded border border-amber-500/20">
+                                            🔒 Tunggu Trip Selesai
+                                        </span>
+                                    </div>
+                                </div>
+                            ))}
+                        </div>
+                        <p className="text-[10px] text-slate-500 text-center font-medium">
+                            Trip 2 dan seterusnya akan dipaparkan secara automatik sebaik sahaja Trip 1 selesai dan dihantar.
+                        </p>
+                    </div>
                 )}
             </div>
 
