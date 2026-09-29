@@ -17,6 +17,7 @@ import {
 import { handleWhatsAppRecipeWorkflow } from '../lib/whatsappRecipe.js';
 import { generateNightlyReport } from '../lib/nightlyReport.js';
 import { createIssueTicket, executeTriageAction, isCasualChitChat } from '../lib/issueTriage.js';
+import { handleSmartAgentQuery } from '../lib/whatsappSmartAgent.js';
 
 function getSupabase() {
   const supabaseUrl = process.env.SUPABASE_URL || process.env.VITE_SUPABASE_URL || '';
@@ -643,6 +644,14 @@ Output valid JSON only: { "is_scale": boolean, "weight_kg": number or null, "des
           risk_reason: text,
           location: employee.base_location || 'TAIPING',
         });
+        // Auto-create issue ticket for operational triage dashboard
+        createIssueTicket({
+          source_type: 'driver_dm',
+          sender_name: empName,
+          sender_phone: fromNumber,
+          employee_id: employee.employee_id,
+          raw_content: text
+        }).catch(e => console.warn('[Triage Ticket Error]:', e));
       } catch (logErr) {
         console.warn('[Exception log error]:', logErr);
       }
@@ -656,8 +665,8 @@ Output valid JSON only: { "is_scale": boolean, "weight_kg": number or null, "des
       return res.status(200).json({ status: 'DRIVER_ISSUE_ALERTED' });
     }
 
-    // ── DRIVER QUICK STATUS (e.g. "Stop 1 selesai", "DO-001 siap") ────────────
-    if (isDriver && /selesai|siap|hantar|delivered/i.test(lower)) {
+    // ── DRIVER QUICK STATUS (e.g. "Stop 1 selesai", "DO-001 siap", "dah hantar") ──
+    if (isDriver && /^(selesai|siap|dah hantar|delivered|order siap|stop\s*\d+\s*(selesai|siap))$/i.test(lower.trim())) {
       const { data: pendingOrders } = await supabase
         .from('sales_orders')
         .select('*')
@@ -685,8 +694,8 @@ Output valid JSON only: { "is_scale": boolean, "weight_kg": number or null, "des
       }
     }
 
-    // Command 1: Punch / Clock-in (打卡)
-    if (/打卡|上班|下班|masuk|keluar|punch|clock/i.test(lower)) {
+    // Command 1: Explicit Punch / Clock-in (打卡)
+    if (/^(打卡|上班|下班|masuk|keluar|punch|clock|punch\s*in|punch\s*out|clock\s*in|clock\s*out)$/i.test(lower.trim())) {
       const timeStr = new Date().toLocaleTimeString('zh-CN', { timeZone: 'Asia/Kuala_Lumpur' });
       const dateStr = new Date().toISOString().split('T')[0];
       await sendWhatsAppText(
@@ -701,8 +710,8 @@ Output valid JSON only: { "is_scale": boolean, "weight_kg": number or null, "des
       return res.status(200).json({ status: 'ATTENDANCE_RECORDED' });
     }
 
-    // Command 2: Work hours / Personal Summary (工时)
-    if (/工时|出勤|jam kerja|gaji|trip saya|jadual/i.test(lower)) {
+    // Command 2: Explicit Work hours / Personal Summary (工时)
+    if (/^(工时|出勤|jam kerja|gaji|trip saya|jadual)$/i.test(lower.trim())) {
       // Check active trip if driver
       let tripNotice = '';
       if (isDriver) {
@@ -730,8 +739,9 @@ Output valid JSON only: { "is_scale": boolean, "weight_kg": number or null, "des
       return res.status(200).json({ status: 'HOURS_QUERIED' });
     }
 
-    // Command 3: Inventory Query (库存)
-    if (/库存|stok|balance/i.test(lower)) {
+    // Command 3: Explicit Inventory Quick-Card (库存 - e.g. "库存", "库存 500", "stok C1802")
+    const isExplicitStock = /^(库存|stok|balance)(\s+[a-zA-Z0-9_-]+)?$/i.test(lower.trim());
+    if (isExplicitStock) {
       const searchKeyword = text.replace(/库存|stok|balance/gi, '').trim();
       let stockQuery = supabase.from('live_stock').select('*').limit(5);
       if (searchKeyword) {
@@ -808,7 +818,7 @@ Output valid JSON only: { "is_scale": boolean, "weight_kg": number or null, "des
     }
 
     // Command 5: Direct Evening Report request (晚报 / 日报)
-    if (/晚报|日报|report|ringkasan/i.test(lower)) {
+    if (/^(晚报|日报|report|ringkasan)$/i.test(lower.trim())) {
       try {
         const { reportText } = await generateNightlyReport();
         await sendWhatsAppText(fromNumber, reportText);
@@ -834,52 +844,23 @@ Output valid JSON only: { "is_scale": boolean, "weight_kg": number or null, "des
       console.warn('[Recipe Workflow Error]:', recipeErr);
     }
 
-    // Command 7: AI Conversational Fallback (Gemini with Real-time DB Context)
-    if (apiKey) {
-      try {
-        const isExecutive = ['SuperAdmin', 'Admin', 'Director'].includes(empRole);
-        let realTimeContext = '';
+    // Command 7: Smart Agent (Persistent Memory + Factory Business Truth + Live DB Tools)
+    try {
+      const smartReply = await handleSmartAgentQuery({
+        sessionId: fromNumber,
+        userText: text,
+        senderName: empName,
+        senderRole: empRole,
+        userPhone: fromNumber,
+        baseLocation: employee.base_location || employee.factory_id || 'TAIPING'
+      });
 
-        if (isExecutive) {
-          const todayIso = new Date().toISOString().split('T')[0];
-          const [{ data: oData }, { data: tData }, { data: exData }] = await Promise.all([
-            supabase.from('sales_orders').select('id, status').gte('created_at', `${todayIso}T00:00:00.000Z`),
-            supabase.from('trips_v2').select('trip_number, status').gte('created_at', `${todayIso}T00:00:00.000Z`),
-            supabase.from('work_photos').select('employee_name, user_note, risk_reason').gte('created_at', `${todayIso}T00:00:00.000Z`).limit(5)
-          ]);
-
-          const totalO = oData?.length || 0;
-          const deliveredO = (oData || []).filter((o: any) => o.status === 'Delivered').length;
-          const tripsSummary = (tData || []).map((t: any) => `${t.trip_number} (${t.status})`).join(', ') || '今日暂无运行车次';
-          const exSummary = (exData || []).map((e: any) => `${e.employee_name}: ${e.risk_reason || e.user_note}`).join('; ') || '全天无现场突发异常';
-
-          realTimeContext = `\n[LIVE FACTORY DB DATA]:
-- User is Company SUPERADMIN / BOSS: ${empName}.
-- Today's Delivery Orders: ${totalO} 票 (已送达 ${deliveredO} 票, 送达率 ${totalO > 0 ? Math.round((deliveredO / totalO) * 100) : 100}%).
-- Today's Trips: ${tripsSummary}.
-- Recent Field Exceptions: ${exSummary}.
-GUIDELINES FOR EXECUTIVE ANSWER:
-- Answer in professional, compact Chinese with relevant business emojis (高管速报风格).
-- State key facts/conclusions in 2-4 structured bullet points.
-- Highlight any anomalies (e.g. unfinished trips or issues).`;
-        }
-
-        const genAI = new GoogleGenerativeAI(apiKey);
-        const model = genAI.getGenerativeModel({ model: 'gemini-2.5-flash' });
-
-        const systemPrompt = `You are Packsecure OS WhatsApp Executive & Operations Assistant. 
-The user is: Name: ${empName}, Role: ${empRole}, Base: ${employee.base_location || 'TAIPING'}.
-${realTimeContext || 'Answer concisely in friendly Malay or Chinese. Max 2-3 sentences.'}`;
-
-        const aiReply = await model.generateContent([
-          { text: `${systemPrompt}\n\nUser asks: "${text}"` }
-        ]);
-
-        await sendWhatsAppText(fromNumber, aiReply.response.text());
-        return res.status(200).json({ status: 'AI_REPLIED' });
-      } catch (aiErr) {
-        console.warn('[WhatsApp AI Error]:', aiErr);
+      if (smartReply) {
+        await sendWhatsAppText(fromNumber, smartReply);
+        return res.status(200).json({ status: 'SMART_AI_REPLIED', reply: smartReply });
       }
+    } catch (smartErr) {
+      console.warn('[WhatsApp SmartAgent Error]:', smartErr);
     }
 
     await sendWhatsAppText(

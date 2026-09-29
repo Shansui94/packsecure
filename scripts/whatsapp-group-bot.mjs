@@ -19,6 +19,7 @@ import { fileURLToPath } from 'url';
 import * as dotenv from 'dotenv';
 import { createClient } from '@supabase/supabase-js';
 import { GoogleGenerativeAI } from '@google/generative-ai';
+import { handleSmartAgentQuery } from '../lib/whatsappSmartAgent.ts';
 
 const __filename = fileURLToPath(import.meta.url);
 const __dirname = path.dirname(__filename);
@@ -182,23 +183,23 @@ async function handleMessage(m) {
     return;
   }
 
-  // Command 3: AI Conversational Query (Gemini)
-  if (genAI) {
-    try {
-      const model = genAI.getGenerativeModel({ model: 'gemini-2.5-flash' });
-      const prompt = `你是 Packsecure OS 工厂调度与现场运营智能体。
-当前提问来自 ${isGroup ? '车间/车队群聊' : '私人聊天'}，发问者手机尾号 ${senderPhone.slice(-4)}。
-请用专业、简练、地道、友好的口吻回答（如果对方用马来语，请用马来语回复；如果中文，用中文回复）。
-提问内容: "${cleanText}"
-回答要求: 不超过100字，工业生产与物流术语准确，带有 emoji。`;
+  // Command 3: AI Conversational Query (Smart Agent with Multi-Turn Memory & DB Tools)
+  try {
+    const answer = await handleSmartAgentQuery({
+      sessionId: chatJid,
+      userText: cleanText,
+      senderName: senderPhone ? `User-${senderPhone.slice(-4)}` : 'GroupMember',
+      senderRole: isGroup ? 'OperationsGroup' : 'Operator',
+      userPhone: senderPhone,
+      baseLocation: 'TAIPING'
+    });
 
-      const result = await model.generateContent(prompt);
-      const answer = result.response.text().trim();
+    if (answer) {
       await sock.sendMessage(chatJid, { text: answer }, { quoted: m });
       return;
-    } catch (e) {
-      console.warn('[WA-Bot AI Error]:', e.message);
     }
+  } catch (e) {
+    console.warn('[WA-Bot SmartAgent Error]:', e.message);
   }
 
   // Default Fallback

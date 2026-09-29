@@ -18,7 +18,7 @@
     "check:scan": "tsx scripts/e2e_system_scan.ts",
     "reset:recording": "node scripts/reset_for_user_recording.mjs",
     "sync:sops": "node seed_markdown_sops.mjs",
-    "bot:whatsapp": "node scripts/whatsapp-group-bot.mjs"
+    "bot:whatsapp": "tsx scripts/whatsapp-group-bot.mjs"
   },
   "dependencies": {
     "@dnd-kit/core": "^6.3.1",
