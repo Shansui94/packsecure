@@ -765,6 +765,9 @@ const DeliveryOrderManagement: React.FC<DeliveryOrderManagementProps> = ({ user 
     const [reviewingExtraJob, setReviewingExtraJob] = useState<any>(null);
     const [extraJobAmountInput, setExtraJobAmountInput] = useState<string>('');
 
+    // Regular Order Amendment Review State
+    const [reviewingAmendmentOrder, setReviewingAmendmentOrder] = useState<SalesOrder | null>(null);
+
     // Driver Leave & Service State
     const [driverLeaves, setDriverLeaves] = useState<any[]>([]);
     const [scheduledServices, setScheduledServices] = useState<any[]>([]);
@@ -1764,30 +1767,34 @@ const DeliveryOrderManagement: React.FC<DeliveryOrderManagementProps> = ({ user 
             return;
         }
 
+        // Open comprehensive Amendment Review modal for regular orders
+        setReviewingAmendmentOrder(order);
+    };
+
+    const handleConfirmApproveAmendment = async (order: SalesOrder) => {
         const isAlreadyDelivered = Boolean(order.pod_photo_url || (order as any).pod_timestamp);
         const targetStatus = isAlreadyDelivered ? 'Delivered' : 'Loaded';
-        if (!window.confirm(`Approve changes for Order ${order.orderNumber}? \nThis will adjust stock for amendments and mark as ${targetStatus}.`)) return;
 
         try {
-            // 1. Let V6 DB Trigger handle the stock deduction/adjustment automatically.
+            const updatedNotes = `${order.notes || ''}\n[DISPATCH_APPROVED_AMENDMENT: Approved by ${user?.name || 'Dispatch'}]`.trim();
 
-            // 2. Update Status
             const { error } = await supabase.from('sales_orders').update({
-                status: targetStatus
+                status: targetStatus,
+                notes: updatedNotes
             }).eq('id', order.id);
 
             if (error) throw error;
 
             // If order belongs to a trip, check if all sibling orders are now Delivered
             const tripId = (order as any).trip_id;
-            if (tripId) {
+            if (tripId && targetStatus === 'Delivered') {
                 const { data: siblingOrders } = await supabase
                     .from('sales_orders')
                     .select('id, status')
                     .eq('trip_id', tripId)
                     .neq('status', 'Cancelled');
                 const allDone = (siblingOrders || []).every(s => 
-                    s.id === order.id ? targetStatus === 'Delivered' : s.status === 'Delivered'
+                    s.id === order.id ? true : s.status === 'Delivered'
                 );
                 if (allDone) {
                     await supabase
@@ -1800,18 +1807,85 @@ const DeliveryOrderManagement: React.FC<DeliveryOrderManagementProps> = ({ user 
                 }
             }
 
-            alert("✅ Approved & Stock Adjusted!");
+            setToast({
+                type: 'success',
+                message: `✅ Pindaan Order ${order.orderNumber} Diluluskan! Status dikemas kini ke ${targetStatus}.`
+            });
 
             // Optimistic Update
             setOrders(prev => prev.map(o => {
                 if (o.id === order.id) {
-                    return { ...o, status: targetStatus };
+                    return { ...o, status: targetStatus, notes: updatedNotes };
                 }
                 return o;
             }));
 
-            // fetchData(); // Optional debounce
+            setReviewingAmendmentOrder(null);
+            fetchData();
+        } catch (e: any) {
+            alert("Error: " + e.message);
+        }
+    };
 
+    const handleRejectAmendment = async (order: SalesOrder) => {
+        const confirmMsg = `Adakah anda pasti mahu TOLAK pindaan pemandu untuk Order #${order.orderNumber}?\n\nTindakan ini akan:\n1. Memulihkan kuantiti barangan ke kuantiti asal DO.\n2. Mengemas kini status ke 'Loaded' / 'Delivered'.\n3. Merekod audit penolakan.`;
+        if (!window.confirm(confirmMsg)) return;
+
+        try {
+            const restoredItems = (order.items || []).map(it => {
+                const origQty = (it as any).original_quantity !== undefined ? Number((it as any).original_quantity) : Number(it.quantity);
+                const copy = { ...it, quantity: origQty };
+                delete (copy as any).original_quantity;
+                return copy;
+            });
+
+            const isAlreadyDelivered = Boolean(order.pod_photo_url || (order as any).pod_timestamp);
+            const targetStatus = isAlreadyDelivered ? 'Delivered' : 'Loaded';
+            const updatedNotes = `${order.notes || ''}\n[DISPATCH_REJECTED_AMENDMENT: Restored to original quantity by ${user?.name || 'Dispatch'}]`.trim();
+
+            const { error } = await supabase.from('sales_orders').update({
+                status: targetStatus,
+                items: restoredItems,
+                notes: updatedNotes
+            }).eq('id', order.id);
+
+            if (error) throw error;
+
+            const tripId = (order as any).trip_id;
+            if (tripId && targetStatus === 'Delivered') {
+                const { data: siblingOrders } = await supabase
+                    .from('sales_orders')
+                    .select('id, status')
+                    .eq('trip_id', tripId)
+                    .neq('status', 'Cancelled');
+                const allDone = (siblingOrders || []).every(s => 
+                    s.id === order.id ? true : s.status === 'Delivered'
+                );
+                if (allDone) {
+                    await supabase
+                        .from('trips_v2')
+                        .update({
+                            status: 'Completed',
+                            completed_at: new Date().toISOString()
+                        })
+                        .eq('id', tripId);
+                }
+            }
+
+            setToast({
+                type: 'success',
+                message: `❌ Pindaan Order ${order.orderNumber} Ditolak! Kuantiti asal telah dipulihkan.`
+            });
+
+            setOrders(prev => prev.map(o => {
+                if (o.id === order.id) {
+                    return { ...o, status: targetStatus, items: restoredItems, notes: updatedNotes };
+                }
+                return o;
+            }));
+
+            setReviewingAmendmentOrder(null);
+            fetchData();
         } catch (e: any) {
             alert("Error: " + e.message);
         }
@@ -5815,6 +5889,11 @@ const DeliveryOrderManagement: React.FC<DeliveryOrderManagementProps> = ({ user 
                                                                                         🔒 HR Locked
                                                                                     </span>
                                                                                 )}
+                                                                                {tripGroup.orders.some(o => o.status === 'Pending Approval') && (
+                                                                                    <span className="text-[10px] font-black uppercase px-2 py-0.5 rounded-full bg-amber-500/20 text-amber-300 border border-amber-500/40 flex items-center gap-1 shadow-sm animate-pulse" title="Trip contains orders pending amendment approval">
+                                                                                        ⚠️ {tripGroup.orders.filter(o => o.status === 'Pending Approval').length} Pending
+                                                                                    </span>
+                                                                                )}
                                                                             </div>
 
                                                                             <div className="flex items-center gap-1">
@@ -6005,6 +6084,11 @@ const DeliveryOrderManagement: React.FC<DeliveryOrderManagementProps> = ({ user 
                                                                                                         ✕ Cancelled
                                                                                                     </span>
                                                                                                 )}
+                                                                                                {doOrder.status === 'Pending Approval' && (
+                                                                                                    <span className="text-[9px] font-black px-1.5 py-0.5 rounded bg-amber-500/20 text-amber-300 border border-amber-500/40 shrink-0 animate-pulse flex items-center gap-1">
+                                                                                                        ⏳ Pending
+                                                                                                    </span>
+                                                                                                )}
                                                                                             </div>
                                                                                             <div className="flex items-center gap-1 shrink-0">
                                                                                                 <button
@@ -6094,7 +6178,13 @@ const DeliveryOrderManagement: React.FC<DeliveryOrderManagementProps> = ({ user 
                                                                                                                 {item.sourceLocation}
                                                                                                             </span>
                                                                                                         )}
-                                                                                                        <span className="text-slate-200 font-bold font-mono">x{item.quantity}</span>
+                                                                                                        {(item as any).original_quantity !== undefined && Number((item as any).original_quantity) !== Number(item.quantity) ? (
+                                                                                                            <span className="text-amber-300 font-bold font-mono text-[9px] bg-amber-500/20 px-1 py-0.5 rounded border border-amber-500/30" title={`Asal: ${(item as any).original_quantity}`}>
+                                                                                                                x{item.quantity} <span className="text-[8px] text-amber-400/80">(Asal: {(item as any).original_quantity})</span>
+                                                                                                            </span>
+                                                                                                        ) : (
+                                                                                                            <span className="text-slate-200 font-bold font-mono">x{item.quantity}</span>
+                                                                                                        )}
                                                                                                     </div>
                                                                                                 </div>
                                                                                             ))}
@@ -6104,6 +6194,23 @@ const DeliveryOrderManagement: React.FC<DeliveryOrderManagementProps> = ({ user 
                                                                                                 </div>
                                                                                             )}
                                                                                         </div>
+
+                                                                                        {/* Approve Driver Amendment Button for Multi-Drop Drop Item */}
+                                                                                        {doOrder.status === 'Pending Approval' && (
+                                                                                            <div className="pt-1.5">
+                                                                                                <button
+                                                                                                    type="button"
+                                                                                                    onClick={(e) => {
+                                                                                                        e.stopPropagation();
+                                                                                                        handleApproveAmendment(doOrder);
+                                                                                                    }}
+                                                                                                    className="w-full py-2 px-2.5 bg-gradient-to-r from-amber-600 to-orange-600 hover:from-amber-500 hover:to-orange-500 text-white rounded-lg font-black text-[10px] uppercase tracking-wider flex items-center justify-center gap-1.5 shadow-md shadow-amber-950/40 transition-all active:scale-95 border border-amber-500/30 cursor-pointer"
+                                                                                                >
+                                                                                                    <Zap size={12} className="fill-white" />
+                                                                                                    <span>Semak & Lulus Pindaan / Review & Approve</span>
+                                                                                                </button>
+                                                                                            </div>
+                                                                                        )}
                                                                                     </div>
                                                                                 ))}
                                                                             </div>
@@ -6575,8 +6682,13 @@ const DeliveryOrderManagement: React.FC<DeliveryOrderManagementProps> = ({ user 
                                                                     <Scissors size={16} />
                                                                 </button>
                                                                 {order.status === 'Pending Approval' && (
-                                                                    <button onClick={(e) => { e.stopPropagation(); handleApproveAmendment(order); }} className="p-2 text-white bg-red-600 hover:bg-red-500 shadow-md shadow-red-900/50 rounded-md transition-colors" title="Approve">
-                                                                        <Zap size={16} />
+                                                                    <button
+                                                                        onClick={(e) => { e.stopPropagation(); handleApproveAmendment(order); }}
+                                                                        className="px-2.5 py-1.5 text-white bg-gradient-to-r from-amber-600 to-orange-600 hover:from-amber-500 hover:to-orange-500 shadow-md shadow-amber-950/40 rounded-lg transition-all flex items-center gap-1.5 text-xs font-black border border-amber-500/30 cursor-pointer"
+                                                                        title="Semak & Lulus Pindaan / Review & Approve"
+                                                                    >
+                                                                        <Zap size={13} className="fill-white" />
+                                                                        <span>Approve</span>
                                                                     </button>
                                                                 )}
                                                             </>
@@ -6645,6 +6757,33 @@ const DeliveryOrderManagement: React.FC<DeliveryOrderManagementProps> = ({ user 
 
                             {/* Modal Body */}
                             <div className="flex-1 overflow-y-auto p-4 sm:p-6 lg:p-8 custom-scrollbar bg-slate-950 min-h-0">
+                                {/* Pending Approval Banner inside Modal */}
+                                {currentEditingOrder?.status === 'Pending Approval' && (
+                                    <div className="mb-6 p-4 bg-gradient-to-r from-amber-500/15 via-orange-500/10 to-amber-500/15 border-2 border-amber-500/40 rounded-2xl flex flex-col sm:flex-row items-start sm:items-center justify-between gap-3 shadow-lg shadow-amber-950/30">
+                                        <div className="flex items-center gap-3">
+                                            <div className="w-10 h-10 rounded-xl bg-amber-500/20 border border-amber-500/40 flex items-center justify-center text-amber-400 shrink-0">
+                                                <Zap size={20} className="fill-amber-400" />
+                                            </div>
+                                            <div>
+                                                <div className="text-sm font-black text-amber-300 uppercase tracking-wide flex items-center gap-2">
+                                                    <span>⚠️ Pemandu Telah Meminda Kuantiti / Driver Amended Quantities</span>
+                                                </div>
+                                                <div className="text-xs text-amber-200/80 mt-0.5">
+                                                    Pemandu mengubah kuantiti barang semasa memuatkan lori. Sila semak perbezaan kuantiti sebelum meluluskan.
+                                                </div>
+                                            </div>
+                                        </div>
+                                        <button
+                                            type="button"
+                                            onClick={() => handleApproveAmendment(currentEditingOrder)}
+                                            className="px-4 py-2 bg-gradient-to-r from-amber-600 to-orange-600 hover:from-amber-500 hover:to-orange-500 text-white rounded-xl text-xs font-black uppercase flex items-center gap-2 cursor-pointer shadow-lg shadow-amber-950/40 transition-all shrink-0 active:scale-95"
+                                        >
+                                            <Zap size={14} className="fill-white" />
+                                            <span>Semak Perubahan / View Diff & Approve</span>
+                                        </button>
+                                    </div>
+                                )}
+
                                 <div className="grid grid-cols-1 lg:grid-cols-2 gap-6 lg:gap-8">
                                 <div className="space-y-6">
 
@@ -7359,6 +7498,14 @@ const DeliveryOrderManagement: React.FC<DeliveryOrderManagementProps> = ({ user 
                                                                         <span className="text-[10px] bg-blue-500/10 text-blue-400 px-1.5 py-0.5 rounded uppercase font-bold border border-blue-500/20">
                                                                             {item.packaging || matchedV2?.uom || 'Unit'}
                                                                         </span>
+                                                                        {(item as any).original_quantity !== undefined && Number((item as any).original_quantity) !== Number(item.quantity) && (
+                                                                            <span className="text-[10px] font-bold px-2 py-0.5 rounded-full bg-amber-500/20 text-amber-300 border border-amber-500/40 flex items-center gap-1">
+                                                                                <span>⚠️ 原单: {(item as any).original_quantity} ➔ 实装: {item.quantity}</span>
+                                                                                <span className={Number(item.quantity) - Number((item as any).original_quantity) < 0 ? 'text-red-400 font-black' : 'text-emerald-400 font-black'}>
+                                                                                    ({Number(item.quantity) - Number((item as any).original_quantity) > 0 ? '+' : ''}{Number(item.quantity) - Number((item as any).original_quantity)})
+                                                                                </span>
+                                                                            </span>
+                                                                        )}
                                                                     </div>
                                                                 </div>
 
@@ -7475,10 +7622,20 @@ const DeliveryOrderManagement: React.FC<DeliveryOrderManagementProps> = ({ user 
                                         </span>
                                     )}
                                 </div>
-                                <div className="flex items-center gap-3 w-full sm:w-auto justify-end">
+                                <div className="flex items-center gap-3 w-full sm:w-auto justify-end flex-wrap">
                                     <button onClick={handleCloseModal} className="px-5 py-2.5 rounded-xl text-slate-400 hover:text-white font-bold transition-colors cursor-pointer text-xs sm:text-sm">
                                         Cancel
                                     </button>
+                                    {currentEditingOrder?.status === 'Pending Approval' && (
+                                        <button
+                                            type="button"
+                                            onClick={() => handleApproveAmendment(currentEditingOrder)}
+                                            className="px-4 sm:px-6 py-2.5 rounded-xl font-black text-xs sm:text-sm bg-gradient-to-r from-amber-600 to-orange-600 hover:from-amber-500 hover:to-orange-500 text-white shadow-lg shadow-amber-950/40 transition-all flex items-center gap-1.5 cursor-pointer active:scale-95"
+                                        >
+                                            <Zap size={14} className="fill-white" />
+                                            <span>{t('Semak Pindaan / Review Amendment')}</span>
+                                        </button>
+                                    )}
                                     <button
                                         onClick={handleSubmitOrder}
                                         disabled={isSubmitting || modalUnmappedItemsCount > 0}
@@ -9461,6 +9618,248 @@ const DeliveryOrderManagement: React.FC<DeliveryOrderManagementProps> = ({ user 
                                     className="px-6 py-2 bg-gradient-to-r from-emerald-600 to-teal-600 hover:from-emerald-500 hover:to-teal-500 text-white rounded-xl font-black transition-all text-xs shadow-lg shadow-emerald-950/40 active:scale-95 cursor-pointer"
                                 >
                                     ✅ Luluskan & Kredit Gaji (RM {(parseFloat(extraJobAmountInput) || 0).toFixed(2)})
+                                </button>
+                            </div>
+                        </div>
+                    </div>
+                );
+            })()}
+
+            {/* --- REGULAR ORDER AMENDMENT REVIEW MODAL --- */}
+            {reviewingAmendmentOrder && (() => {
+                const driverObj = drivers.find(d => d.uid === reviewingAmendmentOrder.driverId);
+                const driverName = driverObj?.name || getDriverName(reviewingAmendmentOrder.driverId);
+                const lorry = lorries.find(l => l.driverUserId === reviewingAmendmentOrder.driverId);
+                const isAlreadyDelivered = Boolean(reviewingAmendmentOrder.pod_photo_url || (reviewingAmendmentOrder as any).pod_timestamp);
+                const targetStatus = isAlreadyDelivered ? 'Delivered' : 'Loaded';
+                const proofPhoto = reviewingAmendmentOrder.proof_of_load_url || reviewingAmendmentOrder.pod_photo_url;
+
+                // Calculate item-level diffs
+                const itemDiffs = (reviewingAmendmentOrder.items || []).map(it => {
+                    const origQty = (it as any).original_quantity !== undefined ? Number((it as any).original_quantity) : Number(it.quantity);
+                    const actualQty = Number(it.quantity) || 0;
+                    const diff = actualQty - origQty;
+                    return {
+                        ...it,
+                        origQty,
+                        actualQty,
+                        diff
+                    };
+                });
+
+                const totalOrig = itemDiffs.reduce((sum, it) => sum + it.origQty, 0);
+                const totalActual = itemDiffs.reduce((sum, it) => sum + it.actualQty, 0);
+                const totalDiff = totalActual - totalOrig;
+
+                return (
+                    <div className="fixed inset-0 z-[250] flex items-center justify-center p-3 sm:p-4 bg-black/80 backdrop-blur-sm animate-in fade-in">
+                        <div className="bg-slate-900 border border-amber-500/30 rounded-2xl w-full max-w-2xl overflow-hidden shadow-2xl flex flex-col max-h-[92vh]">
+                            {/* Header */}
+                            <div className="p-4 border-b border-slate-800 flex justify-between items-center bg-slate-950/60">
+                                <div className="flex items-center gap-2.5">
+                                    <div className="w-9 h-9 rounded-xl bg-amber-500/15 border border-amber-500/30 flex items-center justify-center text-amber-400">
+                                        <Zap size={18} className="fill-amber-400" />
+                                    </div>
+                                    <div>
+                                        <h3 className="text-sm font-black text-white uppercase tracking-wider flex items-center gap-2">
+                                            Semakan Pindaan Kuantiti Pemandu / Review Driver Amendment
+                                        </h3>
+                                        <div className="flex items-center gap-2 mt-0.5">
+                                            <span className="text-xs font-mono font-bold text-amber-400">{reviewingAmendmentOrder.orderNumber}</span>
+                                            <span className="text-[10px] text-slate-500">|</span>
+                                            <span className="text-xs text-slate-300 font-medium truncate max-w-xs">{reviewingAmendmentOrder.customer || 'General Customer'}</span>
+                                        </div>
+                                    </div>
+                                </div>
+                                <button
+                                    onClick={() => setReviewingAmendmentOrder(null)}
+                                    className="p-1.5 text-slate-400 hover:text-white rounded-lg hover:bg-slate-800 transition-colors cursor-pointer"
+                                >
+                                    <X size={18} />
+                                </button>
+                            </div>
+
+                            {/* Body */}
+                            <div className="p-5 overflow-y-auto space-y-4 text-xs custom-scrollbar">
+                                {/* Driver & Delivery Meta */}
+                                <div className="grid grid-cols-2 sm:grid-cols-4 gap-2.5 bg-slate-950/60 p-3 rounded-xl border border-slate-800">
+                                    <div>
+                                        <span className="text-[10px] text-slate-500 uppercase font-bold block">Pemandu / Driver</span>
+                                        <span className="text-xs font-black text-white">{driverName}</span>
+                                    </div>
+                                    <div>
+                                        <span className="text-[10px] text-slate-500 uppercase font-bold block">Lori / Vehicle</span>
+                                        <span className="text-xs font-mono font-bold text-blue-400">{lorry?.plateNumber || 'No Plate'}</span>
+                                    </div>
+                                    <div>
+                                        <span className="text-[10px] text-slate-500 uppercase font-bold block">Tarikh / Date</span>
+                                        <span className="text-xs font-mono text-slate-300">{reviewingAmendmentOrder.deadline || reviewingAmendmentOrder.orderDate || '-'}</span>
+                                    </div>
+                                    <div>
+                                        <span className="text-[10px] text-slate-500 uppercase font-bold block">Status Selepas Lulus</span>
+                                        <span className={`text-[10px] font-bold px-1.5 py-0.5 rounded border inline-block ${
+                                            targetStatus === 'Delivered' 
+                                                ? 'bg-emerald-500/20 text-emerald-300 border-emerald-500/40' 
+                                                : 'bg-blue-500/20 text-blue-300 border-blue-500/40'
+                                        }`}>
+                                            ➔ {targetStatus}
+                                        </span>
+                                    </div>
+                                </div>
+
+                                {reviewingAmendmentOrder.deliveryAddress && (
+                                    <div className="flex items-start gap-1.5 text-slate-400 text-[11px] bg-slate-950/40 px-3 py-2 rounded-lg border border-slate-800/80">
+                                        <MapPin size={12} className="text-slate-500 shrink-0 mt-0.5" />
+                                        <span className="line-clamp-2">{reviewingAmendmentOrder.deliveryAddress}</span>
+                                    </div>
+                                )}
+
+                                {/* Driver Remark / Amendment Note */}
+                                <div className="bg-amber-950/30 border border-amber-500/40 p-3.5 rounded-xl space-y-1">
+                                    <div className="flex items-center justify-between">
+                                        <span className="text-[10px] text-amber-400 uppercase font-black tracking-wider flex items-center gap-1.5">
+                                            <MessageSquare size={13} />
+                                            Catatan / Alasan Pemandu (Driver Remark):
+                                        </span>
+                                    </div>
+                                    <p className="text-xs text-amber-100 font-medium whitespace-pre-line leading-relaxed">
+                                        {reviewingAmendmentOrder.notes || 'Tiada catatan bertulis daripada pemandu.'}
+                                    </p>
+                                </div>
+
+                                {/* Proof Photo if uploaded */}
+                                {proofPhoto && (
+                                    <div className="space-y-1.5">
+                                        <span className="text-[10px] text-slate-400 uppercase font-black tracking-wider flex items-center gap-1">
+                                            <Camera size={12} />
+                                            Bukti Gambar Muatan / Photo Proof:
+                                        </span>
+                                        <div className="flex items-center gap-3 bg-slate-950/60 p-2.5 rounded-xl border border-slate-800">
+                                            <a href={proofPhoto} target="_blank" rel="noopener noreferrer" className="relative group overflow-hidden rounded-lg border border-slate-700 w-20 h-20 bg-black shrink-0">
+                                                <img src={proofPhoto} alt="Proof" className="w-full h-full object-cover group-hover:scale-105 transition-transform" />
+                                                <div className="absolute inset-0 bg-black/40 flex items-center justify-center opacity-0 group-hover:opacity-100 transition-opacity">
+                                                    <span className="text-[9px] bg-blue-600 text-white font-bold px-1.5 py-0.5 rounded">Buka ↗</span>
+                                                </div>
+                                            </a>
+                                            <div className="text-[11px] text-slate-400 flex-1">
+                                                <p className="font-semibold text-slate-200">Gambar diambil semasa pemandu naik barang / POD</p>
+                                                <a href={proofPhoto} target="_blank" rel="noopener noreferrer" className="text-blue-400 hover:underline text-[10px] font-mono mt-1 inline-block">
+                                                    Klik untuk lihat gambar penuh resolusi tinggi ↗
+                                                </a>
+                                            </div>
+                                        </div>
+                                    </div>
+                                )}
+
+                                {/* Quantity Difference Table */}
+                                <div className="space-y-1.5">
+                                    <div className="flex items-center justify-between">
+                                        <span className="text-[10px] text-slate-400 uppercase font-black tracking-wider flex items-center gap-1">
+                                            <Box size={12} />
+                                            Perincian Perubahan Kuantiti / Quantity Diff:
+                                        </span>
+                                        <span className="text-[10px] font-mono font-bold text-slate-400">
+                                            {itemDiffs.length} item(s)
+                                        </span>
+                                    </div>
+
+                                    <div className="border border-slate-800 rounded-xl overflow-hidden bg-slate-950">
+                                        <table className="w-full text-left text-xs">
+                                            <thead className="bg-slate-900/80 text-[10px] text-slate-400 uppercase font-black border-b border-slate-800">
+                                                <tr>
+                                                    <th className="p-2.5">Barang / Item</th>
+                                                    <th className="p-2.5 text-center">Lokasi</th>
+                                                    <th className="p-2.5 text-center">Asal (DO)</th>
+                                                    <th className="p-2.5 text-center">Sebenar (Muat)</th>
+                                                    <th className="p-2.5 text-right">Perbezaan (Diff)</th>
+                                                </tr>
+                                            </thead>
+                                            <tbody className="divide-y divide-slate-800/60 font-medium">
+                                                {itemDiffs.map((it, idx) => (
+                                                    <tr key={idx} className={it.diff !== 0 ? 'bg-amber-500/5' : 'hover:bg-slate-900/40'}>
+                                                        <td className="p-2.5">
+                                                            <div className="font-bold text-white leading-tight">{it.product}</div>
+                                                            {it.sku && <div className="text-[10px] font-mono text-slate-500">{it.sku}</div>}
+                                                        </td>
+                                                        <td className="p-2.5 text-center">
+                                                            {it.sourceLocation ? (
+                                                                <span className="text-[9px] px-1.5 py-0.5 rounded bg-blue-500/10 text-blue-400 border border-blue-500/20 font-bold uppercase">
+                                                                    {it.sourceLocation}
+                                                                </span>
+                                                            ) : '-'}
+                                                        </td>
+                                                        <td className="p-2.5 text-center font-mono font-bold text-slate-400">
+                                                            {it.origQty}
+                                                        </td>
+                                                        <td className="p-2.5 text-center font-mono font-bold text-white">
+                                                            {it.actualQty}
+                                                        </td>
+                                                        <td className="p-2.5 text-right font-mono font-bold">
+                                                            {it.diff < 0 ? (
+                                                                <span className="px-2 py-0.5 rounded bg-rose-500/20 text-rose-300 border border-rose-500/30 text-[11px]">
+                                                                    🔻 {it.diff}
+                                                                </span>
+                                                            ) : it.diff > 0 ? (
+                                                                <span className="px-2 py-0.5 rounded bg-emerald-500/20 text-emerald-300 border border-emerald-500/30 text-[11px]">
+                                                                    🔺 +{it.diff}
+                                                                </span>
+                                                            ) : (
+                                                                <span className="text-slate-600 text-[10px]">
+                                                                    Sama
+                                                                </span>
+                                                            )}
+                                                        </td>
+                                                    </tr>
+                                                ))}
+                                            </tbody>
+                                            <tfoot className="bg-slate-900/90 border-t border-slate-800 font-bold text-xs">
+                                                <tr>
+                                                    <td colSpan={2} className="p-2.5 text-slate-400 uppercase text-[10px]">
+                                                        Jumlah Kuantiti / Total:
+                                                    </td>
+                                                    <td className="p-2.5 text-center font-mono text-slate-400">
+                                                        {totalOrig}
+                                                    </td>
+                                                    <td className="p-2.5 text-center font-mono text-white">
+                                                        {totalActual}
+                                                    </td>
+                                                    <td className="p-2.5 text-right font-mono">
+                                                        {totalDiff < 0 ? (
+                                                            <span className="text-rose-400 font-black">Net: {totalDiff}</span>
+                                                        ) : totalDiff > 0 ? (
+                                                            <span className="text-emerald-400 font-black">Net: +{totalDiff}</span>
+                                                        ) : (
+                                                            <span className="text-slate-500">Tiada Beza</span>
+                                                        )}
+                                                    </td>
+                                                </tr>
+                                            </tfoot>
+                                        </table>
+                                    </div>
+                                </div>
+
+                                <div className="bg-slate-950 p-3 rounded-xl border border-slate-800/80 text-[11px] text-slate-400 leading-relaxed">
+                                    💡 <strong className="text-slate-200">Kesan Kelulusan:</strong> Mengklik <strong className="text-emerald-400">Luluskan Pindaan</strong> akan mengesahkan kuantiti sebenar ({totalActual} unit) dan melaraskan baki stok gudang secara automatik. Mengklik <strong className="text-rose-400">Tolak Pindaan</strong> akan memulihkan kuantiti ke asal DO ({totalOrig} unit).
+                                </div>
+                            </div>
+
+                            {/* Footer Actions */}
+                            <div className="p-4 border-t border-slate-800 bg-slate-950/60 flex items-center justify-between gap-3 flex-wrap">
+                                <button
+                                    type="button"
+                                    onClick={() => handleRejectAmendment(reviewingAmendmentOrder)}
+                                    className="px-4 py-2.5 bg-rose-600/15 hover:bg-rose-600/25 border border-rose-500/30 text-rose-300 rounded-xl font-bold transition-all text-xs cursor-pointer flex items-center gap-1.5"
+                                >
+                                    <span>❌</span>
+                                    <span>Tolak Pindaan / Pulihkan Kuantiti Asal</span>
+                                </button>
+                                <button
+                                    type="button"
+                                    onClick={() => handleConfirmApproveAmendment(reviewingAmendmentOrder)}
+                                    className="px-6 py-2.5 bg-gradient-to-r from-emerald-600 to-teal-600 hover:from-emerald-500 hover:to-teal-500 text-white rounded-xl font-black transition-all text-xs shadow-lg shadow-emerald-950/40 active:scale-95 cursor-pointer flex items-center gap-2"
+                                >
+                                    <CheckCircle size={15} />
+                                    <span>Luluskan Pindaan & Tolak Stok ({totalActual} Rolls)</span>
                                 </button>
                             </div>
                         </div>

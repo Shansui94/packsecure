@@ -3584,18 +3584,24 @@ const PersonalMonthlyReport: React.FC<Props> = ({
                                 <thead className="sticky top-0 z-20 bg-[#0c0c14] border-b border-white/15 backdrop-blur-md shadow-sm">
                                     <tr>
                                         <th className="px-3.5 py-2.5 text-left font-black text-[10px] uppercase tracking-wider text-gray-400 w-20">Tarikh / Date</th>
-                                        <th className="px-3.5 py-2.5 text-left font-black text-[10px] uppercase tracking-wider text-gray-400 w-28">Status / Status</th>
+                                        <th className="px-3.5 py-2.5 text-left font-black text-[10px] uppercase tracking-wider text-gray-400 w-24">Status / Status</th>
                                         <th className="px-3.5 py-2.5 text-left font-black text-[10px] uppercase tracking-wider text-gray-400">Masa Kerja / Working Time</th>
-                                        <th className="px-3.5 py-2.5 text-right font-black text-[10px] uppercase tracking-wider text-gray-400">{isDriver ? 'Trip / Perjalanan' : 'Output / Output'}</th>
-                                        <th className="px-3.5 py-2.5 text-center font-black text-[10px] uppercase tracking-wider text-gray-400">{isDriver ? 'Butiran Trip / Trip Details' : 'Mesin & Ralat'}</th>
-                                        <th className="px-3.5 py-2.5 text-center font-black text-[10px] uppercase tracking-wider text-gray-400 w-24">Gambar / Photos</th>
-                                        {isAdminOrHR && <th className="px-3.5 py-2.5 text-center font-black text-[10px] uppercase tracking-wider text-gray-400 w-24">Tindakan / Action</th>}
+                                        {isDriver ? (
+                                            <th className="px-3.5 py-2.5 text-center font-black text-[10px] uppercase tracking-wider text-gray-400">Butiran Trip & Elaun / Trips & Pay</th>
+                                        ) : (
+                                            <>
+                                                <th className="px-3.5 py-2.5 text-right font-black text-[10px] uppercase tracking-wider text-gray-400">Output / Output</th>
+                                                <th className="px-3.5 py-2.5 text-center font-black text-[10px] uppercase tracking-wider text-gray-400">Mesin & Ralat</th>
+                                            </>
+                                        )}
+                                        <th className="px-3.5 py-2.5 text-center font-black text-[10px] uppercase tracking-wider text-gray-400 w-20">Gambar / Photos</th>
+                                        {isAdminOrHR && <th className="px-3.5 py-2.5 text-center font-black text-[10px] uppercase tracking-wider text-gray-400 w-20">Tindakan / Action</th>}
                                     </tr>
                                 </thead>
                                 <tbody className="divide-y divide-white/5">
                                     {filteredDailyMetrics.length === 0 ? (
                                         <tr>
-                                            <td colSpan={isAdminOrHR ? 7 : 6} className="py-10 text-center text-gray-500 text-xs">
+                                            <td colSpan={isDriver ? (isAdminOrHR ? 6 : 5) : (isAdminOrHR ? 7 : 6)} className="py-10 text-center text-gray-500 text-xs">
                                                 <Filter size={18} className="mx-auto mb-2 opacity-40 text-blue-400" />
                                                 <p className="font-bold">Tiada rekod untuk penapis ini / No records for this filter</p>
                                                 <button onClick={() => setTableFilter('all')} className="mt-2 text-[11px] text-blue-400 hover:underline cursor-pointer">
@@ -3673,11 +3679,9 @@ const PersonalMonthlyReport: React.FC<Props> = ({
                                                     ) : day.hasAttendance ? (
                                                         <div className="flex flex-col items-start gap-0.5">
                                                             <span className="inline-flex items-center px-1.5 py-0.5 rounded bg-emerald-500/10 border border-emerald-500/20 text-emerald-400 text-[9.5px] font-black uppercase tracking-wider">
-                                                                {isDriver && day.tripDetails && day.tripDetails.length > 0
-                                                                    ? `🚚 Hadir (${day.tripDetails.length} Trip${day.tripDetails.length > 1 ? 's' : ''})`
-                                                                    : 'Hadir / Present'}
+                                                                Hadir / Present
                                                             </span>
-                                                            {isDriver && (day.lorryPlate || driverLorryPlate) && (day.lorryPlate || driverLorryPlate) !== 'N/A' && (
+                                                            {isDriver && (!day.tripDetails || day.tripDetails.length === 0) && (day.lorryPlate || driverLorryPlate) && (day.lorryPlate || driverLorryPlate) !== 'N/A' && (
                                                                 <span className="text-[9px] font-mono text-amber-300 font-bold flex items-center gap-1 bg-amber-500/10 px-1 py-0.5 rounded border border-amber-500/20">
                                                                     <Truck size={9} className="text-amber-400 shrink-0" />
                                                                     <span className="inline-flex items-center gap-1">
@@ -3804,62 +3808,8 @@ const PersonalMonthlyReport: React.FC<Props> = ({
                                                         )
                                                     )}
                                                 </td>
-                                                <td className="px-3.5 py-2.5 whitespace-nowrap text-right">
-                                                    {isDriver ? (
-                                                        day.tripCount > 0 ? (
-                                                            <div className="flex flex-col items-end gap-0.5">
-                                                                <span className="font-mono text-amber-400 font-bold text-xs">{day.tripCount} <span className="text-[9px] text-gray-500">trip</span></span>
-                                                                {day.tripDetails && day.tripDetails.length > 0 ? (
-                                                                    <div className="flex flex-col items-end gap-0.5 font-mono text-[9.5px]">
-                                                                        {day.tripDetails.map((td: any, tidx: number) => {
-                                                                            const isPending = isTripPending(td);
-                                                                            const isUnscanned = td.status !== 'Delivered' && td.status !== 'Cancelled';
-                                                                            return (
-                                                                                <span key={tidx} className={`font-bold px-1.5 py-0.5 rounded border ${
-                                                                                    isUnscanned
-                                                                                        ? 'text-amber-300/90 bg-amber-500/10 border-amber-500/30'
-                                                                                        : isPending 
-                                                                                            ? 'text-amber-300 bg-amber-500/10 border-amber-500/30 animate-pulse' 
-                                                                                            : 'text-emerald-400 bg-emerald-500/10 border-emerald-500/20'
-                                                                                }`} title={`Trip ${tidx+1}: Base RM${(td.baseRate||td.earnings||0).toFixed(2)} + Extra Drop RM${(td.extraRate||0).toFixed(2)}`}>
-                                                                                    {isUnscanned
-                                                                                        ? `#${tidx + 1}: 🚚 未扫码 (RM ${(td.earnings || 0).toFixed(2)})`
-                                                                                        : (isPending ? `#${tidx + 1}: ⏳ 待审核 (RM ${(td.earnings || 0).toFixed(2)})` : `#${tidx + 1}: RM ${(td.earnings || 0).toFixed(2)}`)}
-                                                                                </span>
-                                                                            );
-                                                                        })}
-                                                                        {day.tripDetails.length > 1 && (
-                                                                            <span className="text-[9.5px] text-amber-300 font-black mt-0.5 pt-0.5 border-t border-slate-800">
-                                                                                RM {day.tripEarnings.toFixed(2)}
-                                                                            </span>
-                                                                        )}
-                                                                    </div>
-                                                                ) : (
-                                                                    day.tripEarnings > 0 && (
-                                                                        <span className="text-[9.5px] text-green-400 font-mono mt-0.5">+ RM{day.tripEarnings.toFixed(2)}</span>
-                                                                    )
-                                                                )}
-                                                            </div>
-                                                        ) : <span className="text-gray-700 font-mono">—</span>
-                                                    ) : (
-                                                        day.outputQty > 0 ? (
-                                                            <div className="flex flex-col items-end gap-0.5">
-                                                                <span className="font-mono text-blue-400 font-bold text-sm">{day.outputQty.toLocaleString()}</span>
-                                                                {day.jobDetails.length > 0 && (
-                                                                    <div className="flex flex-col items-end text-[8.5px] text-gray-400 font-mono">
-                                                                        {day.jobDetails.slice(0, 2).map((j, jidx) => (
-                                                                            <span key={jidx} className="text-gray-400 truncate max-w-[100px]" title={`Job: ${j.jobId}, SKU: ${j.sku || 'N/A'}`}>
-                                                                                {j.sku ? j.sku.split('-').slice(0, 3).join('-') : j.jobId}
-                                                                            </span>
-                                                                        ))}
-                                                                    </div>
-                                                                )}
-                                                            </div>
-                                                        ) : <span className="text-gray-700 font-mono">—</span>
-                                                    )}
-                                                </td>
                                                 {isDriver ? (
-                                                    <td className="px-3.5 py-2.5 whitespace-nowrap text-center">
+                                                    <td className="px-3 py-2 whitespace-nowrap text-center">
                                                         {day.tripDetails && day.tripDetails.length > 0 ? (
                                                             <div className="flex flex-col items-center gap-1.5">
                                                                 {day.tripDetails.map((td: any, idx: number) => {
@@ -3876,7 +3826,7 @@ const PersonalMonthlyReport: React.FC<Props> = ({
                                                                         <div key={idx} className="flex items-center gap-1.5 justify-center">
                                                                             <button 
                                                                                 onClick={() => setSelectedTrip(td)}
-                                                                                className={`text-[9.5px] px-2 py-0.5 rounded-lg font-mono shadow-sm cursor-pointer transition-all flex items-center gap-1 ${
+                                                                                className={`text-[9.5px] px-2.5 py-1 rounded-lg font-mono shadow-sm cursor-pointer transition-all flex items-center gap-1.5 ${
                                                                                     isTdHrApproved
                                                                                         ? 'bg-purple-950/50 text-purple-300 border border-purple-500/40 font-bold'
                                                                                         : isUnscanned
@@ -3893,7 +3843,7 @@ const PersonalMonthlyReport: React.FC<Props> = ({
                                                                                 {isUnscanned && !isTdHrApproved && <span className="text-[10px] shrink-0">🚚</span>}
                                                                                 {isPending && !isUnscanned && !isTdHrApproved && <Clock size={9} className="text-amber-400 shrink-0" />}
                                                                                 {isTripConfirmed && !isUnscanned && !isTdHrApproved && <CheckCircle2 size={10} className="text-emerald-400 shrink-0" />}
-                                                                                <span className="truncate max-w-[130px]">{isUnscanned ? `[未扫码] ${td.displayString}` : (isPending ? `⏳ ${td.displayString}` : td.displayString)}</span>
+                                                                                <span className="truncate max-w-[140px] font-sans font-medium">{isUnscanned ? `[未扫码] ${td.displayString}` : (isPending ? `⏳ ${td.displayString}` : td.displayString)}</span>
                                                                                 {(td.lorry_plate || day.lorryPlate) && (td.lorry_plate || day.lorryPlate) !== 'N/A' && (
                                                                                     <span className="inline-flex items-center gap-0.5 px-1 py-0.5 rounded bg-black/60 border border-amber-500/30 text-[8.5px] font-mono font-bold text-amber-300" title="No. Plat Lori">
                                                                                         <span>{(td.lorry_plate || day.lorryPlate).replace('✓', '').trim()}</span>
@@ -3902,7 +3852,7 @@ const PersonalMonthlyReport: React.FC<Props> = ({
                                                                                         )}
                                                                                     </span>
                                                                                 )}
-                                                                                <span className={`ml-1 px-1 py-0.2 rounded font-black border text-[9px] ${
+                                                                                <span className={`ml-1 px-1.5 py-0.5 rounded font-black border text-[9.5px] font-mono ${
                                                                                     isTdHrApproved 
                                                                                         ? 'bg-purple-900/40 text-purple-300 border-purple-500/40' 
                                                                                         : isUnscanned
@@ -3911,11 +3861,11 @@ const PersonalMonthlyReport: React.FC<Props> = ({
                                                                                                 ? 'bg-amber-500/20 text-amber-300 border-amber-500/30'
                                                                                                 : 'bg-emerald-500/20 text-emerald-300 border-emerald-500/30'
                                                                                 }`}>
-                                                                                    RM {(td.earnings || 0).toFixed(0)}
+                                                                                    RM {(td.earnings || 0).toFixed(2)}
                                                                                 </span>
                                                                             </button>
 
-                                                                            <div className="flex items-center gap-1 border-l border-slate-700/50 pl-1">
+                                                                            <div className="flex items-center gap-1 border-l border-slate-700/50 pl-1 shrink-0">
                                                                                 <label 
                                                                                     className={`flex items-center justify-center p-0.5 rounded transition-colors ${isTdHrApproved ? 'opacity-50 cursor-not-allowed' : 'hover:bg-white/5 cursor-pointer'}`}
                                                                                     title={isTdHrApproved ? "🔒 已被 HR 锁定 / Locked by HR" : (isTripConfirmed ? "✅ 该 Trip 已确认无误 / Trip Confirmed" : "⬜ 点击打钩确认此 Trip / Confirm")}
@@ -3957,11 +3907,38 @@ const PersonalMonthlyReport: React.FC<Props> = ({
                                                                         </div>
                                                                     );
                                                                 })}
+                                                                {day.tripDetails.length > 1 && (
+                                                                    <div className="text-[10px] font-mono font-bold text-amber-300/90 pt-0.5 border-t border-slate-800/80 flex items-center justify-center gap-1.5">
+                                                                        <span className="text-gray-400">Jumlah ({day.tripDetails.length} Trips):</span>
+                                                                        <span className="text-amber-300 font-black">RM {day.tripEarnings.toFixed(2)}</span>
+                                                                    </div>
+                                                                )}
                                                             </div>
-                                                        ) : <span className="text-gray-700 font-mono">—</span>}
+                                                        ) : day.tripEarnings > 0 ? (
+                                                            <span className="text-[10px] text-green-400 font-mono font-bold">+ RM{day.tripEarnings.toFixed(2)}</span>
+                                                        ) : (
+                                                            <span className="text-gray-700 font-mono">—</span>
+                                                        )}
                                                     </td>
                                                 ) : (
-                                                    <td className="px-3.5 py-2.5 whitespace-nowrap text-center">
+                                                    <>
+                                                        <td className="px-3.5 py-2.5 whitespace-nowrap text-right">
+                                                            {day.outputQty > 0 ? (
+                                                                <div className="flex flex-col items-end gap-0.5">
+                                                                    <span className="font-mono text-blue-400 font-bold text-sm">{day.outputQty.toLocaleString()}</span>
+                                                                    {day.jobDetails.length > 0 && (
+                                                                        <div className="flex flex-col items-end text-[8.5px] text-gray-400 font-mono">
+                                                                            {day.jobDetails.slice(0, 2).map((j, jidx) => (
+                                                                                <span key={jidx} className="text-gray-400 truncate max-w-[100px]" title={`Job: ${j.jobId}, SKU: ${j.sku || 'N/A'}`}>
+                                                                                    {j.sku ? j.sku.split('-').slice(0, 3).join('-') : j.jobId}
+                                                                                </span>
+                                                                            ))}
+                                                                        </div>
+                                                                    )}
+                                                                </div>
+                                                            ) : <span className="text-gray-700 font-mono">—</span>}
+                                                        </td>
+                                                        <td className="px-3.5 py-2.5 whitespace-nowrap text-center">
                                                         <div className="flex flex-col items-center gap-1">
                                                             {day.machinesOperated.length > 0 && (
                                                                 <div className="flex flex-wrap justify-center gap-1">
@@ -3992,7 +3969,8 @@ const PersonalMonthlyReport: React.FC<Props> = ({
                                                             )}
                                                         </div>
                                                     </td>
-                                                )}
+                                                </>
+                                            )}
                                                 <td className="px-3.5 py-2.5 whitespace-nowrap text-center">
                                                     {day.photoCount > 0 ? (
                                                         <div className="flex items-center justify-center gap-1.5">
@@ -4077,7 +4055,7 @@ const PersonalMonthlyReport: React.FC<Props> = ({
                                 </tbody>
                                 <tfoot>
                                     <tr className="bg-slate-900/95 border-t border-slate-800">
-                                        <td colSpan={isAdminOrHR ? 7 : 6} className="px-3.5 py-2.5">
+                                        <td colSpan={isDriver ? (isAdminOrHR ? 6 : 5) : (isAdminOrHR ? 7 : 6)} className="px-3.5 py-2.5">
                                             <div className="flex flex-col sm:flex-row items-center justify-between gap-3">
                                                 <div className="flex items-center gap-2.5">
                                                     <div className="p-1.5 rounded-lg bg-emerald-500/10 border border-emerald-500/20 text-emerald-400 shrink-0">
