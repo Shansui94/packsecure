@@ -1430,6 +1430,12 @@ const DeliveryOrderManagement: React.FC<DeliveryOrderManagementProps> = ({ user 
 
         if (movedOrders.length === 0) return;
 
+        // HR Approved Guardrail: Prevent modifying trips/orders audited and locked by HR
+        if (movedOrders.some(o => o.notes?.includes('[HR_APPROVED]') || (o as any).is_hr_approved) && user?.role !== 'SuperAdmin') {
+            alert(t('⚠️ 选中的行程/订单已被 HR 审核锁定（[HR_APPROVED]），无法通过拖拽调整司机！如需调整请联系 HR/财务人员解锁。\n(This trip/order is locked by HR and cannot be reassigned.)'));
+            return;
+        }
+
         // Smart Reminder & Cross-Location Guard
         if (newDriverId && newDriverId !== oldDriverId) {
             const targetDriver = drivers.find(d => d.uid === newDriverId);
@@ -1541,10 +1547,15 @@ const DeliveryOrderManagement: React.FC<DeliveryOrderManagementProps> = ({ user 
 
     // DELETE TRIP (Soft Delete all orders in trip)
     const handleDeleteTrip = async (tripId: string, tripNumber: string) => {
+        const tripOrders = orders.filter(o => o.trip_id === tripId);
+        if (tripOrders.some(o => o.notes?.includes('[HR_APPROVED]') || (o as any).is_hr_approved) && user?.role !== 'SuperAdmin') {
+            alert(t('⚠️ 此车次中包含已被 HR 审核锁定的订单（[HR_APPROVED]），禁止取消！如需调整请联系 HR/财务人员解锁。\n(This trip is locked by HR and cannot be cancelled.)'));
+            return;
+        }
+
         if (!window.confirm(`Are you sure you want to CANCEL Trip ${tripNumber} and all its Delivery Orders?\nThis will move all orders in this trip to the Cancelled tab and reverse deducted stock if loaded.`)) return;
 
         try {
-            const tripOrders = orders.filter(o => o.trip_id === tripId);
             const orderIds = tripOrders.map(o => o.id);
 
             // Soft Delete: Update status to 'Cancelled'
@@ -1575,10 +1586,15 @@ const DeliveryOrderManagement: React.FC<DeliveryOrderManagementProps> = ({ user 
 
     // DELETE ORDER (Soft Delete)
     const handleDeleteOrder = async (orderId: string, orderNumber: string) => {
+        const target = orders.find(o => o.id === orderId);
+        if ((target?.notes?.includes('[HR_APPROVED]') || (target as any)?.is_hr_approved) && user?.role !== 'SuperAdmin') {
+            alert(t('⚠️ 此订单已被 HR 审核锁定（[HR_APPROVED]），禁止取消！如需调整请联系 HR/财务人员解锁。\n(This order is locked by HR and cannot be cancelled.)'));
+            return;
+        }
+
         if (!window.confirm(`Are you sure you want to CANCEL Order ${orderNumber}?\nThis will move it to the Cancelled tab and reverse deducted stock if loaded.`)) return;
 
         try {
-            const target = orders.find(o => o.id === orderId);
 
             // Soft Delete: Update status to 'Cancelled'
             const { error } = await supabase.from('sales_orders').update({ status: 'Cancelled' }).eq('id', orderId);
@@ -4000,6 +4016,10 @@ const DeliveryOrderManagement: React.FC<DeliveryOrderManagementProps> = ({ user 
     };
 
     const handleQuickUpdateOrderNotes = async (orderId: string, currentNotes: string) => {
+        if (currentNotes?.includes('[HR_APPROVED]') && user?.role !== 'SuperAdmin') {
+            alert(t('⚠️ 此订单已被 HR 审核锁定（[HR_APPROVED]），禁止修改备注！如需调整请联系 HR/财务人员解锁。\n(This order is locked by HR and cannot be edited.)'));
+            return;
+        }
         const input = window.prompt(t('Edit / Add Remark for this DO (订单备注与司机须知):'), currentNotes || '');
         if (input === null) return;
         const trimmed = input.trim();
@@ -4093,6 +4113,12 @@ const DeliveryOrderManagement: React.FC<DeliveryOrderManagementProps> = ({ user 
     // REASSIGN DRIVER HANDLER
     const handleReassignDriver = async (driverId: string) => {
         if (!reassignOrder) return;
+
+        // HR Approved Guardrail: Prevent reassigning drivers for orders audited and locked by HR
+        if ((reassignOrder.notes?.includes('[HR_APPROVED]') || (reassignOrder as any)?.is_hr_approved) && user?.role !== 'SuperAdmin') {
+            alert(t('⚠️ 此订单已被 HR 审核锁定（[HR_APPROVED]），无法更换司机！如需调整请联系 HR/财务人员解锁。\n(This order is locked by HR and cannot be reassigned.)'));
+            return;
+        }
 
         // Smart Reminder / Blocker
         if (!checkDriverAvailability(driverId, reassignOrder.deadline)) return;
@@ -4353,14 +4379,14 @@ const DeliveryOrderManagement: React.FC<DeliveryOrderManagementProps> = ({ user 
             }
 
             let finalNotes = newOrderNotes;
-            if (deliveryMethod === 'SELF_PICKUP') {
+            if (deliveryMethod === 'SELF_PICKUP' && !selectedDriverId) {
                 const low = finalNotes.toLowerCase();
                 if (!low.includes('pickup') && !low.includes('pick up') && !low.includes('自提') && !low.includes('ambil sendiri')) {
                     finalNotes = `[Self Pickup] ${finalNotes}`.trim();
                 }
             }
 
-            const isSelfPickup = deliveryMethod === 'SELF_PICKUP' || /(?:self[- ]?pickup|自提|ambil\s+sendiri|customer\s+ambil)/i.test(finalNotes);
+            const isSelfPickup = (deliveryMethod === 'SELF_PICKUP' || /(?:self[- ]?pickup|自提|ambil\s+sendiri|customer\s+ambil)/i.test(finalNotes)) && !selectedDriverId;
 
             const payload: any = {
                 order_number: doNumber,
@@ -4370,13 +4396,13 @@ const DeliveryOrderManagement: React.FC<DeliveryOrderManagementProps> = ({ user 
                 trip_origin: tripOrigin,
                 trip_drop_count: isSelfPickup ? 1 : tripDropCount,
                 factory_id: finalFactoryId,
-                driver_id: isSelfPickup ? null : (selectedDriverId || null),
+                driver_id: selectedDriverId || null,
                 items: finalizedItems,
                 order_date: newOrderDate || new Date().toISOString().split("T")[0],
                 deadline: newOrderDeliveryDate || null,
                 notes: finalNotes,
-                delivery_method: isSelfPickup ? 'SELF_PICKUP' : 'Company Delivery',
-                job_type: isSelfPickup ? 'Pickup' : 'Delivery',
+                delivery_method: isSelfPickup ? 'SELF_PICKUP' : (deliveryMethod || 'Company Delivery'),
+                job_type: isSelfPickup ? 'Pickup' : (deliveryMethod === 'SELF_PICKUP' ? 'Pickup' : 'Delivery'),
             };
 
             // Only set status for NEW orders. Editing should not overwrite background status changes.
@@ -4409,6 +4435,13 @@ const DeliveryOrderManagement: React.FC<DeliveryOrderManagementProps> = ({ user 
 
             if (editingOrderId) {
                 const existingOrder = orders.find(o => o.id === editingOrderId);
+
+                // HR Approved Guardrail: Prevent modifying orders audited and locked by HR
+                if ((existingOrder?.notes?.includes('[HR_APPROVED]') || (existingOrder as any)?.is_hr_approved) && user?.role !== 'SuperAdmin') {
+                    alert(t('⚠️ 此订单已被 HR 审核锁定（[HR_APPROVED]），禁止修改！如需调整请先由 HR 或财务在月度报表解锁。\n(This order is locked by HR. Contact HR/Finance to unlock.)'));
+                    return;
+                }
+
                 const { error } = await supabase.from('sales_orders').update(payload).eq('id', editingOrderId);
                 if (error) throw error;
 
@@ -5777,6 +5810,11 @@ const DeliveryOrderManagement: React.FC<DeliveryOrderManagementProps> = ({ user 
                                                                                         {tripGroup.zone}
                                                                                     </div>
                                                                                 )}
+                                                                                {tripGroup.orders.some(o => o.notes?.includes('[HR_APPROVED]') || (o as any).is_hr_approved) && (
+                                                                                    <span className="text-[10px] font-black uppercase px-2 py-0.5 rounded-full bg-purple-500/20 text-purple-300 border border-purple-500/40 flex items-center gap-1 shadow-sm" title="HR Approved / Locked">
+                                                                                        🔒 HR Locked
+                                                                                    </span>
+                                                                                )}
                                                                             </div>
 
                                                                             <div className="flex items-center gap-1">
@@ -6117,6 +6155,11 @@ const DeliveryOrderManagement: React.FC<DeliveryOrderManagementProps> = ({ user 
                                                                                     <div className={`text-[10px] font-bold px-1.5 py-0.5 rounded border uppercase tracking-wider ${getStateColor(determineState(order.deliveryAddress))}`}>
                                                                                         {determineState(order.deliveryAddress)}
                                                                                     </div>
+                                                                                )}
+                                                                                {(order.notes?.includes('[HR_APPROVED]') || (order as any).is_hr_approved) && (
+                                                                                    <span className="text-[10px] font-black uppercase px-1.5 py-0.5 rounded bg-purple-500/20 text-purple-300 border border-purple-500/40 flex items-center gap-1 shadow-sm" title="HR Approved / Locked">
+                                                                                        🔒 HR Locked
+                                                                                    </span>
                                                                                 )}
                                                                                 <button
                                                                                     onClick={(e) => {
