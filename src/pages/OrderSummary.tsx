@@ -220,6 +220,12 @@ const OrderSummary: React.FC<OrderSummaryProps> = ({ user }) => {
     const [dateMode, setDateMode] = useState<'today' | 'tomorrow' | 'pending_prep' | 'all_active' | 'custom'>('today');
     const [showLoadedTrips, setShowLoadedTrips] = useState<boolean>(false);
 
+    // Role Permission Guardrail (Only dispatch managers can reassign trips via DnD)
+    const canEdit = useMemo(() => {
+        const allowedRoles = ['SuperAdmin', 'Admin', 'Manager', 'LogisticsCoordinator'];
+        return allowedRoles.includes(user?.role);
+    }, [user?.role]);
+
     // Data States
     const [orders, setOrders] = useState<SalesOrder[]>([]);
     const [tripsMap, setTripsMap] = useState<Record<string, any>>({});
@@ -990,6 +996,10 @@ const OrderSummary: React.FC<OrderSummaryProps> = ({ user }) => {
     // ─── DND REASSIGNMENT WITH CROSS-FACTORY GUARDRAIL ────────────────────────
 
     const onDragEnd = async (result: DropResult) => {
+        if (!canEdit) {
+            console.warn('[Security Guardrail] Non-dispatch user attempted DnD reassignment:', user?.email, user?.role);
+            return;
+        }
         const { destination, source, draggableId } = result;
         if (!destination) return;
         if (destination.droppableId === source.droppableId && destination.index === source.index) return;
@@ -1823,7 +1833,12 @@ const TripColumn: React.FC<TripColumnProps> = ({
                         }`}
                     >
                         {trips.map((trip, index) => (
-                            <Draggable key={trip.tripId} draggableId={trip.tripId} index={index}>
+                            <Draggable 
+                                key={trip.tripId} 
+                                draggableId={trip.tripId} 
+                                index={index}
+                                isDragDisabled={!canEdit}
+                            >
                                 {(dragProvided, dragSnapshot) => (
                                     <div
                                         ref={dragProvided.innerRef}

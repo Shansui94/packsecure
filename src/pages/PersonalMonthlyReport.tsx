@@ -2,9 +2,9 @@ import React, { useState, useEffect, useMemo, useRef } from 'react';
 import { createPortal } from 'react-dom';
 import {
     CalendarDays, Award, AlertTriangle, Camera,
-    DollarSign, Clock, ChevronLeft, ChevronRight, Activity, Users, Truck, X,
+    DollarSign, Clock, ChevronLeft, ChevronRight, ChevronUp, ChevronDown, Activity, Users, Truck, X,
     FileSpreadsheet, Printer, FileText, CheckCircle2, Percent, Layers, Plus, Search, Box,
-    User as UserIcon, MapPin, ImagePlus, Calendar, Sparkles, Download, CheckSquare, Lock
+    User as UserIcon, MapPin, ImagePlus, Calendar, Sparkles, Download, CheckSquare, Lock, Filter
 } from 'lucide-react';
 import { supabase } from '../services/supabase';
 import { getV2Items } from '../services/apiV2';
@@ -452,6 +452,8 @@ const PersonalMonthlyReport: React.FC<Props> = ({
     const [showPayrollModal, setShowPayrollModal] = useState<boolean>(false);
     const [currentUserRole, setCurrentUserRole] = useState<string>('');
     const [isTutorialModalOpen, setIsTutorialModalOpen] = useState<boolean>(false);
+    const [showCharts, setShowCharts] = useState<boolean>(true);
+    const [tableFilter, setTableFilter] = useState<'all' | 'trips' | 'pending' | 'leaves'>('all');
 
     const isDriver = viewedProfile?.role === 'Driver' || (!viewedProfile && user?.role === 'Driver') || deliveries.length > 0;
     const isAdminOrHR = ['SuperAdmin', 'Admin', 'HR'].includes(currentUserRole);
@@ -2727,29 +2729,42 @@ const PersonalMonthlyReport: React.FC<Props> = ({
         return `${now.getFullYear()}-${String(now.getMonth() + 1).padStart(2, '0')}-${String(now.getDate()).padStart(2, '0')}`;
     }, []);
 
+    const filteredDailyMetrics = useMemo(() => {
+        if (tableFilter === 'trips') {
+            return dailyMetrics.filter(d => (d.tripCount || 0) > 0);
+        }
+        if (tableFilter === 'pending') {
+            return dailyMetrics.filter(d => (d.tripDetails || []).some((t: any) => isTripPending(t)) || d.leaveStatus === 'Pending');
+        }
+        if (tableFilter === 'leaves') {
+            return dailyMetrics.filter(d => Boolean(d.leaveStatus || d.isPublicHoliday));
+        }
+        return dailyMetrics;
+    }, [dailyMetrics, tableFilter]);
+
     const canSelectEmployee = employeesList.length > 0;
     return (
-        <div className={`${isModal ? 'w-full' : 'min-h-screen'} bg-[#07070a] text-white p-4 md:p-6 font-sans pmr-no-print`}>
+        <div className={`${isModal ? 'w-full' : 'min-h-screen'} bg-[#07070a] text-white p-3 sm:p-4 md:p-5 font-sans pmr-no-print`}>
             {/* Header Area / Kawasan Kepala Halaman */}
-            <div className="max-w-6xl mx-auto flex flex-col md:flex-row justify-between items-start md:items-center gap-6 mb-6">
-                <div className="flex flex-col gap-2">
-                    <h1 className="text-3xl font-black bg-clip-text text-transparent bg-gradient-to-r from-blue-400 to-indigo-500 mb-1 flex items-center gap-3">
-                        <Activity className="text-blue-500 animate-pulse" size={28} />
-                        Laporan Bulanan / Monthly Report
+            <div className="w-full max-w-[1400px] mx-auto flex flex-col lg:flex-row justify-between items-start lg:items-center gap-3.5 mb-4">
+                <div className="flex flex-col gap-1.5">
+                    <h1 className="text-xl sm:text-2xl font-black bg-clip-text text-transparent bg-gradient-to-r from-blue-400 via-indigo-400 to-purple-400 flex items-center gap-2">
+                        <Activity className="text-blue-500 animate-pulse shrink-0" size={22} />
+                        <span>Laporan Bulanan / Monthly Report</span>
                     </h1>
-                    <div className="flex items-center gap-3">
-                        <p className="text-sm text-gray-500">
-                            Analisis untuk: / Analytics for:
-                        </p>
+                    <div className="flex flex-wrap items-center gap-2 text-xs">
+                        <span className="text-gray-400 font-medium">
+                            Analisis untuk / Analytics for:
+                        </span>
                         {canSelectEmployee ? (
                             <div className="relative group">
-                                <div className="absolute inset-y-0 left-0 pl-3 flex items-center pointer-events-none">
-                                    <Users size={14} className="text-gray-400 group-hover:text-blue-400 transition-colors" />
+                                <div className="absolute inset-y-0 left-0 pl-2.5 flex items-center pointer-events-none">
+                                    <Users size={13} className="text-gray-400 group-hover:text-blue-400 transition-colors" />
                                 </div>
                                 <select 
                                     value={selectedEmployeeId}
                                     onChange={(e) => setSelectedEmployeeId(e.target.value)}
-                                    className="pl-9 pr-8 py-1.5 bg-[#0d0d12]/90 border border-white/10 hover:border-blue-500/50 rounded-lg text-sm font-bold text-white focus:outline-none focus:ring-2 focus:ring-blue-500/50 appearance-none cursor-pointer transition-all backdrop-blur-md"
+                                    className="pl-8 pr-7 py-1 bg-[#0d0d12]/90 border border-white/10 hover:border-blue-500/50 rounded-lg text-xs md:text-sm font-bold text-white focus:outline-none focus:ring-1 focus:ring-blue-500/50 appearance-none cursor-pointer transition-all backdrop-blur-md"
                                 >
                                     {employeesList.map(emp => {
                                         const rowKey = emp.uid || emp.auth_user_id || emp.id;
@@ -2763,18 +2778,18 @@ const PersonalMonthlyReport: React.FC<Props> = ({
                                 </select>
                             </div>
                         ) : (
-                            <span className="text-sm font-bold text-gray-300 bg-white/5 px-3 py-1 rounded-lg border border-white/10">
+                            <span className="text-xs font-bold text-gray-300 bg-white/5 px-2.5 py-1 rounded-lg border border-white/10">
                                 {viewedProfile?.name || user?.name} ({viewedProfile?.role === 'Driver' ? 'Pemandu / Driver' : (viewedProfile?.role || user?.role)})
                             </span>
                         )}
                         {isDriver && (
-                            <div className="flex items-center gap-1.5 px-3 py-1.5 bg-gradient-to-r from-amber-500/15 to-orange-500/10 border border-amber-500/30 rounded-lg text-xs font-bold text-amber-300 shadow-sm" title={isVpc9821(driverLorryPlate) ? "No. Plat Lori: VPC 9821 (Kadar Khas / Special Rate) ✓" : "No. Plat Lori untuk Pemandu ini / Lorry Plate"}>
-                                <Truck size={14} className="text-amber-400 shrink-0" />
+                            <div className="flex items-center gap-1.5 px-2.5 py-1 bg-amber-500/10 border border-amber-500/30 rounded-lg text-xs font-bold text-amber-300 shadow-sm" title={isVpc9821(driverLorryPlate) ? "No. Plat Lori: VPC 9821 (Kadar Khas / Special Rate) ✓" : "No. Plat Lori untuk Pemandu ini / Lorry Plate"}>
+                                <Truck size={13} className="text-amber-400 shrink-0" />
                                 <span className="text-gray-400">Lori:</span>
-                                <span className="font-mono text-amber-200 font-black tracking-wider bg-amber-950/60 px-2 py-0.5 rounded border border-amber-500/30 inline-flex items-center gap-1.5">
+                                <span className="font-mono text-amber-200 font-black tracking-wider bg-amber-950/60 px-1.5 py-0.5 rounded border border-amber-500/30 inline-flex items-center gap-1">
                                     <span>{driverLorryPlate !== 'N/A' ? driverLorryPlate.replace('✓', '').trim() : 'Tiada Lori / N/A'}</span>
                                     {isVpc9821(driverLorryPlate) && (
-                                        <span className="text-emerald-400 font-black text-sm" title="VPC 9821 (Lori Khas / Special Rate) ✓">✓</span>
+                                        <span className="text-emerald-400 font-black text-xs" title="VPC 9821 (Lori Khas / Special Rate) ✓">✓</span>
                                     )}
                                 </span>
                             </div>
@@ -2782,13 +2797,13 @@ const PersonalMonthlyReport: React.FC<Props> = ({
                     </div>
                 </div>
 
-                <div className="flex flex-wrap items-center gap-3">
+                <div className="flex flex-wrap items-center gap-2">
                     {isDriver && (
                         <button
                             onClick={handleDownloadExcel}
-                            className="flex items-center gap-2 bg-gradient-to-r from-emerald-500/80 to-teal-600/80 hover:from-emerald-500 hover:to-teal-600 text-white border border-emerald-500/30 px-4 py-2.5 rounded-2xl font-black uppercase text-xs tracking-widest transition-all shadow-lg shadow-emerald-950/20 active:scale-95 cursor-pointer"
+                            className="flex items-center gap-1.5 bg-gradient-to-r from-emerald-500/80 to-teal-600/80 hover:from-emerald-500 hover:to-teal-600 text-white border border-emerald-500/30 px-3 py-1.5 rounded-xl font-bold uppercase text-[11px] tracking-wider transition-all shadow-sm active:scale-95 cursor-pointer"
                         >
-                            <FileSpreadsheet size={16} className="text-emerald-400" />
+                            <FileSpreadsheet size={14} className="text-emerald-300" />
                             <span>Excel</span>
                         </button>
                     )}
@@ -2796,10 +2811,10 @@ const PersonalMonthlyReport: React.FC<Props> = ({
                     {(isDriver || viewedProfile?.role === 'Driver') && (
                         <button
                             onClick={handlePrintSingleDriver}
-                            className="flex items-center gap-2 bg-gradient-to-r from-blue-500/80 to-indigo-600/80 hover:from-blue-500 hover:to-indigo-600 text-white border border-blue-500/30 px-4 py-2.5 rounded-2xl font-black uppercase text-xs tracking-widest transition-all shadow-lg shadow-blue-950/20 active:scale-95 cursor-pointer"
+                            className="flex items-center gap-1.5 bg-gradient-to-r from-blue-500/80 to-indigo-600/80 hover:from-blue-500 hover:to-indigo-600 text-white border border-blue-500/30 px-3 py-1.5 rounded-xl font-bold uppercase text-[11px] tracking-wider transition-all shadow-sm active:scale-95 cursor-pointer"
                             title="Cetak Laporan Pemandu Ini / Print Current Driver Report"
                         >
-                            <Printer size={16} className="text-blue-300" />
+                            <Printer size={14} className="text-blue-200" />
                             <span>Cetak Driver</span>
                         </button>
                     )}
@@ -2808,55 +2823,56 @@ const PersonalMonthlyReport: React.FC<Props> = ({
                         <button
                             onClick={handlePrintAllDrivers}
                             disabled={isPreparingBatchPrint}
-                            className="flex items-center gap-2 bg-gradient-to-r from-purple-600/80 to-pink-600/80 hover:from-purple-600 hover:to-pink-600 text-white border border-purple-500/30 px-4 py-2.5 rounded-2xl font-black uppercase text-xs tracking-widest transition-all shadow-lg shadow-purple-950/20 active:scale-95 cursor-pointer disabled:opacity-50"
+                            className="flex items-center gap-1.5 bg-gradient-to-r from-purple-600/80 to-pink-600/80 hover:from-purple-600 hover:to-pink-600 text-white border border-purple-500/30 px-3 py-1.5 rounded-xl font-bold uppercase text-[11px] tracking-wider transition-all shadow-sm active:scale-95 cursor-pointer disabled:opacity-50"
                             title="Cetak Laporan Semua Pemandu / Print All Drivers Reports"
                         >
-                            <Printer size={16} className="text-purple-300" />
-                            <span>{isPreparingBatchPrint ? 'Menyedia...' : 'Cetak Semua Driver (Batch)'}</span>
+                            <Printer size={14} className="text-purple-200" />
+                            <span>{isPreparingBatchPrint ? 'Menyedia...' : 'Cetak Semua (Batch)'}</span>
                         </button>
                     )}
 
                     <button
                         onClick={() => setIsTutorialModalOpen(true)}
-                        className="flex items-center gap-2 bg-gradient-to-r from-amber-500/80 to-orange-600/80 hover:from-amber-500 hover:to-orange-600 text-white border border-amber-500/30 px-4 py-2.5 rounded-2xl font-black uppercase text-xs tracking-widest transition-all shadow-lg shadow-amber-950/20 active:scale-95 cursor-pointer"
+                        className="flex items-center gap-1.5 bg-amber-500/20 hover:bg-amber-500/30 text-amber-300 border border-amber-500/30 px-3 py-1.5 rounded-xl font-bold uppercase text-[11px] tracking-wider transition-all shadow-sm active:scale-95 cursor-pointer"
                         title="Video Tutorial Pemandu / Driver Video Tutorial"
                     >
                         <span>🎥</span>
-                        <span>Video Tutorial</span>
+                        <span>Tutorial</span>
                     </button>
 
-                    <div className="flex items-center gap-3 bg-[#0d0d12]/80 border border-white/10 rounded-2xl px-5 py-3 shadow-lg backdrop-blur-md">
-                        <button onClick={() => changeMonth(-1)} className="p-2 rounded-xl hover:bg-white/10 text-gray-400 hover:text-white transition-all active:scale-95">
-                            <ChevronLeft size={20} />
+                    {/* Compact Month Navigator */}
+                    <div className="flex items-center gap-1.5 bg-[#0d0d12]/90 border border-white/10 rounded-xl px-2.5 py-1 shadow-sm backdrop-blur-md">
+                        <button onClick={() => changeMonth(-1)} className="p-1 rounded-lg hover:bg-white/10 text-gray-400 hover:text-white transition-all active:scale-95 cursor-pointer">
+                            <ChevronLeft size={16} />
                         </button>
-                        <div className="text-center min-w-[140px]">
-                            <div className="text-xl font-black text-white">
+                        <div className="text-center min-w-[110px] sm:min-w-[125px]">
+                            <div className="text-xs sm:text-sm font-black text-white leading-tight">
                                 {(() => {
                                     const msNames: Record<string, string> = {
-                                        'January': 'Januari / January', 'February': 'Februari / February', 'March': 'Mac / March',
-                                        'April': 'April / April', 'May': 'Mei / May', 'June': 'Jun / June', 'July': 'Julai / July',
-                                        'August': 'Ogos / August', 'September': 'September / September', 'October': 'Oktober / October',
-                                        'November': 'November / November', 'December': 'Disember / December'
+                                        'January': 'Januari / Jan', 'February': 'Februari / Feb', 'March': 'Mac / Mar',
+                                        'April': 'April / Apr', 'May': 'Mei / May', 'June': 'Jun / Jun', 'July': 'Julai / Jul',
+                                        'August': 'Ogos / Aug', 'September': 'Sep / Sep', 'October': 'Okt / Oct',
+                                        'November': 'Nov / Nov', 'December': 'Dis / Dec'
                                     };
                                     return msNames[MONTH_NAMES[selectedMonth - 1]] || MONTH_NAMES[selectedMonth - 1];
                                 })()}
                             </div>
-                            <div className="text-xs text-blue-400 tracking-widest uppercase font-bold">{selectedYear}</div>
+                            <div className="text-[10px] text-blue-400 tracking-wider uppercase font-bold leading-tight">{selectedYear}</div>
                         </div>
                         <button onClick={() => changeMonth(1)} disabled={selectedMonth === today.getMonth() + 1 && selectedYear === today.getFullYear()}
-                            className="p-2 rounded-xl hover:bg-white/10 text-gray-400 hover:text-white transition-all disabled:opacity-20 disabled:hover:bg-transparent cursor-pointer active:scale-95">
-                            <ChevronRight size={20} />
+                            className="p-1 rounded-lg hover:bg-white/10 text-gray-400 hover:text-white transition-all disabled:opacity-20 disabled:hover:bg-transparent cursor-pointer active:scale-95">
+                            <ChevronRight size={16} />
                         </button>
                     </div>
 
                     {onClose && (
                         <button
                             onClick={onClose}
-                            className="flex items-center gap-1.5 bg-rose-600/20 hover:bg-rose-600/30 text-rose-300 border border-rose-500/30 px-4 py-2.5 rounded-2xl font-black uppercase text-xs tracking-widest transition-all cursor-pointer shadow-lg active:scale-95"
+                            className="flex items-center gap-1 bg-rose-600/20 hover:bg-rose-600/30 text-rose-300 border border-rose-500/30 px-3 py-1.5 rounded-xl font-bold uppercase text-[11px] tracking-wider transition-all cursor-pointer shadow-sm active:scale-95"
                             title="关闭月报 / Close Monthly Report"
                         >
-                            <X size={16} />
-                            <span>关闭 / Close</span>
+                            <X size={14} />
+                            <span>关闭</span>
                         </button>
                     )}
                 </div>
@@ -2871,7 +2887,7 @@ const PersonalMonthlyReport: React.FC<Props> = ({
                     <p className="text-blue-400 font-bold tracking-widest uppercase text-sm animate-pulse">Sila tunggu, sedang dikira... / Calculating Metrics...</p>
                 </div>
             ) : (
-                <div className="max-w-6xl mx-auto space-y-6 animate-in fade-in slide-in-from-bottom-4 duration-700">
+                <div className="w-full max-w-[1400px] mx-auto space-y-3.5 animate-in fade-in duration-300">
 
                     {/* Performance Badges Row / Barisan Lencana Prestasi */}
                     {(() => {
@@ -2881,7 +2897,7 @@ const PersonalMonthlyReport: React.FC<Props> = ({
                         
                         if (attendRate >= 90) {
                             badges.push({
-                                icon: <CalendarDays size={14} className="text-emerald-400" />,
+                                icon: <CalendarDays size={13} className="text-emerald-400" />,
                                 text: "Juara Kehadiran / Attendance Champion",
                                 desc: "Hadir >= 90% hari bekerja (Isnin-Sabtu) / Attended >= 90% of working days (Mon-Sat)",
                                 color: "bg-emerald-500/10 border-emerald-500/25 text-emerald-400"
@@ -2889,14 +2905,14 @@ const PersonalMonthlyReport: React.FC<Props> = ({
                         }
                         if (isDriver && totalTrips >= 15) {
                             badges.push({
-                                icon: <Truck size={14} className="text-amber-400" />,
+                                icon: <Truck size={13} className="text-amber-400" />,
                                 text: "Pemandu Emas / Gold Driver",
                                 desc: "Melakukan >= 15 trip penghantaran bulan ini / Made >= 15 trips this month",
                                 color: "bg-amber-500/10 border-amber-500/25 text-amber-400"
                             });
                         } else if (!isDriver && totalOutput >= 5000) {
                             badges.push({
-                                icon: <Award size={14} className="text-blue-400" />,
+                                icon: <Award size={13} className="text-blue-400" />,
                                 text: "Pengendali Bintang / Star Operator",
                                 desc: "Jumlah output >= 5,000 unit bulan ini / Total output >= 5,000 units this month",
                                 color: "bg-blue-500/10 border-blue-500/25 text-blue-400"
@@ -2904,7 +2920,7 @@ const PersonalMonthlyReport: React.FC<Props> = ({
                         }
                         if (totalPhotos >= 15) {
                             badges.push({
-                                icon: <Camera size={14} className="text-purple-400" />,
+                                icon: <Camera size={13} className="text-purple-400" />,
                                 text: "Pemberita Visual / Visual Reporter",
                                 desc: "Memuat naik >= 15 gambar rekod kerja / Uploaded >= 15 work photos",
                                 color: "bg-purple-500/10 border-purple-500/25 text-purple-400"
@@ -2912,7 +2928,7 @@ const PersonalMonthlyReport: React.FC<Props> = ({
                         }
                         if (totalAlarms === 0 && presentDays >= 5) {
                             badges.push({
-                                icon: <AlertTriangle size={14} className="text-teal-400" />,
+                                icon: <AlertTriangle size={13} className="text-teal-400" />,
                                 text: "Bebas Ralat / Error-Free Pro",
                                 desc: "Tiada sebarang ralat atau amaran dikesan / Zero alarms or rejects handled",
                                 color: "bg-teal-500/10 border-teal-500/25 text-teal-400"
@@ -2922,13 +2938,13 @@ const PersonalMonthlyReport: React.FC<Props> = ({
                         if (badges.length === 0) return null;
 
                         return (
-                            <div className="flex flex-wrap gap-2.5 bg-[#0d0d12]/50 border border-white/5 p-3 rounded-2xl">
+                            <div className="flex flex-wrap gap-2 bg-[#0d0d12]/50 border border-white/5 p-2 rounded-xl">
                                 {badges.map((b, idx) => (
-                                    <div key={idx} className={`flex items-center gap-2 px-3 py-1.5 rounded-full border text-[11px] font-bold shadow-sm cursor-help relative group transition-all hover:scale-105 hover:bg-white/5 ${b.color}`} title={b.desc}>
+                                    <div key={idx} className={`flex items-center gap-1.5 px-2.5 py-1 rounded-full border text-[10px] font-bold shadow-sm cursor-help relative group transition-all hover:scale-105 hover:bg-white/5 ${b.color}`} title={b.desc}>
                                         {b.icon}
                                         <span>{b.text}</span>
                                         {/* Floating Tooltip */}
-                                        <div className="absolute bottom-full left-1/2 -translate-x-1/2 mb-2 w-48 bg-[#09090b] border border-slate-800 p-2.5 rounded-xl text-[10px] text-gray-400 font-normal leading-normal opacity-0 group-hover:opacity-100 pointer-events-none transition-opacity shadow-2xl z-20">
+                                        <div className="absolute bottom-full left-1/2 -translate-x-1/2 mb-1.5 w-48 bg-[#09090b] border border-slate-800 p-2 rounded-lg text-[9px] text-gray-400 font-normal leading-normal opacity-0 group-hover:opacity-100 pointer-events-none transition-opacity shadow-2xl z-20">
                                             {b.desc}
                                         </div>
                                     </div>
@@ -2939,14 +2955,14 @@ const PersonalMonthlyReport: React.FC<Props> = ({
 
                     {/* Driver Pending Extra Jobs / Trips Notice Banner */}
                     {isDriver && dailyMetrics.some(d => d.tripDetails.some((t: any) => isTripPending(t))) && (
-                        <div className="bg-amber-500/10 border border-amber-500/30 rounded-2xl p-4 flex items-center justify-between gap-3 shadow-lg animate-fade-in">
-                            <div className="flex items-center gap-3">
-                                <Clock className="text-amber-400 animate-spin shrink-0" size={20} />
+                        <div className="bg-amber-500/10 border border-amber-500/30 rounded-xl p-3 sm:p-3.5 flex items-center justify-between gap-3 shadow-md animate-fade-in">
+                            <div className="flex items-center gap-2.5">
+                                <Clock className="text-amber-400 animate-spin shrink-0" size={18} />
                                 <div>
-                                    <div className="text-sm font-bold text-amber-300">
+                                    <div className="text-xs sm:text-sm font-bold text-amber-300">
                                         {isAdminOrHR ? "发现待审核的额外任务 / 预修改申请" : "您有待审核的额外任务 / 预修改申请"}
                                     </div>
-                                    <div className="text-xs text-amber-400/80 mt-0.5">
+                                    <div className="text-[11px] text-amber-400/80 mt-0.5">
                                         {isAdminOrHR 
                                             ? "下方行程标有 ⏳ [待审核] 标签。点击该行程即可直接进行审核、修改金额并批准。" 
                                             : "额外任务或预修改已提交，等待 Admin/Manager 审核确认后将直接计入当月薪资。"}
@@ -2956,86 +2972,81 @@ const PersonalMonthlyReport: React.FC<Props> = ({
                         </div>
                     )}
 
-                    {/* Top Row: Metrics Overview / Ringkasan Metrik */}
-                    <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 xl:grid-cols-6 gap-4">
+                    {/* Top Row: Metrics Overview / Ringkasan Metrik (Compact High-Density Cards) */}
+                    <div className="grid grid-cols-2 md:grid-cols-3 xl:grid-cols-6 gap-2.5 sm:gap-3">
                         {/* Attendance Card */}
-                        <div className="bg-gradient-to-br from-[#0d0d12] to-black border border-white/5 rounded-3xl p-5 shadow-2xl relative overflow-hidden group hover:border-emerald-500/30 transition-all duration-300">
-                            <div className="absolute -right-4 -top-4 w-24 h-24 bg-emerald-500/10 rounded-full blur-2xl group-hover:bg-emerald-500/20 transition-all"></div>
+                        <div className="bg-gradient-to-br from-[#0d0d12] to-black border border-white/5 rounded-xl p-3 sm:p-3.5 shadow-md relative overflow-hidden group hover:border-emerald-500/30 transition-all duration-300">
+                            <div className="absolute -right-3 -top-3 w-16 h-16 bg-emerald-500/10 rounded-full blur-xl group-hover:bg-emerald-500/20 transition-all"></div>
                             <div className="flex items-start justify-between">
                                 <div>
-                                    <p className="text-[10px] text-emerald-400 uppercase tracking-widest font-black mb-1">Kehadiran / Attendance</p>
-                                    <h3 className="text-3xl font-black text-white">{presentDays} <span className="text-xs font-normal text-gray-500">hari / days</span></h3>
-                                    <p className="text-[10px] text-emerald-400/90 font-mono mt-1.5 font-bold">{totalHoursWorked.toFixed(1)} hrs total ({otHours.toFixed(1)}h OT)</p>
-                                    <p className="text-[10px] text-gray-400 mt-1">{leaveDays} Cuti diluluskan / Approved</p>
+                                    <p className="text-[10px] text-emerald-400 uppercase tracking-wider font-bold mb-0.5">Kehadiran / Attendance</p>
+                                    <h3 className="text-xl sm:text-2xl font-black text-white font-mono">{presentDays} <span className="text-[10px] font-normal text-gray-400">hari / days</span></h3>
+                                    <p className="text-[10px] text-emerald-400/90 font-mono mt-1 font-bold">{totalHoursWorked.toFixed(1)}h ({otHours.toFixed(1)}h OT)</p>
+                                    <p className="text-[10px] text-gray-400 mt-0.5">{leaveDays} Cuti diluluskan</p>
                                 </div>
-                                <div className="p-3 bg-emerald-500/10 rounded-2xl text-emerald-400 border border-emerald-500/20">
-                                    <CalendarDays size={20} />
+                                <div className="p-2 bg-emerald-500/10 rounded-xl text-emerald-400 border border-emerald-500/20 shrink-0">
+                                    <CalendarDays size={16} />
                                 </div>
                             </div>
                         </div>
 
                         {/* Cuti & Cuti Umum (Holidays & Leaves) Card */}
-                        <div className="bg-gradient-to-br from-[#0d0d12] to-black border border-white/5 rounded-3xl p-5 shadow-2xl relative overflow-hidden group hover:border-indigo-500/30 transition-all duration-300">
-                            <div className="absolute -right-4 -top-4 w-24 h-24 bg-indigo-500/10 rounded-full blur-2xl group-hover:bg-indigo-500/20 transition-all"></div>
+                        <div className="bg-gradient-to-br from-[#0d0d12] to-black border border-white/5 rounded-xl p-3 sm:p-3.5 shadow-md relative overflow-hidden group hover:border-indigo-500/30 transition-all duration-300">
+                            <div className="absolute -right-3 -top-3 w-16 h-16 bg-indigo-500/10 rounded-full blur-xl group-hover:bg-indigo-500/20 transition-all"></div>
                             <div className="flex items-start justify-between">
-                                <div>
-                                    <p className="text-[10px] text-indigo-400 uppercase tracking-widest font-black mb-1">Cuti & Cuti Umum / Holidays</p>
-                                    <h3 className="text-3xl font-black text-white">
-                                        {leaveDays + publicHolidayDays} <span className="text-xs font-normal text-gray-500">hari / days</span>
+                                <div className="min-w-0 flex-1">
+                                    <p className="text-[10px] text-indigo-400 uppercase tracking-wider font-bold mb-0.5">Cuti & PH / Holidays</p>
+                                    <h3 className="text-xl sm:text-2xl font-black text-white font-mono">
+                                        {leaveDays + publicHolidayDays} <span className="text-[10px] font-normal text-gray-400">hari</span>
                                     </h3>
-                                    <p className="text-[10px] text-indigo-300/90 font-mono mt-1.5 font-bold">
+                                    <p className="text-[10px] text-indigo-300/90 font-mono mt-1 font-bold">
                                         🇲🇾 {publicHolidayDays} Cuti Umum {publicHolidayWorkedDays > 0 ? `(${publicHolidayWorkedDays} Bekerja)` : ''}
                                     </p>
-                                    {/* Prominent Annual Leave Callout */}
-                                    <div className="mt-2 py-1 px-2.5 bg-amber-500/15 border border-amber-500/30 rounded-xl flex items-center justify-between gap-2 shadow-sm">
-                                        <span className="text-[11px] font-bold text-amber-300 flex items-center gap-1.5 truncate">
+                                    {/* Compact Annual Leave Callout */}
+                                    <div className="mt-1.5 py-0.5 px-2 bg-amber-500/15 border border-amber-500/30 rounded-lg flex items-center justify-between gap-1 shadow-sm">
+                                        <span className="text-[10px] font-bold text-amber-300 flex items-center gap-1 truncate">
                                             <span>🏖️</span>
-                                            <span>年假 / Annual Leave (AL)</span>
+                                            <span>年假 (AL)</span>
                                         </span>
-                                        <span className="font-mono text-xs font-black text-amber-200 bg-amber-500/30 px-2 py-0.5 rounded-lg border border-amber-400/40 shrink-0">
-                                            {annualLeaveDays} <span className="text-[9px] font-normal text-amber-300/80">hari</span>
+                                        <span className="font-mono text-xs font-black text-amber-200 bg-amber-500/30 px-1.5 py-0.5 rounded border border-amber-400/40 shrink-0">
+                                            {annualLeaveDays} <span className="text-[8px] font-normal text-amber-300/80">hari</span>
                                         </span>
                                     </div>
-                                    <div className="flex flex-wrap gap-1 mt-1.5 text-[9px]">
-                                        {mcLeaveDays > 0 && <span className="bg-blue-500/15 text-blue-300 px-1.5 py-0.5 rounded border border-blue-500/30 font-medium">MC: {mcLeaveDays}d</span>}
-                                        {unpaidLeaveDays > 0 && <span className="bg-rose-500/15 text-rose-300 px-1.5 py-0.5 rounded border border-rose-500/30 font-medium">UPL: {unpaidLeaveDays}d</span>}
-                                        {emergencyLeaveDays > 0 && <span className="bg-orange-500/15 text-orange-300 px-1.5 py-0.5 rounded border border-orange-500/30 font-medium">EL: {emergencyLeaveDays}d</span>}
-                                        {otherLeaveDays > 0 && <span className="bg-gray-500/15 text-gray-300 px-1.5 py-0.5 rounded border border-gray-500/30 font-medium">Cuti: {otherLeaveDays}d</span>}
+                                    <div className="flex flex-wrap gap-1 mt-1 text-[9px]">
+                                        {mcLeaveDays > 0 && <span className="bg-blue-500/15 text-blue-300 px-1 py-0.5 rounded border border-blue-500/30 font-medium">MC: {mcLeaveDays}d</span>}
+                                        {unpaidLeaveDays > 0 && <span className="bg-rose-500/15 text-rose-300 px-1 py-0.5 rounded border border-rose-500/30 font-medium">UPL: {unpaidLeaveDays}d</span>}
+                                        {emergencyLeaveDays > 0 && <span className="bg-orange-500/15 text-orange-300 px-1 py-0.5 rounded border border-orange-500/30 font-medium">EL: {emergencyLeaveDays}d</span>}
                                         {pendingLeaveDays > 0 && (
-                                            <span className="bg-amber-500/20 text-amber-300 px-1.5 py-0.5 rounded border border-amber-500/40 animate-pulse font-bold">
-                                                ⏳ {pendingLeaveDays} Pending
+                                            <span className="bg-amber-500/20 text-amber-300 px-1 py-0.5 rounded border border-amber-500/40 animate-pulse font-bold">
+                                                ⏳ {pendingLeaveDays}
                                             </span>
-                                        )}
-                                        {leaveDays === 0 && pendingLeaveDays === 0 && (
-                                            <span className="text-gray-500 text-[10px]">Tiada Cuti / 0 Leaves</span>
                                         )}
                                     </div>
                                 </div>
-                                <div className="p-3 bg-indigo-500/10 rounded-2xl text-indigo-400 border border-indigo-500/20">
-                                    <Calendar size={20} />
+                                <div className="p-2 bg-indigo-500/10 rounded-xl text-indigo-400 border border-indigo-500/20 shrink-0 ml-1">
+                                    <Calendar size={16} />
                                 </div>
                             </div>
                         </div>
 
-
                         {/* Production / Deliveries Card */}
-                        <div className={`bg-gradient-to-br from-[#0d0d12] to-black border border-white/5 rounded-3xl p-5 shadow-2xl relative overflow-hidden group transition-all duration-300 ${isDriver ? 'hover:border-amber-500/30' : 'hover:border-blue-500/30'}`}>
-                            <div className={`absolute -right-4 -top-4 w-24 h-24 rounded-full blur-2xl transition-all ${isDriver ? 'bg-amber-500/10 group-hover:bg-amber-500/20' : 'bg-blue-500/10 group-hover:bg-blue-500/20'}`}></div>
+                        <div className={`bg-gradient-to-br from-[#0d0d12] to-black border border-white/5 rounded-xl p-3 sm:p-3.5 shadow-md relative overflow-hidden group transition-all duration-300 ${isDriver ? 'hover:border-amber-500/30' : 'hover:border-blue-500/30'}`}>
+                            <div className={`absolute -right-3 -top-3 w-16 h-16 rounded-full blur-xl transition-all ${isDriver ? 'bg-amber-500/10 group-hover:bg-amber-500/20' : 'bg-blue-500/10 group-hover:bg-blue-500/20'}`}></div>
                             <div className="flex items-start justify-between">
                                 <div>
-                                    <p className={`text-[10px] uppercase tracking-widest font-black mb-1 ${isDriver ? 'text-amber-400' : 'text-blue-400'}`}>
-                                        {isDriver ? 'Penghantaran / Deliveries' : 'Jumlah Output / Total Output'}
+                                    <p className={`text-[10px] uppercase tracking-wider font-bold mb-0.5 ${isDriver ? 'text-amber-400' : 'text-blue-400'}`}>
+                                        {isDriver ? 'Penghantaran / Deliveries' : 'Jumlah Output'}
                                     </p>
-                                    <h3 className="text-3xl font-black text-white">{isDriver ? totalTrips : totalOutput.toLocaleString()}</h3>
+                                    <h3 className="text-xl sm:text-2xl font-black text-white font-mono">{isDriver ? totalTrips : totalOutput.toLocaleString()}</h3>
                                     <p className="text-[10px] text-gray-400 mt-1">
                                         {isDriver 
-                                            ? `${completedTrips} Selesai / Completed ${pendingScanTrips > 0 ? `(${pendingScanTrips} 未扫码 / Pending Scan)` : ''}`
-                                            : `Unit Dihasilkan / Produced`}
+                                            ? `${completedTrips} Selesai ${pendingScanTrips > 0 ? `(${pendingScanTrips} 未扫码)` : ''}`
+                                            : `Unit Dihasilkan`}
                                     </p>
                                     {isDriver && (
-                                        <div className="mt-2.5 flex items-center gap-1.5 text-[11px] text-amber-300 font-bold bg-amber-500/10 px-2.5 py-1 rounded-xl border border-amber-500/20 w-fit">
-                                            <Truck size={13} className="text-amber-400 shrink-0" />
-                                            <span className="text-gray-400 text-[10px]">No. Lori:</span>
+                                        <div className="mt-1.5 flex items-center gap-1 text-[10px] text-amber-300 font-bold bg-amber-500/10 px-2 py-0.5 rounded-lg border border-amber-500/20 w-fit">
+                                            <Truck size={11} className="text-amber-400 shrink-0" />
+                                            <span className="text-gray-400 text-[9px]">Lori:</span>
                                             <span className="font-mono font-black text-amber-200 inline-flex items-center gap-1">
                                                 <span>{driverLorryPlate.replace('✓', '').trim()}</span>
                                                 {isVpc9821(driverLorryPlate) && (
@@ -3048,27 +3059,27 @@ const PersonalMonthlyReport: React.FC<Props> = ({
                                         <p className="text-[10px] text-blue-400 font-mono mt-1 font-bold">Yield: {yieldRate}% ({totalRejects} Reject)</p>
                                     )}
                                 </div>
-                                <div className={`p-3 rounded-2xl border ${isDriver ? 'bg-amber-500/10 text-amber-500 border-amber-500/20' : 'bg-blue-500/10 text-blue-400 border-blue-500/20'}`}>
-                                    {isDriver ? <Truck size={20} /> : <Award size={20} />}
+                                <div className={`p-2 rounded-xl border shrink-0 ${isDriver ? 'bg-amber-500/10 text-amber-500 border-amber-500/20' : 'bg-blue-500/10 text-blue-400 border-blue-500/20'}`}>
+                                    {isDriver ? <Truck size={16} /> : <Award size={16} />}
                                 </div>
                             </div>
                         </div>
 
                         {/* Alarms / Zones Card */}
-                        <div className={`bg-gradient-to-br from-[#0d0d12] to-black border border-white/5 rounded-3xl p-5 shadow-2xl relative overflow-hidden group transition-all duration-300 ${isDriver ? 'hover:border-cyan-500/30' : 'hover:border-red-500/30'}`}>
-                            <div className={`absolute -right-4 -top-4 w-24 h-24 rounded-full blur-2xl transition-all ${isDriver ? 'bg-cyan-500/10 group-hover:bg-cyan-500/20' : 'bg-red-500/10 group-hover:bg-red-500/20'}`}></div>
+                        <div className={`bg-gradient-to-br from-[#0d0d12] to-black border border-white/5 rounded-xl p-3 sm:p-3.5 shadow-md relative overflow-hidden group transition-all duration-300 ${isDriver ? 'hover:border-cyan-500/30' : 'hover:border-red-500/30'}`}>
+                            <div className={`absolute -right-3 -top-3 w-16 h-16 rounded-full blur-xl transition-all ${isDriver ? 'bg-cyan-500/10 group-hover:bg-cyan-500/20' : 'bg-red-500/10 group-hover:bg-red-500/20'}`}></div>
                             <div className="flex items-start justify-between">
                                 <div>
-                                    <p className={`text-[10px] uppercase tracking-widest font-black mb-1 ${isDriver ? 'text-cyan-400' : 'text-red-400'}`}>
-                                        {isDriver ? 'Destinasi & Performance' : 'Anomali & Defect'}
+                                    <p className={`text-[10px] uppercase tracking-wider font-bold mb-0.5 ${isDriver ? 'text-cyan-400' : 'text-red-400'}`}>
+                                        {isDriver ? 'Destinasi & Prestasi' : 'Anomali & Defect'}
                                     </p>
-                                    <h3 className="text-3xl font-black text-white">
+                                    <h3 className="text-xl sm:text-2xl font-black text-white font-mono">
                                         {isDriver ? Array.from(new Set(deliveries.map(d => d.zone).filter(Boolean))).length : (totalAlarms + totalRejects)}
                                     </h3>
-                                    <p className="text-[10px] text-gray-400 mt-1">{isDriver ? `On-time Delivery: ${onTimeRate}%` : `Alarms: ${totalAlarms} | Defect: ${totalRejects}`}</p>
+                                    <p className="text-[10px] text-gray-400 mt-1">{isDriver ? `On-time: ${onTimeRate}%` : `Alarms: ${totalAlarms} | Defect: ${totalRejects}`}</p>
                                 </div>
-                                <div className={`p-3 rounded-2xl border ${isDriver ? 'bg-cyan-500/10 text-cyan-400 border-cyan-500/20' : 'bg-red-500/10 text-red-500 border-red-500/20'}`}>
-                                    {isDriver ? <Truck size={20} /> : <AlertTriangle size={20} />}
+                                <div className={`p-2 rounded-xl border shrink-0 ${isDriver ? 'bg-cyan-500/10 text-cyan-400 border-cyan-500/20' : 'bg-red-500/10 text-red-500 border-red-500/20'}`}>
+                                    {isDriver ? <Truck size={16} /> : <AlertTriangle size={16} />}
                                 </div>
                             </div>
                         </div>
@@ -3079,32 +3090,29 @@ const PersonalMonthlyReport: React.FC<Props> = ({
                                 setAllMonthPhotoFilter('all');
                                 setIsAllMonthPhotosModalOpen(true);
                             }}
-                            className="bg-gradient-to-br from-[#0d0d12] to-black border border-white/5 rounded-3xl p-5 shadow-2xl relative overflow-hidden group hover:border-violet-500/40 hover:shadow-violet-500/10 transition-all duration-300 cursor-pointer"
-                            title="Klik untuk melihat semua gambar kerja, rekod odometer & DO sebulan / Click to view all photos"
+                            className="bg-gradient-to-br from-[#0d0d12] to-black border border-white/5 rounded-xl p-3 sm:p-3.5 shadow-md relative overflow-hidden group hover:border-violet-500/40 transition-all duration-300 cursor-pointer"
+                            title="Klik untuk melihat semua gambar kerja sebulan / Click to view photos"
                         >
-                            <div className="absolute -right-4 -top-4 w-24 h-24 bg-violet-500/10 rounded-full blur-2xl group-hover:bg-violet-500/20 transition-all"></div>
+                            <div className="absolute -right-3 -top-3 w-16 h-16 bg-violet-500/10 rounded-full blur-xl group-hover:bg-violet-500/20 transition-all"></div>
                             <div className="flex items-start justify-between">
                                 <div>
-                                    <p className="text-[10px] text-violet-400 uppercase tracking-widest font-black mb-1 flex items-center gap-1.5">
-                                        Rekod Bergambar / Photo Logs
-                                        <span className="text-[8px] bg-violet-500/20 text-violet-300 px-1.5 py-0.5 rounded border border-violet-500/30">
-                                            Lihat Semua 🔍
+                                    <p className="text-[10px] text-violet-400 uppercase tracking-wider font-bold mb-0.5 flex items-center gap-1">
+                                        <span>Gambar / Photos</span>
+                                        <span className="text-[8px] bg-violet-500/20 text-violet-300 px-1 py-0.5 rounded">
+                                            🔍
                                         </span>
                                     </p>
-                                    <h3 className="text-3xl font-black text-white">{totalPhotos} <span className="text-xs font-normal text-gray-500">fail</span></h3>
-                                    <p className="text-[10px] text-gray-400 mt-1 flex items-center gap-1.5">
+                                    <h3 className="text-xl sm:text-2xl font-black text-white font-mono">{totalPhotos} <span className="text-[10px] font-normal text-gray-400">fail</span></h3>
+                                    <p className="text-[10px] text-gray-400 mt-1 flex items-center gap-1">
                                         {riskPhotoCount > 0 ? (
-                                            <span className="text-red-400 font-bold">⚠️ {riskPhotoCount} Risiko / Risk</span>
+                                            <span className="text-red-400 font-bold">⚠️ {riskPhotoCount} Risiko</span>
                                         ) : (
-                                            <span>Odometer & Bukti Kerja</span>
-                                        )}
-                                        {totalPhotos > 0 && (
-                                            <span className="text-violet-400 font-semibold group-hover:underline">➔ Galeri Penuh</span>
+                                            <span>Odo & Kerja</span>
                                         )}
                                     </p>
                                 </div>
-                                <div className="p-3 bg-violet-500/10 rounded-2xl text-violet-400 border border-violet-500/20 group-hover:scale-110 group-hover:border-violet-500/40 transition-all">
-                                    <Camera size={20} />
+                                <div className="p-2 bg-violet-500/10 rounded-xl text-violet-400 border border-violet-500/20 shrink-0 group-hover:scale-105 transition-all">
+                                    <Camera size={16} />
                                 </div>
                             </div>
                         </div>
@@ -3112,310 +3120,324 @@ const PersonalMonthlyReport: React.FC<Props> = ({
                         {/* Payroll Estimate Card */}
                         <div 
                             onClick={() => setShowPayrollModal(true)}
-                            className="bg-gradient-to-br from-green-950/30 to-black border border-green-500/20 rounded-3xl p-5 shadow-2xl relative overflow-hidden group hover:border-green-500/40 transition-all duration-300 cursor-pointer"
+                            className="bg-gradient-to-br from-green-950/20 to-black border border-green-500/20 rounded-xl p-3 sm:p-3.5 shadow-md relative overflow-hidden group hover:border-green-500/40 transition-all duration-300 cursor-pointer"
                         >
-                            <div className="absolute -left-4 -bottom-4 w-32 h-32 bg-green-500/10 rounded-full blur-3xl"></div>
+                            <div className="absolute -left-3 -bottom-3 w-16 h-16 bg-green-500/10 rounded-full blur-xl"></div>
                             <div className="flex items-start justify-between relative z-10">
-                                <div>
-                                    <p className="text-[10px] text-green-400 uppercase tracking-widest font-black mb-1 flex items-center gap-1">
-                                        Gaji / Wallet <span className="text-[8px] bg-green-500/20 px-1 py-0.5 rounded border border-green-500/30 text-green-300">Detail 🔍</span>
+                                <div className="min-w-0 flex-1">
+                                    <p className="text-[10px] text-green-400 uppercase tracking-wider font-bold mb-0.5 flex items-center gap-1">
+                                        <span>Gaji / Wallet</span>
+                                        <span className="text-[8px] bg-green-500/20 px-1 py-0.5 rounded text-green-300">🔍</span>
                                     </p>
                                     {payroll ? (
                                         <>
-                                            <h3 className="text-2xl font-black text-green-300">RM {Number(payroll.net_salary).toLocaleString('en-MY', { minimumFractionDigits: 2 })}</h3>
+                                            <h3 className="text-lg sm:text-xl font-black text-green-300 font-mono">RM {Number(payroll.net_salary).toLocaleString('en-MY', { minimumFractionDigits: 2 })}</h3>
                                             {totalClaimsAmount > 0 && (
-                                                <p className="text-[9px] text-teal-400 mt-1 font-bold">+ Claims: RM {totalClaimsAmount.toFixed(2)}</p>
+                                                <p className="text-[9px] text-teal-400 mt-0.5 font-bold">+ Claim: RM{totalClaimsAmount.toFixed(2)}</p>
                                             )}
-                                            <p className="text-[9px] text-green-500/80 mt-1 uppercase font-bold tracking-wider">Telah Disahkan / Confirmed</p>
+                                            <p className="text-[9px] text-green-500/80 mt-0.5 uppercase font-bold tracking-wider">Disahkan / Confirmed</p>
                                         </>
                                     ) : isDriver ? (
                                         <>
-                                            <h3 className="text-2xl font-black text-emerald-400">
+                                            <h3 className="text-lg sm:text-xl font-black text-emerald-400 font-mono">
                                                 RM {(totalTripEarnings + totalClaimsAmount).toLocaleString('en-MY', { minimumFractionDigits: 2 })}
                                             </h3>
-                                            <div className="flex flex-wrap items-center gap-1.5 mt-1">
-                                                <span className="text-[9px] text-emerald-400 font-bold bg-emerald-500/10 px-1.5 py-0.5 rounded border border-emerald-500/20">
-                                                    Anggaran Trip MTD
-                                                </span>
+                                            <div className="flex flex-wrap items-center gap-1 mt-0.5">
                                                 {pendingTripEarnings > 0 && (
-                                                    <span className="text-[9px] text-amber-400 font-bold bg-amber-500/10 px-1.5 py-0.5 rounded border border-amber-500/20">
-                                                        +RM {pendingTripEarnings.toFixed(2)} ⏳
+                                                    <span className="text-[9px] text-amber-400 font-bold bg-amber-500/10 px-1 py-0.5 rounded border border-amber-500/20">
+                                                        +RM{pendingTripEarnings.toFixed(0)} ⏳
                                                     </span>
                                                 )}
                                                 {totalClaimsAmount > 0 && (
                                                     <span className="text-[9px] text-teal-400 font-bold">
-                                                        + Claims: RM {totalClaimsAmount.toFixed(2)}
+                                                        + RM{totalClaimsAmount.toFixed(0)} Claim
                                                     </span>
                                                 )}
                                             </div>
-                                            <p className="text-[9px] text-gray-400 mt-1 uppercase">Belum Tutup Akaun HR / Live MTD Earnings 🔍</p>
+                                            <p className="text-[9px] text-gray-400 mt-0.5 uppercase">Anggaran MTD 🔍</p>
                                         </>
                                     ) : (
                                         <>
-                                            <h3 className="text-lg font-black text-gray-400 italic mt-1">RM {totalClaimsAmount > 0 ? totalClaimsAmount.toFixed(2) : '0.00'}</h3>
+                                            <h3 className="text-base font-black text-gray-400 italic mt-0.5 font-mono">RM {totalClaimsAmount > 0 ? totalClaimsAmount.toFixed(2) : '0.00'}</h3>
                                             {totalClaimsAmount > 0 && (
-                                                <p className="text-[9px] text-teal-400 font-bold mt-1">+ Claims: RM {totalClaimsAmount.toFixed(2)}</p>
+                                                <p className="text-[9px] text-teal-400 font-bold mt-0.5">+ Claims: RM {totalClaimsAmount.toFixed(2)}</p>
                                             )}
-                                            <p className="text-[9px] text-gray-500 mt-1 uppercase">Klik perincian / Breakdown 🔍</p>
+                                            <p className="text-[9px] text-gray-500 mt-0.5 uppercase">Perincian 🔍</p>
                                         </>
                                     )}
                                 </div>
-                                <div className="p-3 bg-green-500/10 rounded-2xl text-green-400 border border-green-500/30 group-hover:scale-110 transition-transform">
-                                    <DollarSign size={20} />
+                                <div className="p-2 bg-green-500/10 rounded-xl text-green-400 border border-green-500/30 group-hover:scale-105 transition-transform shrink-0 ml-1">
+                                    <DollarSign size={16} />
                                 </div>
                             </div>
                         </div>
                     </div>
 
                     {/* Middle Section: Chart & Calendar Grid / Graf Trend & Grid Bulanan */}
-                    <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
-                        {/* Interactive Trend Chart Card (SVG) */}
-                        <div className="lg:col-span-2 bg-[#0d0d12]/80 backdrop-blur-md border border-white/5 rounded-3xl p-6 shadow-2xl relative overflow-hidden flex flex-col">
-                            <div className="absolute top-0 right-0 w-64 h-64 bg-indigo-500/5 rounded-full blur-3xl -z-10"></div>
-                            <div className="flex items-center justify-between mb-4">
-                                <div className="flex items-center gap-3">
-                                    <div className="p-2 bg-blue-500/20 text-blue-400 rounded-xl border border-blue-500/20">
-                                        <Activity size={18} />
+                    <div className="flex items-center justify-between pt-1">
+                        <div className="text-xs font-bold text-gray-400 flex items-center gap-2">
+                            <Activity size={14} className="text-blue-400" />
+                            <span>Visual Trends & Calendar / 趋势图与日历</span>
+                        </div>
+                        <button
+                            type="button"
+                            onClick={() => setShowCharts(prev => !prev)}
+                            className="text-xs text-gray-400 hover:text-white flex items-center gap-1.5 px-2.5 py-1 bg-white/5 hover:bg-white/10 rounded-lg border border-white/10 transition-colors cursor-pointer"
+                        >
+                            <span>{showCharts ? '收起图表 / Hide' : '展开图表 / Show'}</span>
+                            {showCharts ? <ChevronUp size={14} /> : <ChevronDown size={14} />}
+                        </button>
+                    </div>
+
+                    {showCharts && (
+                        <div className="grid grid-cols-1 lg:grid-cols-3 gap-3 sm:gap-3.5">
+                            {/* Interactive Trend Chart Card (SVG) */}
+                            <div className="lg:col-span-2 bg-[#0d0d12]/80 backdrop-blur-md border border-white/5 rounded-2xl p-3.5 sm:p-4 shadow-md relative overflow-hidden flex flex-col">
+                                <div className="absolute top-0 right-0 w-48 h-48 bg-indigo-500/5 rounded-full blur-2xl -z-10"></div>
+                                <div className="flex items-center justify-between mb-2">
+                                    <div className="flex items-center gap-2">
+                                        <div className="p-1.5 bg-blue-500/20 text-blue-400 rounded-lg border border-blue-500/20">
+                                            <Activity size={15} />
+                                        </div>
+                                        <div>
+                                            <h2 className="text-sm font-black text-white">
+                                                {isDriver ? 'Analisis Pendapatan Harian / Daily Trip Earnings Trend' : 'Carta Output Harian / Daily Output Trend'}
+                                            </h2>
+                                            <p className="text-[9px] uppercase font-bold tracking-wider text-gray-500">
+                                                {isDriver ? 'Carta Pendapatan Trip / Trip Earnings' : 'Carta Output Kerja / Work Output'}
+                                            </p>
+                                        </div>
+                                    </div>
+                                </div>
+
+                                {/* SVG Render (Compact) */}
+                                <div className="w-full flex-1 min-h-[110px] flex items-center">
+                                    {(() => {
+                                        const chartData = dailyMetrics.map(d => ({
+                                            day: d.dayNum,
+                                            val: isDriver ? d.tripEarnings : d.outputQty
+                                        }));
+                                        const maxChartVal = Math.max(...chartData.map(c => c.val), 10);
+
+                                        return (
+                                            <div className="w-full overflow-hidden">
+                                                <svg viewBox="0 0 800 120" className="w-full overflow-visible max-h-[125px]">
+                                                    <defs>
+                                                        <linearGradient id="chartGlow" x1="0" y1="0" x2="0" y2="1">
+                                                            <stop offset="0%" stopColor={isDriver ? '#f59e0b' : '#3b82f6'} stopOpacity="0.25"/>
+                                                            <stop offset="100%" stopColor={isDriver ? '#f59e0b' : '#3b82f6'} stopOpacity="0.00"/>
+                                                        </linearGradient>
+                                                    </defs>
+
+                                                    {/* Gridlines */}
+                                                    {[0, 0.5, 1].map((ratio, i) => {
+                                                        const y = 15 + ratio * 80;
+                                                        const labelVal = maxChartVal - ratio * maxChartVal;
+                                                        return (
+                                                            <g key={i} className="opacity-20">
+                                                                <line x1="50" y1={y} x2="775" y2={y} stroke="#fff" strokeDasharray="3 3" strokeWidth="0.5" />
+                                                                <text x="10" y={y + 3} fill="#fff" className="text-[9px] font-mono font-bold">{isDriver ? 'RM' : ''}{Math.round(labelVal)}</text>
+                                                            </g>
+                                                        );
+                                                    })}
+
+                                                    {/* Path Drawing */}
+                                                    {(() => {
+                                                        const points = chartData.map((c, idx) => {
+                                                            const x = 50 + (idx / Math.max(chartData.length - 1, 1)) * 725;
+                                                            const y = 95 - (c.val / maxChartVal) * 80;
+                                                            return { x, y, day: c.day, val: c.val };
+                                                        });
+
+                                                        const pathD = points.map((p, i) => `${i === 0 ? 'M' : 'L'} ${p.x} ${p.y}`).join(' ');
+                                                        const areaD = `${pathD} L ${points[points.length - 1].x} 95 L 50 95 Z`;
+
+                                                        return (
+                                                            <>
+                                                                {/* Area Fill */}
+                                                                <path d={areaD} fill="url(#chartGlow)" />
+
+                                                                {/* Line */}
+                                                                <path d={pathD} fill="none" stroke={isDriver ? '#f59e0b' : '#3b82f6'} strokeWidth="2" className="drop-shadow-[0_0_6px_rgba(59,130,246,0.5)]" />
+
+                                                                {/* Interactive/Visual Dots */}
+                                                                {points.map((p, idx) => (
+                                                                    <g key={idx} className="group/dot cursor-pointer">
+                                                                        <circle cx={p.x} cy={p.y} r="2.5" fill="#fff" stroke={isDriver ? '#f59e0b' : '#3b82f6'} strokeWidth="1.5" className="transition-all duration-300 transform origin-center hover:scale-[2]" />
+                                                                        <circle cx={p.x} cy={p.y} r="7" fill={isDriver ? '#f59e0b' : '#3b82f6'} className="opacity-0 hover:opacity-20 transition-opacity" />
+                                                                        <title>{`Hari / Day ${p.day}: ${isDriver ? 'RM ' : ''}${p.val.toLocaleString()}`}</title>
+                                                                    </g>
+                                                                ))}
+                                                            </>
+                                                        );
+                                                    })()}
+
+                                                    {/* X-axis Labels */}
+                                                    {chartData.map((c, idx) => {
+                                                        if (idx % 4 !== 0 && idx !== chartData.length - 1) return null;
+                                                        const x = 50 + (idx / Math.max(chartData.length - 1, 1)) * 725;
+                                                        return (
+                                                            <text key={idx} x={x} y="114" fill="#fff" className="text-[8px] font-mono font-bold opacity-30 text-center" textAnchor="middle">
+                                                                {c.day}
+                                                            </text>
+                                                        );
+                                                    })}
+                                                </svg>
+                                            </div>
+                                        );
+                                    })()}
+                                </div>
+                            </div>
+
+                            {/* GitHub-Style Attendance Grid / Grid Visual Kehadiran (Compact) */}
+                            <div className="bg-[#0d0d12]/80 backdrop-blur-md border border-white/5 rounded-2xl p-3.5 sm:p-4 shadow-md relative overflow-hidden flex flex-col justify-between">
+                                <div className="absolute top-0 right-0 w-48 h-48 bg-indigo-500/5 rounded-full blur-2xl -z-10"></div>
+                                <div className="flex items-center gap-2 mb-2">
+                                    <div className="p-1.5 bg-emerald-500/20 text-emerald-400 rounded-lg border border-emerald-500/20">
+                                        <CalendarDays size={15} />
                                     </div>
                                     <div>
-                                        <h2 className="text-base font-black text-white">
-                                            {isDriver ? 'Analisis Pendapatan Harian / Daily Trip Earnings Trend' : 'Carta Output Harian / Daily Output Trend'}
-                                        </h2>
-                                        <p className="text-[10px] uppercase font-bold tracking-widest text-gray-500 mt-0.5">
-                                            {isDriver ? 'Carta Pendapatan Trip / Trip Earnings Chart' : 'Carta Output Kerja / Work Output Chart'}
-                                        </p>
+                                        <h2 className="text-sm font-black text-white">Visual Kehadiran / Calendar Grid</h2>
+                                        <p className="text-[9px] uppercase font-bold tracking-wider text-gray-500">Status Harian / Daily</p>
                                     </div>
                                 </div>
-                            </div>
 
-                            {/* SVG Render */}
-                            <div className="w-full flex-1 min-h-[180px] flex items-center">
-                                {(() => {
-                                    const chartData = dailyMetrics.map(d => ({
-                                        day: d.dayNum,
-                                        val: isDriver ? d.tripEarnings : d.outputQty
-                                    }));
-                                    const maxChartVal = Math.max(...chartData.map(c => c.val), 10);
+                                <div className="grid grid-cols-7 gap-1 max-w-sm mx-auto w-full">
+                                    {/* Weekday headers */}
+                                    {['Ahd', 'Isn', 'Sel', 'Rab', 'Kha', 'Jum', 'Sab'].map((d, i) => (
+                                        <div key={i} className="text-[8px] font-black uppercase text-slate-500 tracking-wider text-center">{d}</div>
+                                    ))}
 
-                                    return (
-                                        <div className="w-full overflow-hidden">
-                                            <svg viewBox="0 0 800 200" className="w-full overflow-visible">
-                                                <defs>
-                                                    <linearGradient id="chartGlow" x1="0" y1="0" x2="0" y2="1">
-                                                        <stop offset="0%" stopColor={isDriver ? '#f59e0b' : '#3b82f6'} stopOpacity="0.25"/>
-                                                        <stop offset="100%" stopColor={isDriver ? '#f59e0b' : '#3b82f6'} stopOpacity="0.00"/>
-                                                    </linearGradient>
-                                                </defs>
+                                    {/* Blanks */}
+                                    {(() => {
+                                        const firstDayStr = `${selectedYear}-${String(selectedMonth).padStart(2, '0')}-01`;
+                                        const firstDayIdx = new Date(firstDayStr.replace(/-/g, '/')).getDay();
+                                        return Array.from({ length: firstDayIdx }).map((_, i) => (
+                                            <div key={`blank-${i}`} className="aspect-square rounded-md bg-white/[0.01] border border-dashed border-white/[0.03]"></div>
+                                        ));
+                                    })()}
 
-                                                {/* Gridlines */}
-                                                {[0, 0.25, 0.5, 0.75, 1].map((ratio, i) => {
-                                                    const y = 20 + ratio * 140;
-                                                    const labelVal = maxChartVal - ratio * maxChartVal;
-                                                    return (
-                                                        <g key={i} className="opacity-20">
-                                                            <line x1="55" y1={y} x2="770" y2={y} stroke="#fff" strokeDasharray="4 4" strokeWidth="0.5" />
-                                                            <text x="10" y={y + 4} fill="#fff" className="text-[9px] font-mono font-bold">{isDriver ? 'RM' : ''}{Math.round(labelVal)}</text>
-                                                        </g>
-                                                    );
-                                                })}
-
-                                                {/* Path Drawing */}
-                                                {(() => {
-                                                    const points = chartData.map((c, idx) => {
-                                                        const x = 55 + (idx / (chartData.length - 1)) * 715;
-                                                        const y = 160 - (c.val / maxChartVal) * 140;
-                                                        return { x, y, day: c.day, val: c.val };
-                                                    });
-
-                                                    const pathD = points.map((p, i) => `${i === 0 ? 'M' : 'L'} ${p.x} ${p.y}`).join(' ');
-                                                    const areaD = `${pathD} L ${points[points.length - 1].x} 160 L 55 160 Z`;
-
-                                                    return (
-                                                        <>
-                                                            {/* Area Fill */}
-                                                            <path d={areaD} fill="url(#chartGlow)" />
-
-                                                            {/* Line */}
-                                                            <path d={pathD} fill="none" stroke={isDriver ? '#f59e0b' : '#3b82f6'} strokeWidth="2.5" className="drop-shadow-[0_0_8px_rgba(59,130,246,0.5)]" />
-
-                                                            {/* Interactive/Visual Dots */}
-                                                            {points.map((p, idx) => (
-                                                                <g key={idx} className="group/dot cursor-pointer">
-                                                                    <circle cx={p.x} cy={p.y} r="3.5" fill="#fff" stroke={isDriver ? '#f59e0b' : '#3b82f6'} strokeWidth="2" className="transition-all duration-300 transform origin-center hover:scale-[2]" />
-                                                                    <circle cx={p.x} cy={p.y} r="9" fill={isDriver ? '#f59e0b' : '#3b82f6'} className="opacity-0 hover:opacity-20 transition-opacity" />
-                                                                    <title>{`Hari / Day ${p.day}: ${isDriver ? 'RM ' : ''}${p.val.toLocaleString()}`}</title>
-                                                                </g>
-                                                            ))}
-                                                        </>
-                                                    );
-                                                })()}
-
-                                                {/* X-axis Labels */}
-                                                {chartData.map((c, idx) => {
-                                                    if (idx % 3 !== 0 && idx !== chartData.length - 1) return null;
-                                                    const x = 55 + (idx / (chartData.length - 1)) * 715;
-                                                    return (
-                                                        <text key={idx} x={x} y="185" fill="#fff" className="text-[9px] font-mono font-bold opacity-30 text-center" textAnchor="middle">
-                                                            {c.day}
-                                                        </text>
-                                                    );
-                                                })}
-                                            </svg>
-                                        </div>
-                                    );
-                                })()}
-                            </div>
-                        </div>
-
-                        {/* GitHub-Style Attendance Grid / Grid Visual Kehadiran */}
-                        <div className="bg-[#0d0d12]/80 backdrop-blur-md border border-white/5 rounded-3xl p-6 shadow-2xl relative overflow-hidden flex flex-col justify-between">
-                            <div className="absolute top-0 right-0 w-64 h-64 bg-indigo-500/5 rounded-full blur-3xl -z-10"></div>
-                            <div className="flex items-center gap-3 mb-4">
-                                <div className="p-2 bg-emerald-500/20 text-emerald-400 rounded-xl border border-emerald-500/20">
-                                    <CalendarDays size={18} />
-                                </div>
-                                <div>
-                                    <h2 className="text-base font-black text-white">Visual Kehadiran / Attendance Grid</h2>
-                                    <p className="text-[10px] uppercase font-bold tracking-widest text-gray-500 mt-0.5">Status Harian / Daily Status</p>
-                                </div>
-                            </div>
-
-                            <div className="grid grid-cols-7 gap-1.5 max-w-sm mx-auto w-full">
-                                {/* Weekday headers */}
-                                {['Ahd/Sun', 'Isn/Mon', 'Sel/Tue', 'Rab/Wed', 'Kha/Thu', 'Jum/Fri', 'Sab/Sat'].map((d, i) => (
-                                    <div key={i} className="text-[8px] font-black uppercase text-slate-500 tracking-wider text-center">{d.slice(0, 3)}</div>
-                                ))}
-
-                                {/* Blanks */}
-                                {(() => {
-                                    const firstDayStr = `${selectedYear}-${String(selectedMonth).padStart(2, '0')}-01`;
-                                    const firstDayIdx = new Date(firstDayStr.replace(/-/g, '/')).getDay();
-                                    return Array.from({ length: firstDayIdx }).map((_, i) => (
-                                        <div key={`blank-${i}`} className="aspect-square rounded-md bg-white/[0.01] border border-dashed border-white/[0.03]"></div>
-                                    ));
-                                })()}
-
-                                {/* Days */}
-                                {dailyMetrics.map((day) => {
-                                    let colorClass = "bg-white/[0.02] border-white/5 text-gray-500";
-                                    
-                                    if (day.leaveStatus === 'Approved') {
-                                        colorClass = "bg-amber-500/15 border-amber-500/40 text-amber-300 shadow-sm shadow-amber-950/20";
-                                    } else if (day.leaveStatus === 'Pending') {
-                                        colorClass = "bg-amber-500/5 border-amber-500/30 border-dashed text-amber-300 shadow-sm animate-pulse";
-                                    } else if (day.isPublicHoliday) {
-                                        if (day.hasAttendance || day.tripCount > 0) {
-                                            colorClass = "bg-indigo-500/20 border-indigo-500/50 text-indigo-300 shadow-sm shadow-indigo-950/30 ring-1 ring-emerald-500/40";
-                                        } else {
-                                            colorClass = "bg-indigo-500/15 border-indigo-500/35 text-indigo-300 shadow-sm shadow-indigo-950/20";
+                                    {/* Days */}
+                                    {dailyMetrics.map((day) => {
+                                        let colorClass = "bg-white/[0.02] border-white/5 text-gray-500";
+                                        
+                                        if (day.leaveStatus === 'Approved') {
+                                            colorClass = "bg-amber-500/15 border-amber-500/40 text-amber-300 shadow-sm shadow-amber-950/20";
+                                        } else if (day.leaveStatus === 'Pending') {
+                                            colorClass = "bg-amber-500/5 border-amber-500/30 border-dashed text-amber-300 shadow-sm animate-pulse";
+                                        } else if (day.isPublicHoliday) {
+                                            if (day.hasAttendance || day.tripCount > 0) {
+                                                colorClass = "bg-indigo-500/20 border-indigo-500/50 text-indigo-300 shadow-sm shadow-indigo-950/30 ring-1 ring-emerald-500/40";
+                                            } else {
+                                                colorClass = "bg-indigo-500/15 border-indigo-500/35 text-indigo-300 shadow-sm shadow-indigo-950/20";
+                                            }
+                                        } else if (day.hasAttendance) {
+                                            if (day.notes === 'System Auto-Logout') {
+                                                colorClass = "bg-rose-500/10 border-rose-500/35 text-rose-400 shadow-sm shadow-rose-950/20 border-dashed";
+                                            } else {
+                                                colorClass = "bg-emerald-500/10 border-emerald-500/35 text-emerald-400 shadow-sm shadow-emerald-950/20";
+                                            }
+                                        } else if (day.isWeekend) {
+                                            colorClass = "bg-white/[0.04] border-white/10 text-slate-500";
                                         }
-                                    } else if (day.hasAttendance) {
-                                        if (day.notes === 'System Auto-Logout') {
-                                            colorClass = "bg-rose-500/10 border-rose-500/35 text-rose-400 shadow-sm shadow-rose-950/20 border-dashed";
-                                        } else {
-                                            colorClass = "bg-emerald-500/10 border-emerald-500/35 text-emerald-400 shadow-sm shadow-emerald-950/20";
-                                        }
-                                    } else if (day.isWeekend) {
-                                        colorClass = "bg-white/[0.04] border-white/10 text-slate-500";
-                                    }
 
-                                    return (
-                                        <div 
-                                            key={day.dateStr} 
-                                            className={`aspect-square rounded-lg border flex flex-col items-center justify-center relative group cursor-pointer transition-all hover:scale-110 hover:z-10 ${colorClass}`}
-                                        >
-                                            <span className="text-[10px] font-black flex items-center justify-center gap-0.5">
-                                                {day.dayNum}
-                                                {day.isPublicHoliday && <span className="text-[7px] leading-none select-none">🇲🇾</span>}
-                                            </span>
-                                            
-                                            {/* Floating Tooltip */}
-                                            <div className="absolute bottom-full left-1/2 -translate-x-1/2 mb-2 w-56 bg-[#09090b] border border-slate-800 p-3 rounded-xl text-[10px] text-gray-400 opacity-0 group-hover:opacity-100 pointer-events-none transition-opacity shadow-2xl z-30 leading-relaxed font-sans">
-                                                <div className="font-bold text-white mb-1 flex items-center justify-between border-b border-white/5 pb-1">
-                                                    <span>{new Date(day.dateStr.replace(/-/g, '/')).toLocaleDateString('en-GB', { day: '2-digit', month: 'short', year: 'numeric' })}</span>
-                                                    <span className="text-[9px] text-gray-500 uppercase tracking-widest">{new Date(day.dateStr.replace(/-/g, '/')).toLocaleDateString('en-US', { weekday: 'short' })}</span>
-                                                </div>
+                                        return (
+                                            <div 
+                                                key={day.dateStr} 
+                                                className={`aspect-square rounded-md border flex flex-col items-center justify-center relative group cursor-pointer transition-all hover:scale-105 hover:z-10 ${colorClass}`}
+                                            >
+                                                <span className="text-[9px] font-black flex items-center justify-center gap-0.5">
+                                                    {day.dayNum}
+                                                    {day.isPublicHoliday && <span className="text-[7px] leading-none select-none">🇲🇾</span>}
+                                                </span>
                                                 
-                                                <div className="space-y-1 mt-2">
-                                                    {day.isPublicHoliday && (
-                                                        <div className="bg-indigo-500/15 border border-indigo-500/30 rounded px-1.5 py-0.5 text-indigo-200 text-[9px] font-bold flex items-center justify-between">
-                                                            <span>🇲🇾 {day.publicHoliday?.nameMs}</span>
-                                                            <span className="text-[8px] text-indigo-300">Cuti Umum</span>
-                                                        </div>
-                                                    )}
-                                                    {day.leaveStatus && (
-                                                        <div className={`px-1.5 py-0.5 rounded border text-[9px] font-bold flex items-center justify-between ${
-                                                            day.leaveStatus === 'Approved' ? 'bg-amber-500/15 border-amber-500/30 text-amber-300' : 'bg-amber-500/10 border-amber-500/20 border-dashed text-amber-200'
-                                                        }`}>
-                                                            <span>🏖️ {day.leaveType || 'Cuti'}</span>
-                                                            <span className="text-[8px] uppercase">{day.leaveStatus}</span>
-                                                        </div>
-                                                    )}
-                                                    <div className="flex justify-between">
-                                                        <span className="text-gray-500 font-bold uppercase text-[9px] tracking-wider">Status:</span>
-                                                        <span className={`font-bold uppercase text-[9px] ${
-                                                            day.isPublicHoliday ? 'text-indigo-400' :
-                                                            day.leaveStatus === 'Approved' ? 'text-amber-400' :
-                                                            day.leaveStatus === 'Pending' ? 'text-amber-300' :
-                                                            day.hasAttendance ? 'text-emerald-400' :
-                                                            day.isWeekend ? 'text-slate-500' : 'text-gray-500'
-                                                        }`}>
-                                                            {day.isPublicHoliday ? (day.hasAttendance || day.tripCount > 0 ? 'Kerja Cuti Umum' : 'Cuti Umum / PH') :
-                                                             day.leaveStatus === 'Approved' ? `Cuti (${day.leaveType || 'AL'})` :
-                                                             day.leaveStatus === 'Pending' ? 'Cuti Menunggu' :
-                                                             day.hasAttendance ? 'Hadir / Present' :
-                                                             day.isWeekend ? 'Weekend' : 'Rest'}
-                                                        </span>
+                                                {/* Floating Tooltip */}
+                                                <div className="absolute bottom-full left-1/2 -translate-x-1/2 mb-1.5 w-52 bg-[#09090b] border border-slate-800 p-2.5 rounded-xl text-[9px] text-gray-400 opacity-0 group-hover:opacity-100 pointer-events-none transition-opacity shadow-2xl z-30 leading-relaxed font-sans">
+                                                    <div className="font-bold text-white mb-1 flex items-center justify-between border-b border-white/5 pb-1">
+                                                        <span>{new Date(day.dateStr.replace(/-/g, '/')).toLocaleDateString('en-GB', { day: '2-digit', month: 'short', year: 'numeric' })}</span>
+                                                        <span className="text-[8px] text-gray-500 uppercase tracking-wider">{new Date(day.dateStr.replace(/-/g, '/')).toLocaleDateString('en-US', { weekday: 'short' })}</span>
                                                     </div>
-
-
-                                                    {day.hasAttendance && (
-                                                        <>
-                                                            <div className="flex justify-between">
-                                                                <span className="text-gray-500 font-bold uppercase text-[9px] tracking-wider">Masa / Time:</span>
-                                                                <span className="font-mono text-white text-[9px]">{day.shiftStart} → {day.shiftEnd || 'Aktif'}</span>
+                                                    
+                                                    <div className="space-y-1 mt-1.5">
+                                                        {day.isPublicHoliday && (
+                                                            <div className="bg-indigo-500/15 border border-indigo-500/30 rounded px-1.5 py-0.5 text-indigo-200 text-[8.5px] font-bold flex items-center justify-between">
+                                                                <span>🇲🇾 {day.publicHoliday?.nameMs}</span>
+                                                                <span className="text-[8px] text-indigo-300">Cuti Umum</span>
                                                             </div>
-                                                            {day.notes && (
-                                                                <div className="text-[8px] text-rose-400 font-bold bg-rose-950/20 px-1 py-0.5 rounded mt-0.5 border border-rose-500/10">
-                                                                    ⚠️ {day.notes === 'System Auto-Logout' ? 'Log Keluar Automatik' : day.notes}
-                                                                </div>
-                                                            )}
-                                                        </>
-                                                    )}
+                                                        )}
+                                                        {day.leaveStatus && (
+                                                            <div className={`px-1.5 py-0.5 rounded border text-[8.5px] font-bold flex items-center justify-between ${
+                                                                day.leaveStatus === 'Approved' ? 'bg-amber-500/15 border-amber-500/30 text-amber-300' : 'bg-amber-500/10 border-amber-500/20 border-dashed text-amber-200'
+                                                            }`}>
+                                                                <span>🏖️ {day.leaveType || 'Cuti'}</span>
+                                                                <span className="text-[8px] uppercase">{day.leaveStatus}</span>
+                                                            </div>
+                                                        )}
+                                                        <div className="flex justify-between">
+                                                            <span className="text-gray-500 font-bold uppercase text-[8.5px] tracking-wider">Status:</span>
+                                                            <span className={`font-bold uppercase text-[8.5px] ${
+                                                                day.isPublicHoliday ? 'text-indigo-400' :
+                                                                day.leaveStatus === 'Approved' ? 'text-amber-400' :
+                                                                day.leaveStatus === 'Pending' ? 'text-amber-300' :
+                                                                day.hasAttendance ? 'text-emerald-400' :
+                                                                day.isWeekend ? 'text-slate-500' : 'text-gray-500'
+                                                            }`}>
+                                                                {day.isPublicHoliday ? (day.hasAttendance || day.tripCount > 0 ? 'Kerja Cuti Umum' : 'Cuti Umum / PH') :
+                                                                 day.leaveStatus === 'Approved' ? `Cuti (${day.leaveType || 'AL'})` :
+                                                                 day.leaveStatus === 'Pending' ? 'Cuti Menunggu' :
+                                                                 day.hasAttendance ? 'Hadir / Present' :
+                                                                 day.isWeekend ? 'Weekend' : 'Rest'}
+                                                            </span>
+                                                        </div>
 
-                                                    {isDriver ? (
-                                                        day.tripCount > 0 && (
+                                                        {day.hasAttendance && (
                                                             <>
                                                                 <div className="flex justify-between">
-                                                                    <span className="text-gray-500 font-bold uppercase text-[9px] tracking-wider">Trip:</span>
-                                                                    <span className="font-bold text-amber-400">{day.tripCount} trip{day.tripCount > 1 ? 's' : ''}</span>
+                                                                    <span className="text-gray-500 font-bold uppercase text-[8.5px] tracking-wider">Masa / Time:</span>
+                                                                    <span className="font-mono text-white text-[8.5px]">{day.shiftStart} → {day.shiftEnd || 'Aktif'}</span>
                                                                 </div>
-                                                                {day.tripEarnings > 0 && (
-                                                                    <div className="flex justify-between">
-                                                                        <span className="text-gray-500 font-bold uppercase text-[9px] tracking-wider">Gaji Trip:</span>
-                                                                        <span className="font-bold text-green-400">RM {day.tripEarnings.toFixed(2)}</span>
+                                                                {day.notes && (
+                                                                    <div className="text-[8px] text-rose-400 font-bold bg-rose-950/20 px-1 py-0.5 rounded mt-0.5 border border-rose-500/10">
+                                                                        ⚠️ {day.notes === 'System Auto-Logout' ? 'Log Keluar Automatik' : day.notes}
                                                                     </div>
                                                                 )}
                                                             </>
-                                                        )
-                                                    ) : (
-                                                        day.outputQty > 0 && (
-                                                            <div className="flex justify-between">
-                                                                <span className="text-gray-500 font-bold uppercase text-[9px] tracking-wider">Output:</span>
-                                                                <span className="font-bold text-blue-400">{day.outputQty.toLocaleString()}</span>
-                                                            </div>
-                                                        )
-                                                    )}
+                                                        )}
+
+                                                        {isDriver ? (
+                                                            day.tripCount > 0 && (
+                                                                <>
+                                                                    <div className="flex justify-between">
+                                                                        <span className="text-gray-500 font-bold uppercase text-[8.5px] tracking-wider">Trip:</span>
+                                                                        <span className="font-bold text-amber-400">{day.tripCount} trip{day.tripCount > 1 ? 's' : ''}</span>
+                                                                    </div>
+                                                                    {day.tripEarnings > 0 && (
+                                                                        <div className="flex justify-between">
+                                                                            <span className="text-gray-500 font-bold uppercase text-[8.5px] tracking-wider">Gaji Trip:</span>
+                                                                            <span className="font-bold text-green-400">RM {day.tripEarnings.toFixed(2)}</span>
+                                                                        </div>
+                                                                    )}
+                                                                </>
+                                                            )
+                                                        ) : (
+                                                            day.outputQty > 0 && (
+                                                                <div className="flex justify-between">
+                                                                    <span className="text-gray-500 font-bold uppercase text-[8.5px] tracking-wider">Output:</span>
+                                                                    <span className="font-bold text-blue-400">{day.outputQty.toLocaleString()}</span>
+                                                                </div>
+                                                            )
+                                                        )}
+                                                    </div>
                                                 </div>
                                             </div>
-                                        </div>
-                                    );
-                                })}
+                                        );
+                                    })}
+                                </div>
                             </div>
                         </div>
-                    </div>
+                    )}
 
-                    {/* PENDING EXTRA JOBS & EDITS QUICK REVIEW SECTION */ }
+                    {/* PENDING EXTRA JOBS & EDITS QUICK REVIEW SECTION (Compact) */ }
                     {(() => {
                         const pendingTripsList = dailyMetrics.flatMap(d => (d.tripDetails || []).filter((t: any) => 
                             isTripPending(t)
@@ -3424,43 +3446,43 @@ const PersonalMonthlyReport: React.FC<Props> = ({
                         if (!isDriver || pendingTripsList.length === 0) return null;
 
                         return (
-                            <div className="bg-gradient-to-br from-amber-950/40 via-amber-900/20 to-black border-2 border-amber-500/40 rounded-3xl p-6 shadow-2xl relative overflow-hidden animate-fade-in">
-                                <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3 mb-4">
-                                    <div className="flex items-center gap-3">
-                                        <div className="p-2.5 bg-amber-500/20 text-amber-300 rounded-2xl border border-amber-500/30">
-                                            <Clock size={22} className="animate-spin" />
+                            <div className="bg-gradient-to-br from-amber-950/30 via-amber-900/15 to-black border border-amber-500/30 rounded-2xl p-3.5 sm:p-4 shadow-md relative overflow-hidden animate-fade-in">
+                                <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-2.5 mb-3">
+                                    <div className="flex items-center gap-2.5">
+                                        <div className="p-2 bg-amber-500/20 text-amber-300 rounded-xl border border-amber-500/30">
+                                            <Clock size={18} className="animate-spin" />
                                         </div>
                                         <div>
-                                            <h3 className="text-base font-black text-amber-300 flex items-center gap-2">
-                                                <span>待审核任务专区 / Pending Approvals List</span>
-                                                <span className="px-2 py-0.5 bg-amber-500 text-black text-xs font-black rounded-full">
-                                                    {pendingTripsList.length} 项待处理
+                                            <h3 className="text-sm font-black text-amber-300 flex items-center gap-2">
+                                                <span>待审核任务专区 / Pending Approvals</span>
+                                                <span className="px-1.5 py-0.5 bg-amber-500 text-black text-[10px] font-black rounded-full">
+                                                    {pendingTripsList.length} 项
                                                 </span>
                                             </h3>
-                                            <p className="text-xs text-amber-400/80 mt-0.5">
-                                                {isAdminOrHR ? "发现该司机有待审核的额外任务/预修改，点击卡片可直接核实并批准金额：" : "您提交的任务已进入审核列表，等待 Admin/Manager 确认：" }
+                                            <p className="text-[11px] text-amber-400/80 mt-0.5">
+                                                {isAdminOrHR ? "点击卡片可直接核实并批准金额：" : "任务等待 Admin/Manager 确认中：" }
                                             </p>
                                         </div>
                                     </div>
                                 </div>
 
-                                <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-3">
+                                <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-2.5">
                                     {pendingTripsList.map((pt, pidx) => (
                                         <div 
                                             key={pidx} 
                                             onClick={() => setSelectedTrip(pt)}
-                                            className="bg-black/60 border border-amber-500/30 hover:border-amber-500/70 p-4 rounded-2xl flex flex-col justify-between gap-3 transition-all cursor-pointer group hover:bg-black/80 hover:shadow-lg hover:shadow-amber-500/10"
+                                            className="bg-black/60 border border-amber-500/30 hover:border-amber-500/70 p-3 rounded-xl flex flex-col justify-between gap-2 transition-all cursor-pointer group hover:bg-black/80 hover:shadow-md"
                                         >
-                                            <div className="space-y-2">
+                                            <div className="space-y-1.5">
                                                 <div className="flex justify-between items-start gap-2">
-                                                    <span className="px-2 py-0.5 rounded bg-amber-500/20 border border-amber-500/30 text-amber-300 text-[10px] font-bold">
+                                                    <span className="px-1.5 py-0.5 rounded bg-amber-500/20 border border-amber-500/30 text-amber-300 text-[9.5px] font-bold">
                                                         📅 {pt.dateStr}
                                                     </span>
-                                                    <span className="font-mono font-black text-amber-300 text-sm">
+                                                    <span className="font-mono font-black text-amber-300 text-xs">
                                                         预估 RM {(pt.earnings || 0).toFixed(2)}
                                                     </span>
                                                 </div>
-                                                <div className="text-xs font-black text-white group-hover:text-amber-200 transition-colors">
+                                                <div className="text-xs font-bold text-white group-hover:text-amber-200 transition-colors">
                                                     {pt.displayString}
                                                 </div>
                                                 {pt.delivery_address && (
@@ -3469,16 +3491,16 @@ const PersonalMonthlyReport: React.FC<Props> = ({
                                                     </div>
                                                 )}
                                                 {pt.proof_of_load_url && (
-                                                    <div className="aspect-video w-full rounded-xl overflow-hidden bg-black/50 border border-white/10 relative">
+                                                    <div className="aspect-video w-full rounded-lg overflow-hidden bg-black/50 border border-white/10 relative max-h-24">
                                                         <img src={pt.proof_of_load_url} alt="Proof" className="w-full h-full object-cover group-hover:scale-105 transition-transform" />
                                                     </div>
                                                 )}
                                             </div>
                                             <button 
                                                 type="button" 
-                                                className="w-full py-2 bg-amber-500/20 hover:bg-amber-500 text-amber-300 hover:text-black rounded-xl text-xs font-bold transition-all border border-amber-500/30 flex items-center justify-center gap-1.5"
+                                                className="w-full py-1.5 bg-amber-500/20 hover:bg-amber-500 text-amber-300 hover:text-black rounded-lg text-xs font-bold transition-all border border-amber-500/30 flex items-center justify-center gap-1 cursor-pointer"
                                             >
-                                                <span>{isAdminOrHR ? "⚡ 点击审核 / Review & Approve" : "查看详情 / View"}</span>
+                                                <span>{isAdminOrHR ? "⚡ 审核 / Review" : "查看详情 / View"}</span>
                                             </button>
                                         </div>
                                     ))}
@@ -3488,568 +3510,602 @@ const PersonalMonthlyReport: React.FC<Props> = ({
                     })()}
 
                     {/* Daily Breakdown Table Section / Seksyen Jadual Harian */}
-                    <div className="bg-[#0d0d12] border border-white/5 rounded-3xl p-6 md:p-8 shadow-2xl relative overflow-hidden">
+                    <div className="bg-[#0d0d12] border border-white/10 rounded-2xl p-3 sm:p-4 shadow-xl relative overflow-hidden">
                         <div className="absolute top-0 right-0 w-64 h-64 bg-blue-500/5 rounded-full blur-3xl -z-10"></div>
                         
-                        <div className="flex items-center gap-3 mb-6">
-                            <div className="p-2 bg-indigo-500/20 text-indigo-400 rounded-xl border border-indigo-500/30">
-                                <Clock size={18} />
+                        <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3 mb-3">
+                            <div className="flex items-center gap-2">
+                                <div className="p-1.5 bg-indigo-500/20 text-indigo-400 rounded-lg border border-indigo-500/30">
+                                    <Clock size={16} />
+                                </div>
+                                <div>
+                                    <h2 className="text-sm sm:text-base font-black text-white">Garis Masa Harian / Daily Timeline</h2>
+                                    <p className="text-[10px] uppercase font-bold tracking-wider text-gray-500">Perincian Rekod Kerja / Detailed Job Logs</p>
+                                </div>
                             </div>
-                            <div>
-                                <h2 className="text-lg font-black text-white">Garis Masa Harian / Daily Timeline</h2>
-                                <p className="text-[10px] uppercase font-bold tracking-widest text-gray-500 mt-0.5">Perincian Rekod Kerja / Detailed Job Logs</p>
+
+                            {/* Interactive Quick Filter Chips */}
+                            <div className="flex flex-wrap items-center gap-1.5 text-xs">
+                                <button
+                                    type="button"
+                                    onClick={() => setTableFilter('all')}
+                                    className={`px-2.5 py-1 rounded-lg text-xs font-bold transition-all cursor-pointer ${
+                                        tableFilter === 'all' 
+                                            ? 'bg-blue-600 text-white shadow-sm' 
+                                            : 'bg-white/5 text-gray-400 hover:bg-white/10 hover:text-white'
+                                    }`}
+                                >
+                                    Semua / All ({dailyMetrics.length})
+                                </button>
+                                {isDriver && (
+                                    <button
+                                        type="button"
+                                        onClick={() => setTableFilter('trips')}
+                                        className={`px-2.5 py-1 rounded-lg text-xs font-bold transition-all flex items-center gap-1 cursor-pointer ${
+                                            tableFilter === 'trips' 
+                                                ? 'bg-amber-600 text-white shadow-sm' 
+                                                : 'bg-amber-500/10 text-amber-300 hover:bg-amber-500/20'
+                                        }`}
+                                    >
+                                        <Truck size={12} />
+                                        <span>出车日 / Trips ({dailyMetrics.filter(d => (d.tripCount || 0) > 0).length})</span>
+                                    </button>
+                                )}
+                                <button
+                                    type="button"
+                                    onClick={() => setTableFilter('pending')}
+                                    className={`px-2.5 py-1 rounded-lg text-xs font-bold transition-all flex items-center gap-1 cursor-pointer ${
+                                        tableFilter === 'pending' 
+                                            ? 'bg-amber-500 text-black shadow-sm font-black' 
+                                            : (dailyMetrics.some(d => (d.tripDetails || []).some((t: any) => isTripPending(t)) || d.leaveStatus === 'Pending')
+                                                ? 'bg-amber-500/20 text-amber-300 border border-amber-500/30 hover:bg-amber-500/30'
+                                                : 'bg-white/5 text-gray-400 hover:bg-white/10 hover:text-white')
+                                    }`}
+                                >
+                                    <Clock size={12} className={dailyMetrics.some(d => (d.tripDetails || []).some((t: any) => isTripPending(t)) || d.leaveStatus === 'Pending') ? 'animate-spin' : ''} />
+                                    <span>待审核 / Pending ({dailyMetrics.filter(d => (d.tripDetails || []).some((t: any) => isTripPending(t)) || d.leaveStatus === 'Pending').length})</span>
+                                </button>
+                                <button
+                                    type="button"
+                                    onClick={() => setTableFilter('leaves')}
+                                    className={`px-2.5 py-1 rounded-lg text-xs font-bold transition-all flex items-center gap-1 cursor-pointer ${
+                                        tableFilter === 'leaves' 
+                                            ? 'bg-indigo-600 text-white shadow-sm' 
+                                            : 'bg-white/5 text-indigo-300/80 hover:bg-white/10 hover:text-indigo-200'
+                                    }`}
+                                >
+                                    <span>🏖️ 休假·公假 / Leaves ({dailyMetrics.filter(d => Boolean(d.leaveStatus || d.isPublicHoliday)).length})</span>
+                                </button>
                             </div>
                         </div>
 
-                        <div className="overflow-x-auto rounded-2xl border border-white/5 bg-black/40">
-                            <table className="w-full text-sm">
-                                <thead>
-                                    <tr className="border-b border-white/10 bg-white/[0.02]">
-                                        <th className="px-5 py-4 text-left font-black text-[10px] uppercase tracking-widest text-gray-500 w-24">Tarikh / Date</th>
-                                        <th className="px-5 py-4 text-left font-black text-[10px] uppercase tracking-widest text-gray-500 w-32">Status / Status</th>
-                                        <th className="px-5 py-4 text-left font-black text-[10px] uppercase tracking-widest text-gray-500">Masa Kerja / Working Time (Scan In/Out)</th>
-                                        <th className="px-5 py-4 text-right font-black text-[10px] uppercase tracking-widest text-gray-500">{isDriver ? 'Trip / Perjalanan' : 'Output / Output'}</th>
-                                        <th className="px-5 py-4 text-center font-black text-[10px] uppercase tracking-widest text-gray-500">{isDriver ? 'Butiran Trip / Trip Details' : 'Mesin & Ralat / Machines & Alarms'}</th>
-                                        <th className="px-5 py-4 text-center font-black text-[10px] uppercase tracking-widest text-gray-500">Gambar / Photos</th>
-                                        {isAdminOrHR && <th className="px-5 py-4 text-center font-black text-[10px] uppercase tracking-widest text-gray-500 w-28">Tindakan / Action</th>}
+                        <div className="overflow-x-auto rounded-xl border border-white/10 bg-black/40 max-h-[72vh] custom-scrollbar">
+                            <table className="w-full text-xs">
+                                <thead className="sticky top-0 z-20 bg-[#0c0c14] border-b border-white/15 backdrop-blur-md shadow-sm">
+                                    <tr>
+                                        <th className="px-3.5 py-2.5 text-left font-black text-[10px] uppercase tracking-wider text-gray-400 w-20">Tarikh / Date</th>
+                                        <th className="px-3.5 py-2.5 text-left font-black text-[10px] uppercase tracking-wider text-gray-400 w-28">Status / Status</th>
+                                        <th className="px-3.5 py-2.5 text-left font-black text-[10px] uppercase tracking-wider text-gray-400">Masa Kerja / Working Time</th>
+                                        <th className="px-3.5 py-2.5 text-right font-black text-[10px] uppercase tracking-wider text-gray-400">{isDriver ? 'Trip / Perjalanan' : 'Output / Output'}</th>
+                                        <th className="px-3.5 py-2.5 text-center font-black text-[10px] uppercase tracking-wider text-gray-400">{isDriver ? 'Butiran Trip / Trip Details' : 'Mesin & Ralat'}</th>
+                                        <th className="px-3.5 py-2.5 text-center font-black text-[10px] uppercase tracking-wider text-gray-400 w-24">Gambar / Photos</th>
+                                        {isAdminOrHR && <th className="px-3.5 py-2.5 text-center font-black text-[10px] uppercase tracking-wider text-gray-400 w-24">Tindakan / Action</th>}
                                     </tr>
                                 </thead>
                                 <tbody className="divide-y divide-white/5">
-                                    {dailyMetrics.map((day) => {
-                                        const hasDayPending = isDriver && day.tripDetails?.some((t: any) => isTripPending(t));
-                                        return (
-                                        <tr key={day.dateStr} className={`transition-colors ${hasDayPending ? 'bg-amber-500/10 hover:bg-amber-500/15 border-l-4 border-l-amber-500 shadow-sm' : (day.isWeekend ? 'bg-white/[0.01] hover:bg-white/[0.03]' : 'hover:bg-white/[0.03]')}`}>
-                                            <td className="px-5 py-4 whitespace-nowrap">
-                                                <div className="flex flex-col">
-                                                    <span className={`font-black text-lg ${day.isWeekend ? 'text-gray-600' : 'text-gray-300'}`}>{day.dayNum}</span>
-                                                    <span className="text-[9px] uppercase tracking-widest font-bold text-gray-600">
-                                                        {new Date(day.dateStr.replace(/-/g, '/')).toLocaleDateString('ms-MY', { weekday: 'short' })}
-                                                    </span>
-                                                </div>
+                                    {filteredDailyMetrics.length === 0 ? (
+                                        <tr>
+                                            <td colSpan={isAdminOrHR ? 7 : 6} className="py-10 text-center text-gray-500 text-xs">
+                                                <Filter size={18} className="mx-auto mb-2 opacity-40 text-blue-400" />
+                                                <p className="font-bold">Tiada rekod untuk penapis ini / No records for this filter</p>
+                                                <button onClick={() => setTableFilter('all')} className="mt-2 text-[11px] text-blue-400 hover:underline cursor-pointer">
+                                                    Tunjuk Semua / Show All
+                                                </button>
                                             </td>
-                                            <td className="px-5 py-4 whitespace-nowrap">
-                                                {hasDayPending && (
-                                                    <span className="inline-flex items-center gap-1 px-2 py-0.5 rounded bg-amber-500/20 border border-amber-500/40 text-amber-300 text-[10px] font-black uppercase tracking-wider animate-pulse mb-1">
-                                                        <Clock size={10} className="animate-spin" />
-                                                        待审核 / Pending
-                                                    </span>
-                                                )}
-                                                {day.isPublicHoliday ? (
-                                                    (day.hasAttendance || (isDriver && day.tripCount > 0)) ? (
-                                                        <div className="flex flex-col items-start gap-0.5">
-                                                            <span className="inline-flex items-center gap-1 px-2 py-0.5 rounded bg-indigo-500/20 border border-indigo-500/40 text-indigo-300 text-[10px] font-black uppercase tracking-wider">
-                                                                <span>🇲🇾</span>
-                                                                Kerja Cuti Umum / PH Worked
-                                                            </span>
-                                                            <span className="text-[9px] text-indigo-400 font-bold">
-                                                                {day.publicHoliday?.nameMs}
-                                                            </span>
-                                                        </div>
-                                                    ) : (
-                                                        <div className="flex flex-col items-start gap-0.5">
-                                                            <span className="inline-flex items-center gap-1 px-2 py-0.5 rounded bg-indigo-500/10 border border-indigo-500/30 text-indigo-300 text-[10px] font-black uppercase tracking-wider">
-                                                                <span>🇲🇾</span>
-                                                                Cuti Umum / Public Holiday
-                                                            </span>
-                                                            <span className="text-[9px] text-indigo-400 font-medium">
-                                                                {day.publicHoliday?.nameMs} {day.publicHoliday?.nameZh ? `(${day.publicHoliday.nameZh})` : ''}
-                                                            </span>
-                                                        </div>
-                                                    )
-                                                ) : day.leaveStatus === 'Approved' ? (
-                                                    <div className="flex flex-col items-start gap-0.5">
-                                                        {day.leaveType === 'Annual' ? (
-                                                            <span className="inline-flex items-center gap-1 px-2 py-0.5 rounded bg-amber-500/20 border border-amber-500/40 text-amber-300 text-[10px] font-black uppercase tracking-wider shadow-sm">
-                                                                <span>🏖️</span>
-                                                                <span>年假 / Annual Leave</span>
-                                                            </span>
-                                                        ) : (
-                                                            <span className="inline-flex items-center px-2 py-0.5 rounded bg-amber-500/10 border border-amber-500/20 text-amber-400 text-[10px] font-black uppercase tracking-wider">
-                                                                🏖️ Cuti / {day.leaveType || 'Leave'}
-                                                            </span>
-                                                        )}
-                                                        {day.leaveReason && (
-                                                            <span className="text-[9px] text-gray-400 max-w-[140px] truncate" title={day.leaveReason}>
-                                                                {day.leaveReason}
-                                                            </span>
-                                                        )}
-                                                    </div>
-                                                ) : day.leaveStatus === 'Pending' ? (
-                                                    <div className="flex flex-col items-start gap-0.5">
-                                                        {day.leaveType === 'Annual' ? (
-                                                            <span className="inline-flex items-center gap-1 px-2 py-0.5 rounded bg-amber-500/20 border border-amber-500/40 border-dashed text-amber-300 text-[10px] font-black uppercase tracking-wider animate-pulse">
-                                                                <Clock size={10} className="animate-spin" />
-                                                                ⏳ 申请年假中 / Pending AL
-                                                            </span>
-                                                        ) : (
-                                                            <span className="inline-flex items-center gap-1 px-2 py-0.5 rounded bg-amber-500/15 border border-amber-500/35 border-dashed text-amber-300 text-[10px] font-black uppercase tracking-wider animate-pulse">
-                                                                <Clock size={10} className="animate-spin" />
-                                                                ⏳ Permohonan Cuti / Pending
-                                                            </span>
-                                                        )}
-                                                        <span className="text-[9px] text-amber-400 font-medium">
-                                                            {day.leaveType === 'Annual' ? '年假 (Annual Leave)' : (day.leaveType || 'Leave')} {day.leaveReason ? `(${day.leaveReason})` : ''}
+                                        </tr>
+                                    ) : (
+                                        filteredDailyMetrics.map((day) => {
+                                            const hasDayPending = isDriver && day.tripDetails?.some((t: any) => isTripPending(t));
+                                            return (
+                                            <tr key={day.dateStr} className={`transition-colors ${hasDayPending ? 'bg-amber-500/10 hover:bg-amber-500/15 border-l-4 border-l-amber-500 shadow-sm' : (day.isWeekend ? 'bg-white/[0.01] hover:bg-white/[0.03]' : 'hover:bg-white/[0.03]')}`}>
+                                                <td className="px-3.5 py-2.5 whitespace-nowrap">
+                                                    <div className="flex flex-col">
+                                                        <span className={`font-black text-sm sm:text-base font-mono ${day.isWeekend ? 'text-gray-500' : 'text-gray-200'}`}>{day.dayNum}</span>
+                                                        <span className="text-[9px] uppercase tracking-wider font-bold text-gray-500">
+                                                            {new Date(day.dateStr.replace(/-/g, '/')).toLocaleDateString('ms-MY', { weekday: 'short' })}
                                                         </span>
                                                     </div>
-                                                ) : day.hasAttendance ? (
-                                                    <div className="flex flex-col items-start gap-0.5">
-                                                        <span className="inline-flex items-center px-2 py-1 rounded bg-emerald-500/10 border border-emerald-500/20 text-emerald-400 text-[10px] font-black uppercase tracking-wider">
-                                                            {isDriver && day.tripDetails && day.tripDetails.length > 0
-                                                                ? `🚚 Hadir / On Trip (${day.tripDetails.length} Trip${day.tripDetails.length > 1 ? 's' : ''})`
-                                                                : 'Hadir / Present'}
+                                                </td>
+                                                <td className="px-3.5 py-2.5 whitespace-nowrap">
+                                                    {hasDayPending && (
+                                                        <span className="inline-flex items-center gap-1 px-1.5 py-0.5 rounded bg-amber-500/20 border border-amber-500/40 text-amber-300 text-[9.5px] font-black uppercase tracking-wider animate-pulse mb-1">
+                                                            <Clock size={9} className="animate-spin" />
+                                                            待审核 / Pending
                                                         </span>
-                                                        {isDriver && (day.lorryPlate || driverLorryPlate) && (day.lorryPlate || driverLorryPlate) !== 'N/A' && (
-                                                            <span className="text-[9px] font-mono text-amber-300 font-bold flex items-center gap-1 bg-amber-500/10 px-1.5 py-0.5 rounded border border-amber-500/20">
-                                                                <Truck size={10} className="text-amber-400 shrink-0" />
-                                                                <span className="inline-flex items-center gap-1">
-                                                                    <span>{(day.lorryPlate || driverLorryPlate).replace('✓', '').trim()}</span>
-                                                                    {isVpc9821(day.lorryPlate || driverLorryPlate) && (
-                                                                        <span className="text-emerald-400 font-black text-xs" title="VPC 9821 (Lori Khas / Special Rate) ✓">✓</span>
-                                                                    )}
+                                                    )}
+                                                    {day.isPublicHoliday ? (
+                                                        (day.hasAttendance || (isDriver && day.tripCount > 0)) ? (
+                                                            <div className="flex flex-col items-start gap-0.5">
+                                                                <span className="inline-flex items-center gap-1 px-1.5 py-0.5 rounded bg-indigo-500/20 border border-indigo-500/40 text-indigo-300 text-[9.5px] font-black uppercase tracking-wider">
+                                                                    <span>🇲🇾</span>
+                                                                    Kerja PH Worked
                                                                 </span>
-                                                            </span>
-                                                        )}
-                                                    </div>
-                                                ) : isDriver && day.tripCount > 0 ? (
-                                                    day.dateStr > todayStr ? (
-                                                        <div className="flex flex-col items-start gap-0.5">
-                                                            <span className="inline-flex items-center px-2 py-1 rounded bg-blue-500/10 border border-blue-500/20 text-blue-400 text-[10px] font-black uppercase tracking-wider">
-                                                                📅 Dijadualkan / Scheduled ({day.tripCount} Trip{day.tripCount > 1 ? 's' : ''})
-                                                            </span>
-                                                            {(day.lorryPlate || driverLorryPlate) && (day.lorryPlate || driverLorryPlate) !== 'N/A' && (
-                                                                <span className="text-[9px] font-mono text-blue-300 font-bold flex items-center gap-1 bg-blue-500/10 px-1.5 py-0.5 rounded border border-blue-500/20">
-                                                                    <Truck size={10} className="text-blue-400 shrink-0" />
-                                                                    <span className="inline-flex items-center gap-1">
-                                                                        <span>{(day.lorryPlate || driverLorryPlate).replace('✓', '').trim()}</span>
-                                                                        {isVpc9821(day.lorryPlate || driverLorryPlate) && (
-                                                                            <span className="text-emerald-400 font-black text-xs" title="VPC 9821 (Lori Khas / Special Rate) ✓">✓</span>
-                                                                        )}
-                                                                    </span>
+                                                                <span className="text-[9px] text-indigo-400 font-bold truncate max-w-[130px]" title={day.publicHoliday?.nameMs}>
+                                                                    {day.publicHoliday?.nameMs}
                                                                 </span>
-                                                            )}
-                                                        </div>
-                                                    ) : (
-                                                        <div className="flex flex-col items-start gap-0.5">
-                                                            <span className="inline-flex items-center px-2 py-1 rounded bg-amber-500/10 border border-amber-500/30 text-amber-300 text-[10px] font-black uppercase tracking-wider">
-                                                                ⏳ Menunggu Imbasan / Pending Scan ({day.tripCount} Trip{day.tripCount > 1 ? 's' : ''})
-                                                            </span>
-                                                            {(day.lorryPlate || driverLorryPlate) && (day.lorryPlate || driverLorryPlate) !== 'N/A' && (
-                                                                <span className="text-[9px] font-mono text-amber-300 font-bold flex items-center gap-1 bg-amber-500/10 px-1.5 py-0.5 rounded border border-amber-500/20">
-                                                                    <Truck size={10} className="text-amber-400 shrink-0" />
-                                                                    <span className="inline-flex items-center gap-1">
-                                                                        <span>{(day.lorryPlate || driverLorryPlate).replace('✓', '').trim()}</span>
-                                                                        {isVpc9821(day.lorryPlate || driverLorryPlate) && (
-                                                                            <span className="text-emerald-400 font-black text-xs" title="VPC 9821 (Lori Khas / Special Rate) ✓">✓</span>
-                                                                        )}
-                                                                    </span>
-                                                                </span>
-                                                            )}
-                                                        </div>
-                                                    )
-                                                ) : day.isWeekend ? (
-                                                    <span className="inline-flex items-center px-2 py-1 rounded bg-white/5 border border-white/5 text-gray-500 text-[10px] font-black uppercase tracking-wider">
-                                                        Weekend
-                                                    </span>
-                                                ) : (
-                                                    <span className="inline-flex items-center px-2 py-1 rounded bg-gray-800 text-gray-500 text-[10px] font-black uppercase tracking-wider">
-                                                        {isDriver ? 'Tiada Trip / Off' : 'Tiada Log / No Log'}
-                                                    </span>
-                                                )}
-                                            </td>
-                                            <td className="px-5 py-4 whitespace-nowrap">
-                                                {day.hasAttendance ? (
-                                                    <div className="flex flex-col gap-1">
-                                                        <div className="flex items-center gap-2 font-mono text-xs">
-                                                            <span className="text-green-400">{day.shiftStart || '-'}</span>
-                                                            <span className="text-gray-600">→</span>
-                                                            <span className="text-orange-400">{day.shiftEnd || 'Aktif / Active'}</span>
-                                                        </div>
-                                                        <div className="flex items-center gap-2">
-                                                            <span className="text-[10px] text-emerald-400 font-mono font-bold bg-emerald-500/10 px-1.5 py-0.5 rounded border border-emerald-500/20">
-                                                                {day.hoursWorked.toFixed(1)} hrs
-                                                            </span>
-                                                            {day.isPublicHoliday && (
-                                                                <span className="text-[9px] font-bold text-indigo-300 bg-indigo-500/15 px-1.5 py-0.5 rounded border border-indigo-500/30">
-                                                                    🇲🇾 Cuti Umum / PH
-                                                                </span>
-                                                            )}
-                                                            {day.isDerivedDriverAttendance && (
-                                                                <span className="text-[9px] font-bold text-cyan-400 bg-cyan-500/10 px-1.5 py-0.5 rounded border border-cyan-500/20" title="基于送货记录派生考勤工时">
-                                                                    物流自动计算
-                                                                </span>
-                                                            )}
-                                                            {day.notes === 'System Auto-Logout' && (
-                                                                <span className="text-[9px] uppercase font-bold text-red-500/80 bg-red-500/10 px-1.5 py-0.5 rounded border border-red-500/20">
-                                                                    Auto-Logout
-                                                                </span>
-                                                            )}
-                                                        </div>
-                                                    </div>
-                                                ) : (
-                                                    day.isPublicHoliday ? (
-                                                        <div className="inline-flex items-center gap-1.5 px-2.5 py-1 rounded-lg text-xs text-indigo-300 bg-indigo-500/10 border border-indigo-500/20">
-                                                            <span>🇲🇾</span>
-                                                            <span>Cuti Umum / {day.publicHoliday?.nameMs || 'Public Holiday'}</span>
-                                                        </div>
-                                                    ) : day.leaveStatus === 'Approved' ? (
-                                                        day.leaveType === 'Annual' ? (
-                                                            <span className="text-amber-300 text-xs font-bold">🏖️ 年假 / Cuti Tahunan (Annual Leave)</span>
+                                                            </div>
                                                         ) : (
-                                                            <span className="text-amber-400/80 text-xs font-medium">🏖️ Cuti / {day.leaveType || 'Leave'}</span>
+                                                            <div className="flex flex-col items-start gap-0.5">
+                                                                <span className="inline-flex items-center gap-1 px-1.5 py-0.5 rounded bg-indigo-500/10 border border-indigo-500/30 text-indigo-300 text-[9.5px] font-black uppercase tracking-wider">
+                                                                    <span>🇲🇾</span>
+                                                                    Cuti Umum / PH
+                                                                </span>
+                                                                <span className="text-[9px] text-indigo-400 font-medium truncate max-w-[130px]" title={day.publicHoliday?.nameMs}>
+                                                                    {day.publicHoliday?.nameMs}
+                                                                </span>
+                                                            </div>
                                                         )
+                                                    ) : day.leaveStatus === 'Approved' ? (
+                                                        <div className="flex flex-col items-start gap-0.5">
+                                                            {day.leaveType === 'Annual' ? (
+                                                                <span className="inline-flex items-center gap-1 px-1.5 py-0.5 rounded bg-amber-500/20 border border-amber-500/40 text-amber-300 text-[9.5px] font-black uppercase tracking-wider shadow-sm">
+                                                                    <span>🏖️</span>
+                                                                    <span>年假 (AL)</span>
+                                                                </span>
+                                                            ) : (
+                                                                <span className="inline-flex items-center px-1.5 py-0.5 rounded bg-amber-500/10 border border-amber-500/20 text-amber-400 text-[9.5px] font-black uppercase tracking-wider">
+                                                                    🏖️ {day.leaveType || 'Leave'}
+                                                                </span>
+                                                            )}
+                                                            {day.leaveReason && (
+                                                                <span className="text-[9px] text-gray-400 max-w-[130px] truncate" title={day.leaveReason}>
+                                                                    {day.leaveReason}
+                                                                </span>
+                                                            )}
+                                                        </div>
                                                     ) : day.leaveStatus === 'Pending' ? (
-                                                        <span className="text-amber-300/80 text-xs font-medium flex items-center gap-1">
-                                                            <Clock size={12} className="animate-spin text-amber-400" />
-                                                            <span>{day.leaveType === 'Annual' ? '年假审批中 / Pending AL' : 'Cuti Menunggu / Pending'}</span>
-                                                        </span>
+                                                        <div className="flex flex-col items-start gap-0.5">
+                                                            <span className="inline-flex items-center gap-1 px-1.5 py-0.5 rounded bg-amber-500/20 border border-amber-500/40 border-dashed text-amber-300 text-[9.5px] font-black uppercase tracking-wider animate-pulse">
+                                                                <Clock size={9} className="animate-spin" />
+                                                                {day.leaveType === 'Annual' ? '申请年假中 / Pending AL' : 'Permohonan Cuti'}
+                                                            </span>
+                                                        </div>
+                                                    ) : day.hasAttendance ? (
+                                                        <div className="flex flex-col items-start gap-0.5">
+                                                            <span className="inline-flex items-center px-1.5 py-0.5 rounded bg-emerald-500/10 border border-emerald-500/20 text-emerald-400 text-[9.5px] font-black uppercase tracking-wider">
+                                                                {isDriver && day.tripDetails && day.tripDetails.length > 0
+                                                                    ? `🚚 Hadir (${day.tripDetails.length} Trip${day.tripDetails.length > 1 ? 's' : ''})`
+                                                                    : 'Hadir / Present'}
+                                                            </span>
+                                                            {isDriver && (day.lorryPlate || driverLorryPlate) && (day.lorryPlate || driverLorryPlate) !== 'N/A' && (
+                                                                <span className="text-[9px] font-mono text-amber-300 font-bold flex items-center gap-1 bg-amber-500/10 px-1 py-0.5 rounded border border-amber-500/20">
+                                                                    <Truck size={9} className="text-amber-400 shrink-0" />
+                                                                    <span className="inline-flex items-center gap-1">
+                                                                        <span>{(day.lorryPlate || driverLorryPlate).replace('✓', '').trim()}</span>
+                                                                        {isVpc9821(day.lorryPlate || driverLorryPlate) && (
+                                                                            <span className="text-emerald-400 font-black text-xs" title="VPC 9821 (Lori Khas / Special Rate) ✓">✓</span>
+                                                                        )}
+                                                                    </span>
+                                                                </span>
+                                                            )}
+                                                        </div>
                                                     ) : isDriver && day.tripCount > 0 ? (
                                                         day.dateStr > todayStr ? (
-                                                            <span className="text-gray-500 text-xs font-mono">📅 Belum Mula / Scheduled</span>
+                                                            <div className="flex flex-col items-start gap-0.5">
+                                                                <span className="inline-flex items-center px-1.5 py-0.5 rounded bg-blue-500/10 border border-blue-500/20 text-blue-400 text-[9.5px] font-black uppercase tracking-wider">
+                                                                    📅 Scheduled ({day.tripCount} Trip{day.tripCount > 1 ? 's' : ''})
+                                                                </span>
+                                                            </div>
                                                         ) : (
-                                                            <span className="text-amber-400/90 text-xs font-mono flex items-center gap-1.5">
-                                                                🚚 Menunggu Imbasan QR / Pending Scan
-                                                            </span>
+                                                            <div className="flex flex-col items-start gap-0.5">
+                                                                <span className="inline-flex items-center px-1.5 py-0.5 rounded bg-amber-500/10 border border-amber-500/30 text-amber-300 text-[9.5px] font-black uppercase tracking-wider">
+                                                                    ⏳ Pending Scan ({day.tripCount})
+                                                                </span>
+                                                            </div>
                                                         )
-                                                    ) : isDriver ? (
-                                                        <div className="inline-flex items-center gap-1.5 px-2.5 py-1 rounded-lg text-xs text-gray-400 bg-gray-800/40 border border-gray-700/40">
-                                                            <span>🛋️</span>
-                                                            <span>{day.isWeekend ? '周末休班 / Weekend' : '本日无出车 / Tiada Trip'}</span>
-                                                            {isAdminOrHR && (
-                                                                <button
-                                                                    type="button"
-                                                                    onClick={() => setSelectedAttendanceDay(day)}
-                                                                    className="text-[10px] text-amber-400 hover:text-amber-300 underline ml-1 cursor-pointer"
-                                                                    title="点击为司机补录工时或打卡"
+                                                    ) : day.isWeekend ? (
+                                                        <span className="inline-flex items-center px-1.5 py-0.5 rounded bg-white/5 border border-white/5 text-gray-500 text-[9.5px] font-bold uppercase tracking-wider">
+                                                            Weekend
+                                                        </span>
+                                                    ) : (
+                                                        <span className="inline-flex items-center px-1.5 py-0.5 rounded bg-gray-800 text-gray-500 text-[9.5px] font-bold uppercase tracking-wider">
+                                                            {isDriver ? 'Tiada Trip' : 'Tiada Log'}
+                                                        </span>
+                                                    )}
+                                                </td>
+                                                <td className="px-3.5 py-2.5 whitespace-nowrap">
+                                                    {day.hasAttendance ? (
+                                                        <div className="flex flex-col gap-0.5">
+                                                            <div className="flex items-center gap-1.5 font-mono text-[11px]">
+                                                                <span className="text-green-400 font-bold">{day.shiftStart || '-'}</span>
+                                                                <span className="text-gray-600">→</span>
+                                                                <span className="text-orange-400 font-bold">{day.shiftEnd || 'Aktif'}</span>
+                                                            </div>
+                                                            <div className="flex items-center gap-1.5">
+                                                                <span className="text-[9.5px] text-emerald-400 font-mono font-bold bg-emerald-500/10 px-1 py-0.5 rounded border border-emerald-500/20">
+                                                                    {day.hoursWorked.toFixed(1)} hrs
+                                                                </span>
+                                                                {day.isPublicHoliday && (
+                                                                    <span className="text-[8.5px] font-bold text-indigo-300 bg-indigo-500/15 px-1 py-0.5 rounded border border-indigo-500/30">
+                                                                        🇲🇾 PH
+                                                                    </span>
+                                                                )}
+                                                                {day.isDerivedDriverAttendance && (
+                                                                    <span className="text-[8.5px] font-bold text-cyan-400 bg-cyan-500/10 px-1 py-0.5 rounded border border-cyan-500/20" title="基于送货记录派生考勤工时">
+                                                                        自动计算
+                                                                    </span>
+                                                                )}
+                                                                {day.notes === 'System Auto-Logout' && (
+                                                                    <span className="text-[8.5px] uppercase font-bold text-red-500/80 bg-red-500/10 px-1 py-0.5 rounded border border-red-500/20">
+                                                                        Auto-Logout
+                                                                    </span>
+                                                                )}
+                                                            </div>
+                                                        </div>
+                                                    ) : (
+                                                        day.isPublicHoliday ? (
+                                                            <div className="inline-flex items-center gap-1 px-2 py-0.5 rounded text-[11px] text-indigo-300 bg-indigo-500/10 border border-indigo-500/20">
+                                                                <span>🇲🇾</span>
+                                                                <span>Cuti Umum / {day.publicHoliday?.nameMs || 'PH'}</span>
+                                                            </div>
+                                                        ) : day.leaveStatus === 'Approved' ? (
+                                                            day.leaveType === 'Annual' ? (
+                                                                <span className="text-amber-300 text-[11px] font-bold">🏖️ 年假 / Annual Leave</span>
+                                                            ) : (
+                                                                <span className="text-amber-400/80 text-[11px] font-medium">🏖️ Cuti / {day.leaveType || 'Leave'}</span>
+                                                            )
+                                                        ) : day.leaveStatus === 'Pending' ? (
+                                                            <span className="text-amber-300/80 text-[11px] font-medium flex items-center gap-1">
+                                                                <Clock size={11} className="animate-spin text-amber-400" />
+                                                                <span>{day.leaveType === 'Annual' ? '年假审批中 / Pending AL' : 'Pending'}</span>
+                                                            </span>
+                                                        ) : isDriver && day.tripCount > 0 ? (
+                                                            day.dateStr > todayStr ? (
+                                                                <span className="text-gray-500 text-[11px] font-mono">📅 Belum Mula / Scheduled</span>
+                                                            ) : (
+                                                                <span className="text-amber-400/90 text-[11px] font-mono flex items-center gap-1">
+                                                                    🚚 Menunggu Scan
+                                                                </span>
+                                                            )
+                                                        ) : isDriver ? (
+                                                            <div className="inline-flex items-center gap-1.5 px-2 py-0.5 rounded text-[11px] text-gray-400 bg-gray-800/40 border border-gray-700/40">
+                                                                <span>🛋️</span>
+                                                                <span>{day.isWeekend ? '周末休班 / Weekend' : '本日无出车 / Off'}</span>
+                                                                {isAdminOrHR && (
+                                                                    <button
+                                                                        type="button"
+                                                                        onClick={() => setSelectedAttendanceDay(day)}
+                                                                        className="text-[10px] text-amber-400 hover:text-amber-300 underline ml-1 cursor-pointer"
+                                                                        title="点击为司机补录工时或打卡"
+                                                                    >
+                                                                        补录
+                                                                    </button>
+                                                                )}
+                                                            </div>
+                                                        ) : (
+                                                            <button
+                                                                type="button"
+                                                                onClick={() => {
+                                                                    if (isAdminOrHR) {
+                                                                        setSelectedAttendanceDay(day);
+                                                                    }
+                                                                }}
+                                                                className={`inline-flex items-center gap-1 px-2 py-0.5 rounded border text-[11px] transition-all ${
+                                                                    isAdminOrHR
+                                                                        ? 'text-amber-300 bg-amber-500/10 border-amber-500/30 hover:bg-amber-500/20 cursor-pointer shadow-sm'
+                                                                        : 'text-amber-400/80 bg-amber-500/5 border-amber-500/15 cursor-default'
+                                                                }`}
+                                                                title={isAdminOrHR ? "点击去为该日打卡补录 / Click to log clock-in time" : "未打卡 / No Clock In"}
+                                                            >
+                                                                <AlertTriangle size={11} className="text-amber-400 shrink-0" />
+                                                                <span className="font-bold">没有时间 / 未打卡</span>
+                                                                {isAdminOrHR && <span className="text-[9px] text-amber-200 underline ml-0.5">补录 ➜</span>}
+                                                            </button>
+                                                        )
+                                                    )}
+                                                </td>
+                                                <td className="px-3.5 py-2.5 whitespace-nowrap text-right">
+                                                    {isDriver ? (
+                                                        day.tripCount > 0 ? (
+                                                            <div className="flex flex-col items-end gap-0.5">
+                                                                <span className="font-mono text-amber-400 font-bold text-xs">{day.tripCount} <span className="text-[9px] text-gray-500">trip</span></span>
+                                                                {day.tripDetails && day.tripDetails.length > 0 ? (
+                                                                    <div className="flex flex-col items-end gap-0.5 font-mono text-[9.5px]">
+                                                                        {day.tripDetails.map((td: any, tidx: number) => {
+                                                                            const isPending = isTripPending(td);
+                                                                            const isUnscanned = td.status !== 'Delivered' && td.status !== 'Cancelled';
+                                                                            return (
+                                                                                <span key={tidx} className={`font-bold px-1.5 py-0.5 rounded border ${
+                                                                                    isUnscanned
+                                                                                        ? 'text-amber-300/90 bg-amber-500/10 border-amber-500/30'
+                                                                                        : isPending 
+                                                                                            ? 'text-amber-300 bg-amber-500/10 border-amber-500/30 animate-pulse' 
+                                                                                            : 'text-emerald-400 bg-emerald-500/10 border-emerald-500/20'
+                                                                                }`} title={`Trip ${tidx+1}: Base RM${(td.baseRate||td.earnings||0).toFixed(2)} + Extra Drop RM${(td.extraRate||0).toFixed(2)}`}>
+                                                                                    {isUnscanned
+                                                                                        ? `#${tidx + 1}: 🚚 未扫码 (RM ${(td.earnings || 0).toFixed(2)})`
+                                                                                        : (isPending ? `#${tidx + 1}: ⏳ 待审核 (RM ${(td.earnings || 0).toFixed(2)})` : `#${tidx + 1}: RM ${(td.earnings || 0).toFixed(2)}`)}
+                                                                                </span>
+                                                                            );
+                                                                        })}
+                                                                        {day.tripDetails.length > 1 && (
+                                                                            <span className="text-[9.5px] text-amber-300 font-black mt-0.5 pt-0.5 border-t border-slate-800">
+                                                                                RM {day.tripEarnings.toFixed(2)}
+                                                                            </span>
+                                                                        )}
+                                                                    </div>
+                                                                ) : (
+                                                                    day.tripEarnings > 0 && (
+                                                                        <span className="text-[9.5px] text-green-400 font-mono mt-0.5">+ RM{day.tripEarnings.toFixed(2)}</span>
+                                                                    )
+                                                                )}
+                                                            </div>
+                                                        ) : <span className="text-gray-700 font-mono">—</span>
+                                                    ) : (
+                                                        day.outputQty > 0 ? (
+                                                            <div className="flex flex-col items-end gap-0.5">
+                                                                <span className="font-mono text-blue-400 font-bold text-sm">{day.outputQty.toLocaleString()}</span>
+                                                                {day.jobDetails.length > 0 && (
+                                                                    <div className="flex flex-col items-end text-[8.5px] text-gray-400 font-mono">
+                                                                        {day.jobDetails.slice(0, 2).map((j, jidx) => (
+                                                                            <span key={jidx} className="text-gray-400 truncate max-w-[100px]" title={`Job: ${j.jobId}, SKU: ${j.sku || 'N/A'}`}>
+                                                                                {j.sku ? j.sku.split('-').slice(0, 3).join('-') : j.jobId}
+                                                                            </span>
+                                                                        ))}
+                                                                    </div>
+                                                                )}
+                                                            </div>
+                                                        ) : <span className="text-gray-700 font-mono">—</span>
+                                                    )}
+                                                </td>
+                                                {isDriver ? (
+                                                    <td className="px-3.5 py-2.5 whitespace-nowrap text-center">
+                                                        {day.tripDetails && day.tripDetails.length > 0 ? (
+                                                            <div className="flex flex-col items-center gap-1.5">
+                                                                {day.tripDetails.map((td: any, idx: number) => {
+                                                                    const isTdHrApproved = Boolean(
+                                                                        td.notes?.includes('[HR_APPROVED]') ||
+                                                                        td.is_hr_approved ||
+                                                                        (td.orders && td.orders.some((o: any) => o.notes?.includes('[HR_APPROVED]') || o.is_hr_approved))
+                                                                    );
+                                                                    const isPending = isTripPending(td);
+                                                                    const isTripConfirmed = confirmedTripIds.has(td.id) || td.notes?.includes('[DRIVER_CONFIRMED') || td.driver_confirmed === true;
+                                                                    const isUnscanned = td.status !== 'Delivered' && td.status !== 'Cancelled';
+
+                                                                    return (
+                                                                        <div key={idx} className="flex items-center gap-1.5 justify-center">
+                                                                            <button 
+                                                                                onClick={() => setSelectedTrip(td)}
+                                                                                className={`text-[9.5px] px-2 py-0.5 rounded-lg font-mono shadow-sm cursor-pointer transition-all flex items-center gap-1 ${
+                                                                                    isTdHrApproved
+                                                                                        ? 'bg-purple-950/50 text-purple-300 border border-purple-500/40 font-bold'
+                                                                                        : isUnscanned
+                                                                                            ? 'bg-amber-500/15 text-amber-300 border border-amber-500/35 font-semibold'
+                                                                                            : isPending 
+                                                                                                ? 'bg-amber-500/20 text-amber-300 border border-amber-500/40 animate-pulse font-bold'
+                                                                                                : isTripConfirmed
+                                                                                                    ? 'bg-emerald-500/15 text-emerald-300 border border-emerald-500/30 font-bold'
+                                                                                                    : 'bg-blue-500/10 text-blue-400 border border-blue-500/20 hover:bg-blue-500/20 hover:text-blue-300'
+                                                                                }`}
+                                                                                title={isTdHrApproved ? "🔒 已被 HR 锁定 / Locked by HR" : (isUnscanned ? "🚚 未完成扫码 / Pending POD" : "点击查看详情 / Click to view")}
+                                                                            >
+                                                                                {isTdHrApproved && <span className="text-purple-400 shrink-0">🔒</span>}
+                                                                                {isUnscanned && !isTdHrApproved && <span className="text-[10px] shrink-0">🚚</span>}
+                                                                                {isPending && !isUnscanned && !isTdHrApproved && <Clock size={9} className="text-amber-400 shrink-0" />}
+                                                                                {isTripConfirmed && !isUnscanned && !isTdHrApproved && <CheckCircle2 size={10} className="text-emerald-400 shrink-0" />}
+                                                                                <span className="truncate max-w-[130px]">{isUnscanned ? `[未扫码] ${td.displayString}` : (isPending ? `⏳ ${td.displayString}` : td.displayString)}</span>
+                                                                                {(td.lorry_plate || day.lorryPlate) && (td.lorry_plate || day.lorryPlate) !== 'N/A' && (
+                                                                                    <span className="inline-flex items-center gap-0.5 px-1 py-0.5 rounded bg-black/60 border border-amber-500/30 text-[8.5px] font-mono font-bold text-amber-300" title="No. Plat Lori">
+                                                                                        <span>{(td.lorry_plate || day.lorryPlate).replace('✓', '').trim()}</span>
+                                                                                        {isVpc9821(td.lorry_plate || day.lorryPlate) && (
+                                                                                            <span className="text-emerald-400 font-black text-xs" title="VPC 9821 ✓">✓</span>
+                                                                                        )}
+                                                                                    </span>
+                                                                                )}
+                                                                                <span className={`ml-1 px-1 py-0.2 rounded font-black border text-[9px] ${
+                                                                                    isTdHrApproved 
+                                                                                        ? 'bg-purple-900/40 text-purple-300 border-purple-500/40' 
+                                                                                        : isUnscanned
+                                                                                            ? 'bg-amber-500/10 text-amber-400 border-amber-500/20'
+                                                                                            : isPending
+                                                                                                ? 'bg-amber-500/20 text-amber-300 border-amber-500/30'
+                                                                                                : 'bg-emerald-500/20 text-emerald-300 border-emerald-500/30'
+                                                                                }`}>
+                                                                                    RM {(td.earnings || 0).toFixed(0)}
+                                                                                </span>
+                                                                            </button>
+
+                                                                            <div className="flex items-center gap-1 border-l border-slate-700/50 pl-1">
+                                                                                <label 
+                                                                                    className={`flex items-center justify-center p-0.5 rounded transition-colors ${isTdHrApproved ? 'opacity-50 cursor-not-allowed' : 'hover:bg-white/5 cursor-pointer'}`}
+                                                                                    title={isTdHrApproved ? "🔒 已被 HR 锁定 / Locked by HR" : (isTripConfirmed ? "✅ 该 Trip 已确认无误 / Trip Confirmed" : "⬜ 点击打钩确认此 Trip / Confirm")}
+                                                                                >
+                                                                                    <input
+                                                                                        type="checkbox"
+                                                                                        checked={isTripConfirmed}
+                                                                                        onChange={(e) => handleToggleTripConfirmation(td, e.target.checked)}
+                                                                                        className="w-3.5 h-3.5 accent-emerald-500 rounded cursor-pointer disabled:cursor-not-allowed"
+                                                                                        disabled={isTdHrApproved}
+                                                                                    />
+                                                                                </label>
+                                                                                {isAdminOrHR && (
+                                                                                    <label 
+                                                                                        className={`flex items-center justify-center px-1 py-0.2 border text-[8.5px] font-bold uppercase rounded transition-all ${
+                                                                                            isTdHrApproved 
+                                                                                                ? (currentUserRole === 'HR' || currentUserRole === 'SuperAdmin'
+                                                                                                    ? 'bg-purple-950/80 border-purple-500/80 text-purple-300 hover:bg-purple-900/60 cursor-pointer'
+                                                                                                    : 'bg-purple-950/60 border-purple-500/50 text-purple-300 cursor-not-allowed opacity-90')
+                                                                                                : 'bg-slate-800/50 border-slate-700 text-slate-500 hover:bg-slate-700 cursor-pointer'
+                                                                                        }`}
+                                                                                        title={isTdHrApproved 
+                                                                                            ? (currentUserRole === 'HR' || currentUserRole === 'SuperAdmin' 
+                                                                                                ? "🔒 HR 已审核锁定 (HR 可点击解除打勾 / Click to untick)" 
+                                                                                                : "🔒 HR 已审核锁定此 Trip (非 HR 角色不可取消)") 
+                                                                                            : "点击由 HR 批准此 Trip / Click to HR Approve"}
+                                                                                    >
+                                                                                        <input
+                                                                                            type="checkbox"
+                                                                                            checked={isTdHrApproved}
+                                                                                            onChange={(e) => handleToggleHRApproveTrip(td, e.target.checked)}
+                                                                                            disabled={isTdHrApproved && !(currentUserRole === 'HR' || currentUserRole === 'SuperAdmin')}
+                                                                                            className="w-3 h-3 accent-purple-500 rounded cursor-pointer disabled:cursor-not-allowed mr-0.5"
+                                                                                        />
+                                                                                        {isTdHrApproved ? '🔒' : 'HR'}
+                                                                                    </label>
+                                                                                )}
+                                                                            </div>
+                                                                        </div>
+                                                                    );
+                                                                })}
+                                                            </div>
+                                                        ) : <span className="text-gray-700 font-mono">—</span>}
+                                                    </td>
+                                                ) : (
+                                                    <td className="px-3.5 py-2.5 whitespace-nowrap text-center">
+                                                        <div className="flex flex-col items-center gap-1">
+                                                            {day.machinesOperated.length > 0 && (
+                                                                <div className="flex flex-wrap justify-center gap-1">
+                                                                    {day.machinesOperated.map(m => (
+                                                                        <span key={m} className="text-[9.5px] bg-blue-500/10 text-blue-400 border border-blue-500/20 px-1.5 py-0.5 rounded font-mono shadow-sm">{m}</span>
+                                                                    ))}
+                                                                </div>
+                                                            )}
+                                                            <div className="flex flex-wrap justify-center gap-1">
+                                                                {day.rejectQty > 0 && (
+                                                                    <span className="inline-flex items-center justify-center px-1.5 py-0.5 rounded bg-amber-500/10 text-amber-400 text-[8.5px] font-bold border border-amber-500/20">
+                                                                        {day.rejectQty} Defect
+                                                                    </span>
+                                                                )}
+                                                                {day.alarmCount > 0 && (
+                                                                    <span className="inline-flex items-center justify-center px-1.5 py-0.5 rounded bg-red-500/10 text-red-500 text-[8.5px] font-bold border border-red-500/20">
+                                                                        {day.alarmCount} Amaran
+                                                                    </span>
+                                                                )}
+                                                                {day.approvedClaims > 0 && (
+                                                                    <span className="inline-flex items-center justify-center px-1.5 py-0.5 rounded bg-teal-500/10 text-teal-400 text-[8.5px] font-bold border border-teal-500/20">
+                                                                        +RM{day.approvedClaims.toFixed(2)}
+                                                                    </span>
+                                                                )}
+                                                            </div>
+                                                            {day.machinesOperated.length === 0 && day.alarmCount === 0 && day.rejectQty === 0 && day.approvedClaims === 0 && (
+                                                                <span className="text-gray-700 font-mono">—</span>
+                                                            )}
+                                                        </div>
+                                                    </td>
+                                                )}
+                                                <td className="px-3.5 py-2.5 whitespace-nowrap text-center">
+                                                    {day.photoCount > 0 ? (
+                                                        <div className="flex items-center justify-center gap-1.5">
+                                                            {day.photos.slice(0, 3).map((photo: any, idx: number) => (
+                                                                <div 
+                                                                    key={idx}
+                                                                    className="relative group/thumb cursor-pointer"
+                                                                    onClick={() => {
+                                                                        setPhotoFilterCategory('all');
+                                                                        setSelectedPhotoDay(day);
+                                                                    }}
+                                                                    title={photo.category || "Work photo"}
                                                                 >
-                                                                    补录
+                                                                    <img 
+                                                                        src={photo.photo_url} 
+                                                                        alt={photo.category || "Work photo"}
+                                                                        className={`w-7 h-7 rounded-md border object-cover transition-all shadow hover:scale-110 ${
+                                                                            photo.type === 'odometer' ? 'border-emerald-500/70 hover:border-emerald-400' :
+                                                                            photo.type === 'do' || photo.type === 'pod' ? 'border-indigo-500/70 hover:border-indigo-400' :
+                                                                            photo.risk_flag ? 'border-red-500' : 'border-white/10 hover:border-violet-500'
+                                                                        }`}
+                                                                    />
+                                                                    {photo.type === 'odometer' && (
+                                                                        <span className="absolute -bottom-1 -right-1 bg-emerald-600 text-white text-[6.5px] font-black px-0.5 rounded-full shadow leading-tight">
+                                                                            ODO
+                                                                        </span>
+                                                                    )}
+                                                                </div>
+                                                            ))}
+                                                            {day.photoCount > 3 && (
+                                                                <button 
+                                                                    onClick={() => {
+                                                                        setPhotoFilterCategory('all');
+                                                                        setSelectedPhotoDay(day);
+                                                                    }}
+                                                                    className="w-7 h-7 rounded-md bg-white/5 border border-white/10 hover:border-violet-500 hover:bg-white/10 flex items-center justify-center text-[9px] font-black text-violet-400 transition-all cursor-pointer"
+                                                                >
+                                                                    +{day.photoCount - 3}
                                                                 </button>
                                                             )}
                                                         </div>
                                                     ) : (
-                                                        <button
-                                                            type="button"
-                                                            onClick={() => {
-                                                                if (isAdminOrHR) {
-                                                                    setSelectedAttendanceDay(day);
-                                                                }
-                                                            }}
-                                                            className={`inline-flex items-center gap-1.5 px-2.5 py-1 rounded-lg border text-xs transition-all ${
-                                                                isAdminOrHR
-                                                                    ? 'text-amber-300 bg-amber-500/10 border-amber-500/30 hover:bg-amber-500/20 cursor-pointer shadow-sm'
-                                                                    : 'text-amber-400/80 bg-amber-500/5 border-amber-500/15 cursor-default'
-                                                            }`}
-                                                            title={isAdminOrHR ? "点击去为该日打卡补录 / Click to log clock-in time" : "未打卡 / No Clock In"}
-                                                        >
-                                                            <AlertTriangle size={12} className="text-amber-400 shrink-0" />
-                                                            <span className="font-bold">没有时间 / 未打卡</span>
-                                                            {isAdminOrHR && <span className="text-[10px] text-amber-200 underline ml-0.5">去打卡 ➜</span>}
-                                                        </button>
-                                                    )
-                                                )}
-                                            </td>
-                                            <td className="px-5 py-4 whitespace-nowrap text-right">
-                                                {isDriver ? (
-                                                    day.tripCount > 0 ? (
-                                                        <div className="flex flex-col items-end gap-1">
-                                                            <span className="font-mono text-amber-400 font-bold">{day.tripCount} <span className="text-[10px] text-gray-500">trip</span></span>
-                                                            {day.tripDetails && day.tripDetails.length > 0 ? (
-                                                                <div className="flex flex-col items-end gap-0.5 font-mono text-[10px]">
-                                                                    {day.tripDetails.map((td: any, tidx: number) => {
-                                                                        const isPending = isTripPending(td);
-                                                                        const isUnscanned = td.status !== 'Delivered' && td.status !== 'Cancelled';
-                                                                        return (
-                                                                            <span key={tidx} className={`font-bold px-1.5 py-0.5 rounded border ${
-                                                                                isUnscanned
-                                                                                    ? 'text-amber-300/90 bg-amber-500/10 border-amber-500/30'
-                                                                                    : isPending 
-                                                                                        ? 'text-amber-300 bg-amber-500/10 border-amber-500/30 animate-pulse' 
-                                                                                        : 'text-emerald-400 bg-emerald-500/10 border-emerald-500/20'
-                                                                            }`} title={`Trip ${tidx+1}: Base RM${(td.baseRate||td.earnings||0).toFixed(2)} + Extra Drop RM${(td.extraRate||0).toFixed(2)}`}>
-                                                                                {isUnscanned
-                                                                                    ? `Trip #${tidx + 1}: 🚚 未扫码 (RM ${(td.earnings || 0).toFixed(2)})`
-                                                                                    : (isPending ? `Trip #${tidx + 1}: ⏳ 待审核 (RM ${(td.earnings || 0).toFixed(2)})` : `Trip #${tidx + 1}: RM ${(td.earnings || 0).toFixed(2)}`)}
-                                                                            </span>
-                                                                        );
-                                                                    })}
-                                                                    {day.tripDetails.length > 1 && (
-                                                                        <span className="text-[10px] text-amber-300 font-black mt-0.5 pt-0.5 border-t border-slate-800">
-                                                                            合计: RM {day.tripEarnings.toFixed(2)}
-                                                                        </span>
-                                                                    )}
-                                                                </div>
+                                                        <span className="text-gray-700">—</span>
+                                                    )}
+                                                </td>
+                                                {isAdminOrHR && (
+                                                    <td className="px-3.5 py-2.5 whitespace-nowrap text-center">
+                                                        <div className="flex items-center justify-center gap-1">
+                                                            {hasDayPending ? (
+                                                                <button
+                                                                    onClick={() => {
+                                                                        const pTrip = day.tripDetails.find((t: any) => isTripPending(t));
+                                                                        if (pTrip) setSelectedTrip(pTrip);
+                                                                    }}
+                                                                    className="text-[9.5px] bg-amber-500 hover:bg-amber-400 text-black font-black px-2 py-0.5 rounded-md shadow flex items-center gap-1 transition-all active:scale-95 animate-pulse cursor-pointer"
+                                                                >
+                                                                    <Clock size={10} className="animate-spin" />
+                                                                    <span>审核</span>
+                                                                </button>
+                                                            ) : day.hasAttendance ? (
+                                                                <button 
+                                                                    onClick={() => setSelectedAttendanceDay(day)}
+                                                                    className="text-[9.5px] bg-amber-500/10 text-amber-400 border border-amber-500/20 hover:bg-amber-500/20 px-1.5 py-0.5 rounded font-bold transition-colors cursor-pointer"
+                                                                >
+                                                                    ✏️ Sunting
+                                                                </button>
                                                             ) : (
-                                                                day.tripEarnings > 0 && (
-                                                                    <span className="text-[10px] text-green-400 font-mono mt-0.5">+ RM{day.tripEarnings.toFixed(2)}</span>
-                                                                )
+                                                                <button 
+                                                                    onClick={() => setSelectedAttendanceDay(day)}
+                                                                    className="text-[9.5px] bg-white/5 text-gray-400 border border-white/5 hover:bg-white/10 px-1.5 py-0.5 rounded font-bold transition-colors cursor-pointer"
+                                                                >
+                                                                    ➕ Log
+                                                                </button>
                                                             )}
                                                         </div>
-                                                    ) : <span className="text-gray-700 font-mono">—</span>
-                                                ) : (
-                                                    day.outputQty > 0 ? (
-                                                        <div className="flex flex-col items-end gap-0.5">
-                                                            <span className="font-mono text-blue-400 font-bold text-base">{day.outputQty.toLocaleString()}</span>
-                                                            {day.jobDetails.length > 0 && (
-                                                                <div className="flex flex-col items-end text-[9px] text-gray-400 font-mono">
-                                                                    {day.jobDetails.slice(0, 2).map((j, jidx) => (
-                                                                        <span key={jidx} className="text-gray-400" title={`Job: ${j.jobId}, SKU: ${j.sku || 'N/A'}`}>
-                                                                            {j.sku ? j.sku.split('-').slice(0, 3).join('-') : j.jobId}
-                                                                        </span>
-                                                                    ))}
-                                                                </div>
-                                                            )}
-                                                        </div>
-                                                    ) : <span className="text-gray-700 font-mono">—</span>
+                                                    </td>
                                                 )}
-                                            </td>
-                                            {isDriver ? (
-                                                <td className="px-5 py-4 whitespace-nowrap text-center">
-                                                    {day.tripDetails && day.tripDetails.length > 0 ? (
-                                                        <div className="flex flex-col items-center gap-2">
-                                                            {day.tripDetails.map((td: any, idx: number) => {
-                                                                const isTdHrApproved = Boolean(
-                                                                    td.notes?.includes('[HR_APPROVED]') ||
-                                                                    td.is_hr_approved ||
-                                                                    (td.orders && td.orders.some((o: any) => o.notes?.includes('[HR_APPROVED]') || o.is_hr_approved))
-                                                                );
-                                                                const isPending = isTripPending(td);
-                                                                const isTripConfirmed = confirmedTripIds.has(td.id) || td.notes?.includes('[DRIVER_CONFIRMED') || td.driver_confirmed === true;
-                                                                const isUnscanned = td.status !== 'Delivered' && td.status !== 'Cancelled';
-
-                                                                return (
-                                                                    <div key={idx} className="flex items-center gap-2 justify-center">
-                                                                        <button 
-                                                                            onClick={() => setSelectedTrip(td)}
-                                                                            className={`text-[10px] px-2.5 py-1 rounded-lg font-mono shadow-sm cursor-pointer transition-all flex items-center gap-1.5 ${
-                                                                                isTdHrApproved
-                                                                                    ? 'bg-purple-950/50 text-purple-300 border border-purple-500/40 font-bold'
-                                                                                    : isUnscanned
-                                                                                        ? 'bg-amber-500/15 text-amber-300 border border-amber-500/35 font-semibold'
-                                                                                        : isPending 
-                                                                                            ? 'bg-amber-500/20 text-amber-300 border border-amber-500/40 animate-pulse font-bold'
-                                                                                            : isTripConfirmed
-                                                                                                ? 'bg-emerald-500/15 text-emerald-300 border border-emerald-500/30 font-bold'
-                                                                                                : 'bg-blue-500/10 text-blue-400 border border-blue-500/20 hover:bg-blue-500/20 hover:text-blue-300'
-                                                                            }`}
-                                                                            title={isTdHrApproved ? "🔒 已被 HR 锁定 (不可修改) / Locked by HR" : (isUnscanned ? "🚚 未完成扫码/进行中 / Pending POD Scan" : "点击查看或提交预修改申请 / Click to view or pre-edit")}
-                                                                        >
-                                                                            {isTdHrApproved && <div className="text-purple-400 shrink-0">🔒</div>}
-                                                                            {isUnscanned && !isTdHrApproved && <span className="text-xs shrink-0">🚚</span>}
-                                                                            {isPending && !isUnscanned && !isTdHrApproved && <Clock size={10} className="text-amber-400 shrink-0" />}
-                                                                            {isTripConfirmed && !isUnscanned && !isTdHrApproved && <CheckCircle2 size={11} className="text-emerald-400 shrink-0" />}
-                                                                            <span>{isUnscanned ? `[未扫码] ${td.displayString}` : (isPending ? `⏳ [待审核] ${td.displayString}` : td.displayString)}</span>
-                                                                            {(td.lorry_plate || day.lorryPlate) && (td.lorry_plate || day.lorryPlate) !== 'N/A' && (
-                                                                                <span className="inline-flex items-center gap-1 px-1.5 py-0.5 rounded bg-black/60 border border-amber-500/30 text-[9px] font-mono font-bold text-amber-300 tracking-wider" title="No. Plat Lori untuk Trip ini / Lorry Plate">
-                                                                                    <Truck size={10} className="text-amber-400 shrink-0" />
-                                                                                    <span className="inline-flex items-center gap-1">
-                                                                                        <span>{(td.lorry_plate || day.lorryPlate).replace('✓', '').trim()}</span>
-                                                                                        {isVpc9821(td.lorry_plate || day.lorryPlate) && (
-                                                                                            <span className="text-emerald-400 font-black text-xs" title="VPC 9821 (Lori Khas / Special Rate) ✓">✓</span>
-                                                                                        )}
-                                                                                    </span>
-                                                                                </span>
-                                                                            )}
-                                                                            <span className={`ml-1 px-1.5 py-0.5 rounded font-black border text-[9.5px] ${
-                                                                                isTdHrApproved 
-                                                                                    ? 'bg-purple-900/40 text-purple-300 border-purple-500/40' 
-                                                                                    : isUnscanned
-                                                                                        ? 'bg-amber-500/10 text-amber-400 border-amber-500/20'
-                                                                                        : isPending
-                                                                                            ? 'bg-amber-500/20 text-amber-300 border-amber-500/30'
-                                                                                            : 'bg-emerald-500/20 text-emerald-300 border-emerald-500/30'
-                                                                            }`}>
-                                                                                {isUnscanned ? `未扫码 (RM ${(td.earnings || 0).toFixed(2)})` : (isPending ? `待审核 RM ${(td.earnings || 0).toFixed(2)}` : `RM ${(td.earnings || 0).toFixed(2)}`)}
-                                                                            </span>
-                                                                        </button>
-
-                                                                        <div className="flex items-center gap-1.5 border-l border-slate-700/50 pl-1.5 ml-1">
-                                                                            <label 
-                                                                                className={`flex items-center justify-center p-1 rounded transition-colors ${isTdHrApproved ? 'opacity-50 cursor-not-allowed' : 'hover:bg-white/5 cursor-pointer'}`}
-                                                                                title={isTdHrApproved ? "🔒 已被 HR 锁定 / Locked by HR" : (isTripConfirmed ? "✅ 该 Trip 已确认无误 / Trip Confirmed" : "⬜ 点击打钩确认此 Trip 无误 / Confirm this Trip")}
-                                                                            >
-                                                                                <input
-                                                                                    type="checkbox"
-                                                                                    checked={isTripConfirmed}
-                                                                                    onChange={(e) => handleToggleTripConfirmation(td, e.target.checked)}
-                                                                                    className="w-4 h-4 accent-emerald-500 rounded cursor-pointer disabled:cursor-not-allowed"
-                                                                                    disabled={isTdHrApproved}
-                                                                                />
-                                                                            </label>
-                                                                            {isAdminOrHR && (
-                                                                                <label 
-                                                                                    className={`flex items-center justify-center px-1.5 py-0.5 border text-[9px] font-bold uppercase rounded transition-all ${
-                                                                                        isTdHrApproved 
-                                                                                            ? (currentUserRole === 'HR' || currentUserRole === 'SuperAdmin'
-                                                                                                ? 'bg-purple-950/80 border-purple-500/80 text-purple-300 hover:bg-purple-900/60 cursor-pointer'
-                                                                                                : 'bg-purple-950/60 border-purple-500/50 text-purple-300 cursor-not-allowed opacity-90')
-                                                                                            : 'bg-slate-800/50 border-slate-700 text-slate-500 hover:bg-slate-700 cursor-pointer'
-                                                                                    }`}
-                                                                                    title={isTdHrApproved 
-                                                                                        ? (currentUserRole === 'HR' || currentUserRole === 'SuperAdmin' 
-                                                                                            ? "🔒 HR 已审核锁定 (HR 可点击解除打勾 / Click to untick)" 
-                                                                                            : "🔒 HR 已审核锁定此 Trip (非 HR 角色不可取消) / HR Approved (Locked)") 
-                                                                                        : "点击由 HR 批准此 Trip / Click to HR Approve"}
-                                                                                >
-                                                                                    <input
-                                                                                        type="checkbox"
-                                                                                        checked={isTdHrApproved}
-                                                                                        onChange={(e) => handleToggleHRApproveTrip(td, e.target.checked)}
-                                                                                        disabled={isTdHrApproved && !(currentUserRole === 'HR' || currentUserRole === 'SuperAdmin')}
-                                                                                        className="w-3 h-3 accent-purple-500 rounded cursor-pointer disabled:cursor-not-allowed mr-1"
-                                                                                    />
-                                                                                    {isTdHrApproved ? '🔒 HR' : 'HR'}
-                                                                                </label>
-                                                                            )}
-                                                                        </div>
-                                                                    </div>
-                                                                );
-                                                            })}
-                                                        </div>
-                                                    ) : <span className="text-gray-700 font-mono">—</span>}
-                                                </td>
-                                            ) : (
-                                                <td className="px-5 py-4 whitespace-nowrap text-center">
-                                                    <div className="flex flex-col items-center gap-1.5">
-                                                        {day.machinesOperated.length > 0 && (
-                                                            <div className="flex flex-wrap justify-center gap-1">
-                                                                {day.machinesOperated.map(m => (
-                                                                    <span key={m} className="text-[10px] bg-blue-500/10 text-blue-400 border border-blue-500/20 px-2 py-0.5 rounded font-mono shadow-sm">{m}</span>
-                                                                ))}
-                                                            </div>
-                                                        )}
-                                                        <div className="flex flex-wrap justify-center gap-1">
-                                                            {day.rejectQty > 0 && (
-                                                                <span className="inline-flex items-center justify-center px-1.5 py-0.5 rounded bg-amber-500/10 text-amber-400 text-[9px] font-bold border border-amber-500/20">
-                                                                    {day.rejectQty} Defect
-                                                                </span>
-                                                            )}
-                                                            {day.alarmCount > 0 && (
-                                                                <span className="inline-flex items-center justify-center px-1.5 py-0.5 rounded bg-red-500/10 text-red-500 text-[9px] font-bold border border-red-500/20">
-                                                                    {day.alarmCount} Amaran
-                                                                </span>
-                                                            )}
-                                                            {day.approvedClaims > 0 && (
-                                                                <span className="inline-flex items-center justify-center px-1.5 py-0.5 rounded bg-teal-500/10 text-teal-400 text-[9px] font-bold border border-teal-500/20">
-                                                                    +RM{day.approvedClaims.toFixed(2)} Claim
-                                                                </span>
-                                                            )}
-                                                        </div>
-                                                        {day.machinesOperated.length === 0 && day.alarmCount === 0 && day.rejectQty === 0 && day.approvedClaims === 0 && (
-                                                            <span className="text-gray-700 font-mono">—</span>
-                                                        )}
-                                                    </div>
-                                                </td>
-                                            )}
-                                            <td className="px-5 py-4 whitespace-nowrap text-center">
-                                                {day.photoCount > 0 ? (
-                                                    <div className="flex items-center justify-center gap-2">
-                                                        {day.photos.slice(0, 3).map((photo: any, idx: number) => (
-                                                            <div 
-                                                                key={idx}
-                                                                className="relative group/thumb cursor-pointer"
-                                                                onClick={() => {
-                                                                    setPhotoFilterCategory('all');
-                                                                    setSelectedPhotoDay(day);
-                                                                }}
-                                                                title={photo.category || "Work photo"}
-                                                            >
-                                                                <img 
-                                                                    src={photo.photo_url} 
-                                                                    alt={photo.category || "Work photo"}
-                                                                    className={`w-8 h-8 rounded-lg border object-cover transition-all shadow hover:scale-110 ${
-                                                                        photo.type === 'odometer' ? 'border-emerald-500/70 hover:border-emerald-400' :
-                                                                        photo.type === 'do' || photo.type === 'pod' ? 'border-indigo-500/70 hover:border-indigo-400' :
-                                                                        photo.risk_flag ? 'border-red-500' : 'border-white/10 hover:border-violet-500'
-                                                                    }`}
-                                                                />
-                                                                {photo.type === 'odometer' && (
-                                                                    <span className="absolute -bottom-1 -right-1 bg-emerald-600 text-white text-[7px] font-black px-1 rounded-full shadow leading-tight">
-                                                                        ODO
-                                                                    </span>
-                                                                )}
-                                                            </div>
-                                                        ))}
-                                                        {day.photoCount > 3 && (
-                                                            <button 
-                                                                onClick={() => {
-                                                                    setPhotoFilterCategory('all');
-                                                                    setSelectedPhotoDay(day);
-                                                                }}
-                                                                className="w-8 h-8 rounded-lg bg-white/5 border border-white/10 hover:border-violet-500 hover:bg-white/10 flex items-center justify-center text-[10px] font-black text-violet-400 transition-all cursor-pointer"
-                                                            >
-                                                                +{day.photoCount - 3}
-                                                            </button>
-                                                        )}
-                                                    </div>
-                                                ) : (
-                                                    <span className="text-gray-700">—</span>
-                                                )}
-                                            </td>
-                                            {isAdminOrHR && (
-                                                <td className="px-5 py-4 whitespace-nowrap text-center">
-                                                    <div className="flex items-center justify-center gap-1.5">
-                                                        {hasDayPending ? (
-                                                            <button
-                                                                onClick={() => {
-                                                                    const pTrip = day.tripDetails.find((t: any) => isTripPending(t));
-                                                                    if (pTrip) setSelectedTrip(pTrip);
-                                                                }}
-                                                                className="text-[10px] bg-amber-500 hover:bg-amber-400 text-black font-black px-2.5 py-1 rounded-lg shadow-md shadow-amber-500/20 flex items-center gap-1 transition-all active:scale-95 animate-pulse cursor-pointer"
-                                                            >
-                                                                <Clock size={11} className="animate-spin" />
-                                                                <span>审核 / Review</span>
-                                                            </button>
-                                                        ) : day.hasAttendance ? (
-                                                            <button 
-                                                                onClick={() => setSelectedAttendanceDay(day)}
-                                                                className="text-[10px] bg-amber-500/10 text-amber-400 border border-amber-500/20 hover:bg-amber-500/20 px-2 py-1 rounded font-bold transition-colors cursor-pointer"
-                                                            >
-                                                                ✏️ Sunting / Edit
-                                                            </button>
-                                                        ) : (
-                                                            <button 
-                                                                onClick={() => setSelectedAttendanceDay(day)}
-                                                                className="text-[10px] bg-white/5 text-gray-400 border border-white/5 hover:bg-white/10 px-2 py-1 rounded font-bold transition-colors cursor-pointer"
-                                                            >
-                                                                ➕ Log
-                                                            </button>
-                                                        )}
-                                                    </div>
-                                                </td>
-                                            )}
-                                        </tr>
-                                    ); })}
+                                            </tr>
+                                        );
+                                    })
+                                )}
                                 </tbody>
                                 <tfoot>
-                                    <tr className="bg-slate-900/90 border-t-2 border-slate-800">
-                                        <td colSpan={isAdminOrHR ? 6 : 5} className="px-5 py-4">
-                                            <div className="flex flex-col sm:flex-row items-center justify-between gap-4">
-                                                <div className="flex items-center gap-3">
-                                                    <div className="p-2.5 rounded-xl bg-emerald-500/10 border border-emerald-500/20 text-emerald-400 shrink-0">
-                                                        <CheckSquare size={22} />
+                                    <tr className="bg-slate-900/95 border-t border-slate-800">
+                                        <td colSpan={isAdminOrHR ? 7 : 6} className="px-3.5 py-2.5">
+                                            <div className="flex flex-col sm:flex-row items-center justify-between gap-3">
+                                                <div className="flex items-center gap-2.5">
+                                                    <div className="p-1.5 rounded-lg bg-emerald-500/10 border border-emerald-500/20 text-emerald-400 shrink-0">
+                                                        <CheckSquare size={18} />
                                                     </div>
                                                     <div>
-                                                        <div className="text-xs font-black text-white uppercase tracking-wider flex items-center gap-2">
+                                                        <div className="text-xs font-black text-white uppercase tracking-wider flex items-center gap-1.5">
                                                             司机 Trip 逐项打钩确认 / Driver Per-Trip Confirmation
                                                         </div>
-                                                        <div className="text-[11px] text-slate-400 mt-0.5">
-                                                            每个 Trip 按钮后方均有独立打钩框。出车无误请逐个打钩；如有数据问题请点击 Trip 按钮提交预修改（需 Admin 审核生效）。
+                                                        <div className="text-[10px] text-slate-400">
+                                                            每个 Trip 按钮后方均有独立打钩框。出车无误请逐个打钩；如有数据问题请点击 Trip 提交预修改。
                                                         </div>
                                                     </div>
                                                 </div>
 
-                                                <div className="flex items-center gap-3">
-                                                    <div className="bg-slate-950 border border-slate-800 px-3.5 py-2 rounded-xl text-xs font-bold text-slate-300 shadow-md">
-                                                        已确认: <span className="text-emerald-400 font-mono text-sm font-black">{confirmedTripIds.size}</span> 个 Trip
+                                                <div className="flex items-center gap-2.5 shrink-0">
+                                                    <div className="bg-slate-950 border border-slate-800 px-2.5 py-1 rounded-lg text-xs font-bold text-slate-300 shadow-sm">
+                                                        已确认: <span className="text-emerald-400 font-mono text-xs font-black">{confirmedTripIds.size}</span> 个 Trip
                                                     </div>
-                                                    <label className="flex items-center gap-3 bg-slate-950 border border-slate-800 hover:border-slate-700 px-4 py-2 rounded-xl cursor-pointer transition-all shrink-0 shadow-md">
+                                                    <label className="flex items-center gap-2 bg-slate-950 border border-slate-800 hover:border-slate-700 px-3 py-1 rounded-lg cursor-pointer transition-all shrink-0 shadow-sm">
                                                         <input
                                                             type="checkbox"
                                                             checked={isMonthlyConfirmed}
                                                             onChange={e => handleToggleMonthlyConfirmation(e.target.checked)}
-                                                            className="w-5 h-5 accent-emerald-500 rounded cursor-pointer"
+                                                            className="w-4 h-4 accent-emerald-500 rounded cursor-pointer"
                                                         />
                                                         <span className={`text-xs font-black font-mono ${isMonthlyConfirmed ? 'text-emerald-400' : 'text-slate-300'}`}>
-                                                            {isMonthlyConfirmed ? '✅ 全月确认 / Confirmed' : '⬜ 全月打钩'}
+                                                            {isMonthlyConfirmed ? '✅ 全月确认' : '⬜ 全月打钩'}
                                                         </span>
                                                     </label>
                                                 </div>
