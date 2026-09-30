@@ -93,12 +93,32 @@ class ErrorBoundary extends Component<Props, State> {
                             </pre>
                         </div>
 
-                        <button
-                            onClick={() => window.location.reload()}
-                            className="mt-6 px-6 py-3 bg-red-600 hover:bg-red-500 text-white rounded-xl font-bold transition-all"
-                        >
-                            ATTEMPT SYSTEM REBOOT
-                        </button>
+                        <div className="flex flex-col sm:flex-row items-center gap-4 mt-6">
+                            <button
+                                onClick={async () => {
+                                    try {
+                                        if ('caches' in window) {
+                                            const keys = await caches.keys();
+                                            await Promise.all(keys.map(k => caches.delete(k)));
+                                        }
+                                        if ('serviceWorker' in navigator) {
+                                            const registrations = await navigator.serviceWorker.getRegistrations();
+                                            await Promise.all(registrations.map(r => r.unregister()));
+                                        }
+                                    } catch (e) {
+                                        console.warn('Failed to clear caches:', e);
+                                    }
+                                    window.location.href = window.location.origin + window.location.pathname + '?_t=' + Date.now() + window.location.hash;
+                                }}
+                                className="px-6 py-3 bg-red-600 hover:bg-red-500 text-white rounded-xl font-bold transition-all shadow-lg active:scale-95 cursor-pointer flex items-center gap-2"
+                            >
+                                <span>🔄</span>
+                                <span>ATTEMPT SYSTEM REBOOT (清除缓存重启)</span>
+                            </button>
+                            <span className="text-xs text-red-300/80">
+                                💡 若持续报错，请按 <kbd className="px-2 py-0.5 bg-black/50 border border-red-500/30 rounded font-mono text-white">Ctrl + F5</kbd> 强制刷新浏览器缓存。
+                            </span>
+                        </div>
                     </div>
                 </div>
             );
