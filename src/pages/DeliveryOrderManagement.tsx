@@ -65,7 +65,8 @@ const normalizeWarehouseName = (loc: string): string => {
     if (lower === 'kelantan' || lower === 'k1' || lower.includes('kelantan')) return 'Kelantan';
     if (lower === 'nilai' || lower === 'n1' || lower.includes('nilai')) return 'Nilai';
     if (lower === 'spd') return 'SPD';
-    if (lower.includes('corner') || lower.includes('ali')) return 'OPM Ali';
+    if (lower === 'opm corner' || lower === 'opm_corner' || lower.includes('corner')) return 'OPM Corner';
+    if (lower === 'opm ali' || lower === 'opm_ali' || lower.includes('ali')) return 'OPM Ali';
     if (lower.includes('lama') || lower === 'taiping' || lower === 't1') return 'OPM Lama';
     return loc;
 };
@@ -145,9 +146,9 @@ const getAvailableWarehousesForOrigin = (origin: string): string[] => {
     if (u === 'KELANTAN') return ['Kelantan'];
     if (u === 'JOHOR') return ['Johor'];
     if (u === 'TAIPING' || u === 'SPD' || u === 'T1') {
-        return ['OPM Lama', 'OPM Ali', 'SPD'];
+        return ['OPM Lama', 'OPM Corner', 'OPM Ali', 'SPD'];
     }
-    return ['OPM Lama', 'OPM Ali', 'SPD'];
+    return ['OPM Lama', 'OPM Corner', 'OPM Ali', 'SPD'];
 };
 
 

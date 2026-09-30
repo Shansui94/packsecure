@@ -11,7 +11,7 @@ export const normalizeLocation = (loc?: string): string => {
     if (!loc) return 'OPM Lama';
     const upper = loc.toUpperCase().trim();
     if (upper === 'TAIPING' || upper === 'OPM_LAMA' || upper === 'OPM LAMA' || upper === 'T1' || upper === 'T2' || upper === 'T3' || upper === 'T4' || upper === 'T5') return 'OPM Lama';
-    if (upper === 'OPM CORNER' || upper === 'OPM_CORNER') return 'OPM Ali';
+    if (upper === 'OPM CORNER' || upper === 'OPM_CORNER') return 'OPM Corner';
     if (upper === 'OPM ALI' || upper === 'OPM_ALI') return 'OPM Ali';
     if (upper === 'NILAI') return 'Nilai';
     if (upper === 'JOHOR') return 'Johor';

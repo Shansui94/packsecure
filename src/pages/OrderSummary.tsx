@@ -16,7 +16,7 @@ type FactoryHub = 'Taiping' | 'Nilai' | 'Kelantan' | 'Johor';
 
 const FACTORY_HUBS: FactoryHub[] = ['Taiping', 'Nilai', 'Kelantan', 'Johor'];
 
-const TAIPING_WAREHOUSES = ['OPM Lama', 'OPM Ali', 'SPD', 'All'] as const;
+const TAIPING_WAREHOUSES = ['OPM Lama', 'OPM Corner', 'OPM Ali', 'SPD', 'All'] as const;
 
 // Normalize inventory loc_id to match warehouse names
 const normalizeLoc = (locId: string): string => {
@@ -25,8 +25,8 @@ const normalizeLoc = (locId: string): string => {
         'spd': 'SPD', 
         'opm lama': 'OPM Lama', 
         'opm_lama': 'OPM Lama',
-        'opm corner': 'OPM Ali', 
-        'opm_corner': 'OPM Ali',
+        'opm corner': 'OPM Corner', 
+        'opm_corner': 'OPM Corner',
         'opm ali': 'OPM Ali', 
         'opm_ali': 'OPM Ali',
         'nilai': 'Nilai',
@@ -38,6 +38,7 @@ const normalizeLoc = (locId: string): string => {
 
 // Sub-locations sharing stock fallback
 const STOCK_FALLBACK: Record<string, string> = {
+    'OPM Corner': 'SPD',
     'OPM Lama': 'SPD',
     'OPM Ali': 'SPD',
 };

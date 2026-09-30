@@ -23,7 +23,8 @@ const deg2rad = (deg: number) => {
 const WAREHOUSE_COORDS = [
     { id: 'Nilai', name: 'Nilai', lat: 2.8167, lng: 101.7958 },
     { id: 'OPM Lama', name: 'OPM Lama', lat: 4.8500, lng: 100.7333 },
-    { id: 'OPM Ali', name: 'OPM Ali', lat: 4.8505, lng: 100.7340 },
+    { id: 'OPM Corner', name: 'OPM Corner', lat: 4.8505, lng: 100.7340 },
+    { id: 'OPM Ali', name: 'OPM Ali', lat: 4.8508, lng: 100.7345 },
     { id: 'SPD', name: 'SPD', lat: 4.8510, lng: 100.7350 },
     { id: 'Kelantan', name: 'Kelantan', lat: 6.1256, lng: 102.2381 },
     { id: 'Johor', name: 'Johor', lat: 1.4927, lng: 103.7414 }

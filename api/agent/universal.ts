@@ -1612,8 +1612,11 @@ CRITICAL: Return strictly a valid JSON object. Do not wrap in markdown quotes.
                         const sanitizedItems = (d.items || []).map((it: any) => {
                             if (!it || typeof it !== 'object') return it;
                             let loc = it.sourceLocation || it.warehouse || it.location;
-                            if (typeof loc === 'string' && (loc.toLowerCase().includes('corner') || loc.toLowerCase().includes('ali'))) {
-                                loc = 'OPM Ali';
+                            if (typeof loc === 'string') {
+                                const l = loc.toLowerCase().trim();
+                                if (l.includes('corner')) loc = 'OPM Corner';
+                                else if (l.includes('ali')) loc = 'OPM Ali';
+                                else if (l.includes('lama')) loc = 'OPM Lama';
                             }
                             return {
                                 ...it,

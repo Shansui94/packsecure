@@ -9,7 +9,8 @@
 | 厂区代码 / 标识 | 厂区名称 | 业务属性与定位 | 产线与产品限制规则 |
 | :--- | :--- | :--- | :--- |
 | **OPM Lama** (T1) | 太平旧厂 (Taiping Main) | 核心生产基地 & 仓库 | 气泡膜 (Bubble Wrap) 与 缠绕膜 (Stretch Film) 主力生产/存放地。 |
-| **OPM Ali** | 太平分厂 (Auxiliary & Converted Goods) | 辅助成品与流转仓库 | 胶带 (Tape)、运单 (AWB)、CUKUPP 气泡袋/卷材、充气袋 (Airtube) 等主力存放地。**系统已全面废除 OPM Corner（OPM Baru）概念，全系统统一归并至 OPM Ali**。 |
+| **OPM Corner** / **OPM Baru** | 太平新厂 / 角落厂区 | 仓储与辅助加工 | 与 OPM Lama 紧密联动（OPM Corner 即 OPM Baru）。 |
+| **OPM Ali** | 太平分厂 (Auxiliary & Converted Goods) | 辅助成品与流转仓库 | 胶带 (Tape)、运单 (AWB)、CUKUPP 气泡袋/卷材、充气袋 (Airtube) 等主力存放地。 |
 | **SPD** | 太平 SPD 仓 | 仓储/流转 | 北马流转枢纽。 |
 | **Nilai** (N1) | 汝来厂 (Central Hub) | 中马核心生产与中转 | 允许生产与存放**所有品类**产品，覆盖雪兰莪、吉隆坡、森美兰、马六甲等中南部市场。 |
 | **Kelantan** (K1) | 吉兰丹厂 (East Coast) | 东海岸生产基地 | 覆盖吉兰丹、登嘉楼、彭亨等东海岸市场。 |

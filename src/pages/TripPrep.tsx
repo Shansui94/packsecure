@@ -10,7 +10,7 @@ const getItemLocation = (item: any, order: any): string => {
     if (item.sourceLocation) {
         const src = item.sourceLocation.toLowerCase();
         if (src.includes('opm lama')) return 'OPM Lama';
-        if (src.includes('opm corner')) return 'OPM Ali';
+        if (src.includes('opm corner')) return 'OPM Corner';
         if (src.includes('opm ali')) return 'OPM Ali';
         if (src.includes('nilai')) return 'Nilai';
         if (src.includes('kelantan')) return 'Kelantan';
@@ -20,7 +20,7 @@ const getItemLocation = (item: any, order: any): string => {
     if (item.remark) {
         const r = item.remark.toLowerCase();
         if (r.includes('opm lama')) return 'OPM Lama';
-        if (r.includes('opm corner')) return 'OPM Ali';
+        if (r.includes('opm corner')) return 'OPM Corner';
         if (r.includes('opm ali')) return 'OPM Ali';
         if (r.includes('nilai')) return 'Nilai';
         if (r.includes('kelantan')) return 'Kelantan';
