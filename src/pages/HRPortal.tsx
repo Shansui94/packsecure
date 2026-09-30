@@ -28,6 +28,7 @@ import {
 import { DriverPricingRulebookEditor } from '../components/pricing/DriverPricingRulebookEditor';
 import { HRAuditWorkbench } from '../components/pricing/HRAuditWorkbench';
 import PersonalMonthlyReport from './PersonalMonthlyReport';
+import TenancyAgreementFolder from '../components/tenancy/TenancyAgreementFolder';
 
 const formatYYYYMMDD = (dateStr: string | null | undefined): string => {
     if (!dateStr) return '';
@@ -769,7 +770,7 @@ const MachineRateItemCard: React.FC<{
 // ── MAIN COMPONENT ────────────────────────────────────────────
 interface HRPortalProps {
     user?: any;
-    initialTab?: 'personnel' | 'permissions' | 'payroll' | 'advances' | 'approvals' | 'badges' | 'driver-pricing-audit';
+    initialTab?: 'personnel' | 'permissions' | 'payroll' | 'advances' | 'approvals' | 'badges' | 'driver-pricing-audit' | 'tenancy';
     initialRoleFilter?: string;
     onNavigate?: (page: string) => void;
 }
@@ -777,7 +778,7 @@ interface HRPortalProps {
 const HRPortal: React.FC<HRPortalProps> = ({ user, initialTab, initialRoleFilter, onNavigate }) => {
     const { t } = useTranslation();
     const isSuperAdminOrHR = user?.role === 'SuperAdmin' || user?.role === 'HR';
-    const [activeTab, setActiveTab] = useState<'personnel' | 'permissions' | 'payroll' | 'advances' | 'approvals' | 'badges' | 'driver-pricing-audit'>(
+    const [activeTab, setActiveTab] = useState<'personnel' | 'permissions' | 'payroll' | 'advances' | 'approvals' | 'badges' | 'driver-pricing-audit' | 'tenancy'>(
         (initialTab && (initialTab !== 'payroll' && initialTab !== 'advances' || isSuperAdminOrHR)) 
             ? initialTab 
             : 'personnel'
@@ -1758,6 +1759,7 @@ const HRPortal: React.FC<HRPortalProps> = ({ user, initialTab, initialRoleFilter
         { id: 'payroll', label: '💰 Payroll', count: 0 },
         { id: 'advances', label: '💸 Salary Advances', count: 0 },
         { id: 'badges', label: '🏅 Badges Studio (勋章工坊)', count: 0 },
+        { id: 'tenancy', label: '🏢 租约管理 (Tenancy Agreements)', count: 0 },
     ];
 
     const visibleTabs = TABS.filter(tab => {
@@ -1769,6 +1771,9 @@ const HRPortal: React.FC<HRPortalProps> = ({ user, initialTab, initialRoleFilter
         }
         if (tab.id === 'payroll' || tab.id === 'advances') {
             return isSuperAdminOrHR;
+        }
+        if (tab.id === 'tenancy') {
+            return isSuperAdminOrHR || user?.role === 'Admin';
         }
         return true;
     });
@@ -3258,6 +3263,11 @@ const HRPortal: React.FC<HRPortalProps> = ({ user, initialTab, initialRoleFilter
                         <DriverPricingRulebookEditor />
                     )}
                 </div>
+            )}
+
+            {/* ── TENANCY AGREEMENTS REPOSITORY ── */}
+            {activeTab === 'tenancy' && (
+                <TenancyAgreementFolder currentUser={user} />
             )}
 
             {/* ── PERSONAL MONTHLY REPORT MODAL DIALOG ── */}

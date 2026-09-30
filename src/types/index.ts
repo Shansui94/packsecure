@@ -786,5 +786,38 @@ export interface UniversalQueryResponse {
     confidence?: number;
 }
 
+// 18. Tenancy Agreement & Asset Lease Management
+export type TenancyStatus = 'Active' | 'Expiring_Soon' | 'Expired' | 'Renewed' | 'Terminated';
+
+export interface TenancyAgreement {
+    id: string;
+    title: string;
+    category?: string;
+    property_address?: string;
+    location_tag?: string;
+    landlord_name?: string;
+    landlord_phone?: string;
+    landlord_ic_ssm?: string;
+    start_date?: string; // YYYY-MM-DD
+    end_date?: string;   // YYYY-MM-DD
+    monthly_rent?: number;
+    security_deposit?: number;
+    utility_deposit?: number;
+    notice_period_months?: number;
+    status: TenancyStatus;
+    file_url?: string;
+    storage_path?: string;
+    file_name?: string;
+    tags?: string[];
+    notes?: string;
+    whatsapp_reminded_at?: string;
+    created_by?: string;
+    created_at?: string;
+    updated_at?: string;
+    // Computed helper fields for UI
+    days_remaining?: number;
+}
+
+
 
 
