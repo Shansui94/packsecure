@@ -22,7 +22,7 @@ const normalizeWarehouseName = (loc: string): string => {
     if (lower === 'kelantan') return 'Kelantan';
     if (lower === 'johor') return 'Johor';
     if (lower === 'opm lama' || lower === 'opm_lama') return 'OPM Lama';
-    if (lower === 'opm corner' || lower === 'opm_corner') return 'OPM Corner';
+    if (lower === 'opm corner' || lower === 'opm_corner') return 'OPM Ali';
     if (lower === 'opm ali' || lower === 'opm_ali') return 'OPM Ali';
     return loc;
 };
@@ -36,7 +36,7 @@ const getAvailableWarehousesForOrigin = (origin: string): string[] => {
     if (u === 'NILAI') return ['Nilai'];
     if (u === 'KELANTAN') return ['Kelantan'];
     if (u === 'JOHOR') return ['Johor'];
-    return ['SPD', 'OPM Lama', 'OPM Corner', 'OPM Ali'];
+    return ['SPD', 'OPM Lama', 'OPM Ali'];
 };
 
 const normalizeLeaveType = (raw?: string | null): string => {

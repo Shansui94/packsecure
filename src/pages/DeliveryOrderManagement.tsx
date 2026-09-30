@@ -66,7 +66,7 @@ const normalizeWarehouseName = (loc: string): string => {
     if (lower === 'nilai' || lower === 'n1') return 'Nilai';
     if (lower === 'spd') return 'SPD';
     if (lower === 'opm lama' || lower === 'opm_lama' || lower === 'taiping' || lower === 't1') return 'OPM Lama';
-    if (lower === 'opm corner' || lower === 'opm_corner') return 'OPM Corner';
+    if (lower === 'opm corner' || lower === 'opm_corner') return 'OPM Ali';
     if (lower === 'opm ali' || lower === 'opm_ali') return 'OPM Ali';
     return loc;
 };
@@ -111,9 +111,9 @@ export const guessItemLocation = (item: { sku?: string; product?: string; rawPro
         return 'OPM Lama';
     }
 
-    // 3. Tapes / Air tube / Converted products -> OPM Corner or SPD
-    if (sku.includes('TAPE') || sku.includes('CUKUPP') || prod.includes('TAPE') || sku.includes('AWB') || prod.includes('AWB') || sku.includes('AIRTUBE') || prod.includes('AIRTUBE')) {
-        return 'OPM Corner';
+    // 3. Tapes / Air tube / Converted products / AWB / CUKUPP -> OPM Ali
+    if (sku.includes('TAPE') || sku.includes('CUKUPP') || prod.includes('TAPE') || sku.includes('AWB') || prod.includes('AWB') || sku.includes('AIRTUBE') || prod.includes('AIRTUBE') || (sku.startsWith('B') && sku.endsWith('-ROLL')) || (sku.startsWith('W') && sku.endsWith('-ROLL')) || (sku.startsWith('YEL-') && sku.endsWith('-ROLL'))) {
+        return 'OPM Ali';
     }
 
     // Default for Taiping is OPM Lama
@@ -136,9 +136,9 @@ const getAvailableWarehousesForOrigin = (origin: string): string[] => {
     if (u === 'KELANTAN') return ['Kelantan'];
     if (u === 'JOHOR') return ['Johor'];
     if (u === 'TAIPING' || u === 'SPD' || u === 'T1') {
-        return ['OPM Lama', 'OPM Corner', 'OPM Ali', 'SPD'];
+        return ['OPM Lama', 'OPM Ali', 'SPD'];
     }
-    return ['OPM Lama', 'OPM Corner', 'OPM Ali', 'SPD'];
+    return ['OPM Lama', 'OPM Ali', 'SPD'];
 };
 
 
@@ -6091,6 +6091,20 @@ const DeliveryOrderManagement: React.FC<DeliveryOrderManagementProps> = ({ user 
                                                                                                 )}
                                                                                             </div>
                                                                                             <div className="flex items-center gap-1 shrink-0">
+                                                                                                {doOrder.status === 'Pending Approval' && (
+                                                                                                    <button
+                                                                                                        type="button"
+                                                                                                        onClick={(e) => {
+                                                                                                            e.stopPropagation();
+                                                                                                            handleApproveAmendment(doOrder);
+                                                                                                        }}
+                                                                                                        className="px-2 py-0.5 text-white bg-gradient-to-r from-amber-600 to-orange-600 hover:from-amber-500 hover:to-orange-500 rounded text-[10px] font-black border border-amber-500/40 shadow cursor-pointer flex items-center gap-1 animate-pulse mr-1"
+                                                                                                        title="Semak & Lulus Pindaan / Review & Approve"
+                                                                                                    >
+                                                                                                        <Zap size={10} className="fill-white" />
+                                                                                                        <span>审核 / Approve</span>
+                                                                                                    </button>
+                                                                                                )}
                                                                                                 <button
                                                                                                     type="button"
                                                                                                     onClick={(e) => {

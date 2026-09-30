@@ -715,7 +715,7 @@ const LiveStock: React.FC<LiveStockProps> = ({ onNavigate }) => {
                 const l = loc.toLowerCase().trim();
                 if (l === 'opm lama' || l === 'opm_lama' || l === 't1' || l === 't2' || l === 't3' || l === 't4' || l === 't5' || l === 'taiping') return 'OPM Lama';
                 if (l === 'spd') return 'SPD';
-                if (l === 'opm corner' || l === 'opm_corner') return 'OPM Corner';
+                if (l === 'opm corner' || l === 'opm_corner') return 'OPM Ali';
                 if (l === 'opm ali' || l === 'opm_ali') return 'OPM Ali';
                 if (l === 'nilai') return 'Nilai';
                 if (l === 'johor') return 'Johor';
@@ -878,7 +878,7 @@ const LiveStock: React.FC<LiveStockProps> = ({ onNavigate }) => {
                     const l = String(rawLoc).toLowerCase().trim();
                     if (l === 'opm lama' || l === 'opm_lama' || l === 't1' || l === 't2' || l === 't3' || l === 't4' || l === 't5' || l === 'taiping') loc = 'OPM Lama';
                     else if (l === 'spd') loc = 'SPD';
-                    else if (l === 'opm corner' || l === 'opm_corner') loc = 'OPM Corner';
+                    else if (l === 'opm corner' || l === 'opm_corner') loc = 'OPM Ali';
                     else if (l === 'opm ali' || l === 'opm_ali') loc = 'OPM Ali';
                     else if (l === 'nilai') loc = 'Nilai';
                     else if (l === 'johor') loc = 'Johor';

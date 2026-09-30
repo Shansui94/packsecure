@@ -87,7 +87,7 @@ const normalizeLoc = (loc?: string): string => {
     )
         return 'OPM Lama';
     if (l === 'spd') return 'SPD';
-    if (l === 'opm corner' || l === 'opm_corner') return 'OPM Corner';
+    if (l === 'opm corner' || l === 'opm_corner') return 'OPM Ali';
     if (l === 'opm ali' || l === 'opm_ali') return 'OPM Ali';
     if (l === 'nilai') return 'Nilai';
     if (l === 'kelantan') return 'Kelantan';

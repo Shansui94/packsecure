@@ -3,7 +3,6 @@ import { Machine } from '../types';
 export const WAREHOUSES = [
     'SPD',
     'OPM Lama',
-    'OPM Corner',
     'OPM Ali',
     'Nilai',
     'Kelantan',

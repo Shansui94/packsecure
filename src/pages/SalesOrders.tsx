@@ -136,7 +136,7 @@ const SalesOrders: React.FC = () => {
                     const normalized = locId === 'spd' ? 'SPD' : 
                                        (locId === 'nilai' ? 'Nilai' : 
                                        (locId === 'opm_lama' || locId === 'opm lama' ? 'OPM Lama' : 
-                                       (locId === 'opm_corner' || locId === 'opm corner' ? 'OPM Corner' : 
+                                       (locId === 'opm_corner' || locId === 'opm corner' ? 'OPM Ali' : 
                                        (locId === 'opm_ali' || locId === 'opm ali' ? 'OPM Ali' : locId.toUpperCase()))));
                     newStockMap[sku][normalized] = (newStockMap[sku][normalized] || 0) + stock;
                 });
