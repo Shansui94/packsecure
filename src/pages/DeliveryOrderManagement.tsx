@@ -61,13 +61,12 @@ type ScanSheetReview = {
 const normalizeWarehouseName = (loc: string): string => {
     if (!loc) return 'OPM Lama';
     const lower = loc.trim().toLowerCase();
-    if (lower === 'johor' || lower === 'j1') return 'Johor';
-    if (lower === 'kelantan' || lower === 'k1') return 'Kelantan';
-    if (lower === 'nilai' || lower === 'n1') return 'Nilai';
+    if (lower === 'johor' || lower === 'j1' || lower.includes('johor')) return 'Johor';
+    if (lower === 'kelantan' || lower === 'k1' || lower.includes('kelantan')) return 'Kelantan';
+    if (lower === 'nilai' || lower === 'n1' || lower.includes('nilai')) return 'Nilai';
     if (lower === 'spd') return 'SPD';
-    if (lower === 'opm lama' || lower === 'opm_lama' || lower === 'taiping' || lower === 't1') return 'OPM Lama';
-    if (lower === 'opm corner' || lower === 'opm_corner') return 'OPM Ali';
-    if (lower === 'opm ali' || lower === 'opm_ali') return 'OPM Ali';
+    if (lower.includes('corner') || lower.includes('ali')) return 'OPM Ali';
+    if (lower.includes('lama') || lower === 'taiping' || lower === 't1') return 'OPM Lama';
     return loc;
 };
 
@@ -111,8 +110,18 @@ export const guessItemLocation = (item: { sku?: string; product?: string; rawPro
         return 'OPM Lama';
     }
 
-    // 3. Tapes / Air tube / Converted products / AWB / CUKUPP -> OPM Ali
-    if (sku.includes('TAPE') || sku.includes('CUKUPP') || prod.includes('TAPE') || sku.includes('AWB') || prod.includes('AWB') || sku.includes('AIRTUBE') || prod.includes('AIRTUBE') || (sku.startsWith('B') && sku.endsWith('-ROLL')) || (sku.startsWith('W') && sku.endsWith('-ROLL')) || (sku.startsWith('YEL-') && sku.endsWith('-ROLL'))) {
+    // 3. Tapes / Air tube / Converted products / AWB / CUKUPP / Courier Bags / Flyers -> OPM Ali
+    if (
+        sku.includes('TAPE') || sku.includes('CUKUPP') || prod.includes('TAPE') || 
+        sku.includes('AWB') || prod.includes('AWB') || 
+        sku.includes('AIRTUBE') || prod.includes('AIRTUBE') || 
+        sku.includes('FLYER') || prod.includes('FLYER') ||
+        sku.includes('BEG') || prod.includes('BEG') ||
+        sku.includes('BAG') || prod.includes('BAG') ||
+        (sku.startsWith('B') && sku.endsWith('-ROLL')) || 
+        (sku.startsWith('W') && sku.endsWith('-ROLL')) || 
+        (sku.startsWith('YEL-') && sku.endsWith('-ROLL'))
+    ) {
         return 'OPM Ali';
     }
 
@@ -811,7 +820,7 @@ const DeliveryOrderManagement: React.FC<DeliveryOrderManagementProps> = ({ user 
         parsedTripBatch.deliveryOrders.forEach(o => {
             (o.items || []).forEach(it => {
                 const key = it.sku || it.rawProductName || it.product || 'Unknown';
-                const loc = it.sourceLocation || guessItemLocation(it, parsedTripOrigin);
+                const loc = normalizeWarehouseName(it.sourceLocation || guessItemLocation(it, parsedTripOrigin));
                 const q = Number(it.quantity) || 0;
                 const existing = prodMap.get(key);
                 if (existing) {
@@ -2561,18 +2570,40 @@ const DeliveryOrderManagement: React.FC<DeliveryOrderManagementProps> = ({ user 
         try {
             const filePayloads = await Promise.all(
                 fileList.map(async (file) => {
-                    const base64 = await new Promise<string>((resolve, reject) => {
-                        const reader = new FileReader();
-                        reader.onload = () => {
-                            const res = reader.result as string;
-                            const data = res.includes(',') ? res.split(',')[1] : res;
-                            resolve(data);
-                        };
-                        reader.onerror = reject;
-                        reader.readAsDataURL(file);
-                    });
-
+                    const isImg = file.type.startsWith('image/') || /\.(jpg|jpeg|png|webp)$/i.test(file.name);
+                    let base64 = '';
                     let mime = file.type;
+
+                    if (isImg) {
+                        try {
+                            const compressedDataUrl = await compressImage(file, 1600, 0.85);
+                            const parsed = dataUrlToBase64Payload(compressedDataUrl);
+                            base64 = parsed.base64;
+                            mime = parsed.mimeType || 'image/jpeg';
+                        } catch (compErr) {
+                            console.warn("Failed to compress image, falling back to raw:", compErr);
+                            base64 = await new Promise<string>((resolve, reject) => {
+                                const reader = new FileReader();
+                                reader.onload = () => {
+                                    const res = reader.result as string;
+                                    resolve(res.includes(',') ? res.split(',')[1] : res);
+                                };
+                                reader.onerror = reject;
+                                reader.readAsDataURL(file);
+                            });
+                        }
+                    } else {
+                        base64 = await new Promise<string>((resolve, reject) => {
+                            const reader = new FileReader();
+                            reader.onload = () => {
+                                const res = reader.result as string;
+                                resolve(res.includes(',') ? res.split(',')[1] : res);
+                            };
+                            reader.onerror = reject;
+                            reader.readAsDataURL(file);
+                        });
+                    }
+
                     if (!mime || mime === 'application/octet-stream') {
                         const nameLower = file.name.toLowerCase();
                         if (nameLower.endsWith('.pdf')) mime = 'application/pdf';
@@ -2646,7 +2677,7 @@ const DeliveryOrderManagement: React.FC<DeliveryOrderManagementProps> = ({ user 
                         rawProductName: it.rawProductName || it.product,
                         product: matchRes.product,
                         sku: matchRes.sku,
-                        sourceLocation: it.sourceLocation || matchRes.sourceLocation || guessItemLocation({ sku: matchRes.sku, product: matchRes.product, rawProductName: it.product }, initialOrigin),
+                        sourceLocation: normalizeWarehouseName(it.sourceLocation || matchRes.sourceLocation || guessItemLocation({ sku: matchRes.sku, product: matchRes.product, rawProductName: it.product }, initialOrigin)),
                         isMatched: matchRes.isMatched
                     };
                 });
@@ -2865,18 +2896,40 @@ const DeliveryOrderManagement: React.FC<DeliveryOrderManagementProps> = ({ user 
         try {
             const filePayloads = await Promise.all(
                 fileList.map(async (file) => {
-                    const base64 = await new Promise<string>((resolve, reject) => {
-                        const reader = new FileReader();
-                        reader.onload = () => {
-                            const res = reader.result as string;
-                            const data = res.includes(',') ? res.split(',')[1] : res;
-                            resolve(data);
-                        };
-                        reader.onerror = reject;
-                        reader.readAsDataURL(file);
-                    });
-
+                    const isImg = file.type.startsWith('image/') || /\.(jpg|jpeg|png|webp)$/i.test(file.name);
+                    let base64 = '';
                     let mime = file.type;
+
+                    if (isImg) {
+                        try {
+                            const compressedDataUrl = await compressImage(file, 1600, 0.85);
+                            const parsed = dataUrlToBase64Payload(compressedDataUrl);
+                            base64 = parsed.base64;
+                            mime = parsed.mimeType || 'image/jpeg';
+                        } catch (compErr) {
+                            console.warn("Failed to compress image, falling back to raw:", compErr);
+                            base64 = await new Promise<string>((resolve, reject) => {
+                                const reader = new FileReader();
+                                reader.onload = () => {
+                                    const res = reader.result as string;
+                                    resolve(res.includes(',') ? res.split(',')[1] : res);
+                                };
+                                reader.onerror = reject;
+                                reader.readAsDataURL(file);
+                            });
+                        }
+                    } else {
+                        base64 = await new Promise<string>((resolve, reject) => {
+                            const reader = new FileReader();
+                            reader.onload = () => {
+                                const res = reader.result as string;
+                                resolve(res.includes(',') ? res.split(',')[1] : res);
+                            };
+                            reader.onerror = reject;
+                            reader.readAsDataURL(file);
+                        });
+                    }
+
                     if (!mime || mime === 'application/octet-stream') {
                         const nameLower = file.name.toLowerCase();
                         if (nameLower.endsWith('.pdf')) mime = 'application/pdf';
@@ -2950,7 +3003,7 @@ const DeliveryOrderManagement: React.FC<DeliveryOrderManagementProps> = ({ user 
                         rawProductName: it.rawProductName || it.product,
                         product: matchRes.product,
                         sku: matchRes.sku,
-                        sourceLocation: it.sourceLocation || matchRes.sourceLocation || guessItemLocation({ sku: matchRes.sku, product: matchRes.product, rawProductName: it.product }, currentOrigin),
+                        sourceLocation: normalizeWarehouseName(it.sourceLocation || matchRes.sourceLocation || guessItemLocation({ sku: matchRes.sku, product: matchRes.product, rawProductName: it.product }, currentOrigin)),
                         isMatched: matchRes.isMatched
                     };
                 });
@@ -3175,8 +3228,10 @@ const DeliveryOrderManagement: React.FC<DeliveryOrderManagementProps> = ({ user 
             const currentItem = { ...items[itemIndex] };
 
             const trimmed = (inputVal || '').trim();
+            const skuCandidate = trimmed.includes(' - ') ? trimmed.split(' - ')[0].trim() : trimmed;
             const matchedProd = v2Items.find(x => 
                 x.sku.toLowerCase() === trimmed.toLowerCase() || 
+                x.sku.toLowerCase() === skuCandidate.toLowerCase() ||
                 x.name.toLowerCase() === trimmed.toLowerCase() ||
                 `${x.name} (${x.sku})`.toLowerCase() === trimmed.toLowerCase() ||
                 `${x.sku} - ${x.name}`.toLowerCase() === trimmed.toLowerCase()
@@ -3186,18 +3241,21 @@ const DeliveryOrderManagement: React.FC<DeliveryOrderManagementProps> = ({ user 
                 currentItem.sku = matchedProd.sku;
                 currentItem.product = matchedProd.name;
                 currentItem.isMatched = true;
-                currentItem.sourceLocation = guessItemLocation({ sku: matchedProd.sku, product: matchedProd.name, rawProductName: currentItem.rawProductName }, parsedTripOrigin);
+                currentItem.sourceLocation = normalizeWarehouseName(guessItemLocation({ sku: matchedProd.sku, product: matchedProd.name, rawProductName: currentItem.rawProductName }, parsedTripOrigin));
             } else if (trimmed) {
-                const exactCatalogMatch = v2Items.find(x => x.sku.toLowerCase() === trimmed.toLowerCase());
+                const exactCatalogMatch = v2Items.find(x => 
+                    x.sku.toLowerCase() === trimmed.toLowerCase() ||
+                    x.sku.toLowerCase() === skuCandidate.toLowerCase()
+                );
                 if (exactCatalogMatch) {
                     currentItem.sku = exactCatalogMatch.sku;
                     currentItem.product = exactCatalogMatch.name;
                     currentItem.isMatched = true;
-                    currentItem.sourceLocation = guessItemLocation({ sku: exactCatalogMatch.sku, product: exactCatalogMatch.name, rawProductName: currentItem.rawProductName }, parsedTripOrigin);
+                    currentItem.sourceLocation = normalizeWarehouseName(guessItemLocation({ sku: exactCatalogMatch.sku, product: exactCatalogMatch.name, rawProductName: currentItem.rawProductName }, parsedTripOrigin));
                 } else {
                     currentItem.sku = trimmed;
                     currentItem.isMatched = false;
-                    currentItem.sourceLocation = guessItemLocation({ sku: trimmed, rawProductName: currentItem.rawProductName }, parsedTripOrigin);
+                    currentItem.sourceLocation = normalizeWarehouseName(guessItemLocation({ sku: trimmed, rawProductName: currentItem.rawProductName }, parsedTripOrigin));
                 }
             } else {
                 currentItem.sku = '';
@@ -3217,7 +3275,7 @@ const DeliveryOrderManagement: React.FC<DeliveryOrderManagementProps> = ({ user 
             const orders = [...prev.deliveryOrders];
             const order = { ...orders[doIndex], adminEdited: true };
             const items = [...(order.items || [])];
-            items[itemIndex] = { ...items[itemIndex], sourceLocation: newLocation };
+            items[itemIndex] = { ...items[itemIndex], sourceLocation: normalizeWarehouseName(newLocation) };
             order.items = items;
             orders[doIndex] = order;
             return { ...prev, deliveryOrders: orders };
@@ -3241,11 +3299,11 @@ const DeliveryOrderManagement: React.FC<DeliveryOrderManagementProps> = ({ user 
             const updatedOrders = prev.deliveryOrders.map(order => ({
                 ...order,
                 items: (order.items || []).map(it => {
-                    const currentLoc = it.sourceLocation;
+                    const currentLoc = normalizeWarehouseName(it.sourceLocation || '');
                     if (!currentLoc || !validWarehouses.includes(currentLoc)) {
-                        return { ...it, sourceLocation: guessItemLocation(it, newOrigin) || defaultLoc };
+                        return { ...it, sourceLocation: normalizeWarehouseName(guessItemLocation(it, newOrigin) || defaultLoc) };
                     }
-                    return it;
+                    return { ...it, sourceLocation: currentLoc };
                 })
             }));
             return { ...prev, deliveryOrders: updatedOrders };
@@ -3443,9 +3501,9 @@ const DeliveryOrderManagement: React.FC<DeliveryOrderManagementProps> = ({ user 
                     delivery_method: isSelfPickup ? 'SELF_PICKUP' : 'Company Delivery',
                     job_type: isSelfPickup ? 'Pickup' : 'Delivery',
                     items: (doItem.items || []).map(it => {
-                        let loc = it.sourceLocation;
+                        let loc = normalizeWarehouseName(it.sourceLocation || '');
                         if (!loc || !validWarehouses.includes(loc)) {
-                            loc = guessItemLocation(it, parsedTripOrigin) || defaultLoc;
+                            loc = normalizeWarehouseName(guessItemLocation(it, parsedTripOrigin) || defaultLoc);
                         }
                         return {
                             product: it.product,
@@ -7847,7 +7905,7 @@ const DeliveryOrderManagement: React.FC<DeliveryOrderManagementProps> = ({ user 
                         }
                     }}
                 >
-                    <div className="bg-slate-950 border border-slate-800 rounded-2xl w-full max-w-4xl max-h-[min(94vh,860px)] overflow-hidden flex flex-col shadow-2xl shadow-black/80">
+                    <div className="bg-slate-950 border border-slate-800 rounded-2xl w-full max-w-6xl xl:max-w-7xl max-h-[min(94vh,860px)] overflow-hidden flex flex-col shadow-2xl shadow-black/80">
                         {/* Hidden input for appending DO PDFs / photos */}
                         <input
                             ref={appendTripPdfInputRef}
@@ -8622,10 +8680,10 @@ const DeliveryOrderManagement: React.FC<DeliveryOrderManagementProps> = ({ user 
                                                                         <option value="Bundle">{t('Bundle / 捆')}</option>
                                                                     </select>
 
-                                                                    <div className="min-w-0 flex-1 flex flex-col gap-1">
+                                                                    <div className="min-w-[180px] sm:min-w-[240px] lg:min-w-[280px] flex-1 flex flex-col gap-1">
                                                                         <input
                                                                             type="text"
-                                                                            className="w-full bg-slate-900 border border-slate-700 focus:border-blue-500 rounded-lg px-2.5 py-1 text-xs font-medium text-white outline-none placeholder:text-slate-600"
+                                                                            className="w-full bg-slate-900 border border-slate-700 focus:border-blue-500 rounded-lg px-2.5 py-1.5 text-xs font-semibold text-white outline-none placeholder:text-slate-600"
                                                                             placeholder={t('Product description / 货品名称描述')}
                                                                             value={it.product || it.rawProductName || ''}
                                                                             onChange={e => handleUpdateParsedItemName(idx, itemIdx, e.target.value)}
@@ -8702,18 +8760,35 @@ const DeliveryOrderManagement: React.FC<DeliveryOrderManagementProps> = ({ user 
                                                                             SKU:
                                                                         </label>
                                                                         <div className="flex flex-col gap-1">
-                                                                            <input
-                                                                                type="text"
-                                                                                list="global-v2items-datalist"
-                                                                                className={`px-2.5 py-1.5 rounded-lg text-xs font-mono font-bold outline-none transition-all w-44 sm:w-56 ${
-                                                                                    isRealSku
-                                                                                        ? 'bg-emerald-950/40 border border-emerald-500/50 text-emerald-300 focus:border-emerald-400'
-                                                                                        : 'bg-red-950/70 border-2 border-red-500 text-red-100 placeholder:text-red-400 focus:border-red-400 animate-pulse'
-                                                                                }`}
-                                                                                placeholder={t('-- 请选择标准料号 --')}
-                                                                                value={it.sku ? `${it.sku} - ${it.product || ''}` : ''}
-                                                                                onChange={e => handleUpdateParsedItemSku(idx, itemIdx, e.target.value)}
-                                                                            />
+                                                                            {(() => {
+                                                                                let skuDisplay = '';
+                                                                                if (it.sku) {
+                                                                                    const skuTrim = it.sku.trim();
+                                                                                    const prodTrim = (it.product || '').trim();
+                                                                                    if (!prodTrim || prodTrim.toLowerCase() === skuTrim.toLowerCase()) {
+                                                                                        skuDisplay = skuTrim;
+                                                                                    } else if (prodTrim.toLowerCase().startsWith(skuTrim.toLowerCase()) && prodTrim.length - skuTrim.length < 8) {
+                                                                                        skuDisplay = prodTrim;
+                                                                                    } else {
+                                                                                        skuDisplay = `${skuTrim} - ${prodTrim}`;
+                                                                                    }
+                                                                                }
+                                                                                return (
+                                                                                    <input
+                                                                                        type="text"
+                                                                                        list="global-v2items-datalist"
+                                                                                        className={`px-2.5 py-1.5 rounded-lg text-xs font-mono font-bold outline-none transition-all w-52 sm:w-64 lg:w-72 xl:w-80 ${
+                                                                                            isRealSku
+                                                                                                ? 'bg-emerald-950/40 border border-emerald-500/50 text-emerald-300 focus:border-emerald-400'
+                                                                                                : 'bg-red-950/70 border-2 border-red-500 text-red-100 placeholder:text-red-400 focus:border-red-400 animate-pulse'
+                                                                                        }`}
+                                                                                        placeholder={t('-- 请选择标准料号 --')}
+                                                                                        value={skuDisplay}
+                                                                                        title={skuDisplay || it.sku}
+                                                                                        onChange={e => handleUpdateParsedItemSku(idx, itemIdx, e.target.value)}
+                                                                                    />
+                                                                                );
+                                                                            })()}
                                                                             {!isRealSku && (
                                                                                 <span className="text-[9px] font-black uppercase text-red-300 bg-red-600/30 border border-red-500/60 px-1.5 py-0.5 rounded flex items-center gap-1 w-fit">
                                                                                     <AlertTriangle size={10} className="text-red-400 shrink-0" />
@@ -8731,8 +8806,8 @@ const DeliveryOrderManagement: React.FC<DeliveryOrderManagementProps> = ({ user 
                                                                             type="text"
                                                                             list="modal-warehouse-datalist"
                                                                             className="px-2 py-1 rounded-lg text-xs font-bold bg-slate-900 border border-slate-700 text-blue-400 outline-none focus:border-blue-500 w-24 sm:w-28"
-                                                                            value={it.sourceLocation || guessItemLocation(it, parsedTripOrigin)}
-                                                                            onChange={e => handleUpdateParsedItemLocation(idx, itemIdx, e.target.value)}
+                                                                            value={normalizeWarehouseName(it.sourceLocation || guessItemLocation(it, parsedTripOrigin))}
+                                                                            onChange={e => handleUpdateParsedItemLocation(idx, itemIdx, normalizeWarehouseName(e.target.value))}
                                                                             placeholder="Warehouse"
                                                                         />
                                                                     </div>

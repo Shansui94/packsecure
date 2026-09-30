@@ -61,8 +61,8 @@ export const aiService = {
 
             console.log("Using REST API for Gemini...");
             const apiVersion = "v1beta";
-            // Updated candidates based on verified available models (2026-01-25)
-            const candidates = ["gemini-2.0-flash", "gemini-2.5-flash", "gemini-pro-latest"];
+            // Updated candidates based on verified available models
+            const candidates = ["gemini-3.5-flash-lite", "gemini-3.5-flash", "gemini-2.5-flash"];
 
             let lastError;
 

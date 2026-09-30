@@ -1149,43 +1149,42 @@ export async function handleParseTripPdf(req: VercelRequest, res: VercelResponse
         }
 
         let apiKey = process.env.GOOGLE_API_KEY || process.env.GEMINI_API_KEY || '';
+        let aliasList: Array<{ customer: string; alias_name: string; sku: string; product_name?: string }> = [];
+
         try {
-            const { data: dbKeyEntry } = await supabase
-                .from('ai_prompt_configs')
-                .select('prompt_template')
-                .eq('mode', 'system_google_api_key')
-                .maybeSingle();
-            if (dbKeyEntry?.prompt_template) {
-                const cleanKey = dbKeyEntry.prompt_template.trim();
+            const [dbKeyRes, aliasRes] = await Promise.allSettled([
+                supabase
+                    .from('ai_prompt_configs')
+                    .select('prompt_template')
+                    .eq('mode', 'system_google_api_key')
+                    .maybeSingle(),
+                supabase
+                    .from('customer_sku_mappings')
+                    .select('customer_name, raw_product_name, mapped_product_name, mapped_sku')
+                    .limit(150)
+            ]);
+
+            if (dbKeyRes.status === 'fulfilled' && dbKeyRes.value.data?.prompt_template) {
+                const cleanKey = dbKeyRes.value.data.prompt_template.trim();
                 if (cleanKey.startsWith('AIza') || cleanKey.startsWith('AQ.')) {
                     apiKey = cleanKey;
                 }
             }
-        } catch (dbErr) {
-            console.warn("Failed to check db API key override:", dbErr);
-        }
 
-        if (!apiKey) {
-            return res.status(500).json({ error: 'Server Google Gemini AI Key not configured.' });
-        }
-
-        // Fetch known product aliases from customer_sku_mappings table
-        let aliasList: Array<{ customer: string; alias_name: string; sku: string; product_name?: string }> = [];
-        try {
-            const { data } = await supabase
-                .from('customer_sku_mappings')
-                .select('customer_name, raw_product_name, mapped_product_name, mapped_sku')
-                .limit(250);
-            if (data) {
-                aliasList = data.map((m: any) => ({
+            if (aliasRes.status === 'fulfilled' && aliasRes.value.data) {
+                aliasList = aliasRes.value.data.map((m: any) => ({
                     customer: m.customer_name,
                     alias_name: m.raw_product_name,
                     sku: m.mapped_sku,
                     product_name: m.mapped_product_name
                 }));
             }
-        } catch (err) {
-            console.warn("Failed to fetch customer_sku_mappings:", err);
+        } catch (dbErr) {
+            console.warn("Failed to check db API key / aliases in parallel:", dbErr);
+        }
+
+        if (!apiKey) {
+            return res.status(500).json({ error: 'Server Google Gemini AI Key not configured.' });
         }
 
         const cleanBase64Payload = (rawStr: string = '') => {
@@ -1221,11 +1220,11 @@ export async function handleParseTripPdf(req: VercelRequest, res: VercelResponse
         });
 
         const genAI = new GoogleGenerativeAI(apiKey);
-        // Verified high-performance multimodal candidate models (all tested 200 SUCCESS)
+        // Verified high-performance multimodal candidate models (sub-3s fast execution to prevent Vercel 504 timeouts)
         const candidates = [
-            "gemini-2.5-flash",
             "gemini-3.5-flash-lite",
             "gemini-3.5-flash",
+            "gemini-2.5-flash",
             "gemini-flash-latest"
         ];
 
@@ -1503,7 +1502,13 @@ CRITICAL: Return strictly a valid JSON object. Do not wrap in markdown quotes.
                         temperature: 0.1
                     }
                 });
-                const result = await model.generateContent([prompt, ...fileParts]);
+                const timeoutPromise = new Promise<never>((_, reject) =>
+                    setTimeout(() => reject(new Error(`Timeout after 8500ms on ${modelId}`)), 8500)
+                );
+                const result = await Promise.race([
+                    model.generateContent([prompt, ...fileParts]),
+                    timeoutPromise
+                ]);
                 const text = (await result.response).text();
                 if (text) {
                     responseText = text;
@@ -1604,8 +1609,21 @@ CRITICAL: Return strictly a valid JSON object. Do not wrap in markdown quotes.
                             originalDoNumber
                         };
 
+                        const sanitizedItems = (d.items || []).map((it: any) => {
+                            if (!it || typeof it !== 'object') return it;
+                            let loc = it.sourceLocation || it.warehouse || it.location;
+                            if (typeof loc === 'string' && (loc.toLowerCase().includes('corner') || loc.toLowerCase().includes('ali'))) {
+                                loc = 'OPM Ali';
+                            }
+                            return {
+                                ...it,
+                                ...(loc ? { sourceLocation: loc } : {})
+                            };
+                        });
+
                         return {
                             ...d,
+                            items: sanitizedItems,
                             isAgentDelivery,
                             agentName,
                             originalDoNumber,
@@ -1854,7 +1872,7 @@ async function handleOmniCommand(req: VercelRequest, res: VercelResponse) {
         const geminiKey = process.env.GOOGLE_API_KEY || '';
         if (geminiKey) {
             const genAI = new GoogleGenerativeAI(geminiKey);
-            const model = genAI.getGenerativeModel({ model: 'gemini-2.0-flash' });
+            const model = genAI.getGenerativeModel({ model: 'gemini-3.5-flash-lite' });
             const prompt = `你是一个工业制造与仓储运营系统(Packsecure OS)的指令解析与问答助理。
 用户角色: ${userRole}, 用户姓名: ${context.userName || '用户'}, 用户输入: "${rawQuery}".
 
@@ -2252,7 +2270,7 @@ export async function handleSopAssistant(req: VercelRequest, res: VercelResponse
         }
 
         const genAI = new GoogleGenerativeAI(apiKey);
-        const candidates = ["gemini-2.5-flash", "gemini-2.0-flash", "gemini-2.0-flash-lite"];
+        const candidates = ["gemini-3.5-flash-lite", "gemini-3.5-flash", "gemini-2.5-flash"];
 
         let systemInstruction = `
 你是一位专精于包装制造业（气泡膜 Bubblewrap、拉伸膜 Stretch Film、原料再生造粒）与车间数字化的资深工业工程 (IE) 专家和精益生产总监。

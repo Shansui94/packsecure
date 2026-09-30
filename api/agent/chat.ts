@@ -291,7 +291,7 @@ ${sopArticles.length > 0 ? sopArticles.map(a => `Title: ${a.title}\nDesc: ${a.de
         }
 
         const genAI = new GoogleGenerativeAI(apiKey);
-        const candidates = ["gemini-2.5-flash", "gemini-2.0-flash-lite"];
+        const candidates = ["gemini-3.5-flash-lite", "gemini-2.5-flash"];
 
         let lastError;
         for (const modelId of candidates) {
