@@ -128,6 +128,61 @@ const serviceJob = [
 const groupedService = groupOrdersIntoTrips(serviceJob, {});
 assert('T7: Lorry Service earnings', groupedService[0].earnings, 15);
 
+// TEST 8: Real Production Trip Multi-Drop AUTO_MATCH Compliance
+// Scenario from User Screenshot: Trip #393 (Ayam) - Nilai to KL 9 drops (1 base + 8 extra)
+const t8 = resolveDeliveryRate({
+    addresses: ['Cheras, KL', 'Subang Jaya, Selangor', 'Petaling Jaya', 'Shah Alam', 'Klang', 'Kajang', 'Bangi', 'Puchong', 'Cyberjaya'],
+    dropCount: 9,
+    origin: 'NILAI',
+    lorryPlate: 'VCH 2311'
+});
+assert('T8: Trip 393 Nilai to KL Base', t8.baseRate, 80);
+assert('T8: Trip 393 Extra Drops (9 - 1 = 8)', t8.extraDrops, 8);
+assert('T8: Trip 393 Extra Earnings (8 * 10)', t8.extraEarnings, 80);
+assert('T8: Trip 393 Total AI Rate (80 + 80)', t8.aiRate, 160);
+assert('T8: Trip 393 Discrepancy Level is AUTO_MATCH (Not Error!)', t8.discrepancyLevel, 'AUTO_MATCH');
+
+// Scenario: Trip #272 (Mahadi) - Nilai to Batu Pahat / Kluang 8 drops (2 base + 6 extra)
+const t9 = resolveDeliveryRate({
+    addresses: ['Kluang, Johor', 'Batu Pahat, Johor'],
+    dropCount: 8,
+    origin: 'NILAI',
+    lorryPlate: 'JTL 4321'
+});
+assert('T9: Trip 272 Base Rate', t9.baseRate, 200);
+assert('T9: Trip 272 Extra Drops (8 - 2 = 6)', t9.extraDrops, 6);
+assert('T9: Trip 272 Total AI Rate (200 + 60)', t9.aiRate, 260);
+assert('T9: Trip 272 Discrepancy Level is AUTO_MATCH', t9.discrepancyLevel, 'AUTO_MATCH');
+
+// TEST 10: Anomaly Interception Guardrails
+// 10.1: Completely Unrecognized Address Fallback -> HIGH_DISCREPANCY
+const t10_1 = resolveDeliveryRate({
+    addresses: ['Plaza Unknown XYZ 123 Mars Station'],
+    dropCount: 1,
+    origin: 'NILAI',
+    lorryPlate: 'VCH 2311'
+});
+assert('T10.1: Unrecognized address flagged as HIGH_DISCREPANCY', t10_1.discrepancyLevel, 'HIGH_DISCREPANCY');
+
+// 10.2: Extreme Surge Rate > RM 650 -> HIGH_DISCREPANCY
+const t10_2 = resolveDeliveryRate({
+    addresses: ['Shah Alam, Selangor'],
+    dropCount: 65, // 80 + 64*10 = 720 > 650
+    origin: 'NILAI',
+    lorryPlate: 'VCH 2311'
+});
+assert('T10.2: Extreme surge rate > RM 650 flagged as HIGH_DISCREPANCY', t10_2.discrepancyLevel, 'HIGH_DISCREPANCY');
+
+// 10.3: Existing Approved Amount Divergence -> HIGH_DISCREPANCY
+const t10_3 = resolveDeliveryRate({
+    addresses: ['Shah Alam, Selangor'],
+    dropCount: 1,
+    origin: 'NILAI',
+    lorryPlate: 'VCH 2311',
+    existingApprovedAmount: 50 // Standard is 80, diff is 30 > 15
+});
+assert('T10.3: Existing approved divergence flagged as HIGH_DISCREPANCY', t10_3.discrepancyLevel, 'HIGH_DISCREPANCY');
+
 console.log('\n====================================================');
 console.log(`🏁 SUMMARY: ${passCount} PASSED, ${failCount} FAILED`);
 console.log('====================================================\n');

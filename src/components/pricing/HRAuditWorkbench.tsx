@@ -20,6 +20,11 @@ export interface AuditTripItem {
     orders: any[];
     addresses: string[];
     dropCount: number;
+    baseRate: number;
+    maxPlaces: number;
+    extraRatePerPlace: number;
+    extraDrops: number;
+    extraEarnings: number;
     legacyRate: number;
     aiRate: number;
     diffAmount: number;
@@ -161,7 +166,8 @@ export const HRAuditWorkbench: React.FC<HRAuditWorkbenchProps> = ({ onOpenRulebo
                     dropCount,
                     origin,
                     lorryPlate: plate,
-                    dbRates: allRates
+                    dbRates: allRates,
+                    existingApprovedAmount: existingApproved
                 });
 
                 const baseRate = resolved.baseRate;
@@ -187,17 +193,22 @@ export const HRAuditWorkbench: React.FC<HRAuditWorkbenchProps> = ({ onOpenRulebo
                     orders: groupOrders,
                     addresses,
                     dropCount,
+                    baseRate,
+                    maxPlaces,
+                    extraRatePerPlace,
+                    extraDrops,
+                    extraEarnings,
                     legacyRate,
                     aiRate,
                     diffAmount: diff,
                     discrepancyLevel: level,
-                    auditStatus: existingApproved !== null ? 'APPROVED' : (level === 'AUTO_MATCH' ? 'APPROVED' : 'PENDING'),
-                    approvedAmount: existingApproved !== null ? existingApproved : (level === 'AUTO_MATCH' ? aiRate : null),
+                    auditStatus: existingApproved !== null ? 'APPROVED' : 'PENDING',
+                    approvedAmount: existingApproved !== null ? existingApproved : null,
                     standardizedLocation: standardized,
                     aiZone: zone,
                     aiReasoning: reasoning,
-                    citations: ['规则第2节 太平厂阶梯价目表', '规则第1节 单趟多单合并原则'],
-                    confidenceScore: 0.95
+                    citations: ['《Packsecure 运费规则库 v2.1.0》', origin === 'NILAI' ? '汝来基地生效价目表' : (origin === 'JOHOR' ? '柔佛基地生效价目表' : '太平基地生效价目表'), '超点津贴计算规则 (Tambah Tempat)'],
+                    confidenceScore: 0.98
                 });
             }
 
@@ -214,25 +225,25 @@ export const HRAuditWorkbench: React.FC<HRAuditWorkbenchProps> = ({ onOpenRulebo
         if (filterTab === 'pending') return t.auditStatus === 'PENDING';
         if (filterTab === 'approved') return t.auditStatus === 'APPROVED' || t.auditStatus === 'ADJUSTED';
         if (filterTab === 'green') return t.discrepancyLevel === 'AUTO_MATCH';
-        if (filterTab === 'yellow') return t.discrepancyLevel === 'AI_ENRICHED';
-        if (filterTab === 'red') return t.discrepancyLevel === 'HIGH_DISCREPANCY' || t.discrepancyLevel === 'MINOR_DRIFT';
+        if (filterTab === 'yellow') return t.discrepancyLevel === 'MINOR_DRIFT' || t.discrepancyLevel === 'AI_ENRICHED';
+        if (filterTab === 'red') return t.discrepancyLevel === 'HIGH_DISCREPANCY';
         return true;
     });
 
     const pendingMatchesCount = trips.filter(t => t.discrepancyLevel === 'AUTO_MATCH' && t.auditStatus === 'PENDING').length;
-    const enrichedCount = trips.filter(t => t.discrepancyLevel === 'AI_ENRICHED').length;
-    const discrepancyCount = trips.filter(t => t.discrepancyLevel === 'HIGH_DISCREPANCY' || t.discrepancyLevel === 'MINOR_DRIFT').length;
+    const minorDriftCount = trips.filter(t => t.discrepancyLevel === 'MINOR_DRIFT' || t.discrepancyLevel === 'AI_ENRICHED').length;
+    const discrepancyCount = trips.filter(t => t.discrepancyLevel === 'HIGH_DISCREPANCY').length;
     const totalPending = trips.filter(t => t.auditStatus === 'PENDING').length;
 
     // Batch approve all matching green items
     const handleBatchApproveMatches = async () => {
         const greenMatches = trips.filter(t => t.discrepancyLevel === 'AUTO_MATCH' && t.auditStatus === 'PENDING');
         if (greenMatches.length === 0) {
-            alert('当前没有待核准的绿色一致项。');
+            alert('当前没有待核准的规则合规项。');
             return;
         }
 
-        if (!window.confirm(`确认一键批量核准 ${greenMatches.length} 笔完全一致的绿色单据？系统将自动将金额计入司机工资！`)) {
+        if (!window.confirm(`确认一键批量核准 ${greenMatches.length} 趟规则合规单据？系统将自动将应发运费计入司机工资流水！`)) {
             return;
         }
 
@@ -354,7 +365,7 @@ export const HRAuditWorkbench: React.FC<HRAuditWorkbenchProps> = ({ onOpenRulebo
                         ) : (
                             <span>⚡</span>
                         )}
-                        <span>一键全选批准一致项 ({pendingMatchesCount} 笔)</span>
+                        <span>一键全选批准合规项 ({pendingMatchesCount} 笔)</span>
                     </button>
 
                     <button
@@ -377,35 +388,35 @@ export const HRAuditWorkbench: React.FC<HRAuditWorkbenchProps> = ({ onOpenRulebo
 
                 <div className="bg-emerald-50/60 p-4 rounded-xl border border-emerald-200 shadow-xs">
                     <div className="flex items-center justify-between">
-                        <span className="text-xs font-bold text-emerald-800">🟢 完全一致 (Auto Match)</span>
+                        <span className="text-xs font-bold text-emerald-800">🟢 规则合规 (Auto Match)</span>
                         <span className="text-xs font-mono font-bold bg-emerald-200 text-emerald-900 px-1.5 py-0.5 rounded">
                             {pendingMatchesCount} 待批
                         </span>
                     </div>
                     <div className="text-2xl font-black text-emerald-700 mt-1">{trips.filter(t => t.discrepancyLevel === 'AUTO_MATCH').length} 趟</div>
-                    <div className="text-[11px] text-emerald-600 mt-0.5">原系统与 AI 零差额，安全可靠</div>
+                    <div className="text-[11px] text-emerald-600 mt-0.5">起步价与超点津贴精准合规，安全可靠</div>
                 </div>
 
                 <div className="bg-amber-50/60 p-4 rounded-xl border border-amber-200 shadow-xs">
                     <div className="flex items-center justify-between">
-                        <span className="text-xs font-bold text-amber-800">⭐ AI 智能补全 (Enriched)</span>
+                        <span className="text-xs font-bold text-amber-800">🟡 待定微调 (Review)</span>
                         <span className="text-xs font-mono font-bold bg-amber-200 text-amber-900 px-1.5 py-0.5 rounded">
-                            {enrichedCount} 趟
+                            {minorDriftCount} 趟
                         </span>
                     </div>
-                    <div className="text-2xl font-black text-amber-700 mt-1">{enrichedCount} 趟</div>
-                    <div className="text-[11px] text-amber-700 mt-0.5">原系统查无地名兜底，AI 智能匹配工业区</div>
+                    <div className="text-2xl font-black text-amber-700 mt-1">{minorDriftCount} 趟</div>
+                    <div className="text-[11px] text-amber-700 mt-0.5">未分配车牌、专属车型或超10点大单</div>
                 </div>
 
                 <div className="bg-rose-50/60 p-4 rounded-xl border border-rose-200 shadow-xs">
                     <div className="flex items-center justify-between">
-                        <span className="text-xs font-bold text-rose-800">🚨 重点复核 (Discrepancy)</span>
+                        <span className="text-xs font-bold text-rose-800">🚨 异常拦截 (Anomalies)</span>
                         <span className="text-xs font-mono font-bold bg-rose-200 text-rose-900 px-1.5 py-0.5 rounded">
                             {discrepancyCount} 趟
                         </span>
                     </div>
                     <div className="text-2xl font-black text-rose-700 mt-1">{discrepancyCount} 趟</div>
-                    <div className="text-[11px] text-rose-600 mt-0.5">差额较大或触发偏远长途规则</div>
+                    <div className="text-[11px] text-rose-600 mt-0.5">地址未识别兜底、基准价为0或总额超限</div>
                 </div>
             </div>
 
@@ -419,7 +430,7 @@ export const HRAuditWorkbench: React.FC<HRAuditWorkbenchProps> = ({ onOpenRulebo
                             : 'bg-slate-100 text-slate-600 hover:bg-slate-200'
                     }`}
                 >
-                    待核销 ({totalPending})
+                    待核验 ({totalPending})
                 </button>
                 <button
                     onClick={() => setFilterTab('green')}
@@ -429,7 +440,7 @@ export const HRAuditWorkbench: React.FC<HRAuditWorkbenchProps> = ({ onOpenRulebo
                             : 'bg-slate-100 text-slate-600 hover:bg-slate-200'
                     }`}
                 >
-                    🟢 完全吻合 ({trips.filter(t => t.discrepancyLevel === 'AUTO_MATCH').length})
+                    🟢 规则合规 ({trips.filter(t => t.discrepancyLevel === 'AUTO_MATCH').length})
                 </button>
                 <button
                     onClick={() => setFilterTab('yellow')}
@@ -439,7 +450,7 @@ export const HRAuditWorkbench: React.FC<HRAuditWorkbenchProps> = ({ onOpenRulebo
                             : 'bg-slate-100 text-slate-600 hover:bg-slate-200'
                     }`}
                 >
-                    ⭐ AI 补全 ({enrichedCount})
+                    🟡 待定微调 ({minorDriftCount})
                 </button>
                 <button
                     onClick={() => setFilterTab('red')}
@@ -449,7 +460,7 @@ export const HRAuditWorkbench: React.FC<HRAuditWorkbenchProps> = ({ onOpenRulebo
                             : 'bg-slate-100 text-slate-600 hover:bg-slate-200'
                     }`}
                 >
-                    🚨 差异项 ({discrepancyCount})
+                    🚨 异常拦截 ({discrepancyCount})
                 </button>
                 <button
                     onClick={() => setFilterTab('approved')}
@@ -476,16 +487,16 @@ export const HRAuditWorkbench: React.FC<HRAuditWorkbenchProps> = ({ onOpenRulebo
             {/* Trips List Table */}
             <div className="flex-1 overflow-x-auto">
                 <table className="w-full text-left text-xs">
-                    <thead className="bg-slate-50 text-slate-500 font-bold border-b border-slate-200">
+                    <thead className="bg-slate-50 text-slate-600 font-bold border-b border-slate-200">
                         <tr>
                             <th className="p-3">自检状态</th>
                             <th className="p-3">车次 / 司机</th>
                             <th className="p-3">车辆</th>
-                            <th className="p-3">送货地址摘要 (经停点)</th>
-                            <th className="p-3">老系统查表价</th>
-                            <th className="p-3">AI 规则核算价</th>
-                            <th className="p-3">差额</th>
-                            <th className="p-3">核准最终入账</th>
+                            <th className="p-3">送货目的地 (经停点)</th>
+                            <th className="p-3">基准起步价</th>
+                            <th className="p-3">超点津贴 (Tambah)</th>
+                            <th className="p-3">应发总运费</th>
+                            <th className="p-3">核准入账</th>
                             <th className="p-3 text-right">操作</th>
                         </tr>
                     </thead>
@@ -544,30 +555,40 @@ export const HRAuditWorkbench: React.FC<HRAuditWorkbenchProps> = ({ onOpenRulebo
                                                 {trip.standardizedLocation || trip.addresses[0]}
                                             </div>
                                             <div className="text-[11px] text-slate-400 truncate">
-                                                共 {trip.dropCount} 个卸货点: {trip.addresses.join(', ')}
+                                                共 {trip.dropCount} 个卸货点 ({trip.aiZone || '默认区域'})
                                             </div>
                                         </td>
-                                        <td className="p-3 font-semibold text-slate-600">
-                                            RM {trip.legacyRate.toFixed(2)}
-                                        </td>
-                                        <td className="p-3 font-bold text-indigo-700">
-                                            RM {trip.aiRate.toFixed(2)}
+                                        <td className="p-3">
+                                            <div className="font-bold text-slate-700 font-mono text-xs">
+                                                RM {trip.baseRate.toFixed(2)}
+                                            </div>
+                                            <div className="text-[10px] text-slate-400 mt-0.5">
+                                                含 {trip.maxPlaces} 个免费点
+                                            </div>
                                         </td>
                                         <td className="p-3">
-                                            <span className={`px-2 py-0.5 rounded font-bold text-[11px] ${
-                                                trip.diffAmount === 0 ? 'bg-slate-100 text-slate-600' :
-                                                trip.diffAmount > 0 ? 'bg-emerald-50 text-emerald-700' : 'bg-rose-50 text-rose-700'
-                                            }`}>
-                                                {trip.diffAmount > 0 ? '+' : ''}{trip.diffAmount.toFixed(2)}
-                                            </span>
+                                            <div className={`font-bold font-mono text-xs ${trip.extraEarnings > 0 ? 'text-indigo-600' : 'text-slate-400'}`}>
+                                                {trip.extraEarnings > 0 ? `+RM ${trip.extraEarnings.toFixed(2)}` : 'RM 0.00'}
+                                            </div>
+                                            <div className="text-[10px] text-slate-400 mt-0.5">
+                                                {trip.extraDrops > 0 ? `超 ${trip.extraDrops} 点 (+RM ${trip.extraRatePerPlace}/点)` : '未超点'}
+                                            </div>
+                                        </td>
+                                        <td className="p-3">
+                                            <div className="font-black text-slate-900 font-mono text-sm">
+                                                RM {trip.aiRate.toFixed(2)}
+                                            </div>
+                                            <div className="text-[10px] text-emerald-600 font-semibold mt-0.5">
+                                                起步 + 津贴
+                                            </div>
                                         </td>
                                         <td className="p-3">
                                             {isApproved && trip.approvedAmount !== null ? (
-                                                <span className="inline-flex items-center text-emerald-700 font-bold bg-emerald-50 border border-emerald-200 px-2 py-0.5 rounded">
+                                                <span className="inline-flex items-center text-emerald-700 font-bold bg-emerald-50 border border-emerald-200 px-2 py-0.5 rounded text-xs font-mono">
                                                     ✅ RM {trip.approvedAmount.toFixed(2)}
                                                 </span>
                                             ) : (
-                                                <span className="text-amber-600 font-medium text-[11px]">
+                                                <span className="text-amber-600 font-medium text-[11px] bg-amber-50 border border-amber-200 px-2 py-0.5 rounded inline-flex items-center gap-1">
                                                     ⏳ 待核验
                                                 </span>
                                             )}
@@ -619,25 +640,28 @@ export const HRAuditWorkbench: React.FC<HRAuditWorkbenchProps> = ({ onOpenRulebo
 
                         {/* Drawer Body */}
                         <div className="p-6 space-y-5 flex-1">
-                            {/* Price Comparison Card */}
-                            <div className="grid grid-cols-2 gap-4 p-4 bg-slate-50 border border-slate-200 rounded-xl">
-                                <div className="border-r border-slate-200 pr-3">
-                                    <div className="text-[11px] text-slate-500 font-medium">老系统传统查表价</div>
-                                    <div className="text-xl font-bold text-slate-700 mt-0.5">
-                                        RM {selectedTrip.legacyRate.toFixed(2)}
+                            {/* Price Breakdown Card */}
+                            <div className="grid grid-cols-3 gap-3 p-4 bg-slate-50 border border-slate-200 rounded-xl">
+                                <div className="border-r border-slate-200 pr-2">
+                                    <div className="text-[11px] text-slate-500 font-semibold">基准起步价 (Base)</div>
+                                    <div className="text-xl font-bold text-slate-700 font-mono mt-0.5">
+                                        RM {selectedTrip.baseRate.toFixed(2)}
                                     </div>
-                                    <div className="text-[10px] text-slate-400 mt-1">基于关键词静态模糊匹配</div>
+                                    <div className="text-[10px] text-slate-400 mt-1">含 {selectedTrip.maxPlaces} 个免费点</div>
                                 </div>
-                                <div className="pl-1">
-                                    <div className="text-[11px] text-indigo-600 font-bold flex items-center space-x-1">
-                                        <span>AI 规则推导价 (最新 MD)</span>
+                                <div className="border-r border-slate-200 pr-2">
+                                    <div className="text-[11px] text-indigo-600 font-semibold">超点津贴 (Tambah)</div>
+                                    <div className="text-xl font-bold text-indigo-600 font-mono mt-0.5">
+                                        +{selectedTrip.extraEarnings.toFixed(2)} RM
                                     </div>
-                                    <div className="text-2xl font-black text-indigo-700 mt-0.5">
+                                    <div className="text-[10px] text-slate-400 mt-1">超 {selectedTrip.extraDrops} 点 (+RM {selectedTrip.extraRatePerPlace}/点)</div>
+                                </div>
+                                <div>
+                                    <div className="text-[11px] text-emerald-700 font-bold">应发总运费 (Total)</div>
+                                    <div className="text-2xl font-black text-emerald-700 font-mono mt-0.5">
                                         RM {selectedTrip.aiRate.toFixed(2)}
                                     </div>
-                                    <div className="text-[10px] text-indigo-500 mt-1">
-                                        差额: {selectedTrip.diffAmount >= 0 ? '+' : ''}{selectedTrip.diffAmount.toFixed(2)} RM
-                                    </div>
+                                    <div className="text-[10px] text-emerald-600 font-medium mt-1">起步基准 + 超点津贴</div>
                                 </div>
                             </div>
 
@@ -725,11 +749,11 @@ export const HRAuditWorkbench: React.FC<HRAuditWorkbenchProps> = ({ onOpenRulebo
                         {/* Drawer Actions Footer */}
                         <div className="p-6 bg-slate-50 border-t border-slate-200 flex items-center justify-between gap-3">
                             <button
-                                onClick={() => handleApproveTrip(selectedTrip, selectedTrip.legacyRate, false)}
+                                onClick={() => handleApproveTrip(selectedTrip, selectedTrip.baseRate, false)}
                                 disabled={actionLoading}
                                 className="flex-1 py-2.5 bg-white hover:bg-slate-100 text-slate-700 border border-slate-300 rounded-lg text-xs font-bold transition shadow-xs cursor-pointer"
                             >
-                                维持原系统价 (RM {selectedTrip.legacyRate.toFixed(2)})
+                                仅发起步价 (RM {selectedTrip.baseRate.toFixed(2)})
                             </button>
 
                             {customAmount && Number(customAmount) > 0 ? (
@@ -744,9 +768,9 @@ export const HRAuditWorkbench: React.FC<HRAuditWorkbenchProps> = ({ onOpenRulebo
                                 <button
                                     onClick={() => handleApproveTrip(selectedTrip, selectedTrip.aiRate, false)}
                                     disabled={actionLoading}
-                                    className="flex-1 py-2.5 bg-indigo-600 hover:bg-indigo-700 text-white rounded-lg text-xs font-bold transition shadow-xs cursor-pointer"
+                                    className="flex-1 py-2.5 bg-emerald-600 hover:bg-emerald-500 text-white rounded-lg text-xs font-bold transition shadow-xs cursor-pointer"
                                 >
-                                    采纳 AI 价格 (RM {selectedTrip.aiRate.toFixed(2)})
+                                    确认核准应发总额 (RM {selectedTrip.aiRate.toFixed(2)})
                                 </button>
                             )}
                         </div>

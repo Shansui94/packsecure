@@ -610,6 +610,7 @@ export function resolveDeliveryRate(params: {
     origin?: string;
     lorryPlate?: string;
     dbRates?: any[];
+    existingApprovedAmount?: number | null;
 }): ResolvedDeliveryRate {
     const origin = (params.origin || 'TAIPING').trim().toUpperCase();
     const addresses = (params.addresses || []).filter(Boolean);
@@ -903,18 +904,59 @@ export function resolveDeliveryRate(params: {
     const aiRate = baseRate + extraEarnings;
     const diff = aiRate - legacyRate;
 
-    let level: DiscrepancyLevel = 'AUTO_MATCH';
-    let reasoning = `基准价 RM ${baseRate.toFixed(2)} (含 ${maxPlaces} 点)，未超落点，零差额。`;
+    // Detect unrecognized destination fallback
+    let isUnrecognizedFallback = false;
+    if (origin === 'TAIPING' && zone === 'TAIPING' && addresses.length > 0) {
+        if (!fullText.includes('taiping') && !fullText.includes('kamunting') && !fullText.includes('simpang') && !fullText.includes('pokok asam') && !fullText.includes('matang')) {
+            isUnrecognizedFallback = true;
+        }
+    } else if (origin === 'NILAI' && zone === 'NILAI' && addresses.length > 0) {
+        if (!fullText.includes('nilai') && !fullText.includes('enstek') && !fullText.includes('pajam') && !fullText.includes('batang benar')) {
+            isUnrecognizedFallback = true;
+        }
+    } else if (origin === 'JOHOR' && zone === 'WEHENG' && addresses.length > 0) {
+        if (!fullText.includes('weheng') && !fullText.includes('jb') && !fullText.includes('johor bahru') && !fullText.includes('skudai') && !fullText.includes('tiram')) {
+            isUnrecognizedFallback = true;
+        }
+    } else if (origin === 'KELANTAN' && zone === 'KOTA BHARU' && addresses.length > 0) {
+        if (!fullText.includes('kota bharu') && !fullText.includes('pengkalan chepa') && !fullText.includes('kubang kerian')) {
+            isUnrecognizedFallback = true;
+        }
+    }
 
-    if (diff === 0) {
-        level = 'AUTO_MATCH';
-        reasoning = `基准价 RM ${baseRate.toFixed(2)} (含 ${maxPlaces} 点)，未超落点，零差额。`;
-    } else if (diff > 0 && diff <= 25) {
-        level = 'MINOR_DRIFT';
-        reasoning = `基准价 RM ${baseRate.toFixed(2)} (含 ${maxPlaces} 点)，落点 ${dropCount} 个，超点 ${extraDrops} 点加发 RM ${extraEarnings.toFixed(2)}。`;
-    } else if (diff > 25) {
+    let level: DiscrepancyLevel = 'AUTO_MATCH';
+    let reasoning = '';
+
+    // Anomaly Interception Guardrails
+    if (baseRate === 0) {
         level = 'HIGH_DISCREPANCY';
-        reasoning = `基准价 RM ${baseRate.toFixed(2)} (含 ${maxPlaces} 点)，落点多达 ${dropCount} 个，超点 ${extraDrops} 点按 +RM ${extraRatePerPlace}/点加发 RM ${extraEarnings.toFixed(2)}。`;
+        reasoning = `🚨 目的地 [${zone}] 属于待定义区域 (基准价为 RM 0)，开单不可按 0 结算，需 HR 手动核准具体运费。`;
+    } else if (isUnrecognizedFallback) {
+        level = 'HIGH_DISCREPANCY';
+        reasoning = `🚨 送货地址未能命中任何标准计费区域，已临时兜底至最低本地价 RM ${baseRate.toFixed(2)}，需 HR 确认具体城镇。`;
+    } else if (aiRate > 650) {
+        level = 'HIGH_DISCREPANCY';
+        reasoning = `🚨 计算应发总运费 RM ${aiRate.toFixed(2)} 触发安全熔断保护 (上限 RM 650.00)，需人工复核落点真实性。`;
+    } else if (params.existingApprovedAmount !== undefined && params.existingApprovedAmount !== null && Math.abs(params.existingApprovedAmount - aiRate) > 15) {
+        level = 'HIGH_DISCREPANCY';
+        reasoning = `🚨 既有核准金额 (RM ${params.existingApprovedAmount.toFixed(2)}) 与规则核算价 (RM ${aiRate.toFixed(2)}) 存在显著差额 (RM ${Math.abs(params.existingApprovedAmount - aiRate).toFixed(2)})。`;
+    } else if (isVpc) {
+        level = 'MINOR_DRIFT';
+        reasoning = `🟡 车辆为 VPC 9821 专属适配运价，基准价 RM ${baseRate.toFixed(2)}，请核验是否按专属车型标准发放。`;
+    } else if (params.lorryPlate === '待定车辆' || !params.lorryPlate) {
+        level = 'MINOR_DRIFT';
+        reasoning = `🟡 尚未指定有效车辆，已按基准价 RM ${baseRate.toFixed(2)} + 超点津贴 RM ${extraEarnings.toFixed(2)} 试算，建议补齐车辆。`;
+    } else if (dropCount > 10) {
+        level = 'MINOR_DRIFT';
+        reasoning = `🟡 单趟送货经停多达 ${dropCount} 个落点 (超 ${extraDrops} 点)，建议快速核对送货单交接真实性。`;
+    } else {
+        // Standard rulebook match - 100% compliant!
+        level = 'AUTO_MATCH';
+        if (extraDrops > 0) {
+            reasoning = `起步基准价 RM ${baseRate.toFixed(2)} (含 ${maxPlaces} 点) + 超点津贴 ${extraDrops} 点 (RM ${extraEarnings.toFixed(2)}) = 应发总运费 RM ${aiRate.toFixed(2)}。符合规则库标准。`;
+        } else {
+            reasoning = `起步基准价 RM ${baseRate.toFixed(2)} (含 ${maxPlaces} 点)，未超落点，应发总运费 RM ${aiRate.toFixed(2)}。符合规则库标准。`;
+        }
     }
 
     return {
@@ -939,36 +981,36 @@ export function getDiscrepancyBadge(level: DiscrepancyLevel) {
     switch (level) {
         case 'AUTO_MATCH':
             return {
-                label: '完全一致',
+                label: '规则合规',
                 bg: 'bg-emerald-50 text-emerald-700 border-emerald-200',
                 dot: 'bg-emerald-500',
-                icon: '✅',
-                desc: '原系统与 AI 计算金额完全吻合，可一键批量通过'
+                icon: '🟢',
+                desc: '依据最新运费规则库计算，起步价与超点津贴无异常，可一键批量核准'
             };
         case 'AI_ENRICHED':
             return {
-                label: 'AI 智能补全',
-                bg: 'bg-amber-50 text-amber-700 border-amber-200',
-                dot: 'bg-amber-500',
+                label: '智能补全',
+                bg: 'bg-blue-50 text-blue-700 border-blue-200',
+                dot: 'bg-blue-500',
                 icon: '⭐',
-                desc: '老系统未匹配到地名（跌落底价），AI 成功识别具体工业区'
+                desc: '系统通过详细地址/工业区智能识别目的地区域'
             };
         case 'MINOR_DRIFT':
             return {
-                label: '轻度差异',
-                bg: 'bg-blue-50 text-blue-700 border-blue-200',
-                dot: 'bg-blue-500',
-                icon: 'ℹ️',
-                desc: '金额差异在合理微调区间内 (通常由于车型或落点阶梯计算)'
+                label: '待定微调',
+                bg: 'bg-amber-50 text-amber-700 border-amber-200',
+                dot: 'bg-amber-500',
+                icon: '🟡',
+                desc: '车型待定、超10点大单或特殊车型适配，建议快速确认'
             };
         case 'HIGH_DISCREPANCY':
         default:
             return {
-                label: '重点复核',
+                label: '异常拦截',
                 bg: 'bg-rose-50 text-rose-700 border-rose-200',
                 dot: 'bg-rose-500',
                 icon: '🚨',
-                desc: '金额偏差 > RM25 或触发系统熔断限制，需 HR 强制人工审查'
+                desc: '地址未识别兜底、基准价为0或总运费超限，需人工指定金额'
             };
     }
 }
