@@ -1049,13 +1049,30 @@ const DriverDelivery: React.FC<DriverDeliveryProps> = ({ user, onNavigate }) => 
                 }
             }
 
-            const isAllDropsCompleted = isMultiOrder || isFinalDrop || completedDrops >= totalDrops;
+            // Check if signed DO photo is present (even indices in podPhotoUrl)
+            const rawPodList = podPhotoUrl ? podPhotoUrl.split(',') : [];
+            const validDoCount = rawPodList.filter((u, idx) => idx % 2 === 0 && Boolean(u && u.trim())).length;
+            const hasSignedDo = (totalDrops === 1 || isMultiOrder) 
+                ? validDoCount >= 1 
+                : validDoCount >= totalDrops;
+
+            // Only mark as Delivered if drops are completed AND the signed DO photo is present!
+            // If only goods photo is taken, keep status in 'Loaded' so the order and trip stay visible in Pending.
+            const isAllDropsCompleted = (isMultiOrder || isFinalDrop || completedDrops >= totalDrops) && hasSignedDo;
 
             let nextStatus = selectedOrder.status === 'Pending Approval' 
                 ? 'Pending Approval' 
                 : (isAllDropsCompleted ? 'Delivered' : 'Loaded');
 
             let updatedNotes = finalNote;
+            if (!hasSignedDo && (prodUrl || completedDrops > 0)) {
+                if (!updatedNotes.includes('Menunggu gambar DO')) {
+                    updatedNotes = `${updatedNotes}\n[Menunggu gambar DO / Pending signed DO]`;
+                }
+            } else if (hasSignedDo && updatedNotes.includes('Menunggu gambar DO')) {
+                updatedNotes = updatedNotes.replace(/\n?\[Menunggu gambar DO \/ Pending signed DO\]/g, '').trim();
+            }
+
             if (extractedDoNumber) {
                 const cleanNotes = (finalNote || '').replace(/\[AI DO:\s*.*?\]/g, '').trim();
                 updatedNotes = cleanNotes 
@@ -1461,7 +1478,7 @@ const DriverDelivery: React.FC<DriverDeliveryProps> = ({ user, onNavigate }) => 
             const totalDrops = isMultiOrder ? 1 : Math.max(1, Number(freshOrder.trip_drop_count) || 1);
             const filledDoCount = updatedPodUrl.split(',').filter((url: string, idx: number) => idx % 2 === 0 && Boolean(url && url.trim())).length;
             const completedDrops = countCompletedDrops(updatedPodUrl);
-            const isAllDropsCompleted = (isMultiOrder && completedDrops >= 1) || (completedDrops >= totalDrops && filledDoCount >= totalDrops);
+            const isAllDropsCompleted = (isMultiOrder && completedDrops >= 1 && filledDoCount >= 1) || (completedDrops >= totalDrops && filledDoCount >= totalDrops);
 
             // Format notes
             let updatedNotes = freshOrder.notes || '';
@@ -2237,6 +2254,36 @@ const DriverDelivery: React.FC<DriverDeliveryProps> = ({ user, onNavigate }) => 
 
     const pendingTrips = React.useMemo(() => tripGroups.filter(t => !t.isAllDone), [tripGroups]);
 
+    const doneTrips = React.useMemo(() => {
+        const list = tripGroups.filter(t => t.isAllDone);
+        // Sort descending: newest trips on top, older trips at the bottom
+        return list.slice().sort((a, b) => {
+            const dateA = a.deliveryDate || '';
+            const dateB = b.deliveryDate || '';
+            if (dateA !== dateB) return dateB.localeCompare(dateA);
+
+            const getLatestPodTime = (grp: DriverTripGroup) => {
+                return grp.orders.reduce((max, o) => {
+                    const t = o.pod_timestamp 
+                        ? new Date(o.pod_timestamp).getTime() 
+                        : ((o as any).completed_at 
+                            ? new Date((o as any).completed_at).getTime() 
+                            : (o.created_at ? new Date(o.created_at).getTime() : 0));
+                    return Math.max(max, t);
+                }, 0);
+            };
+            const timeA = getLatestPodTime(a);
+            const timeB = getLatestPodTime(b);
+            if (timeA !== timeB) return timeB - timeA;
+
+            const seqA = a.sortSeq !== undefined ? a.sortSeq : 0;
+            const seqB = b.sortSeq !== undefined ? b.sortSeq : 0;
+            if (seqA !== seqB) return seqB - seqA;
+
+            return String(b.tripNumber || '').localeCompare(String(a.tripNumber || ''));
+        });
+    }, [tripGroups]);
+
     const currentTripList = activeTab === 'todo' ? pendingTrips : doneTrips;
 
     const pendingDropsCount = React.useMemo(() => pendingTrips.reduce((acc, t) => acc + (t.totalDrops - t.completedDrops), 0), [pendingTrips]);
@@ -3000,6 +3047,57 @@ const DriverDelivery: React.FC<DriverDeliveryProps> = ({ user, onNavigate }) => 
 
             {/* LIST (TRIP ACCORDION) */}
             <div className="px-4 space-y-4">
+                {/* MISSING DO ALERT BANNER (ONLY FOR CURRENT / LOADED ORDERS) */}
+                {activeTab === 'todo' && (() => {
+                    const missingDoOrders = tasks.filter(t => 
+                        t.status === 'Loaded' &&
+                        t.pod_photo_url && 
+                        (
+                            (t.notes && (t.notes.includes('Menunggu gambar DO') || t.notes.includes('Pending signed DO'))) ||
+                            (t.pod_photo_url.split(',').filter((u, i) => i % 2 === 0 && Boolean(u && u.trim())).length === 0)
+                        )
+                    );
+                    if (missingDoOrders.length === 0) return null;
+
+                    return (
+                        <div className="bg-gradient-to-r from-amber-950/80 via-amber-900/60 to-orange-950/80 border-2 border-amber-500/50 rounded-2xl p-4 shadow-xl shadow-amber-950/40 space-y-2.5 animate-in fade-in">
+                            <div className="flex items-center gap-2">
+                                <span className="p-1.5 rounded-lg bg-amber-500/20 text-amber-400 text-base">⚠️</span>
+                                <div>
+                                    <h4 className="text-xs font-black text-amber-300 uppercase tracking-wider">
+                                        {missingDoOrders.length} DO Perlu Dimuat Naik / Missing Signed DO
+                                    </h4>
+                                    <p className="text-[10px] text-slate-300 font-bold">
+                                        Barang telah diturunkan. Sila tangkap gambar DO bertandatangan untuk selesaikan trip.
+                                    </p>
+                                </div>
+                            </div>
+                            <div className="space-y-1.5 pt-1">
+                                {missingDoOrders.map(mo => (
+                                    <div key={mo.id} className="bg-black/60 border border-amber-500/30 rounded-xl p-2.5 flex items-center justify-between gap-2">
+                                        <div className="min-w-0 flex-1">
+                                            <div className="flex items-center gap-1.5">
+                                                <span className="font-mono text-xs font-bold text-amber-300">{mo.orderNumber}</span>
+                                                {(mo as any).stop_sequence && (
+                                                    <span className="text-[9px] font-bold bg-purple-500/20 text-purple-300 px-1 rounded">Drop #{(mo as any).stop_sequence}</span>
+                                                )}
+                                            </div>
+                                            <div className="text-xs text-white font-bold truncate">{mo.customer}</div>
+                                        </div>
+                                        <button
+                                            type="button"
+                                            onClick={() => handleOpenUnloadModal(mo)}
+                                            className="px-3 py-1.5 bg-gradient-to-r from-amber-600 to-orange-600 hover:from-amber-500 hover:to-orange-500 text-white rounded-lg text-xs font-black shadow-md flex items-center gap-1 shrink-0 cursor-pointer active:scale-95"
+                                        >
+                                            <Camera size={13} />
+                                            <span>Tangkap DO</span>
+                                        </button>
+                                    </div>
+                                ))}
+                            </div>
+                        </div>
+                    );
+                })()}
                 {loading ? (
                     <div className="text-center py-10 text-slate-500 animate-pulse">Memuatkan... / Loading...</div>
                 ) : currentTripList.length === 0 ? (
@@ -3663,23 +3761,40 @@ const DriverDelivery: React.FC<DriverDeliveryProps> = ({ user, onNavigate }) => 
 
                     {/* Footer Actions */}
                     <div className="p-4 border-t border-slate-800 bg-slate-900 space-y-3 safe-bottom-padding">
-                        <button
-                            onClick={handleConfirmUnload}
-                            disabled={submitting || uploadingTarget !== null || (!unloadProductPhotoBase64 && !unloadDoPhotoBase64 && !isFinalDrop && !(selectedOrder.pod_photo_url && selectedOrder.pod_photo_url.trim()))}
-                            className="w-full py-4 bg-emerald-600 hover:bg-emerald-500 disabled:bg-slate-800 text-white disabled:text-slate-500 rounded-xl font-black text-lg uppercase tracking-widest shadow-lg shadow-emerald-950/40 disabled:shadow-none transition-all active:scale-95 flex items-center justify-center gap-2"
-                        >
-                            {submitting ? (
-                                <>
-                                    <div className="w-5 h-5 border-2 border-white/20 border-t-white rounded-full animate-spin"></div>
-                                    <span>PENGHANTARAN SEDANG DISAHKAN... / CONFIRMING...</span>
-                                </>
-                            ) : (
-                                <>
-                                    <CheckCircle size={20} />
-                                    <span>SAHKAN HANTARAN / CONFIRM DELIVERY</span>
-                                </>
-                            )}
-                        </button>
+                        {(() => {
+                            const hasDoInModal = Boolean(unloadDoPhotoBase64 || (selectedOrder?.pod_photo_url && selectedOrder.pod_photo_url.split(',')[0]?.trim()));
+                            const hasProdInModal = Boolean(unloadProductPhotoBase64 || (selectedOrder?.pod_photo_url && selectedOrder.pod_photo_url.split(',')[1]?.trim()));
+                            const isMissingDoOnly = hasProdInModal && !hasDoInModal && !isFinalDrop;
+
+                            return (
+                                <button
+                                    onClick={handleConfirmUnload}
+                                    disabled={submitting || uploadingTarget !== null || (!unloadProductPhotoBase64 && !unloadDoPhotoBase64 && !isFinalDrop && !(selectedOrder.pod_photo_url && selectedOrder.pod_photo_url.trim()))}
+                                    className={`w-full py-4 text-white disabled:text-slate-500 rounded-xl font-black text-sm sm:text-base uppercase tracking-wider shadow-lg disabled:shadow-none transition-all active:scale-95 flex items-center justify-center gap-2 cursor-pointer ${
+                                        isMissingDoOnly
+                                            ? 'bg-amber-600 hover:bg-amber-500 disabled:bg-slate-800 shadow-amber-950/40'
+                                            : 'bg-emerald-600 hover:bg-emerald-500 disabled:bg-slate-800 shadow-emerald-950/40'
+                                    }`}
+                                >
+                                    {submitting ? (
+                                        <>
+                                            <div className="w-5 h-5 border-2 border-white/20 border-t-white rounded-full animate-spin"></div>
+                                            <span>MEMPROSES... / PROCESSING...</span>
+                                        </>
+                                    ) : isMissingDoOnly ? (
+                                        <>
+                                            <span>💾</span>
+                                            <span>SIMPAN BARANG (DO AMBIL KEMUDIAN) / SAVE GOODS ONLY</span>
+                                        </>
+                                    ) : (
+                                        <>
+                                            <CheckCircle size={20} />
+                                            <span>SAHKAN HANTARAN / CONFIRM DELIVERY</span>
+                                        </>
+                                    )}
+                                </button>
+                            );
+                        })()}
                     </div>
                 </div>
             )}
