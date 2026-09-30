@@ -1429,6 +1429,7 @@ const OrderSummary: React.FC<OrderSummaryProps> = ({ user }) => {
                                     label={t('Unassigned Trips / 待指派车次')}
                                     trips={unassignedTrips}
                                     isUnassigned
+                                    canEdit={canEdit}
                                     expandedTripIds={expandedTripIds}
                                     onToggleExpand={toggleTripExpand}
                                     onUploadTripPhoto={(tripId) => triggerUpload('trip', tripId)}
@@ -1451,6 +1452,7 @@ const OrderSummary: React.FC<OrderSummaryProps> = ({ user }) => {
                                     droppableId={driver.uid}
                                     label={driver.name || driver.email || 'Driver'}
                                     trips={driverTrips}
+                                    canEdit={canEdit}
                                     expandedTripIds={expandedTripIds}
                                     onToggleExpand={toggleTripExpand}
                                     onUploadTripPhoto={(tripId) => triggerUpload('trip', tripId)}
@@ -1768,6 +1770,7 @@ interface TripColumnProps {
     label: string;
     trips: TripGroup[];
     isUnassigned?: boolean;
+    canEdit?: boolean;
     expandedTripIds: Record<string, boolean>;
     onToggleExpand: (tripId: string) => void;
     onUploadTripPhoto: (tripId: string) => void;
@@ -1783,6 +1786,7 @@ const TripColumn: React.FC<TripColumnProps> = ({
     label,
     trips,
     isUnassigned,
+    canEdit = false,
     expandedTripIds,
     onToggleExpand,
     onUploadTripPhoto,
