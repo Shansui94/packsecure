@@ -2963,9 +2963,9 @@ const DriverDelivery: React.FC<DriverDeliveryProps> = ({ user, onNavigate }) => 
                                         </div>
                                     )}
 
-                                    {/* 🎯 左边拍到货，右边拍 DO 极速双直达按钮 */}
+                                    {/* 🎯 左边拍到货，右边拍 DO 极速双直达按钮 (三语标准：Malay / English / 中文) */}
                                     <div className="grid grid-cols-2 gap-2.5">
-                                        {/* 1. 左边：拍到货 (Gambar Barang) */}
+                                        {/* 1. 左边：拍到货 (Ambil Gambar Barang) */}
                                         {hasProdPhoto ? (
                                             <div className="relative py-2 px-2.5 bg-slate-900/90 border border-emerald-500/50 rounded-xl flex items-center justify-between gap-2 shadow-inner">
                                                 <div 
@@ -2981,10 +2981,10 @@ const DriverDelivery: React.FC<DriverDeliveryProps> = ({ user, onNavigate }) => 
                                                     <div className="min-w-0">
                                                         <div className="flex items-center gap-1 text-[11px] font-black text-emerald-300 truncate">
                                                             <CheckCircle size={12} className="text-emerald-400 shrink-0" />
-                                                            <span>已拍到货</span>
+                                                            <span>BARANG SIAP</span>
                                                         </div>
                                                         <span className="text-[9px] text-slate-400 font-bold block truncate">
-                                                            Barang Siap
+                                                            Foto Disimpan • 拍到货
                                                         </span>
                                                     </div>
                                                 </div>
@@ -2993,7 +2993,7 @@ const DriverDelivery: React.FC<DriverDeliveryProps> = ({ user, onNavigate }) => 
                                                     title="Ambil Semula / Retake"
                                                     onClick={() => handleTriggerDirectPhoto(order, 'product')}
                                                     disabled={isDirectUploadingThis}
-                                                    className="p-1.5 bg-slate-800 hover:bg-slate-700 active:scale-90 text-slate-300 hover:text-white rounded-lg border border-slate-700 shrink-0 text-[10px] font-bold cursor-pointer"
+                                                    className="p-1.5 bg-slate-800 hover:bg-slate-750 active:scale-90 text-slate-300 hover:text-white rounded-lg border border-slate-700 shrink-0 text-[10px] font-bold cursor-pointer"
                                                 >
                                                     🔄
                                                 </button>
@@ -3004,8 +3004,8 @@ const DriverDelivery: React.FC<DriverDeliveryProps> = ({ user, onNavigate }) => 
                                                 onClick={() => handleTriggerDirectPhoto(order, 'product')}
                                                 disabled={isDirectUploadingThis}
                                                 data-action="DIRECT_SNAP_PRODUCT"
-                                                data-action-name="直接拍摄到货照片"
-                                                className="py-3 px-2 bg-gradient-to-br from-amber-600 to-amber-700 hover:from-amber-500 hover:to-amber-600 text-white rounded-xl font-black flex flex-col items-center justify-center gap-0.5 shadow-lg shadow-amber-950/40 active:scale-95 transition-all cursor-pointer border border-amber-400/30"
+                                                data-action-name="Ambil Foto Barang / 拍到货"
+                                                className="py-3 px-2 bg-gradient-to-br from-amber-600 to-amber-700 hover:from-amber-500 hover:to-amber-600 text-white rounded-xl font-black flex flex-col items-center justify-center gap-0.5 shadow-lg shadow-amber-950/40 active:scale-95 transition-all cursor-pointer border border-amber-400/30 min-h-[56px]"
                                             >
                                                 {isDirectUploadingThis && directUploadingTarget === 'product' ? (
                                                     <div className="flex items-center gap-1 text-xs text-amber-200 py-1">
@@ -3016,17 +3016,17 @@ const DriverDelivery: React.FC<DriverDeliveryProps> = ({ user, onNavigate }) => 
                                                     <>
                                                         <div className="flex items-center gap-1 text-xs font-black tracking-wide">
                                                             <Camera size={15} className="text-amber-200" />
-                                                            <span>📸 拍到货</span>
+                                                            <span>AMBIL BARANG</span>
                                                         </div>
                                                         <span className="text-[9px] text-amber-200/90 font-bold uppercase tracking-wider">
-                                                            BARANG SAMPAI
+                                                            BARANG SAMPAI • 拍到货
                                                         </span>
                                                     </>
                                                 )}
                                             </button>
                                         )}
 
-                                        {/* 2. 右边：拍 DO (Gambar DO Bercop) */}
+                                        {/* 2. 右边：拍 DO (Ambil Gambar DO Bercop) */}
                                         {hasDoPhoto ? (
                                             <div className="relative py-2 px-2.5 bg-slate-900/90 border border-blue-500/50 rounded-xl flex items-center justify-between gap-2 shadow-inner">
                                                 <div 
@@ -3042,10 +3042,10 @@ const DriverDelivery: React.FC<DriverDeliveryProps> = ({ user, onNavigate }) => 
                                                     <div className="min-w-0">
                                                         <div className="flex items-center gap-1 text-[11px] font-black text-blue-300 truncate">
                                                             <CheckCircle size={12} className="text-blue-400 shrink-0" />
-                                                            <span>已拍 DO</span>
+                                                            <span>DO BERCOP SIAP</span>
                                                         </div>
                                                         <span className="text-[9px] text-slate-400 font-bold block truncate">
-                                                            DO Bercop
+                                                            DO Disimpan • 拍 DO
                                                         </span>
                                                     </div>
                                                 </div>
@@ -3054,7 +3054,7 @@ const DriverDelivery: React.FC<DriverDeliveryProps> = ({ user, onNavigate }) => 
                                                     title="Ambil Semula / Retake"
                                                     onClick={() => handleTriggerDirectPhoto(order, 'do')}
                                                     disabled={isDirectUploadingThis}
-                                                    className="p-1.5 bg-slate-800 hover:bg-slate-700 active:scale-90 text-slate-300 hover:text-white rounded-lg border border-slate-700 shrink-0 text-[10px] font-bold cursor-pointer"
+                                                    className="p-1.5 bg-slate-800 hover:bg-slate-750 active:scale-90 text-slate-300 hover:text-white rounded-lg border border-slate-700 shrink-0 text-[10px] font-bold cursor-pointer"
                                                 >
                                                     🔄
                                                 </button>
@@ -3065,8 +3065,8 @@ const DriverDelivery: React.FC<DriverDeliveryProps> = ({ user, onNavigate }) => 
                                                 onClick={() => handleTriggerDirectPhoto(order, 'do')}
                                                 disabled={isDirectUploadingThis}
                                                 data-action="DIRECT_SNAP_DO"
-                                                data-action-name="直接拍摄DO照片"
-                                                className={`py-3 px-2 rounded-xl font-black flex flex-col items-center justify-center gap-0.5 shadow-lg active:scale-95 transition-all cursor-pointer border ${
+                                                data-action-name="Ambil Foto DO / 拍签收单"
+                                                className={`py-3 px-2 rounded-xl font-black flex flex-col items-center justify-center gap-0.5 shadow-lg active:scale-95 transition-all cursor-pointer border min-h-[56px] ${
                                                     hasProdPhoto
                                                         ? 'bg-gradient-to-br from-emerald-600 to-emerald-700 hover:from-emerald-500 hover:to-emerald-600 text-white shadow-emerald-950/40 border-emerald-400/40 animate-pulse'
                                                         : 'bg-gradient-to-br from-blue-600 to-blue-700 hover:from-blue-500 hover:to-blue-600 text-white shadow-blue-950/40 border-blue-400/30'
@@ -3081,10 +3081,10 @@ const DriverDelivery: React.FC<DriverDeliveryProps> = ({ user, onNavigate }) => 
                                                     <>
                                                         <div className="flex items-center gap-1 text-xs font-black tracking-wide">
                                                             <FileText size={15} className={hasProdPhoto ? 'text-emerald-200' : 'text-blue-200'} />
-                                                            <span>📄 拍 DO</span>
+                                                            <span>AMBIL DO</span>
                                                         </div>
                                                         <span className={`text-[9px] font-bold uppercase tracking-wider ${hasProdPhoto ? 'text-emerald-200/90' : 'text-blue-200/90'}`}>
-                                                            DO BERCOP
+                                                            DO BERCOP • 拍签收单
                                                         </span>
                                                     </>
                                                 )}
@@ -3095,20 +3095,20 @@ const DriverDelivery: React.FC<DriverDeliveryProps> = ({ user, onNavigate }) => 
                                     {/* 辅助说明与完整窗口备选入口 */}
                                     <div className="flex items-center justify-between px-1 text-[10px] text-slate-400">
                                         <span className="truncate">
-                                            {!hasDoPhoto && !hasProdPhoto && (btnTotalDrops > 1 ? `📸 Drop ${Math.min(btnDoneDrops + 1, btnTotalDrops)}/${btnTotalDrops}: Ambil Barang & DO` : '📸 Ambil gambar Barang & DO untuk sahkan')}
+                                            {!hasDoPhoto && !hasProdPhoto && (btnTotalDrops > 1 ? `📸 Drop ${Math.min(btnDoneDrops + 1, btnTotalDrops)}/${btnTotalDrops}: Ambil Gambar Barang & DO` : '📸 Ambil Gambar Barang & DO Bercop')}
                                             {hasProdPhoto && !hasDoPhoto && '👉 Sila ambil gambar DO bercop untuk selesaikan'}
                                             {hasDoPhoto && !hasProdPhoto && '✅ DO siap. Boleh tambah gambar barang jika perlu'}
-                                            {hasDoPhoto && hasProdPhoto && '🎉 Gambar Barang & DO lengkap! Hantaran disahkan.'}
+                                            {hasDoPhoto && hasProdPhoto && '🎉 Lengkap! Gambar Barang & DO telah disahkan.'}
                                         </span>
                                         <button
                                             type="button"
                                             onClick={() => handleOpenUnloadModal(order)}
                                             data-action="OPEN_UNLOAD_MODAL"
-                                            data-action-name="打开送货卸货与拍照窗口"
+                                            data-action-name="Buka Borang Penuh / 完整表单"
                                             data-target={`工单 #${order.orderNumber || order.id}`}
                                             className="text-[10px] text-slate-500 hover:text-slate-300 underline underline-offset-2 flex items-center gap-0.5 shrink-0 ml-2 cursor-pointer"
                                         >
-                                            <span>Borang Penuh</span>
+                                            <span>Borang Penuh / Full Form</span>
                                         </button>
                                     </div>
                                 </div>
@@ -3130,7 +3130,7 @@ const DriverDelivery: React.FC<DriverDeliveryProps> = ({ user, onNavigate }) => 
                                     }}
                                     className="text-[11px] font-bold text-blue-400 hover:text-blue-300 underline underline-offset-2 flex items-center gap-1 cursor-pointer"
                                 >
-                                    <span>Muat Trip ↑</span>
+                                    <span>Muat Trip / Load Trip ↑</span>
                                 </button>
                             </div>
                         )
