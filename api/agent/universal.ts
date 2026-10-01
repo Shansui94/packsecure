@@ -1221,12 +1221,12 @@ export async function handleParseTripPdf(req: VercelRequest, res: VercelResponse
         });
 
         const genAI = new GoogleGenerativeAI(apiKey);
-        // Verified high-performance multimodal candidate models (sub-3s fast execution to prevent Vercel 504 timeouts)
+        // Prioritize full multimodal reasoning models (gemini-3.5-flash & gemini-2.5-flash) for character-level OCR table accuracy
         const candidates = [
-            "gemini-3.5-flash-lite",
             "gemini-3.5-flash",
             "gemini-2.5-flash",
-            "gemini-flash-latest"
+            "gemini-flash-latest",
+            "gemini-3.5-flash-lite"
         ];
 
         // Build prompt
@@ -1300,11 +1300,34 @@ ${allDetectedDoNumbers.length > 0 ? `2. Detected potential DO numbers in documen
            "sku": "BW-DL-CLR-100Mx25CMx4ROLL-BLU"
        ==> STRICTLY FORBIDDEN to output quantity: 20 or 4! The printed DO quantity is 5!
 
-2. PACKAGING BREAKDOWN IN PRODUCT NAME OR REMARKS:
+     * If DO line says:
+       "Bubble Wrap Single Layer Clear 1m x 100m (MERAH)" with Qty: 10, UOM: UNIT
+       ==> MUST OUTPUT:
+           "quantity": 10,
+           "uom": "UNIT"
+       ==> STRICTLY FORBIDDEN to hallucinate or misread '10' as '15', '16', etc.! The printed number is 10!
+
+2. 🚨 ZERO-HALLUCINATION DIGIT OCR (字符级精确数字识别，杜绝数字幻觉):
+   - You MUST read the exact glyphs printed in the "Qty" column with surgical precision.
+   - Distinct character verification:
+     * The number "10" consists of digit '1' followed by digit '0' (an oval/circle). Do NOT confuse '0' with '5' or '6'!
+     * If the document says 10, it is 10, NOT 15.
+     * Do NOT invent or hallucinate digits. Never guess or round numbers based on common pack sizes or other lines.
+     * Do NOT confuse the Item line number (e.g. "1."), the Date (e.g. "01/10/2026"), the Drop sequence (e.g. "Drop #9"), or numbers in the Address as the item quantity!
+     * ONLY read the number strictly situated under the "Qty" or "Quantity" column header on the line of that product.
+
+3. 🚨 STRICT CROSS-PAGE & CROSS-DROP ISOLATION (单据与停靠点绝对隔离，严禁跨单串数):
+   - In a multi-page or multi-DO batch, EACH page / Delivery Order is 100% independent!
+   - STRICTLY FORBIDDEN to cross-contaminate numbers across DOs:
+     * Do NOT copy, bleed, sum, borrow, or carry over quantities from Drop #1, #2, #5, #6, etc., into Drop #7, #8, #9.
+     * Even if multiple DOs order the same product (e.g. "MERAH"), DO NOT use the quantity from another customer's DO.
+     * Every line item's quantity MUST come exclusively from that specific DO's own printed table row!
+
+4. PACKAGING BREAKDOWN IN PRODUCT NAME OR REMARKS:
    - Retain the packaging breakdown in the "product" description or remarks, e.g. "(20 Cartons / 120 Rolls)" or "(5 Bundles / 20 Slit Rolls)".
    - This ensures the driver knows how many physical rolls/pieces to count, while ensuring the official quantity stays 100% true to the DO and ERP/inventory system!
 
-3. BUBBLE WRAP SLITTING (分切规格) & SKU MATCHING:
+5. BUBBLE WRAP SLITTING (分切规格) & SKU MATCHING:
    - When description specifies slit width (e.g. 25cm, 30cm, 50cm):
      * "25cm" or "25cm x 100m (4 units)":
        - Double Layer ("Double" / "DL"): match to "BW-DL-CLR-100Mx25CMx4ROLL-BLU" (or "DL-25CM") for clear, or "BW-DL-BLK-100Mx25CMx4ROLL-RED" for black.
@@ -1493,18 +1516,20 @@ CRITICAL: Return strictly a valid JSON object. Do not wrap in markdown quotes.
         let modelUsed = "";
         const errorLogs: string[] = [];
 
+        const timeoutMs = files.length > 5 || totalEstimatedPages > 5 ? 25000 : 15000;
+
         for (const modelId of candidates) {
             try {
-                console.log(`[DO PDF AI] Trying model ${modelId} for ${files.length} PDFs (est. ${totalEstimatedPages} pages)...`);
+                console.log(`[DO PDF AI] Trying model ${modelId} for ${files.length} PDFs (est. ${totalEstimatedPages} pages, timeout ${timeoutMs}ms)...`);
                 const model = genAI.getGenerativeModel({
                     model: modelId,
                     generationConfig: {
                         responseMimeType: "application/json",
-                        temperature: 0.1
+                        temperature: 0.0
                     }
                 });
                 const timeoutPromise = new Promise<never>((_, reject) =>
-                    setTimeout(() => reject(new Error(`Timeout after 8500ms on ${modelId}`)), 8500)
+                    setTimeout(() => reject(new Error(`Timeout after ${timeoutMs}ms on ${modelId}`)), timeoutMs)
                 );
                 const result = await Promise.race([
                     model.generateContent([prompt, ...fileParts]),
@@ -1619,15 +1644,25 @@ CRITICAL: Return strictly a valid JSON object. Do not wrap in markdown quotes.
                                 else if (l.includes('ali')) loc = 'OPM Ali';
                                 else if (l.includes('lama')) loc = 'OPM Lama';
                             }
+
+                            const rawQty = it.quantity;
+                            const parsedQty = typeof rawQty === 'number' && !isNaN(rawQty)
+                                ? rawQty
+                                : (parseInt(String(rawQty || '0').replace(/[^0-9.]/g, ''), 10) || 0);
+
                             return {
                                 ...it,
+                                quantity: parsedQty,
                                 ...(loc ? { sourceLocation: loc } : {})
                             };
                         });
 
+                        const calculatedDoTotal = sanitizedItems.reduce((sum: number, it: any) => sum + (Number(it.quantity) || 0), 0);
+
                         return {
                             ...d,
                             items: sanitizedItems,
+                            doTotal: calculatedDoTotal,
                             isAgentDelivery,
                             agentName,
                             originalDoNumber,
