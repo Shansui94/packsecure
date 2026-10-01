@@ -42,10 +42,12 @@ const getAvailableWarehousesForOrigin = (origin: string): string[] => {
 const normalizeLeaveType = (raw?: string | null): string => {
     if (!raw) return 'Leave';
     const lower = raw.toLowerCase().trim();
-    if (lower.includes('annual') || lower.includes('tahunan') || lower.includes('年假')) return 'Annual';
-    if (lower.includes('mc') || lower.includes('medical') || lower.includes('sakit') || lower.includes('hospital') || lower.includes('病假')) return 'Medical';
-    if (lower.includes('unpaid') || lower.includes('tanpa gaji') || lower.includes('无薪假') || lower.includes('事假')) return 'Unpaid';
-    if (lower.includes('emergency') || lower.includes('kecemasan') || lower.includes('紧急事假')) return 'Emergency';
+    if (lower.includes('annual') || lower.includes('tahunan') || lower.includes('年假') || lower === 'al' || lower.includes('[al]') || lower.includes(' al ') || lower.startsWith('al ') || lower.endsWith(' al') || lower.includes('al:')) return 'Annual';
+    if (lower.includes('mc') || lower.includes('medical') || lower.includes('sakit') || lower.includes('demam') || lower.includes('hospital') || lower.includes('doctor') || lower.includes('doktor') || lower.includes('warded') || lower.includes('discharge') || lower.includes('checkup') || lower.includes('fisio') || lower.includes('病假') || lower.includes('[mc]')) return 'Medical';
+    if (lower.includes('off day') || lower.includes('rehat') || lower.includes('cuti rehat') || lower.includes('[off day]') || lower.includes('[off]')) return 'Off Day';
+    if (lower.includes('emergency') || lower.includes('kecemasan') || lower.includes('hal keluarga') || lower.includes('urusan keluarga') || lower.includes('family event') || lower.includes('kahwin') || lower.includes('nikah') || lower.includes('紧急事假') || lower.includes('[emergency]') || lower.includes('[el]')) return 'Emergency';
+    if (lower.includes('ganti') || lower.includes('ph') || lower.includes('[ph replacement]') || lower.includes('[cuti ganti ph]') || lower.includes('[ph]')) return 'PH Replacement';
+    if (lower.includes('unpaid') || lower.includes('tanpa gaji') || lower.includes('no pay') || lower.includes('无薪假') || lower.includes('事假') || lower.includes('[unpaid]') || lower.includes('[upl]')) return 'Unpaid';
     return raw;
 };
 
@@ -2016,12 +2018,12 @@ const PersonalMonthlyReport: React.FC<Props> = ({
 
                     const leave = batchLeaves.find(l => (l.employee_id === driver.employee_id || l.employee_id === driverUid) && dateStr >= l.start_date && dateStr <= l.end_date);
                     if (leave) {
-                        const normType = normalizeLeaveType(leave.leave_type || leave.type);
+                        const normType = normalizeLeaveType(leave.leave_type || leave.type || leave.reason);
                         const isAL = normType === 'Annual';
                         if (isAL) {
                             driverAnnualLeaveDays++;
                         }
-                        const lType = leave.leave_type || leave.type || 'Leave';
+                        const lType = leave.leave_type || normType || 'Leave';
                         workingTimeText = isAL ? '🏖️ Cuti Tahunan / Annual Leave' : `Cuti / Leave (${lType})`;
                     }
 
@@ -2058,17 +2060,18 @@ const PersonalMonthlyReport: React.FC<Props> = ({
                             });
                         });
                     } else if (leave) {
-                        const normType = normalizeLeaveType(leave.leave_type || leave.type);
+                        const normType = normalizeLeaveType(leave.leave_type || leave.type || leave.reason);
                         const isAL = normType === 'Annual';
+                        const displayType = leave.leave_type || normType || 'Leave';
                         tripRows.push({
                             date: dateDisplay,
-                            workingTime: isAL ? '🏖️ Cuti Tahunan / Annual Leave' : `Cuti / Leave (${leave.leave_type || leave.type || 'Leave'})`,
+                            workingTime: isAL ? '🏖️ Cuti Tahunan / Annual Leave' : `Cuti / Leave (${displayType})`,
                             orderNumber: '-',
-                            customer: leave.reason ? (isAL ? `年假 / AL: ${leave.reason}` : `Cuti: ${leave.reason}`) : (isAL ? '🏖️ Cuti Tahunan / Annual Leave' : 'Cuti Diluluskan / Approved Leave'),
+                            customer: leave.reason ? (isAL ? `年假 / AL: ${leave.reason}` : `Cuti (${displayType}): ${leave.reason}`) : (isAL ? '🏖️ Cuti Tahunan / Annual Leave' : `Cuti Diluluskan / Approved (${displayType})`),
                             origin: '-',
                             destination: '-',
                             drops: 0,
-                            status: isAL ? '🏖️ Cuti Tahunan (Annual Leave)' : `🏖️ Cuti (${leave.leave_type || leave.type || 'Leave'})`,
+                            status: isAL ? '🏖️ Cuti Tahunan (Annual Leave)' : `🏖️ Cuti (${displayType})`,
                             earnings: 0,
                             potentialEarnings: 0,
                             isDelivered: false,
@@ -2601,7 +2604,7 @@ const PersonalMonthlyReport: React.FC<Props> = ({
             const isPublicHoliday = Boolean(dayPublicHoliday);
 
             const dayLeave = leaves.find(l => dateStr >= l.start_date && dateStr <= l.end_date);
-            const rawLeaveType = dayLeave ? (dayLeave.leave_type || dayLeave.type || 'Leave') : null;
+            const rawLeaveType = dayLeave ? (dayLeave.leave_type || dayLeave.type || dayLeave.reason || 'Leave') : null;
             const leaveType = dayLeave ? normalizeLeaveType(rawLeaveType) : null;
             const leaveReason = dayLeave ? dayLeave.reason : null;
             const leaveStatus = dayLeave ? dayLeave.status : null; // 'Approved' | 'Pending' | null
@@ -2709,9 +2712,11 @@ const PersonalMonthlyReport: React.FC<Props> = ({
     const publicHolidayRestDays = dailyMetrics.filter(d => d.isRestOnPublicHoliday).length;
     const annualLeaveDays = dailyMetrics.filter(d => d.leaveStatus === 'Approved' && d.leaveType === 'Annual').length;
     const mcLeaveDays = dailyMetrics.filter(d => d.leaveStatus === 'Approved' && d.leaveType === 'Medical').length;
-    const unpaidLeaveDays = dailyMetrics.filter(d => d.leaveStatus === 'Approved' && d.leaveType === 'Unpaid').length;
+    const offDayLeaveDays = dailyMetrics.filter(d => d.leaveStatus === 'Approved' && d.leaveType === 'Off Day').length;
     const emergencyLeaveDays = dailyMetrics.filter(d => d.leaveStatus === 'Approved' && d.leaveType === 'Emergency').length;
-    const otherLeaveDays = Math.max(0, leaveDays - annualLeaveDays - mcLeaveDays - unpaidLeaveDays - emergencyLeaveDays);
+    const phReplacementLeaveDays = dailyMetrics.filter(d => d.leaveStatus === 'Approved' && d.leaveType === 'PH Replacement').length;
+    const unpaidLeaveDays = dailyMetrics.filter(d => d.leaveStatus === 'Approved' && d.leaveType === 'Unpaid').length;
+    const otherLeaveDays = Math.max(0, leaveDays - annualLeaveDays - mcLeaveDays - offDayLeaveDays - emergencyLeaveDays - phReplacementLeaveDays - unpaidLeaveDays);
 
     const totalPhotos = dailyMetrics.reduce((sum, d) => sum + d.photoCount, 0);
     const totalHoursWorked = dailyMetrics.reduce((sum, d) => sum + d.hoursWorked, 0);
@@ -3014,8 +3019,11 @@ const PersonalMonthlyReport: React.FC<Props> = ({
                                     </div>
                                     <div className="flex flex-wrap gap-1 mt-1 text-[9px]">
                                         {mcLeaveDays > 0 && <span className="bg-blue-500/15 text-blue-300 px-1 py-0.5 rounded border border-blue-500/30 font-medium">MC: {mcLeaveDays}d</span>}
-                                        {unpaidLeaveDays > 0 && <span className="bg-rose-500/15 text-rose-300 px-1 py-0.5 rounded border border-rose-500/30 font-medium">UPL: {unpaidLeaveDays}d</span>}
-                                        {emergencyLeaveDays > 0 && <span className="bg-orange-500/15 text-orange-300 px-1 py-0.5 rounded border border-orange-500/30 font-medium">EL: {emergencyLeaveDays}d</span>}
+                                        {offDayLeaveDays > 0 && <span className="bg-emerald-500/15 text-emerald-300 px-1 py-0.5 rounded border border-emerald-500/30 font-medium">Off: {offDayLeaveDays}d</span>}
+                                        {phReplacementLeaveDays > 0 && <span className="bg-indigo-500/15 text-indigo-300 px-1 py-0.5 rounded border border-indigo-500/30 font-medium">Ganti: {phReplacementLeaveDays}d</span>}
+                                        {emergencyLeaveDays > 0 && <span className="bg-rose-500/15 text-rose-300 px-1 py-0.5 rounded border border-rose-500/30 font-medium">EL: {emergencyLeaveDays}d</span>}
+                                        {unpaidLeaveDays > 0 && <span className="bg-purple-500/15 text-purple-300 px-1 py-0.5 rounded border border-purple-500/30 font-medium">UPL: {unpaidLeaveDays}d</span>}
+                                        {otherLeaveDays > 0 && <span className="bg-slate-500/15 text-slate-300 px-1 py-0.5 rounded border border-slate-500/30 font-medium">Lain: {otherLeaveDays}d</span>}
                                         {pendingLeaveDays > 0 && (
                                             <span className="bg-amber-500/20 text-amber-300 px-1 py-0.5 rounded border border-amber-500/40 animate-pulse font-bold">
                                                 ⏳ {pendingLeaveDays}
@@ -3658,6 +3666,31 @@ const PersonalMonthlyReport: React.FC<Props> = ({
                                                                     <span>🏖️</span>
                                                                     <span>年假 (AL)</span>
                                                                 </span>
+                                                            ) : day.leaveType === 'Medical' ? (
+                                                                <span className="inline-flex items-center gap-1 px-1.5 py-0.5 rounded bg-blue-500/20 border border-blue-500/40 text-blue-300 text-[9.5px] font-black uppercase tracking-wider shadow-sm">
+                                                                    <span>💊</span>
+                                                                    <span>病假 (MC)</span>
+                                                                </span>
+                                                            ) : day.leaveType === 'Off Day' ? (
+                                                                <span className="inline-flex items-center gap-1 px-1.5 py-0.5 rounded bg-emerald-500/20 border border-emerald-500/40 text-emerald-300 text-[9.5px] font-black uppercase tracking-wider shadow-sm">
+                                                                    <span>🛋️</span>
+                                                                    <span>调休 (Off)</span>
+                                                                </span>
+                                                            ) : day.leaveType === 'Emergency' ? (
+                                                                <span className="inline-flex items-center gap-1 px-1.5 py-0.5 rounded bg-rose-500/20 border border-rose-500/40 text-rose-300 text-[9.5px] font-black uppercase tracking-wider shadow-sm">
+                                                                    <span>🚨</span>
+                                                                    <span>紧急事假 (EL)</span>
+                                                                </span>
+                                                            ) : day.leaveType === 'PH Replacement' ? (
+                                                                <span className="inline-flex items-center gap-1 px-1.5 py-0.5 rounded bg-indigo-500/20 border border-indigo-500/40 text-indigo-300 text-[9.5px] font-black uppercase tracking-wider shadow-sm">
+                                                                    <span>🇲🇾</span>
+                                                                    <span>公假补休 (PH)</span>
+                                                                </span>
+                                                            ) : day.leaveType === 'Unpaid' ? (
+                                                                <span className="inline-flex items-center gap-1 px-1.5 py-0.5 rounded bg-purple-500/20 border border-purple-500/40 text-purple-300 text-[9.5px] font-black uppercase tracking-wider shadow-sm">
+                                                                    <span>📄</span>
+                                                                    <span>无薪假 (UPL)</span>
+                                                                </span>
                                                             ) : (
                                                                 <span className="inline-flex items-center px-1.5 py-0.5 rounded bg-amber-500/10 border border-amber-500/20 text-amber-400 text-[9.5px] font-black uppercase tracking-wider">
                                                                     🏖️ {day.leaveType || 'Leave'}
@@ -3673,7 +3706,12 @@ const PersonalMonthlyReport: React.FC<Props> = ({
                                                         <div className="flex flex-col items-start gap-0.5">
                                                             <span className="inline-flex items-center gap-1 px-1.5 py-0.5 rounded bg-amber-500/20 border border-amber-500/40 border-dashed text-amber-300 text-[9.5px] font-black uppercase tracking-wider animate-pulse">
                                                                 <Clock size={9} className="animate-spin" />
-                                                                {day.leaveType === 'Annual' ? '申请年假中 / Pending AL' : 'Permohonan Cuti'}
+                                                                {day.leaveType === 'Annual' ? '年假审批中 / Pending AL' : 
+                                                                 day.leaveType === 'Medical' ? '病假审批中 / Pending MC' :
+                                                                 day.leaveType === 'Off Day' ? '调休审批中 / Pending Off' :
+                                                                 day.leaveType === 'Emergency' ? '事假审批中 / Pending EL' :
+                                                                 day.leaveType === 'PH Replacement' ? '公假补休审批中 / Pending PH' :
+                                                                 '请假审批中 / Pending'}
                                                             </span>
                                                         </div>
                                                     ) : day.hasAttendance ? (
@@ -3755,13 +3793,30 @@ const PersonalMonthlyReport: React.FC<Props> = ({
                                                         ) : day.leaveStatus === 'Approved' ? (
                                                             day.leaveType === 'Annual' ? (
                                                                 <span className="text-amber-300 text-[11px] font-bold">🏖️ 年假 / Annual Leave</span>
+                                                            ) : day.leaveType === 'Medical' ? (
+                                                                <span className="text-blue-300 text-[11px] font-bold">💊 病假 / Medical Leave (MC)</span>
+                                                            ) : day.leaveType === 'Off Day' ? (
+                                                                <span className="text-emerald-300 text-[11px] font-bold">🛋️ 调休 / Off Day</span>
+                                                            ) : day.leaveType === 'Emergency' ? (
+                                                                <span className="text-rose-300 text-[11px] font-bold">🚨 紧急事假 / Emergency Leave</span>
+                                                            ) : day.leaveType === 'PH Replacement' ? (
+                                                                <span className="text-indigo-300 text-[11px] font-bold">🇲🇾 公假补休 / PH Replacement</span>
+                                                            ) : day.leaveType === 'Unpaid' ? (
+                                                                <span className="text-purple-300 text-[11px] font-bold">📄 无薪假 / Unpaid Leave</span>
                                                             ) : (
                                                                 <span className="text-amber-400/80 text-[11px] font-medium">🏖️ Cuti / {day.leaveType || 'Leave'}</span>
                                                             )
                                                         ) : day.leaveStatus === 'Pending' ? (
                                                             <span className="text-amber-300/80 text-[11px] font-medium flex items-center gap-1">
                                                                 <Clock size={11} className="animate-spin text-amber-400" />
-                                                                <span>{day.leaveType === 'Annual' ? '年假审批中 / Pending AL' : 'Pending'}</span>
+                                                                <span>
+                                                                    {day.leaveType === 'Annual' ? '年假审批中 / Pending AL' : 
+                                                                     day.leaveType === 'Medical' ? '病假审批中 / Pending MC' :
+                                                                     day.leaveType === 'Off Day' ? '调休审批中 / Pending Off' :
+                                                                     day.leaveType === 'Emergency' ? '事假审批中 / Pending EL' :
+                                                                     day.leaveType === 'PH Replacement' ? '公假补休审批中 / Pending PH' :
+                                                                     '请假审批中 / Pending'}
+                                                                </span>
                                                             </span>
                                                         ) : isDriver && day.tripCount > 0 ? (
                                                             day.dateStr > todayStr ? (

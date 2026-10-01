@@ -12,6 +12,7 @@ interface LeaveRecord {
     end_date: string;
     count_days: number;
     reason: string | null;
+    leave_type?: string | null;
     status: 'Pending' | 'Approved' | 'Rejected';
     users_public: {
         name: string;
@@ -20,6 +21,63 @@ interface LeaveRecord {
     created_at: string;
     reviewed_at?: string;
 }
+
+export const LEAVE_OPTIONS = [
+    {
+        id: 'Annual',
+        code: 'AL',
+        icon: '🏖️',
+        label: 'Cuti Tahunan (AL)',
+        subLabel: 'Annual Leave / 年假',
+        activeClass: 'bg-amber-500/20 border-amber-500 text-amber-300 shadow-amber-900/40 ring-1 ring-amber-500',
+        badgeClass: 'bg-amber-500/20 border-amber-500/40 text-amber-300'
+    },
+    {
+        id: 'Medical',
+        code: 'MC',
+        icon: '💊',
+        label: 'Cuti Sakit (MC)',
+        subLabel: 'Medical / 病假',
+        activeClass: 'bg-blue-500/20 border-blue-500 text-blue-300 shadow-blue-900/40 ring-1 ring-blue-500',
+        badgeClass: 'bg-blue-500/20 border-blue-500/40 text-blue-300'
+    },
+    {
+        id: 'Off Day',
+        code: 'OFF',
+        icon: '🛋️',
+        label: 'Cuti Rehat (Off Day)',
+        subLabel: 'Rest Day / 调休·轮休',
+        activeClass: 'bg-emerald-500/20 border-emerald-500 text-emerald-300 shadow-emerald-900/40 ring-1 ring-emerald-500',
+        badgeClass: 'bg-emerald-500/20 border-emerald-500/40 text-emerald-300'
+    },
+    {
+        id: 'Emergency',
+        code: 'EL',
+        icon: '🚨',
+        label: 'Kecemasan (EL)',
+        subLabel: 'Emergency / 紧急事假',
+        activeClass: 'bg-rose-500/20 border-rose-500 text-rose-300 shadow-rose-900/40 ring-1 ring-rose-500',
+        badgeClass: 'bg-rose-500/20 border-rose-500/40 text-rose-300'
+    },
+    {
+        id: 'PH Replacement',
+        code: 'PH',
+        icon: '🇲🇾',
+        label: 'Cuti Ganti PH',
+        subLabel: 'PH Replacement / 公假补休',
+        activeClass: 'bg-indigo-500/20 border-indigo-500 text-indigo-300 shadow-indigo-900/40 ring-1 ring-indigo-500',
+        badgeClass: 'bg-indigo-500/20 border-indigo-500/40 text-indigo-300'
+    },
+    {
+        id: 'Unpaid',
+        code: 'UPL',
+        icon: '📄',
+        label: 'Tanpa Gaji (UPL)',
+        subLabel: 'Unpaid / 无薪假',
+        activeClass: 'bg-purple-500/20 border-purple-500 text-purple-300 shadow-purple-900/40 ring-1 ring-purple-500',
+        badgeClass: 'bg-purple-500/20 border-purple-500/40 text-purple-300'
+    }
+];
 
 const MONTH_NAMES = [
     'January', 'February', 'March', 'April', 'May', 'June',
@@ -257,6 +315,7 @@ const LeaveCalendar: React.FC<Props> = ({ user, onNavigate }) => {
     const [selectedDateFilter, setSelectedDateFilter] = useState<string | null>(null);
 
     // -- My Leave State --
+    const [leaveType, setLeaveType] = useState<string>('Annual');
     const [startDate, setStartDate] = useState('');
     const [endDate, setEndDate] = useState('');
     const [reason, setReason] = useState('');
@@ -401,13 +460,18 @@ const LeaveCalendar: React.FC<Props> = ({ user, onNavigate }) => {
             const diffDays = Math.ceil(diffTime / (1000 * 60 * 60 * 24)) + 1;
 
             const userId = user.uid || user.id;
+            const cleanReason = reason.trim();
+            const formattedReason = cleanReason.startsWith(`[${leaveType}]`)
+                ? cleanReason
+                : `[${leaveType}] ${cleanReason}`;
 
             const { error } = await supabase.from('employee_leave').insert({
                 employee_id: userId,
                 start_date: startDate,
                 end_date: endDate,
                 count_days: diffDays,
-                reason: reason.trim() || null,
+                leave_type: leaveType,
+                reason: formattedReason,
                 status: 'Pending',
             });
 
@@ -416,21 +480,23 @@ const LeaveCalendar: React.FC<Props> = ({ user, onNavigate }) => {
             logActivity(user, {
                 action: 'LEAVE_SUBMIT',
                 module: 'HR / LeaveCalendar',
-                target: `请假申请: ${startDate} 至 ${endDate} (${diffDays} 天)`,
+                target: `请假申请 (${leaveType}): ${startDate} 至 ${endDate} (${diffDays} 天)`,
                 status: 'SUCCESS',
-                resultSummary: `成功提交 ${diffDays} 天请假申请 (${startDate} 至 ${endDate})，等待 HR 审批`,
+                resultSummary: `成功提交 ${diffDays} 天 [${leaveType}] 请假申请 (${startDate} 至 ${endDate})，等待 HR 审批`,
                 details: {
+                    leaveType,
                     startDate,
                     endDate,
                     countDays: diffDays,
-                    reason: reason.trim() || null
+                    reason: formattedReason
                 }
             });
 
-            alert('✅ Permohonan cuti berjaya dihantar! Menunggu kelulusan HR. (Leave application submitted! Pending HR approval.)');
+            alert(`✅ Permohonan cuti [${leaveType}] berjaya dihantar! Menunggu kelulusan HR. (Leave application submitted! Pending HR approval.)`);
             setStartDate('');
             setEndDate('');
             setReason('');
+            setLeaveType('Annual');
             fetchLeaves(); // Refresh global list
             setActiveTab('my-leave'); // Stay or go to history
         } catch (err: any) {
@@ -716,7 +782,26 @@ const LeaveCalendar: React.FC<Props> = ({ user, onNavigate }) => {
                                             <UserIcon size={18} />
                                         </div>
                                         <div className="flex-1 min-w-0">
-                                            <div className="font-bold text-white text-sm truncate">{leave.users_public?.name}</div>
+                                            <div className="font-bold text-white text-sm truncate flex items-center gap-1.5">
+                                                <span>{leave.users_public?.name}</span>
+                                                {leave.leave_type && (
+                                                    <span className={`text-[8.5px] font-black uppercase px-1.5 py-0.5 rounded-full border ${
+                                                        leave.leave_type === 'Annual' ? 'bg-amber-500/20 text-amber-300 border-amber-500/30' :
+                                                        leave.leave_type === 'Medical' ? 'bg-blue-500/20 text-blue-300 border-blue-500/30' :
+                                                        leave.leave_type === 'Off Day' ? 'bg-emerald-500/20 text-emerald-300 border-emerald-500/30' :
+                                                        leave.leave_type === 'Emergency' ? 'bg-rose-500/20 text-rose-300 border-rose-500/30' :
+                                                        leave.leave_type === 'PH Replacement' ? 'bg-indigo-500/20 text-indigo-300 border-indigo-500/30' :
+                                                        'bg-purple-500/20 text-purple-300 border-purple-500/30'
+                                                    }`}>
+                                                        {leave.leave_type === 'Annual' ? '🏖️ AL' :
+                                                         leave.leave_type === 'Medical' ? '💊 MC' :
+                                                         leave.leave_type === 'Off Day' ? '🛋️ OFF' :
+                                                         leave.leave_type === 'Emergency' ? '🚨 EL' :
+                                                         leave.leave_type === 'PH Replacement' ? '🇲🇾 PH' :
+                                                         leave.leave_type}
+                                                    </span>
+                                                )}
+                                            </div>
                                             <div className="text-[10px] text-slate-500 uppercase font-black tracking-widest flex items-center gap-1.5 mt-0.5">
                                                 <span className="bg-white/10 px-1.5 py-0.5 rounded">{leave.users_public?.role}</span>
                                             </div>
@@ -1020,32 +1105,107 @@ const LeaveCalendar: React.FC<Props> = ({ user, onNavigate }) => {
             <form onSubmit={handleSubmitApplication} className="bg-slate-900 border border-white/5 rounded-3xl p-6 shadow-2xl space-y-5">
                 <div className="flex items-center gap-3 mb-2">
                     <div className="p-2 bg-blue-500/20 text-blue-400 rounded-xl border border-blue-500/30"><Send size={16} /></div>
-                    <h2 className="text-sm font-black text-white uppercase tracking-widest">Mohon Cuti / Apply for Leave</h2>
+                    <div>
+                        <h2 className="text-sm font-black text-white uppercase tracking-widest">Mohon Cuti / Apply for Leave</h2>
+                        <p className="text-[10px] text-slate-400 font-medium">Pilih jenis cuti dan tarikh untuk dihantar ke HR / Select leave type & dates</p>
+                    </div>
                 </div>
 
-                <div className="grid grid-cols-1 md:grid-cols-2 gap-5">
-                    <div>
-                        <label className="block text-[10px] font-black text-slate-500 uppercase tracking-widest mb-2 px-1">Tarikh Mula / Start Date</label>
-                        <input type="date" value={startDate} onChange={(e) => setStartDate(e.target.value)} required
-                            className="w-full bg-black/40 border border-white/10 rounded-xl p-4 text-white font-bold focus:border-blue-500 outline-none transition-all" />
+                {/* 🏷️ PILIHAN JENIS CUTI / LEAVE TYPE SELECTOR */}
+                <div>
+                    <label className="block text-[10px] font-black text-slate-400 uppercase tracking-widest mb-2 px-1">
+                        1. PILIH JENIS CUTI / SELECT LEAVE TYPE (WAJIB / REQUIRED)
+                    </label>
+                    <div className="grid grid-cols-2 sm:grid-cols-3 gap-2.5">
+                        {LEAVE_OPTIONS.map((opt) => {
+                            const isSelected = leaveType === opt.id;
+                            return (
+                                <button
+                                    key={opt.id}
+                                    type="button"
+                                    onClick={() => setLeaveType(opt.id)}
+                                    className={`p-3 rounded-2xl border text-left transition-all cursor-pointer relative overflow-hidden flex flex-col justify-between ${
+                                        isSelected 
+                                            ? opt.activeClass + ' shadow-lg scale-[1.02]' 
+                                            : 'bg-black/40 border-white/10 hover:border-white/20 text-slate-400 hover:text-slate-200'
+                                    }`}
+                                >
+                                    <div className="flex items-center justify-between w-full">
+                                        <span className="text-lg">{opt.icon}</span>
+                                        <span className={`text-[9px] font-black uppercase px-1.5 py-0.5 rounded border ${
+                                            isSelected ? opt.badgeClass : 'bg-white/5 border-white/10 text-slate-500'
+                                        }`}>
+                                            {opt.code}
+                                        </span>
+                                    </div>
+                                    <div className="mt-2.5">
+                                        <div className={`text-xs font-black ${isSelected ? 'text-white' : 'text-slate-300'}`}>
+                                            {opt.label}
+                                        </div>
+                                        <div className="text-[9px] opacity-70 mt-0.5 font-medium">
+                                            {opt.subLabel}
+                                        </div>
+                                    </div>
+                                </button>
+                            );
+                        })}
                     </div>
-                    <div>
-                        <label className="block text-[10px] font-black text-slate-500 uppercase tracking-widest mb-2 px-1">Tarikh Tamat / End Date</label>
-                        <input type="date" value={endDate} onChange={(e) => setEndDate(e.target.value)} required
-                            className="w-full bg-black/40 border border-white/10 rounded-xl p-4 text-white font-bold focus:border-blue-500 outline-none transition-all" />
+                    {/* Helper notes for selected type */}
+                    <div className="mt-2.5 px-3 py-2 rounded-xl bg-black/40 border border-white/5 text-[11px] text-slate-300 flex items-center gap-2">
+                        <span>💡</span>
+                        <span>
+                            {leaveType === 'Annual' && 'Cuti tahunan ditolak daripada baki kelayakan tahunan (AL). / Annual leave deducted from AL balance.'}
+                            {leaveType === 'Medical' && 'Sila serahkan sijil sakit (MC fizikal/slip klinik) kepada HR selepas kembali bertugas. / Please submit medical cert to HR.'}
+                            {leaveType === 'Off Day' && 'Permohonan cuti rehat / tukar hari cuti kerja (Off Day). / Rest day / day off schedule request.'}
+                            {leaveType === 'Emergency' && 'Cuti kecemasan untuk urusan mendesak keluarga / musibah. / Emergency leave for urgent matters.'}
+                            {leaveType === 'PH Replacement' && 'Tuntutan cuti ganti bagi kerja yang dijalankan pada Cuti Umum (PH). / Replacement leave for working on Public Holiday.'}
+                            {leaveType === 'Unpaid' && 'Cuti tanpa gaji (UPL) tertakluk kepada kelulusan pihak pengurusan. / Unpaid leave subject to management approval.'}
+                        </span>
                     </div>
                 </div>
+
                 <div>
-                    <label className="block text-[10px] font-black text-slate-500 uppercase tracking-widest mb-2 px-1 flex items-center gap-1">
-                        <FileText size={10} /> Sebab (Wajib) / Reason (Required)
+                    <label className="block text-[10px] font-black text-slate-400 uppercase tracking-widest mb-2 px-1">
+                        2. TEMPOH CUTI / LEAVE PERIOD
                     </label>
-                    <textarea value={reason} onChange={(e) => setReason(e.target.value)} rows={2} required
-                        placeholder="Contoh: Temujanji perubatan, urusan keluarga..."
-                        className="w-full bg-black/40 border border-white/10 rounded-xl p-4 text-white font-bold focus:border-blue-500 outline-none transition-all resize-none text-sm" />
+                    <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                        <div>
+                            <label className="block text-[9.5px] font-bold text-slate-500 uppercase mb-1 px-1">Tarikh Mula / Start Date</label>
+                            <input type="date" value={startDate} onChange={(e) => setStartDate(e.target.value)} required
+                                className="w-full bg-black/40 border border-white/10 rounded-xl p-3.5 text-white font-bold focus:border-blue-500 outline-none transition-all" />
+                        </div>
+                        <div>
+                            <label className="block text-[9.5px] font-bold text-slate-500 uppercase mb-1 px-1">Tarikh Tamat / End Date</label>
+                            <input type="date" value={endDate} onChange={(e) => setEndDate(e.target.value)} required
+                                className="w-full bg-black/40 border border-white/10 rounded-xl p-3.5 text-white font-bold focus:border-blue-500 outline-none transition-all" />
+                        </div>
+                    </div>
+                </div>
+
+                <div>
+                    <label className="block text-[10px] font-black text-slate-400 uppercase tracking-widest mb-2 px-1 flex items-center gap-1">
+                        <FileText size={10} /> 3. SEBAB & CATATAN (WAJIB) / REASON (REQUIRED)
+                    </label>
+                    <textarea 
+                        value={reason} 
+                        onChange={(e) => setReason(e.target.value)} 
+                        rows={2} 
+                        required
+                        placeholder={
+                            leaveType === 'Medical' 
+                                ? "Contoh: Demam panas, rawatan di Klinik Kesihatan / Hospital..." 
+                                : leaveType === 'PH Replacement'
+                                ? "Contoh: Cuti ganti kerja PH Hari Raya / Merdeka..."
+                                : leaveType === 'Off Day'
+                                ? "Contoh: Rehat hal peribadi, tukar giliran cuti..."
+                                : "Contoh: Urusan keluarga, kenduri kahwin, cuti tahunan..."
+                        }
+                        className="w-full bg-black/40 border border-white/10 rounded-xl p-3.5 text-white font-medium focus:border-blue-500 outline-none transition-all resize-none text-xs" 
+                    />
                 </div>
                 <button type="submit" disabled={submitting}
-                    className="w-full py-4 bg-blue-600 hover:bg-blue-500 text-white rounded-2xl font-black uppercase tracking-widest flex items-center justify-center gap-3 shadow-lg shadow-blue-900/40 active:scale-95 transition-all disabled:opacity-50">
-                    {submitting ? 'SEDANG DIHANTAR / SENDING...' : 'Hantar Permohonan Cuti / Submit Leave Application'}
+                    className="w-full py-4 bg-gradient-to-r from-blue-600 to-indigo-600 hover:from-blue-500 hover:to-indigo-500 text-white rounded-2xl font-black uppercase tracking-widest flex items-center justify-center gap-3 shadow-lg shadow-blue-900/40 active:scale-95 transition-all disabled:opacity-50 cursor-pointer">
+                    {submitting ? 'SEDANG DIHANTAR / SENDING...' : `Hantar Permohonan [${leaveType}] / Submit Leave Application`}
                 </button>
             </form>
 
@@ -1061,26 +1221,48 @@ const LeaveCalendar: React.FC<Props> = ({ user, onNavigate }) => {
                     </div>
                 ) : (
                     <div className="space-y-3">
-                        {myLeaves.map((leave) => (
-                            <div key={leave.id} className="bg-black/40 border border-white/5 p-4 sm:p-5 rounded-2xl flex flex-col sm:flex-row justify-between sm:items-center gap-4 hover:bg-white/[0.02] transition-colors">
-                                <div>
-                                    <div className="text-white font-black text-sm sm:text-base">{leave.start_date} <span className="text-slate-600 font-normal mx-1">hingga / to</span> {leave.end_date}</div>
-                                    <div className="text-[10px] text-blue-400 font-bold uppercase mt-1">{leave.count_days} Hari Cuti / Days Off</div>
-                                    {leave.reason && <p className="text-xs text-slate-400 italic mt-2">"{leave.reason}"</p>}
-                                </div>
-                                <div className="flex flex-col sm:items-end items-start gap-2">
-                                    <div className={`px-3 py-1.5 rounded-full text-[10px] font-black uppercase border tracking-wider
-                                        ${leave.status === 'Approved' ? 'bg-emerald-500/10 text-emerald-400 border-emerald-500/20' :
-                                            leave.status === 'Rejected' ? 'bg-rose-500/10 text-rose-400 border-rose-500/20' :
-                                                'bg-amber-500/10 text-amber-400 border-amber-500/20'}`}>
-                                        {leave.status === 'Approved' ? 'Lulus / Approved' :
-                                         leave.status === 'Rejected' ? 'Ditolak / Rejected' :
-                                         'Proses / Pending'}
+                        {myLeaves.map((leave) => {
+                            const leaveTypeDisplay = leave.leave_type || (leave.reason?.includes('[MC]') ? 'Medical' : leave.reason?.includes('[AL]') ? 'Annual' : 'Leave');
+                            return (
+                                <div key={leave.id} className="bg-black/40 border border-white/5 p-4 sm:p-5 rounded-2xl flex flex-col sm:flex-row justify-between sm:items-center gap-4 hover:bg-white/[0.02] transition-colors">
+                                    <div>
+                                        <div className="flex items-center gap-2 flex-wrap">
+                                            <div className="text-white font-black text-sm sm:text-base">
+                                                {leave.start_date} <span className="text-slate-600 font-normal mx-1">hingga / to</span> {leave.end_date}
+                                            </div>
+                                            <span className={`text-[9px] font-black uppercase px-2 py-0.5 rounded-full border ${
+                                                leaveTypeDisplay === 'Annual' ? 'bg-amber-500/20 text-amber-300 border-amber-500/30' :
+                                                leaveTypeDisplay === 'Medical' ? 'bg-blue-500/20 text-blue-300 border-blue-500/30' :
+                                                leaveTypeDisplay === 'Off Day' ? 'bg-emerald-500/20 text-emerald-300 border-emerald-500/30' :
+                                                leaveTypeDisplay === 'Emergency' ? 'bg-rose-500/20 text-rose-300 border-rose-500/30' :
+                                                leaveTypeDisplay === 'PH Replacement' ? 'bg-indigo-500/20 text-indigo-300 border-indigo-500/30' :
+                                                'bg-purple-500/20 text-purple-300 border-purple-500/30'
+                                            }`}>
+                                                {leaveTypeDisplay === 'Annual' ? '🏖️ AL' :
+                                                 leaveTypeDisplay === 'Medical' ? '💊 MC' :
+                                                 leaveTypeDisplay === 'Off Day' ? '🛋️ OFF' :
+                                                 leaveTypeDisplay === 'Emergency' ? '🚨 EL' :
+                                                 leaveTypeDisplay === 'PH Replacement' ? '🇲🇾 PH' :
+                                                 leaveTypeDisplay}
+                                            </span>
+                                        </div>
+                                        <div className="text-[10px] text-blue-400 font-bold uppercase mt-1">{leave.count_days} Hari Cuti / Days Off</div>
+                                        {leave.reason && <p className="text-xs text-slate-400 italic mt-2">"{leave.reason}"</p>}
                                     </div>
-                                    {leave.reviewed_at && <div className="text-[9px] text-slate-600 font-mono">Reviewed: {new Date(leave.reviewed_at).toLocaleDateString()}</div>}
+                                    <div className="flex flex-col sm:items-end items-start gap-2">
+                                        <div className={`px-3 py-1.5 rounded-full text-[10px] font-black uppercase border tracking-wider
+                                            ${leave.status === 'Approved' ? 'bg-emerald-500/10 text-emerald-400 border-emerald-500/20' :
+                                                leave.status === 'Rejected' ? 'bg-rose-500/10 text-rose-400 border-rose-500/20' :
+                                                    'bg-amber-500/10 text-amber-400 border-amber-500/20'}`}>
+                                            {leave.status === 'Approved' ? 'Lulus / Approved' :
+                                             leave.status === 'Rejected' ? 'Ditolak / Rejected' :
+                                             'Proses / Pending'}
+                                        </div>
+                                        {leave.reviewed_at && <div className="text-[9px] text-slate-600 font-mono">Reviewed: {new Date(leave.reviewed_at).toLocaleDateString()}</div>}
+                                    </div>
                                 </div>
-                            </div>
-                        ))}
+                            );
+                        })}
                     </div>
                 )}
             </div>
@@ -1106,9 +1288,29 @@ const LeaveCalendar: React.FC<Props> = ({ user, onNavigate }) => {
                                 <div className="flex items-center gap-4">
                                     <div className="w-10 h-10 bg-blue-500/10 rounded-xl flex items-center justify-center text-blue-400 border border-blue-500/20"><UserIcon size={18} /></div>
                                     <div>
-                                        <div className="font-bold text-white flex items-center gap-2">
-                                            {req.users_public?.name || 'Unknown'}
+                                        <div className="font-bold text-white flex items-center gap-2 flex-wrap">
+                                            <span>{req.users_public?.name || 'Unknown'}</span>
                                             <span className="text-[9px] bg-white/10 px-1.5 py-0.5 rounded uppercase text-slate-400">{req.users_public?.role}</span>
+                                            {(() => {
+                                                const lt = req.leave_type || (req.reason?.includes('[MC]') ? 'Medical' : req.reason?.includes('[AL]') ? 'Annual' : req.reason?.includes('[OFF') ? 'Off Day' : 'Leave');
+                                                return (
+                                                    <span className={`text-[9px] font-black uppercase px-2 py-0.5 rounded-full border ${
+                                                        lt === 'Annual' ? 'bg-amber-500/20 text-amber-300 border-amber-500/30' :
+                                                        lt === 'Medical' ? 'bg-blue-500/20 text-blue-300 border-blue-500/30' :
+                                                        lt === 'Off Day' ? 'bg-emerald-500/20 text-emerald-300 border-emerald-500/30' :
+                                                        lt === 'Emergency' ? 'bg-rose-500/20 text-rose-300 border-rose-500/30' :
+                                                        lt === 'PH Replacement' ? 'bg-indigo-500/20 text-indigo-300 border-indigo-500/30' :
+                                                        'bg-purple-500/20 text-purple-300 border-purple-500/30'
+                                                    }`}>
+                                                        {lt === 'Annual' ? '🏖️ AL' :
+                                                         lt === 'Medical' ? '💊 MC' :
+                                                         lt === 'Off Day' ? '🛋️ OFF' :
+                                                         lt === 'Emergency' ? '🚨 EL' :
+                                                         lt === 'PH Replacement' ? '🇲🇾 PH' :
+                                                         lt}
+                                                    </span>
+                                                );
+                                            })()}
                                         </div>
                                         <div className="text-sm font-bold text-slate-300 mt-1">{req.start_date} <span className="text-slate-600 font-normal">→</span> {req.end_date} <span className="text-amber-400 text-xs ml-2">({req.count_days} Days)</span></div>
                                         {req.reason && <div className="text-xs text-slate-400 mt-1 italic">"{req.reason}"</div>}
