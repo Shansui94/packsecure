@@ -9,7 +9,6 @@ import {
 } from 'lucide-react';
 import { useTranslation } from "react-i18next";
 import { DevLogModal, formatWhatsAppReport, type DevLogRecord } from '../components/DevLogModal';
-import { LiveIssueTriageTab } from '../components/LiveIssueTriageTab';
 
 interface Commit {
     hash: string;
@@ -332,8 +331,6 @@ const DevLog: React.FC<DevLogProps> = ({ user, onNavigate }) => {
     const [logs, setLogs] = useState<DevLogRecord[]>([]);
     const [loading, setLoading] = useState(true);
 
-    // Main Tab Switcher: 'triage' (现场投诉流转看板) vs 'devlog' (系统版本更新日志)
-    const [activeMainTab, setActiveMainTab] = useState<'triage' | 'devlog'>('triage');
 
     // Filter & search states
     const [activeFilter, setActiveFilter] = useState<'all' | 'upgrades' | 'tasks'>('all');
@@ -540,38 +537,7 @@ const DevLog: React.FC<DevLogProps> = ({ user, onNavigate }) => {
                 </div>
             </div>
 
-            {/* Top Subtab Navigation */}
-            <div className="flex items-center gap-2 p-1.5 bg-slate-900/90 backdrop-blur-md rounded-2xl border border-white/10 mb-8 max-w-md">
-                <button
-                    type="button"
-                    onClick={() => setActiveMainTab('triage')}
-                    className={`flex-1 flex items-center justify-center gap-2 py-2.5 px-4 rounded-xl text-xs font-black transition cursor-pointer ${
-                        activeMainTab === 'triage'
-                            ? 'bg-gradient-to-r from-emerald-600 to-teal-600 text-white shadow-lg'
-                            : 'text-slate-400 hover:text-white'
-                    }`}
-                >
-                    <MessageSquare size={16} />
-                    <span>现场投诉流转看板</span>
-                </button>
-                <button
-                    type="button"
-                    onClick={() => setActiveMainTab('devlog')}
-                    className={`flex-1 flex items-center justify-center gap-2 py-2.5 px-4 rounded-xl text-xs font-black transition cursor-pointer ${
-                        activeMainTab === 'devlog'
-                            ? 'bg-blue-600 text-white shadow-lg'
-                            : 'text-slate-400 hover:text-white'
-                    }`}
-                >
-                    <Activity size={16} />
-                    <span>系统版本更新日志</span>
-                </button>
-            </div>
 
-            {activeMainTab === 'triage' ? (
-                <LiveIssueTriageTab />
-            ) : (
-                <>
                     {/* Summary Statistics Cards */}
                     <div className="grid grid-cols-2 sm:grid-cols-4 gap-3 sm:gap-4 mb-8">
                         {[
@@ -658,8 +624,6 @@ const DevLog: React.FC<DevLogProps> = ({ user, onNavigate }) => {
                             ))}
                         </div>
                     )}
-                </>
-            )}
 
             {/* Interactive Report Editor Modal */}
             <DevLogModal

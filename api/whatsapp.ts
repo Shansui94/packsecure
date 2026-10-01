@@ -48,16 +48,38 @@ export async function handleWhatsAppSend(req: VercelRequest, res: VercelResponse
 
     // ── Triage Action: Execute 3-Option Action ──────────────────────────────────
     if (action === 'triage-action') {
-      const { ticketId, actionOption, resolvedBy, customReplyText, sendWhatsApp } = req.body || {};
+      const {
+        ticketId,
+        actionOption,
+        resolvedBy,
+        customReplyText,
+        sendWhatsApp,
+        taskTitle,
+        taskDescription,
+        assignedTo,
+        priority,
+        userId,
+        resolutionNotes
+      } = req.body || {};
+
       if (!ticketId || !actionOption) {
         return res.status(400).json({ error: '缺少 ticketId 或 actionOption (1/2/3)' });
       }
+
+      const parsedOption = isNaN(Number(actionOption)) ? actionOption : Number(actionOption);
+
       const result = await executeTriageAction({
         ticketId,
-        actionOption: Number(actionOption) as 1 | 2 | 3,
+        actionOption: parsedOption as any,
         resolvedBy,
         customReplyText,
-        sendWhatsApp: Boolean(sendWhatsApp)
+        sendWhatsApp: Boolean(sendWhatsApp),
+        taskTitle,
+        taskDescription,
+        assignedTo,
+        priority,
+        userId,
+        resolutionNotes
       });
       return res.status(200).json(result);
     }
@@ -366,16 +388,22 @@ export async function handleWhatsAppWebhook(req: VercelRequest, res: VercelRespo
       }
     }
 
-    // ── STEP 0: ISSUE TRIAGE AUTO-CAPTURE (Group / Direct Complaints) ───────────
+    // ── STEP 0: ISSUE TRIAGE AUTO-CAPTURE (Group / Explicit Distress Complaints) ──
     const textBody = (msg.text?.body || msg.image?.caption || '').trim();
     const groupId = (msg as any).group_id || (msg as any).context?.group_id || null;
 
-    if (textBody && !isCasualChitChat(textBody)) {
+    // Only capture if:
+    // 1. Message comes from a group chat (and is not casual chit chat), OR
+    // 2. Message contains explicit distress/breakdown/bug keywords (never normal queries or chit-chat)
+    const isExplicitDistress = /rosak|takleh|xleh|tak boleh|error|bug|rusak|bocor|terlebih\s*muatan|sistem\s*down|stuck|sangkut|pancit|kemalangan|crash|problem|masalah|故障|报错|卡死|无法|崩溃|闪退|损坏/i.test(textBody);
+    const shouldCheckTriage = textBody && !isCasualChitChat(textBody) && (Boolean(groupId) || isExplicitDistress);
+
+    if (shouldCheckTriage) {
       try {
         const triageTicket = await createIssueTicket({
           rawText: textBody,
           photoUrl: msgType === 'image' && msg.image?.id ? `whatsapp-media:${msg.image.id}` : null,
-          senderName: employee?.name || 'WhatsApp Group Member',
+          senderName: employee?.name || 'WhatsApp Member',
           senderPhone: fromNumber,
           groupId: groupId || undefined,
           employeeId: employee?.employee_id || undefined

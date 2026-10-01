@@ -20,6 +20,7 @@ import * as dotenv from 'dotenv';
 import { createClient } from '@supabase/supabase-js';
 import { GoogleGenerativeAI } from '@google/generative-ai';
 import { handleSmartAgentQuery } from '../lib/whatsappSmartAgent.ts';
+import { createIssueTicket } from '../lib/issueTriage.ts';
 
 const __filename = fileURLToPath(import.meta.url);
 const __dirname = path.dirname(__filename);
@@ -114,6 +115,16 @@ async function handleMessage(m) {
   const senderPhone = senderJid.replace(/[^0-9]/g, '');
 
   console.log(`[WA-Bot] Incoming (${isGroup ? 'Group' : 'DM'}): "${text}" from ${senderPhone}`);
+
+  // Silent capture for group complaints/distress (never spam group):
+  if (isGroup && /rosak|takleh|xleh|tak boleh|error|bug|bocor|terlebih|overload|stuck|sangkut|pancit|kemalangan|crash|problem|masalah|故障|报错|卡死|无法|崩溃/i.test(text)) {
+    createIssueTicket({
+      rawText: text,
+      senderName: `GroupMember-${senderPhone.slice(-4)}`,
+      senderPhone: senderPhone,
+      groupId: chatJid
+    }).catch(e => console.warn('[WA-Bot Group Triage Error]:', e));
+  }
 
   // In groups, only respond if message starts with ! or # or includes bot trigger
   const isTriggered = !isGroup || text.startsWith('!') || text.startsWith('#') || text.includes('@bot') || /查单|库存|晚报|配方/i.test(text);
