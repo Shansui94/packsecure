@@ -7,7 +7,7 @@ import {
     FileSpreadsheet, MapPin, Printer, Sparkles, AlertTriangle, 
     CheckCircle2, ShieldCheck, ArrowUpRight, ArrowDownRight, 
     Layers, Factory, Truck, Package, Copy, Check, RefreshCw, 
-    X, ShieldAlert, Award, FileText, ChevronDown
+    X, ShieldAlert, Award, FileText, ChevronDown, FileBarChart
 } from 'lucide-react';
 import { 
     ResponsiveContainer, PieChart, Pie, Cell, Tooltip, Legend, 
