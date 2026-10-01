@@ -59,7 +59,7 @@ type ScanSheetReview = {
 };
 
 const normalizeWarehouseName = (loc: string): string => {
-    if (!loc) return 'OPM Lama';
+    if (!loc || !loc.trim()) return '';
     const lower = loc.trim().toLowerCase();
     if (lower === 'johor' || lower === 'j1' || lower.includes('johor')) return 'Johor';
     if (lower === 'kelantan' || lower === 'k1' || lower.includes('kelantan')) return 'Kelantan';
@@ -68,7 +68,7 @@ const normalizeWarehouseName = (loc: string): string => {
     if (lower === 'opm corner' || lower === 'opm_corner' || lower.includes('corner')) return 'OPM Corner';
     if (lower === 'opm ali' || lower === 'opm_ali' || lower.includes('ali')) return 'OPM Ali';
     if (lower.includes('lama') || lower === 'taiping' || lower === 't1') return 'OPM Lama';
-    return loc;
+    return loc.trim();
 };
 
 const normalizeLoc = (locId: string): string => {
@@ -81,7 +81,7 @@ const getDefaultLocForOrigin = (origin: string): string => {
     if (u === 'KELANTAN' || u === 'K1') return 'Kelantan';
     if (u === 'JOHOR' || u === 'J1') return 'Johor';
     if (u === 'TAIPING' || u === 'T1' || u === 'SPD' || u === 'OPM') return 'OPM Lama';
-    return normalizeWarehouseName(origin);
+    return normalizeWarehouseName(origin) || 'OPM Lama';
 };
 
 const getVehicleRollCapacity = (plateNumber?: string): number => {
@@ -3317,7 +3317,7 @@ const DeliveryOrderManagement: React.FC<DeliveryOrderManagementProps> = ({ user 
             const orders = [...prev.deliveryOrders];
             const order = { ...orders[doIndex], adminEdited: true };
             const items = [...(order.items || [])];
-            items[itemIndex] = { ...items[itemIndex], sourceLocation: normalizeWarehouseName(newLocation) };
+            items[itemIndex] = { ...items[itemIndex], sourceLocation: normalizeWarehouseName(newLocation) || newLocation };
             order.items = items;
             orders[doIndex] = order;
             return { ...prev, deliveryOrders: orders };
@@ -9587,14 +9587,22 @@ const DeliveryOrderManagement: React.FC<DeliveryOrderManagementProps> = ({ user 
                                                                         <label className="text-[10px] font-bold text-slate-400 uppercase">
                                                                             {t('Whs')}:
                                                                         </label>
-                                                                        <input
-                                                                            type="text"
-                                                                            list="modal-warehouse-datalist"
-                                                                            className="px-2 py-1 rounded-lg text-xs font-bold bg-slate-900 border border-slate-700 text-blue-400 outline-none focus:border-blue-500 w-24 sm:w-28"
-                                                                            value={normalizeWarehouseName(it.sourceLocation || guessItemLocation(it, parsedTripOrigin))}
-                                                                            onChange={e => handleUpdateParsedItemLocation(idx, itemIdx, normalizeWarehouseName(e.target.value))}
-                                                                            placeholder="Warehouse"
-                                                                        />
+                                                                        <select
+                                                                            className="px-2 py-1 rounded-lg text-xs font-bold bg-slate-900 border border-slate-700 text-blue-400 outline-none focus:border-blue-500 cursor-pointer w-24 sm:w-28"
+                                                                            value={normalizeWarehouseName(it.sourceLocation || guessItemLocation(it, parsedTripOrigin)) || getDefaultLocForOrigin(parsedTripOrigin)}
+                                                                            onChange={e => handleUpdateParsedItemLocation(idx, itemIdx, e.target.value)}
+                                                                        >
+                                                                            {(() => {
+                                                                                const avail = getAvailableWarehousesForOrigin(parsedTripOrigin);
+                                                                                const curr = normalizeWarehouseName(it.sourceLocation || guessItemLocation(it, parsedTripOrigin)) || getDefaultLocForOrigin(parsedTripOrigin);
+                                                                                const list = avail.includes(curr) ? avail : [curr, ...avail].filter(Boolean);
+                                                                                return list.map(whs => (
+                                                                                    <option key={whs} value={whs} className="bg-slate-900 text-slate-100 font-bold">
+                                                                                        {whs}
+                                                                                    </option>
+                                                                                ));
+                                                                            })()}
+                                                                        </select>
                                                                     </div>
 
                                                                     <button
