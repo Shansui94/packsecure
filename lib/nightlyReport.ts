@@ -19,16 +19,17 @@ export async function generateNightlyReport(): Promise<{ reportText: string; sum
   // ── 1. REAL ORDERS BREAKDOWN (sales_orders) ───────────────────────────────────
   const { data: rawOrders } = await supabase
     .from('sales_orders')
-    .select('id, order_number, customer, status, driver_id, created_at, pod_timestamp')
+    .select('id, order_number, customer, status, driver_id, trip_id, created_at, pod_timestamp')
     .gte('created_at', mytStartIso);
 
   const orders = rawOrders || [];
-  const deliveredCount = orders.filter((o: any) => o.status === 'Delivered').length;
-  const loadedCount = orders.filter((o: any) => o.status === 'Loaded').length;
+  const deliveredOrders = orders.filter((o: any) => o.status === 'Delivered');
+  const loadedOrders = orders.filter((o: any) => o.status === 'Loaded' || o.status === 'In-Transit');
   const plannedCount = orders.filter((o: any) => o.status === 'Planned').length;
   const cancelledOrdersCount = orders.filter((o: any) => o.status === 'Cancelled').length;
 
-  // Real active dispatched orders for today = delivered + loaded
+  const deliveredCount = deliveredOrders.length;
+  const loadedCount = loadedOrders.length;
   const activeDispatchedOrders = deliveredCount + loadedCount;
   const realDeliveryRate = activeDispatchedOrders > 0 
     ? Math.round((deliveredCount / activeDispatchedOrders) * 100) 
@@ -37,22 +38,24 @@ export async function generateNightlyReport(): Promise<{ reportText: string; sum
   // ── 2. REAL TRIPS STATUS BREAKDOWN (trips_v2) ─────────────────────────────────
   const { data: rawTrips } = await supabase
     .from('trips_v2')
-    .select('id, trip_number, driver_id, status, lorry_id, started_at, created_at')
+    .select(`
+      id, trip_number, driver_id, status, lorry_id, started_at, created_at,
+      lorries(plate_number)
+    `)
     .gte('created_at', mytStartIso)
     .order('created_at', { ascending: false });
 
-  // Filter out cancelled trips and test trips (e.g. TRIP-260925-TEST)
+  // Filter out cancelled trips and test trips
   const validTrips = (rawTrips || []).filter((t: any) => 
-    !t.trip_number.toUpperCase().includes('TEST') && t.status !== 'Cancelled'
+    !t.trip_number?.toUpperCase().includes('TEST') && t.status !== 'Cancelled'
   );
 
-  const completedTrips = validTrips.filter((t: any) => t.status === 'Completed');
-  const inTransitTrips = validTrips.filter((t: any) => t.status === 'In Transit');
-  const preparedTrips = validTrips.filter((t: any) => t.status === 'Prepared');
-  const planningTrips = validTrips.filter((t: any) => t.status === 'Planning');
+  // Fetch Driver Names for trips and orders
+  const driverIds = Array.from(new Set([
+    ...validTrips.map((t: any) => t.driver_id),
+    ...orders.map((o: any) => o.driver_id)
+  ].filter(Boolean)));
 
-  // Fetch Driver Names for trips
-  const driverIds = Array.from(new Set(validTrips.map((t: any) => t.driver_id).filter(Boolean)));
   const { data: drivers } = await supabase
     .from('users_public')
     .select('id, name')
@@ -60,27 +63,47 @@ export async function generateNightlyReport(): Promise<{ reportText: string; sum
 
   const driverMap = new Map((drivers || []).map((d: any) => [d.id, d.name]));
 
-  // In-transit trip details (detect over 6 hours without completion)
-  const inTransitLines: string[] = [];
-  inTransitTrips.forEach((t: any) => {
-    const dName = driverMap.get(t.driver_id) || '未指派';
+  // Exclude trips belonging to "DRIVER TEST"
+  const productionTrips = validTrips.filter((t: any) => {
+    const dName = driverMap.get(t.driver_id) || '';
+    return !dName.toUpperCase().includes('TEST');
+  });
+
+  const inTransitTrips = productionTrips.filter((t: any) => t.status === 'In Transit');
+  const completedTrips = productionTrips.filter((t: any) => t.status === 'Completed');
+  const preparedTrips = productionTrips.filter((t: any) => t.status === 'Prepared');
+  const planningTrips = productionTrips.filter((t: any) => t.status === 'Planning');
+
+  const trulyInTransitTrips: any[] = [];
+  const pendingCloseoutTrips: any[] = [];
+
+  for (const t of inTransitTrips) {
+    const dName = driverMap.get(t.driver_id) || '未知司机';
+    const hasPendingOrder = loadedOrders.some((o: any) => o.trip_id === t.id || o.driver_id === t.driver_id);
+    const lorryPlate = (t as any).lorries?.plate_number || '厂车';
+    if (hasPendingOrder) {
+      trulyInTransitTrips.push({ ...t, driverName: dName, lorryPlate });
+    } else {
+      pendingCloseoutTrips.push({ ...t, driverName: dName, lorryPlate });
+    }
+  }
+
+  const pendingCloseoutDrivers = Array.from(new Set(pendingCloseoutTrips.map(t => t.driverName)));
+
+  // Detailed lines for truly in-transit trips
+  const trulyInTransitLines: string[] = trulyInTransitTrips.map((t: any) => {
     let timeNote = '';
     if (t.started_at) {
       const startTime = new Date(t.started_at);
       const startMYT = startTime.toLocaleTimeString('zh-CN', { timeZone: 'Asia/Kuala_Lumpur', hour: '2-digit', minute: '2-digit' });
-      const elapsedHours = (now.getTime() - startTime.getTime()) / (1000 * 3600);
-      if (elapsedHours > 6) {
-        timeNote = ` (${startMYT} 发车, ⚠️ 已在途超 ${Math.floor(elapsedHours)}h, 疑已回厂漏点完成)`;
-      } else {
-        timeNote = ` (${startMYT} 发车)`;
-      }
+      timeNote = ` (${startMYT} 发车)`;
     }
-    inTransitLines.push(`  • ${t.trip_number} (${dName}): 🚚 派送中${timeNote}`);
+    return `    • *${t.driverName}* (${t.lorryPlate}, ${t.trip_number}): 🚚 派送中${timeNote}`;
   });
 
   const completedLines: string[] = completedTrips.map((t: any) => {
     const dName = driverMap.get(t.driver_id) || '司机';
-    return `  • ${t.trip_number} (${dName}): ✅ 已回厂结案`;
+    return `    • ${t.trip_number} (${dName}): ✅ 已回厂结案`;
   });
 
   // ── 3. SHOPFLOOR DEFECTS, DOWNTIME & FLEET EXCEPTIONS (work_photos) ────────────
@@ -139,8 +162,8 @@ export async function generateNightlyReport(): Promise<{ reportText: string; sum
     : '  ✅ 原材料与成品库存充足';
 
   const actualDispatchedTrips = completedTrips.length + inTransitTrips.length;
-  const dispatchRate = validTrips.length > 0
-    ? Math.round((actualDispatchedTrips / validTrips.length) * 100)
+  const dispatchRate = productionTrips.length > 0
+    ? Math.round((actualDispatchedTrips / productionTrips.length) * 100)
     : 0;
 
   // ── 5. FORMAT EXECUTIVE NIGHTLY REPORT TEXT ──────────────────────────────────
@@ -149,12 +172,13 @@ export async function generateNightlyReport(): Promise<{ reportText: string; sum
     `━━━━━━━━━━━━━━━━━━━━\n\n` +
     `🚚 *一、 物流派送与车次执行 (Fleet & Delivery)*\n` +
     `• 今日出货送达率: *${realDeliveryRate}%* (实际装车出库 *${activeDispatchedOrders}* 票, 已送达 *${deliveredCount}* 票, 派送中 *${loadedCount}* 票)\n` +
-    `• 今日新增排单: *${plannedCount}* 票 (备货待安排)${cancelledOrdersCount > 0 ? ` • 取消: ${cancelledOrdersCount} 票` : ''}\n` +
-    `• 车队出车执行率: *${dispatchRate}%* (实际发车出动 *${actualDispatchedTrips}* 趟 / 计划总车次 *${validTrips.length}* 趟)\n` +
-    `  - 🚚 实际在途: *${inTransitTrips.length}* 趟 | ✅ 已回厂: *${completedTrips.length}* 趟 | ⏳ 筹备与排单: *${preparedTrips.length + planningTrips.length}* 趟\n\n` +
-    `📋 *当前在途与完成车次明细:*\n` +
-    `${inTransitLines.length > 0 ? inTransitLines.join('\n') : '  • 当前无实际在途车次'}\n` +
-    `${completedLines.length > 0 ? completedLines.join('\n') : ''}\n\n` +
+    `• 今日新增排单: *${plannedCount}* 票 (远期排程待安排)${cancelledOrdersCount > 0 ? ` • 取消: ${cancelledOrdersCount} 票` : ''}\n` +
+    `• 现场出车与司机实时追踪:\n` +
+    `  - 🚚 *真正派送在途*: *${trulyInTransitTrips.length}* 人 (*${trulyInTransitTrips.length}* 车)\n` +
+    `${trulyInTransitLines.length > 0 ? trulyInTransitLines.join('\n') : '    • 当前无实际在途外勤司机'}\n` +
+    `  - 📦 *已送达待回厂闭环*: *${pendingCloseoutTrips.length}* 趟 (货物已全送达，司机待点击回厂结案: ${pendingCloseoutDrivers.join(', ') || '无'})\n` +
+    `  - ⏳ *备货与排单筹备*: *${preparedTrips.length + planningTrips.length}* 趟 (备货 *${preparedTrips.length}* 趟, 排单中 *${planningTrips.length}* 趟)\n\n` +
+    `${completedLines.length > 0 ? completedLines.join('\n') + '\n\n' : ''}` +
     `🏭 *二、 车间机台与现场异常 (Shopfloor & Exceptions)*\n` +
     `${exceptionSummaryText}\n\n` +
     `📦 *三、 仓储与物料预警 (Inventory)*\n` +
