@@ -107,8 +107,12 @@ const Layout: React.FC<LayoutProps> = ({ children, activePage, setActivePage, us
             return customOverrides[mod.id];
         }
         if (showAllModules) return true;
+        // For Driver, lorry-service and personal-report are primary navigation items
+        if (userRole === 'Driver' && (mod.id === 'lorry-service' || mod.id === 'personal-report')) {
+            return true;
+        }
         return !mod.hiddenFromNav;
-    }, [customOverrides, showAllModules]);
+    }, [customOverrides, showAllModules, userRole]);
 
     const isSuperAdmin = userRole === 'SuperAdmin';
 
