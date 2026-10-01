@@ -463,12 +463,14 @@ function App() {
 
             // Initial Routing Logic (Force correct landing page)
             const isAppMode = window.location.search.includes('mode=app');
-            if (isAppMode) {
+            if (role === 'Driver') {
+                // 司机登录或自动恢复会话后的第一个页面必须是 My Deliveries
+                setActivePage('delivery-driver');
+            } else if (isAppMode) {
                 setActivePage('delivery-driver');
             } else if (!localStorage.getItem('lastActivePage')) {
                 if (role === 'SuperAdmin') setActivePage('dashboard');
                 else if (role === 'Operator' || role === 'Device') setActivePage('scanner');
-                else if (role === 'Driver') setActivePage('delivery-driver');
                 else if (role === 'Manager') setActivePage('order-summary');
                 else if (['Admin', 'Sales', 'Finance'].includes(role)) setActivePage('construction');
                 else if (role === 'HR') setActivePage('hr');

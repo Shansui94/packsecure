@@ -787,7 +787,7 @@ const Layout: React.FC<LayoutProps> = ({ children, activePage, setActivePage, us
                             setActivePage={setActivePage} 
                         />
 
-                        {userRole !== 'Driver' && activePage !== 'driver-delivery' && (
+                        {userRole !== 'Driver' && activePage !== 'delivery-driver' && (
                             <SmartIntakeModal 
                                 currentUser={user} 
                                 pageContext={{ activePage, userRole }} 

@@ -1221,12 +1221,12 @@ export async function handleParseTripPdf(req: VercelRequest, res: VercelResponse
         });
 
         const genAI = new GoogleGenerativeAI(apiKey);
-        // Prioritize full multimodal reasoning models (gemini-3.5-flash & gemini-2.5-flash) for character-level OCR table accuracy
+        // Prioritize ultra-fast multimodal model (gemini-3.5-flash-lite) to handle multi-page trips (10+ DOs) within seconds without serverless timeouts
         const candidates = [
-            "gemini-3.5-flash",
+            "gemini-3.5-flash-lite",
             "gemini-2.5-flash",
-            "gemini-flash-latest",
-            "gemini-3.5-flash-lite"
+            "gemini-3.5-flash",
+            "gemini-flash-latest"
         ];
 
         // Build prompt
@@ -1516,7 +1516,7 @@ CRITICAL: Return strictly a valid JSON object. Do not wrap in markdown quotes.
         let modelUsed = "";
         const errorLogs: string[] = [];
 
-        const timeoutMs = files.length > 5 || totalEstimatedPages > 5 ? 25000 : 15000;
+        const timeoutMs = files.length > 5 || totalEstimatedPages > 5 ? 35000 : 18000;
 
         for (const modelId of candidates) {
             try {
@@ -1694,13 +1694,9 @@ CRITICAL: Return strictly a valid JSON object. Do not wrap in markdown quotes.
                     zone: 'NORTH',
                     orderDate: today,
                     terms: 'C.O.D.',
-                    items: [{
-                        product: 'Bubble Wrap Single Layer 1m x 100m (B17-ROLL)',
-                        quantity: 10,
-                        uom: 'ROLL',
-                        sku: 'B17-ROLL'
-                    }],
-                    doTotal: 10
+                    remarks: '[备用草稿] AI 解析超时，请核对并添加物料 / Fallback draft: Please verify and add items',
+                    items: [],
+                    doTotal: 0
                 }));
             } else if (totalEstimatedPages > 1 && files.length === 1) {
                 const rawName = (files[0].name || '').replace(/\.pdf$/i, '');
@@ -1724,14 +1720,9 @@ CRITICAL: Return strictly a valid JSON object. Do not wrap in markdown quotes.
                         zone: 'NORTH',
                         orderDate: today,
                         terms: 'C.O.D.',
-                        remarks: '',
-                        items: [{
-                            product: 'Bubble Wrap Single Layer 1m x 100m (B17-ROLL)',
-                            quantity: 10,
-                            uom: 'ROLL',
-                            sku: 'B17-ROLL'
-                        }],
-                        doTotal: 10
+                        remarks: '[备用草稿] AI 解析超时，请核对并添加物料 / Fallback draft: Please verify and add items',
+                        items: [],
+                        doTotal: 0
                     });
                 }
             } else {
@@ -1747,14 +1738,9 @@ CRITICAL: Return strictly a valid JSON object. Do not wrap in markdown quotes.
                         zone: 'NORTH',
                         orderDate: today,
                         terms: 'C.O.D.',
-                        remarks: '',
-                        items: [{
-                            product: 'Bubble Wrap Single Layer 1m x 100m (B17-ROLL)',
-                            quantity: 10,
-                            uom: 'ROLL',
-                            sku: 'B17-ROLL'
-                        }],
-                        doTotal: 10
+                        remarks: '[备用草稿] AI 解析超时，请核对并添加物料 / Fallback draft: Please verify and add items',
+                        items: [],
+                        doTotal: 0
                     };
                 });
             }

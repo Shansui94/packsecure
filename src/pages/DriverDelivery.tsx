@@ -244,6 +244,7 @@ const DriverDelivery: React.FC<DriverDeliveryProps> = ({ user, onNavigate }) => 
     
     // Lorry Binding State
     const [currentLorry, setCurrentLorry] = useState<any>(null);
+    const [availableLorries, setAvailableLorries] = useState<any[]>([]);
     const [isScannerOpen, setIsScannerOpen] = useState(false);
     const [scannerMode, setScannerMode] = useState<'bind' | 'unbind'>('bind');
     const hasScannedRef = useRef(false);
@@ -359,6 +360,14 @@ const DriverDelivery: React.FC<DriverDeliveryProps> = ({ user, onNavigate }) => 
                 .single();
                 
             setCurrentLorry(lorryData || null);
+
+            // Fetch available lorries for easy bind and testing
+            const { data: availLorries } = await supabase
+                .from('lorries')
+                .select('*')
+                .eq('status', 'Available')
+                .order('plate_number', { ascending: true });
+            setAvailableLorries(availLorries || []);
 
             // Fetch assigned orders with items
             const { data } = await supabase
@@ -1545,11 +1554,19 @@ const DriverDelivery: React.FC<DriverDeliveryProps> = ({ user, onNavigate }) => 
             let plate = '';
             try {
                 const data = JSON.parse(text);
-                qrType = data.type;
+                qrType = data.type || (data.lorryId ? 'LorryBind' : '');
                 lorryId = data.lorryId;
                 plate = data.plate || '';
             } catch (e) {
-                // Keep default empty values
+                // Support direct plate number scans (e.g. "VPC 9821", "APD 9821")
+                const clean = text.trim().toUpperCase().replace(/\s+/g, '');
+                const found = (availableLorries || []).find(l => (l.plate_number || '').replace(/\s+/g, '').toUpperCase() === clean) ||
+                              (currentLorry && (currentLorry.plate_number || '').replace(/\s+/g, '').toUpperCase() === clean ? currentLorry : null);
+                if (found) {
+                    qrType = 'LorryBind';
+                    lorryId = found.id;
+                    plate = found.plate_number;
+                }
             }
 
             // Handle Unbind / Return Lorry (End Trip)
@@ -4026,19 +4043,59 @@ const DriverDelivery: React.FC<DriverDeliveryProps> = ({ user, onNavigate }) => 
                         </p>
 
                         {/* Demo / Manual Bind Shortcut for recording & testing */}
-                        <button
-                            type="button"
-                            onClick={() => {
-                                const payload = scannerMode === 'bind'
-                                    ? JSON.stringify({ type: 'LorryBind', lorryId: '23572333-dba1-421a-b6fd-83d937cfe954', plate: 'APD 9821' })
-                                    : JSON.stringify({ type: 'LorryBind', lorryId: currentLorry?.id || '23572333-dba1-421a-b6fd-83d937cfe954', plate: currentLorry?.plate_number || 'APD 9821' });
-                                handleScanComplete(payload);
-                            }}
-                            className="mt-4 px-4 py-2 bg-amber-500/20 hover:bg-amber-500/30 active:scale-95 border border-amber-500/40 text-amber-400 text-xs font-black rounded-2xl flex items-center gap-2 cursor-pointer shadow-lg transition-all"
-                        >
-                            <Truck size={14} />
-                            <span>⚡ {scannerMode === 'bind' ? 'Pilih Lori Ujian (APD 9821)' : 'Sahkan Pulang Lori (APD 9821)'}</span>
-                        </button>
+                        {scannerMode === 'bind' ? (
+                            <div className="mt-5 w-full max-w-sm flex flex-col items-center">
+                                <span className="text-[10px] text-slate-400 font-bold uppercase tracking-wider mb-2">
+                                    Simulasi / Pilih Lori ({availableLorries.length > 0 ? `${availableLorries.length} Tersedia` : 'Pilihan Ujian'})
+                                </span>
+                                <div className="flex flex-wrap justify-center gap-2">
+                                    {(availableLorries.length > 0 ? availableLorries.slice(0, 4) : [
+                                        { id: '375e804a-2421-43e9-b70b-493e2c1ae562', plate_number: 'VPC 9821' },
+                                        { id: 'deb94a13-57aa-4c23-b7b2-0a0e3f659383', plate_number: 'APH 9821' },
+                                        { id: '23572333-dba1-421a-b6fd-83d937cfe954', plate_number: 'APD 9821' }
+                                    ]).map((l) => (
+                                        <button
+                                            key={l.id}
+                                            type="button"
+                                            onClick={() => {
+                                                const payload = JSON.stringify({
+                                                    type: 'LorryBind',
+                                                    lorryId: l.id,
+                                                    plate: l.plate_number
+                                                });
+                                                handleScanComplete(payload);
+                                            }}
+                                            className="px-3 py-1.5 bg-blue-600/20 hover:bg-blue-600/30 active:scale-95 border border-blue-500/40 text-blue-300 text-xs font-mono font-black rounded-xl flex items-center gap-1.5 cursor-pointer shadow transition-all"
+                                        >
+                                            <Truck size={12} className="text-blue-400" />
+                                            <span>{l.plate_number}</span>
+                                        </button>
+                                    ))}
+                                </div>
+                            </div>
+                        ) : (
+                            <div className="mt-5 w-full max-w-sm flex flex-col items-center">
+                                <button
+                                    type="button"
+                                    onClick={() => {
+                                        if (!currentLorry?.id) {
+                                            alert("Tiada lori aktif dikesan. / No active lorry detected.");
+                                            return;
+                                        }
+                                        const payload = JSON.stringify({
+                                            type: 'LorryBind',
+                                            lorryId: currentLorry.id,
+                                            plate: currentLorry.plate_number
+                                        });
+                                        handleScanComplete(payload);
+                                    }}
+                                    className="px-4 py-2 bg-emerald-600/20 hover:bg-emerald-600/30 active:scale-95 border border-emerald-500/40 text-emerald-300 text-xs font-black rounded-2xl flex items-center gap-2 cursor-pointer shadow-lg transition-all"
+                                >
+                                    <Truck size={14} className="text-emerald-400" />
+                                    <span>⚡ Sahkan Pulang Lori ({currentLorry?.plate_number || 'Lori'})</span>
+                                </button>
+                            </div>
+                        )}
                     </div>
                 </div>
             )}

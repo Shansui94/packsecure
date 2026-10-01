@@ -102,7 +102,7 @@ export const guessItemLocation = (item: { sku?: string; product?: string; rawPro
     const prod = (item.product || item.rawProductName || '').toUpperCase();
 
     // 1. Bubble Wrap -> OPM Lama (T1/T2/T3 main lines and storage)
-    if (sku.startsWith('BW-') || prod.includes('BUBBLE') || prod.includes('MERAH') || prod.includes('DL-') || prod.includes('SL-') || prod.includes('OREN') || prod.includes('HITAM') || prod.includes('SILVER')) {
+    if (sku.startsWith('BW-') || sku === 'B17-ROLL' || prod.includes('BUBBLE') || prod.includes('MERAH') || prod.includes('DL-') || prod.includes('SL-') || prod.includes('OREN') || prod.includes('HITAM') || prod.includes('SILVER')) {
         return 'OPM Lama';
     }
 
@@ -111,19 +111,31 @@ export const guessItemLocation = (item: { sku?: string; product?: string; rawPro
         return 'OPM Lama';
     }
 
-    // 3. Tapes / Air tube / Converted products / AWB / CUKUPP / Courier Bags / Flyers -> OPM Ali
+    // 3. Tapes / AWB (Air Waybill 面单) -> OPM Ali (T3)
     if (
-        sku.includes('TAPE') || sku.includes('CUKUPP') || prod.includes('TAPE') || 
+        sku.includes('TAPE') || prod.includes('TAPE') || 
         sku.includes('AWB') || prod.includes('AWB') || 
+        prod.includes('WAYBILL')
+    ) {
+        return 'OPM Ali';
+    }
+
+    // 4. CUKUPP Courier Bags / Air Tube / Flyers / Converted Bags & Rolls -> OPM Corner (T2)
+    if (
+        sku.includes('CUKUPP') || prod.includes('CUKUPP') || 
         sku.includes('AIRTUBE') || prod.includes('AIRTUBE') || 
         sku.includes('FLYER') || prod.includes('FLYER') ||
         sku.includes('BEG') || prod.includes('BEG') ||
         sku.includes('BAG') || prod.includes('BAG') ||
+        sku.includes('COURIER') || prod.includes('COURIER') ||
         (sku.startsWith('B') && sku.endsWith('-ROLL')) || 
         (sku.startsWith('W') && sku.endsWith('-ROLL')) || 
-        (sku.startsWith('YEL-') && sku.endsWith('-ROLL'))
+        (sku.startsWith('YEL-') && sku.endsWith('-ROLL')) ||
+        (sku.startsWith('PUR-') && sku.endsWith('-ROLL')) ||
+        (sku.startsWith('PINK-') && sku.endsWith('-ROLL')) ||
+        (sku.startsWith('DARKGREEN-') && sku.endsWith('-ROLL'))
     ) {
-        return 'OPM Ali';
+        return 'OPM Corner';
     }
 
     // Default for Taiping is OPM Lama
