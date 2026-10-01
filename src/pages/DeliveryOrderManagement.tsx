@@ -643,6 +643,46 @@ const DeliveryOrderManagement: React.FC<DeliveryOrderManagementProps> = ({ user 
     const [parsedTripRemark, setParsedTripRemark] = useState('');
     const [parsedDeliveryMethod, setParsedDeliveryMethod] = useState<'DELIVERY' | 'SELF_PICKUP'>('DELIVERY');
     const [isCreatingTrip, setIsCreatingTrip] = useState(false);
+    const [editingExistingTripId, setEditingExistingTripId] = useState<string | null>(null);
+
+    // Quick Add DO to Confirmed Trip Modal States
+    const [isAddDoModalOpen, setIsAddDoModalOpen] = useState(false);
+    const [addDoTripTarget, setAddDoTripTarget] = useState<{
+        tripId?: string;
+        tripNumber: string;
+        driverId?: string;
+        driverName?: string;
+        lorryId?: string;
+        lorryPlate?: string;
+        origin: string;
+        deliveryDate: string;
+        nextStopSeq: number;
+        currentDropCount: number;
+        existingTripStatus: string;
+        orders: SalesOrder[];
+    } | null>(null);
+    const [addDoModalTab, setAddDoModalTab] = useState<'ai' | 'manual' | 'unassigned'>('ai');
+    const [isAddDoAiLoading, setIsAddDoAiLoading] = useState(false);
+    const [addDoAiProgress, setAddDoAiProgress] = useState('');
+    const [parsedAddDoOrder, setParsedAddDoOrder] = useState<ParsedDeliveryOrder | null>(null);
+    const addDoFileInputRef = useRef<HTMLInputElement>(null);
+
+    // Manual Add DO fields
+    const [manualDoNumber, setManualDoNumber] = useState('');
+    const [manualCustomer, setManualCustomer] = useState('');
+    const [manualAddress, setManualAddress] = useState('');
+    const [manualPhone, setManualPhone] = useState('');
+    const [manualZone, setManualZone] = useState('');
+    const [manualNotes, setManualNotes] = useState('');
+    const [manualItems, setManualItems] = useState<{
+        sku: string;
+        product: string;
+        quantity: number;
+        sourceLocation: string;
+        uom: string;
+    }[]>([]);
+    const [unassignedSearch, setUnassignedSearch] = useState('');
+    const [isSavingAddDo, setIsSavingAddDo] = useState(false);
 
     // Editing State
     const [editingOrderId, setEditingOrderId] = useState<string | null>(null);
@@ -3066,6 +3106,7 @@ const DeliveryOrderManagement: React.FC<DeliveryOrderManagementProps> = ({ user 
     const handleCloseParsedTripModal = () => {
         setIsParsedTripModalOpen(false);
         setParsedTripBatch(null);
+        setEditingExistingTripId(null);
         setParsedTripRemark('');
         setIsAppendingPdf(false);
         setAppendProgress('');
@@ -3390,26 +3431,39 @@ const DeliveryOrderManagement: React.FC<DeliveryOrderManagementProps> = ({ user 
         setToast(null);
 
         try {
-            const tripId = crypto.randomUUID();
+            const isEditingTrip = Boolean(editingExistingTripId);
+            const tripId = editingExistingTripId || crypto.randomUUID();
             const totalDrops = parsedTripBatch.deliveryOrders.length;
             const defaultLoc = getDefaultLocForOrigin(parsedTripOrigin);
             const validWarehouses = getAvailableWarehousesForOrigin(parsedTripOrigin);
 
-            // 1. Insert into trips_v2
-            const { error: tripError } = await supabase
-                .from('trips_v2')
-                .insert({
-                    id: tripId,
-                    trip_number: parsedTripNumber,
-                    driver_id: parsedDriverId || null,
-                    lorry_id: parsedLorryId || null,
-                    trip_origin: normalizeLocationCode(parsedTripOrigin) || 'TAIPING',
-                    status: 'Planning',
-                    created_at: new Date().toISOString()
-                });
+            // 1. Insert or Update trips_v2
+            if (isEditingTrip) {
+                await supabase
+                    .from('trips_v2')
+                    .update({
+                        trip_number: parsedTripNumber,
+                        driver_id: parsedDriverId || null,
+                        lorry_id: parsedLorryId || null,
+                        trip_origin: normalizeLocationCode(parsedTripOrigin) || 'TAIPING'
+                    })
+                    .eq('id', tripId);
+            } else {
+                const { error: tripError } = await supabase
+                    .from('trips_v2')
+                    .insert({
+                        id: tripId,
+                        trip_number: parsedTripNumber,
+                        driver_id: parsedDriverId || null,
+                        lorry_id: parsedLorryId || null,
+                        trip_origin: normalizeLocationCode(parsedTripOrigin) || 'TAIPING',
+                        status: 'Planning',
+                        created_at: new Date().toISOString()
+                    });
 
-            if (tripError) {
-                console.warn("trips_v2 insert non-fatal notice:", tripError.message);
+                if (tripError) {
+                    console.warn("trips_v2 insert non-fatal notice:", tripError.message);
+                }
             }
 
             // Calculate next trip sequence for this driver on the target delivery date
@@ -3423,10 +3477,15 @@ const DeliveryOrderManagement: React.FC<DeliveryOrderManagementProps> = ({ user 
                 calculatedTripSeq = existingDriverTrips.size + 1;
             }
 
-            // 2. Insert each DO into sales_orders
+            const existingTripOrders = isEditingTrip ? orders.filter(o => o.trip_id === tripId) : [];
+
+            // 2. Insert or update each DO into sales_orders
             for (let i = 0; i < parsedTripBatch.deliveryOrders.length; i++) {
                 const doItem = parsedTripBatch.deliveryOrders[i];
-                const orderId = crypto.randomUUID();
+                const existingTargetOrder = doItem.existingOrderId
+                    ? existingTripOrders.find(o => o.id === doItem.existingOrderId)
+                    : null;
+                const orderId = existingTargetOrder ? existingTargetOrder.id : crypto.randomUUID();
 
                 const noteParts: string[] = [];
 
@@ -3517,24 +3576,48 @@ const DeliveryOrderManagement: React.FC<DeliveryOrderManagementProps> = ({ user 
                     notes: noteParts.join(' | ')
                 };
 
-                const { error: soError } = await supabase
-                    .from('sales_orders')
-                    .insert(orderPayload);
+                if (existingTargetOrder) {
+                    orderPayload.status = existingTargetOrder.status || 'Planned';
+                    const { error: updateErr } = await supabase
+                        .from('sales_orders')
+                        .update(orderPayload)
+                        .eq('id', orderId);
 
-                if (soError) {
-                    throw new Error(`Failed to save DO ${doItem.doNumber}: ${soError.message}`);
-                }
+                    if (updateErr) {
+                        throw new Error(`Failed to update DO ${doItem.doNumber}: ${updateErr.message}`);
+                    }
 
-                // 3. Keep trip_stops_v2 in sync
-                try {
-                    await supabase.from('trip_stops_v2').insert({
-                        trip_id: tripId,
-                        sales_order_id: orderId,
-                        stop_sequence: i + 1,
-                        status: 'Pending'
-                    });
-                } catch {
-                    // Non-blocking sync
+                    try {
+                        await supabase
+                            .from('trip_stops_v2')
+                            .update({ stop_sequence: i + 1 })
+                            .eq('trip_id', tripId)
+                            .eq('sales_order_id', orderId);
+                    } catch {
+                        // Non-blocking sync
+                    }
+                } else {
+                    orderPayload.id = orderId;
+                    orderPayload.status = existingTripOrders[0]?.status === 'Delivered' ? 'Loaded' : (existingTripOrders[0]?.status || 'Planned');
+                    const { error: soError } = await supabase
+                        .from('sales_orders')
+                        .insert(orderPayload);
+
+                    if (soError) {
+                        throw new Error(`Failed to save DO ${doItem.doNumber}: ${soError.message}`);
+                    }
+
+                    // 3. Keep trip_stops_v2 in sync
+                    try {
+                        await supabase.from('trip_stops_v2').insert({
+                            trip_id: tripId,
+                            sales_order_id: orderId,
+                            stop_sequence: i + 1,
+                            status: 'Pending'
+                        });
+                    } catch {
+                        // Non-blocking sync
+                    }
                 }
 
                 // 4. Auto-Learning: Remember confirmed/adjusted item mappings for this customer in customer_sku_mappings
@@ -3588,6 +3671,27 @@ const DeliveryOrderManagement: React.FC<DeliveryOrderManagementProps> = ({ user 
                 }
             }
 
+            if (isEditingTrip) {
+                // Cascade update all active sibling orders for this trip to match totalDrops
+                await supabase.from('sales_orders')
+                    .update({ trip_drop_count: totalDrops })
+                    .eq('trip_id', tripId)
+                    .neq('status', 'Cancelled');
+
+                // Detach any orders removed during editing
+                const keptOrderIds = new Set(parsedTripBatch.deliveryOrders.map(d => d.existingOrderId).filter(Boolean));
+                const removedOrders = existingTripOrders.filter(o => !keptOrderIds.has(o.id));
+                for (const ro of removedOrders) {
+                    await supabase.from('sales_orders').update({
+                        trip_id: null,
+                        trip_drop_count: 1,
+                        stop_sequence: 999
+                    }).eq('id', ro.id);
+                    await supabase.from('trip_stops_v2').delete().eq('sales_order_id', ro.id);
+                }
+                setEditingExistingTripId(null);
+            }
+
             handleCloseParsedTripModal();
             handleCloseModal();
             const targetOrigin = normalizeLocationCode(parsedTripOrigin);
@@ -3598,11 +3702,13 @@ const DeliveryOrderManagement: React.FC<DeliveryOrderManagementProps> = ({ user 
             await fetchData();
             setToast({
                 type: 'success',
-                message: t('Trip {{trip}} with {{count}} DOs created successfully (Factory: {{factory}})!', {
-                    trip: parsedTripNumber,
-                    count: totalDrops,
-                    factory: targetOrigin
-                })
+                message: isEditingTrip
+                    ? t('车次 {{trip}} 更改已成功保存 (共 {{count}} 站)！', { trip: parsedTripNumber, count: totalDrops })
+                    : t('Trip {{trip}} with {{count}} DOs created successfully (Factory: {{factory}})!', {
+                        trip: parsedTripNumber,
+                        count: totalDrops,
+                        factory: targetOrigin
+                    })
             });
         } catch (err: any) {
             console.error("Failed to create trip from DO PDFs:", err);
@@ -3612,6 +3718,564 @@ const DeliveryOrderManagement: React.FC<DeliveryOrderManagementProps> = ({ user 
             });
         } finally {
             setIsCreatingTrip(false);
+        }
+    };
+
+    const handleOpenEditTripInWorkstation = (tripGroup: any) => {
+        if (!tripGroup.orders || tripGroup.orders.length === 0) return;
+
+        const deliveryOrders: ParsedDeliveryOrder[] = tripGroup.orders.map((o: SalesOrder, idx: number) => {
+            const items = (o.items || []).map((it: any) => ({
+                product: it.product || '',
+                rawProductName: it.product || '',
+                quantity: Number(it.quantity) || 1,
+                uom: it.packaging || 'Rolls',
+                sku: it.sku || '',
+                sourceLocation: it.sourceLocation,
+                isMatched: Boolean(it.sku)
+            }));
+            return {
+                doNumber: o.orderNumber || `DO-${idx + 1}`,
+                customer: o.customer || '',
+                deliveryAddress: o.deliveryAddress || '',
+                phone: (o as any).customer_phone || (o as any).phone || '',
+                zone: o.zone || '',
+                orderDate: o.orderDate || '',
+                terms: (o as any).terms || '',
+                remarks: o.notes || '',
+                items,
+                doTotal: items.reduce((sum: number, it: any) => sum + (Number(it.quantity) || 0), 0),
+                isAgentDelivery: (o as any).is_agent_delivery,
+                agentName: (o as any).agent_name,
+                originalDoNumber: (o as any).original_do_number,
+                existingOrderId: o.id,
+                adminEdited: true
+            };
+        });
+
+        const totalRolls = deliveryOrders.reduce((sum, o) => sum + o.doTotal, 0);
+
+        const batch: ParsedTripDOBatch = {
+            deliveryOrders,
+            totalDrops: deliveryOrders.length,
+            totalRolls,
+            primaryZone: tripGroup.zone || '',
+            tripRemarks: tripGroup.notes || '',
+            suggestedTripDate: tripGroup.deadline || tripGroup.orderDate || getTodayStr(),
+            destinationsSummary: tripGroup.orders.map((o: any) => o.customer).filter(Boolean).join(', ')
+        };
+
+        setParsedTripBatch(batch);
+        setParsedTripNumber(tripGroup.tripNumber);
+        setParsedTripDate(tripGroup.orderDate || getTodayStr());
+        setParsedDeliveryDate(tripGroup.deadline || getTodayStr());
+        setParsedTripOrigin(tripGroup.tripOrigin || activeLocation || 'Taiping');
+        setParsedZone(tripGroup.zone || '');
+        setParsedTripRemark(tripGroup.notes || '');
+        setParsedDriverId(tripGroup.driverId || '');
+        const driverLorry = lorries.find(l => l.driverUserId === tripGroup.driverId);
+        setParsedLorryId(driverLorry ? driverLorry.id : '');
+        setParsedDeliveryMethod('DELIVERY');
+        setEditingExistingTripId(tripGroup.tripId || null);
+        setIsParsedTripModalOpen(true);
+    };
+
+    const handleOpenAddDoModal = async (tripGroup: any, initialTab: 'ai' | 'manual' | 'unassigned' = 'ai') => {
+        let currentTripId = tripGroup.tripId;
+        const currentOrders: SalesOrder[] = tripGroup.orders || [];
+        const driverObj = drivers.find(d => d.uid === tripGroup.driverId);
+        const lorryObj = lorries.find(l => l.driverUserId === tripGroup.driverId);
+        const origin = normalizeLocationCode(tripGroup.tripOrigin || activeLocation || 'TAIPING');
+        const deliveryDate = tripGroup.deadline || tripGroup.orderDate || getTodayStr();
+        const existingStatus = currentOrders[0]?.status || 'Planned';
+
+        // Auto-upgrade standalone order to trip if it doesn't have a trip_id yet
+        if (!currentTripId && currentOrders.length > 0) {
+            const standaloneOrder = currentOrders[0];
+            const newTripId = crypto.randomUUID();
+            const now = new Date();
+            const dateCode = `${String(now.getFullYear()).slice(-2)}${String(now.getMonth() + 1).padStart(2, '0')}${String(now.getDate()).padStart(2, '0')}`;
+            const randomSeq = String(Math.floor(Math.random() * 900) + 100);
+            const genTripNo = `TRIP-${dateCode}-${randomSeq}`;
+
+            try {
+                await supabase.from('trips_v2').insert({
+                    id: newTripId,
+                    trip_number: genTripNo,
+                    driver_id: tripGroup.driverId || null,
+                    lorry_id: lorryObj?.id || null,
+                    trip_origin: origin,
+                    status: existingStatus === 'Delivered' ? 'Completed' : 'Planning',
+                    created_at: new Date().toISOString()
+                });
+
+                await supabase.from('sales_orders').update({
+                    trip_id: newTripId,
+                    stop_sequence: 1,
+                    trip_drop_count: 2
+                }).eq('id', standaloneOrder.id);
+
+                await supabase.from('trip_stops_v2').insert({
+                    trip_id: newTripId,
+                    sales_order_id: standaloneOrder.id,
+                    stop_sequence: 1,
+                    status: 'Pending'
+                });
+
+                currentTripId = newTripId;
+                tripGroup.tripId = newTripId;
+                tripGroup.tripNumber = genTripNo;
+            } catch (err) {
+                console.error("Failed to upgrade standalone order to trip:", err);
+            }
+        }
+
+        const nextStopSeq = currentOrders.length + 1;
+        const currentDropCount = currentOrders.length;
+
+        const now = new Date();
+        const dateCode = `${String(now.getFullYear()).slice(-2)}${String(now.getMonth() + 1).padStart(2, '0')}${String(now.getDate()).padStart(2, '0')}`;
+        const driverNameStr = (driverObj?.name || 'HQ').split(' ')[0].replace(/[^a-zA-Z0-9]/g, '');
+        const proposedDoNumber = `DO-${driverNameStr}-${dateCode}-${String(nextStopSeq).padStart(2, '0')}`;
+
+        setAddDoTripTarget({
+            tripId: currentTripId,
+            tripNumber: tripGroup.tripNumber,
+            driverId: tripGroup.driverId,
+            driverName: driverObj?.name || 'Unassigned',
+            lorryId: lorryObj?.id,
+            lorryPlate: lorryObj?.plateNumber,
+            origin,
+            deliveryDate,
+            nextStopSeq,
+            currentDropCount,
+            existingTripStatus: existingStatus,
+            orders: currentOrders
+        });
+
+        // Initialize Manual Form Fields
+        setManualDoNumber(proposedDoNumber);
+        setManualCustomer('');
+        setManualAddress('');
+        setManualPhone('');
+        setManualZone(tripGroup.zone || '');
+        setManualNotes('');
+        const defaultLoc = getDefaultLocForOrigin(origin);
+        setManualItems([
+            {
+                sku: v2Items[0]?.sku || '',
+                product: v2Items[0]?.name || '',
+                quantity: 1,
+                sourceLocation: defaultLoc,
+                uom: 'Rolls'
+            }
+        ]);
+
+        // Reset AI parsed state
+        setParsedAddDoOrder(null);
+        setAddDoAiProgress('');
+        setIsAddDoAiLoading(false);
+        setUnassignedSearch('');
+
+        setAddDoModalTab(initialTab);
+        setIsAddDoModalOpen(true);
+    };
+
+    const handleTriggerAiAddDo = (tripGroup: any) => {
+        handleOpenAddDoModal(tripGroup, 'ai');
+        setTimeout(() => {
+            addDoFileInputRef.current?.click();
+        }, 150);
+    };
+
+    const handleAddDoFileSelect = async (e: React.ChangeEvent<HTMLInputElement>) => {
+        const files = Array.from(e.target.files || []);
+        if (files.length === 0 || !addDoTripTarget) return;
+
+        setIsAddDoAiLoading(true);
+        setAddDoAiProgress(t('AI analyzing DO details and mapping SKUs...'));
+
+        try {
+            const filePayloads = await Promise.all(
+                files.map(async (file) => {
+                    let base64 = '';
+                    let mime = file.type;
+
+                    if (file.type.startsWith('image/')) {
+                        const compressedDataUrl = await compressImage(file, 1600, 0.85);
+                        base64 = dataUrlToBase64Payload(compressedDataUrl);
+                        mime = 'image/jpeg';
+                    } else {
+                        const buffer = await file.arrayBuffer();
+                        const bytes = new Uint8Array(buffer);
+                        let binary = '';
+                        const len = bytes.byteLength;
+                        for (let i = 0; i < len; i++) {
+                            binary += String.fromCharCode(bytes[i]);
+                        }
+                        base64 = btoa(binary);
+                        if (!mime) mime = 'application/pdf';
+                    }
+
+                    return {
+                        name: file.name,
+                        base64,
+                        mimeType: mime
+                    };
+                })
+            );
+
+            const response = await fetch('/api/agent/parse-trip-pdf', {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({
+                    action: 'parse-trip-pdf',
+                    files: filePayloads,
+                    productsList: v2Items.map(i => ({ sku: i.sku, name: i.name })),
+                    driversList: drivers.map(d => ({ uid: d.uid, name: d.name || d.email || '' }))
+                })
+            });
+
+            if (!response.ok) {
+                const errData = await response.json().catch(() => ({}));
+                throw new Error(errData.error || `HTTP ${response.status}`);
+            }
+
+            const data: ParsedTripDOBatch = await response.json();
+            if (!data.deliveryOrders || data.deliveryOrders.length === 0) {
+                throw new Error(t('No valid Delivery Orders detected in the uploaded files.'));
+            }
+
+            const firstDO = data.deliveryOrders[0];
+            const currentOrigin = addDoTripTarget.origin || activeLocation || 'Taiping';
+
+            // Align items with SKU catalogue
+            const alignedItems = (firstDO.items || []).map(it => {
+                const matchRes = alignDOItemWithCatalog(
+                    firstDO.customer,
+                    it.product,
+                    it.sku,
+                    skuMappings,
+                    v2Items
+                );
+                return {
+                    ...it,
+                    product: matchRes.product,
+                    sku: matchRes.sku,
+                    sourceLocation: normalizeWarehouseName(it.sourceLocation || matchRes.sourceLocation || guessItemLocation({ sku: matchRes.sku, product: matchRes.product, rawProductName: it.product }, currentOrigin)),
+                    isMatched: matchRes.isMatched
+                };
+            });
+
+            setParsedAddDoOrder({
+                ...firstDO,
+                items: alignedItems,
+                doTotal: alignedItems.reduce((sum, it) => sum + (Number(it.quantity) || 0), 0)
+            });
+
+            setToast({
+                type: 'success',
+                message: t('✅ AI 识别完成，请核对单据信息并确认加单！')
+            });
+        } catch (err: any) {
+            console.error("AI parse for Add DO failed:", err);
+            setToast({
+                type: 'error',
+                message: err.message || t('AI recognition failed')
+            });
+            alert(`识别失败 / Failed: ${err.message || 'Error parsing document'}`);
+        } finally {
+            setIsAddDoAiLoading(false);
+            setAddDoAiProgress('');
+            if (e.target) e.target.value = '';
+        }
+    };
+
+    const handleConfirmAddDoFromAi = async () => {
+        if (!addDoTripTarget || !parsedAddDoOrder || isSavingAddDo) return;
+
+        const invalidItems = (parsedAddDoOrder.items || []).filter(it => {
+            const cleanSku = (it.sku || '').trim().toLowerCase();
+            return !cleanSku || !v2Items.some(v => v.sku.toLowerCase() === cleanSku);
+        });
+
+        if (invalidItems.length > 0) {
+            alert(`【系统防呆拦截 · 存在非标物料】\n\n检测到本单包含 ${invalidItems.length} 项未匹配标准料号的物料，请点击匹配选择后再保存出车！`);
+            return;
+        }
+
+        setIsSavingAddDo(true);
+        try {
+            const newOrderId = crypto.randomUUID();
+            const newTotalDrops = addDoTripTarget.currentDropCount + 1;
+            const validWarehouses = getAvailableWarehousesForOrigin(addDoTripTarget.origin);
+            const defaultLoc = getDefaultLocForOrigin(addDoTripTarget.origin);
+
+            const finalizedItems = (parsedAddDoOrder.items || []).map(it => {
+                let loc = normalizeWarehouseName(it.sourceLocation || '');
+                if (!loc || !validWarehouses.includes(loc)) {
+                    loc = defaultLoc;
+                }
+                return {
+                    product: it.product,
+                    quantity: Number(it.quantity) || 1,
+                    sku: it.sku || '',
+                    packaging: it.uom || 'Rolls',
+                    sourceLocation: loc
+                };
+            });
+
+            const noteParts: string[] = [];
+            if (parsedAddDoOrder.remarks && parsedAddDoOrder.remarks.trim()) {
+                noteParts.push(parsedAddDoOrder.remarks.trim());
+            }
+            if (parsedAddDoOrder.phone) {
+                noteParts.push(`Tel: ${parsedAddDoOrder.phone}`);
+            }
+
+            const targetStatus = addDoTripTarget.existingTripStatus === 'Delivered' ? 'Loaded' : (addDoTripTarget.existingTripStatus || 'Planned');
+
+            const orderPayload: any = {
+                id: newOrderId,
+                trip_id: addDoTripTarget.tripId,
+                order_number: parsedAddDoOrder.doNumber || `DO-${addDoTripTarget.tripNumber}-${addDoTripTarget.nextStopSeq}`,
+                customer: parsedAddDoOrder.customer || 'General Customer',
+                delivery_address: parsedAddDoOrder.deliveryAddress || '',
+                zone: parsedAddDoOrder.zone || addDoTripTarget.orders[0]?.zone || 'Central',
+                driver_id: addDoTripTarget.driverId || null,
+                status: targetStatus,
+                order_date: addDoTripTarget.deliveryDate,
+                deadline: addDoTripTarget.deliveryDate,
+                trip_origin: addDoTripTarget.origin.toUpperCase(),
+                trip_drop_count: newTotalDrops,
+                stop_sequence: addDoTripTarget.nextStopSeq,
+                trip_sequence: (addDoTripTarget.orders[0] as any)?.trip_sequence || 1,
+                delivery_method: 'Company Delivery',
+                job_type: 'Delivery',
+                items: finalizedItems,
+                notes: noteParts.join(' | ')
+            };
+
+            const { error: soErr } = await supabase.from('sales_orders').insert(orderPayload);
+            if (soErr) throw new Error(`Failed to insert sales_order: ${soErr.message}`);
+
+            try {
+                await supabase.from('trip_stops_v2').insert({
+                    trip_id: addDoTripTarget.tripId,
+                    sales_order_id: newOrderId,
+                    stop_sequence: addDoTripTarget.nextStopSeq,
+                    status: 'Pending'
+                });
+            } catch {}
+
+            await supabase.from('sales_orders')
+                .update({ trip_drop_count: newTotalDrops })
+                .eq('trip_id', addDoTripTarget.tripId)
+                .neq('status', 'Cancelled');
+
+            if (parsedAddDoOrder.customer && Array.isArray(parsedAddDoOrder.items)) {
+                for (const it of parsedAddDoOrder.items) {
+                    if (it.sku && it.rawProductName) {
+                        try {
+                            await supabase.from('customer_sku_mappings').upsert({
+                                customer_name: parsedAddDoOrder.customer.trim(),
+                                raw_product_name: it.rawProductName.trim(),
+                                mapped_sku: it.sku.trim(),
+                                mapped_product_name: it.product || it.rawProductName,
+                                updated_at: new Date().toISOString()
+                            }, { onConflict: 'customer_name,raw_product_name' });
+                        } catch {}
+                    }
+                }
+            }
+
+            if (parsedAddDoOrder.customer && parsedAddDoOrder.customer.trim() && parsedAddDoOrder.deliveryAddress) {
+                try {
+                    const cleanName = parsedAddDoOrder.customer.trim();
+                    const existingCust = customerDB.find(c => c.name.toLowerCase() === cleanName.toLowerCase());
+                    if (!existingCust) {
+                        await supabase.from('sys_customers').insert({
+                            id: crypto.randomUUID(),
+                            name: cleanName,
+                            address: parsedAddDoOrder.deliveryAddress,
+                            phone: parsedAddDoOrder.phone || '',
+                            zone: parsedAddDoOrder.zone || '',
+                            created_at: new Date().toISOString()
+                        });
+                    }
+                } catch {}
+            }
+
+            setIsAddDoModalOpen(false);
+            setAddDoTripTarget(null);
+            setParsedAddDoOrder(null);
+            await fetchData();
+            setToast({
+                type: 'success',
+                message: t('✅ 成功将送货单 {{do}} 加入车次 {{trip}} (第 {{drop}} 站)！', {
+                    do: orderPayload.order_number,
+                    trip: addDoTripTarget.tripNumber,
+                    drop: addDoTripTarget.nextStopSeq
+                })
+            });
+        } catch (err: any) {
+            console.error("Failed to add DO from AI:", err);
+            alert(`加单失败 / Error: ${err.message}`);
+        } finally {
+            setIsSavingAddDo(false);
+        }
+    };
+
+    const handleConfirmAddDoManual = async () => {
+        if (!addDoTripTarget || isSavingAddDo) return;
+
+        if (!manualCustomer.trim()) {
+            alert(t('请输入客户名称 (Customer Name)'));
+            return;
+        }
+        if (!manualDoNumber.trim()) {
+            alert(t('请输入送货单号 (DO Number)'));
+            return;
+        }
+        if (manualItems.length === 0) {
+            alert(t('请至少添加一项物料'));
+            return;
+        }
+
+        const invalidItems = manualItems.filter(it => {
+            const cleanSku = (it.sku || '').trim().toLowerCase();
+            return !cleanSku || !v2Items.some(v => v.sku.toLowerCase() === cleanSku);
+        });
+
+        if (invalidItems.length > 0) {
+            alert(`【系统防呆拦截 · 存在非标物料】\n\n检测到本单包含 ${invalidItems.length} 项未选择标准料号的物料，请在料号下拉框中选择后再保存！`);
+            return;
+        }
+
+        setIsSavingAddDo(true);
+        try {
+            const newOrderId = crypto.randomUUID();
+            const newTotalDrops = addDoTripTarget.currentDropCount + 1;
+            const targetStatus = addDoTripTarget.existingTripStatus === 'Delivered' ? 'Loaded' : (addDoTripTarget.existingTripStatus || 'Planned');
+
+            const orderPayload: any = {
+                id: newOrderId,
+                trip_id: addDoTripTarget.tripId,
+                order_number: manualDoNumber.trim(),
+                customer: manualCustomer.trim(),
+                delivery_address: manualAddress.trim(),
+                zone: manualZone.trim() || addDoTripTarget.orders[0]?.zone || 'Central',
+                driver_id: addDoTripTarget.driverId || null,
+                status: targetStatus,
+                order_date: addDoTripTarget.deliveryDate,
+                deadline: addDoTripTarget.deliveryDate,
+                trip_origin: addDoTripTarget.origin.toUpperCase(),
+                trip_drop_count: newTotalDrops,
+                stop_sequence: addDoTripTarget.nextStopSeq,
+                trip_sequence: (addDoTripTarget.orders[0] as any)?.trip_sequence || 1,
+                delivery_method: 'Company Delivery',
+                job_type: 'Delivery',
+                items: manualItems.map(it => ({
+                    product: it.product,
+                    quantity: Number(it.quantity) || 1,
+                    sku: it.sku,
+                    packaging: it.uom || 'Rolls',
+                    sourceLocation: it.sourceLocation
+                })),
+                notes: manualNotes.trim() + (manualPhone.trim() ? ` | Tel: ${manualPhone.trim()}` : '')
+            };
+
+            const { error: soErr } = await supabase.from('sales_orders').insert(orderPayload);
+            if (soErr) throw new Error(`Failed to insert sales_order: ${soErr.message}`);
+
+            try {
+                await supabase.from('trip_stops_v2').insert({
+                    trip_id: addDoTripTarget.tripId,
+                    sales_order_id: newOrderId,
+                    stop_sequence: addDoTripTarget.nextStopSeq,
+                    status: 'Pending'
+                });
+            } catch {}
+
+            await supabase.from('sales_orders')
+                .update({ trip_drop_count: newTotalDrops })
+                .eq('trip_id', addDoTripTarget.tripId)
+                .neq('status', 'Cancelled');
+
+            setIsAddDoModalOpen(false);
+            setAddDoTripTarget(null);
+            await fetchData();
+            setToast({
+                type: 'success',
+                message: t('✅ 成功将送货单 {{do}} 加入车次 {{trip}} (第 {{drop}} 站)！', {
+                    do: orderPayload.order_number,
+                    trip: addDoTripTarget.tripNumber,
+                    drop: addDoTripTarget.nextStopSeq
+                })
+            });
+        } catch (err: any) {
+            console.error("Failed to add manual DO:", err);
+            alert(`手工加单失败 / Error: ${err.message}`);
+        } finally {
+            setIsSavingAddDo(false);
+        }
+    };
+
+    const handleMergeUnassignedOrder = async (targetOrder: SalesOrder) => {
+        if (!addDoTripTarget || isSavingAddDo) return;
+
+        const confirmed = window.confirm(
+            `确认将送货单 #${targetOrder.orderNumber} (客户: ${targetOrder.customer || '未命名'}) 并入车次 ${addDoTripTarget.tripNumber} 作为第 ${addDoTripTarget.nextStopSeq} 站？`
+        );
+        if (!confirmed) return;
+
+        setIsSavingAddDo(true);
+        try {
+            const newTotalDrops = addDoTripTarget.currentDropCount + 1;
+            const targetStatus = addDoTripTarget.existingTripStatus === 'Delivered' ? 'Loaded' : (addDoTripTarget.existingTripStatus || targetOrder.status || 'Planned');
+
+            const { error: updateErr } = await supabase.from('sales_orders').update({
+                trip_id: addDoTripTarget.tripId,
+                driver_id: addDoTripTarget.driverId || null,
+                trip_origin: addDoTripTarget.origin.toUpperCase(),
+                deadline: addDoTripTarget.deliveryDate,
+                stop_sequence: addDoTripTarget.nextStopSeq,
+                trip_drop_count: newTotalDrops,
+                status: targetStatus
+            }).eq('id', targetOrder.id);
+
+            if (updateErr) throw new Error(updateErr.message);
+
+            try {
+                await supabase.from('trip_stops_v2').insert({
+                    trip_id: addDoTripTarget.tripId,
+                    sales_order_id: targetOrder.id,
+                    stop_sequence: addDoTripTarget.nextStopSeq,
+                    status: 'Pending'
+                });
+            } catch {}
+
+            await supabase.from('sales_orders')
+                .update({ trip_drop_count: newTotalDrops })
+                .eq('trip_id', addDoTripTarget.tripId)
+                .neq('status', 'Cancelled');
+
+            setIsAddDoModalOpen(false);
+            setAddDoTripTarget(null);
+            await fetchData();
+            setToast({
+                type: 'success',
+                message: t('✅ 成功将送货单 {{do}} 并入车次 {{trip}} (第 {{drop}} 站)！', {
+                    do: targetOrder.orderNumber,
+                    trip: addDoTripTarget.tripNumber,
+                    drop: addDoTripTarget.nextStopSeq
+                })
+            });
+        } catch (err: any) {
+            console.error("Failed to merge unassigned order:", err);
+            alert(`并单失败 / Error: ${err.message}`);
+        } finally {
+            setIsSavingAddDo(false);
         }
     };
 
@@ -5956,6 +6620,34 @@ const DeliveryOrderManagement: React.FC<DeliveryOrderManagementProps> = ({ user 
                                                                             </div>
 
                                                                             <div className="flex items-center gap-1">
+                                                                                {/* Quick Add DO Button */}
+                                                                                <button
+                                                                                    type="button"
+                                                                                    onClick={(e) => {
+                                                                                        e.stopPropagation();
+                                                                                        handleOpenAddDoModal(tripGroup);
+                                                                                    }}
+                                                                                    className="px-2 py-1 text-blue-300 bg-blue-500/15 hover:bg-blue-500/25 hover:text-white rounded-md transition-colors flex items-center gap-1 text-[11px] font-bold border border-blue-500/30 shadow-sm cursor-pointer"
+                                                                                    title="加单到此车次 / Add DO to this Trip"
+                                                                                >
+                                                                                    <Plus size={12} className="stroke-[3]" />
+                                                                                    <span>加单</span>
+                                                                                </button>
+
+                                                                                {/* Edit Trip in Workstation Button */}
+                                                                                <button
+                                                                                    type="button"
+                                                                                    onClick={(e) => {
+                                                                                        e.stopPropagation();
+                                                                                        handleOpenEditTripInWorkstation(tripGroup);
+                                                                                    }}
+                                                                                    className="px-2 py-1 text-slate-300 bg-slate-800/80 hover:bg-slate-700 hover:text-white rounded-md transition-colors flex items-center gap-1 text-[11px] font-bold border border-slate-700 shadow-sm cursor-pointer"
+                                                                                    title="在工作台查看/编辑/批量加单 (Workstation)"
+                                                                                >
+                                                                                    <Edit3 size={11} />
+                                                                                    <span className="hidden sm:inline">工作台</span>
+                                                                                </button>
+
                                                                                 {/* Delete Trip Button */}
                                                                                 <button
                                                                                     type="button"
@@ -6286,6 +6978,61 @@ const DeliveryOrderManagement: React.FC<DeliveryOrderManagementProps> = ({ user 
                                                                                         )}
                                                                                     </div>
                                                                                 ))}
+
+                                                                                {/* ➕ Add DO / Append Drop to this Trip Card */}
+                                                                                <div className="mt-2.5 p-2.5 rounded-xl border border-dashed border-blue-500/40 bg-blue-950/20 hover:bg-blue-950/40 hover:border-blue-500/70 transition-all">
+                                                                                    <div className="flex items-center justify-between gap-2 mb-2">
+                                                                                        <div className="flex items-center gap-2">
+                                                                                            <span className="w-5 h-5 rounded-full bg-blue-500/30 text-blue-300 font-mono text-[10px] font-black flex items-center justify-center">
+                                                                                                #{tripGroup.orders.length + 1}
+                                                                                            </span>
+                                                                                            <span className="text-xs font-bold text-blue-200">
+                                                                                                {t('加单到此车次 (第 {{drop}} 站)', { drop: tripGroup.orders.length + 1 })}
+                                                                                            </span>
+                                                                                        </div>
+                                                                                        <span className="text-[10px] text-slate-400 font-mono font-bold">
+                                                                                            {tripGroup.tripNumber}
+                                                                                        </span>
+                                                                                    </div>
+                                                                                    <div className="grid grid-cols-3 gap-1.5">
+                                                                                        <button
+                                                                                            type="button"
+                                                                                            onClick={(e) => {
+                                                                                                e.stopPropagation();
+                                                                                                handleTriggerAiAddDo(tripGroup);
+                                                                                            }}
+                                                                                            className="px-2 py-1.5 rounded-lg bg-indigo-600/25 hover:bg-indigo-600/40 border border-indigo-500/30 text-indigo-200 hover:text-white text-[11px] font-bold flex items-center justify-center gap-1 transition-all cursor-pointer shadow-sm"
+                                                                                            title="上传/拍照送货单，AI 自动识别加入此车次"
+                                                                                        >
+                                                                                            <Sparkles size={12} className="text-indigo-400" />
+                                                                                            <span>AI 识单</span>
+                                                                                        </button>
+                                                                                        <button
+                                                                                            type="button"
+                                                                                            onClick={(e) => {
+                                                                                                e.stopPropagation();
+                                                                                                handleOpenAddDoModal(tripGroup, 'manual');
+                                                                                            }}
+                                                                                            className="px-2 py-1.5 rounded-lg bg-blue-600/25 hover:bg-blue-600/40 border border-blue-500/30 text-blue-200 hover:text-white text-[11px] font-bold flex items-center justify-center gap-1 transition-all cursor-pointer shadow-sm"
+                                                                                            title="手工录入单据加入此车次"
+                                                                                        >
+                                                                                            <Plus size={12} className="text-blue-400" />
+                                                                                            <span>手工录入</span>
+                                                                                        </button>
+                                                                                        <button
+                                                                                            type="button"
+                                                                                            onClick={(e) => {
+                                                                                                e.stopPropagation();
+                                                                                                handleOpenAddDoModal(tripGroup, 'unassigned');
+                                                                                            }}
+                                                                                            className="px-2 py-1.5 rounded-lg bg-amber-600/20 hover:bg-amber-600/30 border border-amber-500/30 text-amber-300 hover:text-amber-200 text-[11px] font-bold flex items-center justify-center gap-1 transition-all cursor-pointer shadow-sm"
+                                                                                            title="选择待分配单据并入此车次"
+                                                                                        >
+                                                                                            <Box size={12} className="text-amber-400" />
+                                                                                            <span>并入单据</span>
+                                                                                        </button>
+                                                                                    </div>
+                                                                                </div>
                                                                             </div>
                                                                         )}
                                                                     </div>
@@ -6350,6 +7097,20 @@ const DeliveryOrderManagement: React.FC<DeliveryOrderManagementProps> = ({ user 
                                                                                     title="Cancel Order"
                                                                                 >
                                                                                     <Trash2 size={14} />
+                                                                                </button>
+
+                                                                                {/* Quick Add DO Button to upgrade to multi-drop */}
+                                                                                <button
+                                                                                    type="button"
+                                                                                    onClick={(e) => {
+                                                                                        e.stopPropagation();
+                                                                                        handleOpenAddDoModal(tripGroup);
+                                                                                    }}
+                                                                                    className="px-2 py-1 text-blue-300 bg-blue-500/15 hover:bg-blue-500/25 hover:text-white rounded-md transition-colors flex items-center gap-1 text-[11px] font-bold border border-blue-500/30 shadow-sm cursor-pointer ml-1"
+                                                                                    title="升级为多点车次并加单 / Upgrade to Multi-Drop & Add DO"
+                                                                                >
+                                                                                    <Plus size={12} className="stroke-[3]" />
+                                                                                    <span>加单</span>
                                                                                 </button>
 
                                                                                 <button
@@ -6811,6 +7572,29 @@ const DeliveryOrderManagement: React.FC<DeliveryOrderManagementProps> = ({ user 
                                                     <Truck size={11} className="text-indigo-400" />
                                                     <span>多点车次 · 第 {editingTripContext.stopSeq} 站 / 共 {editingTripContext.totalDrops} 站</span>
                                                 </span>
+                                            )}
+                                            {editingTripContext && (
+                                                <button
+                                                    type="button"
+                                                    onClick={() => {
+                                                        const targetTripGroup = {
+                                                            tripId: editingTripContext.tripId || undefined,
+                                                            tripNumber: currentEditingOrder?.orderNumber || 'TRIP',
+                                                            driverId: currentEditingOrder?.driverId,
+                                                            tripOrigin: currentEditingOrder?.trip_origin || activeLocation || 'TAIPING',
+                                                            orderDate: currentEditingOrder?.orderDate || getTodayStr(),
+                                                            deadline: currentEditingOrder?.deadline || getTodayStr(),
+                                                            zone: currentEditingOrder?.zone || '',
+                                                            orders: currentEditingOrder ? [currentEditingOrder, ...editingTripContext.siblings] : []
+                                                        };
+                                                        handleOpenAddDoModal(targetTripGroup);
+                                                    }}
+                                                    className="px-2.5 py-1 bg-cyan-600/20 hover:bg-cyan-600/30 text-cyan-300 border border-cyan-500/40 rounded-lg text-xs font-bold flex items-center gap-1.5 transition-all active:scale-95 cursor-pointer shadow-sm shadow-cyan-950/40"
+                                                    title="为此车次追加送货单 (Drop)"
+                                                >
+                                                    <Plus size={13} className="stroke-[2.5]" />
+                                                    <span>➕ 加单到此车次 / + Drop</span>
+                                                </button>
                                             )}
                                         </div>
                                     )}
@@ -9998,6 +10782,748 @@ const DeliveryOrderManagement: React.FC<DeliveryOrderManagementProps> = ({ user 
                     </div>
                 </div>
             )}
+
+            {/* Quick Add DO to Confirmed Trip Modal */}
+            {isAddDoModalOpen && addDoTripTarget && (
+                <div className="fixed inset-0 z-[120] flex items-center justify-center p-2 sm:p-4 bg-black/80 backdrop-blur-md animate-in fade-in duration-200">
+                    <div className="bg-slate-950 border border-slate-800 rounded-3xl w-full max-w-4xl max-h-[92vh] flex flex-col shadow-2xl overflow-hidden">
+                        {/* Header */}
+                        <div className="px-6 py-4 bg-slate-900/90 border-b border-slate-800 flex items-center justify-between">
+                            <div className="flex items-center gap-3">
+                                <div className="w-10 h-10 rounded-2xl bg-cyan-500/10 border border-cyan-500/30 flex items-center justify-center text-cyan-400">
+                                    <Plus size={20} className="stroke-[2.5]" />
+                                </div>
+                                <div>
+                                    <div className="flex items-center gap-2 flex-wrap">
+                                        <h3 className="text-base sm:text-lg font-black text-white">
+                                            {t('追加送货单到车次 / Add DO to Trip')}
+                                        </h3>
+                                        <span className="font-mono text-xs font-black text-blue-400 bg-blue-500/15 border border-blue-500/30 px-2.5 py-0.5 rounded-full">
+                                            {addDoTripTarget.tripNumber}
+                                        </span>
+                                        <span className="text-[11px] font-bold text-amber-300 bg-amber-500/15 border border-amber-500/30 px-2 py-0.5 rounded-full">
+                                            第 {addDoTripTarget.nextStopSeq} 站 (Next Drop #{addDoTripTarget.nextStopSeq})
+                                        </span>
+                                    </div>
+                                    <div className="text-xs text-slate-400 flex items-center gap-3 mt-1 flex-wrap">
+                                        <span className="flex items-center gap-1">
+                                            <UserIcon size={12} className="text-slate-400" />
+                                            司机: <strong className="text-slate-200">{addDoTripTarget.driverName || '未指定'}</strong>
+                                        </span>
+                                        {addDoTripTarget.lorryPlate && (
+                                            <span className="flex items-center gap-1">
+                                                <Truck size={12} className="text-slate-400" />
+                                                车牌: <strong className="text-slate-200">{addDoTripTarget.lorryPlate}</strong>
+                                            </span>
+                                        )}
+                                        <span className="flex items-center gap-1">
+                                            <Building2 size={12} className="text-slate-400" />
+                                            发货仓: <strong className="text-slate-200">{addDoTripTarget.origin}</strong>
+                                        </span>
+                                        <span className="flex items-center gap-1">
+                                            <Calendar size={12} className="text-slate-400" />
+                                            出车日期: <strong className="text-slate-200">{addDoTripTarget.deliveryDate}</strong>
+                                        </span>
+                                    </div>
+                                </div>
+                            </div>
+                            <button
+                                type="button"
+                                onClick={() => {
+                                    setIsAddDoModalOpen(false);
+                                    setAddDoTripTarget(null);
+                                    setParsedAddDoOrder(null);
+                                }}
+                                className="p-2 text-slate-400 hover:text-white hover:bg-slate-800 rounded-xl transition-colors cursor-pointer"
+                            >
+                                <X size={20} />
+                            </button>
+                        </div>
+
+                        {/* Navigation Tabs */}
+                        <div className="flex border-b border-slate-800/80 bg-slate-900/40 px-6 pt-3 gap-2 overflow-x-auto">
+                            <button
+                                type="button"
+                                onClick={() => setAddDoModalTab('ai')}
+                                className={`pb-3 px-4 text-xs font-black uppercase tracking-wider flex items-center gap-2 border-b-2 transition-all cursor-pointer whitespace-nowrap ${
+                                    addDoModalTab === 'ai'
+                                        ? 'text-cyan-400 border-cyan-400 bg-cyan-500/10 rounded-t-xl'
+                                        : 'text-slate-400 border-transparent hover:text-slate-200'
+                                }`}
+                            >
+                                <Sparkles size={14} />
+                                <span>📸 AI 识单追加 (PDF / 照片)</span>
+                            </button>
+                            <button
+                                type="button"
+                                onClick={() => setAddDoModalTab('manual')}
+                                className={`pb-3 px-4 text-xs font-black uppercase tracking-wider flex items-center gap-2 border-b-2 transition-all cursor-pointer whitespace-nowrap ${
+                                    addDoModalTab === 'manual'
+                                        ? 'text-cyan-400 border-cyan-400 bg-cyan-500/10 rounded-t-xl'
+                                        : 'text-slate-400 border-transparent hover:text-slate-200'
+                                }`}
+                            >
+                                <Edit3 size={14} />
+                                <span>✍️ 手工快速填单 (Manual)</span>
+                            </button>
+                            <button
+                                type="button"
+                                onClick={() => setAddDoModalTab('unassigned')}
+                                className={`pb-3 px-4 text-xs font-black uppercase tracking-wider flex items-center gap-2 border-b-2 transition-all cursor-pointer whitespace-nowrap ${
+                                    addDoModalTab === 'unassigned'
+                                        ? 'text-cyan-400 border-cyan-400 bg-cyan-500/10 rounded-t-xl'
+                                        : 'text-slate-400 border-transparent hover:text-slate-200'
+                                }`}
+                            >
+                                <Package size={14} />
+                                <span>📦 从待分配并入 (Unassigned Pool)</span>
+                            </button>
+                        </div>
+
+                        {/* Modal Body */}
+                        <div className="flex-1 overflow-y-auto p-6 custom-scrollbar space-y-6">
+                            {/* TAB 1: AI PARSE */}
+                            {addDoModalTab === 'ai' && (
+                                <div className="space-y-6">
+                                    {isAddDoAiLoading ? (
+                                        <div className="py-16 text-center flex flex-col items-center justify-center gap-4">
+                                            <div className="w-16 h-16 rounded-2xl bg-cyan-500/10 border border-cyan-500/30 flex items-center justify-center relative">
+                                                <Sparkles className="text-cyan-400 animate-spin" size={32} />
+                                            </div>
+                                            <div className="space-y-1">
+                                                <h4 className="text-base font-bold text-white">AI 智能解析中...</h4>
+                                                <p className="text-xs text-cyan-300 font-semibold">{addDoAiProgress || '正在识别客户、地址与料号'}</p>
+                                            </div>
+                                        </div>
+                                    ) : !parsedAddDoOrder ? (
+                                        <div
+                                            onClick={() => addDoFileInputRef.current?.click()}
+                                            className="border-2 border-dashed border-cyan-500/40 hover:border-cyan-400 bg-cyan-500/5 hover:bg-cyan-500/10 rounded-3xl p-10 text-center flex flex-col items-center justify-center gap-4 cursor-pointer transition-all group"
+                                        >
+                                            <div className="w-16 h-16 rounded-2xl bg-cyan-500/20 border border-cyan-500/30 flex items-center justify-center text-cyan-400 group-hover:scale-110 transition-transform">
+                                                <Camera size={32} />
+                                            </div>
+                                            <div className="space-y-1">
+                                                <h4 className="text-base font-bold text-white group-hover:text-cyan-300 transition-colors">
+                                                    点击上传送货单 PDF 或拍照 (Muat naik DO PDF / Foto)
+                                                </h4>
+                                                <p className="text-xs text-slate-400 max-w-md mx-auto">
+                                                    系统支持 PDF 文件与手机拍照。AI 将自动提取 DO 单号、客户名称、送达地址、物料并对齐标准 SKU。
+                                                </p>
+                                            </div>
+                                            <button
+                                                type="button"
+                                                className="px-5 py-2.5 bg-cyan-600 hover:bg-cyan-500 text-white rounded-xl text-xs font-bold flex items-center gap-2 shadow-lg shadow-cyan-950/50 cursor-pointer"
+                                            >
+                                                <FileText size={16} />
+                                                <span>选择文件 / Upload Document</span>
+                                            </button>
+                                        </div>
+                                    ) : (
+                                        <div className="space-y-5 bg-slate-900/60 p-5 rounded-2xl border border-slate-800">
+                                            <div className="flex items-center justify-between pb-3 border-b border-slate-800">
+                                                <div className="flex items-center gap-2">
+                                                    <span className="text-xs font-bold text-emerald-400 bg-emerald-500/15 border border-emerald-500/30 px-2.5 py-0.5 rounded-full flex items-center gap-1">
+                                                        <CheckCircle size={12} /> AI 识别成功
+                                                    </span>
+                                                    <span className="text-xs text-slate-400">请核对以下信息，确认无误后点击下方加单按钮</span>
+                                                </div>
+                                                <button
+                                                    type="button"
+                                                    onClick={() => addDoFileInputRef.current?.click()}
+                                                    className="text-xs text-cyan-400 hover:text-cyan-300 flex items-center gap-1 font-bold cursor-pointer"
+                                                >
+                                                    <RotateCcw size={12} />
+                                                    <span>重新上传 / Re-upload</span>
+                                                </button>
+                                            </div>
+
+                                            {/* Order Details Form */}
+                                            <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                                                <div>
+                                                    <label className="text-[10px] font-bold text-slate-400 uppercase tracking-wider block mb-1">
+                                                        DO 单号 / Order Number *
+                                                    </label>
+                                                    <input
+                                                        type="text"
+                                                        value={parsedAddDoOrder.doNumber || ''}
+                                                        onChange={(e) => setParsedAddDoOrder(prev => prev ? ({ ...prev, doNumber: e.target.value }) : null)}
+                                                        className="w-full bg-slate-950 border border-slate-700 rounded-xl px-3 py-2 text-sm text-white font-mono focus:border-cyan-500 outline-none"
+                                                    />
+                                                </div>
+                                                <div>
+                                                    <label className="text-[10px] font-bold text-slate-400 uppercase tracking-wider block mb-1">
+                                                        客户名称 / Customer Name *
+                                                    </label>
+                                                    <input
+                                                        type="text"
+                                                        value={parsedAddDoOrder.customer || ''}
+                                                        onChange={(e) => setParsedAddDoOrder(prev => prev ? ({ ...prev, customer: e.target.value }) : null)}
+                                                        className="w-full bg-slate-950 border border-slate-700 rounded-xl px-3 py-2 text-sm text-white focus:border-cyan-500 outline-none"
+                                                    />
+                                                </div>
+                                                <div className="md:col-span-2">
+                                                    <label className="text-[10px] font-bold text-slate-400 uppercase tracking-wider block mb-1">
+                                                        送达地址 / Delivery Address
+                                                    </label>
+                                                    <textarea
+                                                        rows={2}
+                                                        value={parsedAddDoOrder.deliveryAddress || ''}
+                                                        onChange={(e) => setParsedAddDoOrder(prev => prev ? ({ ...prev, deliveryAddress: e.target.value }) : null)}
+                                                        className="w-full bg-slate-950 border border-slate-700 rounded-xl px-3 py-2 text-xs text-white focus:border-cyan-500 outline-none resize-none"
+                                                    />
+                                                </div>
+                                                <div>
+                                                    <label className="text-[10px] font-bold text-slate-400 uppercase tracking-wider block mb-1">
+                                                        联系电话 / Phone
+                                                    </label>
+                                                    <input
+                                                        type="text"
+                                                        value={parsedAddDoOrder.phone || ''}
+                                                        onChange={(e) => setParsedAddDoOrder(prev => prev ? ({ ...prev, phone: e.target.value }) : null)}
+                                                        className="w-full bg-slate-950 border border-slate-700 rounded-xl px-3 py-2 text-sm text-white font-mono focus:border-cyan-500 outline-none"
+                                                    />
+                                                </div>
+                                                <div>
+                                                    <label className="text-[10px] font-bold text-slate-400 uppercase tracking-wider block mb-1">
+                                                        地区分区 / Zone
+                                                    </label>
+                                                    <input
+                                                        type="text"
+                                                        value={parsedAddDoOrder.zone || ''}
+                                                        onChange={(e) => setParsedAddDoOrder(prev => prev ? ({ ...prev, zone: e.target.value }) : null)}
+                                                        className="w-full bg-slate-950 border border-slate-700 rounded-xl px-3 py-2 text-sm text-white focus:border-cyan-500 outline-none"
+                                                    />
+                                                </div>
+                                            </div>
+
+                                            {/* Items Table */}
+                                            <div className="space-y-3 pt-2">
+                                                <div className="flex items-center justify-between">
+                                                    <span className="text-xs font-bold text-slate-300 uppercase tracking-wider flex items-center gap-1.5">
+                                                        <Package size={14} className="text-cyan-400" />
+                                                        物料明细 (Items) · 共 {parsedAddDoOrder.items?.length || 0} 项 / {parsedAddDoOrder.doTotal || 0} 卷
+                                                    </span>
+                                                    <button
+                                                        type="button"
+                                                        onClick={() => {
+                                                            setParsedAddDoOrder(prev => {
+                                                                if (!prev) return null;
+                                                                const defaultLoc = getDefaultLocForOrigin(addDoTripTarget.origin);
+                                                                const newItem = {
+                                                                    product: v2Items[0]?.name || '',
+                                                                    rawProductName: v2Items[0]?.name || '',
+                                                                    sku: v2Items[0]?.sku || '',
+                                                                    quantity: 1,
+                                                                    uom: 'Rolls',
+                                                                    sourceLocation: defaultLoc,
+                                                                    isMatched: true
+                                                                };
+                                                                const newItems = [...(prev.items || []), newItem];
+                                                                return {
+                                                                    ...prev,
+                                                                    items: newItems,
+                                                                    doTotal: newItems.reduce((s, it) => s + (Number(it.quantity) || 0), 0)
+                                                                };
+                                                            });
+                                                        }}
+                                                        className="text-xs text-cyan-400 hover:text-cyan-300 font-bold flex items-center gap-1 cursor-pointer"
+                                                    >
+                                                        <Plus size={12} />
+                                                        <span>+ 增加物料 / Add Item</span>
+                                                    </button>
+                                                </div>
+
+                                                <div className="space-y-2">
+                                                    {(parsedAddDoOrder.items || []).map((it, idx) => (
+                                                        <div key={idx} className="bg-slate-950/80 p-3 rounded-xl border border-slate-800 flex flex-col md:flex-row items-start md:items-center gap-3">
+                                                            <div className="flex-1 min-w-[200px]">
+                                                                <div className="flex items-center gap-1.5 mb-1">
+                                                                    {it.sku && v2Items.some(v => v.sku.toLowerCase() === it.sku.toLowerCase()) ? (
+                                                                        <span className="text-[10px] font-bold text-emerald-400 bg-emerald-500/10 px-1.5 py-0.5 rounded border border-emerald-500/20">
+                                                                            标准SKU: {it.sku}
+                                                                        </span>
+                                                                    ) : (
+                                                                        <span className="text-[10px] font-bold text-amber-400 bg-amber-500/10 px-1.5 py-0.5 rounded border border-amber-500/20 animate-pulse">
+                                                                            ⚠️ 需对齐标准料号
+                                                                        </span>
+                                                                    )}
+                                                                </div>
+                                                                <select
+                                                                    value={it.sku || ''}
+                                                                    onChange={(e) => {
+                                                                        const selectedSku = e.target.value;
+                                                                        const matchedItem = v2Items.find(v => v.sku === selectedSku);
+                                                                        setParsedAddDoOrder(prev => {
+                                                                            if (!prev) return null;
+                                                                            const newItems = [...(prev.items || [])];
+                                                                            newItems[idx] = {
+                                                                                ...newItems[idx],
+                                                                                sku: selectedSku,
+                                                                                product: matchedItem ? matchedItem.name : newItems[idx].product,
+                                                                                isMatched: Boolean(matchedItem)
+                                                                            };
+                                                                            return { ...prev, items: newItems };
+                                                                        });
+                                                                    }}
+                                                                    className="w-full bg-slate-900 border border-slate-700 rounded-lg px-2.5 py-1.5 text-xs text-white focus:border-cyan-500 outline-none"
+                                                                >
+                                                                    <option value="">-- 选择标准物料 SKU --</option>
+                                                                    {v2Items.map(item => (
+                                                                        <option key={item.id || item.sku} value={item.sku}>
+                                                                            {item.sku} - {item.name}
+                                                                        </option>
+                                                                    ))}
+                                                                </select>
+                                                            </div>
+
+                                                            <div className="flex items-center gap-2 shrink-0">
+                                                                <div className="w-20">
+                                                                    <label className="text-[9px] text-slate-500 uppercase block">数量</label>
+                                                                    <input
+                                                                        type="number"
+                                                                        min="1"
+                                                                        value={it.quantity || 1}
+                                                                        onChange={(e) => {
+                                                                            const val = Math.max(1, Number(e.target.value) || 1);
+                                                                            setParsedAddDoOrder(prev => {
+                                                                                if (!prev) return null;
+                                                                                const newItems = [...(prev.items || [])];
+                                                                                newItems[idx] = { ...newItems[idx], quantity: val };
+                                                                                return {
+                                                                                    ...prev,
+                                                                                    items: newItems,
+                                                                                    doTotal: newItems.reduce((s, item) => s + (Number(item.quantity) || 0), 0)
+                                                                                };
+                                                                            });
+                                                                        }}
+                                                                        className="w-full bg-slate-900 border border-slate-700 rounded-lg px-2 py-1 text-xs text-white font-mono text-center"
+                                                                    />
+                                                                </div>
+
+                                                                <div className="w-24">
+                                                                    <label className="text-[9px] text-slate-500 uppercase block">包装单位</label>
+                                                                    <select
+                                                                        value={it.uom || 'Rolls'}
+                                                                        onChange={(e) => {
+                                                                            const val = e.target.value;
+                                                                            setParsedAddDoOrder(prev => {
+                                                                                if (!prev) return null;
+                                                                                const newItems = [...(prev.items || [])];
+                                                                                newItems[idx] = { ...newItems[idx], uom: val };
+                                                                                return { ...prev, items: newItems };
+                                                                            });
+                                                                        }}
+                                                                        className="w-full bg-slate-900 border border-slate-700 rounded-lg px-2 py-1 text-xs text-white"
+                                                                    >
+                                                                        <option value="Rolls">Rolls</option>
+                                                                        <option value="Carton">Carton</option>
+                                                                        <option value="Pcs">Pcs</option>
+                                                                        <option value="Unit">Unit</option>
+                                                                    </select>
+                                                                </div>
+
+                                                                <div className="w-28">
+                                                                    <label className="text-[9px] text-slate-500 uppercase block">发货仓库</label>
+                                                                    <select
+                                                                        value={it.sourceLocation || getDefaultLocForOrigin(addDoTripTarget.origin)}
+                                                                        onChange={(e) => {
+                                                                            const val = e.target.value;
+                                                                            setParsedAddDoOrder(prev => {
+                                                                                if (!prev) return null;
+                                                                                const newItems = [...(prev.items || [])];
+                                                                                newItems[idx] = { ...newItems[idx], sourceLocation: val };
+                                                                                return { ...prev, items: newItems };
+                                                                            });
+                                                                        }}
+                                                                        className="w-full bg-slate-900 border border-slate-700 rounded-lg px-2 py-1 text-xs text-white"
+                                                                    >
+                                                                        {getAvailableWarehousesForOrigin(addDoTripTarget.origin).map(loc => (
+                                                                            <option key={loc} value={loc}>{loc}</option>
+                                                                        ))}
+                                                                    </select>
+                                                                </div>
+
+                                                                <button
+                                                                    type="button"
+                                                                    onClick={() => {
+                                                                        setParsedAddDoOrder(prev => {
+                                                                            if (!prev) return null;
+                                                                            const newItems = (prev.items || []).filter((_, i) => i !== idx);
+                                                                            return {
+                                                                                ...prev,
+                                                                                items: newItems,
+                                                                                doTotal: newItems.reduce((s, item) => s + (Number(item.quantity) || 0), 0)
+                                                                            };
+                                                                        });
+                                                                    }}
+                                                                    className="p-1.5 text-rose-400 hover:text-rose-300 hover:bg-rose-500/10 rounded-lg mt-3.5 transition-colors cursor-pointer"
+                                                                    title="删除物料"
+                                                                >
+                                                                    <Trash2 size={14} />
+                                                                </button>
+                                                            </div>
+                                                        </div>
+                                                    ))}
+                                                </div>
+                                            </div>
+
+                                            {/* Submit button */}
+                                            <div className="pt-4 flex justify-end">
+                                                <button
+                                                    type="button"
+                                                    disabled={isSavingAddDo}
+                                                    onClick={handleConfirmAddDoFromAi}
+                                                    className="px-6 py-3 bg-gradient-to-r from-cyan-600 to-blue-600 hover:from-cyan-500 hover:to-blue-500 text-white rounded-xl text-sm font-black uppercase tracking-wider flex items-center gap-2 shadow-lg shadow-cyan-950/40 cursor-pointer active:scale-95 disabled:opacity-50 transition-all"
+                                                >
+                                                    <CheckCircle size={16} />
+                                                    <span>
+                                                        {isSavingAddDo ? '正在加入车次...' : `确认追加为第 ${addDoTripTarget.nextStopSeq} 站 / Confirm Add Drop #${addDoTripTarget.nextStopSeq}`}
+                                                    </span>
+                                                </button>
+                                            </div>
+                                        </div>
+                                    )}
+                                </div>
+                            )}
+
+                            {/* TAB 2: MANUAL ENTRY */}
+                            {addDoModalTab === 'manual' && (
+                                <div className="space-y-6">
+                                    <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                                        <div>
+                                            <label className="text-[10px] font-bold text-slate-400 uppercase tracking-wider block mb-1">
+                                                DO 单号 / DO Number *
+                                            </label>
+                                            <input
+                                                type="text"
+                                                value={manualDoNumber}
+                                                onChange={(e) => setManualDoNumber(e.target.value)}
+                                                className="w-full bg-slate-900 border border-slate-700 rounded-xl px-3 py-2 text-sm text-white font-mono focus:border-cyan-500 outline-none"
+                                                placeholder="例: DO-Khairol-260930-08"
+                                            />
+                                        </div>
+                                        <div>
+                                            <label className="text-[10px] font-bold text-slate-400 uppercase tracking-wider block mb-1">
+                                                客户名称 / Customer Name *
+                                            </label>
+                                            <input
+                                                type="text"
+                                                list="customer-suggestions-add-do"
+                                                value={manualCustomer}
+                                                onChange={(e) => {
+                                                    const val = e.target.value;
+                                                    setManualCustomer(val);
+                                                    const matchedCust = customerDB.find(c => (c.name || '').toLowerCase() === val.toLowerCase());
+                                                    if (matchedCust) {
+                                                        if (matchedCust.address && !manualAddress) setManualAddress(matchedCust.address);
+                                                        if (matchedCust.phone && !manualPhone) setManualPhone(matchedCust.phone);
+                                                        if (matchedCust.zone && !manualZone) setManualZone(matchedCust.zone);
+                                                    }
+                                                }}
+                                                className="w-full bg-slate-900 border border-slate-700 rounded-xl px-3 py-2 text-sm text-white focus:border-cyan-500 outline-none"
+                                                placeholder="输入客户名称或从历史客户选取"
+                                            />
+                                            <datalist id="customer-suggestions-add-do">
+                                                {customerDB.map((c, i) => (
+                                                    <option key={c.id || i} value={c.name} />
+                                                ))}
+                                            </datalist>
+                                        </div>
+                                        <div className="md:col-span-2">
+                                            <label className="text-[10px] font-bold text-slate-400 uppercase tracking-wider block mb-1">
+                                                送货地址 / Delivery Address
+                                            </label>
+                                            <textarea
+                                                rows={2}
+                                                value={manualAddress}
+                                                onChange={(e) => setManualAddress(e.target.value)}
+                                                className="w-full bg-slate-900 border border-slate-700 rounded-xl px-3 py-2 text-xs text-white focus:border-cyan-500 outline-none resize-none"
+                                                placeholder="详细送达地址 (例: No 12, Jalan Perindustrian...)"
+                                            />
+                                        </div>
+                                        <div>
+                                            <label className="text-[10px] font-bold text-slate-400 uppercase tracking-wider block mb-1">
+                                                联系电话 / Phone
+                                            </label>
+                                            <input
+                                                type="text"
+                                                value={manualPhone}
+                                                onChange={(e) => setManualPhone(e.target.value)}
+                                                className="w-full bg-slate-900 border border-slate-700 rounded-xl px-3 py-2 text-sm text-white font-mono focus:border-cyan-500 outline-none"
+                                                placeholder="例: 012-3456789"
+                                            />
+                                        </div>
+                                        <div>
+                                            <label className="text-[10px] font-bold text-slate-400 uppercase tracking-wider block mb-1">
+                                                送货区域 / Zone
+                                            </label>
+                                            <input
+                                                type="text"
+                                                value={manualZone}
+                                                onChange={(e) => setManualZone(e.target.value)}
+                                                className="w-full bg-slate-900 border border-slate-700 rounded-xl px-3 py-2 text-sm text-white focus:border-cyan-500 outline-none"
+                                                placeholder="例: Shah Alam, Klang, Central"
+                                            />
+                                        </div>
+                                        <div className="md:col-span-2">
+                                            <label className="text-[10px] font-bold text-slate-400 uppercase tracking-wider block mb-1">
+                                                调度备注 / Delivery Notes
+                                            </label>
+                                            <input
+                                                type="text"
+                                                value={manualNotes}
+                                                onChange={(e) => setManualNotes(e.target.value)}
+                                                className="w-full bg-slate-900 border border-slate-700 rounded-xl px-3 py-2 text-sm text-white focus:border-cyan-500 outline-none"
+                                                placeholder="交接注意事项或特殊装货要求"
+                                            />
+                                        </div>
+                                    </div>
+
+                                    {/* Manual Items */}
+                                    <div className="space-y-3 pt-2">
+                                        <div className="flex items-center justify-between">
+                                            <span className="text-xs font-bold text-slate-300 uppercase tracking-wider flex items-center gap-1.5">
+                                                <Package size={14} className="text-cyan-400" />
+                                                物料明细 (Items)
+                                            </span>
+                                            <button
+                                                type="button"
+                                                onClick={() => {
+                                                    setManualItems(prev => [
+                                                        ...prev,
+                                                        {
+                                                            sku: v2Items[0]?.sku || '',
+                                                            product: v2Items[0]?.name || '',
+                                                            quantity: 1,
+                                                            sourceLocation: getDefaultLocForOrigin(addDoTripTarget.origin),
+                                                            uom: 'Rolls'
+                                                        }
+                                                    ]);
+                                                }}
+                                                className="text-xs text-cyan-400 hover:text-cyan-300 font-bold flex items-center gap-1 cursor-pointer"
+                                            >
+                                                <Plus size={12} />
+                                                <span>+ 增加物料 / Add Item</span>
+                                            </button>
+                                        </div>
+
+                                        <div className="space-y-2">
+                                            {manualItems.map((it, idx) => (
+                                                <div key={idx} className="bg-slate-900/80 p-3 rounded-xl border border-slate-800 flex flex-col md:flex-row items-start md:items-center gap-3">
+                                                    <div className="flex-1 min-w-[200px]">
+                                                        <label className="text-[9px] text-slate-400 uppercase block mb-1">物料料号 (SKU) *</label>
+                                                        <select
+                                                            value={it.sku}
+                                                            onChange={(e) => {
+                                                                const selectedSku = e.target.value;
+                                                                const matched = v2Items.find(v => v.sku === selectedSku);
+                                                                setManualItems(prev => {
+                                                                    const copy = [...prev];
+                                                                    copy[idx] = {
+                                                                        ...copy[idx],
+                                                                        sku: selectedSku,
+                                                                        product: matched ? matched.name : copy[idx].product
+                                                                    };
+                                                                    return copy;
+                                                                });
+                                                            }}
+                                                            className="w-full bg-slate-950 border border-slate-700 rounded-lg px-2.5 py-1.5 text-xs text-white focus:border-cyan-500 outline-none"
+                                                        >
+                                                            {v2Items.map(item => (
+                                                                <option key={item.id || item.sku} value={item.sku}>
+                                                                    {item.sku} - {item.name}
+                                                                </option>
+                                                            ))}
+                                                        </select>
+                                                    </div>
+
+                                                    <div className="flex items-center gap-2 shrink-0">
+                                                        <div className="w-20">
+                                                            <label className="text-[9px] text-slate-500 uppercase block">数量</label>
+                                                            <input
+                                                                type="number"
+                                                                min="1"
+                                                                value={it.quantity}
+                                                                onChange={(e) => {
+                                                                    const val = Math.max(1, Number(e.target.value) || 1);
+                                                                    setManualItems(prev => {
+                                                                        const copy = [...prev];
+                                                                        copy[idx] = { ...copy[idx], quantity: val };
+                                                                        return copy;
+                                                                    });
+                                                                }}
+                                                                className="w-full bg-slate-950 border border-slate-700 rounded-lg px-2 py-1 text-xs text-white font-mono text-center"
+                                                            />
+                                                        </div>
+
+                                                        <div className="w-24">
+                                                            <label className="text-[9px] text-slate-500 uppercase block">包装单位</label>
+                                                            <select
+                                                                value={it.uom}
+                                                                onChange={(e) => {
+                                                                    const val = e.target.value;
+                                                                    setManualItems(prev => {
+                                                                        const copy = [...prev];
+                                                                        copy[idx] = { ...copy[idx], uom: val };
+                                                                        return copy;
+                                                                    });
+                                                                }}
+                                                                className="w-full bg-slate-950 border border-slate-700 rounded-lg px-2 py-1 text-xs text-white"
+                                                            >
+                                                                <option value="Rolls">Rolls</option>
+                                                                <option value="Carton">Carton</option>
+                                                                <option value="Pcs">Pcs</option>
+                                                                <option value="Unit">Unit</option>
+                                                            </select>
+                                                        </div>
+
+                                                        <div className="w-28">
+                                                            <label className="text-[9px] text-slate-500 uppercase block">出货仓库</label>
+                                                            <select
+                                                                value={it.sourceLocation}
+                                                                onChange={(e) => {
+                                                                    const val = e.target.value;
+                                                                    setManualItems(prev => {
+                                                                        const copy = [...prev];
+                                                                        copy[idx] = { ...copy[idx], sourceLocation: val };
+                                                                        return copy;
+                                                                    });
+                                                                }}
+                                                                className="w-full bg-slate-950 border border-slate-700 rounded-lg px-2 py-1 text-xs text-white"
+                                                            >
+                                                                {getAvailableWarehousesForOrigin(addDoTripTarget.origin).map(loc => (
+                                                                    <option key={loc} value={loc}>{loc}</option>
+                                                                ))}
+                                                            </select>
+                                                        </div>
+
+                                                        {manualItems.length > 1 && (
+                                                            <button
+                                                                type="button"
+                                                                onClick={() => {
+                                                                    setManualItems(prev => prev.filter((_, i) => i !== idx));
+                                                                }}
+                                                                className="p-1.5 text-rose-400 hover:text-rose-300 hover:bg-rose-500/10 rounded-lg mt-3.5 transition-colors cursor-pointer"
+                                                                title="删除物料"
+                                                            >
+                                                                <Trash2 size={14} />
+                                                            </button>
+                                                        )}
+                                                    </div>
+                                                </div>
+                                            ))}
+                                        </div>
+                                    </div>
+
+                                    {/* Submit button */}
+                                    <div className="pt-4 flex justify-end">
+                                        <button
+                                            type="button"
+                                            disabled={isSavingAddDo}
+                                            onClick={handleConfirmAddDoManual}
+                                            className="px-6 py-3 bg-gradient-to-r from-cyan-600 to-blue-600 hover:from-cyan-500 hover:to-blue-500 text-white rounded-xl text-sm font-black uppercase tracking-wider flex items-center gap-2 shadow-lg shadow-cyan-950/40 cursor-pointer active:scale-95 disabled:opacity-50 transition-all"
+                                        >
+                                            <CheckCircle size={16} />
+                                            <span>
+                                                {isSavingAddDo ? '正在加入车次...' : `确认手工加单 (第 ${addDoTripTarget.nextStopSeq} 站) / Save DO as Drop #${addDoTripTarget.nextStopSeq}`}
+                                            </span>
+                                        </button>
+                                    </div>
+                                </div>
+                            )}
+
+                            {/* TAB 3: MERGE UNASSIGNED */}
+                            {addDoModalTab === 'unassigned' && (
+                                <div className="space-y-4">
+                                    <div className="relative">
+                                        <Search className="absolute left-3 top-1/2 -translate-y-1/2 text-slate-500" size={16} />
+                                        <input
+                                            type="text"
+                                            value={unassignedSearch}
+                                            onChange={(e) => setUnassignedSearch(e.target.value)}
+                                            placeholder="搜索待分配单号、客户名称、送货地址..."
+                                            className="w-full bg-slate-900 border border-slate-700 rounded-xl pl-9 pr-4 py-2.5 text-xs text-white placeholder:text-slate-500 focus:border-cyan-500 outline-none"
+                                        />
+                                    </div>
+
+                                    <div className="space-y-2 max-h-[500px] overflow-y-auto custom-scrollbar">
+                                        {orders
+                                            .filter(o => !o.driverId && !o.trip_id && o.status !== 'Cancelled' && o.status !== 'Delivered')
+                                            .filter(o => {
+                                                const term = unassignedSearch.toLowerCase().trim();
+                                                if (!term) return true;
+                                                return (
+                                                    (o.orderNumber && o.orderNumber.toLowerCase().includes(term)) ||
+                                                    (o.customer && o.customer.toLowerCase().includes(term)) ||
+                                                    (o.deliveryAddress && o.deliveryAddress.toLowerCase().includes(term)) ||
+                                                    (o.zone && o.zone.toLowerCase().includes(term))
+                                                );
+                                            })
+                                            .map((unassignedOrder) => {
+                                                const totalRolls = (unassignedOrder.items || []).reduce((sum, it) => sum + (Number(it.quantity) || 0), 0);
+                                                return (
+                                                    <div
+                                                        key={unassignedOrder.id}
+                                                        className="p-3.5 bg-slate-900/80 hover:bg-slate-800/80 rounded-2xl border border-slate-800 flex items-center justify-between gap-4 transition-all"
+                                                    >
+                                                        <div className="min-w-0 flex-1">
+                                                            <div className="flex items-center gap-2">
+                                                                <span className="font-mono text-xs font-bold text-amber-400 bg-amber-500/10 px-2 py-0.5 rounded border border-amber-500/20">
+                                                                    #{unassignedOrder.orderNumber}
+                                                                </span>
+                                                                <span className="text-xs font-bold text-white truncate">
+                                                                    {unassignedOrder.customer || 'General Customer'}
+                                                                </span>
+                                                                {unassignedOrder.zone && (
+                                                                    <span className="text-[10px] font-bold text-slate-400 bg-slate-800 px-1.5 py-0.5 rounded">
+                                                                        {unassignedOrder.zone}
+                                                                    </span>
+                                                                )}
+                                                            </div>
+                                                            <div className="text-xs text-slate-400 mt-1 truncate">
+                                                                {unassignedOrder.deliveryAddress || '无送达地址'}
+                                                            </div>
+                                                            <div className="text-[10px] text-slate-500 mt-0.5 flex items-center gap-3">
+                                                                <span>物料: {(unassignedOrder.items || []).length} 项 ({totalRolls} 卷)</span>
+                                                                <span>交货日期: {unassignedOrder.deadline || unassignedOrder.orderDate || '-'}</span>
+                                                            </div>
+                                                        </div>
+
+                                                        <button
+                                                            type="button"
+                                                            disabled={isSavingAddDo}
+                                                            onClick={() => handleMergeUnassignedOrder(unassignedOrder)}
+                                                            className="px-3.5 py-2 bg-cyan-600 hover:bg-cyan-500 text-white rounded-xl text-xs font-bold flex items-center gap-1.5 shadow-md shadow-cyan-950/40 cursor-pointer active:scale-95 disabled:opacity-50 transition-all shrink-0"
+                                                        >
+                                                            <Plus size={14} className="stroke-[3]" />
+                                                            <span>并入第 {addDoTripTarget.nextStopSeq} 站</span>
+                                                        </button>
+                                                    </div>
+                                                );
+                                            })}
+
+                                        {orders.filter(o => !o.driverId && !o.trip_id && o.status !== 'Cancelled' && o.status !== 'Delivered').length === 0 && (
+                                            <div className="p-8 text-center text-slate-500 text-xs">
+                                                当前暂无未分配的送货单。您可以切换到「📸 AI 识单追加」或「✍️ 手工快速填单」录入新单。
+                                            </div>
+                                        )}
+                                    </div>
+                                </div>
+                            )}
+                        </div>
+                    </div>
+                </div>
+            )}
+
+            {/* Hidden Input for Add DO AI Upload */}
+            <input
+                ref={addDoFileInputRef}
+                type="file"
+                accept="application/pdf,image/*"
+                className="hidden"
+                onChange={handleAddDoFileSelect}
+            />
 
             {/* Hidden Input for Admin POD Upload */}
             <input

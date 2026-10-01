@@ -221,6 +221,7 @@ export interface ParsedDeliveryOrder {
     originalDoNumber?: string;
     aiSnapshot?: any;
     adminEdited?: boolean;
+    existingOrderId?: string;
 }
 
 export interface ParsedTripDOBatch {
