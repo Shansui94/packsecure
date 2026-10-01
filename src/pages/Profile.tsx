@@ -275,6 +275,20 @@ export const Profile: React.FC<ProfileProps> = ({ user, onNavigate }) => {
                 setEmergencyNameInput(data.emergency_name || user?.emergencyName || '');
                 setEmergencyRelationInput(data.emergency_relation || user?.emergencyRelation || '');
                 setEmergencyPhoneInput(data.emergency_phone || user?.emergencyPhone || '');
+            } else {
+                const { data: pubData } = await supabase
+                    .from('users_public')
+                    .select('*')
+                    .eq('id', userId)
+                    .maybeSingle();
+
+                if (pubData) {
+                    setExtraProfile(pubData);
+                    setPhoneInput(pubData.phone || user?.phone || '');
+                    setEmergencyNameInput(pubData.emergency_name || user?.emergencyName || '');
+                    setEmergencyRelationInput(pubData.emergency_relation || user?.emergencyRelation || '');
+                    setEmergencyPhoneInput(pubData.emergency_phone || user?.emergencyPhone || '');
+                }
             }
         } catch (e) {
             console.error('Error fetching extra profile:', e);
@@ -425,6 +439,21 @@ export const Profile: React.FC<ProfileProps> = ({ user, onNavigate }) => {
                 .or(`auth_user_id.eq.${userId},id.eq.${userId}`);
 
             if (error) throw error;
+
+            // Also keep users_public in sync
+            try {
+                await supabase
+                    .from('users_public')
+                    .update({
+                        phone: phoneInput.trim() || null,
+                        emergency_name: emergencyNameInput.trim() || null,
+                        emergency_relation: emergencyRelationInput.trim() || null,
+                        emergency_phone: emergencyPhoneInput.trim() || null
+                    })
+                    .eq('id', userId);
+            } catch (syncErr) {
+                console.warn('Sync to users_public non-blocking error:', syncErr);
+            }
 
             setProfileSuccessMsg(t('✅ 个人联系信息已成功更新！'));
             setIsEditingProfile(false);
