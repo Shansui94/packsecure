@@ -3324,6 +3324,22 @@ const DeliveryOrderManagement: React.FC<DeliveryOrderManagementProps> = ({ user 
         });
     };
 
+    const handleBatchSetParsedItemsLocation = (doIndex: number, newLocation: string) => {
+        setParsedTripBatch(prev => {
+            if (!prev) return null;
+            const orders = [...prev.deliveryOrders];
+            const order = { ...orders[doIndex], adminEdited: true };
+            const loc = normalizeWarehouseName(newLocation) || newLocation;
+            const items = (order.items || []).map(it => ({
+                ...it,
+                sourceLocation: loc
+            }));
+            order.items = items;
+            orders[doIndex] = order;
+            return { ...prev, deliveryOrders: orders };
+        });
+    };
+
     const handleUpdateParsedTripOrigin = (newOrigin: string) => {
         setParsedTripOrigin(newOrigin);
         if (parsedDriverId) {
@@ -9583,26 +9599,35 @@ const DeliveryOrderManagement: React.FC<DeliveryOrderManagementProps> = ({ user 
                                                                         </div>
                                                                     </div>
 
-                                                                    <div className="flex items-center gap-1 shrink-0">
-                                                                        <label className="text-[10px] font-bold text-slate-400 uppercase">
+                                                                    <div className="flex items-center gap-1.5 shrink-0">
+                                                                        <label className="text-[10px] font-black text-slate-400 uppercase tracking-wider">
                                                                             {t('Whs')}:
                                                                         </label>
-                                                                        <select
-                                                                            className="px-2 py-1 rounded-lg text-xs font-bold bg-slate-900 border border-slate-700 text-blue-400 outline-none focus:border-blue-500 cursor-pointer w-24 sm:w-28"
-                                                                            value={normalizeWarehouseName(it.sourceLocation || guessItemLocation(it, parsedTripOrigin)) || getDefaultLocForOrigin(parsedTripOrigin)}
-                                                                            onChange={e => handleUpdateParsedItemLocation(idx, itemIdx, e.target.value)}
-                                                                        >
-                                                                            {(() => {
-                                                                                const avail = getAvailableWarehousesForOrigin(parsedTripOrigin);
-                                                                                const curr = normalizeWarehouseName(it.sourceLocation || guessItemLocation(it, parsedTripOrigin)) || getDefaultLocForOrigin(parsedTripOrigin);
-                                                                                const list = avail.includes(curr) ? avail : [curr, ...avail].filter(Boolean);
-                                                                                return list.map(whs => (
-                                                                                    <option key={whs} value={whs} className="bg-slate-900 text-slate-100 font-bold">
-                                                                                        {whs}
-                                                                                    </option>
-                                                                                ));
-                                                                            })()}
-                                                                        </select>
+                                                                        <div className="relative inline-flex items-center">
+                                                                            <select
+                                                                                className={`appearance-none pl-2.5 pr-6 py-1 rounded-lg text-xs font-black border transition-all cursor-pointer outline-none focus:ring-1 focus:ring-blue-500 shadow-sm ${
+                                                                                    (it.sourceLocation || '').includes('Ali') ? 'bg-purple-950/80 border-purple-500/60 text-purple-300 hover:bg-purple-900/80' :
+                                                                                    (it.sourceLocation || '').includes('Corner') ? 'bg-emerald-950/80 border-emerald-500/60 text-emerald-300 hover:bg-emerald-900/80' :
+                                                                                    (it.sourceLocation || '').includes('SPD') ? 'bg-blue-950/80 border-blue-500/60 text-blue-300 hover:bg-blue-900/80' :
+                                                                                    'bg-amber-950/80 border-amber-500/60 text-amber-300 hover:bg-amber-900/80'
+                                                                                }`}
+                                                                                value={normalizeWarehouseName(it.sourceLocation || guessItemLocation(it, parsedTripOrigin)) || getDefaultLocForOrigin(parsedTripOrigin)}
+                                                                                onChange={e => handleUpdateParsedItemLocation(idx, itemIdx, e.target.value)}
+                                                                                title="点击直接切换仓库，无需手动删除文字"
+                                                                            >
+                                                                                {(() => {
+                                                                                    const avail = getAvailableWarehousesForOrigin(parsedTripOrigin);
+                                                                                    const curr = normalizeWarehouseName(it.sourceLocation || guessItemLocation(it, parsedTripOrigin)) || getDefaultLocForOrigin(parsedTripOrigin);
+                                                                                    const list = avail.includes(curr) ? avail : [curr, ...avail].filter(Boolean);
+                                                                                    return list.map(whs => (
+                                                                                        <option key={whs} value={whs} className="bg-slate-900 text-slate-100 font-bold py-1">
+                                                                                            {whs}
+                                                                                        </option>
+                                                                                    ));
+                                                                                })()}
+                                                                            </select>
+                                                                            <ChevronDown size={12} className="absolute right-1.5 text-slate-400 pointer-events-none" />
+                                                                        </div>
                                                                     </div>
 
                                                                     <button
@@ -9622,14 +9647,44 @@ const DeliveryOrderManagement: React.FC<DeliveryOrderManagementProps> = ({ user 
 
                                                 {/* Bottom Action Toolbar for each DO */}
                                                 <div className="flex flex-wrap items-center justify-between gap-2 pt-1 border-t border-slate-800/40">
-                                                    <button
-                                                        type="button"
-                                                        onClick={() => handleAddNewParsedItem(idx)}
-                                                        className="px-3 py-1.5 rounded-lg bg-blue-600/20 hover:bg-blue-600/30 border border-blue-500/40 text-blue-300 font-bold text-xs flex items-center gap-1.5 transition-all active:scale-95"
-                                                    >
-                                                        <Plus size={13} />
-                                                        <span>{t('+ 添加货品 (+ Add Product)')}</span>
-                                                    </button>
+                                                    <div className="flex flex-wrap items-center gap-2">
+                                                        <button
+                                                            type="button"
+                                                            onClick={() => handleAddNewParsedItem(idx)}
+                                                            className="px-3 py-1.5 rounded-lg bg-blue-600/20 hover:bg-blue-600/30 border border-blue-500/40 text-blue-300 font-bold text-xs flex items-center gap-1.5 transition-all active:scale-95 cursor-pointer"
+                                                        >
+                                                            <Plus size={13} />
+                                                            <span>{t('+ 添加货品 (+ Add Product)')}</span>
+                                                        </button>
+
+                                                        {/* Quick Batch Set Warehouse for All Items in this DO */}
+                                                        {doItem.items && doItem.items.length > 1 && (
+                                                            <div className="flex items-center gap-1.5 bg-slate-900/90 border border-slate-800 rounded-xl px-2.5 py-1 text-xs">
+                                                                <span className="text-slate-400 font-bold text-[11px] flex items-center gap-1">
+                                                                    <Building2 size={12} className="text-cyan-400" />
+                                                                    <span>本单全设为:</span>
+                                                                </span>
+                                                                <div className="flex items-center gap-1">
+                                                                    {getAvailableWarehousesForOrigin(parsedTripOrigin).map(whs => (
+                                                                        <button
+                                                                            key={whs}
+                                                                            type="button"
+                                                                            onClick={() => handleBatchSetParsedItemsLocation(idx, whs)}
+                                                                            className={`px-2 py-0.5 rounded-md text-[10px] font-black border transition-all cursor-pointer active:scale-95 ${
+                                                                                whs.includes('Ali') ? 'bg-purple-500/15 hover:bg-purple-500/30 border-purple-500/40 text-purple-300' :
+                                                                                whs.includes('Corner') ? 'bg-emerald-500/15 hover:bg-emerald-500/30 border-emerald-500/40 text-emerald-300' :
+                                                                                whs.includes('SPD') ? 'bg-blue-500/15 hover:bg-blue-500/30 border-blue-500/40 text-blue-300' :
+                                                                                'bg-amber-500/15 hover:bg-amber-500/30 border-amber-500/40 text-amber-300'
+                                                                            }`}
+                                                                            title={`一键将本单全部 ${doItem.items?.length} 件商品仓库设为 ${whs}`}
+                                                                        >
+                                                                            {whs}
+                                                                        </button>
+                                                                    ))}
+                                                                </div>
+                                                            </div>
+                                                        )}
+                                                    </div>
                                                     {doItem.items && doItem.items.length > 0 && (
                                                         <button
                                                             type="button"
