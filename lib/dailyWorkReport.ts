@@ -81,22 +81,56 @@ export async function collectDailyWorkData(targetDate?: string) {
 
   const tickets = rawTickets || [];
 
-  // 4. Logistics & Operations Snapshot
-  const { data: orders } = await supabase
+  // 4. Logistics & Operations Snapshot (Rigorous & Scientifically Separated)
+  const { data: rawOrders } = await supabase
     .from('sales_orders')
-    .select('id, status')
+    .select('id, status, created_at')
     .gte('created_at', startIso);
 
-  const totalOrders = orders?.length || 0;
-  const deliveredOrders = orders?.filter((o: any) => o.status === 'Delivered').length || 0;
+  const orders = rawOrders || [];
+  const deliveredOrders = orders.filter((o: any) => o.status === 'Delivered').length;
+  const loadedOrders = orders.filter((o: any) => o.status === 'Loaded' || o.status === 'In-Transit').length;
+  const plannedOrders = orders.filter((o: any) => o.status === 'Planned').length;
 
-  const { data: trips } = await supabase
+  // Real actively dispatched orders for today = delivered + currently loaded
+  const activeDispatchedOrders = deliveredOrders + loadedOrders;
+  const realDeliveryRate = activeDispatchedOrders > 0
+    ? Math.round((deliveredOrders / activeDispatchedOrders) * 100)
+    : 100;
+
+  // Trips from trips_v2
+  const { data: rawTrips } = await supabase
     .from('trips_v2')
-    .select('id, status')
+    .select(`
+      id, trip_number, status, lorry_id, driver_id, started_at, completed_at,
+      lorries(plate_number)
+    `)
     .gte('created_at', startIso);
 
-  const totalTrips = trips?.length || 0;
-  const completedTrips = trips?.filter((t: any) => t.status === 'Completed').length || 0;
+  const validTrips = (rawTrips || []).filter((t: any) => 
+    !t.trip_number?.toUpperCase().includes('TEST') && t.status !== 'Cancelled'
+  );
+
+  const inTransitTrips = validTrips.filter((t: any) => t.status === 'In Transit');
+  const completedTrips = validTrips.filter((t: any) => t.status === 'Completed');
+  const preparedTrips = validTrips.filter((t: any) => t.status === 'Prepared');
+  const planningTrips = validTrips.filter((t: any) => t.status === 'Planning');
+
+  // Actual dispatched trips that have truly departed
+  const actualDispatchedTrips = inTransitTrips.length + completedTrips.length;
+  const totalPlannedTrips = validTrips.length;
+
+  // Dispatch execution rate = actual departed trips / total planned trips
+  const dispatchRate = totalPlannedTrips > 0
+    ? Math.round((actualDispatchedTrips / totalPlannedTrips) * 100)
+    : 0;
+
+  // Active Lorries currently on the road
+  const activePlates = Array.from(new Set(
+    inTransitTrips
+      .map((t: any) => t.lorries?.plate_number)
+      .filter(Boolean)
+  ));
 
   // 5. Existing DevLog record if already saved
   const { data: devLog } = await supabase
@@ -112,10 +146,20 @@ export async function collectDailyWorkData(targetDate?: string) {
     doneTasks: doneTasks || [],
     tickets,
     operations: {
-      totalOrders,
+      totalOrders: orders.length,
       deliveredOrders,
-      totalTrips,
-      completedTrips
+      loadedOrders,
+      plannedOrders,
+      activeDispatchedOrders,
+      realDeliveryRate,
+      totalPlannedTrips,
+      actualDispatchedTrips,
+      inTransitTrips: inTransitTrips.length,
+      completedTrips: completedTrips.length,
+      preparedTrips: preparedTrips.length,
+      planningTrips: planningTrips.length,
+      dispatchRate,
+      activePlates
     },
     devLog
   };
@@ -171,10 +215,10 @@ export async function buildDailyWorkReportText(targetDate?: string, customNotes?
     ticketLines.push('• 现场群聊全天运行平稳，无紧急阻断级报障。');
   }
 
-  // Delivery stats
-  const deliveryRate = operations.totalOrders > 0
-    ? Math.round((operations.deliveredOrders / operations.totalOrders) * 100)
-    : 100;
+  // Active lorry plates
+  const activePlatesStr = operations.activePlates.length > 0
+    ? ` (${operations.activePlates.join(', ')})`
+    : '';
 
   // Custom user notes if provided
   const customSection = customNotes?.trim()
@@ -194,10 +238,14 @@ export async function buildDailyWorkReportText(targetDate?: string, customNotes?
     `🚨 *三、 WhatsApp 现场报障与决策闭环 (Field Triage)*\n` +
     `${ticketLines.join('\n')}\n` +
     `_(搭载 Gemini 3.1 Pro 现场排障引擎，自动过滤日常闲聊，仅捕获真实验收/装车阻断)_\n\n` +
-    `🚚 *四、 全厂运营与物流执行快报 (Operations)*\n` +
-    `• 今日物流总出货: *${operations.totalOrders}* 票 (已送达 *${operations.deliveredOrders}* 票, 送达率 *${deliveryRate}%*)\n` +
-    `• 车队出车总计: *${operations.totalTrips}* 趟 (已回厂 *${operations.completedTrips}* 趟)\n` +
-    `• 车间生产与设备: 各主要机台正常排产运转，次品率处于受控范围\n` +
+    `🚚 *四、 全厂运营与物流出车快报 (Fleet & Operations)*\n` +
+    `• 今日出货送达率: *${operations.realDeliveryRate}%* (实际装车出库 *${operations.activeDispatchedOrders}* 票：已送达 *${operations.deliveredOrders}* 票, 派送中 *${operations.loadedOrders}* 票)\n` +
+    `• 今日排单与备货: *${operations.plannedOrders}* 票 (计划排程备货中，尚未发车)\n` +
+    `• 车队出车执行率: *${operations.dispatchRate}%* (实际发车出动 *${operations.actualDispatchedTrips}* 趟 / 计划总车次 *${operations.totalPlannedTrips}* 趟)\n` +
+    `  - 🚚 实际在途中: *${operations.inTransitTrips}* 趟${activePlatesStr}\n` +
+    `  - ✅ 已回厂结案: *${operations.completedTrips}* 趟\n` +
+    `  - ⏳ 筹备与排程: *${operations.planningTrips + operations.preparedTrips}* 趟 (备货 *${operations.preparedTrips}* 趟, 排单中 *${operations.planningTrips}* 趟)\n` +
+    `• 车间生产与设备: 各主要机台正常排产运转，废料次品率处于受控范围\n` +
     customSection +
     `\n🎯 *五、 明日技术推进与系统规划*\n` +
     `1. 持续跟踪车间与车队在新版本报障箱和任务闭环下的实际流转体验。\n` +

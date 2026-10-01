@@ -1,8 +1,9 @@
 import { useState, useEffect, useRef, useCallback } from 'react';
 import { Stage, Layer, Rect, Text, Group, Line, Circle, Image as KonvaImage } from 'react-konva';
-import { Settings, ZoomIn, ZoomOut, Maximize, Plus, Save, Camera, MousePointer2, List, Map, Grid3X3, Loader2, Copy, ClipboardPaste, History, Lock, Upload } from 'lucide-react';
+import { Settings, ZoomIn, ZoomOut, Maximize, Plus, Save, Camera, MousePointer2, List, Map, Grid3X3, Loader2, Copy, ClipboardPaste, History, Lock, Upload, Box } from 'lucide-react';
 import { supabase } from '../services/supabase';
 import type { User } from '../types';
+import { Factory3DViewer } from '../components/3d/Factory3DViewer';
 
 function canEditFloorPlan(user?: User | null): boolean {
     if (!user) return false;
@@ -96,7 +97,7 @@ export default function FloorPlan({ user }: FloorPlanProps) {
     const [hoveredData, setHoveredData] = useState<{item: FloorItem, x: number, y: number} | null>(null);
     
     // UI Toggles
-    const [viewMode, setViewMode] = useState<'map' | 'table'>('map');
+    const [viewMode, setViewMode] = useState<'map' | '3d' | 'table'>('map');
     const [gridSnapEnabled, setGridSnapEnabled] = useState(true);
     const [isSpacePressed, setIsSpacePressed] = useState(false);
 
@@ -866,13 +867,41 @@ export default function FloorPlan({ user }: FloorPlanProps) {
                 </div>
                 
                 <div className="flex flex-wrap gap-2 justify-end">
-                    <button 
-                        onClick={() => setViewMode(v => v === 'map' ? 'table' : 'map')}
-                        className="px-4 py-2 bg-indigo-50 hover:bg-indigo-100 text-indigo-700 rounded-lg font-medium shadow-sm flex items-center gap-2 transition-colors border border-indigo-200"
-                        title="Toggle Table View"
-                    >
-                        {viewMode === 'map' ? <><List size={18} /> Table View</> : <><Map size={18} /> Map View</>}
-                    </button>
+                    <div className="flex items-center bg-slate-100 p-1 rounded-xl border border-slate-200 shadow-sm">
+                        <button
+                            onClick={() => setViewMode('map')}
+                            className={`px-3 py-1.5 rounded-lg text-xs font-semibold flex items-center gap-1.5 transition-all ${
+                                viewMode === 'map' 
+                                    ? 'bg-white text-blue-700 shadow-sm' 
+                                    : 'text-slate-600 hover:text-slate-900'
+                            }`}
+                            title="2D 平面布局图"
+                        >
+                            <Map size={15} /> 2D 平面
+                        </button>
+                        <button
+                            onClick={() => setViewMode('3d')}
+                            className={`px-3 py-1.5 rounded-lg text-xs font-semibold flex items-center gap-1.5 transition-all ${
+                                viewMode === '3d' 
+                                    ? 'bg-blue-600 text-white shadow-sm' 
+                                    : 'text-slate-600 hover:text-slate-900'
+                            }`}
+                            title="3D 搬厂数字孪生与水电风推演"
+                        >
+                            <Box size={15} /> 3D 搬厂与孪生
+                        </button>
+                        <button
+                            onClick={() => setViewMode('table')}
+                            className={`px-3 py-1.5 rounded-lg text-xs font-semibold flex items-center gap-1.5 transition-all ${
+                                viewMode === 'table' 
+                                    ? 'bg-white text-indigo-700 shadow-sm' 
+                                    : 'text-slate-600 hover:text-slate-900'
+                            }`}
+                            title="设备资产列表"
+                        >
+                            <List size={15} /> 资产清单
+                        </button>
+                    </div>
                     <button 
                         onClick={handleExport}
                         className="px-4 py-2 bg-slate-100 hover:bg-slate-200 text-slate-700 rounded-lg font-medium shadow-sm flex items-center gap-2 transition-colors"
@@ -1055,6 +1084,16 @@ export default function FloorPlan({ user }: FloorPlanProps) {
                                     )}
                                 </tbody>
                             </table>
+                        </div>
+                    ) : viewMode === '3d' ? (
+                        <div className="flex-1 w-full h-full relative">
+                            <Factory3DViewer 
+                                zone={activeFloor}
+                                items={activeMachines}
+                                selectedId={selectedId}
+                                onSelectItem={setSelectedId}
+                                canEdit={canEditLayout}
+                            />
                         </div>
                     ) : (
                         <>

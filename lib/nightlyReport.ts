@@ -138,6 +138,11 @@ export async function generateNightlyReport(): Promise<{ reportText: string; sum
     ? lowStock.map((s: any) => `  ⚠️ ${s.item_id}: 剩余 ${s.quantity} (${s.factory_id || 'Taiping'})`).join('\n')
     : '  ✅ 原材料与成品库存充足';
 
+  const actualDispatchedTrips = completedTrips.length + inTransitTrips.length;
+  const dispatchRate = validTrips.length > 0
+    ? Math.round((actualDispatchedTrips / validTrips.length) * 100)
+    : 0;
+
   // ── 5. FORMAT EXECUTIVE NIGHTLY REPORT TEXT ──────────────────────────────────
   const reportText = `🌙 *Packsecure OS 运营晚报 / Laporan Harian*\n` +
     `📅 日期: ${todayDisplay} (22:00 MYT)\n` +
@@ -145,7 +150,8 @@ export async function generateNightlyReport(): Promise<{ reportText: string; sum
     `🚚 *一、 物流派送与车次执行 (Fleet & Delivery)*\n` +
     `• 今日出货送达率: *${realDeliveryRate}%* (实际装车出库 *${activeDispatchedOrders}* 票, 已送达 *${deliveredCount}* 票, 派送中 *${loadedCount}* 票)\n` +
     `• 今日新增排单: *${plannedCount}* 票 (备货待安排)${cancelledOrdersCount > 0 ? ` • 取消: ${cancelledOrdersCount} 票` : ''}\n` +
-    `• 车次总计: *${validTrips.length}* 趟 (已回厂 *${completedTrips.length}* 趟, 实际在途 *${inTransitTrips.length}* 趟, 备货待发 *${preparedTrips.length}* 趟, 排程中 *${planningTrips.length}* 趟)\n\n` +
+    `• 车队出车执行率: *${dispatchRate}%* (实际发车出动 *${actualDispatchedTrips}* 趟 / 计划总车次 *${validTrips.length}* 趟)\n` +
+    `  - 🚚 实际在途: *${inTransitTrips.length}* 趟 | ✅ 已回厂: *${completedTrips.length}* 趟 | ⏳ 筹备与排单: *${preparedTrips.length + planningTrips.length}* 趟\n\n` +
     `📋 *当前在途与完成车次明细:*\n` +
     `${inTransitLines.length > 0 ? inTransitLines.join('\n') : '  • 当前无实际在途车次'}\n` +
     `${completedLines.length > 0 ? completedLines.join('\n') : ''}\n\n` +
