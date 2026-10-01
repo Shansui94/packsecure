@@ -1,6 +1,6 @@
 import React, { useState, useEffect, useRef } from 'react';
 import { supabase } from '../services/supabase';
-import { Truck, CheckCircle, Package, ChevronRight, ChevronDown, ChevronUp, X, RefreshCw, Camera, Image as ImageIcon, QrCode, Upload, Phone, MapPin, ExternalLink, MessageCircle } from 'lucide-react';
+import { Truck, CheckCircle, Package, ChevronRight, ChevronDown, ChevronUp, X, RefreshCw, Camera, Image as ImageIcon, QrCode, Upload, Phone, MapPin, ExternalLink, MessageCircle, FileText } from 'lucide-react';
 import { SalesOrder } from '../types';
 import { Scanner } from '@yudiel/react-qr-scanner';
 import { parsePrepPhotos } from '../utils/prepPhotos';
@@ -297,9 +297,11 @@ const DriverDelivery: React.FC<DriverDeliveryProps> = ({ user, onNavigate }) => 
     const [laterUploading, setLaterUploading] = useState(false);
     const laterFileInputRef = useRef<HTMLInputElement>(null);
 
-    // Direct Card Delivery Photo Upload State
+    // Direct Card Delivery Photo Upload State (Dual Target: Product / DO)
     const [directUploadingOrderId, setDirectUploadingOrderId] = useState<string | null>(null);
+    const [directUploadingTarget, setDirectUploadingTarget] = useState<'product' | 'do' | null>(null);
     const directDeliveryOrderRef = useRef<SalesOrder | null>(null);
+    const directDeliveryTargetRef = useRef<'product' | 'do'>('product');
     const directDeliveryInputRef = useRef<HTMLInputElement>(null);
 
     // Helpers to check order delivery status (multi-drop aware: 1 DO = 1 drop)
@@ -1369,19 +1371,26 @@ const DriverDelivery: React.FC<DriverDeliveryProps> = ({ user, onNavigate }) => 
         }
     };
 
-    // Direct Delivery Photo Upload Handlers (Skip modal navigation)
-    const handleTriggerDirectDeliveryUpload = (order: SalesOrder) => {
+    // Direct Delivery Photo Upload Handlers (Dual Target: Product / DO - Skip modal navigation)
+    const handleTriggerDirectPhoto = (order: SalesOrder, targetType: 'product' | 'do') => {
         directDeliveryOrderRef.current = order;
+        directDeliveryTargetRef.current = targetType;
         directDeliveryInputRef.current?.click();
+    };
+
+    const handleTriggerDirectDeliveryUpload = (order: SalesOrder) => {
+        handleTriggerDirectPhoto(order, 'do');
     };
 
     const handleDirectDeliveryFileChange = async (e: React.ChangeEvent<HTMLInputElement>) => {
         const file = e.target.files?.[0];
         const targetOrder = directDeliveryOrderRef.current;
+        const targetType = directDeliveryTargetRef.current || 'product';
         if (!file || !targetOrder) return;
 
         try {
             setDirectUploadingOrderId(targetOrder.id);
+            setDirectUploadingTarget(targetType);
 
             // 1. Compress image
             const compressedBase64 = await compressImage(file);
@@ -1414,23 +1423,27 @@ const DriverDelivery: React.FC<DriverDeliveryProps> = ({ user, onNavigate }) => 
             const shortTime = now.toLocaleDateString('en-GB', { day: '2-digit', month: '2-digit' }) + ' ' +
                               now.toLocaleTimeString('en-GB', { hour: '2-digit', minute: '2-digit' });
 
+            const typeLabel = targetType === 'do' ? 'DO PROOF / BUKTI DO' : 'CARGO PROOF / BUKTI BARANG';
             const lines = [
                 `SO: ${targetOrder.orderNumber} | Plate: ${currentLorry?.plate_number || 'No Lorry'}`,
-                `Time: ${timeStr} | Type: POD / BUKTI HANTARAN`,
+                `Time: ${timeStr} | Type: ${typeLabel}`,
                 `Location: ${gpsStr}`
             ];
             const watermarkedBase64 = await watermarkImage(base64Only, lines);
 
-            // 4. Extract DO Number with AI in background
+            // 4. Extract DO Number with AI in background if target is 'do'
             let extractedDoNumber = '';
-            try {
-                extractedDoNumber = await extractDoNumberFromAi(watermarkedBase64);
-            } catch (aiErr) {
-                console.warn("Direct upload AI DO extraction notice:", aiErr);
+            if (targetType === 'do') {
+                try {
+                    extractedDoNumber = await extractDoNumberFromAi(watermarkedBase64);
+                } catch (aiErr) {
+                    console.warn("Direct upload AI DO extraction notice:", aiErr);
+                }
             }
 
             // 5. Upload to Supabase Storage
-            const fileName = `unload_pod_${targetOrder.orderNumber}_${Date.now()}.jpg`;
+            const filePrefix = targetType === 'do' ? 'unload_do' : 'unload_prod';
+            const fileName = `${filePrefix}_${targetOrder.orderNumber}_${Date.now()}.jpg`;
             const blob = dataURLtoBlob(`data:image/jpeg;base64,${watermarkedBase64}`);
             const { error: uploadError } = await supabase.storage
                 .from('work-photos')
@@ -1447,24 +1460,6 @@ const DriverDelivery: React.FC<DriverDeliveryProps> = ({ user, onNavigate }) => 
                 .eq('id', targetOrder.id)
                 .single();
             if (fetchErr) throw fetchErr;
-
-            const currentPhotos = freshOrder.pod_photo_url ? freshOrder.pod_photo_url.split(',') : [];
-            let updatedPodUrl = '';
-            
-            // Check if an empty DO slot exists to be backfilled
-            const missingDoIndex = currentPhotos.findIndex((url: string, idx: number) => idx % 2 === 0 && (!url || !url.trim()));
-            if (missingDoIndex !== -1) {
-                currentPhotos[missingDoIndex] = publicUrl;
-                if (missingDoIndex + 1 < currentPhotos.length && (!currentPhotos[missingDoIndex + 1] || !currentPhotos[missingDoIndex + 1].trim())) {
-                    currentPhotos[missingDoIndex + 1] = publicUrl;
-                }
-                updatedPodUrl = currentPhotos.join(',');
-            } else {
-                // Append pair [publicUrl, publicUrl] so both DO and Product slots are filled
-                const newPair = [publicUrl, publicUrl];
-                const existing = freshOrder.pod_photo_url ? freshOrder.pod_photo_url.trim().split(',').filter(Boolean) : [];
-                updatedPodUrl = [...existing, ...newPair].join(',');
-            }
 
             let isMultiOrder = false;
             const tripId = (freshOrder as any).trip_id;
@@ -1485,20 +1480,51 @@ const DriverDelivery: React.FC<DriverDeliveryProps> = ({ user, onNavigate }) => 
             }
 
             const totalDrops = isMultiOrder ? 1 : Math.max(1, Number(freshOrder.trip_drop_count) || 1);
-            const filledDoCount = updatedPodUrl.split(',').filter((url: string, idx: number) => idx % 2 === 0 && Boolean(url && url.trim())).length;
+            const currentPhotos = freshOrder.pod_photo_url ? freshOrder.pod_photo_url.split(',') : [];
+            const completedDropsBefore = countCompletedDrops(freshOrder.pod_photo_url);
+
+            const minSlots = Math.max(2, totalDrops * 2);
+            while (currentPhotos.length < minSlots) currentPhotos.push('');
+
+            let targetDropIdx = 0;
+            if (!isMultiOrder && totalDrops > 1) {
+                if (completedDropsBefore === 0) {
+                    targetDropIdx = 0;
+                } else if (completedDropsBefore < totalDrops) {
+                    const prevDo = currentPhotos[(completedDropsBefore - 1) * 2];
+                    if (!prevDo || !prevDo.trim()) {
+                        targetDropIdx = completedDropsBefore - 1;
+                    } else {
+                        targetDropIdx = completedDropsBefore;
+                    }
+                } else {
+                    targetDropIdx = Math.max(0, totalDrops - 1);
+                }
+            }
+
+            const targetSlot = targetType === 'do' ? targetDropIdx * 2 : targetDropIdx * 2 + 1;
+            currentPhotos[targetSlot] = publicUrl;
+            const updatedPodUrl = currentPhotos.join(',');
+
+            const filledDoCount = currentPhotos.filter((url: string, idx: number) => idx % 2 === 0 && Boolean(url && url.trim())).length;
             const completedDrops = countCompletedDrops(updatedPodUrl);
-            const isAllDropsCompleted = (isMultiOrder && completedDrops >= 1 && filledDoCount >= 1) || (completedDrops >= totalDrops && filledDoCount >= totalDrops);
+
+            // An order is delivered if DO is present and all drops completed!
+            const hasSignedDo = (totalDrops === 1 || isMultiOrder) ? filledDoCount >= 1 : filledDoCount >= totalDrops;
+            const isAllDropsCompleted = (isMultiOrder && hasSignedDo) || (completedDrops >= totalDrops && hasSignedDo);
 
             // Format notes
             let updatedNotes = freshOrder.notes || '';
             const cleanNotes = updatedNotes.replace(/\[AI DO:\s*.*?\]/g, '').trim();
             const aiTag = extractedDoNumber ? `\n[AI DO: ${extractedDoNumber}]` : '';
-            const proofTag = `\n[${shortTime}] Proof uploaded (Direct)`;
-            
+            const proofTag = `\n[${shortTime}] ${targetType === 'do' ? 'DO Proof' : 'Cargo Proof'} uploaded (Direct)`;
+
             let newNotes = cleanNotes ? `${cleanNotes}${proofTag}${aiTag}` : `[${shortTime}] Proof uploaded (Direct)${aiTag}`;
             if (isAllDropsCompleted && (newNotes.includes('Menunggu gambar DO') || newNotes.includes('Pending signed DO'))) {
                 newNotes = newNotes.replace(/\[.*?Menunggu gambar DO.*?\]/g, '').replace(/\[.*?Pending signed DO.*?\]/g, '').trim();
                 newNotes += `\n[${shortTime}] ✅ DO telah dibekalkan. Penghantaran lengkap.`;
+            } else if (!hasSignedDo && !newNotes.includes('Menunggu gambar DO')) {
+                newNotes += `\n[Menunggu gambar DO / Pending signed DO]`;
             }
 
             const nextStatus = isAllDropsCompleted ? 'Delivered' : 'Loaded';
@@ -1516,31 +1542,55 @@ const DriverDelivery: React.FC<DriverDeliveryProps> = ({ user, onNavigate }) => 
                 .eq('id', targetOrder.id);
             if (updateErr) throw updateErr;
 
-            // 8. If trip is all done, update trips_v2
+            // 8. If trip is all done, update trips_v2 & trip_stops_v2
             if (freshOrder.trip_id) {
-                const { data: siblingOrders } = await supabase
-                    .from('sales_orders')
-                    .select('id, status')
-                    .eq('trip_id', freshOrder.trip_id);
-                const allStopsDone = (siblingOrders || []).every(s => (s.id === targetOrder.id ? nextStatus === 'Delivered' : s.status === 'Delivered' || s.status === 'Cancelled'));
-                if (allStopsDone) {
+                try {
                     await supabase
-                        .from('trips_v2')
+                        .from('trip_stops_v2')
                         .update({
-                            status: 'Completed',
-                            completed_at: new Date().toISOString()
+                            status: nextStatus === 'Delivered' ? 'Completed' : 'Delivered',
+                            completed_at: new Date().toISOString(),
+                            pod_photos: currentPhotos.filter(Boolean),
+                            pod_notes: `Direct ${targetType.toUpperCase()}`
                         })
-                        .eq('id', freshOrder.trip_id);
+                        .eq('sales_order_id', targetOrder.id);
+
+                    const { data: siblingOrders } = await supabase
+                        .from('sales_orders')
+                        .select('id, status')
+                        .eq('trip_id', freshOrder.trip_id);
+                    const allStopsDone = (siblingOrders || []).every(s => (s.id === targetOrder.id ? nextStatus === 'Delivered' : s.status === 'Delivered' || s.status === 'Cancelled'));
+                    if (allStopsDone) {
+                        await supabase
+                            .from('trips_v2')
+                            .update({
+                                status: 'Completed',
+                                completed_at: new Date().toISOString()
+                            })
+                            .eq('id', freshOrder.trip_id);
+                    }
+                } catch (syncErr) {
+                    console.warn("Trip sync notice:", syncErr);
                 }
             }
 
-            logActivity('Confirm Delivery (Direct)', `Delivered SO: ${targetOrder.orderNumber}`, user);
-            alert("✅ Gambar berjaya dimuat naik & penghantaran disahkan! / Photo uploaded & delivery confirmed!");
+            logActivity('Confirm Delivery (Direct)', `Delivered ${targetType} for SO: ${targetOrder.orderNumber}`, user);
+            
+            // Audio ding & feedback
+            if (isAllDropsCompleted) {
+                try {
+                    const audio = new Audio('https://assets.mixkit.co/active_storage/sfx/2869/2869-preview.mp3');
+                    audio.play().catch(() => {});
+                } catch (e) {}
+                alert("🎉 HANTARAN BERJAYA!\n\nGambar DO bercop & barang telah disahkan lengkap.");
+            }
+
             fetchTasks();
         } catch (err: any) {
             alert("Gagal memuat naik gambar / Failed to upload photo: " + err.message);
         } finally {
             setDirectUploadingOrderId(null);
+            setDirectUploadingTarget(null);
             directDeliveryOrderRef.current = null;
             if (e.target) e.target.value = '';
         }
@@ -2866,34 +2916,171 @@ const DriverDelivery: React.FC<DriverDeliveryProps> = ({ user, onNavigate }) => 
                             const isWaitingDo = Boolean(order.notes && (order.notes.includes('Menunggu gambar DO') || order.notes.includes('Pending signed DO'))) || (rawPhotos.length > 0 && validDoCount < btnTotalDrops);
                             const isDirectUploadingThis = directUploadingOrderId === order.id;
 
+                            // Calculate current drop slots: Even index = DO, Odd index = Product (Barang)
+                            const curDropIdx = isWaitingDo ? Math.max(0, btnDoneDrops - 1) : Math.min(btnDoneDrops, btnTotalDrops - 1);
+                            const targetDoIndex = curDropIdx * 2;
+                            const targetProdIndex = targetDoIndex + 1;
+                            const currentDoUrl = (rawPhotos[targetDoIndex] || '').trim();
+                            const currentProdUrl = (rawPhotos[targetProdIndex] || '').trim();
+                            const hasDoPhoto = Boolean(currentDoUrl);
+                            const hasProdPhoto = Boolean(currentProdUrl);
+
                             return (
-                                <div className="space-y-2">
-                                    {isWaitingDo && (
+                                <div className="space-y-2.5">
+                                    {isWaitingDo && !hasDoPhoto && (
                                         <div className="bg-amber-500/15 border border-amber-500/40 text-amber-300 p-2.5 rounded-xl flex items-center gap-2 text-xs font-bold animate-pulse">
                                             <span>⚠️</span>
-                                            <span>Perlu muat naik gambar DO bertandatangan / Please upload signed DO photo</span>
+                                            <span>Sila ambil gambar DO bercop untuk lengkapkan penghantaran / Please snap signed DO photo</span>
                                         </div>
                                     )}
-                                    <button
-                                        onClick={() => handleOpenUnloadModal(order)}
-                                        data-action="OPEN_UNLOAD_MODAL"
-                                        data-action-name="打开送货卸货与拍照窗口"
-                                        data-target={`工单 #${order.orderNumber || order.id}`}
-                                        className="w-full py-4 bg-emerald-600 hover:bg-emerald-500 text-white rounded-xl font-black uppercase text-sm tracking-widest flex items-center justify-center gap-2.5 shadow-lg shadow-emerald-950/40 active:scale-95 transition-all cursor-pointer"
-                                    >
-                                        <Camera size={20} className="text-emerald-200" />
-                                        <span>
-                                            {isWaitingDo
-                                                ? '📸 MUAT NAIK GAMBAR DO / UPLOAD DO'
-                                                : (btnTotalDrops > 1
-                                                    ? `📸 SAHKAN HANTARAN (Drop ${Math.min(btnDoneDrops + 1, btnTotalDrops)}/${btnTotalDrops})`
-                                                    : '📸 SAHKAN HANTARAN / CONFIRM DELIVERY')}
+
+                                    {/* 🎯 左边拍到货，右边拍 DO 极速双直达按钮 */}
+                                    <div className="grid grid-cols-2 gap-2.5">
+                                        {/* 1. 左边：拍到货 (Gambar Barang) */}
+                                        {hasProdPhoto ? (
+                                            <div className="relative py-2 px-2.5 bg-slate-900/90 border border-emerald-500/50 rounded-xl flex items-center justify-between gap-2 shadow-inner">
+                                                <div 
+                                                    className="flex items-center gap-2 cursor-pointer flex-1 min-w-0"
+                                                    onClick={() => setPreviewImageUrl(currentProdUrl)}
+                                                    title="Klik untuk lihat gambar / Click to preview"
+                                                >
+                                                    <img 
+                                                        src={currentProdUrl} 
+                                                        alt="Barang" 
+                                                        className="w-10 h-10 rounded-lg object-cover border border-emerald-500/40 shrink-0" 
+                                                    />
+                                                    <div className="min-w-0">
+                                                        <div className="flex items-center gap-1 text-[11px] font-black text-emerald-300 truncate">
+                                                            <CheckCircle size={12} className="text-emerald-400 shrink-0" />
+                                                            <span>已拍到货</span>
+                                                        </div>
+                                                        <span className="text-[9px] text-slate-400 font-bold block truncate">
+                                                            Barang Siap
+                                                        </span>
+                                                    </div>
+                                                </div>
+                                                <button
+                                                    type="button"
+                                                    title="Ambil Semula / Retake"
+                                                    onClick={() => handleTriggerDirectPhoto(order, 'product')}
+                                                    disabled={isDirectUploadingThis}
+                                                    className="p-1.5 bg-slate-800 hover:bg-slate-700 active:scale-90 text-slate-300 hover:text-white rounded-lg border border-slate-700 shrink-0 text-[10px] font-bold cursor-pointer"
+                                                >
+                                                    🔄
+                                                </button>
+                                            </div>
+                                        ) : (
+                                            <button
+                                                type="button"
+                                                onClick={() => handleTriggerDirectPhoto(order, 'product')}
+                                                disabled={isDirectUploadingThis}
+                                                data-action="DIRECT_SNAP_PRODUCT"
+                                                data-action-name="直接拍摄到货照片"
+                                                className="py-3 px-2 bg-gradient-to-br from-amber-600 to-amber-700 hover:from-amber-500 hover:to-amber-600 text-white rounded-xl font-black flex flex-col items-center justify-center gap-0.5 shadow-lg shadow-amber-950/40 active:scale-95 transition-all cursor-pointer border border-amber-400/30"
+                                            >
+                                                {isDirectUploadingThis && directUploadingTarget === 'product' ? (
+                                                    <div className="flex items-center gap-1 text-xs text-amber-200 py-1">
+                                                        <RefreshCw size={14} className="animate-spin" />
+                                                        <span className="text-[10px]">Menyimpan...</span>
+                                                    </div>
+                                                ) : (
+                                                    <>
+                                                        <div className="flex items-center gap-1 text-xs font-black tracking-wide">
+                                                            <Camera size={15} className="text-amber-200" />
+                                                            <span>📸 拍到货</span>
+                                                        </div>
+                                                        <span className="text-[9px] text-amber-200/90 font-bold uppercase tracking-wider">
+                                                            BARANG SAMPAI
+                                                        </span>
+                                                    </>
+                                                )}
+                                            </button>
+                                        )}
+
+                                        {/* 2. 右边：拍 DO (Gambar DO Bercop) */}
+                                        {hasDoPhoto ? (
+                                            <div className="relative py-2 px-2.5 bg-slate-900/90 border border-blue-500/50 rounded-xl flex items-center justify-between gap-2 shadow-inner">
+                                                <div 
+                                                    className="flex items-center gap-2 cursor-pointer flex-1 min-w-0"
+                                                    onClick={() => setPreviewImageUrl(currentDoUrl)}
+                                                    title="Klik untuk lihat gambar / Click to preview"
+                                                >
+                                                    <img 
+                                                        src={currentDoUrl} 
+                                                        alt="DO" 
+                                                        className="w-10 h-10 rounded-lg object-cover border border-blue-500/40 shrink-0" 
+                                                    />
+                                                    <div className="min-w-0">
+                                                        <div className="flex items-center gap-1 text-[11px] font-black text-blue-300 truncate">
+                                                            <CheckCircle size={12} className="text-blue-400 shrink-0" />
+                                                            <span>已拍 DO</span>
+                                                        </div>
+                                                        <span className="text-[9px] text-slate-400 font-bold block truncate">
+                                                            DO Bercop
+                                                        </span>
+                                                    </div>
+                                                </div>
+                                                <button
+                                                    type="button"
+                                                    title="Ambil Semula / Retake"
+                                                    onClick={() => handleTriggerDirectPhoto(order, 'do')}
+                                                    disabled={isDirectUploadingThis}
+                                                    className="p-1.5 bg-slate-800 hover:bg-slate-700 active:scale-90 text-slate-300 hover:text-white rounded-lg border border-slate-700 shrink-0 text-[10px] font-bold cursor-pointer"
+                                                >
+                                                    🔄
+                                                </button>
+                                            </div>
+                                        ) : (
+                                            <button
+                                                type="button"
+                                                onClick={() => handleTriggerDirectPhoto(order, 'do')}
+                                                disabled={isDirectUploadingThis}
+                                                data-action="DIRECT_SNAP_DO"
+                                                data-action-name="直接拍摄DO照片"
+                                                className={`py-3 px-2 rounded-xl font-black flex flex-col items-center justify-center gap-0.5 shadow-lg active:scale-95 transition-all cursor-pointer border ${
+                                                    hasProdPhoto
+                                                        ? 'bg-gradient-to-br from-emerald-600 to-emerald-700 hover:from-emerald-500 hover:to-emerald-600 text-white shadow-emerald-950/40 border-emerald-400/40 animate-pulse'
+                                                        : 'bg-gradient-to-br from-blue-600 to-blue-700 hover:from-blue-500 hover:to-blue-600 text-white shadow-blue-950/40 border-blue-400/30'
+                                                }`}
+                                            >
+                                                {isDirectUploadingThis && directUploadingTarget === 'do' ? (
+                                                    <div className="flex items-center gap-1 text-xs text-blue-200 py-1">
+                                                        <RefreshCw size={14} className="animate-spin" />
+                                                        <span className="text-[10px]">Menyimpan...</span>
+                                                    </div>
+                                                ) : (
+                                                    <>
+                                                        <div className="flex items-center gap-1 text-xs font-black tracking-wide">
+                                                            <FileText size={15} className={hasProdPhoto ? 'text-emerald-200' : 'text-blue-200'} />
+                                                            <span>📄 拍 DO</span>
+                                                        </div>
+                                                        <span className={`text-[9px] font-bold uppercase tracking-wider ${hasProdPhoto ? 'text-emerald-200/90' : 'text-blue-200/90'}`}>
+                                                            DO BERCOP
+                                                        </span>
+                                                    </>
+                                                )}
+                                            </button>
+                                        )}
+                                    </div>
+
+                                    {/* 辅助说明与完整窗口备选入口 */}
+                                    <div className="flex items-center justify-between px-1 text-[10px] text-slate-400">
+                                        <span className="truncate">
+                                            {!hasDoPhoto && !hasProdPhoto && (btnTotalDrops > 1 ? `📸 Drop ${Math.min(btnDoneDrops + 1, btnTotalDrops)}/${btnTotalDrops}: Ambil Barang & DO` : '📸 Ambil gambar Barang & DO untuk sahkan')}
+                                            {hasProdPhoto && !hasDoPhoto && '👉 Sila ambil gambar DO bercop untuk selesaikan'}
+                                            {hasDoPhoto && !hasProdPhoto && '✅ DO siap. Boleh tambah gambar barang jika perlu'}
+                                            {hasDoPhoto && hasProdPhoto && '🎉 Gambar Barang & DO lengkap! Hantaran disahkan.'}
                                         </span>
-                                    </button>
-                                    <div className="flex items-center justify-center px-1 text-[11px] text-slate-400">
-                                        <span className="text-[10px] text-slate-400">
-                                            {isWaitingDo ? '⚠️ Sila ambil gambar DO bertandatangan' : '📸 Ambil gambar DO & Barang untuk sahkan penghantaran'}
-                                        </span>
+                                        <button
+                                            type="button"
+                                            onClick={() => handleOpenUnloadModal(order)}
+                                            data-action="OPEN_UNLOAD_MODAL"
+                                            data-action-name="打开送货卸货与拍照窗口"
+                                            data-target={`工单 #${order.orderNumber || order.id}`}
+                                            className="text-[10px] text-slate-500 hover:text-slate-300 underline underline-offset-2 flex items-center gap-0.5 shrink-0 ml-2 cursor-pointer"
+                                        >
+                                            <span>Borang Penuh</span>
+                                        </button>
                                     </div>
                                 </div>
                             );
@@ -4151,6 +4338,7 @@ const DriverDelivery: React.FC<DriverDeliveryProps> = ({ user, onNavigate }) => 
                 ref={directDeliveryInputRef}
                 type="file"
                 accept="image/*"
+                capture="environment"
                 className="hidden"
                 onChange={handleDirectDeliveryFileChange}
             />
