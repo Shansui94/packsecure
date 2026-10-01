@@ -2,7 +2,7 @@ import React, { useState, useEffect } from 'react';
 import {
     X, Sparkles, Check, Copy, Calendar, Plus, Trash2,
     CheckCircle2, AlertTriangle, Lightbulb, GitCommit,
-    Layers, Bot, ArrowRight, Loader2, RefreshCw
+    Layers, Bot, ArrowRight, Loader2, RefreshCw, Send
 } from 'lucide-react';
 import { supabase } from '../services/supabase';
 
@@ -103,6 +103,7 @@ export const DevLogModal: React.FC<DevLogModalProps> = ({
     // AI and Saving state
     const [isAiPolishing, setIsAiPolishing] = useState(false);
     const [isSaving, setIsSaving] = useState(false);
+    const [isSendingWa, setIsSendingWa] = useState(false);
     const [activeTab, setActiveTab] = useState<'form' | 'preview'>('form');
     const [toastMessage, setToastMessage] = useState<string | null>(null);
 
@@ -266,6 +267,31 @@ export const DevLogModal: React.FC<DevLogModalProps> = ({
             alert('AI 润色失败: ' + (e.message || '网络超时'));
         } finally {
             setIsAiPolishing(false);
+        }
+    };
+
+    // ── Send WhatsApp Report to Max & William (The Boss) ──
+    const handleSendWhatsAppToBossAndMe = async () => {
+        setIsSendingWa(true);
+        try {
+            const resp = await fetch('/api/whatsapp?action=send-daily-report', {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({
+                    date: reportDate,
+                    customNotes: summary
+                })
+            });
+            const res = await resp.json();
+            if (res.success) {
+                showToast('✅ 已成功通过 WhatsApp 发送给 Max Tan 与 William 哥 (老板)！');
+            } else {
+                alert('发送失败: ' + (res.error || '请确认 WhatsApp Cloud API 配置'));
+            }
+        } catch (e: any) {
+            alert('网络异常: ' + e.message);
+        } finally {
+            setIsSendingWa(false);
         }
     };
 
@@ -780,14 +806,26 @@ export const DevLogModal: React.FC<DevLogModalProps> = ({
 
                 {/* Modal Footer */}
                 <div className="px-6 py-4 border-t border-white/10 flex flex-wrap items-center justify-between gap-3 bg-white/[0.02]">
-                    <button
-                        type="button"
-                        onClick={handleCopyWhatsApp}
-                        className="px-4 py-2.5 bg-white/5 hover:bg-white/10 border border-white/10 text-gray-200 text-xs sm:text-sm font-bold rounded-xl flex items-center gap-2 transition active:scale-95 cursor-pointer"
-                    >
-                        <Copy size={16} />
-                        复制 WhatsApp 日报
-                    </button>
+                    <div className="flex flex-wrap items-center gap-2">
+                        <button
+                            type="button"
+                            onClick={handleCopyWhatsApp}
+                            className="px-3.5 py-2.5 bg-white/5 hover:bg-white/10 border border-white/10 text-gray-200 text-xs sm:text-sm font-bold rounded-xl flex items-center gap-2 transition active:scale-95 cursor-pointer"
+                        >
+                            <Copy size={16} />
+                            复制文本
+                        </button>
+                        <button
+                            type="button"
+                            onClick={handleSendWhatsAppToBossAndMe}
+                            disabled={isSendingWa}
+                            className="px-4 py-2.5 bg-gradient-to-r from-emerald-600 to-teal-600 hover:from-emerald-500 hover:to-teal-500 text-white text-xs sm:text-sm font-bold rounded-xl flex items-center gap-2 shadow-lg shadow-emerald-600/25 transition active:scale-95 cursor-pointer disabled:opacity-50"
+                            title="一键下发 WhatsApp 汇报至 Max Tan (+60102328335) 与 William 哥 (+60122689095)"
+                        >
+                            <Send size={16} />
+                            <span>{isSendingWa ? '正在下发...' : '📲 一键下发 WhatsApp (我和威廉哥)'}</span>
+                        </button>
+                    </div>
 
                     <div className="flex items-center gap-3">
                         <button

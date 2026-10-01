@@ -2,6 +2,7 @@ import type { VercelRequest, VercelResponse } from '@vercel/node';
 import { createClient } from '@supabase/supabase-js';
 import { sendWhatsAppText, normalizePhoneNumber } from '../../lib/whatsapp.js';
 import { generateNightlyReport } from '../../lib/nightlyReport.js';
+import { sendDailyWorkReportToBossAndMax } from '../../lib/dailyWorkReport.js';
 
 export { generateNightlyReport };
 
@@ -49,12 +50,21 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
       }
     }
 
+    // Also trigger Daily Work & System Upgrade Report to Max and Boss William
+    let workReportRes = null;
+    try {
+      workReportRes = await sendDailyWorkReportToBossAndMax();
+    } catch (workErr: any) {
+      console.warn('[Nightly Cron] Work report send error:', workErr.message);
+    }
+
     return res.status(200).json({
       success: true,
       deliveredTo: uniquePhones,
       results,
       summary: summaryData,
       reportPreview: reportText,
+      workReport: workReportRes,
     });
   } catch (err: any) {
     console.error('[Nightly Report Handler Error]:', err);

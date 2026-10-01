@@ -18,6 +18,7 @@ import { handleWhatsAppRecipeWorkflow } from '../lib/whatsappRecipe.js';
 import { generateNightlyReport } from '../lib/nightlyReport.js';
 import { createIssueTicket, executeTriageAction, isCasualChitChat } from '../lib/issueTriage.js';
 import { handleSmartAgentQuery } from '../lib/whatsappSmartAgent.js';
+import { buildDailyWorkReportText, sendDailyWorkReportToBossAndMax } from '../lib/dailyWorkReport.js';
 
 function getSupabase() {
   const supabaseUrl = process.env.SUPABASE_URL || process.env.VITE_SUPABASE_URL || '';
@@ -132,6 +133,17 @@ export async function handleWhatsAppSend(req: VercelRequest, res: VercelResponse
       }).eq('id', ticketId);
       if (error) return res.status(500).json({ error: error.message });
       return res.status(200).json({ success: true, message: '工单已结案' });
+    }
+
+    // ── Special Action: Send Daily Work & System Upgrade Report ────────────────
+    if (action === 'send-daily-report') {
+      const { date, customNotes, recipients } = req.body || {};
+      const result = await sendDailyWorkReportToBossAndMax({
+        targetDate: date,
+        customNotes,
+        recipients
+      });
+      return res.status(200).json(result);
     }
 
     // ── Special Action 1: Dispatch Trip to Driver ──────────────────────────────
@@ -845,14 +857,21 @@ Output valid JSON only: { "is_scale": boolean, "weight_kg": number or null, "des
         return res.status(200).json({ status: 'STAFF_GREETING_SENT' });
     }
 
-    // Command 5: Direct Evening Report request (晚报 / 日报)
-    if (/^(晚报|日报|report|ringkasan)$/i.test(lower.trim())) {
+    // Command 5: Direct Evening Report & Dev Upgrade Report request (晚报 / 日报 / 工作汇报 / 升级报告)
+    if (/^(晚报|日报|工作汇报|系统升级报告|升级报告|今日汇报|report|ringkasan)$/i.test(lower.trim())) {
       try {
-        const { reportText } = await generateNightlyReport();
-        await sendWhatsAppText(fromNumber, reportText);
-        return res.status(200).json({ status: 'NIGHTLY_REPORT_SENT' });
+        const isUpgradeReport = /工作汇报|系统升级|升级报告|今日汇报/i.test(lower.trim());
+        if (isUpgradeReport) {
+          const { reportText } = await buildDailyWorkReportText();
+          await sendWhatsAppText(fromNumber, reportText);
+          return res.status(200).json({ status: 'DAILY_WORK_REPORT_SENT' });
+        } else {
+          const { reportText } = await generateNightlyReport();
+          await sendWhatsAppText(fromNumber, reportText);
+          return res.status(200).json({ status: 'NIGHTLY_REPORT_SENT' });
+        }
       } catch (repErr) {
-        console.warn('[Nightly Report Trigger Error]:', repErr);
+        console.warn('[Report Trigger Error]:', repErr);
       }
     }
 
