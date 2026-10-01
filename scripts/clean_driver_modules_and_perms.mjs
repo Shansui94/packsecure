@@ -15,9 +15,18 @@ const supabase = createClient(SUPABASE_URL, SERVICE_KEY);
 
 async function run() {
     console.log("=== 1. Cleaning role_permissions for Driver ===");
-    const removePages = ['activity-logs', 'delivery-history', 'driver-leave', 'notes', 'work-photos'];
+    const removePages = [
+        'activity-logs', 
+        'delivery-history', 
+        'driver-leave', 
+        'notes', 
+        'work-photos',
+        'tasks',
+        'sop-center',
+        'raw_material_mobile'
+    ];
     
-    // Delete unwanted role_permissions
+    // Delete unwanted role_permissions for Driver
     const { error: delErr } = await supabase
         .from('role_permissions')
         .delete()
@@ -30,7 +39,7 @@ async function run() {
         console.log(`✅ Removed [${removePages.join(', ')}] from role_permissions for Driver`);
     }
 
-    // Ensure needed pages exist for Driver
+    // Ensure only essential driver pages exist for Driver
     const keepPages = ['delivery-driver', 'leave-calendar', 'personal-report', 'lorry-service'];
     const keepPayloads = keepPages.map(page_id => ({
         role_name: 'Driver',
@@ -81,7 +90,7 @@ async function run() {
                 cleanedMods.some(m => !currentMods.includes(m));
 
             if (isDifferent) {
-                console.log(`Updating driver ${driver.name} (${driver.auth_user_id}):`, currentMods, "->", cleanedMods);
+                console.log(`Updating driver ${driver.name}:`, currentMods, "->", cleanedMods);
                 const { error: updateErr } = await supabase
                     .from('sys_users_v2')
                     .update({ role_modules: cleanedMods })

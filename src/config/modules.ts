@@ -435,7 +435,7 @@ export const MODULE_REGISTRY: ModuleDefinition[] = [
         labelEn: 'Tasks',
         group: 'productivity',
         icon: ClipboardList,
-        defaultRoles: ['SuperAdmin', 'Admin', 'Manager', 'HR', 'Driver', 'Operator'],
+        defaultRoles: ['SuperAdmin', 'Admin', 'Manager', 'HR', 'Operator'],
         badgeKey: 'tasks',
         description: '协同任务指派与跟踪'
     },
@@ -445,7 +445,7 @@ export const MODULE_REGISTRY: ModuleDefinition[] = [
         labelEn: 'SOP Center',
         group: 'productivity',
         icon: BookOpen,
-        defaultRoles: ['SuperAdmin', 'Admin', 'Manager', 'HR', 'Driver', 'Operator'],
+        defaultRoles: ['SuperAdmin', 'Admin', 'Manager', 'HR', 'Operator'],
         description: '全流程岗位标准作业指引'
     },
     {
@@ -474,8 +474,7 @@ export const ESSENTIAL_PAGE_IDS = [
     'profile',
     'login',
     'construction',
-    'dashboard',
-    'raw_material_mobile'
+    'dashboard'
 ] as const;
 
 /**
