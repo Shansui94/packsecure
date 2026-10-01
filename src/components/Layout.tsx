@@ -613,34 +613,36 @@ const Layout: React.FC<LayoutProps> = ({ children, activePage, setActivePage, us
                                 </div>
                             );
                         })()}
-                        {/* 🤖 AI 助理与 💡 本页逻辑说明 专用按钮 (移至左侧菜单) */}
-                        <div className="px-3 pt-3 pb-2 border-t border-white/5 space-y-2 shrink-0">
-                            <button
-                                type="button"
-                                onClick={() => {
-                                    setIsMobileMenuOpen(false);
-                                    window.dispatchEvent(new CustomEvent('packsecure:open-ai-chat'));
-                                }}
-                                className={`w-full flex items-center gap-3 px-3.5 py-2.5 rounded-xl bg-gradient-to-r from-blue-900/40 to-indigo-900/40 border border-blue-500/30 text-blue-300 font-bold text-xs hover:from-blue-800/50 hover:to-indigo-800/50 transition shadow-sm active:scale-95 cursor-pointer ${useCollapsedNavLayout ? 'justify-center px-0' : ''}`}
-                                title={translateUI('🤖 AI Assistant')}
-                            >
-                                <Bot size={18} className="text-blue-400 shrink-0" />
-                                {showNavLabels && <span>{translateUI('🤖 AI Assistant')}</span>}
-                            </button>
+                        {/* 🤖 AI 助理与 💡 本页逻辑说明 专用按钮 (移至左侧菜单，司机角色隐藏) */}
+                        {userRole !== 'Driver' && (
+                            <div className="px-3 pt-3 pb-2 border-t border-white/5 space-y-2 shrink-0">
+                                <button
+                                    type="button"
+                                    onClick={() => {
+                                        setIsMobileMenuOpen(false);
+                                        window.dispatchEvent(new CustomEvent('packsecure:open-ai-chat'));
+                                    }}
+                                    className={`w-full flex items-center gap-3 px-3.5 py-2.5 rounded-xl bg-gradient-to-r from-blue-900/40 to-indigo-900/40 border border-blue-500/30 text-blue-300 font-bold text-xs hover:from-blue-800/50 hover:to-indigo-800/50 transition shadow-sm active:scale-95 cursor-pointer ${useCollapsedNavLayout ? 'justify-center px-0' : ''}`}
+                                    title={translateUI('🤖 AI Assistant')}
+                                >
+                                    <Bot size={18} className="text-blue-400 shrink-0" />
+                                    {showNavLabels && <span>{translateUI('🤖 AI Assistant')}</span>}
+                                </button>
 
-                            <button
-                                type="button"
-                                onClick={() => {
-                                    setIsMobileMenuOpen(false);
-                                    window.dispatchEvent(new CustomEvent('packsecure:open-page-logic'));
-                                }}
-                                className={`w-full flex items-center gap-3 px-3.5 py-2.5 rounded-xl bg-gradient-to-r from-purple-900/40 to-indigo-900/40 border border-purple-500/30 text-purple-300 font-bold text-xs hover:from-purple-800/50 hover:to-indigo-800/50 transition shadow-sm active:scale-95 cursor-pointer ${useCollapsedNavLayout ? 'justify-center px-0' : ''}`}
-                                title={translateUI('💡 Page Logic Guide')}
-                            >
-                                <Lightbulb size={18} className="text-amber-400 shrink-0 animate-pulse" />
-                                {showNavLabels && <span>{translateUI('💡 Page Logic Guide')}</span>}
-                            </button>
-                        </div>
+                                <button
+                                    type="button"
+                                    onClick={() => {
+                                        setIsMobileMenuOpen(false);
+                                        window.dispatchEvent(new CustomEvent('packsecure:open-page-logic'));
+                                    }}
+                                    className={`w-full flex items-center gap-3 px-3.5 py-2.5 rounded-xl bg-gradient-to-r from-purple-900/40 to-indigo-900/40 border border-purple-500/30 text-purple-300 font-bold text-xs hover:from-purple-800/50 hover:to-indigo-800/50 transition shadow-sm active:scale-95 cursor-pointer ${useCollapsedNavLayout ? 'justify-center px-0' : ''}`}
+                                    title={translateUI('💡 Page Logic Guide')}
+                                >
+                                    <Lightbulb size={18} className="text-amber-400 shrink-0 animate-pulse" />
+                                    {showNavLabels && <span>{translateUI('💡 Page Logic Guide')}</span>}
+                                </button>
+                            </div>
+                        )}
                     </nav>
 
                     {/* User Profile (Bottom) */}
@@ -780,12 +782,14 @@ const Layout: React.FC<LayoutProps> = ({ children, activePage, setActivePage, us
                     </div>
 
                     <React.Suspense fallback={null}>
-                        <PageLogicDrawer 
-                            activePage={activePage} 
-                            userRole={userRole} 
-                            user={user} 
-                            setActivePage={setActivePage} 
-                        />
+                        {userRole !== 'Driver' && (
+                            <PageLogicDrawer 
+                                activePage={activePage} 
+                                userRole={userRole} 
+                                user={user} 
+                                setActivePage={setActivePage} 
+                            />
+                        )}
 
                         {userRole !== 'Driver' && activePage !== 'delivery-driver' && (
                             <SmartIntakeModal 

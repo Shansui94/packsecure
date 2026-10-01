@@ -294,7 +294,7 @@ export const MODULE_REGISTRY: ModuleDefinition[] = [
         labelEn: 'Delivery History',
         group: 'logistics',
         icon: ClipboardList,
-        defaultRoles: ['Driver'],
+        defaultRoles: ['SuperAdmin', 'Admin'],
         description: '司机历史趟数与出车津贴明细',
         hiddenFromNav: true // 司机端顶部/底部直接切换，非司机角色免受干扰
     },
@@ -373,7 +373,7 @@ export const MODULE_REGISTRY: ModuleDefinition[] = [
         labelEn: 'Apply Leave',
         group: 'organization',
         icon: Calendar,
-        defaultRoles: ['Driver', 'HR'],
+        defaultRoles: ['HR'],
         description: '快捷员工请假申请单 (指向 Staff Hub 请假中心)',
         hiddenFromNav: true
     },
@@ -423,7 +423,7 @@ export const MODULE_REGISTRY: ModuleDefinition[] = [
         labelEn: 'Activity Logs',
         group: 'organization',
         icon: Activity,
-        defaultRoles: ['SuperAdmin', 'Admin', 'Manager', 'HR', 'Driver', 'Operator'],
+        defaultRoles: ['SuperAdmin', 'Admin', 'Manager', 'HR', 'Operator'],
         description: '系统关键业务操作审计追溯',
         hiddenFromNav: true // 审计日志，可通过 ⌘K 访问
     },
@@ -454,7 +454,7 @@ export const MODULE_REGISTRY: ModuleDefinition[] = [
         labelEn: 'Work Photos',
         group: 'productivity',
         icon: Camera,
-        defaultRoles: ['SuperAdmin', 'Admin', 'Manager', 'HR', 'Driver', 'Operator'],
+        defaultRoles: ['SuperAdmin', 'Admin', 'Manager', 'HR', 'Operator'],
         description: '📸 车间机台与现场作业拍照存档',
         hiddenFromNav: true // 业务端内置拍照，可通过 ⌘K 直达
     },
@@ -464,7 +464,7 @@ export const MODULE_REGISTRY: ModuleDefinition[] = [
         labelEn: 'Notes',
         group: 'productivity',
         icon: FileText,
-        defaultRoles: ['SuperAdmin', 'Admin', 'Manager', 'HR', 'Driver', 'Operator'],
+        defaultRoles: ['SuperAdmin', 'Admin', 'Manager', 'HR', 'Operator'],
         description: '日常工作速记便签',
         hiddenFromNav: true // 可通过 ⌘K 直达
     }

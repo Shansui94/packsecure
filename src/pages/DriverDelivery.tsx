@@ -3159,20 +3159,9 @@ const DriverDelivery: React.FC<DriverDeliveryProps> = ({ user, onNavigate }) => 
 
                     {onNavigate && (
                         <button
-                            onClick={() => onNavigate('delivery-history')}
-                            className="px-2.5 py-1.5 bg-slate-800 hover:bg-slate-700 border border-slate-700 text-slate-300 rounded-lg text-[10px] font-bold uppercase tracking-wider flex items-center gap-1 transition-all active:scale-95 cursor-pointer"
-                            title="Sejarah Penghantaran / Delivery History"
-                        >
-                            <span>📜</span>
-                            <span className="hidden sm:inline">SEJARAH</span>
-                        </button>
-                    )}
-
-                    {onNavigate && (
-                        <button
-                            onClick={() => onNavigate('driver-leave')}
+                            onClick={() => onNavigate('leave-calendar')}
                             className="px-2.5 py-1.5 bg-gradient-to-r from-teal-500/20 to-emerald-500/20 hover:from-teal-500/30 hover:to-emerald-500/30 border border-teal-500/40 text-teal-300 rounded-lg text-[10px] font-bold uppercase tracking-wider flex items-center gap-1 transition-all active:scale-95 cursor-pointer shadow-sm"
-                            title="Mohon Cuti / 申请请假"
+                            title="Mohon Cuti / 申请请假 (Staff Hub)"
                         >
                             <span>🏖️</span>
                             <span className="hidden sm:inline">MOHON CUTI</span>

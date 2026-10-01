@@ -869,7 +869,7 @@ function App() {
                     {renderContent()}
                 </Suspense>
                 <Suspense fallback={null}>
-                    <AIAgentWidget user={user} onNavigate={setActivePage} />
+                    {user?.role !== 'Driver' && <AIAgentWidget user={user} onNavigate={setActivePage} />}
                 </Suspense>
 
             </Layout >

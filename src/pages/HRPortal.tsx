@@ -280,7 +280,7 @@ const EmployeeModal: React.FC<{
         const rawStatus = form.status || 'Active';
         const normalizedStatus = rawStatus.charAt(0).toUpperCase() + rawStatus.slice(1).toLowerCase();
 
-        const defaultDriverModules = ['work-photos', 'delivery-driver', 'delivery-history', 'leave-calendar', 'lorry-service'];
+        const defaultDriverModules = ['delivery-driver', 'leave-calendar', 'personal-report', 'lorry-service'];
         const payload: any = {
             auth_user_id: targetAuthId,
             name: form.name, email: validEmail, phone: form.phone || null,
@@ -1054,7 +1054,7 @@ const HRPortal: React.FC<HRPortalProps> = ({ user, initialTab, initialRoleFilter
 
         try {
             // 1. Dual Upsert into sys_users_v2
-            const defaultDriverModules = ['work-photos', 'delivery-driver', 'delivery-history', 'leave-calendar', 'lorry-service'];
+            const defaultDriverModules = ['delivery-driver', 'leave-calendar', 'personal-report', 'lorry-service'];
             const resolvedFactoryId = assignedLocation === 'Johor' ? 'J1' : assignedLocation === 'Kelantan' ? 'K1' : assignedLocation === 'Nilai' ? 'N1' : 'T1';
             const { error: v2Err } = await supabase.from('sys_users_v2').upsert({
                 auth_user_id: targetAuthId,
