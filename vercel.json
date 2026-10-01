@@ -55,6 +55,10 @@
             "source": "/api/agent/suggest-rule-patch",
             "destination": "/api/agent/universal?action=suggest-rule-patch"
         },
+        {
+            "source": "/api/agent/parse-tenancy",
+            "destination": "/api/agent/universal?action=parse-tenancy"
+        },
 
         {
             "source": "/api/dev-log",
@@ -71,6 +75,10 @@
         {
             "source": "/api/alarm",
             "destination": "/api/iot-config?action=alarm"
+        },
+        {
+            "source": "/api/lorry-latest-mileage",
+            "destination": "/api/iot-config?action=lorry-mileage"
         },
         {
             "source": "/api/(.*)",

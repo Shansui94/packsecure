@@ -207,6 +207,35 @@ export async function handleAlarm(req: VercelRequest, res: VercelResponse) {
     }
 }
 
+export async function handleLorryLatestMileage(req: VercelRequest, res: VercelResponse) {
+    try {
+        const lorryId = (req.query?.lorry_id || req.body?.lorry_id) as string;
+        if (!lorryId) {
+            return res.status(400).json({ error: 'lorry_id is required' });
+        }
+
+        const { data, error } = await supabase
+            .from('lorry_mileage_logs')
+            .select('id, mileage, created_at, log_type, driver_id')
+            .eq('lorry_id', lorryId)
+            .lte('created_at', new Date().toISOString())
+            .order('created_at', { ascending: false })
+            .limit(1)
+            .maybeSingle();
+
+        if (error) throw error;
+
+        return res.status(200).json({
+            success: true,
+            data: data || null,
+            mileage: data?.mileage ?? null
+        });
+    } catch (error: any) {
+        console.error('Error fetching latest lorry mileage:', error);
+        return res.status(500).json({ success: false, error: error.message });
+    }
+}
+
 export default async function handler(req: VercelRequest, res: VercelResponse) {
     // Enable CORS
     res.setHeader('Access-Control-Allow-Credentials', 'true');
@@ -222,6 +251,10 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
     }
 
     const { mac, action } = req.query;
+
+    if (action === 'lorry-mileage' || req.query?.lorry_id || req.body?.lorry_id) {
+        return handleLorryLatestMileage(req, res);
+    }
 
     if (action === 'alarm' || req.body?.action === 'alarm' || (req.method === 'POST' && req.body?.machine_id && !mac)) {
         return handleAlarm(req, res);

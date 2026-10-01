@@ -14,13 +14,13 @@ function getGeminiModel() {
     return genAI.getGenerativeModel({ model: 'gemini-2.5-flash' });
 }
 
-export default async function handler(req: VercelRequest, res: VercelResponse) {
+export async function handleParseTenancy(req: VercelRequest, res: VercelResponse) {
     if (req.method !== 'POST') {
         return res.status(405).json({ error: 'Method Not Allowed' });
     }
 
     try {
-        const { fileBase64, fileName, mimeType } = req.body;
+        const { fileBase64, fileName, mimeType } = req.body || {};
 
         if (!fileBase64 || !fileName) {
             return res.status(400).json({ error: 'fileBase64 and fileName are required' });

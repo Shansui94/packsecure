@@ -2,9 +2,10 @@ import { VercelRequest, VercelResponse } from '@vercel/node';
 import { GoogleGenerativeAI } from '@google/generative-ai';
 import { createClient } from '@supabase/supabase-js';
 import { handleCalcDriverRate, handleSuggestRulePatch } from '../../lib/driver-pricing.js';
+import { handleParseTenancy } from '../../lib/parse-tenancy.js';
 
 export const config = { maxDuration: 60 };
-export { handleCalcDriverRate, handleSuggestRulePatch };
+export { handleCalcDriverRate, handleSuggestRulePatch, handleParseTenancy };
 
 
 // Initialize Supabase Client
@@ -2553,6 +2554,11 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
     // 2. Driver Pricing Rule Patch Suggester
     if (action === 'suggest-rule-patch' || req.query?.action === 'suggest-rule-patch' || req.body?.action === 'suggest-rule-patch') {
         return handleSuggestRulePatch(req, res);
+    }
+
+    // 2.1 Tenancy Agreement Parser
+    if (action === 'parse-tenancy' || req.query?.action === 'parse-tenancy' || req.body?.action === 'parse-tenancy') {
+        return handleParseTenancy(req, res);
     }
 
     // 3. Query or Briefing requests

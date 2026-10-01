@@ -8,8 +8,7 @@ import visionHandler from './api/agent/vision';
 import geocodeHandler from './api/geocode';
 import aiPhotoHandler from './api/agent/ai-photo';
 import universalHandler, { handleIntake, handleQuery, handleParseText, handleParseTripPdf, handleSopAssistant } from './api/agent/universal';
-import iotConfigHandler, { handleMachines, handleAlarm } from './api/iot-config';
-import lorryLatestMileageHandler from './api/lorry-latest-mileage';
+import iotConfigHandler, { handleMachines, handleAlarm, handleLorryLatestMileage } from './api/iot-config';
 import v2DocumentsHandler, {
     handleProcess as documentProcessHandler,
     handleDashboardMetrics as dashboardMetricsHandler,
@@ -21,7 +20,7 @@ import whatsappHandler, { handleWhatsAppSend, handleWhatsAppWebhook } from './ap
 import nightlyReportHandler from './api/cron/nightly-report';
 import { handleCalcDriverRate as calcDriverRateHandler, handleSuggestRulePatch as suggestRulePatchHandler } from './lib/driver-pricing';
 import tenancyHandler from './api/tenancy-agreements';
-import parseTenancyHandler from './api/agent/parse-tenancy';
+import { handleParseTenancy as parseTenancyHandler } from './lib/parse-tenancy';
 import multer from 'multer';
 
 import fs from 'fs';
@@ -57,7 +56,7 @@ mountVercelHandler('/api/agent/parse-text', handleParseText);
 mountVercelHandler('/api/iot-config', iotConfigHandler);
 mountVercelHandler('/api/machines', handleMachines);
 mountVercelHandler('/api/alarm', handleAlarm);
-mountVercelHandler('/api/lorry-latest-mileage', lorryLatestMileageHandler);
+mountVercelHandler('/api/lorry-latest-mileage', handleLorryLatestMileage);
 mountVercelHandler('/api/v2-documents', v2DocumentsHandler);
 mountVercelHandler('/api/v2/documents/process', documentProcessHandler);
 mountVercelHandler('/api/v2/documents/dashboard-metrics', dashboardMetricsHandler);
