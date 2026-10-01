@@ -1,6 +1,6 @@
 import React, { useState, useEffect, useRef } from 'react';
 import { supabase } from '../services/supabase';
-import { Truck, CheckCircle, Package, ChevronRight, ChevronDown, ChevronUp, X, RefreshCw, Camera, Image as ImageIcon, QrCode, Upload, Phone, MapPin, ExternalLink, MessageCircle, FileText } from 'lucide-react';
+import { Truck, CheckCircle, Package, ChevronRight, ChevronDown, ChevronUp, X, RefreshCw, Camera, Image as ImageIcon, QrCode, Upload, Phone, MapPin, ExternalLink, MessageCircle, FileText, Lock } from 'lucide-react';
 import { SalesOrder } from '../types';
 import { Scanner } from '@yudiel/react-qr-scanner';
 import { parsePrepPhotos } from '../utils/prepPhotos';
@@ -414,18 +414,26 @@ const DriverDelivery: React.FC<DriverDeliveryProps> = ({ user, onNavigate }) => 
                 setTripsV2List(tripsV2Acc);
 
                 // Map DB snake_case to TS camelCase
-                const mapped = data.map((item: any) => ({
-                    ...item,
-                    orderNumber: item.order_number || item.orderNumber,
-                    deliveryAddress: item.delivery_address || item.deliveryAddress,
-                    zone: item.zone || item.delivery_zone,
-                    deliveryDate: item.deadline, // Use Deadline as Delivery Date
-                    orderDate: item.order_date || item.orderDate, // Map date
-                    customer_phone: item.customer_phone || item.customerPhone,
-                    stop_sequence: item.stop_sequence ?? item.stopSequence,
-                    terms: item.terms,
-                    do_total: item.do_total
-                }));
+                const mapped = data.map((item: any) => {
+                    const v2Trip = tripsV2Acc.find(t => t.id === item.trip_id);
+                    let effectiveStatus = item.status;
+                    if (effectiveStatus === 'Planned' && (item.proof_of_load_url || (v2Trip && (v2Trip.status === 'In Transit' || v2Trip.started_at)))) {
+                        effectiveStatus = 'Loaded';
+                    }
+                    return {
+                        ...item,
+                        status: effectiveStatus,
+                        orderNumber: item.order_number || item.orderNumber,
+                        deliveryAddress: item.delivery_address || item.deliveryAddress,
+                        zone: item.zone || item.delivery_zone,
+                        deliveryDate: item.deadline, // Use Deadline as Delivery Date
+                        orderDate: item.order_date || item.orderDate, // Map date
+                        customer_phone: item.customer_phone || item.customerPhone,
+                        stop_sequence: item.stop_sequence ?? item.stopSequence,
+                        terms: item.terms,
+                        do_total: item.do_total
+                    };
+                });
 
                 // Client-side sort
                 const sorted = mapped.sort((a: any, b: any) => {
@@ -480,6 +488,14 @@ const DriverDelivery: React.FC<DriverDeliveryProps> = ({ user, onNavigate }) => 
 
     // 2. Open Load Modal (Single DO fallback)
     const handleOpenLoadModal = (order: SalesOrder) => {
+        const parentTrip = tripGroups.find(t => t.orders.some(o => o.id === order.id));
+        const firstPendingDeliveryTrip = pendingTrips.find(t => !t.isAdHoc && !t.isAllDone);
+        const isOrderTripLocked = parentTrip && !parentTrip.isAdHoc && firstPendingDeliveryTrip && firstPendingDeliveryTrip.key !== parentTrip.key;
+        if (isOrderTripLocked) {
+            alert(`⚠️ Sila selesaikan ${firstPendingDeliveryTrip?.tripIndexLabel || firstPendingDeliveryTrip?.tripNumber || 'Trip sebelumnya'} dahulu! / Please complete previous trip first!`);
+            return;
+        }
+
         setSelectedTripForLoad(null);
         setSelectedOrder(order);
         // Deep copy items to allow editing quantity if needed (default same qty)
@@ -495,6 +511,13 @@ const DriverDelivery: React.FC<DriverDeliveryProps> = ({ user, onNavigate }) => 
 
     // 2b. Open Trip Load Modal (Batch load all orders in trip with 1 Naik Barang)
     const handleOpenTripLoadModal = (trip: any) => {
+        const firstPendingDeliveryTrip = pendingTrips.find(t => !t.isAdHoc && !t.isAllDone);
+        const isTripLocked = !trip.isAdHoc && firstPendingDeliveryTrip && firstPendingDeliveryTrip.key !== trip.key;
+        if (isTripLocked) {
+            alert(`⚠️ Sila selesaikan ${firstPendingDeliveryTrip?.tripIndexLabel || firstPendingDeliveryTrip?.tripNumber || 'Trip sebelumnya'} dahulu sebelum muat Trip ini!`);
+            return;
+        }
+
         setSelectedTripForLoad(trip);
         setSelectedOrder(trip.orders?.[0] || null);
         const allItems: any[] = [];
@@ -570,19 +593,23 @@ const DriverDelivery: React.FC<DriverDeliveryProps> = ({ user, onNavigate }) => 
                         };
                     });
 
-                    await supabase.from('sales_orders').update({
+                    const { error: amendError } = await supabase.from('sales_orders').update({
                         status: 'Pending Approval',
                         items: updatedItems,
                         notes: (order.notes || '') + ` | Amended by Driver: ${user?.name}`,
                         proof_of_load_url: photoUrl
                     }).eq('id', order.id);
+                    if (amendError) throw amendError;
                 } else {
                     const { error: updateError } = await supabase.from('sales_orders').update({
                         status: 'Loaded',
                         proof_of_load_url: photoUrl
                     }).eq('id', order.id);
 
-                    if (updateError) console.error("Error loading order:", order.id, updateError);
+                    if (updateError) {
+                        console.error("Error loading order:", order.id, updateError);
+                        throw updateError;
+                    }
                 }
             }
 
@@ -639,6 +666,9 @@ const DriverDelivery: React.FC<DriverDeliveryProps> = ({ user, onNavigate }) => 
             setIsLoadModalOpen(false);
             setLoadPhotoBase64(null);
             setSelectedTripForLoad(null);
+
+            // Re-fetch all tasks and trips from DB to guarantee complete synchronization!
+            await fetchTasks();
 
         } catch (e: any) {
             alert("Error: " + e.message);
@@ -791,6 +821,19 @@ const DriverDelivery: React.FC<DriverDeliveryProps> = ({ user, onNavigate }) => 
 
     // 5b. Unloading handlers (Confirm Delivery / Sahkan Hantaran)
     const handleOpenUnloadModal = (order: SalesOrder) => {
+        const parentTrip = tripGroups.find(t => t.orders.some(o => o.id === order.id));
+        const firstPendingDeliveryTrip = pendingTrips.find(t => !t.isAdHoc && !t.isAllDone);
+        const isOrderTripLocked = parentTrip && !parentTrip.isAdHoc && firstPendingDeliveryTrip && firstPendingDeliveryTrip.key !== parentTrip.key;
+        if (isOrderTripLocked) {
+            alert(`⚠️ Sila selesaikan ${firstPendingDeliveryTrip?.tripIndexLabel || firstPendingDeliveryTrip?.tripNumber || 'Trip sebelumnya'} dahulu! / Please complete previous trip first!`);
+            return;
+        }
+
+        if (order.status !== 'Loaded' && order.status !== 'Pending Approval' && order.status !== 'Delivered') {
+            alert("⚠️ Sila sahkan naik barang (muat barang) dahulu sebelum sahkan hantaran! / Please load goods first before confirming delivery!");
+            return;
+        }
+
         setSelectedOrder(order);
         setUnloadDoPhotoBase64(null);
         setUnloadProductPhotoBase64(null);
@@ -1373,6 +1416,21 @@ const DriverDelivery: React.FC<DriverDeliveryProps> = ({ user, onNavigate }) => 
 
     // Direct Delivery Photo Upload Handlers (Dual Target: Product / DO - Skip modal navigation)
     const handleTriggerDirectPhoto = (order: SalesOrder, targetType: 'product' | 'do') => {
+        // 1. Guard against locked trips:
+        const parentTrip = tripGroups.find(t => t.orders.some(o => o.id === order.id));
+        const firstPendingDeliveryTrip = pendingTrips.find(t => !t.isAdHoc && !t.isAllDone);
+        const isOrderTripLocked = parentTrip && !parentTrip.isAdHoc && firstPendingDeliveryTrip && firstPendingDeliveryTrip.key !== parentTrip.key;
+        if (isOrderTripLocked) {
+            alert(`⚠️ Sila selesaikan ${firstPendingDeliveryTrip?.tripIndexLabel || firstPendingDeliveryTrip?.tripNumber || 'Trip sebelumnya'} dahulu sebelum ambil gambar untuk Trip ini!`);
+            return;
+        }
+
+        // 2. Guard against un-loaded orders:
+        if (order.status !== 'Loaded' && order.status !== 'Pending Approval') {
+            alert("⚠️ Sila sahkan naik barang (muat barang) dahulu sebelum ambil gambar hantaran! / Please load goods first before taking delivery photo!");
+            return;
+        }
+
         directDeliveryOrderRef.current = order;
         directDeliveryTargetRef.current = targetType;
         directDeliveryInputRef.current?.click();
@@ -2366,7 +2424,12 @@ const DriverDelivery: React.FC<DriverDeliveryProps> = ({ user, onNavigate }) => 
         });
     };
 
-    const renderOrderCard = (order: SalesOrder, isMultiOrderTrip: boolean = false) => {
+    const renderOrderCard = (
+        order: SalesOrder, 
+        isMultiOrderTrip: boolean = false, 
+        isTripLocked: boolean = false, 
+        previousActiveTrip?: DriverTripGroup | null
+    ) => {
         const isExtraJob = (order as any).job_type === 'Extra Job' || (order as any).job_type === 'Pick Up' || order.orderNumber?.startsWith('TRIP-JOB') || order.orderNumber?.startsWith('TRIP-PU') || (order.notes && order.notes.startsWith('[') && (!order.items || order.items.length === 0));
 
         if (isExtraJob) {
@@ -2907,8 +2970,18 @@ const DriverDelivery: React.FC<DriverDeliveryProps> = ({ user, onNavigate }) => 
                                 <span>+ Kemaskini Foto POD / Update POD</span>
                             </button>
                         </div>
+                    ) : isTripLocked ? (
+                        <div className="w-full py-3.5 px-4 bg-slate-900/60 border border-slate-800 rounded-xl flex items-center justify-between text-xs text-slate-500 shadow-inner">
+                            <div className="flex items-center gap-2">
+                                <Lock size={14} className="text-amber-400/80 shrink-0" />
+                                <span className="text-slate-300 font-bold">Terkunci / Locked</span>
+                            </div>
+                            <span className="text-[11px] text-amber-400/80 font-mono truncate max-w-[200px]">
+                                Menunggu {previousActiveTrip?.tripIndexLabel || previousActiveTrip?.tripNumber || 'Trip sebelumnya'} selesai
+                            </span>
+                        </div>
                     ) : (
-                        (order.status === 'Loaded' || order.status === 'Pending Approval' || !isDeliveredOrDone) ? (() => {
+                        (order.status === 'Loaded' || order.status === 'Pending Approval') ? (() => {
                             const btnTotalDrops = isMultiOrderTrip ? 1 : Math.max(1, Number((order as any).trip_drop_count) || 1);
                             const btnDoneDrops = countCompletedDrops(order.pod_photo_url);
                             const rawPhotos = order.pod_photo_url ? order.pod_photo_url.split(',') : [];
@@ -3315,13 +3388,20 @@ const DriverDelivery: React.FC<DriverDeliveryProps> = ({ user, onNavigate }) => 
                         const defaultOpen = activeTab === 'todo' && (tripIndex === 0 || currentTripList.length <= 2);
                         const isExpanded = expandedTripKeys[trip.key] !== undefined ? expandedTripKeys[trip.key] : defaultOpen;
 
+                        // Check if trip is locked (only first non-done regular delivery trip is active, later trips are locked)
+                        const firstPendingDeliveryTrip = pendingTrips.find(t => !t.isAdHoc && !t.isAllDone);
+                        const isTripLocked = activeTab === 'todo' && !trip.isAdHoc && firstPendingDeliveryTrip && firstPendingDeliveryTrip.key !== trip.key;
+                        const previousActiveTrip = isTripLocked ? firstPendingDeliveryTrip : null;
+
                         return (
                             <div
                                 key={trip.key}
                                 className={`border rounded-2xl overflow-hidden shadow-xl transition-all ${
                                     trip.isAllDone 
                                         ? 'bg-slate-900/90 border-emerald-500/40' 
-                                        : 'bg-slate-900 border-blue-500/40'
+                                        : isTripLocked
+                                            ? 'bg-slate-950/80 border-slate-800'
+                                            : 'bg-slate-900 border-blue-500/40'
                                 }`}
                             >
                                 {/* Header (Click to toggle expand/collapse) */}
@@ -3334,14 +3414,20 @@ const DriverDelivery: React.FC<DriverDeliveryProps> = ({ user, onNavigate }) => 
                                             <span className={`text-xs font-mono font-black uppercase px-2.5 py-0.5 rounded-md border flex items-center gap-1.5 ${
                                                 trip.isAdHoc 
                                                     ? 'bg-emerald-600/20 text-emerald-300 border-emerald-500/40'
-                                                    : 'bg-blue-600/25 text-blue-300 border-blue-500/40'
+                                                    : isTripLocked
+                                                        ? 'bg-slate-800 text-slate-400 border-slate-700'
+                                                        : 'bg-blue-600/25 text-blue-300 border-blue-500/40'
                                             }`}>
                                                 <Truck size={13} />
                                                 <span>{trip.tripNumber}</span>
                                             </span>
 
                                             {trip.tripIndexLabel && (
-                                                <span className="text-[10px] font-black uppercase bg-purple-600/25 text-purple-300 px-2 py-0.5 rounded border border-purple-500/40">
+                                                <span className={`text-[10px] font-black uppercase px-2 py-0.5 rounded border ${
+                                                    isTripLocked
+                                                        ? 'bg-slate-800 text-slate-400 border-slate-700'
+                                                        : 'bg-purple-600/25 text-purple-300 border-purple-500/40'
+                                                }`}>
                                                     {trip.tripIndexLabel}
                                                 </span>
                                             )}
@@ -3359,11 +3445,21 @@ const DriverDelivery: React.FC<DriverDeliveryProps> = ({ user, onNavigate }) => 
                                             )}
 
                                             {(() => {
-                                                const isTripFullyLoaded = trip.orders.every(o => o.status === 'Loaded' || o.status === 'Delivered' || o.status === 'Pending Approval');
+                                                const v2Trip = tripsV2List.find(t => t.id === trip.tripId);
+                                                const isTripFullyLoaded = (v2Trip && (v2Trip.status === 'In Transit' || v2Trip.status === 'Completed')) || 
+                                                    trip.orders.every(o => o.status === 'Loaded' || o.status === 'Delivered' || o.status === 'Pending Approval' || Boolean(o.proof_of_load_url));
                                                 if (trip.isAllDone) {
                                                     return (
                                                         <span className="text-[10px] font-black uppercase bg-emerald-500/20 text-emerald-300 px-2 py-0.5 rounded border border-emerald-500/30">
                                                             ✅ Selesai / Done
+                                                        </span>
+                                                    );
+                                                }
+                                                if (isTripLocked) {
+                                                    return (
+                                                        <span className="text-[10px] font-black uppercase bg-slate-800 text-amber-400 px-2 py-0.5 rounded border border-amber-500/30 flex items-center gap-1">
+                                                            <Lock size={10} className="text-amber-400" />
+                                                            <span>Terkunci / Locked ({previousActiveTrip?.tripIndexLabel || previousActiveTrip?.tripNumber || 'Trip Sebelumnya'})</span>
                                                         </span>
                                                     );
                                                 }
@@ -3472,9 +3568,16 @@ const DriverDelivery: React.FC<DriverDeliveryProps> = ({ user, onNavigate }) => 
                                             </div>
                                         )}
 
-                                        {/* Trip-Level Naik Barang Button */}
-                                        {(() => {
-                                            const isTripFullyLoaded = trip.orders.every(o => o.status === 'Loaded' || o.status === 'Delivered' || o.status === 'Pending Approval');
+                                        {/* Trip-Level Naik Barang Button or Locked Notice */}
+                                        {isTripLocked ? (
+                                            <div className="w-full py-3.5 px-4 bg-slate-950/80 border border-amber-500/30 rounded-xl flex items-center justify-center gap-2.5 text-amber-300 text-xs font-bold shadow-inner">
+                                                <Lock size={16} className="text-amber-400 shrink-0" />
+                                                <span>🔒 Sila selesaikan {previousActiveTrip?.tripIndexLabel || previousActiveTrip?.tripNumber || 'Trip sebelumnya'} dahulu sebelum muat atau hantar Trip ini.</span>
+                                            </div>
+                                        ) : (() => {
+                                            const v2Trip = tripsV2List.find(t => t.id === trip.tripId);
+                                            const isTripFullyLoaded = (v2Trip && (v2Trip.status === 'In Transit' || v2Trip.status === 'Completed')) || 
+                                                trip.orders.every(o => o.status === 'Loaded' || o.status === 'Delivered' || o.status === 'Pending Approval' || Boolean(o.proof_of_load_url));
                                             if (isTripFullyLoaded) return null;
                                             return (
                                                 <button
@@ -3493,7 +3596,7 @@ const DriverDelivery: React.FC<DriverDeliveryProps> = ({ user, onNavigate }) => 
 
                                         {/* Drops List */}
                                         <div className="space-y-3">
-                                            {trip.orders.map((order) => renderOrderCard(order, trip.orders.length > 1))}
+                                            {trip.orders.map((order) => renderOrderCard(order, trip.orders.length > 1, isTripLocked, previousActiveTrip))}
                                         </div>
                                     </div>
                                 )}
