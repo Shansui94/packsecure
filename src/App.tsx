@@ -78,6 +78,18 @@ function App() {
         if (hash === '#/issues' || hash === '#/triage' || hash === '#/dev-log') return 'dev-log';
         return localStorage.getItem('lastActivePage') || 'factory-live-os';
     });
+    const [currentLanguage, setCurrentLanguage] = useState<string>(() => {
+        return localStorage.getItem('packsecure_lang') || 'zh-CN';
+    });
+
+    useEffect(() => {
+        const handleLangChange = (e: any) => {
+            const newLang = e.detail || localStorage.getItem('packsecure_lang') || 'zh-CN';
+            setCurrentLanguage(newLang);
+        };
+        window.addEventListener('packsecure:lang-change', handleLangChange);
+        return () => window.removeEventListener('packsecure:lang-change', handleLangChange);
+    }, []);
 
     // Hash direct router for issues / dev-log
     useEffect(() => {
@@ -854,7 +866,9 @@ function App() {
                     {/* Main Content Area */}
                     <div className="flex-1 overflow-y-auto relative custom-scrollbar bg-[#09090b]">
                         <Suspense fallback={<PageLoader />}>
-                            {renderContent()}
+                            <div key={currentLanguage} className="h-full w-full">
+                                {renderContent()}
+                            </div>
                         </Suspense>
                     </div>
                 </div>
@@ -866,7 +880,9 @@ function App() {
         <ErrorBoundary>
             <Layout activePage={activePage} setActivePage={setActivePage} userRole={user?.role} user={user} onLogout={handleLogout}>
                 <Suspense fallback={<PageLoader />}>
-                    {renderContent()}
+                    <div key={currentLanguage} className="h-full w-full">
+                        {renderContent()}
+                    </div>
                 </Suspense>
                 <Suspense fallback={null}>
                     {user?.role !== 'Driver' && <AIAgentWidget user={user} onNavigate={setActivePage} />}

@@ -167,39 +167,43 @@ const Layout: React.FC<LayoutProps> = ({ children, activePage, setActivePage, us
         if (!text) return '';
         const translated = t(text);
         if (translated && translated !== text) return translated;
+        const direct = translate(text, { defaultValue: text });
+        if (direct && direct !== text) return direct;
         if (FRAME_LABELS[text]) {
-            return isEnglish ? FRAME_LABELS[text].en : FRAME_LABELS[text].zh;
+            const translatedFromTerm = t(FRAME_LABELS[text].en);
+            if (translatedFromTerm && translatedFromTerm !== FRAME_LABELS[text].en) return translatedFromTerm;
+            return currentLanguage === 'zh-CN' ? FRAME_LABELS[text].zh : (isEnglish ? FRAME_LABELS[text].en : FRAME_LABELS[text].zh);
         }
         if (ROLE_LABELS[text]) {
-            return isEnglish ? ROLE_LABELS[text].en : ROLE_LABELS[text].zh;
+            const translatedFromTerm = t(ROLE_LABELS[text].en);
+            if (translatedFromTerm && translatedFromTerm !== ROLE_LABELS[text].en) return translatedFromTerm;
+            return currentLanguage === 'zh-CN' ? ROLE_LABELS[text].zh : (isEnglish ? ROLE_LABELS[text].en : ROLE_LABELS[text].zh);
         }
-        return translate(text, { defaultValue: text });
+        return translated || text;
     };
 
     const getLocalizedTitle = (group: { title: string; titleEn?: string }) => {
         if (currentLanguage === 'zh-CN') return group.title;
-        if (currentLanguage === 'en') return group.titleEn || group.title;
         const translated = t(group.title);
         if (translated && translated !== group.title) return translated;
         if (group.titleEn) {
             const translatedEn = t(group.titleEn);
             if (translatedEn && translatedEn !== group.titleEn) return translatedEn;
-            return group.titleEn;
+            if (currentLanguage === 'en') return group.titleEn;
         }
-        return group.title;
+        return currentLanguage === 'en' && group.titleEn ? group.titleEn : group.title;
     };
 
     const getLocalizedLabel = (mod: { label: string; labelEn?: string }) => {
         if (currentLanguage === 'zh-CN') return mod.label;
-        if (currentLanguage === 'en') return mod.labelEn || mod.label;
         const translated = t(mod.label);
         if (translated && translated !== mod.label) return translated;
         if (mod.labelEn) {
             const translatedEn = t(mod.labelEn);
             if (translatedEn && translatedEn !== mod.labelEn) return translatedEn;
-            return mod.labelEn;
+            if (currentLanguage === 'en') return mod.labelEn;
         }
-        return mod.label;
+        return currentLanguage === 'en' && mod.labelEn ? mod.labelEn : mod.label;
     };
 
     const handleLanguageChange = (langCode: string) => {

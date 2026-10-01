@@ -295,7 +295,125 @@ export const CORE_TERMS: {
     { en: 'Request Service', 'zh-CN': '报修申请', 'zh-TW': '報修申請', ms: 'Mohon Servis', my: 'ပြုပြင်ခွင့်တောင်းပါ', hi: 'सेवा अनुरोध', bn: 'পরিষেবা অনুরোধ' },
     { en: 'Mileage (km)', 'zh-CN': '里程数 (公里)', 'zh-TW': '里程數 (公里)', ms: 'Bacaan ODO (km)', my: 'မိုင်နှုန်း (km)', hi: 'माइलेज (किमी)', bn: 'মাইলেজ (কিমি)' },
     { en: 'Retake Photo', 'zh-CN': '重新拍照', 'zh-TW': '重新拍照', ms: 'Ambil Semula', my: 'ပြန်ရိုက်ပါ', hi: 'दोबारा फोटो लें', bn: 'পুনরায় ছবি তুলুন' },
-    { en: 'Confirm & Save', 'zh-CN': '确认并保存', 'zh-TW': '確認並儲存', ms: 'Sah & Simpan', my: 'အတည်ပြုပြီးသိမ်းပါ', hi: 'पुष्टि करें और सहेजें', bn: 'নিশ্চিত করুন এবং সংরক্ষণ করুন' },
+    // 🚛 司机移动端常用词汇 (Driver Mobile Terminology - 三语/多语)
+    { en: 'Confirm Delivery', 'zh-CN': '确认送达', 'zh-TW': '確認送達', ms: 'Sahkan Hantaran', my: 'ပို့ဆောင်မှုအတည်ပြုပါ', hi: 'वितरण की पुष्टि करें', bn: 'বিতরণ নিশ্চিত করুন' },
+    { en: 'Load Items', 'zh-CN': '装车上货', 'zh-TW': '裝車上貨', ms: 'Naik Barang', my: 'ပစ္စည်းတင်ပါ', hi: 'सामान लोड करें', bn: 'पণ্য লোড করুন' },
+    { en: 'Select Vehicle', 'zh-CN': '选择车辆', 'zh-TW': '選擇車輛', ms: 'Pilih Lori', my: 'ယာဉ်ရွေးချယ်ပါ', hi: 'वाहन चुनें', bn: 'যানবাহন নির্বাচন করুন' },
+    { en: 'Request Service', 'zh-CN': '报修申请', 'zh-TW': '報修申請', ms: 'Mohon Servis', my: 'ပြုပြင်ခွင့်တောင်းပါ', hi: 'सेवा अनुरोध', bn: 'পরিষেবা অনুরোধ' },
+    { en: 'Mileage (km)', 'zh-CN': '里程数 (公里)', 'zh-TW': '里程數 (公里)', ms: 'Bacaan ODO (km)', my: 'မိုင်နှုန်း (km)', hi: 'माइलेज (किमी)', bn: 'মাইলেজ (किमी)' },
+    { en: 'Retake Photo', 'zh-CN': '重新拍照', 'zh-TW': '重新拍照', ms: 'Ambil Semula', my: 'ပြန်ရိုက်ပါ', hi: 'दोबारा फोटो लें', bn: 'পুনরায় ছবি তুলুন' },
+    { en: 'Confirm & Save', 'zh-CN': '确认并保存', 'zh-TW': '確認並儲存', ms: 'Sah & Simpan', my: 'အတည်ပြုပြီးသိမ်းပါ', hi: 'पुष्टि करें और सहेजें', bn: 'নিশ্চित করুন এবং সংরক্ষণ করুন' },
+    { en: 'Snap Goods', 'zh-CN': '拍到货', 'zh-TW': '拍到貨', ms: 'Ambil Barang', my: 'ကုန်ပစ္စည်းဓာတ်ပုံ', hi: 'सामान की फोटो लें', bn: 'পণ্যের ছবি তুলুন' },
+    { en: 'Goods Arrived', 'zh-CN': '货已送达', 'zh-TW': '貨已送達', ms: 'Barang Sampai', my: 'ပစ္စည်းရောက်ရှိ', hi: 'सामान पहुंचा', bn: 'পণ্য পৌঁছেছে' },
+    { en: 'Goods Photo Saved', 'zh-CN': '到货照片已存', 'zh-TW': '到貨照片已存', ms: 'Barang Siap', my: 'ပစ္စည်းဓာတ်ပုံသိမ်းပြီး', hi: 'सामान फोटो सहेजा गया', bn: 'পণ্যের ছবি সংরক্ষিত' },
+    { en: 'Snap DO', 'zh-CN': '拍签收单', 'zh-TW': '拍簽收單', ms: 'Ambil DO', my: 'DO ဓာတ်ပုံရိုက်ပါ', hi: 'डीओ फोटो लें', bn: 'ডিও ছবি তুলুন' },
+    { en: 'Stamped DO', 'zh-CN': '已盖章 DO', 'zh-TW': '已蓋章 DO', ms: 'DO Bercop', my: 'တံဆိပ်တုံးထုထားသော DO', hi: 'मुहरबंद डीओ', bn: 'সিলমোহরযুক্ত ডিও' },
+    { en: 'Stamped DO Done', 'zh-CN': '签收单已保存', 'zh-TW': '簽收單已保存', ms: 'DO Bercop Siap', my: 'DO သိမ်းဆည်းပြီး', hi: 'डीओ सहेजा गया', bn: 'ডিও সংরক্ষিত' },
+    { en: 'DO Saved', 'zh-CN': '签收单已保存', 'zh-TW': '簽收單已保存', ms: 'DO Disimpan', my: 'DO သိမ်းဆည်းပြီး', hi: 'डीओ सहेजा गया', bn: 'ডিও সংরক্ষিত' },
+    { en: 'Load Trip', 'zh-CN': '车次装车', 'zh-TW': '車次裝車', ms: 'Muat Trip', my: 'ခရီးစဉ်ပစ္စည်းတင်ပါ', hi: 'ट्रिप लोड करें', bn: 'ট্রিপ লোড করুন' },
+    { en: 'Awaiting Trip Load', 'zh-CN': '等待车次装车', 'zh-TW': '等待車次裝車', ms: 'Menunggu Muatan Trip', my: 'ခရီးစဉ်ပစ္စည်းတင်ရန်စောင့်နေသည်', hi: 'ट्रिप लोड की प्रतीक्षा', bn: 'ট্রিপ লোডের অপেক্ষায়' },
+    { en: 'Full Form', 'zh-CN': '完整表单', 'zh-TW': '完整表單', ms: 'Borang Penuh', my: 'ဖောင်အပြည့်အစုံ', hi: 'पूर्ण प्रपत्र', bn: 'সম্পূর্ণ ফর্ম' },
+    { en: 'Extra Task', 'zh-CN': '额外任务', 'zh-TW': '額外任務', ms: 'Tugasan Tambahan', my: 'အပိုတာဝန်', hi: 'अतिरिक्त कार्य', bn: 'অতিরিক্ত কাজ' },
+    { en: 'Video Tutorial', 'zh-CN': '操作教程', 'zh-TW': '操作教學', ms: 'Tutorial Video', my: 'ဗီဒီယိုလမ်းညွှန်', hi: 'वीडियो ट्यूटोरियल', bn: 'ভিডিও টিউটোরিয়াল' },
+    { en: 'Current Vehicle', 'zh-CN': '当前车辆', 'zh-TW': '當前車輛', ms: 'Lori Semasa', my: 'လက်ရှိကား', hi: 'वर्तमान वाहन', bn: 'বর্তমান লরি' },
+    { en: 'Tap to Scan Vehicle QR', 'zh-CN': '点击扫码绑定车辆', 'zh-TW': '點擊掃碼綁定車輛', ms: 'Ketik untuk Imbas QR Lori', my: 'ကား QR စကင်န်ဖတ်ရန် နှိပ်ပါ', hi: 'वाहन क्यूआर स्कैन करें', bn: 'লরি কিউআর স্ক্যান করুন' },
+    { en: 'Bind lorry to start route', 'zh-CN': '绑定车辆开启出车配送', 'zh-TW': '綁定車輛開啟出車配送', ms: 'Tambat lori untuk mulakan laluan', my: 'လမ်းကြောင်းစတင်ရန် ကားကိုချိတ်ဆက်ပါ', hi: 'रूट शुरू करने के लिए वाहन लिंक करें', bn: 'রুট শুরু করতে লরি লিঙ্ক করুন' },
+    { en: 'End Shift', 'zh-CN': '交班登出', 'zh-TW': '交班登出', ms: 'Tamat Syif', my: 'ဆိုင်းပြီးဆုံးပါ', hi: 'शिフト समाप्त', bn: 'শিফট সমাপ্ত' },
+    { en: 'In Progress', 'zh-CN': '进行中', 'zh-TW': '進行中', ms: 'Dalam Proses', my: 'လုပ်ဆောင်နေသည်', hi: 'प्रगति में', bn: 'চলমান' },
+    { en: 'Orders', 'zh-CN': '单', 'zh-TW': '單', ms: 'Pesanan', my: 'အော်ဒါများ', hi: 'ऑर्डर', bn: 'অর্ডার' },
+    { en: 'Trip', 'zh-CN': '趟', 'zh-TW': '趟', ms: 'Trip', my: 'ခရီးစဉ်', hi: 'ट्रिप', bn: 'ট্রিপ' },
+    { en: 'Trips', 'zh-CN': '趟', 'zh-TW': '趟', ms: 'Trip', my: 'ခရီးစဉ်များ', hi: 'ट्रिप', bn: 'ট্রিপ' },
+    { en: 'Missing Signed DO', 'zh-CN': '需补拍签收单', 'zh-TW': '需補拍簽收單', ms: 'Perlu Dimuat Naik DO', my: 'လက်မှတ်ထိုးထားသော DO လိုအပ်သည်', hi: 'हस्ताक्षरित डीओ गायब है', bn: 'স্বাক্ষরিত ডিও প্রয়োজন' },
+    { en: 'Goods unloaded. Please take photo of signed DO to complete trip.', 'zh-CN': '货物已送达卸货，请拍摄客户签章签收单以完成配送。', 'zh-TW': '貨物已送達卸貨，請拍攝客戶簽章簽收單以完成配送。', ms: 'Barang telah diturunkan. Sila tangkap gambar DO bertandatangan untuk selesaikan trip.', my: 'ပစ္စည်းချပြီးပါပြီ။ ခရီးစဉ်ပြီးဆုံးရန် လက်မှတ်ထိုးထားသော DO ဓာတ်ပုံရိုက်ပါ။', hi: 'सामान अनलोड किया गया। कृपया ट्रिप पूरा करने के लिए हस्ताक्षरित डीओ की फोटो लें।', bn: 'পণ্য আনলোড করা হয়েছে। ট্রিপ সম্পূর্ণ করতে স্বাক্ষরিত ডিও এর ছবি তুলুন।' },
+    { en: 'Snap DO Photo', 'zh-CN': '拍摄签收单', 'zh-TW': '拍攝簽收單', ms: 'Tangkap DO', my: 'DO ဓာတ်ပုံရိုက်ပါ', hi: 'डीओ फोटो लें', bn: 'ডিও ফটো তুলুন' },
+    { en: 'No orders found.', 'zh-CN': '暂无配送任务', 'zh-TW': '暫無配送任務', ms: 'Tiada pesanan ditemui.', my: 'ပို့ဆောင်ရန် အော်ဒါမရှိပါ။', hi: 'कोई ऑर्डर नहीं मिला।', bn: 'কোনো অর্ডার পাওয়া যায়নি।' },
+    { en: 'Take photos of Goods & DO to confirm', 'zh-CN': '拍摄到货与签收单照片以确认送达', 'zh-TW': '拍攝到貨與簽收單照片以確認送達', ms: 'Ambil gambar Barang & DO untuk sahkan', my: 'အတည်ပြုရန် ကုန်ပစ္စည်းနှင့် DO ဓာတ်ပုံရိုက်ပါ', hi: 'पुष्टि करने के लिए सामान और डीओ की फोटो लें', bn: 'নিশ্চিত করতে পণ্য এবং ডিও এর ছবি তুলুন' },
+    { en: 'Please take photo of stamped DO to complete', 'zh-CN': '请拍摄盖章签收单以完成送达', 'zh-TW': '請拍攝蓋章簽收單以完成送達', ms: 'Sila ambil gambar DO bercop untuk selesaikan', my: 'ပြီးမြောက်ရန် တံဆိပ်တုံးထုထားသော DO ဓာတ်ပုံရိုက်ပါ', hi: 'पूरा करने के लिए कृपया मुहरबंद डीओ की फोटो लें', bn: 'সম্পূর্ণ করতে দয়া করে সিলমোহরযুক্ত ডিও এর ছবি তুলুন' },
+    { en: 'DO completed. You can add goods photo if needed', 'zh-CN': '签收单已保存，如有需要可补充拍摄到货照片', 'zh-TW': '簽收單已保存，如有需要可補充拍攝到貨照片', ms: 'DO siap. Boleh tambah gambar barang jika perlu', my: 'DO ပြီးပါပြီ။ လိုအပ်ပါက ကုန်ပစ္စည်းဓာတ်ပုံ ထည့်သွင်းနိုင်သည်', hi: 'डीओ पूरा हुआ। आवश्यकता पड़ने पर आप सामान की फोटो जोड़ सकते हैं', bn: 'ডিও সম্পন্ন হয়েছে। প্রয়োজনে পণ্যের ছবি যোগ করতে পারেন' },
+    { en: 'Goods & DO photos complete! Delivery confirmed.', 'zh-CN': '到货与签收单照片已齐全，送达已确认。', 'zh-TW': '到貨與簽收單照片已齊全，送達已確認。', ms: 'Lengkap! Gambar Barang & DO telah disahkan.', my: 'ပြီးပြည့်စုံပါပြီ! ကုန်ပစ္စည်းနှင့် DO အတည်ပြုပြီးပါပြီ။', hi: 'सामान और डीओ फोटो पूर्ण! वितरण की पुष्टि हो गई।', bn: 'পণ্য এবং ডিও ছবি সম্পূর্ণ! বিতরণ নিশ্চিত হয়েছে।' },
+    { en: 'Saving...', 'zh-CN': '正在保存...', 'zh-TW': '正在保存...', ms: 'Menyimpan...', my: 'သိမ်းဆည်းနေသည်...', hi: 'सहेज रहा है...', bn: 'সংরক্ষণ করা হচ্ছে...' },
+    { en: 'Retake', 'zh-CN': '重拍', 'zh-TW': '重拍', ms: 'Ambil Semula', my: 'ပြန်ရိုက်ပါ', hi: 'दोबारा लें', bn: 'আবার নিন' },
+    { en: 'Loaded', 'zh-CN': '已装车', 'zh-TW': '已裝車', ms: 'Dimuat', my: 'ပစ္စည်းတင်ပြီး', hi: 'लोड किया गया', bn: 'লোড করা হয়েছে' },
+    { en: 'Not Loaded', 'zh-CN': '未装车', 'zh-TW': '未裝車', ms: 'Belum Muat', my: 'ပစ္စည်းမတင်ရသေးပါ', hi: 'लोड नहीं किया गया', bn: 'লোড করা হয়নি' },
+    { en: 'Verify Trip Load', 'zh-CN': '核对车次物料', 'zh-TW': '核對車次物料', ms: 'Sahkan Muatan Trip', my: 'ခရီးစဉ်ပစ္စည်းစစ်ဆေးပါ', hi: 'ट्रिप लोड सत्यापित करें', bn: 'ট্রিপ লোড যাচাই করুন' },
+    { en: 'Verify Stock', 'zh-CN': '核对库存', 'zh-TW': '核對庫存', ms: 'Sahkan Stok', my: 'ပစ္စည်းစစ်ဆေးပါ', hi: 'स्टॉक सत्यापित करें', bn: 'স্টক যাচাই করুন' },
+    { en: 'Cargo Prep Photo', 'zh-CN': '备货照片参考', 'zh-TW': '備貨照片參考', ms: 'Rujukan Gambar Bersedia', my: 'ကုန်ပစ္စည်းပြင်ဆင်မှုဓာတ်ပုံ', hi: 'कार्गो तैयारी फोटो', bn: 'কার্গো প্রস্তুতি ছবি' },
+    { en: 'Quantity', 'zh-CN': '数量', 'zh-TW': '數量', ms: 'Kuantiti', my: 'အရေအတွက်', hi: 'मात्रा', bn: 'পরিমাণ' },
+    { en: 'Unknown Item', 'zh-CN': '未知物料', 'zh-TW': '未知物料', ms: 'Barang Tidak Diketahui', my: 'အမည်မသိပစ္စည်း', hi: 'अज्ञात वस्तु', bn: 'অজানা আইটেম' },
+    { en: 'Current GPS Coordinate', 'zh-CN': '当前 GPS 坐标', 'zh-TW': '當前 GPS 坐標', ms: 'Lokasi GPS Semasa', my: 'လက်ရှိ GPS တည်နေရာ', hi: 'वर्तमान जीपीएस स्थान', bn: 'বর্তমান জিপিএস অবস্থান' },
+    { en: 'Camera', 'zh-CN': '相机拍照', 'zh-TW': '相機拍照', ms: 'Kamera', my: 'ကင်မရာ', hi: 'कैमरा', bn: 'ক্যামেরা' },
+    { en: 'Gallery', 'zh-CN': '相册上传', 'zh-TW': '相冊上傳', ms: 'Galeri', my: 'ဓာတ်ပုံတွဲ', hi: 'गैलरी', bn: 'গ্যালারি' },
+    { en: 'Optional', 'zh-CN': '可选', 'zh-TW': '可選', ms: 'Pilihan', my: 'ရွေးချယ်နိုင်သည်', hi: 'वैकल्पिक', bn: 'ঐচ্ছিক' },
+    { en: 'Processing...', 'zh-CN': '处理中...', 'zh-TW': '處理中...', ms: 'Memproses...', my: 'လုပ်ဆောင်နေသည်...', hi: 'प्रक्रिया जारी है...', bn: 'প্রক্রিয়াকরণ চলছে...' },
+    { en: 'Trip Remark', 'zh-CN': '车次备注', 'zh-TW': '車次備註', ms: 'Nota Trip', my: 'ခရီးစဉ်မှတ်စု', hi: 'ट्रिप टिप्पणी', bn: 'ट्रिप নোট' },
+    { en: "This Trip's Cargo", 'zh-CN': '本趟装载明细', 'zh-TW': '本趟裝載明細', ms: 'Muatan Khas Trip Ini', my: 'ဤခရီးစဉ် ကုန်ပစ္စည်း', hi: 'इस ट्रिप का कार्गो', bn: 'এই ট্রিপের কার্গো' },
+    { en: 'Check items before departure', 'zh-CN': '发车前核对装载物料与数量', 'zh-TW': '發車前核對裝載物料與數量', ms: 'Semak kuantiti sebelum muat', my: 'မထွက်ခွာမီ ပစ္စည်းစစ်ဆေးပါ', hi: 'प्रस्थान से पहले सामान की जांच करें', bn: 'রওয়ানা হওয়ার আগে পণ্য পরীক্ষা করুন' },
+    { en: 'Load This Trip', 'zh-CN': '本车次装车', 'zh-TW': '本車次裝車', ms: 'Naik Barang Trip Ini', my: 'ဤခရီးစဉ် ပစ္စည်းတင်ပါ', hi: 'इस ट्रिप को लोड करें', bn: 'এই ট্রিপ লোড করুন' },
+    { en: 'Completed Drops', 'zh-CN': '已送达站点', 'zh-TW': '已送達站點', ms: 'Hentian Selesai', my: 'ပြီးစီးသောမှတ်တိုင်များ', hi: 'पूरे हुए ड्रॉप्स', bn: 'সম্পূর্ণ ড্রপ' },
+    { en: 'Today', 'zh-CN': '今天', 'zh-TW': '今天', ms: 'Hari Ini', my: 'ယနေ့', hi: 'आज', bn: 'আজ' },
+    { en: 'Customer', 'zh-CN': '客户', 'zh-TW': '客戶', ms: 'Pelanggan', my: 'ဖောက်သည်', hi: 'ग्राहक', bn: 'গ্রাহক' },
+    { en: 'Take Photo & Confirm', 'zh-CN': '拍照并确认', 'zh-TW': '拍照並確認', ms: 'Ambil Gambar & Sahkan', my: 'ဓာတ်ပုံရိုက်ပြီးအတည်ပြုပါ', hi: 'फोटो लें और पुष्टि करें', bn: 'ছবি তুলুন এবং নিশ্চিত করুন' },
+    { en: 'Total Items', 'zh-CN': '货物总数', 'zh-TW': '貨物總數', ms: 'Jumlah Barang', my: 'စုစုပေါင်းပစ္စည်းများ', hi: 'कुल सामान', bn: 'মোট আইটেম' },
+    { en: 'Save Goods (DO Later)', 'zh-CN': '仅存到货照 (随后补DO)', 'zh-TW': '僅存到貨照 (隨後補DO)', ms: 'Simpan Barang (DO Kemudian)', my: 'ပစ္စည်းသိမ်းဆည်းပါ (DO နောက်မှ)', hi: 'केवल सामान सहेजें (डीओ बाद में)', bn: 'শুধু পণ্য সংরক্ষণ করুন (ডিও পরে)' },
+    { en: 'Scan Lorry QR', 'zh-CN': '扫码绑定车辆', 'zh-TW': '掃碼綁定車輛', ms: 'Imbas QR Lori', my: 'ကား QR စကင်န်ဖတ်ပါ', hi: 'लॉरी क्यूआर स्कैन करें', bn: 'লরি কিউআর স্ক্যান করুন' },
+    { en: 'Scan Lorry QR (Return Vehicle)', 'zh-CN': '扫码交还车辆', 'zh-TW': '掃碼交還車輛', ms: 'Imbas QR Lori (Pemulangan)', my: 'ကားပြန်အပ်ရန် QR စကင်န်ဖတ်ပါ', hi: 'लॉरी वापस करने के लिए क्यूआर स्कैन करें', bn: 'লরি ফেরতের জন্য কিউআর স্ক্যান করুন' },
+    { en: 'Agent DO', 'zh-CN': '代理商单', 'zh-TW': '代理商單', ms: 'DO AGEN', my: 'ကိုယ်စားလှယ် DO', hi: 'एजेंट डीओ', bn: 'এজেন্ট ডিও' },
+    { en: 'Agent Delivery Instructions', 'zh-CN': '代理商送货指引', 'zh-TW': '代理商送貨指引', ms: 'ARAHAN PENGHANTARAN AGEN', my: 'ကိုယ်စားလှယ် ပို့ဆောင်မှု လမ်းညွှန်ချက်များ', hi: 'एजेंट वितरण निर्देश', bn: 'এজেন্ট বিতরণ নির্দেশাবলী' },
+    { en: 'Agent Delivery Notice', 'zh-CN': '代理商送货重要提醒', 'zh-TW': '代理商送貨重要提醒', ms: 'PERINGATAN PENTING: PENGHANTARAN DO AGEN', my: 'အရေးကြီးသော ကိုယ်စားလှယ် ပို့ဆောင်မှု သတိပေးချက်', hi: 'एजेंट वितरण सूचना', bn: 'এজেন্ট বিতরণ বিজ্ঞপ্তি' },
+    { en: 'DO Photo', 'zh-CN': '签收单照片', 'zh-TW': '簽收單照片', ms: 'GAMBAR DO', my: 'DO ဓာတ်ပုံ', hi: 'डीओ फोटो', bn: 'ডিও ফটো' },
+    { en: 'Product Photo', 'zh-CN': '货物照片', 'zh-TW': '貨物照片', ms: 'GAMBAR BARANG', my: 'ကုန်ပစ္စည်းဓာတ်ပုံ', hi: 'उत्पाद फोटो', bn: 'পণ্য ফটো' },
+    { en: 'Delivery Remark', 'zh-CN': '送货备注', 'zh-TW': '送貨備註', ms: 'CATATAN PENGHANTARAN', my: 'ပို့ဆောင်မှုမှတ်စု', hi: 'वितरण टिप्पणी', bn: 'বিতরণ মন্তব্য' },
+    { en: 'Write delivery note here...', 'zh-CN': '在此填写送货备注 (例如: 货物放在保安亭，李先生签收)', 'zh-TW': '在此填寫送貨備註 (例如: 貨物放在保安亭，李先生簽收)', ms: 'Tuliskan nota penghantaran di sini (contoh: Barang diletakkan di pondok pengawal, ditandatangani oleh En. Lee)', my: 'ပို့ဆောင်မှုမှတ်စုကို ဤနေရာတွင်ရေးပါ', hi: 'यहाँ डिलीवरी नोट लिखें...', bn: 'এখানে ডেলিভারি নোট লিখুন...' },
+    { en: 'Previously Uploaded Photos', 'zh-CN': '已上传的送货照片', 'zh-TW': '已上傳的送貨照片', ms: 'GAMBAR HANTARAN TERDAHULU', my: 'ယခင်တင်ထားသော ဓာတ်ပုံများ', hi: 'पहले अपलोड की गई तस्वीरें', bn: 'পূর্বে আপলোড করা ফটো' },
+    { en: 'Final Drop (End Trip)?', 'zh-CN': '🏁 最后送达点 (结束车次)?', 'zh-TW': '🏁 最後送達點 (結束車次)?', ms: '🏁 HANTARAN TERAKHIR (TAMAT TRIP)?', my: '🏁 နောက်ဆုံးမှတ်တိုင် (ခရီးစဉ်ပြီးဆုံး)?', hi: '🏁 अंतिम ड्रॉप (ट्रिप समाप्त)?', bn: '🏁 শেষ ড্রপ (ट्रिप समाप्त)?' },
+    { en: 'End Trip Early?', 'zh-CN': '⚠️ 提前结束车次?', 'zh-TW': '⚠️ 提前結束車次?', ms: '⚠️ TAMAT TRIP LEBIH AWAL?', my: '⚠️ ခရီးစဉ်စောစောပြီးမလား?', hi: '⚠️ क्या ट्रिप जल्दी समाप्त करें?', bn: '⚠️ ট্রিপ কি তাড়াতাড়ি শেষ করবেন?' },
+    { en: 'Select task category and take photo proof', 'zh-CN': '选择任务类别并拍摄照片凭证', 'zh-TW': '選擇任務類別並拍攝照片憑證', ms: 'Pilih Kategori Tugasan & Ambil Gambar Bukti', my: 'တာဝန်အမျိုးအစားရွေးချယ်ပြီး ဓာတ်ပုံရိုက်ပါ', hi: 'कार्य श्रेणी चुनें और फोटो प्रमाण लें', bn: 'টাস্ক বিভাগ নির্বাচন করুন এবং ছবি প্রমাণ নিন' },
+    { en: 'Select Category', 'zh-CN': '选择任务类别', 'zh-TW': '選擇任務類別', ms: 'PILIH KATEGORI TUGASAN', my: 'အမျိုးအစားရွေးပါ', hi: 'श्रेणी चुनें', bn: 'বিভাগ নির্বাচন করুন' },
+    { en: 'System Salary Rate', 'zh-CN': '系统补贴费率', 'zh-TW': '系統補貼費率', ms: 'Kadar Gaji Sistem', my: 'စနစ်လစာနှုန်း', hi: 'सिस्टम वेतन दर', bn: 'সিস্টেম বেতন হার' },
+    { en: 'Origin', 'zh-CN': '发车起点', 'zh-TW': '發車起點', ms: 'Asal', my: 'မူရင်း', hi: 'मूल', bn: 'উৎস' },
+    { en: 'Admin/Manager sets rate', 'zh-CN': '管理层核定补贴金额', 'zh-TW': '管理層核定補貼金額', ms: 'Admin / Manager Tentukan Gaji', my: 'မန်နေဂျာမှ သတ်မှတ်သည်', hi: 'व्यवस्थापक दर तय करता है', bn: 'প্রশাসক হার নির্ধারণ করে' },
+    { en: 'Salary rate is set by system and verified by admin.', 'zh-CN': '补贴费率由系统按规则核算 (司机不可自行修改)，需管理员审核。', 'zh-TW': '補貼費率由系統按規則核算 (司機不可自行修改)，需管理員審核。', ms: 'Kadar gaji telah ditetapkan oleh sistem (tidak boleh diubah oleh pemandu) & akan disahkan oleh Admin/Manager.', my: 'လစာနှုန်းကို စနစ်မှသတ်မှတ်ထားပြီး အက်ဒမင်မှ အတည်ပြုပါမည်။', hi: 'वेतन दर प्रणाली द्वारा निर्धारित की जाती है और व्यवस्थापक द्वारा सत्यापित की जाती है।', bn: 'বেতন হার সিস্টেম দ্বারা নির্ধারিত এবং প্রশাসক দ্বারা যাচাই করা হয়।' },
+    { en: 'Photo Proof', 'zh-CN': '现场拍照凭证', 'zh-TW': '現場拍照憑證', ms: 'BUKTI GAMBAR', my: 'ဓာတ်ပုံသက်သေ', hi: 'फोटो प्रमाण', bn: 'ফটো প্রমাণ' },
+    { en: 'Mandatory', 'zh-CN': '必填', 'zh-TW': '必填', ms: 'Wajib', my: 'မဖြစ်မနေ', hi: 'अनिवार्य', bn: 'বাধ্যতামূলক' },
+    { en: 'Take Photo Proof', 'zh-CN': '拍摄工作凭证照片', 'zh-TW': '拍攝工作憑證照片', ms: 'AMBIL GAMBAR BUKTI KERJA', my: 'အလုပ်ဓာတ်ပုံရိုက်ပါ', hi: 'फोटो प्रमाण लें', bn: 'কাজের ছবির প্রমাণ নিন' },
+    { en: 'Tap to open camera and take photo of task', 'zh-CN': '点击打开相机拍摄作业现场照片', 'zh-TW': '點擊打開相機拍攝作業現場照片', ms: 'Ketik untuk buka kamera & ambil gambar tugasan', my: 'ကင်မရာဖွင့်ပြီး ဓာတ်ပုံရိုက်ရန် နှိပ်ပါ', hi: 'कैमरा खोलने और फोटो लेने के लिए टैप करें', bn: 'ক্যামেরা খুলতে এবং ছবি তুলতে ট্যাপ করুন' },
+    { en: 'Photo Uploaded Successfully', 'zh-CN': '照片上传成功', 'zh-TW': '照片上傳成功', ms: 'Gambar Berjaya Dimuat Naik', my: 'ဓာတ်ပုံအောင်မြင်စွာ တင်ပြီးပါပြီ', hi: 'फोटो सफलतापूर्वक अपलोड हो गई', bn: 'ছবি সফলভাবে আপলোড হয়েছে' },
+    { en: 'Remarks (Optional)', 'zh-CN': '备注说明 (可选)', 'zh-TW': '備註說明 (可選)', ms: 'CATATAN (PILIHAN)', my: 'မှတ်ချက် (ရွေးချယ်နိုင်သည်)', hi: 'टिप्पणियाँ (वैकल्पिक)', bn: 'মন্তব্য (ঐচ্ছিক)' },
+    { en: 'Submit for Approval', 'zh-CN': '提交审核', 'zh-TW': '提交審核', ms: 'HANTAR UNTUK KELULUSAN ADMIN', my: 'အတည်ပြုချက်အတွက် တင်သွင်းပါ', hi: 'स्वीकृति के लिए जमा करें', bn: 'অনুমোদনের জন্য জমা দিন' },
+    { en: 'Confirm Return Vehicle', 'zh-CN': '确认交还车辆', 'zh-TW': '確認交還車輛', ms: 'Sahkan Pulang Lori', my: 'ကားပြန်အပ်ခြင်း အတည်ပြုပါ', hi: 'वाहन वापसी की पुष्टि करें', bn: 'যানবাহন ফেরত নিশ্চিত করুন' },
+    { en: 'Tap anywhere to close', 'zh-CN': '点击任意区域关闭', 'zh-TW': '點擊任意區域關閉', ms: 'Ketik di mana-mana untuk tutup', my: 'ပိတ်ရန် နေရာမရွေးနှိပ်ပါ', hi: 'बंद करने के लिए कहीं भी टैप करें', bn: 'বন্ধ করতে যেকোনো স্থানে ট্যাপ করুন' },
+    { en: 'Odometer Reading', 'zh-CN': '仪表盘里程读数', 'zh-TW': '儀表盤里程讀數', ms: 'BACAAN ODOMETER', my: 'မိုင်မီတာဖတ်ချက်', hi: 'ओडोमीटर रीडिंग', bn: 'ওডোমিটার রিডিং' },
+    { en: 'Start Shift', 'zh-CN': '出车打卡 (上班)', 'zh-TW': '出車打卡 (上班)', ms: 'Mula Syif', my: 'ဆိုင်းစတင်ပါ', hi: 'शिफ्ट शुरू', bn: 'শিফট শুরু' },
+    { en: 'Cancel?', 'zh-CN': '确定取消吗？', 'zh-TW': '確定取消嗎？', ms: 'Batal?', my: 'ပယ်ဖျက်မလား?', hi: 'रद्द करें?', bn: 'বাতিল করবেন?' },
+    { en: 'Photo Guide', 'zh-CN': '拍照规范', 'zh-TW': '拍照規範', ms: 'Panduan Mengambil Gambar', my: 'ဓာတ်ပုံလမ်းညွှန်', hi: 'फोटो गाइड', bn: 'ফটো গাইড' },
+    { en: 'Example', 'zh-CN': '示例', 'zh-TW': '示例', ms: 'Contoh', my: 'ဥပမာ', hi: 'उदाहरण', bn: 'উদাহরণ' },
+    { en: 'Take ODO Photo', 'zh-CN': '拍摄里程表照片', 'zh-TW': '拍攝里程表照片', ms: 'AMBIL FOTO ODOMETER', my: 'မိုင်မီတာဓာတ်ပုံရိုက်ပါ', hi: 'ओडो फोटो लें', bn: 'ওডো ফটো নিন' },
+    { en: 'AI Analyzing ODO...', 'zh-CN': 'AI 正在智能识别仪表盘...', 'zh-TW': 'AI 正在智能識別儀表盤...', ms: 'AI Menganalisis Foto...', my: 'AI မှ မိုင်မီတာကို စစ်ဆေးနေသည်...', hi: 'एआई फोटो का विश्लेषण कर रहा है...', bn: 'এআই ওডো বিশ্লেষণ করছে...' },
+    { en: 'Please wait a moment', 'zh-CN': '请稍候片刻', 'zh-TW': '請稍候片刻', ms: 'Sila tunggu sebentar', my: 'ခဏစောင့်ပါ', hi: 'कृपया प्रतीक्षा करें', bn: 'অনুগ্রহ করে অপেক্ষা করুন' },
+    { en: 'Confirm ODO Value (km)', 'zh-CN': '核对里程读数 (km)', 'zh-TW': '核對里程讀數 (km)', ms: 'Masukkan Bacaan ODO (km)', my: 'မိုင်မီတာနံပါတ် အတည်ပြုပါ (km)', hi: 'ओडोमीटर मान दर्ज करें (किमी)', bn: 'ওডোমিটার মান লিখুন (কিমি)' },
+    { en: 'AI successfully detected ODO reading', 'zh-CN': 'AI 已成功识别里程读数', 'zh-TW': 'AI 已成功識別里程讀數', ms: 'AI berjaya mengesan bacaan ODO', my: 'AI မှ မိုင်မီတာကို အောင်မြင်စွာ ဖတ်ရှုပြီးပါပြီ', hi: 'एआई ने ओडो रीडिंग सफलतापूर्वक पहचान ली', bn: 'এআই সফলভাবে ওডো রিডিং সনাক্ত করেছে' },
+    { en: 'Please enter ODO reading manually if AI detection is inaccurate', 'zh-CN': '若识别有偏差，请直接手动修改数字', 'zh-TW': '若識別有偏差，請直接手動修改數字', ms: 'Sila masukkan bacaan ODO secara manual jika AI tidak mengesan dengan tepat.', my: 'AI မှားယွင်းပါက မိုင်မီတာကို ကိုယ်တိုင်ရိုက်ထည့်ပါ', hi: 'यदि एआई पहचान गलत है तो कृपया मैन्युअल रूप से दर्ज करें।', bn: 'এআই ভুল হলে দয়া করে ম্যানুয়ালি ইনপুট করুন।' },
+    { en: 'Submitting...', 'zh-CN': '正在提交...', 'zh-TW': '正在提交...', ms: 'Menghantar...', my: 'တင်သွင်းနေသည်...', hi: 'जमा कर रहा है...', bn: 'জমা দেওয়া হচ্ছে...' },
+    { en: 'Binding...', 'zh-CN': '正在绑定...', 'zh-TW': '正在綁定...', ms: 'Menghubungkan...', my: 'ချိတ်ဆက်နေသည်...', hi: 'बाध्यकारी...', bn: 'বাঁধাই করা হচ্ছে...' },
+    { en: 'Drop', 'zh-CN': '站点', 'zh-TW': '站點', ms: 'Hentian', my: 'မှတ်တိုင်', hi: 'ड्रॉप', bn: 'ড্রপ' },
+    { en: 'Drops', 'zh-CN': '站', 'zh-TW': '站', ms: 'Hentian', my: 'မှတ်တိုင်များ', hi: 'ड्रॉप्स', bn: 'ড্রপ' },
+    { en: 'Stop', 'zh-CN': '站点', 'zh-TW': '站點', ms: 'Hentian', my: 'မှတ်တိုင်', hi: 'स्टॉप', bn: 'স্টপ' },
+    { en: 'Map', 'zh-CN': '地图导航', 'zh-TW': '地圖導航', ms: 'Peta', my: 'မြေပုံ', hi: 'नक्शा', bn: 'মানচিত্র' },
+    { en: 'Call', 'zh-CN': '拨打电话', 'zh-TW': '撥打電話', ms: 'Hubungi', my: 'ဖုန်းခေါ်ပါ', hi: 'कॉल करें', bn: 'কল করুন' },
+    { en: 'Notes', 'zh-CN': '备注', 'zh-TW': '備註', ms: 'Nota', my: 'မှတ်စုများ', hi: 'नोट्स', bn: 'নোট' },
+    { en: 'Other Items', 'zh-CN': '其他物品', 'zh-TW': '其他物品', ms: 'Barangan Lain', my: 'အခြားပစ္စည်းများ', hi: 'अन्य सामान', bn: 'অন্যান্য আইটেম' },
+    { en: 'Proof of Delivery (POD)', 'zh-CN': '送达签收凭证 (POD)', 'zh-TW': '送達簽收憑證 (POD)', ms: 'Bukti Penghantaran (POD)', my: 'ပို့ဆောင်မှုသက်သေ (POD)', hi: 'वितरण का प्रमाण (POD)', bn: 'বিতরণের প্রমাণ (POD)' },
+    { en: 'In Transit', 'zh-CN': '运输途中', 'zh-TW': '運輸途中', ms: 'Dalam Perjalanan', my: 'လမ်းခရီးတွင်', hi: 'पारगमन में', bn: 'ট্রানজিটে' },
+    { en: 'Upload DO', 'zh-CN': '上传签收单', 'zh-TW': '上傳簽收單', ms: 'MUAT NAIK DO', my: 'DO တင်ပါ', hi: 'डीओ अपलोड करें', bn: 'ডিও আপলোড করুন' },
+    { en: 'No Photo', 'zh-CN': '暂无照片', 'zh-TW': '暫無照片', ms: 'TIADA FOTO', my: 'ဓာတ်ပုံမရှိပါ', hi: 'कोई फोटो नहीं', bn: 'ছবি নেই' },
+    { en: 'Goods', 'zh-CN': '货物', 'zh-TW': '貨物', ms: 'Barang', my: 'ကုန်ပစ္စည်း', hi: 'सामान', bn: 'পণ্য' },
+    { en: 'Delivered at', 'zh-CN': '送达时间', 'zh-TW': '送達時間', ms: 'Dihantar pada', my: 'ပို့ဆောင်ချိန်', hi: 'वितरण का समय', bn: 'বিতরণের সময়' },
+    { en: 'Pending logistics approval', 'zh-CN': '等待物流调度核准', 'zh-TW': '等待物流調度核准', ms: 'Menunggu kelulusan logistik', my: 'ထောက်ပံ့ပို့ဆောင်ရေးခွင့်ပြုချက်စောင့်နေသည်', hi: 'लॉजिस्टिक्स स्वीकृति लंबित', bn: 'লজিস্টিক অনুমোদনের অপেক্ষায়' },
+    { en: 'Delivered & Stock Deducted', 'zh-CN': '已送达并完成出库扣减', 'zh-TW': '已送達並完成出庫扣減', ms: 'Stok Ditolak & Hantar', my: 'ပို့ဆောင်ပြီး ပစ္စည်းစာရင်းနုတ်ပြီး', hi: 'वितरित और स्टॉक घटाया गया', bn: 'বিতরণ করা হয়েছে এবং স্টক কাটা হয়েছে' },
+    { en: 'Update POD', 'zh-CN': '补充更新送达照片', 'zh-TW': '補充更新送達照片', ms: 'Kemaskini Foto POD', my: 'POD ဓာတ်ပုံပြင်ဆင်ပါ', hi: 'पीओडी फोटो अपडेट करें', bn: 'পিওডি ছবি আপডেট করুন' },
+    { en: 'Units', 'zh-CN': '件', 'zh-TW': '件', ms: 'Unit', my: 'ခု', hi: 'इकाई', bn: 'ইউনিট' },
+    { en: 'Vehicle', 'zh-CN': '车辆', 'zh-TW': '車輛', ms: 'Lori', my: 'ယာဉ်', hi: 'वाहन', bn: 'যানবাহন' },
+
 
     // 🏭 车间外籍工人与上下班打卡高频词汇 (Factory Worker & Clock-In Terminology - 六语极简大图标)
     { en: 'Clock In', 'zh-CN': '上班打卡', 'zh-TW': '上班打卡', ms: 'Daftar Masuk', my: 'အလုပ်စတင်ပါ (Clock In)', hi: 'काम शुरू (क्लॉक इन)', bn: 'কাজে প্রবেশ (Clock In)' },
@@ -600,6 +718,10 @@ function buildDictionaryForLanguage(lang: SupportedLanguage): Record<string, str
         dict[item['zh-CN']] = targetValue;
         // 允许以繁体中文作为 key
         dict[item['zh-TW']] = targetValue;
+        // 允许以马来文作为 key (方便现场司机模块)
+        if (item.ms) {
+            dict[item.ms] = targetValue;
+        }
     });
 
     return dict;
@@ -615,7 +737,7 @@ const resources = {
     'bn': { translation: { ...bnJson, ...buildDictionaryForLanguage('bn') } }
 };
 
-const savedLang = (localStorage.getItem('packsecure_lang') as SupportedLanguage) || 'zh-CN';
+const savedLang = (typeof localStorage !== 'undefined' ? (localStorage.getItem('packsecure_lang') as SupportedLanguage) : null) || 'zh-CN';
 
 i18n
     .use(initReactI18next)
@@ -632,7 +754,10 @@ i18n
     });
 
 export const getCurrentLanguage = (): SupportedLanguage => {
-    return (localStorage.getItem('packsecure_lang') as SupportedLanguage) || 'zh-CN';
+    if (typeof localStorage !== 'undefined') {
+        return (localStorage.getItem('packsecure_lang') as SupportedLanguage) || 'zh-CN';
+    }
+    return 'zh-CN';
 };
 
 export const t = (text: string, options?: Record<string, any>): string => {
@@ -641,10 +766,17 @@ export const t = (text: string, options?: Record<string, any>): string => {
 };
 
 export const changeLanguage = (langCode: SupportedLanguage) => {
-    localStorage.setItem('packsecure_lang', langCode);
+    if (typeof localStorage !== 'undefined') {
+        localStorage.setItem('packsecure_lang', langCode);
+    }
     i18n.changeLanguage(langCode);
-    const event = new CustomEvent('packsecure:lang-change', { detail: langCode });
-    window.dispatchEvent(event);
+    if (typeof document !== 'undefined') {
+        document.documentElement.lang = langCode;
+    }
+    if (typeof window !== 'undefined') {
+        const event = new CustomEvent('packsecure:lang-change', { detail: langCode });
+        window.dispatchEvent(event);
+    }
 };
 
 export default i18n;

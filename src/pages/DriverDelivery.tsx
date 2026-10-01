@@ -8,6 +8,8 @@ import { dataURLtoBlob } from '../utils/imageCompress';
 import { deductStockForOrder } from '../services/stockService';
 import { logActivity } from '../utils/logger';
 import DriverTutorialModal from '../components/DriverTutorialModal';
+import { useTranslation } from 'react-i18next';
+import { t } from '../utils/i18n';
 
 interface DriverDeliveryProps {
     user: any;
@@ -160,6 +162,22 @@ export const extractTripIdentifier = (notes?: string | null): { tripSeq?: number
 };
 
 const DriverDelivery: React.FC<DriverDeliveryProps> = ({ user, onNavigate }) => {
+    const { t: translate } = useTranslation();
+    const [, setLangTick] = useState(0);
+
+    useEffect(() => {
+        const handleLangChange = () => setLangTick(prev => prev + 1);
+        window.addEventListener('packsecure:lang-change', handleLangChange);
+        return () => window.removeEventListener('packsecure:lang-change', handleLangChange);
+    }, []);
+
+    const tr = (key: string, fallback?: string): string => {
+        const res = t(key);
+        if (res && res !== key) return res;
+        const direct = translate(key, { defaultValue: fallback || key });
+        return direct || fallback || key;
+    };
+
     // State
     const [tasks, setTasks] = useState<SalesOrder[]>([]);
     const [tripsV2List, setTripsV2List] = useState<any[]>([]);
@@ -1701,7 +1719,7 @@ const DriverDelivery: React.FC<DriverDeliveryProps> = ({ user, onNavigate }) => 
             });
 
             if (!response.ok) {
-                throw new Error("Gagal menganalisis gambar dengan AI. / Failed to analyze image with AI.");
+                throw new Error(tr('Failed to analyze image with AI.', 'Gagal menganalisis gambar dengan AI.'));
             }
 
             const data = await response.json();
@@ -1711,11 +1729,11 @@ const DriverDelivery: React.FC<DriverDeliveryProps> = ({ user, onNavigate }) => 
             } else {
                 setDetectedMileage(null);
                 setConfirmedMileage('');
-                alert("AI tidak dapat mengesan bacaan odometer. Sila masukkan secara manual. / AI could not detect odometer reading. Please enter manually.");
+                alert(tr('AI could not detect odometer reading. Please enter manually.', 'AI tidak dapat mengesan bacaan odometer. Sila masukkan secara manual.'));
             }
         } catch (err: any) {
             console.error("Odometer AI Extract Error:", err);
-            alert("Ralat AI: " + err.message + "\nSila masukkan odometer secara manual. / AI Error. Please enter odometer manually.");
+            alert(`${tr('AI Error. Please enter odometer manually.', 'Ralat AI. Sila masukkan odometer secara manual.')}\n${err.message}`);
         } finally {
             setIsAnalyzingOdometer(false);
             if (e.target) e.target.value = '';
@@ -1725,13 +1743,13 @@ const DriverDelivery: React.FC<DriverDeliveryProps> = ({ user, onNavigate }) => 
     // 6.2 Handle Odometer Confirm & Bind/Unbind Lorry
     const handleOdometerConfirm = async () => {
         if (!scannedLorryData || !odometerPhotoBase64) {
-            alert("Sila ambil gambar odometer dahulu! / Please take a photo of the odometer first!");
+            alert(tr('Please take a photo of the odometer first!', 'Sila ambil gambar odometer dahulu!'));
             return;
         }
 
         const mileageVal = parseInt(confirmedMileage, 10);
         if (isNaN(mileageVal) || mileageVal <= 0) {
-            alert("Sila masukkan bacaan odometer yang sah! / Please enter a valid odometer reading!");
+            alert(tr('Please enter a valid odometer reading!', 'Sila masukkan bacaan odometer yang sah!'));
             return;
         }
 
@@ -1868,7 +1886,7 @@ const DriverDelivery: React.FC<DriverDeliveryProps> = ({ user, onNavigate }) => 
 
                 if (bindError) throw bindError;
 
-                alert("✅ Lori Berjaya Ditambat! / Lorry Bound Successfully!");
+                alert(tr('Lorry bound successfully!', '✅ Lori berjaya ditambat!'));
                 setIsOdometerModalOpen(false);
                 fetchTasks(); // Refresh lorry status
             } 
@@ -1984,9 +2002,9 @@ const DriverDelivery: React.FC<DriverDeliveryProps> = ({ user, onNavigate }) => 
                 }
 
                 if (partialCount > 0 || unstartedCount > 0) {
-                    alert(`✅ Syif Selesai & Lori dilepaskan! / Shift completed & Lorry unbound!\n\nRingkasan Pesanan / Orders Summary:\n- Selesai Sepenuhnya (Delivered): ${fullyCompletedCount}\n- Hantaran Separa (Incomplete Drops): ${partialCount}\n- Belum Dihantar (Unstarted): ${unstartedCount}\n\nPesanan yang belum selesai dikekalkan dalam status 'Dalam Proses' untuk tindakan susulan Logistik.`);
+                    alert(`${tr('Shift completed & Lorry unbound!', '✅ Syif Selesai & Lori dilepaskan!')}\n\n${tr('Orders Summary', 'Ringkasan Pesanan')}:\n- ${tr('Delivered', 'Selesai Sepenuhnya')}: ${fullyCompletedCount}\n- ${tr('Incomplete Drops', 'Hantaran Separa')}: ${partialCount}\n- ${tr('Not Loaded', 'Belum Dihantar')}: ${unstartedCount}`);
                 } else {
-                    alert("✅ Syif Selesai & Lori dilepaskan! / Shift completed & Lorry unbound!");
+                    alert(tr('Shift completed & Lorry unbound!', '✅ Syif Selesai & Lori dilepaskan!'));
                 }
                 setCurrentLorry(null);
                 setIsOdometerModalOpen(false);
@@ -1994,7 +2012,7 @@ const DriverDelivery: React.FC<DriverDeliveryProps> = ({ user, onNavigate }) => 
             }
 
         } catch (err: any) {
-            alert("Ralat mengesahkan odometer / Error confirming odometer: " + err.message);
+            alert(`${tr('Error confirming odometer', 'Ralat mengesahkan odometer')}: ${err.message}`);
         } finally {
             setSubmittingOdometer(false);
         }
@@ -2287,7 +2305,7 @@ const DriverDelivery: React.FC<DriverDeliveryProps> = ({ user, onNavigate }) => 
 
             result.push({
                 key: 'adhoc_extra_jobs',
-                tripNumber: 'Tugasan Luar & Pesanan Tambahan / Ad-hoc & Extra Jobs',
+                tripNumber: 'Tugasan Luar & Pesanan Tambahan',
                 tripIndexLabel: 'Ad-hoc',
                 isAdHoc: true,
                 orders: extraJobOrders,
@@ -2433,7 +2451,7 @@ const DriverDelivery: React.FC<DriverDeliveryProps> = ({ user, onNavigate }) => 
                                     </span>
                                 </div>
                                 <h2 className="text-base font-black text-white leading-tight">
-                                    {order.deliveryAddress || 'Tugasan Luar / Ad-hoc Task'}
+                                    {order.deliveryAddress || tr('Extra Task', 'Tugasan Luar')}
                                 </h2>
                                 {order.deliveryDate && (() => {
                                     const d = new Date(order.deliveryDate);
@@ -2457,7 +2475,7 @@ const DriverDelivery: React.FC<DriverDeliveryProps> = ({ user, onNavigate }) => 
                             {extraJobPhoto && (
                                 <div className="bg-slate-950/60 p-3 rounded-xl border border-slate-800">
                                     <p className="text-[10px] text-blue-400 uppercase font-black mb-2 flex items-center gap-1">
-                                        📦 1. Gambar Naik Barang / Loading
+                                        📦 1. {tr('Load Items', 'Gambar Naik Barang')}
                                     </p>
                                     <div className="w-full h-36 rounded-lg overflow-hidden border border-slate-700 bg-black relative group">
                                         <img
@@ -2467,7 +2485,7 @@ const DriverDelivery: React.FC<DriverDeliveryProps> = ({ user, onNavigate }) => 
                                             onClick={() => setPreviewImageUrl(extraJobPhoto)}
                                         />
                                         <div className="absolute bottom-1.5 left-1.5 bg-black/80 backdrop-blur-sm px-2 py-0.5 rounded text-[8px] text-blue-300 font-bold">
-                                            Ketik untuk besarkan
+                                            {tr('Tap to enlarge', 'Ketik untuk besarkan')}
                                         </div>
                                     </div>
                                 </div>
@@ -2477,7 +2495,7 @@ const DriverDelivery: React.FC<DriverDeliveryProps> = ({ user, onNavigate }) => 
                             {order.pod_photo_url ? (
                                 <div className="bg-slate-950/60 p-3 rounded-xl border border-emerald-500/30">
                                     <p className="text-[10px] text-emerald-400 uppercase font-black mb-2 flex items-center gap-1">
-                                        🏁 2. Gambar Hantar Barang / POD
+                                        🏁 2. {tr('Proof of Delivery (POD)', 'Gambar Hantar Barang / POD')}
                                     </p>
                                     <div className="w-full h-36 rounded-lg overflow-hidden border border-slate-700 bg-black relative group">
                                         <img
@@ -2487,15 +2505,15 @@ const DriverDelivery: React.FC<DriverDeliveryProps> = ({ user, onNavigate }) => 
                                             onClick={() => setPreviewImageUrl(order.pod_photo_url.split(',')[0])}
                                         />
                                         <div className="absolute bottom-1.5 left-1.5 bg-black/80 backdrop-blur-sm px-2 py-0.5 rounded text-[8px] text-emerald-300 font-bold">
-                                            Ketik untuk besarkan
+                                            {tr('Tap to enlarge', 'Ketik untuk besarkan')}
                                         </div>
                                     </div>
                                 </div>
                             ) : (
                                 <div className="bg-slate-950/40 p-3 rounded-xl border border-dashed border-slate-800 flex flex-col items-center justify-center text-center">
                                     <Camera size={24} className="text-slate-600 mb-1" />
-                                    <p className="text-[10px] font-bold text-slate-400">Belum Ambil Gambar Hantar</p>
-                                    <p className="text-[9px] text-slate-500">Ambil gambar semasa tiba di destinasi/pelanggan</p>
+                                    <p className="text-[10px] font-bold text-slate-400">{tr('No Photo', 'Belum Ambil Gambar Hantar')}</p>
+                                    <p className="text-[9px] text-slate-500">{tr('Take photos of Goods & DO to confirm', 'Ambil gambar semasa tiba di destinasi/pelanggan')}</p>
                                 </div>
                             )}
                         </div>
@@ -2503,7 +2521,7 @@ const DriverDelivery: React.FC<DriverDeliveryProps> = ({ user, onNavigate }) => 
                         {/* Notes */}
                         {order.notes && (
                             <div className="mb-4 bg-slate-800/50 p-2.5 rounded-lg border border-slate-700/50 text-xs">
-                                <p className="text-[10px] text-slate-500 uppercase font-black mb-1">Catatan / Notes</p>
+                                <p className="text-[10px] text-slate-500 uppercase font-black mb-1">{tr('Notes', 'Catatan')}</p>
                                 <p className="text-slate-300 italic whitespace-pre-line">{order.notes}</p>
                             </div>
                         )}
@@ -2518,10 +2536,10 @@ const DriverDelivery: React.FC<DriverDeliveryProps> = ({ user, onNavigate }) => 
                                     className="w-full py-3.5 bg-emerald-600 hover:bg-emerald-500 active:scale-95 text-white rounded-xl font-black uppercase text-xs tracking-wider flex items-center justify-center gap-2 shadow-lg shadow-emerald-950/40 transition-all cursor-pointer"
                                 >
                                     <Camera size={16} className="text-emerald-200" />
-                                    <span>📸 AMBIL GAMBAR HANTAR BARANG / SAHKAN HANTARAN</span>
+                                    <span>📸 {tr('Confirm Delivery', 'SAHKAN HANTARAN')}</span>
                                 </button>
                                 <div className="flex items-center justify-center px-1 text-[10px] text-slate-400">
-                                    <span>🚚 Naik barang selesai. Sila ambil gambar di lokasi pelanggan untuk selesaikan.</span>
+                                    <span>🚚 {tr('Loading complete. Please take photo at customer location to finish.', 'Naik barang selesai. Sila ambil gambar di lokasi pelanggan untuk selesaikan.')}</span>
                                 </div>
                             </div>
                         ) : (
@@ -2531,7 +2549,7 @@ const DriverDelivery: React.FC<DriverDeliveryProps> = ({ user, onNavigate }) => 
                                     className="w-full py-2 bg-slate-800 hover:bg-slate-750 text-slate-300 hover:text-white border border-slate-700 rounded-xl font-bold uppercase text-[11px] flex items-center justify-center gap-1.5 transition-all"
                                 >
                                     <Camera size={13} className="text-emerald-400" />
-                                    <span>+ Kemaskini Foto Hantar Barang / Update POD</span>
+                                    <span>+ {tr('Update POD', 'Kemaskini Foto Hantar Barang')}</span>
                                 </button>
                             </div>
                         )}
@@ -2549,22 +2567,22 @@ const DriverDelivery: React.FC<DriverDeliveryProps> = ({ user, onNavigate }) => 
                             {!order.pod_photo_url ? (
                                 <>
                                     <div className="w-2 h-2 rounded-full bg-blue-400 animate-pulse"></div>
-                                    <span>🚚 Naik Barang Selesai — Sedang Menghantar / In Transit</span>
+                                    <span>🚚 {tr('In Transit', 'Sedang Menghantar')}</span>
                                 </>
                             ) : order.status === 'Pending Approval' ? (
                                 <>
                                     <div className="w-2 h-2 rounded-full bg-amber-400 animate-pulse"></div>
-                                    <span>🟡 Telah Dihantar — Menunggu Kelulusan Admin / Pending Approval</span>
+                                    <span>🟡 {tr('Pending logistics approval', 'Menunggu Kelulusan Admin')}</span>
                                 </>
                             ) : order.status === 'Delivered' ? (
                                 <>
                                     <CheckCircle size={15} />
-                                    <span>✅ Diluluskan & Gaji Dikreditkan / Approved</span>
+                                    <span>✅ {tr('Approved', 'Diluluskan & Gaji Dikreditkan')}</span>
                                 </>
                             ) : (
                                 <>
                                     <X size={15} />
-                                    <span>❌ Ditolak / Rejected</span>
+                                    <span>❌ {tr('Rejected', 'Ditolak')}</span>
                                 </>
                             )}
                         </div>
@@ -2607,7 +2625,7 @@ const DriverDelivery: React.FC<DriverDeliveryProps> = ({ user, onNavigate }) => 
                         <div className="flex items-center flex-wrap gap-1.5 mb-2">
                             {(order as any).stop_sequence !== undefined && (order as any).stop_sequence !== null && (
                                 <span className="text-[11px] font-black uppercase bg-purple-600/30 text-purple-300 px-2.5 py-0.5 rounded-md border border-purple-500/40 flex items-center gap-1">
-                                    🎯 Hentian / Drop #{(order as any).stop_sequence}
+                                    🎯 {tr('Drop', 'Hentian')} #{(order as any).stop_sequence}
                                 </span>
                             )}
                             {order.orderNumber && (
@@ -2617,7 +2635,7 @@ const DriverDelivery: React.FC<DriverDeliveryProps> = ({ user, onNavigate }) => 
                             )}
                             {isAgentOrder && (
                                 <span className="text-[11px] font-black uppercase bg-orange-600/30 text-orange-300 px-2.5 py-0.5 rounded-md border border-orange-500/50 flex items-center gap-1 shadow-sm">
-                                    🏢 DO {agentTag || 'AGEN'} / 代理商单
+                                    🏢 {agentTag ? `${agentTag} ` : ''}{tr('Agent DO', 'DO AGEN')}
                                 </span>
                             )}
                             {(order as any).terms && (
@@ -2638,7 +2656,7 @@ const DriverDelivery: React.FC<DriverDeliveryProps> = ({ user, onNavigate }) => 
                             {order.zone && <span className="text-[10px] font-black uppercase bg-amber-500/20 text-amber-400 px-2 py-0.5 rounded border border-amber-500/20">{order.zone}</span>}
                             {!(order as any).stop_sequence && !isMultiOrderTrip && (order as any).trip_drop_count > 1 && (
                                 <span className="text-[10px] font-black uppercase bg-emerald-500/20 text-emerald-400 px-2 py-0.5 rounded border border-emerald-500/20">
-                                    {(order as any).trip_drop_count} Hentian / Drops
+                                    {(order as any).trip_drop_count} {tr('Drops', 'Hentian')}
                                 </span>
                             )}
                         </div>
@@ -2658,7 +2676,7 @@ const DriverDelivery: React.FC<DriverDeliveryProps> = ({ user, onNavigate }) => 
                                     <span className="text-xl leading-none mt-0.5">⚠️</span>
                                     <div className="space-y-1">
                                         <div className="text-xs font-black text-orange-200 uppercase tracking-wide">
-                                            ARAHAN PENGHANTARAN AGEN / 代理商送货指引
+                                            {tr('Agent Delivery Instructions', 'ARAHAN PENGHANTARAN AGEN')}
                                         </div>
                                         <div className="text-[12px] text-amber-200 font-bold leading-relaxed">
                                             Sila minta pelanggan cop & tanda tangan pada <span className="underline text-white font-mono font-bold">DO {agentTag || 'AGEN'} ({order.orderNumber})</span> fizikal.
@@ -2685,7 +2703,7 @@ const DriverDelivery: React.FC<DriverDeliveryProps> = ({ user, onNavigate }) => 
                                     onClick={(e) => e.stopPropagation()}
                                     className="shrink-0 px-2.5 py-1.5 bg-blue-600 hover:bg-blue-500 active:scale-95 text-white rounded-lg text-[11px] font-black flex items-center gap-1 shadow transition-all"
                                 >
-                                    <span>Peta</span>
+                                    <span>{tr('Map', 'Peta')}</span>
                                     <ExternalLink size={10} />
                                 </a>
                             </div>
@@ -2700,7 +2718,7 @@ const DriverDelivery: React.FC<DriverDeliveryProps> = ({ user, onNavigate }) => 
                                     className="inline-flex items-center gap-1.5 px-3 py-1.5 bg-emerald-600 hover:bg-emerald-500 active:scale-95 text-white rounded-lg text-xs font-black shadow-md shadow-emerald-950/30 transition-all"
                                 >
                                     <Phone size={12} />
-                                    <span>Hubungi / Call: {(order as any).customer_phone}</span>
+                                    <span>{tr('Call', 'Hubungi')}: {(order as any).customer_phone}</span>
                                 </a>
                                 <a
                                     href={`https://wa.me/${String((order as any).customer_phone).replace(/[^0-9]/g, '').replace(/^0/, '60')}`}
@@ -2734,7 +2752,7 @@ const DriverDelivery: React.FC<DriverDeliveryProps> = ({ user, onNavigate }) => 
                     {/* Order Notes */}
                     {order.notes && (
                         <div className="mb-4 bg-slate-800/50 p-2 rounded-lg border border-slate-700/50">
-                            <p className="text-[10px] text-slate-500 uppercase font-black mb-1">Nota / Notes</p>
+                            <p className="text-[10px] text-slate-500 uppercase font-black mb-1">{tr('Notes', 'Nota')}</p>
                             <p className="text-sm text-slate-300 whitespace-pre-line">{order.notes}</p>
                         </div>
                     )}
@@ -2745,7 +2763,7 @@ const DriverDelivery: React.FC<DriverDeliveryProps> = ({ user, onNavigate }) => 
                         if (photos.length === 0) return null;
                         return (
                             <div className="mb-4 bg-slate-800/30 p-3 rounded-xl border border-slate-800/80">
-                                <p className="text-[10px] text-amber-500 uppercase font-black mb-2 flex items-center gap-1">📦 Gambar Barang Bersedia / Cargo Prep Photo</p>
+                                <p className="text-[10px] text-amber-500 uppercase font-black mb-2 flex items-center gap-1">📦 {tr('Cargo Prep Photo', 'Gambar Barang Bersedia')}</p>
                                 <div className={`grid gap-2 max-w-md mx-auto ${photos.length > 1 ? 'grid-cols-2' : 'grid-cols-1'}`}>
                                     {photos.map((p, idx) => (
                                         <div key={idx} className="relative rounded-lg overflow-hidden border border-white/5 bg-black/40 aspect-video">
@@ -2785,7 +2803,7 @@ const DriverDelivery: React.FC<DriverDeliveryProps> = ({ user, onNavigate }) => 
                             return Object.entries(grouped).map(([loc, items]: [string, any]) => (
                                 <div key={loc} className="bg-slate-950/50 p-3 rounded-xl border border-slate-800">
                                     <div className="text-[10px] font-bold text-slate-500 uppercase mb-2 flex items-center gap-1">
-                                        <Package size={10} /> {loc === 'Other Items' ? 'Barangan Lain / Other Items' : loc}
+                                        <Package size={10} /> {loc === 'Other Items' ? tr('Other Items', 'Barangan Lain') : loc}
                                     </div>
                                     <div className="space-y-2">
                                         {items.map((item: any, idx: number) => (
@@ -2818,27 +2836,27 @@ const DriverDelivery: React.FC<DriverDeliveryProps> = ({ user, onNavigate }) => 
                                     <div className="mb-4 bg-slate-950/40 p-3 rounded-xl border border-slate-800/80">
                                         <div className="flex justify-between items-center mb-2">
                                             <p className="text-[10px] text-emerald-400 uppercase font-black flex items-center gap-1">
-                                                📸 Bukti Penghantaran / Proof of Delivery (POD)
+                                                📸 {tr('Proof of Delivery (POD)', 'Bukti Penghantaran (POD)')}
                                             </p>
                                             {(() => {
                                                 const totalDrops = isMultiOrderTrip ? 1 : Math.max(1, Number((order as any).trip_drop_count) || 1);
                                                 if (completedDropsCount >= totalDrops && totalDrops > 0) {
                                                     return (
                                                         <span className="text-[10px] font-mono font-bold text-emerald-400">
-                                                            ✅ Selesai / Completed ({completedDropsCount}/{totalDrops})
+                                                            ✅ {tr('Completed', 'Selesai')} ({completedDropsCount}/{totalDrops})
                                                         </span>
                                                     );
                                                 }
                                                 if (completedDropsCount > 0) {
                                                     return (
                                                         <span className="text-[10px] font-mono font-bold text-blue-400">
-                                                            🚚 Dalam Perjalanan ({completedDropsCount}/{totalDrops} Drops)
+                                                            🚚 {tr('In Transit', 'Dalam Perjalanan')} ({completedDropsCount}/{totalDrops} {tr('Drops', 'Hentian')})
                                                         </span>
                                                     );
                                                 }
                                                 return (
                                                     <span className="text-[10px] font-mono font-bold text-slate-400">
-                                                        Menunggu / Pending
+                                                        {tr('Pending', 'Menunggu')}
                                                     </span>
                                                 );
                                             })()}
@@ -2868,7 +2886,7 @@ const DriverDelivery: React.FC<DriverDeliveryProps> = ({ user, onNavigate }) => 
                                                                     <>
                                                                         <Upload size={16} className="text-slate-500 group-hover:text-blue-400 transition-colors" />
                                                                         <span className="text-[8px] font-black text-slate-400 group-hover:text-slate-200 uppercase tracking-wider text-center px-1">
-                                                                            UPLOAD DO
+                                                                            {tr('Upload DO', 'MUAT NAIK DO')}
                                                                         </span>
                                                                     </>
                                                                 )}
@@ -2877,7 +2895,7 @@ const DriverDelivery: React.FC<DriverDeliveryProps> = ({ user, onNavigate }) => 
                                                     }
                                                     return (
                                                         <div key={idx} className="relative rounded-lg border border-dashed border-slate-800 bg-slate-950/50 aspect-square flex items-center justify-center">
-                                                            <span className="text-[8px] font-black text-slate-600 uppercase tracking-wider text-center">NO PHOTO</span>
+                                                            <span className="text-[8px] font-black text-slate-600 uppercase tracking-wider text-center">{tr('No Photo', 'TIADA FOTO')}</span>
                                                         </div>
                                                     );
                                                 }
@@ -2890,7 +2908,7 @@ const DriverDelivery: React.FC<DriverDeliveryProps> = ({ user, onNavigate }) => 
                                                             onClick={() => setPreviewImageUrl(url)}
                                                         />
                                                         <div className="absolute top-1 left-1 bg-black/80 backdrop-blur-sm text-[8px] font-black text-emerald-400 px-1.5 py-0.5 rounded border border-emerald-500/20 uppercase tracking-wider">
-                                                            {isDo ? 'DO' : 'Barang'}
+                                                            {isDo ? 'DO' : tr('Goods', 'Barang')}
                                                         </div>
                                                     </div>
                                                 );
@@ -2898,7 +2916,7 @@ const DriverDelivery: React.FC<DriverDeliveryProps> = ({ user, onNavigate }) => 
                                         </div>
                                         {order.pod_timestamp && (
                                             <p className="text-[9px] text-slate-500 mt-2 font-mono uppercase">
-                                                Dihantar pada / Delivered: {new Date(order.pod_timestamp).toLocaleString('en-GB')}
+                                                {tr('Delivered at', 'Dihantar pada')}: {new Date(order.pod_timestamp).toLocaleString('en-GB')}
                                             </p>
                                         )}
                                     </div>
@@ -2917,11 +2935,11 @@ const DriverDelivery: React.FC<DriverDeliveryProps> = ({ user, onNavigate }) => 
                             }`}>
                                 {order.status === 'Pending Approval' ? (
                                     <>
-                                        <Truck size={14} /> Menunggu kelulusan logistik / Pending logistics approval
+                                        <Truck size={14} /> {tr('Pending logistics approval', 'Menunggu kelulusan logistik')}
                                     </>
                                 ) : (
                                     <>
-                                        <CheckCircle size={14} /> Stok Ditolak & Hantar / Delivered & Stock Deducted
+                                        <CheckCircle size={14} /> {tr('Delivered & Stock Deducted', 'Stok Ditolak & Hantar')}
                                     </>
                                 )}
                             </div>
@@ -2933,7 +2951,7 @@ const DriverDelivery: React.FC<DriverDeliveryProps> = ({ user, onNavigate }) => 
                                 className="w-full py-2.5 bg-slate-800 hover:bg-slate-750 text-slate-300 hover:text-white border border-slate-700 hover:border-emerald-500/50 rounded-xl font-bold uppercase text-xs tracking-wider flex items-center justify-center gap-2 transition-all active:scale-98 shadow-sm"
                             >
                                 <Camera size={14} className="text-emerald-400" />
-                                <span>+ Kemaskini Foto POD / Update POD</span>
+                                <span>+ {tr('Update POD', 'Kemaskini Foto POD')}</span>
                             </button>
                         </div>
                     ) : (
@@ -2959,11 +2977,11 @@ const DriverDelivery: React.FC<DriverDeliveryProps> = ({ user, onNavigate }) => 
                                     {isWaitingDo && !hasDoPhoto && (
                                         <div className="bg-amber-500/15 border border-amber-500/40 text-amber-300 p-2.5 rounded-xl flex items-center gap-2 text-xs font-bold animate-pulse">
                                             <span>⚠️</span>
-                                            <span>Sila ambil gambar DO bercop untuk lengkapkan penghantaran / Please snap signed DO photo</span>
+                                            <span>{tr('Please take photo of stamped DO to complete', 'Sila ambil gambar DO bercop untuk selesaikan')}</span>
                                         </div>
                                     )}
 
-                                    {/* 🎯 左边拍到货，右边拍 DO 极速双直达按钮 (三语标准：Malay / English / 中文) */}
+                                    {/* 🎯 左边拍到货，右边拍 DO 极速双直达按钮 (动态多语言) */}
                                     <div className="grid grid-cols-2 gap-2.5">
                                         {/* 1. 左边：拍到货 (Ambil Gambar Barang) */}
                                         {hasProdPhoto ? (
@@ -2971,7 +2989,7 @@ const DriverDelivery: React.FC<DriverDeliveryProps> = ({ user, onNavigate }) => 
                                                 <div 
                                                     className="flex items-center gap-2 cursor-pointer flex-1 min-w-0"
                                                     onClick={() => setPreviewImageUrl(currentProdUrl)}
-                                                    title="Klik untuk lihat gambar / Click to preview"
+                                                    title={tr('Details', 'Klik untuk lihat')}
                                                 >
                                                     <img 
                                                         src={currentProdUrl} 
@@ -2981,16 +2999,16 @@ const DriverDelivery: React.FC<DriverDeliveryProps> = ({ user, onNavigate }) => 
                                                     <div className="min-w-0">
                                                         <div className="flex items-center gap-1 text-[11px] font-black text-emerald-300 truncate">
                                                             <CheckCircle size={12} className="text-emerald-400 shrink-0" />
-                                                            <span>BARANG SIAP</span>
+                                                            <span>{tr('Goods Photo Saved', 'BARANG SIAP')}</span>
                                                         </div>
                                                         <span className="text-[9px] text-slate-400 font-bold block truncate">
-                                                            Foto Disimpan • 拍到货
+                                                            {tr('Goods Arrived', 'BARANG SAMPAI')}
                                                         </span>
                                                     </div>
                                                 </div>
                                                 <button
                                                     type="button"
-                                                    title="Ambil Semula / Retake"
+                                                    title={tr('Retake', 'Ambil Semula')}
                                                     onClick={() => handleTriggerDirectPhoto(order, 'product')}
                                                     disabled={isDirectUploadingThis}
                                                     className="p-1.5 bg-slate-800 hover:bg-slate-750 active:scale-90 text-slate-300 hover:text-white rounded-lg border border-slate-700 shrink-0 text-[10px] font-bold cursor-pointer"
@@ -3004,22 +3022,22 @@ const DriverDelivery: React.FC<DriverDeliveryProps> = ({ user, onNavigate }) => 
                                                 onClick={() => handleTriggerDirectPhoto(order, 'product')}
                                                 disabled={isDirectUploadingThis}
                                                 data-action="DIRECT_SNAP_PRODUCT"
-                                                data-action-name="Ambil Foto Barang / 拍到货"
+                                                data-action-name={tr('Snap Goods', 'Ambil Foto Barang')}
                                                 className="py-3 px-2 bg-gradient-to-br from-amber-600 to-amber-700 hover:from-amber-500 hover:to-amber-600 text-white rounded-xl font-black flex flex-col items-center justify-center gap-0.5 shadow-lg shadow-amber-950/40 active:scale-95 transition-all cursor-pointer border border-amber-400/30 min-h-[56px]"
                                             >
                                                 {isDirectUploadingThis && directUploadingTarget === 'product' ? (
                                                     <div className="flex items-center gap-1 text-xs text-amber-200 py-1">
                                                         <RefreshCw size={14} className="animate-spin" />
-                                                        <span className="text-[10px]">Menyimpan...</span>
+                                                        <span className="text-[10px]">{tr('Saving...', 'Menyimpan...')}</span>
                                                     </div>
                                                 ) : (
                                                     <>
                                                         <div className="flex items-center gap-1 text-xs font-black tracking-wide">
                                                             <Camera size={15} className="text-amber-200" />
-                                                            <span>AMBIL BARANG</span>
+                                                            <span>{tr('Snap Goods', 'AMBIL BARANG')}</span>
                                                         </div>
                                                         <span className="text-[9px] text-amber-200/90 font-bold uppercase tracking-wider">
-                                                            BARANG SAMPAI • 拍到货
+                                                            {tr('Goods Arrived', 'BARANG SAMPAI')}
                                                         </span>
                                                     </>
                                                 )}
@@ -3032,7 +3050,7 @@ const DriverDelivery: React.FC<DriverDeliveryProps> = ({ user, onNavigate }) => 
                                                 <div 
                                                     className="flex items-center gap-2 cursor-pointer flex-1 min-w-0"
                                                     onClick={() => setPreviewImageUrl(currentDoUrl)}
-                                                    title="Klik untuk lihat gambar / Click to preview"
+                                                    title={tr('Details', 'Klik untuk lihat')}
                                                 >
                                                     <img 
                                                         src={currentDoUrl} 
@@ -3042,16 +3060,16 @@ const DriverDelivery: React.FC<DriverDeliveryProps> = ({ user, onNavigate }) => 
                                                     <div className="min-w-0">
                                                         <div className="flex items-center gap-1 text-[11px] font-black text-blue-300 truncate">
                                                             <CheckCircle size={12} className="text-blue-400 shrink-0" />
-                                                            <span>DO BERCOP SIAP</span>
+                                                            <span>{tr('Stamped DO Done', 'DO BERCOP SIAP')}</span>
                                                         </div>
                                                         <span className="text-[9px] text-slate-400 font-bold block truncate">
-                                                            DO Disimpan • 拍 DO
+                                                            {tr('DO Saved', 'DO Disimpan')}
                                                         </span>
                                                     </div>
                                                 </div>
                                                 <button
                                                     type="button"
-                                                    title="Ambil Semula / Retake"
+                                                    title={tr('Retake', 'Ambil Semula')}
                                                     onClick={() => handleTriggerDirectPhoto(order, 'do')}
                                                     disabled={isDirectUploadingThis}
                                                     className="p-1.5 bg-slate-800 hover:bg-slate-750 active:scale-90 text-slate-300 hover:text-white rounded-lg border border-slate-700 shrink-0 text-[10px] font-bold cursor-pointer"
@@ -3065,7 +3083,7 @@ const DriverDelivery: React.FC<DriverDeliveryProps> = ({ user, onNavigate }) => 
                                                 onClick={() => handleTriggerDirectPhoto(order, 'do')}
                                                 disabled={isDirectUploadingThis}
                                                 data-action="DIRECT_SNAP_DO"
-                                                data-action-name="Ambil Foto DO / 拍签收单"
+                                                data-action-name={tr('Snap DO', 'Ambil Foto DO')}
                                                 className={`py-3 px-2 rounded-xl font-black flex flex-col items-center justify-center gap-0.5 shadow-lg active:scale-95 transition-all cursor-pointer border min-h-[56px] ${
                                                     hasProdPhoto
                                                         ? 'bg-gradient-to-br from-emerald-600 to-emerald-700 hover:from-emerald-500 hover:to-emerald-600 text-white shadow-emerald-950/40 border-emerald-400/40 animate-pulse'
@@ -3075,16 +3093,16 @@ const DriverDelivery: React.FC<DriverDeliveryProps> = ({ user, onNavigate }) => 
                                                 {isDirectUploadingThis && directUploadingTarget === 'do' ? (
                                                     <div className="flex items-center gap-1 text-xs text-blue-200 py-1">
                                                         <RefreshCw size={14} className="animate-spin" />
-                                                        <span className="text-[10px]">Menyimpan...</span>
+                                                        <span className="text-[10px]">{tr('Saving...', 'Menyimpan...')}</span>
                                                     </div>
                                                 ) : (
                                                     <>
                                                         <div className="flex items-center gap-1 text-xs font-black tracking-wide">
                                                             <FileText size={15} className={hasProdPhoto ? 'text-emerald-200' : 'text-blue-200'} />
-                                                            <span>AMBIL DO</span>
+                                                            <span>{tr('Snap DO', 'AMBIL DO')}</span>
                                                         </div>
                                                         <span className={`text-[9px] font-bold uppercase tracking-wider ${hasProdPhoto ? 'text-emerald-200/90' : 'text-blue-200/90'}`}>
-                                                            DO BERCOP • 拍签收单
+                                                            {tr('Stamped DO', 'DO BERCOP')}
                                                         </span>
                                                     </>
                                                 )}
@@ -3095,20 +3113,22 @@ const DriverDelivery: React.FC<DriverDeliveryProps> = ({ user, onNavigate }) => 
                                     {/* 辅助说明与完整窗口备选入口 */}
                                     <div className="flex items-center justify-between px-1 text-[10px] text-slate-400">
                                         <span className="truncate">
-                                            {!hasDoPhoto && !hasProdPhoto && (btnTotalDrops > 1 ? `📸 Drop ${Math.min(btnDoneDrops + 1, btnTotalDrops)}/${btnTotalDrops}: Ambil Gambar Barang & DO` : '📸 Ambil Gambar Barang & DO Bercop')}
-                                            {hasProdPhoto && !hasDoPhoto && '👉 Sila ambil gambar DO bercop untuk selesaikan'}
-                                            {hasDoPhoto && !hasProdPhoto && '✅ DO siap. Boleh tambah gambar barang jika perlu'}
-                                            {hasDoPhoto && hasProdPhoto && '🎉 Lengkap! Gambar Barang & DO telah disahkan.'}
+                                            {!hasDoPhoto && !hasProdPhoto && (btnTotalDrops > 1 
+                                                ? `📸 Drop ${Math.min(btnDoneDrops + 1, btnTotalDrops)}/${btnTotalDrops}: ${tr('Take photos of Goods & DO to confirm', 'Ambil gambar Barang & DO untuk sahkan')}` 
+                                                : `📸 ${tr('Take photos of Goods & DO to confirm', 'Ambil gambar Barang & DO untuk sahkan')}`)}
+                                            {hasProdPhoto && !hasDoPhoto && `👉 ${tr('Please take photo of stamped DO to complete', 'Sila ambil gambar DO bercop untuk selesaikan')}`}
+                                            {hasDoPhoto && !hasProdPhoto && `✅ ${tr('DO completed. You can add goods photo if needed', 'DO siap. Boleh tambah gambar barang jika perlu')}`}
+                                            {hasDoPhoto && hasProdPhoto && `🎉 ${tr('Goods & DO photos complete! Delivery confirmed.', 'Lengkap! Gambar Barang & DO telah disahkan.')}`}
                                         </span>
                                         <button
                                             type="button"
                                             onClick={() => handleOpenUnloadModal(order)}
                                             data-action="OPEN_UNLOAD_MODAL"
-                                            data-action-name="Buka Borang Penuh / 完整表单"
+                                            data-action-name={tr('Full Form', 'Borang Penuh')}
                                             data-target={`工单 #${order.orderNumber || order.id}`}
                                             className="text-[10px] text-slate-500 hover:text-slate-300 underline underline-offset-2 flex items-center gap-0.5 shrink-0 ml-2 cursor-pointer"
                                         >
-                                            <span>Borang Penuh / Full Form</span>
+                                            <span>{tr('Full Form', 'Borang Penuh')}</span>
                                         </button>
                                     </div>
                                 </div>
@@ -3117,7 +3137,7 @@ const DriverDelivery: React.FC<DriverDeliveryProps> = ({ user, onNavigate }) => 
                             <div className="w-full py-3.5 px-4 bg-slate-900/80 border border-slate-800 rounded-xl flex items-center justify-between text-xs">
                                 <div className="flex items-center gap-2">
                                     <span className="w-2 h-2 rounded-full bg-amber-400 animate-pulse" />
-                                    <span className="text-amber-300 font-bold">Menunggu Muatan Trip / Awaiting Trip Load</span>
+                                    <span className="text-amber-300 font-bold">{tr('Awaiting Trip Load', 'Menunggu Muatan Trip')}</span>
                                 </div>
                                 <button
                                     onClick={() => {
@@ -3130,7 +3150,7 @@ const DriverDelivery: React.FC<DriverDeliveryProps> = ({ user, onNavigate }) => 
                                     }}
                                     className="text-[11px] font-bold text-blue-400 hover:text-blue-300 underline underline-offset-2 flex items-center gap-1 cursor-pointer"
                                 >
-                                    <span>Muat Trip / Load Trip ↑</span>
+                                    <span>{tr('Load Trip', 'Muat Trip')} ↑</span>
                                 </button>
                             </div>
                         )
@@ -3143,7 +3163,7 @@ const DriverDelivery: React.FC<DriverDeliveryProps> = ({ user, onNavigate }) => 
     return (
         <div className="min-h-screen bg-black text-slate-200 pb-20 font-sans">
             <div className="p-4 flex items-center justify-between border-b border-white/5 bg-slate-900/50">
-                <p className="text-[10px] font-bold text-slate-500 uppercase">{user?.name || 'Pemandu'} • {tasks.length} Pesanan / Orders</p>
+                <p className="text-[10px] font-bold text-slate-500 uppercase">{user?.name || tr('Driver', 'Pemandu')} • {tasks.length} {tr('Orders', 'Pesanan')}</p>
                 <div className="flex items-center gap-2">
                     <input
                         ref={pickUpFileInputRef}
@@ -3172,29 +3192,26 @@ const DriverDelivery: React.FC<DriverDeliveryProps> = ({ user, onNavigate }) => 
                         className="px-3 py-1.5 bg-gradient-to-r from-emerald-600/30 to-teal-600/30 hover:from-emerald-600/40 hover:to-teal-600/40 border border-emerald-500/40 text-emerald-300 rounded-lg text-[10px] font-bold uppercase tracking-wider flex items-center gap-1.5 transition-all shadow-sm active:scale-95 cursor-pointer"
                     >
                         <span>📸</span>
-                        <span className="hidden sm:inline"> TUGASAN TAMBAHAN / EXTRA JOB</span>
-                        <span className="inline sm:hidden"> EXTRA JOB</span>
+                        <span>{tr('Extra Task', 'TUGASAN TAMBAHAN')}</span>
                     </button>
 
                     <button
                         onClick={() => setIsTutorialModalOpen(true)}
                         className="px-2.5 py-1.5 bg-gradient-to-r from-amber-500/20 to-orange-500/20 hover:from-amber-500/30 hover:to-orange-500/30 border border-amber-500/40 text-amber-300 rounded-lg text-[10px] font-bold uppercase tracking-wider flex items-center gap-1 transition-all shadow-sm active:scale-95 cursor-pointer"
-                        title="Video Tutorial / 教学视频"
+                        title={tr('Video Tutorial', 'Tutorial Video')}
                     >
                         <span>🎥</span>
-                        <span className="hidden sm:inline">TUTORIAL</span>
-                        <span className="inline sm:hidden">VIDEO</span>
+                        <span>{tr('Video Tutorial', 'TUTORIAL')}</span>
                     </button>
 
                     {onNavigate && (
                         <button
                             onClick={() => onNavigate('leave-calendar')}
                             className="px-2.5 py-1.5 bg-gradient-to-r from-teal-500/20 to-emerald-500/20 hover:from-teal-500/30 hover:to-emerald-500/30 border border-teal-500/40 text-teal-300 rounded-lg text-[10px] font-bold uppercase tracking-wider flex items-center gap-1 transition-all active:scale-95 cursor-pointer shadow-sm"
-                            title="Mohon Cuti / 申请请假 (Staff Hub)"
+                            title={tr('Apply Leave', 'Mohon Cuti')}
                         >
                             <span>🏖️</span>
-                            <span className="hidden sm:inline">MOHON CUTI</span>
-                            <span className="inline sm:hidden">CUTI</span>
+                            <span>{tr('Apply Leave', 'MOHON CUTI')}</span>
                         </button>
                     )}
 
@@ -3219,7 +3236,7 @@ const DriverDelivery: React.FC<DriverDeliveryProps> = ({ user, onNavigate }) => 
                         onClick={() => setWebGpsActive(!webGpsActive)}
                         className="px-2 py-1 bg-slate-800 hover:bg-slate-700 text-slate-400 rounded text-[11px] font-bold"
                     >
-                        {webGpsActive ? '关闭网页 GPS' : '开启网页 GPS'}
+                        {webGpsActive ? 'GPS ON' : 'GPS OFF'}
                     </button>
                 </div>
             </div>
@@ -3233,7 +3250,7 @@ const DriverDelivery: React.FC<DriverDeliveryProps> = ({ user, onNavigate }) => 
                                 <Truck size={20} />
                             </div>
                             <div>
-                                <p className="text-[10px] font-black text-blue-400 uppercase tracking-widest">Lori Sekarang / Current Lorry</p>
+                                <p className="text-[10px] font-black text-blue-400 uppercase tracking-widest">{tr('Current Vehicle', 'Lori Semasa')}</p>
                                 <p className="text-white font-bold">{currentLorry.plate_number}</p>
                             </div>
                         </div>
@@ -3242,7 +3259,7 @@ const DriverDelivery: React.FC<DriverDeliveryProps> = ({ user, onNavigate }) => 
                             disabled={submitting}
                             className="px-4 py-2 bg-slate-900/50 hover:bg-slate-800 border border-slate-700 rounded-xl text-[10px] font-black uppercase text-slate-300 tracking-wider transition-all disabled:opacity-50"
                         >
-                            TAMAT SYIF / END SHIFT
+                            {tr('End Shift', 'TAMAT SYIF')}
                         </button>
                     </div>
                 ) : (
@@ -3252,8 +3269,8 @@ const DriverDelivery: React.FC<DriverDeliveryProps> = ({ user, onNavigate }) => 
                     >
                         <QrCode className="text-blue-400" size={24} />
                         <div className="text-left">
-                            <p className="text-sm font-black text-white uppercase tracking-wider">Ketik untuk Imbas QR Lori / Tap to Scan Lorry QR</p>
-                            <p className="text-[10px] text-slate-400 font-bold uppercase tracking-widest">Tambat lori untuk mulakan laluan / Bind lorry to start route</p>
+                            <p className="text-sm font-black text-white uppercase tracking-wider">{tr('Tap to Scan Vehicle QR', 'Ketik untuk Imbas QR Lori')}</p>
+                            <p className="text-[10px] text-slate-400 font-bold uppercase tracking-widest">{tr('Bind lorry to start route', 'Tambat lori untuk mulakan laluan')}</p>
                         </div>
                     </button>
                 )}
@@ -3267,7 +3284,7 @@ const DriverDelivery: React.FC<DriverDeliveryProps> = ({ user, onNavigate }) => 
                         activeTab === 'todo' ? 'bg-blue-600 text-white shadow-lg shadow-blue-900/40' : 'bg-slate-900 text-slate-500'
                     }`}
                 >
-                    Dalam Proses / Pending ({pendingTrips.length} {pendingTrips.length === 1 ? 'Trip' : 'Trips'})
+                    {tr('In Progress', 'Dalam Proses')} ({pendingTrips.length} {pendingTrips.length === 1 ? tr('Trip', 'Trip') : tr('Trips', 'Trips')})
                 </button>
                 <button
                     onClick={() => setActiveTab('done')}
@@ -3275,7 +3292,7 @@ const DriverDelivery: React.FC<DriverDeliveryProps> = ({ user, onNavigate }) => 
                         activeTab === 'done' ? 'bg-green-600/20 text-green-500 border border-green-500/30' : 'bg-slate-900 text-slate-500'
                     }`}
                 >
-                    Selesai / Done ({doneTrips.length} {doneTrips.length === 1 ? 'Trip' : 'Trips'})
+                    {tr('Completed', 'Selesai')} ({doneTrips.length} {doneTrips.length === 1 ? tr('Trip', 'Trip') : tr('Trips', 'Trips')})
                 </button>
             </div>
 
@@ -3299,10 +3316,10 @@ const DriverDelivery: React.FC<DriverDeliveryProps> = ({ user, onNavigate }) => 
                                 <span className="p-1.5 rounded-lg bg-amber-500/20 text-amber-400 text-base">⚠️</span>
                                 <div>
                                     <h4 className="text-xs font-black text-amber-300 uppercase tracking-wider">
-                                        {missingDoOrders.length} DO Perlu Dimuat Naik / Missing Signed DO
+                                        {missingDoOrders.length} {tr('Missing Signed DO', 'DO Perlu Dimuat Naik')}
                                     </h4>
                                     <p className="text-[10px] text-slate-300 font-bold">
-                                        Barang telah diturunkan. Sila tangkap gambar DO bertandatangan untuk selesaikan trip.
+                                        {tr('Goods unloaded. Please take photo of signed DO to complete trip.', 'Barang telah diturunkan. Sila tangkap gambar DO bertandatangan untuk selesaikan trip.')}
                                     </p>
                                 </div>
                             </div>
@@ -3324,7 +3341,7 @@ const DriverDelivery: React.FC<DriverDeliveryProps> = ({ user, onNavigate }) => 
                                             className="px-3 py-1.5 bg-gradient-to-r from-amber-600 to-orange-600 hover:from-amber-500 hover:to-orange-500 text-white rounded-lg text-xs font-black shadow-md flex items-center gap-1 shrink-0 cursor-pointer active:scale-95"
                                         >
                                             <Camera size={13} />
-                                            <span>Tangkap DO</span>
+                                            <span>{tr('Snap DO Photo', 'Tangkap DO')}</span>
                                         </button>
                                     </div>
                                 ))}
@@ -3333,11 +3350,11 @@ const DriverDelivery: React.FC<DriverDeliveryProps> = ({ user, onNavigate }) => 
                     );
                 })()}
                 {loading ? (
-                    <div className="text-center py-10 text-slate-500 animate-pulse">Memuatkan... / Loading...</div>
+                    <div className="text-center py-10 text-slate-500 animate-pulse">{tr('Loading...', 'Memuatkan...')}</div>
                 ) : currentTripList.length === 0 ? (
                     <div className="text-center py-12 bg-slate-900/50 rounded-2xl border-2 border-dashed border-slate-800">
                         <Package size={40} className="mx-auto mb-3 text-slate-700" />
-                        <h3 className="font-bold text-slate-500">Tiada pesanan ditemui. / No orders found.</h3>
+                        <h3 className="font-bold text-slate-500">{tr('No orders found.', 'Tiada pesanan ditemui.')}</h3>
                     </div>
                 ) : (
                     currentTripList.map((trip, tripIndex) => {
@@ -3366,7 +3383,7 @@ const DriverDelivery: React.FC<DriverDeliveryProps> = ({ user, onNavigate }) => 
                                                     : 'bg-blue-600/25 text-blue-300 border-blue-500/40'
                                             }`}>
                                                 <Truck size={13} />
-                                                <span>{trip.tripNumber}</span>
+                                                <span>{trip.isAdHoc ? tr('Extra Task', 'Tugasan Luar') : trip.tripNumber}</span>
                                             </span>
 
                                             {trip.tripIndexLabel && (
@@ -3394,20 +3411,20 @@ const DriverDelivery: React.FC<DriverDeliveryProps> = ({ user, onNavigate }) => 
                                                 if (trip.isAllDone) {
                                                     return (
                                                         <span className="text-[10px] font-black uppercase bg-emerald-500/20 text-emerald-300 px-2 py-0.5 rounded border border-emerald-500/30">
-                                                            ✅ Selesai / Done
+                                                            ✅ {tr('Done', 'Selesai')}
                                                         </span>
                                                     );
                                                 }
                                                 if (isTripFullyLoaded) {
                                                     return (
                                                         <span className="text-[10px] font-black uppercase bg-blue-500/20 text-blue-300 px-2 py-0.5 rounded border border-blue-500/30">
-                                                            🚚 Dimuat / Loaded
+                                                            🚚 {tr('Loaded', 'Dimuat')}
                                                         </span>
                                                     );
                                                 }
                                                 return (
                                                     <span className="text-[10px] font-black uppercase bg-amber-500/20 text-amber-300 px-2 py-0.5 rounded border border-amber-500/30 flex items-center gap-1">
-                                                        <span className="w-1.5 h-1.5 rounded-full bg-amber-400 animate-pulse" /> Belum Muat
+                                                        <span className="w-1.5 h-1.5 rounded-full bg-amber-400 animate-pulse" /> {tr('Not Loaded', 'Belum Muat')}
                                                     </span>
                                                 );
                                             })()}
@@ -3415,11 +3432,11 @@ const DriverDelivery: React.FC<DriverDeliveryProps> = ({ user, onNavigate }) => 
 
                                         <div className="flex items-center gap-2 text-xs font-bold">
                                             <span className="text-slate-400">
-                                                {trip.deliveryDate ? new Date(trip.deliveryDate).toLocaleDateString('en-GB', { day: '2-digit', month: 'short' }) : 'Hari Ini'}
+                                                {trip.deliveryDate ? new Date(trip.deliveryDate).toLocaleDateString('en-GB', { day: '2-digit', month: 'short' }) : tr('Today', 'Hari Ini')}
                                             </span>
                                             <span className="text-slate-600">•</span>
                                             <span className={trip.completedDrops === trip.totalDrops ? 'text-emerald-400 font-black' : 'text-blue-400'}>
-                                                {trip.completedDrops}/{trip.totalDrops} Hentian Selesai ({trip.totalDrops} Drops)
+                                                {trip.completedDrops}/{trip.totalDrops} {tr('Completed Drops', 'Hentian Selesai')} ({trip.totalDrops} {tr('Drops', 'Hentian')})
                                             </span>
                                         </div>
                                     </div>
@@ -3446,7 +3463,7 @@ const DriverDelivery: React.FC<DriverDeliveryProps> = ({ user, onNavigate }) => 
                                                 <span className="text-amber-400 text-base mt-0.5">📢</span>
                                                 <div className="flex-1">
                                                     <span className="text-[10px] font-black uppercase text-amber-400 tracking-wider block">
-                                                        Nota Trip / Trip Remark
+                                                        {tr('Trip Remark', 'Nota Trip')}
                                                     </span>
                                                     <p className="text-xs text-amber-200 font-medium whitespace-pre-line leading-relaxed">
                                                         {trip.tripNotes}
@@ -3463,15 +3480,15 @@ const DriverDelivery: React.FC<DriverDeliveryProps> = ({ user, onNavigate }) => 
                                                         <span className="text-lg">📦</span>
                                                         <div>
                                                             <h4 className="text-xs font-black text-white uppercase tracking-wider">
-                                                                Muatan Khas Trip Ini / This Trip's Cargo
+                                                                {tr("This Trip's Cargo", 'Muatan Khas Trip Ini')}
                                                             </h4>
                                                             <p className="text-[10px] text-slate-400 font-bold">
-                                                                Semak kuantiti sebelum muat / Check items before departure
+                                                                {tr('Check items before departure', 'Semak kuantiti sebelum muat')}
                                                             </p>
                                                         </div>
                                                     </div>
                                                     <span className="px-2.5 py-1 rounded-xl bg-amber-500/20 border border-amber-500/40 text-amber-300 text-xs font-mono font-black">
-                                                        Jumlah: {trip.totalRolls} Rolls
+                                                        {tr('Total', 'Jumlah')}: {trip.totalRolls} Rolls
                                                     </span>
                                                 </div>
 
@@ -3517,8 +3534,8 @@ const DriverDelivery: React.FC<DriverDeliveryProps> = ({ user, onNavigate }) => 
                                                     <Truck size={18} />
                                                     <span>
                                                         {trip.orders.length === 1 
-                                                            ? '🚚 NAIK BARANG TRIP INI / LOAD THIS TRIP' 
-                                                            : `🚚 NAIK BARANG TRIP INI / LOAD THIS TRIP (${trip.orders.length} DOs)`}
+                                                            ? `🚚 ${tr('Load This Trip', 'NAIK BARANG TRIP INI')}` 
+                                                            : `🚚 ${tr('Load This Trip', 'NAIK BARANG TRIP INI')} (${trip.orders.length} DOs)`}
                                                     </span>
                                                 </button>
                                             );
@@ -3544,7 +3561,7 @@ const DriverDelivery: React.FC<DriverDeliveryProps> = ({ user, onNavigate }) => 
                         <div className="p-4 border-b border-slate-800 flex justify-between items-center bg-slate-900 safe-top-padding">
                             <div>
                                 <h2 className="font-black text-white text-lg">
-                                    {selectedTripForLoad ? 'SAHKAN MUATAN TRIP / VERIFY TRIP' : 'SAHKAN STOK / VERIFY STOCK'}
+                                    {selectedTripForLoad ? tr('Verify Trip Load', 'SAHKAN MUATAN TRIP') : tr('Verify Stock', 'SAHKAN STOK')}
                                 </h2>
                                 <p className="text-[11px] text-blue-400 font-mono font-bold">
                                     {selectedTripForLoad 
@@ -3567,7 +3584,7 @@ const DriverDelivery: React.FC<DriverDeliveryProps> = ({ user, onNavigate }) => 
                                 return (
                                     <div className="bg-slate-900 border border-slate-800 p-4 rounded-xl space-y-2 mb-4">
                                         <p className="text-[10px] text-amber-500 uppercase font-black flex items-center gap-1">
-                                            📦 Rujukan Gambar Bersedia / Cargo Prep Photo ({photos.length})
+                                            📦 {tr('Cargo Prep Photo', 'Rujukan Gambar Bersedia')} ({photos.length})
                                         </p>
                                         <div className={`grid gap-2 max-w-sm w-full mx-auto ${photos.length > 1 ? 'grid-cols-2' : 'grid-cols-1'}`}>
                                             {photos.map((p: any, idx: number) => (
@@ -3608,19 +3625,19 @@ const DriverDelivery: React.FC<DriverDeliveryProps> = ({ user, onNavigate }) => 
                                     });
                                 } catch (err) {
                                     console.error("Grouping Error:", err);
-                                    return <div className="text-red-500 p-4">Error loading items. Please contact support.</div>;
+                                    return <div className="text-red-500 p-4">{tr('Error loading items. Please contact support.', 'Ralat memuatkan item.')}</div>;
                                 }
 
                                 const groups = Object.entries(grouped);
                                 if (groups.length === 0) {
-                                    return <div className="text-gray-500 text-center p-10">No items found in this order.</div>;
+                                    return <div className="text-gray-500 text-center p-10">{tr('No items found in this order.', 'Tiada item dalam pesanan ini.')}</div>;
                                 }
 
                                 return groups.map(([location, items]) => (
                                     <div key={location}>
                                         {/* Location Header */}
                                         <div className="text-xs font-black text-blue-400 uppercase tracking-widest mb-3 border-b border-blue-500/20 pb-1">
-                                            {location}
+                                            {location === 'Other Items' ? tr('Other Items', 'Barangan Lain') : location}
                                         </div>
 
                                         {/* Items in this location */}
@@ -3637,9 +3654,9 @@ const DriverDelivery: React.FC<DriverDeliveryProps> = ({ user, onNavigate }) => 
                                                             {idx + 1}
                                                         </div>
                                                         <div className="flex-1">
-                                                            <div className="text-white font-bold text-sm">{(item as any).product || (item as any).name || (item as any).sku || 'Barang Tidak Diketahui / Unknown Item'}</div>
+                                                            <div className="text-white font-bold text-sm">{(item as any).product || (item as any).name || (item as any).sku || tr('Unknown Item', 'Barang Tidak Diketahui')}</div>
                                                             <div className="text-[10px] text-slate-500 font-mono">
-                                                                Kuantiti / Qty: {item.quantity} {(item as any).packaging || (item as any).uom || ''}
+                                                                {tr('Quantity', 'Kuantiti')}: {item.quantity} {(item as any).packaging || (item as any).uom || ''}
                                                                 {item.orderNumber && (
                                                                     <span className="ml-2 text-blue-400 font-semibold">• DO: {item.orderNumber}</span>
                                                                 )}
@@ -3673,8 +3690,8 @@ const DriverDelivery: React.FC<DriverDeliveryProps> = ({ user, onNavigate }) => 
                         {/* Footer Camera Auto-Submit */}
                         <div className="p-4 border-t border-slate-800 bg-slate-900 space-y-3 safe-bottom-padding">
                             <div className="flex justify-between text-xs font-bold text-slate-400 uppercase">
-                                <span>Jumlah Barang / Total Items</span>
-                                <span className="text-white">{(loadItems || []).reduce((acc, i) => acc + (i.confirmedQty ?? i.quantity ?? 0), 0)} Unit / Units</span>
+                                <span>{tr('Total Items', 'Jumlah Barang')}</span>
+                                <span className="text-white">{(loadItems || []).reduce((acc, i) => acc + (i.confirmedQty ?? i.quantity ?? 0), 0)} {tr('Units', 'Unit')}</span>
                             </div>
                             <button
                                 onClick={() => fileInputRef.current?.click()}
@@ -3684,12 +3701,12 @@ const DriverDelivery: React.FC<DriverDeliveryProps> = ({ user, onNavigate }) => 
                                 {submitting || uploadingPhoto ? (
                                     <>
                                         <div className="w-5 h-5 border-2 border-white/20 border-t-white rounded-full animate-spin"></div>
-                                        <span>SEDANG DIPROSES... / PROCESSING...</span>
+                                        <span>{tr('Processing...', 'SEDANG DIPROSES...')}</span>
                                     </>
                                 ) : (
                                     <>
                                         <Camera size={20} />
-                                        <span>AMBIL GAMBAR & SAHKAN / TAKE PHOTO & CONFIRM</span>
+                                        <span>{tr('Take Photo & Confirm', 'AMBIL GAMBAR & SAHKAN')}</span>
                                     </>
                                 )}
                             </button>
@@ -3713,7 +3730,7 @@ const DriverDelivery: React.FC<DriverDeliveryProps> = ({ user, onNavigate }) => 
                     <div className="p-4 border-b border-slate-800 flex justify-between items-center bg-slate-900 safe-top-padding">
                         <div>
                             <h2 className="font-black text-white text-lg flex items-center gap-2">
-                                <span>SAHKAN HANTARAN / CONFIRM DELIVERY</span>
+                                <span>{tr('Confirm Delivery', 'SAHKAN HANTARAN')}</span>
                                 {(() => {
                                     const isSelectedMultiOrder = Boolean(
                                         (selectedOrder.trip_id && tasks.filter(t => t.trip_id === selectedOrder.trip_id && t.status !== 'Cancelled').length > 1) ||
@@ -3724,14 +3741,14 @@ const DriverDelivery: React.FC<DriverDeliveryProps> = ({ user, onNavigate }) => 
                                     if (modalTotal > 1) {
                                         return (
                                             <span className="text-xs font-bold px-2 py-0.5 rounded border font-mono bg-emerald-500/20 text-emerald-400 border-emerald-500/30">
-                                                Drop #{Math.min(modalDone + 1, modalTotal)} / {modalTotal}
+                                                {tr('Drop', 'Hentian')} #{Math.min(modalDone + 1, modalTotal)} / {modalTotal}
                                             </span>
                                         );
                                     }
                                     if ((selectedOrder as any).stop_sequence) {
                                         return (
                                             <span className="text-xs font-bold px-2 py-0.5 rounded border font-mono bg-blue-500/10 text-blue-400 border-blue-500/20">
-                                                Hentian #{(selectedOrder as any).stop_sequence}
+                                                {tr('Stop', 'Hentian')} #{(selectedOrder as any).stop_sequence}
                                             </span>
                                         );
                                     }
@@ -3768,7 +3785,7 @@ const DriverDelivery: React.FC<DriverDeliveryProps> = ({ user, onNavigate }) => 
                                         <span className="text-2xl leading-none">🏢</span>
                                         <div className="space-y-1">
                                             <div className="text-xs font-black text-orange-200 uppercase tracking-wide">
-                                                PERINGATAN PENTING: PENGHANTARAN DO AGEN ({agent || 'AGEN'})
+                                                {tr('Agent Delivery Notice', 'PERINGATAN PENTING: PENGHANTARAN DO AGEN')} ({agent || 'AGEN'})
                                             </div>
                                             <div className="text-xs text-amber-100 font-bold leading-relaxed">
                                                 Sila pastikan pelanggan cop & tanda tangan pada <span className="underline text-white font-mono font-bold">DO {agent || 'AGEN'} fizikal</span>.
@@ -3789,14 +3806,14 @@ const DriverDelivery: React.FC<DriverDeliveryProps> = ({ user, onNavigate }) => 
                                     📍
                                 </div>
                                 <div>
-                                    <p className="text-[10px] font-black text-slate-500 uppercase tracking-widest">Lokasi GPS Semasa / GPS Coordinate</p>
+                                    <p className="text-[10px] font-black text-slate-500 uppercase tracking-widest">{tr('Current GPS Coordinate', 'Lokasi GPS Semasa')}</p>
                                     <p className="text-white font-mono text-xs">{gpsCoordinates}</p>
                                 </div>
                             </div>
                             <button
                                 onClick={triggerGpsFetch}
                                 disabled={fetchingGps}
-                                className="px-3 py-1.5 bg-slate-800 hover:bg-slate-700 border border-slate-700 rounded-xl text-[10px] font-bold uppercase text-slate-300 transition-all flex items-center gap-1 active:scale-95 disabled:opacity-50"
+                                className="px-3 py-1.5 bg-slate-800 hover:bg-slate-750 border border-slate-700 rounded-xl text-[10px] font-bold uppercase text-slate-300 transition-all flex items-center gap-1 active:scale-95 disabled:opacity-50"
                             >
                                 <RefreshCw size={10} className={fetchingGps ? 'animate-spin' : ''} />
                                 {fetchingGps ? 'GPS...' : 'RE-SYNC'}
@@ -3808,7 +3825,7 @@ const DriverDelivery: React.FC<DriverDeliveryProps> = ({ user, onNavigate }) => 
                             {/* DO Photo Slot */}
                             <div className="space-y-2">
                                 <label className="text-xs font-bold text-slate-400 uppercase tracking-widest block">
-                                    1. GAMBAR DO {selectedOrder.customer?.startsWith('[') ? 'AGEN ' : ''}(Delivery Order) {isFinalDrop && <span className="text-[10px] text-amber-500 font-bold lowercase tracking-normal bg-amber-500/10 px-1.5 py-0.5 rounded ml-1">(pilihan / optional)</span>}
+                                    1. {tr('DO Photo', 'GAMBAR DO')} {selectedOrder.customer?.startsWith('[') ? 'AGEN ' : ''}(Delivery Order) {isFinalDrop && <span className="text-[10px] text-amber-500 font-bold lowercase tracking-normal bg-amber-500/10 px-1.5 py-0.5 rounded ml-1">({tr('Optional', 'pilihan')})</span>}
                                 </label>
                                 {unloadDoPhotoBase64 ? (
                                     <div className="relative aspect-square rounded-xl overflow-hidden border border-slate-800 bg-slate-900 shadow-inner group">
@@ -3830,7 +3847,7 @@ const DriverDelivery: React.FC<DriverDeliveryProps> = ({ user, onNavigate }) => 
                                         {uploadingTarget === 'do' ? (
                                             <>
                                                 <div className="w-6 h-6 border-2 border-blue-500/30 border-t-blue-500 rounded-full animate-spin"></div>
-                                                <span className="text-[10px] text-blue-400 font-bold uppercase text-center px-2">Memproses...</span>
+                                                <span className="text-[10px] text-blue-400 font-bold uppercase text-center px-2">{tr('Processing...', 'Memproses...')}</span>
                                             </>
                                         ) : (
                                             <>
@@ -3844,7 +3861,7 @@ const DriverDelivery: React.FC<DriverDeliveryProps> = ({ user, onNavigate }) => 
                                                     className="w-full py-2.5 bg-slate-800 hover:bg-slate-750 border border-slate-700 text-white rounded-lg text-[10px] font-bold uppercase tracking-wider flex items-center justify-center gap-1.5 active:scale-95 transition-all"
                                                  >
                                                      <Camera size={14} className="text-emerald-400" />
-                                                     📸 Kamera / Camera
+                                                     {tr('Camera', 'Kamera')}
                                                  </button>
                                                  <button
                                                      type="button"
@@ -3856,7 +3873,7 @@ const DriverDelivery: React.FC<DriverDeliveryProps> = ({ user, onNavigate }) => 
                                                      className="w-full py-2.5 bg-slate-800 hover:bg-slate-750 border border-slate-700 text-white rounded-lg text-[10px] font-bold uppercase tracking-wider flex items-center justify-center gap-1.5 active:scale-95 transition-all"
                                                  >
                                                      <span>📁</span>
-                                                     <span>Galeri / Gallery</span>
+                                                     <span>{tr('Gallery', 'Galeri')}</span>
                                                  </button>
                                             </>
                                         )}
@@ -3867,7 +3884,7 @@ const DriverDelivery: React.FC<DriverDeliveryProps> = ({ user, onNavigate }) => 
                             {/* Product Photo Slot */}
                             <div className="space-y-2">
                                 <label className="text-xs font-bold text-slate-400 uppercase tracking-widest block">
-                                    2. GAMBAR BARANG (PRODUK) {isFinalDrop && <span className="text-[10px] text-amber-500 font-bold lowercase tracking-normal bg-amber-500/10 px-1.5 py-0.5 rounded ml-1">(pilihan / optional)</span>}
+                                    2. {tr('Product Photo', 'Gambar Barang')}{isFinalDrop && <span className="text-[10px] text-amber-500 font-bold lowercase tracking-normal bg-amber-500/10 px-1.5 py-0.5 rounded ml-1">({tr('Optional', 'Pilihan')})</span>}
                                 </label>
                                 {unloadProductPhotoBase64 ? (
                                     <div className="relative aspect-square rounded-xl overflow-hidden border border-slate-800 bg-slate-900 shadow-inner group">
@@ -3889,7 +3906,7 @@ const DriverDelivery: React.FC<DriverDeliveryProps> = ({ user, onNavigate }) => 
                                         {uploadingTarget === 'product' ? (
                                             <>
                                                 <div className="w-6 h-6 border-2 border-blue-500/30 border-t-blue-500 rounded-full animate-spin"></div>
-                                                <span className="text-[10px] text-blue-400 font-bold uppercase text-center px-2">Memproses...</span>
+                                                <span className="text-[10px] text-blue-400 font-bold uppercase text-center px-2">{tr('Processing...', 'Memproses...')}</span>
                                             </>
                                         ) : (
                                             <>
@@ -3903,7 +3920,7 @@ const DriverDelivery: React.FC<DriverDeliveryProps> = ({ user, onNavigate }) => 
                                                     className="w-full py-2.5 bg-slate-800 hover:bg-slate-750 border border-slate-700 text-white rounded-lg text-[10px] font-bold uppercase tracking-wider flex items-center justify-center gap-1.5 active:scale-95 transition-all"
                                                  >
                                                      <Camera size={14} className="text-emerald-400" />
-                                                     📸 Kamera / Camera
+                                                     {tr('Camera', 'Kamera')}
                                                  </button>
                                                  <button
                                                      type="button"
@@ -3915,7 +3932,7 @@ const DriverDelivery: React.FC<DriverDeliveryProps> = ({ user, onNavigate }) => 
                                                      className="w-full py-2.5 bg-slate-800 hover:bg-slate-750 border border-slate-700 text-white rounded-lg text-[10px] font-bold uppercase tracking-wider flex items-center justify-center gap-1.5 active:scale-95 transition-all"
                                                  >
                                                      <span>📁</span>
-                                                     <span>Galeri / Gallery</span>
+                                                     <span>{tr('Gallery', 'Galeri')}</span>
                                                  </button>
                                             </>
                                         )}
@@ -3927,12 +3944,12 @@ const DriverDelivery: React.FC<DriverDeliveryProps> = ({ user, onNavigate }) => 
                         {/* Delivery Note */}
                         <div className="space-y-2">
                             <label className="text-xs font-bold text-slate-400 uppercase tracking-widest block">
-                                3. REMARK / CATATAN PENGHANTARAN
+                                3. {tr('Delivery Remark', 'Catatan Penghantaran')}
                             </label>
                             <textarea
                                 value={deliveryNote}
                                 onChange={e => setDeliveryNote(e.target.value)}
-                                placeholder="Tuliskan nota penghantaran di sini (contoh: Barang diletakkan di pondok pengawal, ditandatangani oleh En. Lee)"
+                                placeholder={tr('Write delivery note here...', 'Tuliskan nota penghantaran di sini (contoh: Barang diletakkan di pondok pengawal, ditandatangani oleh En. Lee)')}
                                 className="w-full bg-slate-950 border border-slate-800 rounded-xl p-4 text-white placeholder:text-slate-700 focus:border-blue-500 focus:ring-1 focus:ring-blue-500 outline-none resize-none h-24 text-sm transition-all"
                             />
                         </div>
@@ -3941,7 +3958,7 @@ const DriverDelivery: React.FC<DriverDeliveryProps> = ({ user, onNavigate }) => 
                         {selectedOrder.pod_photo_url && (
                             <div className="space-y-2">
                                 <label className="text-xs font-bold text-slate-500 uppercase tracking-widest block">
-                                    GAMBAR HANTARAN TERDAHULU / PREVIOUSLY UPLOADED PHOTOS
+                                    {tr('Previously Uploaded Photos', 'Gambar Hantaran Terdahulu')}
                                 </label>
                                 <div className="grid grid-cols-4 gap-2 bg-slate-900/40 p-3 rounded-xl border border-slate-800/80">
                                     {selectedOrder.pod_photo_url.split(',').filter(Boolean).map((url, idx) => (
@@ -3978,12 +3995,12 @@ const DriverDelivery: React.FC<DriverDeliveryProps> = ({ user, onNavigate }) => 
                                 }`}>
                                     <div className="pr-2">
                                         <p className="text-sm font-bold text-white uppercase flex items-center gap-1.5">
-                                            {isAtFinalStep ? '🏁 HANTARAN TERAKHIR (TAMAT TRIP)?' : '⚠️ TAMAT TRIP LEBIH AWAL?'}
+                                            {isAtFinalStep ? tr('Final Drop (End Trip)?', 'Hantaran Terakhir (Tamat Trip)?') : tr('End Trip Early?', 'Tamat Trip Lebih Awal?')}
                                         </p>
                                         <p className="text-[10px] text-slate-400 font-medium mt-0.5">
                                             {isAtFinalStep 
-                                                ? `Hentian ${curDone + 1} daripada ${totalTarget}. Tandakan jika ini hentian terakhir.`
-                                                : `Hentian ${curDone + 1} drpd ${totalTarget}. Hanya tanda jika baki ${totalTarget - curDone - 1} hentian dibatalkan.`}
+                                                ? `${tr('Stop', 'Hentian')} ${curDone + 1} / ${totalTarget}. ${tr('Mark if this is the final stop.', 'Tandakan jika ini hentian terakhir.')}`
+                                                : `${tr('Stop', 'Hentian')} ${curDone + 1} / ${totalTarget}. ${tr('Mark only if remaining stops cancelled.', 'Hanya tanda jika baki hentian dibatalkan.')}`}
                                         </p>
                                     </div>
                                     <input 
@@ -4017,17 +4034,17 @@ const DriverDelivery: React.FC<DriverDeliveryProps> = ({ user, onNavigate }) => 
                                     {submitting ? (
                                         <>
                                             <div className="w-5 h-5 border-2 border-white/20 border-t-white rounded-full animate-spin"></div>
-                                            <span>MEMPROSES... / PROCESSING...</span>
+                                            <span>{tr('Processing...', 'Memproses...')}</span>
                                         </>
                                     ) : isMissingDoOnly ? (
                                         <>
                                             <span>💾</span>
-                                            <span>SIMPAN BARANG (DO AMBIL KEMUDIAN) / SAVE GOODS ONLY</span>
+                                            <span>{tr('Save Goods (DO Later)', 'Simpan Barang (DO Ambil Kemudian)')}</span>
                                         </>
                                     ) : (
                                         <>
                                             <CheckCircle size={20} />
-                                            <span>SAHKAN HANTARAN / CONFIRM DELIVERY</span>
+                                            <span>{tr('Confirm Delivery', 'Sahkan Hantaran')}</span>
                                         </>
                                     )}
                                 </button>
@@ -4058,12 +4075,12 @@ const DriverDelivery: React.FC<DriverDeliveryProps> = ({ user, onNavigate }) => 
                 const currentRateAmount = matchedRate ? Number(matchedRate.base_rate) || 0 : defaultRate;
 
                 const EXTRA_JOB_CATEGORIES = [
-                    { id: 'SHOPEE / SPD', label: 'Shopee / Spd', desc: 'Shopee / Spd / Parcel', icon: '🛍️' },
-                    { id: 'TAIPING TRIP', label: 'Taiping Trip', desc: 'Trip Taiping / Local Trip', icon: '🚚' },
-                    { id: 'AMBIK PALLET', label: 'Angkat Pallet', desc: 'Pallet Handling', icon: '🪵' },
-                    { id: 'LORRY SERVICE', label: 'Lorry Service', desc: 'Servis / Puspakom', icon: '🔧' },
-                    { id: 'RETURN', label: 'Return', desc: 'Barang Pulang / Returns', icon: '↩️' },
-                    { id: 'OTHER', label: 'Other', desc: 'Lain-lain / Admin Tentukan', icon: '🛠️' },
+                    { id: 'SHOPEE / SPD', label: 'Shopee / SPD', desc: 'Shopee / SPD / Parcel', icon: '🛍️' },
+                    { id: 'TAIPING TRIP', label: tr('Taiping Trip', 'Trip Taiping'), desc: tr('Local Trip', 'Trip Tempatan'), icon: '🚚' },
+                    { id: 'AMBIK PALLET', label: tr('Pallet Handling', 'Angkat Pallet'), desc: tr('Pallet Handling', 'Angkat Pallet'), icon: '🪵' },
+                    { id: 'LORRY SERVICE', label: tr('Lorry Service', 'Servis Lori'), desc: tr('Service / Inspection', 'Servis / Puspakom'), icon: '🔧' },
+                    { id: 'RETURN', label: tr('Return', 'Barang Pulang'), desc: tr('Returns', 'Barang Pulang'), icon: '↩️' },
+                    { id: 'OTHER', label: tr('Other', 'Lain-lain'), desc: tr('Admin Decision', 'Admin Tentukan'), icon: '🛠️' },
                 ];
 
                 return (
@@ -4071,9 +4088,9 @@ const DriverDelivery: React.FC<DriverDeliveryProps> = ({ user, onNavigate }) => 
                         <div className="p-4 border-b border-slate-800 flex justify-between items-center bg-slate-900 safe-top-padding">
                             <div>
                                 <h2 className="font-black text-emerald-400 text-lg flex items-center gap-2">
-                                    📸 TUGASAN TAMBAHAN / EXTRA JOB
+                                    📸 {tr('Extra Task', 'Tugasan Tambahan')}
                                 </h2>
-                                <p className="text-[10px] text-slate-400 uppercase font-bold">Pilih Kategori Tugasan & Ambil Gambar Bukti</p>
+                                <p className="text-[10px] text-slate-400 uppercase font-bold">{tr('Select task category and take photo proof', 'Pilih Kategori Tugasan & Ambil Gambar Bukti')}</p>
                             </div>
                             <button onClick={() => { setIsPickUpModalOpen(false); setLoadPhotoBase64(null); }} className="p-2 bg-slate-800 hover:bg-slate-700 rounded-full text-white cursor-pointer"><X size={20} /></button>
                         </div>
@@ -4082,7 +4099,7 @@ const DriverDelivery: React.FC<DriverDeliveryProps> = ({ user, onNavigate }) => 
                             {/* 1. CATEGORY SELECTION */}
                             <div>
                                 <label className="text-xs font-black text-slate-400 uppercase tracking-widest mb-2.5 block flex items-center gap-1.5">
-                                    <span>1. PILIH KATEGORI TUGASAN / SELECT CATEGORY</span>
+                                    <span>1. {tr('Select Category', 'Pilih Kategori Tugasan')}</span>
                                     <span className="text-red-400">*</span>
                                 </label>
                                 <div className="grid grid-cols-2 sm:grid-cols-3 gap-2.5">
@@ -4117,16 +4134,16 @@ const DriverDelivery: React.FC<DriverDeliveryProps> = ({ user, onNavigate }) => 
                             <div className="bg-slate-900/90 border border-slate-800 rounded-2xl p-4 flex flex-col sm:flex-row sm:items-center justify-between gap-3 shadow-inner">
                                 <div>
                                     <span className="text-[10px] font-black uppercase tracking-wider text-slate-400 block mb-0.5">
-                                        💰 Kadar Gaji Sistem / System Salary Rate
+                                        💰 {tr('System Salary Rate', 'Kadar Gaji Sistem')}
                                     </span>
                                     <span className="text-xs text-slate-500">
-                                        Asal / Origin: <strong className="text-slate-300 font-mono">{driverOrigin}</strong>
+                                        {tr('Origin', 'Asal')}: <strong className="text-slate-300 font-mono">{driverOrigin}</strong>
                                     </span>
                                 </div>
                                 <div className="flex items-center gap-2">
                                     {pickUpCategory === 'OTHER' ? (
                                         <div className="bg-amber-500/10 border border-amber-500/30 px-3 py-1.5 rounded-xl text-amber-300 font-bold text-xs">
-                                            Admin / Manager Tentukan Gaji
+                                            {tr('Admin/Manager sets rate', 'Admin / Manager Tentukan Gaji')}
                                         </div>
                                     ) : (
                                         <div className="bg-emerald-500/15 border border-emerald-500/30 px-4 py-1.5 rounded-xl text-emerald-400 font-mono font-black text-lg">
@@ -4136,14 +4153,14 @@ const DriverDelivery: React.FC<DriverDeliveryProps> = ({ user, onNavigate }) => 
                                 </div>
                             </div>
                             <p className="text-[10px] text-slate-500 italic -mt-2">
-                                🔒 Kadar gaji telah ditetapkan oleh sistem (tidak boleh diubah oleh pemandu) & akan disahkan oleh Admin/Manager.
+                                🔒 {tr('Salary rate is set by system and verified by admin.', 'Kadar gaji telah ditetapkan oleh sistem (tidak boleh diubah oleh pemandu) & akan disahkan oleh Admin/Manager.')}
                             </p>
 
                             {/* 3. PHOTO MANDATORY */}
                             <div>
                                 <label className="text-xs font-black text-slate-400 uppercase tracking-widest mb-2 block flex items-center gap-1.5">
-                                    <span>2. BUKTI GAMBAR / PHOTO PROOF</span>
-                                    <span className="text-red-400">* Wajib</span>
+                                    <span>2. {tr('Photo Proof', 'Bukti Gambar')}</span>
+                                    <span className="text-red-400">* {tr('Mandatory', 'Wajib')}</span>
                                 </label>
                                 {!loadPhotoBase64 ? (
                                     <button
@@ -4156,10 +4173,10 @@ const DriverDelivery: React.FC<DriverDeliveryProps> = ({ user, onNavigate }) => 
                                         </div>
                                         <div className="text-center">
                                             <span className="text-sm font-black text-emerald-400 block uppercase tracking-wider">
-                                                {uploadingPhoto ? 'SEDANG DIPROSES / PROCESSING...' : 'AMBIL GAMBAR BUKTI KERJA / TAKE PHOTO PROOF'}
+                                                {uploadingPhoto ? tr('Processing...', 'Sedang Diproses...') : tr('Take Photo Proof', 'Ambil Gambar Bukti Kerja')}
                                             </span>
                                             <span className="text-[10px] text-slate-500 mt-1 block font-medium">
-                                                Ketik untuk buka kamera & ambil gambar tugasan
+                                                {tr('Tap to open camera and take photo of task', 'Ketik untuk buka kamera & ambil gambar tugasan')}
                                             </span>
                                         </div>
                                     </button>
@@ -4175,12 +4192,12 @@ const DriverDelivery: React.FC<DriverDeliveryProps> = ({ user, onNavigate }) => 
                                             type="button"
                                             onClick={() => setLoadPhotoBase64(null)}
                                             className="absolute top-3 right-3 p-2 bg-red-500/90 hover:bg-red-600 rounded-full text-white shadow-lg cursor-pointer transition-transform active:scale-90"
-                                            title="Ambil gambar semula"
+                                            title={tr('Retake Photo', 'Ambil gambar semula')}
                                         >
                                             <X size={16} />
                                         </button>
                                         <div className="absolute bottom-2 left-2 bg-black/80 backdrop-blur-sm px-2.5 py-1 rounded-lg border border-white/10 text-[10px] text-emerald-300 font-bold flex items-center gap-1.5">
-                                            <CheckCircle size={12} /> Gambar Berjaya Dimuat Naik
+                                            <CheckCircle size={12} /> {tr('Photo Uploaded Successfully', 'Gambar Berjaya Dimuat Naik')}
                                         </div>
                                     </div>
                                 )}
@@ -4188,16 +4205,16 @@ const DriverDelivery: React.FC<DriverDeliveryProps> = ({ user, onNavigate }) => 
 
                             {/* 4. NOTE & LOCATION */}
                             <div>
-                                <label className="text-xs font-black text-slate-400 uppercase tracking-widest mb-2 block">3. CATATAN / REMARKS (PILIHAN / OPTIONAL)</label>
+                                <label className="text-xs font-black text-slate-400 uppercase tracking-widest mb-2 block">{tr('Remarks (Optional)', 'Catatan (Pilihan)')}</label>
                                 <textarea
                                     value={pickUpNote}
                                     onChange={e => setPickUpNote(e.target.value)}
-                                    placeholder="Contoh: Angkat 20 biji pallet di kilang Skudai / Servis lori di bengkel ABC..."
+                                    placeholder={tr('e.g.: Collect 20 pallets at factory / Lorry service at workshop...', 'Contoh: Angkat 20 biji pallet di kilang Skudai / Servis lori di bengkel ABC...')}
                                     className="w-full bg-slate-900 border border-slate-700 rounded-xl p-4 text-white placeholder:text-slate-600 focus:border-emerald-500 outline-none resize-none h-24 text-sm"
                                 />
                                 {pickupLocation && (
                                     <p className="text-[10px] text-slate-500 mt-1 font-mono flex items-center gap-1">
-                                        📍 Lokasi: {pickupLocation}
+                                        📍 {tr('Location', 'Lokasi')}: {pickupLocation}
                                     </p>
                                 )}
                             </div>
@@ -4210,7 +4227,7 @@ const DriverDelivery: React.FC<DriverDeliveryProps> = ({ user, onNavigate }) => 
                                 disabled={submitting || !loadPhotoBase64}
                                 className="w-full py-4 bg-gradient-to-r from-emerald-600 to-teal-600 hover:from-emerald-500 hover:to-teal-500 text-white rounded-xl font-black text-base uppercase tracking-widest shadow-lg shadow-emerald-950/40 disabled:opacity-40 disabled:grayscale transition-all active:scale-95 flex items-center justify-center gap-2 cursor-pointer"
                             >
-                                {submitting ? 'SEDANG DIPROSES / PROCESSING...' : 'HANTAR UNTUK KELULUSAN ADMIN / SUBMIT FOR APPROVAL'}
+                                {submitting ? tr('Processing...', 'Sedang Diproses...') : tr('Submit for Approval', 'Hantar Untuk Kelulusan Admin')}
                             </button>
                         </div>
                     </div>
@@ -4224,8 +4241,8 @@ const DriverDelivery: React.FC<DriverDeliveryProps> = ({ user, onNavigate }) => 
                         <h2 className="font-black text-white text-lg flex items-center gap-2">
                             <QrCode size={20} className="text-blue-500" />
                             {scannerMode === 'bind' 
-                                ? "IMBAS QR LORI / SCAN LORRY QR" 
-                                : "IMBAS QR LORI (PEMULANGAN) / SCAN LORRY QR (RETURN VEHICLE)"
+                                ? tr('Scan Lorry QR', 'Imbas QR Lori') 
+                                : tr('Scan Lorry QR (Return Vehicle)', 'Imbas QR Lori (Pemulangan)')
                             }
                         </h2>
                         <button onClick={() => { hasScannedRef.current = true; setTimeout(() => setIsScannerOpen(false), 100); }} className="p-2 bg-slate-800 rounded-full text-white"><X size={20} /></button>
@@ -4238,8 +4255,8 @@ const DriverDelivery: React.FC<DriverDeliveryProps> = ({ user, onNavigate }) => 
                                     <div className="w-8 h-8 border-4 border-blue-500/30 border-t-blue-500 rounded-full animate-spin" />
                                     <span className="font-black tracking-widest text-xs uppercase">
                                         {scannerMode === 'bind' 
-                                            ? "Menghubungkan... / Binding..." 
-                                            : "Memproses... / Processing..."
+                                            ? tr('Binding...', 'Menghubungkan...') 
+                                            : tr('Processing...', 'Memproses...')
                                         }
                                     </span>
                                 </div>
@@ -4258,8 +4275,8 @@ const DriverDelivery: React.FC<DriverDeliveryProps> = ({ user, onNavigate }) => 
                         </div>
                         <p className="text-slate-500 text-xs font-bold uppercase tracking-widest mt-8 text-center max-w-xs">
                             {scannerMode === 'bind'
-                                ? "Halakan kamera anda ke kod QR di papan pemuka lori untuk mendaftar syif anda. / Point your camera at the QR code on the lorry dashboard to bind your shift."
-                                : "Halakan kamera anda ke kod QR lori anda semula untuk mengesahkan pemulangan lori & tamatkan trip. / Point your camera at your lorry QR code again to confirm return & end trip."
+                                ? tr('Point your camera at the QR code on the lorry dashboard to bind your shift.', 'Halakan kamera anda ke kod QR di papan pemuka lori untuk mendaftar syif anda.')
+                                : tr('Point your camera at your lorry QR code again to confirm return & end trip.', 'Halakan kamera anda ke kod QR lori anda semula untuk mengesahkan pemulangan lori & tamatkan trip.')
                             }
                         </p>
 
@@ -4267,7 +4284,7 @@ const DriverDelivery: React.FC<DriverDeliveryProps> = ({ user, onNavigate }) => 
                         {scannerMode === 'bind' ? (
                             <div className="mt-5 w-full max-w-sm flex flex-col items-center">
                                 <span className="text-[10px] text-slate-400 font-bold uppercase tracking-wider mb-2">
-                                    Simulasi / Pilih Lori ({availableLorries.length > 0 ? `${availableLorries.length} Tersedia` : 'Pilihan Ujian'})
+                                    {tr('Simulate / Select Lorry', 'Simulasi / Pilih Lori')} ({availableLorries.length > 0 ? `${availableLorries.length} ${tr('Available', 'Tersedia')}` : tr('Test Option', 'Pilihan Ujian')})
                                 </span>
                                 <div className="flex flex-wrap justify-center gap-2">
                                     {(availableLorries.length > 0 ? availableLorries.slice(0, 4) : [
@@ -4300,7 +4317,7 @@ const DriverDelivery: React.FC<DriverDeliveryProps> = ({ user, onNavigate }) => 
                                     type="button"
                                     onClick={() => {
                                         if (!currentLorry?.id) {
-                                            alert("Tiada lori aktif dikesan. / No active lorry detected.");
+                                            alert(tr('No active lorry detected.', 'Tiada lori aktif dikesan.'));
                                             return;
                                         }
                                         const payload = JSON.stringify({
@@ -4313,7 +4330,7 @@ const DriverDelivery: React.FC<DriverDeliveryProps> = ({ user, onNavigate }) => 
                                     className="px-4 py-2 bg-emerald-600/20 hover:bg-emerald-600/30 active:scale-95 border border-emerald-500/40 text-emerald-300 text-xs font-black rounded-2xl flex items-center gap-2 cursor-pointer shadow-lg transition-all"
                                 >
                                     <Truck size={14} className="text-emerald-400" />
-                                    <span>⚡ Sahkan Pulang Lori ({currentLorry?.plate_number || 'Lori'})</span>
+                                    <span>⚡ {tr('Confirm Return Vehicle', 'Sahkan Pulang Lori')} ({currentLorry?.plate_number || tr('Vehicle', 'Lori')})</span>
                                 </button>
                             </div>
                         )}
@@ -4340,7 +4357,7 @@ const DriverDelivery: React.FC<DriverDeliveryProps> = ({ user, onNavigate }) => 
                         onClick={(e) => e.stopPropagation()}
                     />
                     <p className="text-xs text-slate-500 font-bold uppercase tracking-widest mt-4">
-                        Ketik di mana-mana untuk tutup / Tap anywhere to close
+                        {tr('Tap anywhere to close', 'Ketik di mana-mana untuk tutup')}
                     </p>
                 </div>
             )}
@@ -4395,15 +4412,15 @@ const DriverDelivery: React.FC<DriverDeliveryProps> = ({ user, onNavigate }) => 
                             <div>
                                 <h3 className="text-xl font-black text-white italic uppercase tracking-tighter flex items-center gap-2">
                                     <Truck className="text-blue-500 animate-pulse" />
-                                    BACAAN ODOMETER / ODOMETER READING
+                                    {tr('Odometer Reading', 'Bacaan Odometer')}
                                 </h3>
                                 <p className="text-[10px] text-slate-400 font-bold uppercase tracking-wider mt-0.5">
-                                    {scannedLorryData.mode === 'bind' ? 'Mula Syif (Start Shift)' : 'Tamat Syif (End Shift)'} | Plate: <span className="text-blue-400">{scannedLorryData.plate_number}</span>
+                                    {scannedLorryData.mode === 'bind' ? tr('Start Shift', 'Mula Syif') : tr('End Shift', 'Tamat Syif')} | Plate: <span className="text-blue-400">{scannedLorryData.plate_number}</span>
                                 </p>
                             </div>
                             <button
                                 onClick={() => {
-                                    if (window.confirm("Batal? / Cancel?")) {
+                                    if (window.confirm(tr('Cancel?', 'Batal?'))) {
                                         setIsOdometerModalOpen(false);
                                         setScannedLorryData(null);
                                     }
@@ -4418,18 +4435,18 @@ const DriverDelivery: React.FC<DriverDeliveryProps> = ({ user, onNavigate }) => 
                         {!odometerPhotoBase64 && (
                             <div className="space-y-4">
                                 <div className="bg-slate-900/50 p-4 rounded-2xl border border-slate-800/80 space-y-2">
-                                    <h4 className="text-xs font-black text-slate-300 uppercase tracking-wider">Panduan Mengambil Gambar / Photo Guide:</h4>
+                                    <h4 className="text-xs font-black text-slate-300 uppercase tracking-wider">{tr('Photo Guide', 'Panduan Mengambil Gambar')}:</h4>
                                     <ul className="text-[11px] text-slate-400 space-y-1 list-disc list-inside">
-                                        <li>Ambil gambar meter ODO di papan pemuka lori / Take photo of the ODO meter on the dashboard.</li>
-                                        <li>Pastikan nombor ODO kelihatan jelas dan tidak silau / Ensure ODO numbers are clearly visible and glare-free.</li>
-                                        <li>Lihat contoh di bawah / Refer to the example below.</li>
+                                        <li>{tr('Take photo of ODO meter on dashboard.', 'Ambil gambar meter ODO di papan pemuka lori.')}</li>
+                                        <li>{tr('Ensure ODO numbers are clearly visible.', 'Pastikan nombor ODO kelihatan jelas dan tidak silau.')}</li>
+                                        <li>{tr('Refer to the example below.', 'Lihat contoh di bawah.')}</li>
                                     </ul>
                                 </div>
                                 
                                 {/* Example Image Box */}
                                 <div className="bg-slate-950 border border-slate-800 rounded-2xl p-2 relative group overflow-hidden">
                                     <div className="absolute top-2 left-2 z-10 px-2 py-0.5 bg-blue-600/90 text-white text-[9px] font-black uppercase rounded tracking-wider">
-                                        Contoh / Example
+                                        {tr('Example', 'Contoh')}
                                     </div>
                                     <div className="aspect-[16/9] w-full rounded-xl overflow-hidden bg-slate-900 flex items-center justify-center">
                                         <img 
@@ -4442,7 +4459,7 @@ const DriverDelivery: React.FC<DriverDeliveryProps> = ({ user, onNavigate }) => 
                                         />
                                         <div className="absolute inset-0 flex flex-col items-center justify-center text-center p-4 bg-black/40">
                                             <Camera size={32} className="text-slate-400 mb-2 group-hover:text-blue-500 transition-colors" />
-                                            <span className="text-[10px] text-slate-300 font-bold uppercase tracking-widest">ODO Display must be legible</span>
+                                            <span className="text-[10px] text-slate-300 font-bold uppercase tracking-widest">{tr('ODO Display must be legible', 'Nombor ODO mesti jelas')}</span>
                                             <span className="text-[8px] text-slate-500 font-bold uppercase mt-1">(e.g., ODO 95671 km)</span>
                                         </div>
                                     </div>
@@ -4453,7 +4470,7 @@ const DriverDelivery: React.FC<DriverDeliveryProps> = ({ user, onNavigate }) => 
                                     className="w-full py-4 bg-blue-600 hover:bg-blue-500 text-white rounded-2xl font-black text-sm uppercase tracking-widest shadow-lg shadow-blue-950/50 transition-all flex items-center justify-center gap-2"
                                 >
                                     <Camera size={18} />
-                                    AMBIL FOTO ODOMETER / TAKE ODO PHOTO
+                                    {tr('Take ODO Photo', 'Ambil Foto Odometer')}
                                 </button>
                             </div>
                         )}
@@ -4471,8 +4488,8 @@ const DriverDelivery: React.FC<DriverDeliveryProps> = ({ user, onNavigate }) => 
                                     {isAnalyzingOdometer && (
                                         <div className="absolute inset-0 bg-slate-950/80 backdrop-blur-sm flex flex-col items-center justify-center text-center p-4">
                                             <div className="w-10 h-10 border-4 border-blue-500/20 border-t-blue-500 rounded-full animate-spin mb-3"></div>
-                                            <p className="text-sm font-bold text-white uppercase tracking-wider">AI Menganalisis Foto... / AI Analyzing ODO...</p>
-                                            <p className="text-[9px] text-slate-500 uppercase tracking-widest mt-1">Sila tunggu sebentar / Please wait a moment</p>
+                                            <p className="text-sm font-bold text-white uppercase tracking-wider">{tr('AI Analyzing ODO...', 'AI Menganalisis Foto ODO...')}</p>
+                                            <p className="text-[9px] text-slate-500 uppercase tracking-widest mt-1">{tr('Please wait a moment', 'Sila tunggu sebentar')}</p>
                                         </div>
                                     )}
                                 </div>
@@ -4481,7 +4498,7 @@ const DriverDelivery: React.FC<DriverDeliveryProps> = ({ user, onNavigate }) => 
                                     <div className="space-y-4 animate-in fade-in duration-300">
                                         <div className="bg-slate-900 border border-slate-800/80 p-4 rounded-2xl space-y-3">
                                             <label className="block text-xs font-black text-slate-400 uppercase tracking-wider">
-                                                Masukkan Bacaan ODO (km) / Confirm ODO Value:
+                                                {tr('Confirm ODO Value (km)', 'Masukkan Bacaan ODO (km)')}:
                                             </label>
                                             
                                             <div className="relative flex items-center">
@@ -4500,11 +4517,11 @@ const DriverDelivery: React.FC<DriverDeliveryProps> = ({ user, onNavigate }) => 
                                             {detectedMileage !== null ? (
                                                 <div className="flex items-center gap-2 text-[10px] text-emerald-400 font-bold bg-emerald-500/5 border border-emerald-500/15 py-2 px-3 rounded-lg">
                                                     <CheckCircle size={12} />
-                                                    <span>AI berjaya mengesan bacaan ODO: {detectedMileage} km</span>
+                                                    <span>{tr('AI successfully detected ODO reading', 'AI berjaya mengesan bacaan ODO')}: {detectedMileage} km</span>
                                                 </div>
                                             ) : (
                                                 <div className="flex items-center gap-2 text-[10px] text-amber-400 font-bold bg-amber-500/5 border border-amber-500/15 py-2 px-3 rounded-lg">
-                                                    <span>⚠️ Sila masukkan bacaan ODO secara manual jika AI tidak mengesan dengan tepat.</span>
+                                                    <span>⚠️ {tr('Please enter ODO reading manually if AI detection is inaccurate', 'Sila masukkan bacaan ODO secara manual jika AI tidak mengesan dengan tepat.')}</span>
                                                 </div>
                                             )}
                                         </div>
@@ -4516,7 +4533,7 @@ const DriverDelivery: React.FC<DriverDeliveryProps> = ({ user, onNavigate }) => 
                                                 disabled={submittingOdometer}
                                                 className="flex-1 py-4 bg-slate-900 hover:bg-slate-800 border border-slate-800 text-slate-400 hover:text-white rounded-xl font-bold text-xs uppercase tracking-widest transition-all"
                                             >
-                                                Ambil Semula / Retake
+                                                {tr('Retake', 'Ambil Semula')}
                                             </button>
                                             <button
                                                 type="button"
@@ -4527,12 +4544,12 @@ const DriverDelivery: React.FC<DriverDeliveryProps> = ({ user, onNavigate }) => 
                                                 {submittingOdometer ? (
                                                     <>
                                                         <div className="w-4 h-4 border-2 border-white/20 border-t-white rounded-full animate-spin"></div>
-                                                        <span>Menghantar... / Submitting...</span>
+                                                        <span>{tr('Submitting...', 'Menghantar...')}</span>
                                                     </>
                                                 ) : (
                                                     <>
                                                         <CheckCircle size={14} />
-                                                        <span>Sah & Simpan / Confirm & Save</span>
+                                                        <span>{tr('Confirm & Save', 'Sah & Simpan')}</span>
                                                     </>
                                                 )}
                                             </button>
