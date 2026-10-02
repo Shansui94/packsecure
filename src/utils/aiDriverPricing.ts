@@ -662,7 +662,15 @@ export function resolveDeliveryRate(params: {
             zone = 'PAHANG';
             standardized = '彭亨关丹 / 淡马鲁';
             fallbackBase = 400; fallbackMaxPlaces = 3; fallbackExtraRate = 20;
-        } else if (fullText.includes('kl') || fullText.includes('kuala lumpur') || fullText.includes('selangor') || 
+        } else if (fullText.includes('johor') || /\bjb\b/i.test(fullText) || fullText.includes('skudai') || fullText.includes('kulai') || fullText.includes('batu pahat')) {
+            zone = 'JOHOR';
+            standardized = '柔佛全境 (Johor)';
+            fallbackBase = 550; fallbackMaxPlaces = 3; fallbackExtraRate = 25;
+        } else if (fullText.includes('melaka') || fullText.includes('ayer keroh') || fullText.includes('alor gajah')) {
+            zone = 'MELAKA';
+            standardized = '马六甲全境 (Melaka)';
+            fallbackBase = 450; fallbackMaxPlaces = 3; fallbackExtraRate = 20;
+        } else if (/\b(kl|k\.l\.)\b/i.test(fullText) || fullText.includes('kuala lumpur') || fullText.includes('selangor') || 
                    fullText.includes('subang') || fullText.includes('shah alam') || fullText.includes('petaling') || 
                    fullText.includes('gombak') || fullText.includes('kapar') || fullText.includes('port klang') || 
                    fullText.includes('sungai besar') || fullText.includes('kajang') || fullText.includes('puchong') ||
@@ -681,27 +689,44 @@ export function resolveDeliveryRate(params: {
             zone = 'PERLIS';
             standardized = 'Perlis 玻璃市全境 (Kangar / Arau)';
             fallbackBase = 165; fallbackMaxPlaces = 3; fallbackExtraRate = 5;
+        } else if (fullText.includes('alor setar') || fullText.includes('jitra') || fullText.includes('pokok sena') || 
+                   fullText.includes('baling') || fullText.includes('sik') || fullText.includes('changlun') || fullText.includes('kodiang') ||
+                   fullText.includes('kuala kedah') || fullText.includes('yan') || fullText.includes('guar chempedak') ||
+                   (fullText.includes('kedah') && !fullText.includes('sungai petani') && !fullText.includes('kulim') && !fullText.includes('lunas') && !fullText.includes('padang serai') && !fullText.includes('simpang empat') && !fullText.includes('bedong') && !fullText.includes('pendang') && !fullText.includes('gurun'))) {
+            zone = 'ALOR SETAR';
+            standardized = 'Kedah 亚罗士打 (Alor Setar)';
+            fallbackBase = 150; fallbackMaxPlaces = 3; fallbackExtraRate = 5;
         } else if (fullText.includes('papalazzi') || 
                    (fullText.includes('simpang empat') && (fullText.includes('kedah') || !fullText.includes('penang'))) ||
                    fullText.includes('06650')) {
             zone = 'SIMPANG EMPAT (KEDAH)';
             standardized = 'Kedah 司南马/新邦安拔 (Simpang Empat, Kedah)';
             fallbackBase = 100; fallbackMaxPlaces = 3; fallbackExtraRate = 5;
-        } else if (fullText.includes('alor setar') || fullText.includes('jitra') || fullText.includes('pokok sena') || 
-                   fullText.includes('baling') || fullText.includes('sik') || fullText.includes('changlun') || fullText.includes('kodiang') ||
-                   (fullText.includes('kedah') && !fullText.includes('sungai petani'))) {
-            zone = 'ALOR SETAR';
-            standardized = 'Kedah 亚罗士打 (Alor Setar)';
-            fallbackBase = 150; fallbackMaxPlaces = 3; fallbackExtraRate = 5;
         } else if (fullText.includes('sungai petani') || fullText.includes('bedong') || fullText.includes('pendang') || fullText.includes('gurun') || fullText.includes('bakar arang')) {
             zone = 'SUNGAI PETANI';
             standardized = 'Kedah 双溪大年 (Sungai Petani)';
             fallbackBase = 100; fallbackMaxPlaces = 3; fallbackExtraRate = 5;
+        } else if (fullText.includes('teluk intan') || fullText.includes('hutan melintang') || fullText.includes('langkap') || fullText.includes('bagan datoh')) {
+            zone = 'TELUK INTAN';
+            standardized = 'Perak 安顺 (Teluk Intan)';
+            fallbackBase = 100; fallbackMaxPlaces = 3; fallbackExtraRate = 5;
+        } else if (fullText.includes('tanjung malim') || fullText.includes('sungkai') || fullText.includes('bidor') || fullText.includes('tapah') || fullText.includes('slim river')) {
+            zone = 'TANJUNG MALIM';
+            standardized = 'Perak 丹绒马林 (Tanjung Malim / Sungkai)';
+            fallbackBase = 100; fallbackMaxPlaces = 3; fallbackExtraRate = 5;
+        } else if (fullText.includes('kulim') || fullText.includes('lunas') || fullText.includes('padang serai') || fullText.includes('09000') || fullText.includes('09600')) {
+            zone = 'KULIM';
+            standardized = 'Kedah 居林 (Kulim / Lunas)';
+            fallbackBase = 80; fallbackMaxPlaces = 3; fallbackExtraRate = 5;
+        } else if (fullText.includes('kampar')) {
+            zone = 'KAMPAR';
+            standardized = 'Perak 金宝 (Kampar)';
+            fallbackBase = 80; fallbackMaxPlaces = 3; fallbackExtraRate = 5;
         } else if (fullText.includes('batu kawan') || (fullText.includes('simpang ampat') && !fullText.includes('perlis') && !fullText.includes('kedah')) || (fullText.includes('simpang empat') && fullText.includes('penang')) || fullText.includes('valdor') || fullText.includes('jawi') || fullText.includes('nibong tebal')) {
             zone = 'SIMPANG AMPAT (PENANG)';
             standardized = 'Penang 威南 Batu Kawan / Simpang Ampat';
             fallbackBase = 80; fallbackMaxPlaces = 3; fallbackExtraRate = 5;
-        } else if (fullText.includes('bukit minyak') || fullText.includes('bm') || fullText.includes('mertajam') || fullText.includes('alma') || fullText.includes('juru')) {
+        } else if (fullText.includes('bukit minyak') || /\bbm\b/i.test(fullText) || fullText.includes('mertajam') || fullText.includes('alma') || fullText.includes('juru')) {
             zone = 'BM';
             standardized = 'Penang 威中 Bukit Minyak / BM';
             fallbackBase = 80; fallbackMaxPlaces = 3; fallbackExtraRate = 5;
@@ -712,10 +737,6 @@ export function resolveDeliveryRate(params: {
         } else if (fullText.includes('penang') || fullText.includes('bayan lepas') || fullText.includes('george town') || fullText.includes('jelutong') || fullText.includes('air itam')) {
             zone = 'PENANG';
             standardized = 'Penang 槟岛 (George Town / Bayan Lepas)';
-            fallbackBase = 80; fallbackMaxPlaces = 3; fallbackExtraRate = 5;
-        } else if (fullText.includes('kulim') || fullText.includes('lunas') || fullText.includes('padang serai')) {
-            zone = 'KULIM';
-            standardized = 'Kedah 居林高科技园 (Kulim)';
             fallbackBase = 80; fallbackMaxPlaces = 3; fallbackExtraRate = 5;
         } else if (fullText.includes('ipoh') || fullText.includes('menglembu') || fullText.includes('bercham') || fullText.includes('station 18') || fullText.includes('jelapang') || fullText.includes('chemor') || fullText.includes('lahat') || fullText.includes('batu gajah')) {
             zone = 'IPOH';
@@ -729,22 +750,6 @@ export function resolveDeliveryRate(params: {
             zone = 'KUALA KANGSAR';
             standardized = 'Perak 江沙/和丰 (Kuala Kangsar)';
             fallbackBase = 60; fallbackMaxPlaces = 3; fallbackExtraRate = 5;
-        } else if (fullText.includes('teluk intan') || fullText.includes('hutan melintang') || fullText.includes('langkap')) {
-            zone = 'TELUK INTAN';
-            standardized = 'Perak 安顺 (Teluk Intan)';
-            fallbackBase = 100; fallbackMaxPlaces = 3; fallbackExtraRate = 5;
-        } else if (fullText.includes('tanjung malim') || fullText.includes('sungkai') || fullText.includes('bidor') || fullText.includes('tapah') || fullText.includes('kampar')) {
-            zone = 'TANJUNG MALIM';
-            standardized = 'Perak 丹绒马林/金宝';
-            fallbackBase = 100; fallbackMaxPlaces = 3; fallbackExtraRate = 5;
-        } else if (fullText.includes('melaka') || fullText.includes('ayer keroh') || fullText.includes('alor gajah')) {
-            zone = 'MELAKA';
-            standardized = '马六甲全境 (Melaka)';
-            fallbackBase = 450; fallbackMaxPlaces = 3; fallbackExtraRate = 20;
-        } else if (fullText.includes('johor') || fullText.includes('jb') || fullText.includes('skudai') || fullText.includes('kulai') || fullText.includes('batu pahat')) {
-            zone = 'JOHOR';
-            standardized = '柔佛全境 (Johor)';
-            fallbackBase = 550; fallbackMaxPlaces = 3; fallbackExtraRate = 25;
         } else {
             zone = 'TAIPING';
             standardized = addresses[0] || '太平本地短途 (Taiping Local)';

@@ -222,13 +222,35 @@ export function groupOrdersIntoTrips(
             if (o.customer) searchTokens.push(String(o.customer).trim());
         });
         const addresses = Array.from(new Set(searchTokens.filter(Boolean)));
-        const resolved = resolveDeliveryRate({
+        let resolved = resolveDeliveryRate({
             addresses: addresses.length > 0 ? addresses : [primary.zone || primary.delivery_address || ''],
             dropCount: tripDrops,
             origin: originRaw,
             lorryPlate: tripPlate,
             dbRates: Object.values(rateMap || {})
         });
+
+        // Multi-order safety guard: evaluate each order individually to guarantee the trip is rated by the furthest destination (highest base rate)
+        if (orders.length > 1) {
+            let maxBase = resolved.baseRate || 0;
+            let bestOrderResolved = resolved;
+            for (const o of orders) {
+                const oTokens = [o.delivery_address, o.zone, o.customer].filter(Boolean).map(s => String(s).trim());
+                if (oTokens.length === 0) continue;
+                const oRes = resolveDeliveryRate({
+                    addresses: oTokens,
+                    dropCount: tripDrops,
+                    origin: o.trip_origin || originRaw,
+                    lorryPlate: tripPlate,
+                    dbRates: Object.values(rateMap || {})
+                });
+                if ((oRes.baseRate || 0) > maxBase) {
+                    maxBase = oRes.baseRate || 0;
+                    bestOrderResolved = oRes;
+                }
+            }
+            resolved = bestOrderResolved;
+        }
 
         // Check if any order in the trip has an approved amount override
         let approvedAmount: number | null = null;
