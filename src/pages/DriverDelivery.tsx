@@ -330,11 +330,8 @@ const DriverDelivery: React.FC<DriverDeliveryProps> = ({ user, onNavigate }) => 
         // If it's an Extra Job or Pick Up, it has already been submitted with photo proof and is only awaiting Admin approval.
         const isExtra = (t as any).job_type === 'Extra Job' || (t as any).job_type === 'Pick Up' || t.orderNumber?.startsWith('TRIP-JOB') || t.orderNumber?.startsWith('TRIP-PU') || (!t.items || t.items.length === 0);
         if (isExtra) {
-            // An extra job with proof_of_load_url (naik barang) but NO pod_photo_url is STILL in progress (driver needs to take delivery photo at destination)
-            if (t.proof_of_load_url && !t.pod_photo_url) {
-                return false;
-            }
-            return true;
+            // An extra job in Pending Approval is awaiting Admin verification; it is marked fully delivered once status becomes 'Delivered'
+            return false;
         }
 
         const totalDrops = isMultiOrderTrip ? 1 : Math.max(1, Number((t as any).trip_drop_count) || 1);
@@ -2379,24 +2376,55 @@ const DriverDelivery: React.FC<DriverDeliveryProps> = ({ user, onNavigate }) => 
             result.push(grp);
         });
 
-        // 3. Process Ad-hoc / Extra Jobs
+        // 3. Process Ad-hoc / Extra Jobs (Separate active pending from completed history)
         if (extraJobOrders.length > 0) {
-            const { cargoBreakdown, totalRolls } = getCargoSummary(extraJobOrders);
-            const extraCompleted = extraJobOrders.filter(o => isOrderFullyDelivered(o)).length;
+            const pendingExtra = extraJobOrders.filter(o => o.status !== 'Delivered' && o.status !== 'Cancelled');
+            const doneExtra = extraJobOrders.filter(o => o.status === 'Delivered' || o.status === 'Cancelled');
 
-            result.push({
-                key: 'adhoc_extra_jobs',
-                tripNumber: 'Tugasan Luar & Pesanan Tambahan',
-                tripIndexLabel: 'Ad-hoc',
-                isAdHoc: true,
-                orders: extraJobOrders,
-                totalDrops: extraJobOrders.length,
-                completedDrops: extraCompleted,
-                totalRolls,
-                cargoBreakdown,
-                isAllDone: extraCompleted === extraJobOrders.length && extraJobOrders.length > 0,
-                sortSeq: 9999
-            });
+            if (pendingExtra.length > 0) {
+                const { cargoBreakdown, totalRolls } = getCargoSummary(pendingExtra);
+                result.push({
+                    key: 'adhoc_extra_jobs_pending',
+                    tripNumber: 'Tugasan Luar & Pesanan Tambahan',
+                    tripIndexLabel: 'Ad-hoc',
+                    isAdHoc: true,
+                    orders: pendingExtra,
+                    totalDrops: pendingExtra.length,
+                    completedDrops: 0,
+                    totalRolls,
+                    cargoBreakdown,
+                    deliveryDate: pendingExtra[0]?.deliveryDate || (pendingExtra[0] as any)?.deadline || new Date().toISOString().split('T')[0],
+                    isAllDone: false,
+                    sortSeq: 9998
+                });
+            }
+
+            if (doneExtra.length > 0) {
+                const doneByDate = new Map<string, SalesOrder[]>();
+                doneExtra.forEach(o => {
+                    const dateStr = (o.deliveryDate || (o as any).deadline || (o as any).order_date || (o as any).created_at || '').slice(0, 10) || 'nodate';
+                    if (!doneByDate.has(dateStr)) doneByDate.set(dateStr, []);
+                    doneByDate.get(dateStr)!.push(o);
+                });
+
+                doneByDate.forEach((orders, dateKey) => {
+                    const { cargoBreakdown, totalRolls } = getCargoSummary(orders);
+                    result.push({
+                        key: `adhoc_extra_jobs_done_${dateKey}`,
+                        tripNumber: `Tugasan Luar Selesai (${dateKey !== 'nodate' ? dateKey : 'Lain-lain'})`,
+                        tripIndexLabel: 'Ad-hoc',
+                        isAdHoc: true,
+                        orders,
+                        totalDrops: orders.length,
+                        completedDrops: orders.length,
+                        totalRolls,
+                        cargoBreakdown,
+                        deliveryDate: dateKey !== 'nodate' ? dateKey : undefined,
+                        isAllDone: true,
+                        sortSeq: 9999
+                    });
+                });
+            }
         }
 
         // 4. Sort Trips: Delivery Date Ascending -> Regular before AdHoc -> Trip Seq Ascending -> Created At -> Trip Number
@@ -2552,18 +2580,52 @@ const DriverDelivery: React.FC<DriverDeliveryProps> = ({ user, onNavigate }) => 
                             </div>
                         </div>
 
-                        {/* Driver Photo Proof: Step 1 (Naik Barang) & Step 2 (Hantar Barang / POD) */}
-                        <div className="grid grid-cols-1 sm:grid-cols-2 gap-3 mb-4">
-                            {/* Step 1: Loading Photo (Naik Barang) */}
-                            {extraJobPhoto && (
+                        {/* Driver Photo Proof for Extra Job */}
+                        <div className="mb-4">
+                            {extraJobPhoto && order.pod_photo_url ? (
+                                <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
+                                    <div className="bg-slate-950/60 p-3 rounded-xl border border-slate-800">
+                                        <p className="text-[10px] text-blue-400 uppercase font-black mb-2 flex items-center gap-1">
+                                            📦 1. {tr('Task Proof', 'Gambar Bukti 1')}
+                                        </p>
+                                        <div className="w-full h-36 rounded-lg overflow-hidden border border-slate-700 bg-black relative group">
+                                            <img
+                                                src={extraJobPhoto}
+                                                alt="Bukti 1"
+                                                className="w-full h-full object-cover cursor-zoom-in group-hover:scale-105 transition-transform"
+                                                onClick={() => setPreviewImageUrl(extraJobPhoto)}
+                                            />
+                                            <div className="absolute bottom-1.5 left-1.5 bg-black/80 backdrop-blur-sm px-2 py-0.5 rounded text-[8px] text-blue-300 font-bold">
+                                                {tr('Tap to enlarge', 'Ketik untuk besarkan')}
+                                            </div>
+                                        </div>
+                                    </div>
+                                    <div className="bg-slate-950/60 p-3 rounded-xl border border-emerald-500/30">
+                                        <p className="text-[10px] text-emerald-400 uppercase font-black mb-2 flex items-center gap-1">
+                                            🏁 2. {tr('Additional Proof / POD', 'Gambar Bukti 2 / POD')}
+                                        </p>
+                                        <div className="w-full h-36 rounded-lg overflow-hidden border border-slate-700 bg-black relative group">
+                                            <img
+                                                src={order.pod_photo_url.split(',')[0]}
+                                                alt="Bukti 2"
+                                                className="w-full h-full object-cover cursor-zoom-in group-hover:scale-105 transition-transform"
+                                                onClick={() => setPreviewImageUrl(order.pod_photo_url.split(',')[0])}
+                                            />
+                                            <div className="absolute bottom-1.5 left-1.5 bg-black/80 backdrop-blur-sm px-2 py-0.5 rounded text-[8px] text-emerald-300 font-bold">
+                                                {tr('Tap to enlarge', 'Ketik untuk besarkan')}
+                                            </div>
+                                        </div>
+                                    </div>
+                                </div>
+                            ) : extraJobPhoto ? (
                                 <div className="bg-slate-950/60 p-3 rounded-xl border border-slate-800">
                                     <p className="text-[10px] text-blue-400 uppercase font-black mb-2 flex items-center gap-1">
-                                        📦 1. {tr('Load Items', 'Gambar Naik Barang')}
+                                        📸 {tr('Task Photo Proof', 'Gambar Bukti Tugasan')}
                                     </p>
-                                    <div className="w-full h-36 rounded-lg overflow-hidden border border-slate-700 bg-black relative group">
+                                    <div className="w-full h-44 rounded-lg overflow-hidden border border-slate-700 bg-black relative group">
                                         <img
                                             src={extraJobPhoto}
-                                            alt="Naik Barang"
+                                            alt="Bukti Tugasan"
                                             className="w-full h-full object-cover cursor-zoom-in group-hover:scale-105 transition-transform"
                                             onClick={() => setPreviewImageUrl(extraJobPhoto)}
                                         />
@@ -2572,18 +2634,15 @@ const DriverDelivery: React.FC<DriverDeliveryProps> = ({ user, onNavigate }) => 
                                         </div>
                                     </div>
                                 </div>
-                            )}
-
-                            {/* Step 2: Delivery Photo (Hantar Barang / POD) */}
-                            {order.pod_photo_url ? (
-                                <div className="bg-slate-950/60 p-3 rounded-xl border border-emerald-500/30">
+                            ) : order.pod_photo_url ? (
+                                <div className="bg-slate-950/60 p-3 rounded-xl border border-slate-800">
                                     <p className="text-[10px] text-emerald-400 uppercase font-black mb-2 flex items-center gap-1">
-                                        🏁 2. {tr('Proof of Delivery (POD)', 'Gambar Hantar Barang / POD')}
+                                        📸 {tr('Task Photo Proof', 'Gambar Bukti Tugasan')}
                                     </p>
-                                    <div className="w-full h-36 rounded-lg overflow-hidden border border-slate-700 bg-black relative group">
+                                    <div className="w-full h-44 rounded-lg overflow-hidden border border-slate-700 bg-black relative group">
                                         <img
                                             src={order.pod_photo_url.split(',')[0]}
-                                            alt="Hantar Barang"
+                                            alt="Bukti Tugasan"
                                             className="w-full h-full object-cover cursor-zoom-in group-hover:scale-105 transition-transform"
                                             onClick={() => setPreviewImageUrl(order.pod_photo_url.split(',')[0])}
                                         />
@@ -2593,79 +2652,83 @@ const DriverDelivery: React.FC<DriverDeliveryProps> = ({ user, onNavigate }) => 
                                     </div>
                                 </div>
                             ) : (
-                                <div className="bg-slate-950/40 p-3 rounded-xl border border-dashed border-slate-800 flex flex-col items-center justify-center text-center">
+                                <div className="bg-slate-950/40 p-4 rounded-xl border border-dashed border-slate-800 flex flex-col items-center justify-center text-center">
                                     <Camera size={24} className="text-slate-600 mb-1" />
-                                    <p className="text-[10px] font-bold text-slate-400">{tr('No Photo', 'Belum Ambil Gambar Hantar')}</p>
-                                    <p className="text-[9px] text-slate-500">{tr('Take photos of Goods & DO to confirm', 'Ambil gambar semasa tiba di destinasi/pelanggan')}</p>
+                                    <p className="text-[11px] font-bold text-slate-400">{tr('No Photo Uploaded', 'Tiada Gambar Dimuat Naik')}</p>
                                 </div>
                             )}
                         </div>
 
-                        {/* Notes */}
-                        {order.notes && (
-                            <div className="mb-4 bg-slate-800/50 p-2.5 rounded-lg border border-slate-700/50 text-xs">
-                                <p className="text-[10px] text-slate-500 uppercase font-black mb-1">{tr('Notes', 'Catatan')}</p>
-                                <p className="text-slate-300 italic whitespace-pre-line">{order.notes}</p>
-                            </div>
-                        )}
+                        {/* Notes & Approval Amount */}
+                        {order.notes && (() => {
+                            const approvedAmountMatch = order.notes.match(/\[APPROVED_AMOUNT:\s*([^\]]+)\]/);
+                            const approvedAmount = approvedAmountMatch ? approvedAmountMatch[1].trim() : null;
+                            const rejectMatch = order.notes.match(/\[REJECTED:\s*([^\]]+)\]/);
+                            const rejectReason = rejectMatch ? rejectMatch[1].trim() : null;
 
-                        {/* Action Button: Take Delivery Photo (Hantar Barang) */}
-                        {!order.pod_photo_url ? (
-                            <div className="space-y-2 mb-3">
-                                <button
-                                    onClick={() => handleOpenUnloadModal(order)}
-                                    data-action="OPEN_EXTRA_UNLOAD_MODAL"
-                                    data-action-name="拍摄临时任务送达交货照片"
-                                    className="w-full py-3.5 bg-emerald-600 hover:bg-emerald-500 active:scale-95 text-white rounded-xl font-black uppercase text-xs tracking-wider flex items-center justify-center gap-2 shadow-lg shadow-emerald-950/40 transition-all cursor-pointer"
-                                >
-                                    <Camera size={16} className="text-emerald-200" />
-                                    <span>📸 {tr('Confirm Delivery', 'SAHKAN HANTARAN')}</span>
-                                </button>
-                                <div className="flex items-center justify-center px-1 text-[10px] text-slate-400">
-                                    <span>🚚 {tr('Loading complete. Please take photo at customer location to finish.', 'Naik barang selesai. Sila ambil gambar di lokasi pelanggan untuk selesaikan.')}</span>
+                            return (
+                                <div className="mb-4 bg-slate-800/50 p-2.5 rounded-lg border border-slate-700/50 text-xs space-y-1.5">
+                                    <div className="flex items-center justify-between">
+                                        <p className="text-[10px] text-slate-500 uppercase font-black">{tr('Notes', 'Catatan')}</p>
+                                        {approvedAmount && (
+                                            <span className="text-[11px] font-black text-emerald-400 bg-emerald-500/20 px-2 py-0.5 rounded border border-emerald-500/30">
+                                                💰 Elaun: RM {approvedAmount}
+                                            </span>
+                                        )}
+                                        {rejectReason && (
+                                            <span className="text-[10px] font-bold text-red-400 bg-red-500/20 px-2 py-0.5 rounded border border-red-500/30">
+                                                ❌ {rejectReason}
+                                            </span>
+                                        )}
+                                    </div>
+                                    <p className="text-slate-300 italic whitespace-pre-line">{order.notes}</p>
                                 </div>
-                            </div>
-                        ) : (
+                            );
+                        })()}
+
+                        {/* Optional action to add or update photo */}
+                        {(order.status === 'Pending Approval' || order.status === 'Loaded') && (
                             <div className="mb-3">
                                 <button
+                                    type="button"
                                     onClick={() => handleOpenUnloadModal(order)}
-                                    className="w-full py-2 bg-slate-800 hover:bg-slate-750 text-slate-300 hover:text-white border border-slate-700 rounded-xl font-bold uppercase text-[11px] flex items-center justify-center gap-1.5 transition-all"
+                                    className="w-full py-2.5 bg-slate-800 hover:bg-slate-750 text-slate-300 hover:text-white border border-slate-700 rounded-xl font-bold uppercase text-[11px] flex items-center justify-center gap-1.5 transition-all cursor-pointer"
                                 >
                                     <Camera size={13} className="text-emerald-400" />
-                                    <span>+ {tr('Update POD', 'Kemaskini Foto Hantar Barang')}</span>
+                                    <span>+ {tr('Add / Update Extra Photo (Optional)', 'Tambah / Kemaskini Gambar (Pilihan)')}</span>
                                 </button>
                             </div>
                         )}
 
-                        {/* Status Bar */}
+                        {/* Status Bar: Strict DB Status Driven */}
                         <div className={`p-3 rounded-xl text-xs font-bold uppercase flex items-center justify-center gap-2 ${
-                            !order.pod_photo_url
-                                ? 'bg-blue-500/15 border border-blue-500/30 text-blue-300'
+                            order.status === 'Delivered'
+                                ? 'bg-emerald-500/15 border border-emerald-500/30 text-emerald-300'
                                 : order.status === 'Pending Approval'
                                 ? 'bg-amber-500/15 border border-amber-500/30 text-amber-300'
-                                : order.status === 'Delivered'
-                                ? 'bg-emerald-500/15 border border-emerald-500/30 text-emerald-300'
-                                : 'bg-red-500/15 border border-red-500/30 text-red-300'
+                                : (order.status === 'Cancelled' || order.status === 'Rejected')
+                                ? 'bg-red-500/15 border border-red-500/30 text-red-300'
+                                : 'bg-blue-500/15 border border-blue-500/30 text-blue-300'
                         }`}>
-                            {!order.pod_photo_url ? (
+                            {order.status === 'Delivered' ? (
                                 <>
-                                    <div className="w-2 h-2 rounded-full bg-blue-400 animate-pulse"></div>
-                                    <span>🚚 {tr('In Transit', 'Sedang Menghantar')}</span>
+                                    <CheckCircle size={15} />
+                                    <span>✅ {tr('Approved & Allowance Credited', 'Diluluskan & Gaji Dikreditkan')}</span>
                                 </>
                             ) : order.status === 'Pending Approval' ? (
                                 <>
                                     <div className="w-2 h-2 rounded-full bg-amber-400 animate-pulse"></div>
-                                    <span>🟡 {tr('Pending logistics approval', 'Menunggu Kelulusan Admin')}</span>
+                                    <span>🟡 {tr('Pending Admin Approval', 'Menunggu Kelulusan Admin')}</span>
                                 </>
-                            ) : order.status === 'Delivered' ? (
+                            ) : (order.status === 'Cancelled' || order.status === 'Rejected') ? (
                                 <>
-                                    <CheckCircle size={15} />
-                                    <span>✅ {tr('Approved', 'Diluluskan & Gaji Dikreditkan')}</span>
+                                    <X size={15} />
+                                    <span>❌ {tr('Rejected / Cancelled', 'Ditolak / Dibatalkan')}</span>
                                 </>
                             ) : (
                                 <>
-                                    <X size={15} />
-                                    <span>❌ {tr('Rejected', 'Ditolak')}</span>
+                                    <div className="w-2 h-2 rounded-full bg-blue-400 animate-pulse"></div>
+                                    <span>🚚 {tr('In Transit', 'Sedang Menghantar')}</span>
                                 </>
                             )}
                         </div>
@@ -2967,9 +3030,9 @@ const DriverDelivery: React.FC<DriverDeliveryProps> = ({ user, onNavigate }) => 
                                                                     </>
                                                                 ) : (
                                                                     <>
-                                                                        <Upload size={16} className="text-slate-500 group-hover:text-blue-400 transition-colors" />
+                                                                        <Camera size={16} className="text-slate-500 group-hover:text-blue-400 transition-colors" />
                                                                         <span className="text-[8px] font-black text-slate-400 group-hover:text-slate-200 uppercase tracking-wider text-center px-1">
-                                                                            {tr('Upload DO', 'MUAT NAIK DO')}
+                                                                            {tr('Snap DO', 'AMBIL DO')}
                                                                         </span>
                                                                     </>
                                                                 )}
@@ -3178,7 +3241,7 @@ const DriverDelivery: React.FC<DriverDeliveryProps> = ({ user, onNavigate }) => 
                                             ) : (
                                                 <>
                                                     <div className="flex items-center gap-1 text-xs font-black tracking-wide">
-                                                        <FileText size={15} className={hasProdPhoto ? 'text-emerald-200' : 'text-blue-200'} />
+                                                        <Camera size={15} className={hasProdPhoto ? 'text-emerald-200' : 'text-blue-200'} />
                                                         <span>{tr('Snap DO', 'AMBIL DO')}</span>
                                                     </div>
                                                     <span className={`text-[9px] font-bold uppercase tracking-wider ${hasProdPhoto ? 'text-emerald-200/90' : 'text-blue-200/90'}`}>
@@ -4448,6 +4511,7 @@ const DriverDelivery: React.FC<DriverDeliveryProps> = ({ user, onNavigate }) => 
                 ref={laterFileInputRef}
                 type="file"
                 accept="image/*"
+                capture="environment"
                 className="hidden"
                 onChange={handleLaterFileSelect}
             />
