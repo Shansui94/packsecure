@@ -348,21 +348,21 @@ const DriverDelivery: React.FC<DriverDeliveryProps> = ({ user, onNavigate }) => 
         if (order.status === 'Pending Approval') return isPendingApprovalDone(order, isMultiOrderTrip);
 
         if (order.status === 'Loaded') {
-            // If order was explicitly returned for missing DO, keep in to-do
-            if (order.notes && (order.notes.includes('Menunggu gambar DO') || order.notes.includes('Pending signed DO'))) {
-                return false;
-            }
-
             const totalDrops = isMultiOrderTrip ? 1 : Math.max(1, Number((order as any).trip_drop_count) || 1);
             const rawPhotos = order.pod_photo_url ? order.pod_photo_url.split(',') : [];
             const validDoCount = rawPhotos.filter((_, idx) => idx % 2 === 0 && Boolean(_ && _.trim())).length;
             const completedDrops = countCompletedDrops(order.pod_photo_url);
 
-            // If there is any photo uploaded but DO is missing, it is not completed
-            if (rawPhotos.length > 0 && validDoCount < totalDrops) {
+            // Only keep in to-do if DO is genuinely missing (0 DO photos) and marked as waiting DO
+            if (validDoCount === 0 && order.notes && (order.notes.includes('Menunggu gambar DO') || order.notes.includes('Pending signed DO'))) {
                 return false;
             }
-            return completedDrops >= totalDrops;
+
+            // If there is any photo uploaded but DO is missing, it is not completed
+            if (rawPhotos.length > 0 && validDoCount < (isMultiOrderTrip ? 1 : totalDrops)) {
+                return false;
+            }
+            return isMultiOrderTrip ? (validDoCount >= 1 || completedDrops >= 1) : completedDrops >= totalDrops;
         }
 
         return false;
@@ -1005,16 +1005,24 @@ const DriverDelivery: React.FC<DriverDeliveryProps> = ({ user, onNavigate }) => 
                 }
             }
 
-            // Multi-drop aware: Always fetch freshest trip_drop_count from DB to prevent stale client state
+            // Multi-drop aware: Always fetch freshest trip_drop_count and trip metadata from DB to prevent stale client state
             let freshTripDropCount = (selectedOrder as any).trip_drop_count;
+            let tripId = (selectedOrder as any).trip_id;
+            let driverId = selectedOrder.driver_id;
+            let orderDate = (selectedOrder as any).order_date || (selectedOrder as any).orderDate;
+            let deadline = (selectedOrder as any).deadline;
             try {
                 const { data: freshOrder } = await supabase
                     .from('sales_orders')
-                    .select('trip_drop_count')
+                    .select('trip_drop_count, trip_id, driver_id, order_date, deadline')
                     .eq('id', selectedOrder.id)
                     .single();
-                if (freshOrder?.trip_drop_count) {
-                    freshTripDropCount = freshOrder.trip_drop_count;
+                if (freshOrder) {
+                    if (freshOrder.trip_drop_count) freshTripDropCount = freshOrder.trip_drop_count;
+                    if (freshOrder.trip_id) tripId = freshOrder.trip_id;
+                    if (freshOrder.driver_id) driverId = freshOrder.driver_id;
+                    if (freshOrder.order_date) orderDate = freshOrder.order_date;
+                    if (freshOrder.deadline) deadline = freshOrder.deadline;
                 }
             } catch (fetchErr) {
                 console.warn('[handleConfirmUnload] Fresh trip_drop_count check notice:', fetchErr);
@@ -1022,7 +1030,6 @@ const DriverDelivery: React.FC<DriverDeliveryProps> = ({ user, onNavigate }) => 
 
             // Check if this order belongs to a multi-order trip
             let isMultiOrder = false;
-            const tripId = (selectedOrder as any).trip_id;
             if (tripId) {
                 const { count } = await supabase
                     .from('sales_orders')
@@ -1034,8 +1041,8 @@ const DriverDelivery: React.FC<DriverDeliveryProps> = ({ user, onNavigate }) => 
             if (!isMultiOrder) {
                 isMultiOrder = tasks.filter(t => 
                     t.status !== 'Cancelled' && 
-                    t.driver_id === selectedOrder.driver_id && 
-                    (tripId ? (t as any).trip_id === tripId : (t.order_date === selectedOrder.order_date || t.deadline === selectedOrder.deadline))
+                    t.driver_id === driverId && 
+                    (tripId ? (t as any).trip_id === tripId : (t.order_date === orderDate || t.deadline === deadline))
                 ).length > 1;
             }
 
@@ -1045,6 +1052,7 @@ const DriverDelivery: React.FC<DriverDeliveryProps> = ({ user, onNavigate }) => 
 
             // Update photo slots intelligently to prevent duplicate drops
             let podPhotoUrl = '';
+            const maxSlots = Math.max(2, totalDrops * 2);
             if (isMultiOrder || totalDrops === 1 || completedDropsBefore >= totalDrops) {
                 // Updating existing drop (single-drop or re-editing completed drop)
                 const updatedPhotos = [...existingPhotos];
@@ -1059,13 +1067,12 @@ const DriverDelivery: React.FC<DriverDeliveryProps> = ({ user, onNavigate }) => 
                 if (prodUrl) {
                     updatedPhotos[targetProdIndex] = prodUrl;
                 }
-                const maxSlots = Math.max(2, totalDrops * 2);
                 podPhotoUrl = updatedPhotos.slice(0, maxSlots).join(',');
             } else {
                 // Adding a NEW drop to an ongoing multi-drop delivery (e.g. Drop 2 of 3)
                 const newPair = [doUrl || '', prodUrl || ''];
                 const newPhotos = [...existingPhotos, ...newPair];
-                podPhotoUrl = newPhotos.join(',');
+                podPhotoUrl = newPhotos.slice(0, maxSlots).join(',');
             }
 
             const completedDrops = countCompletedDrops(podPhotoUrl);
@@ -1125,7 +1132,7 @@ const DriverDelivery: React.FC<DriverDeliveryProps> = ({ user, onNavigate }) => 
             }
 
             if (extractedDoNumber) {
-                const cleanNotes = (finalNote || '').replace(/\[AI DO:\s*.*?\]/g, '').trim();
+                const cleanNotes = (updatedNotes || '').replace(/\[AI DO:\s*.*?\]/g, '').trim();
                 updatedNotes = cleanNotes 
                     ? `${cleanNotes}\n[AI DO: ${extractedDoNumber}]`
                     : `[AI DO: ${extractedDoNumber}]`;
@@ -1329,7 +1336,7 @@ const DriverDelivery: React.FC<DriverDeliveryProps> = ({ user, onNavigate }) => 
             // Fetch the current pod_photo_url, status, and trip_drop_count from database to be accurate
             const { data: freshOrder, error: fetchErr } = await supabase
                 .from('sales_orders')
-                .select('status, trip_drop_count, pod_photo_url, notes')
+                .select('status, trip_drop_count, pod_photo_url, notes, trip_id, driver_id, order_date, deadline')
                 .eq('id', target.orderId)
                 .single();
 
@@ -1362,31 +1369,38 @@ const DriverDelivery: React.FC<DriverDeliveryProps> = ({ user, onNavigate }) => 
                 ).length > 1;
             }
 
-            const totalDrops = isMultiOrder ? 1 : (freshOrder.trip_drop_count || 1);
+            const totalDrops = isMultiOrder ? 1 : Math.max(1, Number(freshOrder.trip_drop_count) || 1);
             const filledDoCount = currentPhotos.filter((url: string, idx: number) => idx % 2 === 0 && Boolean(url && url.trim())).length;
             const completedDrops = countCompletedDrops(updatedPodUrl);
+            const hasSignedDo = (totalDrops === 1 || isMultiOrder) ? filledDoCount >= 1 : filledDoCount >= totalDrops;
+            const isAllDropsCompleted = (isMultiOrder && hasSignedDo) || (completedDrops >= totalDrops && hasSignedDo);
 
-            // Construct notes update (fallback)
+            // Construct notes update: clean up pending DO warnings!
             let updatedNotes = freshOrder.notes || '';
-            if (extractedDoNumber) {
-                const cleanNotes = (freshOrder.notes || '').replace(/\[AI DO:\s*.*?\]/g, '').trim();
-                updatedNotes = cleanNotes 
-                    ? `${cleanNotes}\n[AI DO: ${extractedDoNumber}]`
-                    : `[AI DO: ${extractedDoNumber}]`;
+            const cleanNotes = updatedNotes
+                .replace(/\[.*?Menunggu gambar DO.*?\]/g, '')
+                .replace(/\[.*?Pending signed DO.*?\]/g, '')
+                .replace(/\[AI DO:\s*.*?\]/g, '')
+                .trim();
+            const aiTag = extractedDoNumber ? `\n[AI DO: ${extractedDoNumber}]` : '';
+            const doUploadedTag = `\n[${timeStr}] ✅ DO tertunggak telah dimuat naik.`;
+            
+            let finalNotes = cleanNotes ? `${cleanNotes}${doUploadedTag}${aiTag}` : `[${timeStr}] ✅ DO tertunggak telah dimuat naik.${aiTag}`;
+            if (!hasSignedDo && !finalNotes.includes('Menunggu gambar DO')) {
+                finalNotes += `\n[Menunggu gambar DO / Pending signed DO]`;
             }
 
-            // Clear or update Hantaran Separa note if all drops/DOs are filled
-            if ((completedDrops >= totalDrops || filledDoCount >= totalDrops) && updatedNotes.includes('Hantaran Separa')) {
-                updatedNotes += `\n[${timeStr}] ✅ DO tertunggak telah dimuat naik. Semua ${totalDrops} drops lengkap.`;
-            }
+            const nextStatus = isAllDropsCompleted ? 'Delivered' : freshOrder.status;
 
             const updatePayload: any = { 
                 pod_photo_url: updatedPodUrl,
-                notes: updatedNotes
+                pod_signature_url: publicUrl,
+                pod_timestamp: new Date().toISOString(),
+                notes: finalNotes
             };
 
             // If order was in Loaded due to incomplete drops/DOs, auto-promote to Delivered once all drops/DOs are completed
-            if (freshOrder.status === 'Loaded' && (completedDrops >= totalDrops || filledDoCount >= totalDrops)) {
+            if (nextStatus === 'Delivered') {
                 updatePayload.status = 'Delivered';
             }
 
@@ -1397,6 +1411,53 @@ const DriverDelivery: React.FC<DriverDeliveryProps> = ({ user, onNavigate }) => 
                 .eq('id', target.orderId);
 
             if (updateErr) throw updateErr;
+
+            // If trip is all done, update trips_v2 & trip_stops_v2
+            if (freshOrder.trip_id) {
+                try {
+                    await supabase
+                        .from('trip_stops_v2')
+                        .update({
+                            status: nextStatus === 'Delivered' ? 'Completed' : 'Delivered',
+                            pod_photo_url: updatedPodUrl,
+                            pod_signature_url: publicUrl,
+                            pod_timestamp: new Date().toISOString()
+                        })
+                        .eq('sales_order_id', target.orderId);
+
+                    const { data: siblingOrders } = await supabase
+                        .from('sales_orders')
+                        .select('id, status')
+                        .eq('trip_id', freshOrder.trip_id);
+                    const allStopsDone = (siblingOrders || []).every(s => (s.id === target.orderId ? nextStatus === 'Delivered' : s.status === 'Delivered' || s.status === 'Cancelled'));
+                    if (allStopsDone) {
+                        await supabase
+                            .from('trips_v2')
+                            .update({
+                                status: 'Completed',
+                                completed_at: new Date().toISOString()
+                            })
+                            .eq('id', freshOrder.trip_id);
+                    }
+                } catch (syncErr) {
+                    console.warn("Trip sync notice in later upload:", syncErr);
+                }
+            }
+
+            // Optimistic update locally
+            setTasks(prev => prev.map(t => {
+                if (t.id === target.orderId) {
+                    return {
+                        ...t,
+                        pod_photo_url: updatedPodUrl,
+                        pod_signature_url: publicUrl,
+                        pod_timestamp: new Date().toISOString(),
+                        status: nextStatus,
+                        notes: finalNotes
+                    };
+                }
+                return t;
+            }));
 
             alert("✅ Gambar DO berjaya dimuat naik! / DO Photo successfully uploaded!");
             
@@ -3306,14 +3367,13 @@ const DriverDelivery: React.FC<DriverDeliveryProps> = ({ user, onNavigate }) => 
             <div className="px-4 space-y-4">
                 {/* MISSING DO ALERT BANNER (ONLY FOR CURRENT / LOADED ORDERS) */}
                 {activeTab === 'todo' && (() => {
-                    const missingDoOrders = tasks.filter(t => 
-                        t.status === 'Loaded' &&
-                        t.pod_photo_url && 
-                        (
-                            (t.notes && (t.notes.includes('Menunggu gambar DO') || t.notes.includes('Pending signed DO'))) ||
-                            (t.pod_photo_url.split(',').filter((u, i) => i % 2 === 0 && Boolean(u && u.trim())).length === 0)
-                        )
-                    );
+                    const missingDoOrders = tasks.filter(t => {
+                        if (t.status !== 'Loaded') return false;
+                        if (!t.pod_photo_url) return false;
+                        const rawPhotos = t.pod_photo_url.split(',');
+                        const validDoCount = rawPhotos.filter((u, i) => i % 2 === 0 && Boolean(u && u.trim())).length;
+                        return validDoCount === 0;
+                    });
                     if (missingDoOrders.length === 0) return null;
 
                     return (
@@ -3343,7 +3403,7 @@ const DriverDelivery: React.FC<DriverDeliveryProps> = ({ user, onNavigate }) => 
                                         </div>
                                         <button
                                             type="button"
-                                            onClick={() => handleOpenUnloadModal(mo)}
+                                            onClick={() => handleTriggerDirectPhoto(mo, 'do')}
                                             className="px-3 py-1.5 bg-gradient-to-r from-amber-600 to-orange-600 hover:from-amber-500 hover:to-orange-500 text-white rounded-lg text-xs font-black shadow-md flex items-center gap-1 shrink-0 cursor-pointer active:scale-95"
                                         >
                                             <Camera size={13} />

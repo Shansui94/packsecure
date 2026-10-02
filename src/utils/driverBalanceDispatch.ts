@@ -354,9 +354,14 @@ export function generateBalancedDriverAssignments(
     const rules = customRules || loadDispatchRules();
     const rateMap = buildDeliveryRateMap(deliveryRates || []);
 
-    // 1. 过滤当前仓库活跃司机
+    // 1. 过滤当前仓库活跃司机（严格过滤非在职或占位/测试账号，例如 Bob、DRIVER TEST 等）
     const warehouseDrivers = (drivers || []).filter(d => {
         const loc = (d.base_location || 'Taiping').toLowerCase();
+        const dName = (d.name || '').toLowerCase().trim();
+        const dEmail = (d.email || '').toLowerCase().trim();
+        const isTest = dName === 'bob' || dName.includes('test') || dEmail.includes('test') || dEmail.includes('.local');
+        if (isTest) return false;
+        if (d.status && d.status.toLowerCase() !== 'active') return false;
         return loc === activeWarehouse.toLowerCase();
     });
 

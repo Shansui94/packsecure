@@ -2273,11 +2273,15 @@ const DeliveryOrderManagement: React.FC<DeliveryOrderManagementProps> = ({ user 
     const resolveDriverIdByName = (name?: string): string => {
         if (!name?.trim()) return selectedDriverId;
         const n = name.trim().toLowerCase();
-        const matched = drivers.find(d =>
-            (d.name || '').toLowerCase() === n ||
-            (d.name || '').toLowerCase().includes(n) ||
-            n.includes((d.name || '').toLowerCase())
-        );
+        const matched = drivers.filter(d => {
+            const dName = (d.name || '').toLowerCase().trim();
+            const dEmail = (d.email || '').toLowerCase().trim();
+            return dName !== 'bob' && !dName.includes('test') && !dEmail.includes('test') && !dEmail.includes('.local');
+        }).find(d => {
+            const dName = (d.name || '').toLowerCase().trim();
+            if (!dName) return false;
+            return dName === n || (n.length >= 3 && dName.includes(n)) || (dName.length >= 4 && n.includes(dName));
+        });
         return matched?.uid || selectedDriverId;
     };
 
