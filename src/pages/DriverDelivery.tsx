@@ -321,6 +321,8 @@ const DriverDelivery: React.FC<DriverDeliveryProps> = ({ user, onNavigate }) => 
     const directDeliveryOrderRef = useRef<SalesOrder | null>(null);
     const directDeliveryTargetRef = useRef<'product' | 'do'>('product');
     const directDeliveryInputRef = useRef<HTMLInputElement>(null);
+    // Keep recently completed trips visible in current tab view so card does not vanish after snapping photo
+    const [recentlyCompletedTripKeys, setRecentlyCompletedTripKeys] = useState<Set<string>>(new Set());
 
     // Helpers to check order delivery status (multi-drop aware: 1 DO = 1 drop)
     const isPendingApprovalDone = (t: SalesOrder, isMultiOrderTrip: boolean = false) => {
@@ -367,8 +369,8 @@ const DriverDelivery: React.FC<DriverDeliveryProps> = ({ user, onNavigate }) => 
     };
 
     // 1. Fetch Data
-    const fetchTasks = async () => {
-        setLoading(true);
+    const fetchTasks = async (silent: boolean = false) => {
+        if (!silent) setLoading(true);
         if (!user?.uid) return;
 
         try {
@@ -1412,8 +1414,8 @@ const DriverDelivery: React.FC<DriverDeliveryProps> = ({ user, onNavigate }) => 
     // Direct Delivery Photo Upload Handlers (Dual Target: Product / DO - Skip modal navigation)
     const handleTriggerDirectPhoto = (order: SalesOrder, targetType: 'product' | 'do') => {
         // Guard against un-loaded orders:
-        if (order.status !== 'Loaded' && order.status !== 'Pending Approval') {
-            alert("⚠️ Sila sahkan naik barang (muat barang) dahulu sebelum ambil gambar hantaran! / Please load goods first before taking delivery photo!");
+        if (order.status !== 'Loaded' && order.status !== 'Pending Approval' && order.status !== 'Delivered') {
+            alert(tr('Please load goods first before taking delivery photo!', 'Sila sahkan muat barang dahulu sebelum ambil gambar hantaran!'));
             return;
         }
 
@@ -1620,18 +1622,39 @@ const DriverDelivery: React.FC<DriverDeliveryProps> = ({ user, onNavigate }) => 
 
             logActivity('Confirm Delivery (Direct)', `Delivered ${targetType} for SO: ${targetOrder.orderNumber}`, user);
             
-            // Audio ding & feedback
+            // Optimistic update locally: immediately transform button into the photo preview!
+            setTasks(prev => prev.map(t => {
+                if (t.id === targetOrder.id) {
+                    return {
+                        ...t,
+                        pod_photo_url: updatedPodUrl,
+                        pod_signature_url: publicUrl,
+                        pod_timestamp: new Date().toISOString(),
+                        status: nextStatus,
+                        notes: newNotes
+                    };
+                }
+                return t;
+            }));
+
+            // Keep this trip visible in 'todo' tab so the card stays right on the page
+            const parentTrip = tripGroups.find(t => t.orders.some(o => o.id === targetOrder.id));
+            if (parentTrip) {
+                setRecentlyCompletedTripKeys(prev => new Set(prev).add(parentTrip.key));
+            }
+
+            // Audio ding feedback
             if (isAllDropsCompleted) {
                 try {
                     const audio = new Audio('https://assets.mixkit.co/active_storage/sfx/2869/2869-preview.mp3');
                     audio.play().catch(() => {});
                 } catch (e) {}
-                alert("🎉 HANTARAN BERJAYA!\n\nGambar DO bercop & barang telah disahkan lengkap.");
             }
 
-            fetchTasks();
+            // Silent background refresh (no screen flicker or loading flash)
+            fetchTasks(true);
         } catch (err: any) {
-            alert("Gagal memuat naik gambar / Failed to upload photo: " + err.message);
+            alert(tr('Failed to upload photo: ', 'Gagal memuat naik gambar: ') + err.message);
         } finally {
             setDirectUploadingOrderId(null);
             setDirectUploadingTarget(null);
@@ -2363,7 +2386,9 @@ const DriverDelivery: React.FC<DriverDeliveryProps> = ({ user, onNavigate }) => 
         return result;
     }, [tasks, tripsV2List, currentLorry]);
 
-    const pendingTrips = React.useMemo(() => tripGroups.filter(t => !t.isAllDone), [tripGroups]);
+    const pendingTrips = React.useMemo(() => {
+        return tripGroups.filter(t => !t.isAllDone || recentlyCompletedTripKeys.has(t.key));
+    }, [tripGroups, recentlyCompletedTripKeys]);
 
     const doneTrips = React.useMemo(() => {
         const list = tripGroups.filter(t => t.isAllDone);
@@ -2832,7 +2857,7 @@ const DriverDelivery: React.FC<DriverDeliveryProps> = ({ user, onNavigate }) => 
 
                         return (
                             <>
-                                {order.pod_photo_url && (
+                                {order.pod_photo_url && !isMultiOrderTrip && Number((order as any).trip_drop_count) > 1 && (
                                     <div className="mb-4 bg-slate-950/40 p-3 rounded-xl border border-slate-800/80">
                                         <div className="flex justify-between items-center mb-2">
                                             <p className="text-[10px] text-emerald-400 uppercase font-black flex items-center gap-1">
@@ -2925,215 +2950,200 @@ const DriverDelivery: React.FC<DriverDeliveryProps> = ({ user, onNavigate }) => 
                         );
                     })()}
 
-                    {/* ACTION BUTTONS */}
-                    {isDeliveredOrDone ? (
-                        <div className="space-y-2">
-                            <div className={`text-center py-2 rounded-xl text-xs font-bold uppercase flex items-center justify-center gap-2 ${
-                                order.status === 'Pending Approval'
-                                    ? 'bg-yellow-500/10 border border-yellow-500/20 text-yellow-500'
-                                    : 'bg-green-500/10 border border-green-500/20 text-green-400'
-                            }`}>
-                                {order.status === 'Pending Approval' ? (
-                                    <>
-                                        <Truck size={14} /> {tr('Pending logistics approval', 'Menunggu kelulusan logistik')}
-                                    </>
-                                ) : (
-                                    <>
-                                        <CheckCircle size={14} /> {tr('Delivered & Stock Deducted', 'Stok Ditolak & Hantar')}
-                                    </>
-                                )}
-                            </div>
-                            <button
-                                onClick={() => handleOpenUnloadModal(order)}
-                                data-action="OPEN_APPEND_DROP_MODAL"
-                                data-action-name="补充添加送货点与照片"
-                                data-target={`工单 #${order.orderNumber || order.id}`}
-                                className="w-full py-2.5 bg-slate-800 hover:bg-slate-750 text-slate-300 hover:text-white border border-slate-700 hover:border-emerald-500/50 rounded-xl font-bold uppercase text-xs tracking-wider flex items-center justify-center gap-2 transition-all active:scale-98 shadow-sm"
-                            >
-                                <Camera size={14} className="text-emerald-400" />
-                                <span>+ {tr('Update POD', 'Kemaskini Foto POD')}</span>
-                            </button>
-                        </div>
-                    ) : (
-                        (order.status === 'Loaded' || order.status === 'Pending Approval') ? (() => {
-                            const btnTotalDrops = isMultiOrderTrip ? 1 : Math.max(1, Number((order as any).trip_drop_count) || 1);
-                            const btnDoneDrops = countCompletedDrops(order.pod_photo_url);
-                            const rawPhotos = order.pod_photo_url ? order.pod_photo_url.split(',') : [];
-                            const validDoCount = rawPhotos.filter((_, idx) => idx % 2 === 0 && Boolean(_ && _.trim())).length;
-                            const isWaitingDo = Boolean(order.notes && (order.notes.includes('Menunggu gambar DO') || order.notes.includes('Pending signed DO'))) || (rawPhotos.length > 0 && validDoCount < btnTotalDrops);
-                            const isDirectUploadingThis = directUploadingOrderId === order.id;
+                    {/* ACTION BUTTONS (留在原页，极速双直达按钮直接变照片) */}
+                    {(order.status === 'Loaded' || order.status === 'Pending Approval' || order.status === 'Delivered' || isDeliveredOrDone) ? (() => {
+                        const btnTotalDrops = isMultiOrderTrip ? 1 : Math.max(1, Number((order as any).trip_drop_count) || 1);
+                        const btnDoneDrops = countCompletedDrops(order.pod_photo_url);
+                        const rawPhotos = order.pod_photo_url ? order.pod_photo_url.split(',') : [];
+                        const validDoCount = rawPhotos.filter((_, idx) => idx % 2 === 0 && Boolean(_ && _.trim())).length;
+                        const isWaitingDo = Boolean(order.notes && (order.notes.includes('Menunggu gambar DO') || order.notes.includes('Pending signed DO'))) || (rawPhotos.length > 0 && validDoCount < btnTotalDrops);
+                        const isDirectUploadingThis = directUploadingOrderId === order.id;
 
-                            // Calculate current drop slots: Even index = DO, Odd index = Product (Barang)
-                            const curDropIdx = isWaitingDo ? Math.max(0, btnDoneDrops - 1) : Math.min(btnDoneDrops, btnTotalDrops - 1);
-                            const targetDoIndex = curDropIdx * 2;
-                            const targetProdIndex = targetDoIndex + 1;
-                            const currentDoUrl = (rawPhotos[targetDoIndex] || '').trim();
-                            const currentProdUrl = (rawPhotos[targetProdIndex] || '').trim();
-                            const hasDoPhoto = Boolean(currentDoUrl);
-                            const hasProdPhoto = Boolean(currentProdUrl);
+                        // Calculate current drop slots: Even index = DO, Odd index = Product (Barang)
+                        const curDropIdx = isWaitingDo ? Math.max(0, btnDoneDrops - 1) : Math.max(0, Math.min(btnDoneDrops, btnTotalDrops - 1));
+                        const targetDoIndex = curDropIdx * 2;
+                        const targetProdIndex = targetDoIndex + 1;
+                        const currentDoUrl = (rawPhotos[targetDoIndex] || '').trim();
+                        const currentProdUrl = (rawPhotos[targetProdIndex] || '').trim();
+                        const hasDoPhoto = Boolean(currentDoUrl);
+                        const hasProdPhoto = Boolean(currentProdUrl);
 
-                            return (
-                                <div className="space-y-2.5">
-                                    {isWaitingDo && !hasDoPhoto && (
-                                        <div className="bg-amber-500/15 border border-amber-500/40 text-amber-300 p-2.5 rounded-xl flex items-center gap-2 text-xs font-bold animate-pulse">
-                                            <span>⚠️</span>
-                                            <span>{tr('Please take photo of stamped DO to complete', 'Sila ambil gambar DO bercop untuk selesaikan')}</span>
+                        return (
+                            <div className="space-y-2.5">
+                                {/* Delivered / Pending Approval Status Badge */}
+                                {isDeliveredOrDone && (
+                                    <div className="space-y-1">
+                                        <div className={`text-center py-2 px-3 rounded-xl text-xs font-black uppercase flex items-center justify-center gap-2 ${
+                                            order.status === 'Pending Approval'
+                                                ? 'bg-yellow-500/15 border border-yellow-500/30 text-yellow-400'
+                                                : 'bg-emerald-500/15 border border-emerald-500/40 text-emerald-300'
+                                        }`}>
+                                            {order.status === 'Pending Approval' ? (
+                                                <>
+                                                    <Truck size={14} /> <span>{tr('Pending logistics approval', 'Menunggu Kelulusan Logistik')}</span>
+                                                </>
+                                            ) : (
+                                                <>
+                                                    <CheckCircle size={14} className="text-emerald-400" /> <span>{tr('Delivered & Stock Deducted', 'Stok Ditolak & Hantar Selesai')}</span>
+                                                </>
+                                            )}
                                         </div>
-                                    )}
+                                        {order.pod_timestamp && (
+                                            <p className="text-[10px] text-slate-400 font-mono text-center">
+                                                {tr('Delivered at', 'Dihantar pada')}: {new Date(order.pod_timestamp).toLocaleString('en-GB')}
+                                            </p>
+                                        )}
+                                    </div>
+                                )}
 
-                                    {/* 🎯 左边拍到货，右边拍 DO 极速双直达按钮 (动态多语言) */}
-                                    <div className="grid grid-cols-2 gap-2.5">
-                                        {/* 1. 左边：拍到货 (Ambil Gambar Barang) */}
-                                        {hasProdPhoto ? (
-                                            <div className="relative py-2 px-2.5 bg-slate-900/90 border border-emerald-500/50 rounded-xl flex items-center justify-between gap-2 shadow-inner">
-                                                <div 
-                                                    className="flex items-center gap-2 cursor-pointer flex-1 min-w-0"
-                                                    onClick={() => setPreviewImageUrl(currentProdUrl)}
-                                                    title={tr('Details', 'Klik untuk lihat')}
-                                                >
-                                                    <img 
-                                                        src={currentProdUrl} 
-                                                        alt="Barang" 
-                                                        className="w-10 h-10 rounded-lg object-cover border border-emerald-500/40 shrink-0" 
-                                                    />
-                                                    <div className="min-w-0">
-                                                        <div className="flex items-center gap-1 text-[11px] font-black text-emerald-300 truncate">
-                                                            <CheckCircle size={12} className="text-emerald-400 shrink-0" />
-                                                            <span>{tr('Goods Photo Saved', 'BARANG SIAP')}</span>
-                                                        </div>
-                                                        <span className="text-[9px] text-slate-400 font-bold block truncate">
-                                                            {tr('Goods Arrived', 'BARANG SAMPAI')}
-                                                        </span>
+                                {!isDeliveredOrDone && isWaitingDo && !hasDoPhoto && (
+                                    <div className="bg-amber-500/15 border border-amber-500/40 text-amber-300 p-2.5 rounded-xl flex items-center gap-2 text-xs font-bold animate-pulse">
+                                        <span>⚠️</span>
+                                        <span>{tr('Please take photo of stamped DO to complete', 'Sila ambil gambar DO bercop untuk selesaikan')}</span>
+                                    </div>
+                                )}
+
+                                {/* 🎯 左边拍到货，右边拍 DO 极速双直达按钮 (拍照后留在原页，按钮直接变照片) */}
+                                <div className="grid grid-cols-2 gap-2.5">
+                                    {/* 1. 左边：拍到货 (Ambil Gambar Barang) */}
+                                    {hasProdPhoto ? (
+                                        <div className="relative py-2 px-2.5 bg-slate-900/90 border border-emerald-500/50 rounded-xl flex items-center justify-between gap-2 shadow-inner">
+                                            <div 
+                                                className="flex items-center gap-2 cursor-pointer flex-1 min-w-0"
+                                                onClick={() => setPreviewImageUrl(currentProdUrl)}
+                                                title={tr('Details', 'Klik untuk lihat')}
+                                            >
+                                                <img 
+                                                    src={currentProdUrl} 
+                                                    alt="Barang" 
+                                                    className="w-10 h-10 rounded-lg object-cover border border-emerald-500/40 shrink-0" 
+                                                />
+                                                <div className="min-w-0">
+                                                    <div className="flex items-center gap-1 text-[11px] font-black text-emerald-300 truncate">
+                                                        <CheckCircle size={12} className="text-emerald-400 shrink-0" />
+                                                        <span>{tr('Goods Photo Saved', 'BARANG SIAP')}</span>
                                                     </div>
+                                                    <span className="text-[9px] text-slate-400 font-bold block truncate">
+                                                        {tr('Goods Arrived', 'BARANG SAMPAI')}
+                                                    </span>
                                                 </div>
-                                                <button
-                                                    type="button"
-                                                    title={tr('Retake', 'Ambil Semula')}
-                                                    onClick={() => handleTriggerDirectPhoto(order, 'product')}
-                                                    disabled={isDirectUploadingThis}
-                                                    className="p-1.5 bg-slate-800 hover:bg-slate-750 active:scale-90 text-slate-300 hover:text-white rounded-lg border border-slate-700 shrink-0 text-[10px] font-bold cursor-pointer"
-                                                >
-                                                    🔄
-                                                </button>
                                             </div>
-                                        ) : (
                                             <button
                                                 type="button"
+                                                title={tr('Retake', 'Ambil Semula')}
                                                 onClick={() => handleTriggerDirectPhoto(order, 'product')}
                                                 disabled={isDirectUploadingThis}
-                                                data-action="DIRECT_SNAP_PRODUCT"
-                                                data-action-name={tr('Snap Goods', 'Ambil Foto Barang')}
-                                                className="py-3 px-2 bg-gradient-to-br from-amber-600 to-amber-700 hover:from-amber-500 hover:to-amber-600 text-white rounded-xl font-black flex flex-col items-center justify-center gap-0.5 shadow-lg shadow-amber-950/40 active:scale-95 transition-all cursor-pointer border border-amber-400/30 min-h-[56px]"
+                                                className="p-1.5 bg-slate-800 hover:bg-slate-750 active:scale-90 text-slate-300 hover:text-white rounded-lg border border-slate-700 shrink-0 text-[10px] font-bold cursor-pointer"
                                             >
-                                                {isDirectUploadingThis && directUploadingTarget === 'product' ? (
-                                                    <div className="flex items-center gap-1 text-xs text-amber-200 py-1">
-                                                        <RefreshCw size={14} className="animate-spin" />
-                                                        <span className="text-[10px]">{tr('Saving...', 'Menyimpan...')}</span>
-                                                    </div>
-                                                ) : (
-                                                    <>
-                                                        <div className="flex items-center gap-1 text-xs font-black tracking-wide">
-                                                            <Camera size={15} className="text-amber-200" />
-                                                            <span>{tr('Snap Goods', 'AMBIL BARANG')}</span>
-                                                        </div>
-                                                        <span className="text-[9px] text-amber-200/90 font-bold uppercase tracking-wider">
-                                                            {tr('Goods Arrived', 'BARANG SAMPAI')}
-                                                        </span>
-                                                    </>
-                                                )}
+                                                🔄
                                             </button>
-                                        )}
-
-                                        {/* 2. 右边：拍 DO (Ambil Gambar DO Bercop) */}
-                                        {hasDoPhoto ? (
-                                            <div className="relative py-2 px-2.5 bg-slate-900/90 border border-blue-500/50 rounded-xl flex items-center justify-between gap-2 shadow-inner">
-                                                <div 
-                                                    className="flex items-center gap-2 cursor-pointer flex-1 min-w-0"
-                                                    onClick={() => setPreviewImageUrl(currentDoUrl)}
-                                                    title={tr('Details', 'Klik untuk lihat')}
-                                                >
-                                                    <img 
-                                                        src={currentDoUrl} 
-                                                        alt="DO" 
-                                                        className="w-10 h-10 rounded-lg object-cover border border-blue-500/40 shrink-0" 
-                                                    />
-                                                    <div className="min-w-0">
-                                                        <div className="flex items-center gap-1 text-[11px] font-black text-blue-300 truncate">
-                                                            <CheckCircle size={12} className="text-blue-400 shrink-0" />
-                                                            <span>{tr('Stamped DO Done', 'DO BERCOP SIAP')}</span>
-                                                        </div>
-                                                        <span className="text-[9px] text-slate-400 font-bold block truncate">
-                                                            {tr('DO Saved', 'DO Disimpan')}
-                                                        </span>
-                                                    </div>
-                                                </div>
-                                                <button
-                                                    type="button"
-                                                    title={tr('Retake', 'Ambil Semula')}
-                                                    onClick={() => handleTriggerDirectPhoto(order, 'do')}
-                                                    disabled={isDirectUploadingThis}
-                                                    className="p-1.5 bg-slate-800 hover:bg-slate-750 active:scale-90 text-slate-300 hover:text-white rounded-lg border border-slate-700 shrink-0 text-[10px] font-bold cursor-pointer"
-                                                >
-                                                    🔄
-                                                </button>
-                                            </div>
-                                        ) : (
-                                            <button
-                                                type="button"
-                                                onClick={() => handleTriggerDirectPhoto(order, 'do')}
-                                                disabled={isDirectUploadingThis}
-                                                data-action="DIRECT_SNAP_DO"
-                                                data-action-name={tr('Snap DO', 'Ambil Foto DO')}
-                                                className={`py-3 px-2 rounded-xl font-black flex flex-col items-center justify-center gap-0.5 shadow-lg active:scale-95 transition-all cursor-pointer border min-h-[56px] ${
-                                                    hasProdPhoto
-                                                        ? 'bg-gradient-to-br from-emerald-600 to-emerald-700 hover:from-emerald-500 hover:to-emerald-600 text-white shadow-emerald-950/40 border-emerald-400/40 animate-pulse'
-                                                        : 'bg-gradient-to-br from-blue-600 to-blue-700 hover:from-blue-500 hover:to-blue-600 text-white shadow-blue-950/40 border-blue-400/30'
-                                                }`}
-                                            >
-                                                {isDirectUploadingThis && directUploadingTarget === 'do' ? (
-                                                    <div className="flex items-center gap-1 text-xs text-blue-200 py-1">
-                                                        <RefreshCw size={14} className="animate-spin" />
-                                                        <span className="text-[10px]">{tr('Saving...', 'Menyimpan...')}</span>
-                                                    </div>
-                                                ) : (
-                                                    <>
-                                                        <div className="flex items-center gap-1 text-xs font-black tracking-wide">
-                                                            <FileText size={15} className={hasProdPhoto ? 'text-emerald-200' : 'text-blue-200'} />
-                                                            <span>{tr('Snap DO', 'AMBIL DO')}</span>
-                                                        </div>
-                                                        <span className={`text-[9px] font-bold uppercase tracking-wider ${hasProdPhoto ? 'text-emerald-200/90' : 'text-blue-200/90'}`}>
-                                                            {tr('Stamped DO', 'DO BERCOP')}
-                                                        </span>
-                                                    </>
-                                                )}
-                                            </button>
-                                        )}
-                                    </div>
-
-                                    {/* 辅助说明与完整窗口备选入口 */}
-                                    <div className="flex items-center justify-between px-1 text-[10px] text-slate-400">
-                                        <span className="truncate">
-                                            {!hasDoPhoto && !hasProdPhoto && (btnTotalDrops > 1 
-                                                ? `📸 Drop ${Math.min(btnDoneDrops + 1, btnTotalDrops)}/${btnTotalDrops}: ${tr('Take photos of Goods & DO to confirm', 'Ambil gambar Barang & DO untuk sahkan')}` 
-                                                : `📸 ${tr('Take photos of Goods & DO to confirm', 'Ambil gambar Barang & DO untuk sahkan')}`)}
-                                            {hasProdPhoto && !hasDoPhoto && `👉 ${tr('Please take photo of stamped DO to complete', 'Sila ambil gambar DO bercop untuk selesaikan')}`}
-                                            {hasDoPhoto && !hasProdPhoto && `✅ ${tr('DO completed. You can add goods photo if needed', 'DO siap. Boleh tambah gambar barang jika perlu')}`}
-                                            {hasDoPhoto && hasProdPhoto && `🎉 ${tr('Goods & DO photos complete! Delivery confirmed.', 'Lengkap! Gambar Barang & DO telah disahkan.')}`}
-                                        </span>
+                                        </div>
+                                    ) : (
                                         <button
                                             type="button"
-                                            onClick={() => handleOpenUnloadModal(order)}
-                                            data-action="OPEN_UNLOAD_MODAL"
-                                            data-action-name={tr('Full Form', 'Borang Penuh')}
-                                            data-target={`工单 #${order.orderNumber || order.id}`}
-                                            className="text-[10px] text-slate-500 hover:text-slate-300 underline underline-offset-2 flex items-center gap-0.5 shrink-0 ml-2 cursor-pointer"
+                                            onClick={() => handleTriggerDirectPhoto(order, 'product')}
+                                            disabled={isDirectUploadingThis}
+                                            data-action="DIRECT_SNAP_PRODUCT"
+                                            data-action-name={tr('Snap Goods', 'Ambil Foto Barang')}
+                                            className="py-3 px-2 bg-gradient-to-br from-amber-600 to-amber-700 hover:from-amber-500 hover:to-amber-600 text-white rounded-xl font-black flex flex-col items-center justify-center gap-0.5 shadow-lg shadow-amber-950/40 active:scale-95 transition-all cursor-pointer border border-amber-400/30 min-h-[56px]"
                                         >
-                                            <span>{tr('Full Form', 'Borang Penuh')}</span>
+                                            {isDirectUploadingThis && directUploadingTarget === 'product' ? (
+                                                <div className="flex items-center gap-1 text-xs text-amber-200 py-1">
+                                                    <RefreshCw size={14} className="animate-spin" />
+                                                    <span className="text-[10px]">{tr('Saving...', 'Menyimpan...')}</span>
+                                                </div>
+                                            ) : (
+                                                <>
+                                                    <div className="flex items-center gap-1 text-xs font-black tracking-wide">
+                                                        <Camera size={15} className="text-amber-200" />
+                                                        <span>{tr('Snap Goods', 'AMBIL BARANG')}</span>
+                                                    </div>
+                                                    <span className="text-[9px] text-amber-200/90 font-bold uppercase tracking-wider">
+                                                        {tr('Goods Arrived', 'BARANG SAMPAI')}
+                                                    </span>
+                                                </>
+                                            )}
                                         </button>
-                                    </div>
+                                    )}
+
+                                    {/* 2. 右边：拍 DO (Ambil Gambar DO Bercop) */}
+                                    {hasDoPhoto ? (
+                                        <div className="relative py-2 px-2.5 bg-slate-900/90 border border-blue-500/50 rounded-xl flex items-center justify-between gap-2 shadow-inner">
+                                            <div 
+                                                className="flex items-center gap-2 cursor-pointer flex-1 min-w-0"
+                                                onClick={() => setPreviewImageUrl(currentDoUrl)}
+                                                title={tr('Details', 'Klik untuk lihat')}
+                                            >
+                                                <img 
+                                                    src={currentDoUrl} 
+                                                    alt="DO" 
+                                                    className="w-10 h-10 rounded-lg object-cover border border-blue-500/40 shrink-0" 
+                                                />
+                                                <div className="min-w-0">
+                                                    <div className="flex items-center gap-1 text-[11px] font-black text-blue-300 truncate">
+                                                        <CheckCircle size={12} className="text-blue-400 shrink-0" />
+                                                        <span>{tr('Stamped DO Done', 'DO BERCOP SIAP')}</span>
+                                                    </div>
+                                                    <span className="text-[9px] text-slate-400 font-bold block truncate">
+                                                        {tr('DO Saved', 'DO Disimpan')}
+                                                    </span>
+                                                </div>
+                                            </div>
+                                            <button
+                                                type="button"
+                                                title={tr('Retake', 'Ambil Semula')}
+                                                onClick={() => handleTriggerDirectPhoto(order, 'do')}
+                                                disabled={isDirectUploadingThis}
+                                                className="p-1.5 bg-slate-800 hover:bg-slate-750 active:scale-90 text-slate-300 hover:text-white rounded-lg border border-slate-700 shrink-0 text-[10px] font-bold cursor-pointer"
+                                            >
+                                                🔄
+                                            </button>
+                                        </div>
+                                    ) : (
+                                        <button
+                                            type="button"
+                                            onClick={() => handleTriggerDirectPhoto(order, 'do')}
+                                            disabled={isDirectUploadingThis}
+                                            data-action="DIRECT_SNAP_DO"
+                                            data-action-name={tr('Snap DO', 'Ambil Foto DO')}
+                                            className={`py-3 px-2 rounded-xl font-black flex flex-col items-center justify-center gap-0.5 shadow-lg active:scale-95 transition-all cursor-pointer border min-h-[56px] ${
+                                                hasProdPhoto
+                                                    ? 'bg-gradient-to-br from-emerald-600 to-emerald-700 hover:from-emerald-500 hover:to-emerald-600 text-white shadow-emerald-950/40 border-emerald-400/40 animate-pulse'
+                                                    : 'bg-gradient-to-br from-blue-600 to-blue-700 hover:from-blue-500 hover:to-blue-600 text-white shadow-blue-950/40 border-blue-400/30'
+                                            }`}
+                                        >
+                                            {isDirectUploadingThis && directUploadingTarget === 'do' ? (
+                                                <div className="flex items-center gap-1 text-xs text-blue-200 py-1">
+                                                    <RefreshCw size={14} className="animate-spin" />
+                                                    <span className="text-[10px]">{tr('Saving...', 'Menyimpan...')}</span>
+                                                </div>
+                                            ) : (
+                                                <>
+                                                    <div className="flex items-center gap-1 text-xs font-black tracking-wide">
+                                                        <FileText size={15} className={hasProdPhoto ? 'text-emerald-200' : 'text-blue-200'} />
+                                                        <span>{tr('Snap DO', 'AMBIL DO')}</span>
+                                                    </div>
+                                                    <span className={`text-[9px] font-bold uppercase tracking-wider ${hasProdPhoto ? 'text-emerald-200/90' : 'text-blue-200/90'}`}>
+                                                        {tr('Stamped DO', 'DO BERCOP')}
+                                                    </span>
+                                                </>
+                                            )}
+                                        </button>
+                                    )}
                                 </div>
-                            );
-                        })() : (
+
+                                {/* 辅助状态提示 */}
+                                <div className="px-1 text-[10px] text-slate-400">
+                                    {!hasDoPhoto && !hasProdPhoto && (btnTotalDrops > 1 
+                                        ? `📸 Drop ${Math.min(btnDoneDrops + 1, btnTotalDrops)}/${btnTotalDrops}: ${tr('Take photos of Goods & DO to confirm', 'Ambil gambar Barang & DO untuk sahkan')}` 
+                                        : `📸 ${tr('Take photos of Goods & DO to confirm', 'Ambil gambar Barang & DO untuk sahkan')}`)}
+                                    {hasProdPhoto && !hasDoPhoto && `👉 ${tr('Please take photo of stamped DO to complete', 'Sila ambil gambar DO bercop untuk selesaikan')}`}
+                                    {hasDoPhoto && !hasProdPhoto && `✅ ${tr('DO completed. You can add goods photo if needed', 'DO siap. Boleh tambah gambar barang jika perlu')}`}
+                                    {hasDoPhoto && hasProdPhoto && `🎉 ${tr('Goods & DO photos complete! Delivery confirmed.', 'Lengkap! Gambar Barang & DO telah disahkan.')}`}
+                                </div>
+                            </div>
+                        );
+                    })() : (
                             <div className="w-full py-3.5 px-4 bg-slate-900/80 border border-slate-800 rounded-xl flex items-center justify-between text-xs">
                                 <div className="flex items-center gap-2">
                                     <span className="w-2 h-2 rounded-full bg-amber-400 animate-pulse" />
@@ -3153,8 +3163,7 @@ const DriverDelivery: React.FC<DriverDeliveryProps> = ({ user, onNavigate }) => 
                                     <span>{tr('Load Trip', 'Muat Trip')} ↑</span>
                                 </button>
                             </div>
-                        )
-                    )}
+                        )}
                 </div>
             </div>
         );
