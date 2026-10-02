@@ -681,6 +681,12 @@ export function resolveDeliveryRate(params: {
             zone = 'PERLIS';
             standardized = 'Perlis 玻璃市全境 (Kangar / Arau)';
             fallbackBase = 165; fallbackMaxPlaces = 3; fallbackExtraRate = 5;
+        } else if (fullText.includes('papalazzi') || 
+                   (fullText.includes('simpang empat') && (fullText.includes('kedah') || !fullText.includes('penang'))) ||
+                   fullText.includes('06650')) {
+            zone = 'SIMPANG EMPAT (KEDAH)';
+            standardized = 'Kedah 司南马/新邦安拔 (Simpang Empat, Kedah)';
+            fallbackBase = 100; fallbackMaxPlaces = 3; fallbackExtraRate = 5;
         } else if (fullText.includes('alor setar') || fullText.includes('jitra') || fullText.includes('pokok sena') || 
                    fullText.includes('baling') || fullText.includes('sik') || fullText.includes('changlun') || fullText.includes('kodiang') ||
                    (fullText.includes('kedah') && !fullText.includes('sungai petani'))) {
@@ -691,7 +697,7 @@ export function resolveDeliveryRate(params: {
             zone = 'SUNGAI PETANI';
             standardized = 'Kedah 双溪大年 (Sungai Petani)';
             fallbackBase = 100; fallbackMaxPlaces = 3; fallbackExtraRate = 5;
-        } else if (fullText.includes('batu kawan') || (fullText.includes('simpang ampat') && !fullText.includes('perlis') && !fullText.includes('kedah')) || fullText.includes('valdor') || fullText.includes('jawi') || fullText.includes('nibong tebal')) {
+        } else if (fullText.includes('batu kawan') || (fullText.includes('simpang ampat') && !fullText.includes('perlis') && !fullText.includes('kedah')) || (fullText.includes('simpang empat') && fullText.includes('penang')) || fullText.includes('valdor') || fullText.includes('jawi') || fullText.includes('nibong tebal')) {
             zone = 'SIMPANG AMPAT (PENANG)';
             standardized = 'Penang 威南 Batu Kawan / Simpang Ampat';
             fallbackBase = 80; fallbackMaxPlaces = 3; fallbackExtraRate = 5;
@@ -884,7 +890,10 @@ export function resolveDeliveryRate(params: {
         };
     }
 
-    let baseRate = Number(matchedRate.base_rate ?? fallbackBase);
+    // CRITICAL GUARDRAIL: If matched DB rate has unmaintained base_rate <= 0 (e.g. TAIPING dummy row),
+    // fall back to canonical fallbackBase so driver is NEVER zeroed out on valid delivery!
+    let rawBase = Number(matchedRate.base_rate);
+    let baseRate = (!isNaN(rawBase) && rawBase > 0) ? rawBase : fallbackBase;
     let maxPlaces = Number(matchedRate.max_places ?? fallbackMaxPlaces);
     if (isNaN(maxPlaces) || maxPlaces < 0) maxPlaces = 1;
     let extraRatePerPlace = Number(matchedRate.extra_rate_per_place ?? fallbackExtraRate);

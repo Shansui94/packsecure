@@ -86,10 +86,10 @@ export function extractTripIdentifier(notes?: string | null): { tripSeq?: number
  * Helper to match delivery rate for a specific order and origin
  */
 export function findRateForOrder(order: any, originRaw: string, rateMap: Record<string, any>) {
-    const addr = (order.delivery_address || order.zone || '').trim();
+    const searchTokens = [order.delivery_address, order.zone, order.customer].filter(Boolean).map(s => String(s).trim());
     const dbRates = Object.values(rateMap || {});
     const resolved = resolveDeliveryRate({
-        addresses: [addr],
+        addresses: searchTokens.length > 0 ? searchTokens : [''],
         dropCount: 1,
         origin: order.trip_origin || originRaw,
         lorryPlate: order.lorry_plate,
@@ -213,7 +213,15 @@ export function groupOrdersIntoTrips(
         const isVpcLorry = Boolean(tripPlate && String(tripPlate).toUpperCase().replace(/[^A-Z0-9]/g, '') === 'VPC9821');
 
         // Unified rate calculation using official resolveDeliveryRate
-        const addresses = Array.from(new Set(orders.map(o => (o.delivery_address || o.zone || '').trim()).filter(Boolean)));
+        // CRITICAL FIX: Collect all address tokens including delivery_address, zone, and customer name
+        // Prevents losing state/customer signals (e.g. zone: 'KEDAH' or customer: 'papalazzi') when delivery_address is short/fuzzy
+        const searchTokens: string[] = [];
+        orders.forEach(o => {
+            if (o.delivery_address) searchTokens.push(String(o.delivery_address).trim());
+            if (o.zone) searchTokens.push(String(o.zone).trim());
+            if (o.customer) searchTokens.push(String(o.customer).trim());
+        });
+        const addresses = Array.from(new Set(searchTokens.filter(Boolean)));
         const resolved = resolveDeliveryRate({
             addresses: addresses.length > 0 ? addresses : [primary.zone || primary.delivery_address || ''],
             dropCount: tripDrops,

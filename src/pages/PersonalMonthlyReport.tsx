@@ -1762,7 +1762,7 @@ const PersonalMonthlyReport: React.FC<Props> = ({
                         orderNumber: trip.order_number || '-',
                         customer: trip.customer || '-',
                         origin: trip.trip_origin || 'TAIPING',
-                        destination: trip.delivery_address || trip.zone || '-',
+                        destination: (trip.zone && trip.zone !== '待判定') ? trip.zone : (trip.delivery_address || '-'),
                         drops: trip.trip_drop_count || 1,
                         status: isDelivered ? '✅ Selesai' : (trip.status === 'Cancelled' ? '❌ Batal' : '🚚 Belum Imbas'),
                         earnings: isDelivered ? (trip.earnings || 0) : 0,
@@ -2048,7 +2048,7 @@ const PersonalMonthlyReport: React.FC<Props> = ({
                                 orderNumber: t.order_number || '-',
                                 customer: t.customer || '-',
                                 origin: t.trip_origin || 'TAIPING',
-                                destination: t.zone || '-',
+                                destination: (t.zone && t.zone !== '待判定') ? t.zone : (t.delivery_address || '-'),
                                 drops: t.trip_drop_count,
                                 status: isDelivered ? '✅ Selesai' : (t.status === 'Cancelled' ? '❌ Batal' : '🚚 Belum Imbas'),
                                 earnings: isDelivered ? t.earnings : 0,
@@ -5934,8 +5934,12 @@ const PersonalMonthlyReport: React.FC<Props> = ({
                                                     <td style={{ textAlign: 'center', fontSize: '9px', fontWeight: 600 }}>
                                                         {row.status}
                                                     </td>
-                                                    <td style={{ textAlign: 'right', fontWeight: 'bold' }}>
-                                                        {row.earnings > 0 ? row.earnings.toFixed(2) : (row.potentialEarnings > 0 ? `(${row.potentialEarnings.toFixed(2)})` : '-')}
+                                                    <td style={{ textAlign: 'right', fontWeight: 'bold', color: (row.isDelivered && row.earnings <= 0) ? '#dc2626' : undefined }}>
+                                                        {row.earnings > 0 
+                                                            ? row.earnings.toFixed(2) 
+                                                            : (row.isDelivered 
+                                                                ? '⚠️ RM 0.00 (Semak)' 
+                                                                : (row.potentialEarnings > 0 ? `(${row.potentialEarnings.toFixed(2)})` : '-'))}
                                                     </td>
                                                 </tr>
                                             );
