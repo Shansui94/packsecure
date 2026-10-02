@@ -2773,6 +2773,10 @@ const DeliveryOrderManagement: React.FC<DeliveryOrderManagementProps> = ({ user 
             setParsedTripOrigin(initialOrigin);
             setParsedZone(data.primaryZone || '');
             setParsedTripRemark(data.tripRemarks || '');
+            setParsedDriverId('');
+            setParsedLorryId('');
+            setParsedDeliveryMethod('DELIVERY');
+            setEditingExistingTripId(null);
             setIsParsedTripModalOpen(true);
 
             if (data.isFallback) {
@@ -3122,6 +3126,9 @@ const DeliveryOrderManagement: React.FC<DeliveryOrderManagementProps> = ({ user 
         setParsedTripRemark('');
         setIsAppendingPdf(false);
         setAppendProgress('');
+        setParsedDriverId('');
+        setParsedLorryId('');
+        setParsedDeliveryMethod('DELIVERY');
     };
 
     const handleRemoveParsedDO = (index: number) => {
@@ -3416,15 +3423,13 @@ const DeliveryOrderManagement: React.FC<DeliveryOrderManagementProps> = ({ user 
             return;
         }
 
-        // 🚨 司机与车辆防呆校验：自营配送未指定司机或车辆时提示确认
-        if (parsedDeliveryMethod !== 'SELF_PICKUP' && (!parsedDriverId || !parsedLorryId)) {
-            const missingFields: string[] = [];
-            if (!parsedDriverId) missingFields.push(t('未指派司机 (Driver Unassigned)'));
-            if (!parsedLorryId) missingFields.push(t('未绑定车辆 (Lorry Unassigned)'));
+        // 🚨 司机防呆校验：自营配送仅在【未指派司机】时提示保存为待指派车次（车辆为可选项，允许不绑定罗里直接派单，司机端可正常查阅并在现场扫码绑定车辆）
+        if (parsedDeliveryMethod !== 'SELF_PICKUP' && !parsedDriverId) {
             const proceed = window.confirm(
-                `⚠️ 出车调度提示 / Driver & Lorry Notice:\n\n` +
-                `当前车次尚未完成人员与车辆绑定：\n• ${missingFields.join('\n• ')}\n\n` +
-                `若现在创建，司机手机端将无法看到这批送货单！\n是否确认先保存为待指派车次？\n\n(Click OK to save as unassigned draft, or Cancel to assign driver/lorry)`
+                `⚠️ 待指派车次提示 / Unassigned Trip Notice:\n\n` +
+                `当前车次尚未指派司机。\n` +
+                `送货单将作为「待指派车次」保存（后续在调度看板指派司机后，司机手机端方可查阅并配送）。\n\n` +
+                `是否确认保存为待指派车次？\n\n(Click OK to save as unassigned trip, or Cancel to select a driver)`
             );
             if (!proceed) return;
         }
@@ -9021,6 +9026,8 @@ const DeliveryOrderManagement: React.FC<DeliveryOrderManagementProps> = ({ user 
                                                     if (driverId) {
                                                         const matchedLorry = lorries.find(l => l.driverUserId === driverId);
                                                         if (matchedLorry) setParsedLorryId(matchedLorry.id);
+                                                    } else {
+                                                        setParsedLorryId('');
                                                     }
                                                 }}
                                             >
