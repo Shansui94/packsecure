@@ -3466,7 +3466,18 @@ const DeliveryOrderManagement: React.FC<DeliveryOrderManagementProps> = ({ user 
         try {
             const isEditingTrip = Boolean(editingExistingTripId);
             const tripId = editingExistingTripId || crypto.randomUUID();
-            const totalDrops = parsedTripBatch.deliveryOrders.length;
+            // Deduplicate drops by destination: group by customer & normalized address so multiple DOs to the same stop count as 1 drop
+            const uniqueDestKeys = new Set<string>();
+            parsedTripBatch.deliveryOrders.forEach(o => {
+                const cust = (o.customer || '').trim().toLowerCase();
+                const addr = (o.deliveryAddress || o.zone || '')
+                    .trim()
+                    .toLowerCase()
+                    .replace(/[^a-z0-9\u4e00-\u9fa5]/gi, '');
+                const destKey = addr.length >= 8 ? `${cust}::${addr}` : (cust || addr || crypto.randomUUID());
+                uniqueDestKeys.add(destKey);
+            });
+            const totalDrops = Math.max(1, uniqueDestKeys.size);
             const defaultLoc = getDefaultLocForOrigin(parsedTripOrigin);
             const validWarehouses = getAvailableWarehousesForOrigin(parsedTripOrigin);
 

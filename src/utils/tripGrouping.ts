@@ -180,22 +180,40 @@ export function groupOrdersIntoTrips(
         const activeOrders = orders.filter(o => o.status !== 'Cancelled' && o.status !== 'cancelled');
         const activeCount = activeOrders.length > 0 ? activeOrders.length : orders.length;
 
+        // Calculate natural drops based on distinct destinations (customer + normalized address)
+        const targetOrders = activeOrders.length > 0 ? activeOrders : orders;
+        const uniqueDestinations = new Set<string>();
+        targetOrders.forEach(o => {
+            const cust = (o.customer || '').trim().toLowerCase();
+            const addr = (o.delivery_address || (o as any).deliveryAddress || o.zone || '')
+                .trim()
+                .toLowerCase()
+                .replace(/[^a-z0-9\u4e00-\u9fa5]/gi, '');
+            const destKey = addr.length >= 8 ? `${cust}::${addr}` : (cust || addr || crypto.randomUUID());
+            uniqueDestinations.add(destKey);
+        });
+        const naturalDrops = Math.max(1, uniqueDestinations.size);
+
         // Total drops for trip: check explicit trip_drop_count recorded across orders
-        const explicitDropCounts = (activeOrders.length > 0 ? activeOrders : orders)
+        const explicitDropCounts = targetOrders
             .map(o => Number(o.trip_drop_count))
             .filter(d => Boolean(d) && d > 0);
         
         const allSameExplicit = explicitDropCounts.length > 0 && explicitDropCounts.every(d => d === explicitDropCounts[0]);
-        let tripDrops = activeCount;
-        if (allSameExplicit && explicitDropCounts[0] > 1) {
-            // Explicit multi-drop setting from admin (e.g. 4 orders recalibrated to 3 drops, or 1 order with 4 drops)
-            tripDrops = explicitDropCounts[0];
-        } else if (activeCount === 1 && explicitDropCounts.length === 1) {
-            tripDrops = explicitDropCounts[0];
+        let tripDrops = naturalDrops;
+        if (allSameExplicit) {
+            // Legacy guard: if trip_drop_count was naively set to total orders (e.g. 3 DOs = 3 drops)
+            // but all DOs deliver to the exact same customer/address (naturalDrops < activeCount),
+            // auto-correct to naturalDrops to avoid false extra-drop surcharges.
+            if (explicitDropCounts[0] === activeCount && naturalDrops < activeCount) {
+                tripDrops = naturalDrops;
+            } else {
+                tripDrops = explicitDropCounts[0];
+            }
         } else if (explicitDropCounts.length > 0) {
-            tripDrops = Math.max(activeCount, ...explicitDropCounts);
+            tripDrops = Math.max(naturalDrops, ...explicitDropCounts);
         } else {
-            tripDrops = Math.max(1, activeCount);
+            tripDrops = naturalDrops;
         }
 
         // Origin: first non-empty origin

@@ -2306,14 +2306,17 @@ const PersonalMonthlyReport: React.FC<Props> = ({
 
             // 2.3 Driver Delivery / Trip Photos
             if (isDriver) {
-                const seenLoadPhotos = new Set<string>();
-                const seenPrepPhotos = new Set<string>();
+                const seenAllPhotoUrls = new Set<string>();
+                dayPhotos.forEach(p => {
+                    if (p.photo_url) seenAllPhotoUrls.add(p.photo_url.trim());
+                });
+
                 dayDeliveries.forEach(d => {
                     const orderRef = d.order_number ? `[${d.order_number}] ` : '';
                     if (d.proof_of_load_url) {
                         const cleanUrl = d.proof_of_load_url.trim();
-                        if (cleanUrl && !seenLoadPhotos.has(cleanUrl)) {
-                            seenLoadPhotos.add(cleanUrl);
+                        if (cleanUrl && !seenAllPhotoUrls.has(cleanUrl)) {
+                            seenAllPhotoUrls.add(cleanUrl);
                             const sharedOrders = dayDeliveries
                                 .filter(other => other.proof_of_load_url && other.proof_of_load_url.trim() === cleanUrl)
                                 .map(other => other.order_number)
@@ -2337,7 +2340,8 @@ const PersonalMonthlyReport: React.FC<Props> = ({
                     if (d.pod_photo_url) {
                         d.pod_photo_url.split(',').forEach((url: string, index: number) => {
                             const trimmed = url.trim();
-                            if (trimmed) {
+                            if (trimmed && !seenAllPhotoUrls.has(trimmed)) {
+                                seenAllPhotoUrls.add(trimmed);
                                 const isDO = index % 2 === 0;
                                 const label = isDO 
                                     ? `Gambar Surat DO / Delivery Order (${Math.floor(index / 2) + 1})` 
@@ -2355,23 +2359,27 @@ const PersonalMonthlyReport: React.FC<Props> = ({
                             }
                         });
                     } else if (d.proof_of_delivery_url) {
-                        dayPhotos.push({
-                            created_at: d.pod_timestamp || d.created_at || `${dateStr}T12:00:00.000Z`,
-                            category: `${orderRef}Proof of Delivery / POD`,
-                            photo_url: d.proof_of_delivery_url,
-                            risk_flag: false,
-                            type: 'pod',
-                            order_number: d.order_number,
-                            customer: d.customer,
-                            badge_color: 'purple'
-                        });
+                        const cleanPod = d.proof_of_delivery_url.trim();
+                        if (cleanPod && !seenAllPhotoUrls.has(cleanPod)) {
+                            seenAllPhotoUrls.add(cleanPod);
+                            dayPhotos.push({
+                                created_at: d.pod_timestamp || d.created_at || `${dateStr}T12:00:00.000Z`,
+                                category: `${orderRef}Proof of Delivery / POD`,
+                                photo_url: cleanPod,
+                                risk_flag: false,
+                                type: 'pod',
+                                order_number: d.order_number,
+                                customer: d.customer,
+                                badge_color: 'purple'
+                            });
+                        }
                     }
                     if (d.preparation_photo_url) {
                         const parsedPrep = parsePrepPhotos(d.preparation_photo_url);
                         parsedPrep.forEach((p, pIdx) => {
                             const cleanPrepUrl = p.url?.trim();
-                            if (cleanPrepUrl && !seenPrepPhotos.has(cleanPrepUrl)) {
-                                seenPrepPhotos.add(cleanPrepUrl);
+                            if (cleanPrepUrl && !seenAllPhotoUrls.has(cleanPrepUrl)) {
+                                seenAllPhotoUrls.add(cleanPrepUrl);
                                 const sharedOrders = dayDeliveries
                                     .filter(other => other.preparation_photo_url && other.preparation_photo_url.includes(cleanPrepUrl))
                                     .map(other => other.order_number)
@@ -2396,28 +2404,36 @@ const PersonalMonthlyReport: React.FC<Props> = ({
                         });
                     }
                     if (d.whatsapp_screenshot_url) {
-                        dayPhotos.push({
-                            created_at: d.pod_timestamp || d.created_at || `${dateStr}T12:00:00.000Z`,
-                            category: `${orderRef}WhatsApp POD Screenshot`,
-                            photo_url: d.whatsapp_screenshot_url,
-                            risk_flag: false,
-                            type: 'whatsapp',
-                            order_number: d.order_number,
-                            customer: d.customer,
-                            badge_color: 'emerald'
-                        });
+                        const cleanWa = d.whatsapp_screenshot_url.trim();
+                        if (cleanWa && !seenAllPhotoUrls.has(cleanWa)) {
+                            seenAllPhotoUrls.add(cleanWa);
+                            dayPhotos.push({
+                                created_at: d.pod_timestamp || d.created_at || `${dateStr}T12:00:00.000Z`,
+                                category: `${orderRef}WhatsApp POD Screenshot`,
+                                photo_url: cleanWa,
+                                risk_flag: false,
+                                type: 'whatsapp',
+                                order_number: d.order_number,
+                                customer: d.customer,
+                                badge_color: 'emerald'
+                            });
+                        }
                     }
                     if (d.pod_signature_url) {
-                        dayPhotos.push({
-                            created_at: d.pod_timestamp || d.created_at || `${dateStr}T12:00:00.000Z`,
-                            category: `${orderRef}Tandatangan / Signature`,
-                            photo_url: d.pod_signature_url,
-                            risk_flag: false,
-                            type: 'signature',
-                            order_number: d.order_number,
-                            customer: d.customer,
-                            badge_color: 'blue'
-                        });
+                        const cleanSig = d.pod_signature_url.trim();
+                        if (cleanSig && !seenAllPhotoUrls.has(cleanSig)) {
+                            seenAllPhotoUrls.add(cleanSig);
+                            dayPhotos.push({
+                                created_at: d.pod_timestamp || d.created_at || `${dateStr}T12:00:00.000Z`,
+                                category: `${orderRef}Tandatangan / Signature`,
+                                photo_url: cleanSig,
+                                risk_flag: false,
+                                type: 'signature',
+                                order_number: d.order_number,
+                                customer: d.customer,
+                                badge_color: 'blue'
+                            });
+                        }
                     }
                 });
             }
@@ -4233,8 +4249,11 @@ const PersonalMonthlyReport: React.FC<Props> = ({
                                             <Layers size={15} className="text-blue-400" />
                                             包含送货单清单 / Delivery Orders in this Trip ({selectedTrip.orders.length} DOs):
                                         </span>
-                                        <span className="text-[11px] text-slate-500 font-mono">
-                                            Total Drops: {selectedTrip.trip_drop_count || selectedTrip.orders.length}
+                                        <span className="text-[11px] text-slate-400 font-mono">
+                                            Total Drops: <strong className="text-emerald-400 font-bold">{selectedTrip.trip_drop_count || 1}</strong>
+                                            <span className="text-slate-500 ml-1 font-normal">
+                                                ({selectedTrip.orders.length} DOs{selectedTrip.trip_drop_count === 1 ? ' · 同一送货点' : ''})
+                                            </span>
                                         </span>
                                     </div>
                                     <div className="grid grid-cols-1 sm:grid-cols-2 gap-2">
