@@ -1156,9 +1156,10 @@ const DriverDelivery: React.FC<DriverDeliveryProps> = ({ user, onNavigate }) => 
                         .from('trip_stops_v2')
                         .update({
                             status: isFinalDrop ? 'Completed' : 'Delivered',
-                            completed_at: new Date().toISOString(),
-                            pod_photos: [doUrl, prodUrl].filter(Boolean),
-                            pod_notes: deliveryNote || null
+                            pod_photo_url: updatedPodUrl || [doUrl, prodUrl].filter(Boolean).join(','),
+                            pod_signature_url: doUrl || prodUrl || null,
+                            pod_signed_by: receiverName || null,
+                            pod_timestamp: new Date().toISOString()
                         })
                         .eq('sales_order_id', selectedOrder.id);
 
@@ -1595,9 +1596,9 @@ const DriverDelivery: React.FC<DriverDeliveryProps> = ({ user, onNavigate }) => 
                         .from('trip_stops_v2')
                         .update({
                             status: nextStatus === 'Delivered' ? 'Completed' : 'Delivered',
-                            completed_at: new Date().toISOString(),
-                            pod_photos: currentPhotos.filter(Boolean),
-                            pod_notes: `Direct ${targetType.toUpperCase()}`
+                            pod_photo_url: updatedPodUrl,
+                            pod_signature_url: publicUrl,
+                            pod_timestamp: new Date().toISOString()
                         })
                         .eq('sales_order_id', targetOrder.id);
 
@@ -2262,25 +2263,21 @@ const DriverDelivery: React.FC<DriverDeliveryProps> = ({ user, onNavigate }) => 
             });
 
             // Calculate true total drops for this trip group:
-            // - If single order with multiple drops, total is that order's trip_drop_count
-            // - If multiple orders where each order records the batch drop count (e.g. trip_drop_count == orders.length), total is orders.length
-            // - Otherwise, max of order count and the maximum recorded drop count
-            const maxOrderDrop = Math.max(...grp.orders.map(o => Number((o as any).trip_drop_count) || 1));
-            const calculatedTotalDrops = Math.max(grp.orders.length, maxOrderDrop);
-            grp.totalDrops = calculatedTotalDrops;
-
-            grp.completedDrops = grp.orders.reduce((sum, o) => {
-                const ordDone = countCompletedDrops(o.pod_photo_url);
+            // - If multi-order trip: total drops = number of orders (each order is 1 stop/drop)
+            // - If single-order trip with multiple drops: total drops = trip_drop_count
+            const isMultiOrder = grp.orders.length > 1;
+            if (isMultiOrder) {
+                grp.totalDrops = grp.orders.length;
+                grp.completedDrops = grp.orders.filter(o => isOrderFullyDelivered(o, true)).length;
+            } else {
+                const o = grp.orders[0];
                 const orderDropTarget = Math.max(1, Number((o as any).trip_drop_count) || 1);
-                const effectiveDone = o.status === 'Delivered' 
-                    ? Math.max(orderDropTarget, ordDone)
-                    : ordDone;
-                return sum + effectiveDone;
-            }, 0);
-            grp.completedDrops = Math.min(grp.completedDrops, grp.totalDrops);
+                grp.totalDrops = orderDropTarget;
+                const ordDone = countCompletedDrops(o.pod_photo_url);
+                grp.completedDrops = o.status === 'Delivered' ? orderDropTarget : Math.min(orderDropTarget, ordDone);
+            }
 
             // Trip is only all done if all orders are fully delivered and all drops met
-            const isMultiOrder = grp.orders.length > 1;
             const areAllOrdersDelivered = grp.orders.every(o => isOrderFullyDelivered(o, isMultiOrder));
             grp.isAllDone = areAllOrdersDelivered && grp.completedDrops >= grp.totalDrops && grp.totalDrops > 0;
 
